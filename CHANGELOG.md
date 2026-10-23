@@ -90,7 +90,8 @@
   custody probe now carries a fresh nonce.
 - A distrusted root an agent finds in a host trust store can be removed through
   trust distribution (`POST /api/v1/discovery/findings/{id}/remove-distrusted-root`,
-  `trstctl-cli discovery findings remove-distrusted-root`). The exact host agent
+  `trstctl-cli discovery findings remove-distrusted-root`, or **Remove from host
+  trust store** in the console's finding detail). The exact host agent
   reads the file, removes it only when it holds just that root and the agent's own
   distrust list names it, and reports a signed result onto the receipt; bundles,
   other certificates and paths outside the host profile are refused and left

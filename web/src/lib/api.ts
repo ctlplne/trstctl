@@ -240,6 +240,7 @@ import type {
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
+  DistrustedRootRemovalRequest,
   DiscoveryMonitoring,
   DiscoveryPlanPreview,
   DiscoveryRun,
@@ -1079,6 +1080,7 @@ export type {
   DiscoveryFinding,
   DiscoveryFindingList,
   DiscoveryFindingTriageRequest,
+  DistrustedRootRemovalRequest,
   DiscoveryMonitoring,
   DiscoveryPlanPreview,
   DiscoveryRun,
@@ -1975,6 +1977,7 @@ export interface Api {
   discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
   claimDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   dismissDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
+  removeDistrustedRoot(id: string, input: DistrustedRootRemovalRequest): Promise<ConnectorDelivery>;
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
@@ -2720,6 +2723,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   },
   claimDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/claim`, input),
   dismissDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/dismiss`, input),
+  removeDistrustedRoot: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/remove-distrusted-root`, input),
   connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),

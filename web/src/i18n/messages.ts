@@ -10430,6 +10430,43 @@ export const messages = {
     defaultMessage: "Could not dismiss discovery finding",
     description: "Error fallback when dismissing a discovery finding fails.",
   },
+  "discovery.findings.distrustedRootHeading": {
+    defaultMessage: "On the distrust list: {entry}",
+    description: "Heading over a trust-store finding whose root the distrust list names itself.",
+  },
+  "discovery.findings.distrustedRootHelp": {
+    defaultMessage:
+      "The host agent that found this root can remove it, if the host profile allows its directory and the file holds only this root. A bundle is left for the host's trust tool.",
+    description: "Explains when a distrusted trust-store root can be removed from its host.",
+  },
+  "discovery.findings.removeDistrustedRoot": {
+    defaultMessage: "Remove from host trust store",
+    description: "Button that starts removing a distrusted root from the host trust store it was found in.",
+  },
+  "discovery.findings.removeDistrustedRootConfirm": {
+    defaultMessage: "Remove {path} from {host}? The agent checks the file against its own distrust list first and removes nothing else.",
+    description: "Confirmation text before queuing removal of a distrusted root from a host trust store.",
+  },
+  "discovery.findings.removeDistrustedRootConfirmButton": {
+    defaultMessage: "Queue removal",
+    description: "Confirms queuing removal of a distrusted root from a host trust store.",
+  },
+  "discovery.findings.removeDistrustedRootCancel": {
+    defaultMessage: "Keep it",
+    description: "Cancels removal of a distrusted root from a host trust store.",
+  },
+  "discovery.findings.removeDistrustedRootReason": {
+    defaultMessage: "On the distrust list: {entry}",
+    description: "Reason recorded with a distrusted-root removal queued from the console.",
+  },
+  "discovery.findings.removeDistrustedRootQueued": {
+    defaultMessage: "Removal queued for {host}. Receipt {receipt} shows the host's result.",
+    description: "Success notice after queuing removal of a distrusted root from a host trust store.",
+  },
+  "discovery.findings.removeDistrustedRootError": {
+    defaultMessage: "Could not queue removal of the distrusted root",
+    description: "Error fallback when queuing removal of a distrusted root fails.",
+  },
   "discovery.findings.identityRequired": {
     defaultMessage: "Claim this finding to a managed identity before running lifecycle actions.",
     description: "Error shown when a discovery finding lacks a managed identity for lifecycle actions.",

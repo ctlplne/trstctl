@@ -24,6 +24,7 @@ const { apiMock } = vi.hoisted(() => ({
     createIdentity: vi.fn(),
     claimDiscoveryFinding: vi.fn(),
     dismissDiscoveryFinding: vi.fn(),
+    removeDistrustedRoot: vi.fn(),
     createDiscoverySource: vi.fn(),
     agents: vi.fn(),
     createDiscoverySchedule: vi.fn(),
@@ -588,6 +589,46 @@ describe("discovery control-plane surface", () => {
     await waitFor(() => expect(screen.getByLabelText("location search")).toHaveTextContent(""));
     await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenLastCalledWith({ limit: 50 }));
     expect(await screen.findByText("10.0.0.10:443")).toBeInTheDocument();
+  });
+
+  it("queues removal of a distrusted root from the host trust store it was found in", async () => {
+    const seeded = await apiMock.discoveryFindings();
+    const root = {
+      ...seeded.items[0],
+      id: "finding-emsign",
+      kind: "trust-store",
+      ref: "os//etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem",
+      fingerprint: "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b",
+      risk_score: 95,
+      metadata: {
+        trust_store_kind: "os",
+        agent_id: "6f1c2a8e-3b4d-5e6f-8a9b-0c1d2e3f4a5b",
+        host: "web-01",
+        distrust_entry: "emSign ECC Root CA - G3",
+        distrust_how: "itself",
+        distrust_reason: "Mozilla and Chrome distrust",
+      },
+    };
+    apiMock.discoveryFindings.mockReset().mockResolvedValue({ items: [root] });
+    apiMock.removeDistrustedRoot.mockResolvedValue({ id: "receipt-1", status: "trust_anchor_removal_queued" });
+    const user = userEvent.setup();
+    renderDiscovery();
+
+    const row = (await screen.findByText("os//etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem")).closest("tr");
+    await user.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
+    const detail = screen.getByRole("heading", { name: "Finding detail" }).closest("aside") as HTMLElement;
+    expect(within(detail).getByRole("heading", { name: "On the distrust list: emSign ECC Root CA - G3" })).toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Remove from host trust store" }));
+    expect(within(detail).getByText(/Remove \/etc\/ssl\/certs\/emSign_ECC_Root_CA_-_G3\.pem from web-01\?/)).toBeInTheDocument();
+    await user.click(within(detail).getByRole("button", { name: "Queue removal" }));
+    await waitFor(() =>
+      expect(apiMock.removeDistrustedRoot).toHaveBeenCalledWith("finding-emsign", {
+        fingerprint: "86a1ecba089c4a8d3bbe2734c612ba341d813e043cf9e8a862cd5c57a36bbe6b",
+        anchor_path: "/etc/ssl/certs/emSign_ECC_Root_CA_-_G3.pem",
+        reason: "On the distrust list: emSign ECC Root CA - G3",
+      }),
+    );
+    expect(await screen.findByText("Removal queued for web-01. Receipt receipt-1 shows the host's result.")).toBeInTheDocument();
   });
 
   it("keeps an unavailable source ID in exact evidence instead of leaking it into the default decision path", async () => {

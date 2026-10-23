@@ -323,7 +323,12 @@ This screen answers three questions in reading order: what trstctl found, why it
 matters, and what you can safely do next. The default view puts a short attention
 summary and **Credentials to review** first. Choose **Review finding** to see the
 human explanation and claim it into managed inventory; less-common lifecycle actions
-and raw evidence stay behind clearly named disclosures.
+and raw evidence stay behind clearly named disclosures. A host trust-store root that
+the distrust list names itself (for example emSign ECC Root CA - G3) is marked **On
+the distrust list** in its detail, with **Remove from host trust store**: after
+confirming the path and host, the console queues the removal for the agent that found
+it and names the receipt that will carry the host's result (see
+[Discovery & inventory](features/discovery-and-inventory.md#ca-trust-store-private-key-discovery)).
 
 **Run scan** takes you to the real discovery sources so you can run an existing source
 or add the first one. Sources, schedules, and run history remain one tab away. Exact
@@ -332,8 +337,9 @@ paths are available under **Monitoring and exact scan evidence** or **Exact find
 evidence**. They are hidden at first so an operator can make a sound decision without
 decoding implementation details, not because the proof is missing. See
 [Discovery & inventory](features/discovery-and-inventory.md). Backed by
-`/api/v1/discovery/sources`, `/schedules`, `/runs`, `/findings`, `/monitoring`,
-`/ct-monitoring`, `/drift`, and `/nhi/posture/shadow`.
+`/api/v1/discovery/sources`, `/schedules`, `/runs`, `/findings`,
+`/findings/{id}/remove-distrusted-root`, `/monitoring`, `/ct-monitoring`, `/drift`,
+and `/nhi/posture/shadow`.
 
 ### Algorithms and future readiness (`/posture`)
 

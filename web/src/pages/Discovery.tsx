@@ -51,6 +51,23 @@ type FindingFacetFilter = string;
 type FindingFilters = { triage: FindingTriageFilter; owner: FindingFacetFilter; team: FindingFacetFilter; tag: FindingFacetFilter };
 type FindingLifecycleAction = "rotate" | "revoke" | "decommission" | "remediate";
 
+// A distrusted root an agent found in a host trust store (eMudhra, Part 4):
+// the finding the control plane can queue for removal from that host. The
+// server re-checks every condition; this only decides whether to offer it.
+type DistrustedRootRemoval = { anchorPath: string; fingerprint: string; entry: string; host: string };
+
+function distrustedRootRemoval(finding: DiscoveryFinding): DistrustedRootRemoval | null {
+  const meta = finding.metadata ?? {};
+  const text = (key: string) => (typeof meta[key] === "string" ? (meta[key] as string).trim() : "");
+  if (finding.kind !== "trust-store" || text("distrust_how") !== "itself" || text("trust_store_kind") !== "os" || !text("agent_id")) {
+    return null;
+  }
+  if (!finding.ref.startsWith("os//") || !finding.fingerprint) {
+    return null;
+  }
+  return { anchorPath: finding.ref.slice("os/".length), fingerprint: finding.fingerprint, entry: text("distrust_entry"), host: text("host") };
+}
+
 const remediationPlaybookRevokeIdentity = "identity-revoke";
 const remediationPlaybookRotateIdentity = "credential-rotate";
 const identityKinds: Identity["kind"][] = ["x509_certificate", "ssh_certificate", "ssh_key", "secret", "api_key", "workload_identity"];
@@ -2080,6 +2097,7 @@ function FindingTable({
   const [team, setTeam] = useState("");
   const [tagText, setTagText] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [confirmRootRemovalID, setConfirmRootRemovalID] = useState<string | null>(null);
   const selected = selectedID ? (allFindings.find((finding) => finding.id === selectedID) ?? null) : null;
   const ownerByID = useMemo(() => new Map(ownerRoster.map((item) => [item.id, item])), [ownerRoster]);
   const selectedIdentity = identityRoster.find((identity) => identity.id === managedIdentityID) ?? null;
@@ -2203,6 +2221,24 @@ function FindingTable({
       populateFacetInputs(updated);
     } catch (err) {
       onNotice(noticeForError(err, action === "claim" ? t("discovery.findings.claimError") : t("discovery.findings.dismissError")));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function removeDistrustedRootFromHost(finding: DiscoveryFinding, removal: DistrustedRootRemoval) {
+    setActionBusy(true);
+    onNotice(null);
+    try {
+      const receipt = await api.removeDistrustedRoot(finding.id, {
+        fingerprint: removal.fingerprint,
+        anchor_path: removal.anchorPath,
+        reason: t("discovery.findings.removeDistrustedRootReason", { entry: removal.entry }),
+      });
+      setConfirmRootRemovalID(null);
+      onNotice({ kind: "success", message: t("discovery.findings.removeDistrustedRootQueued", { host: removal.host || finding.ref, receipt: receipt.id }) });
+    } catch (err) {
+      onNotice(noticeForError(err, t("discovery.findings.removeDistrustedRootError")));
     } finally {
       setActionBusy(false);
     }
@@ -2426,6 +2462,49 @@ function FindingTable({
             <Tag className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <TagList tags={findingTags(selected)} />
           </div>
+
+          {(() => {
+            const removal = distrustedRootRemoval(selected);
+            if (!removal) return null;
+            return (
+              <section aria-labelledby="distrusted-root-heading" className="rounded-control border border-destructive/40 bg-destructive/5 p-3 text-sm">
+                <h3 id="distrusted-root-heading" className="font-medium">
+                  {t("discovery.findings.distrustedRootHeading", { entry: removal.entry })}
+                </h3>
+                <p className="mt-1 text-muted-foreground">{t("discovery.findings.distrustedRootHelp")}</p>
+                {confirmRootRemovalID === selected.id ? (
+                  <div className="mt-3 grid gap-2">
+                    <p>{t("discovery.findings.removeDistrustedRootConfirm", { path: removal.anchorPath, host: removal.host || "-" })}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => void removeDistrustedRootFromHost(selected, removal)}
+                        disabled={actionBusy}
+                      >
+                        {t("discovery.findings.removeDistrustedRootConfirmButton")}
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => setConfirmRootRemovalID(null)} disabled={actionBusy}>
+                        {t("discovery.findings.removeDistrustedRootCancel")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive-outline"
+                    className="mt-3"
+                    onClick={() => setConfirmRootRemovalID(selected.id)}
+                    disabled={actionBusy}
+                  >
+                    {t("discovery.findings.removeDistrustedRoot")}
+                  </Button>
+                )}
+              </section>
+            );
+          })()}
 
           {!action && (
             <div className="flex flex-wrap items-start gap-2 border-t border-border pt-4">
