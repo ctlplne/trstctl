@@ -26577,6 +26577,88 @@ export const messages = {
     defaultMessage: "Enable scheduled reads",
     description: "I2: whether a configured relay CMDB schedule starts polling.",
   },
+  "providerAccess.heading": {
+    defaultMessage: "Provider emergency access",
+    description: "A95: heading of the customer's Provider-access consent panel.",
+  },
+  "providerAccess.intro": {
+    defaultMessage:
+      "Your Provider's emergency access to this tenant is approved by two of its custodians. Require your own consent as well, and each Provider request appears here for your people to approve or deny by grant id; every decision is an immutable event in this tenant's history.",
+    description: "A95: explains tenant-scoped dual consent.",
+  },
+  "providerAccess.policy.required": {
+    defaultMessage: "This tenant's consent is required: {approvals} distinct approvals and no denial before the Provider may use a grant.",
+    description: "A95: policy state when consent is required.",
+  },
+  "providerAccess.policy.notRequired": {
+    defaultMessage: "This tenant's consent is not required; the Provider's two-custodian rule stands alone.",
+    description: "A95: policy state when consent is not required.",
+  },
+  "providerAccess.policy.turnOn": {
+    defaultMessage: "Require this tenant's consent",
+    description: "A95: button that turns the consent policy on.",
+  },
+  "providerAccess.policy.turnOff": {
+    defaultMessage: "Stop requiring this tenant's consent",
+    description: "A95: button that turns the consent policy off.",
+  },
+  "providerAccess.policy.enabled": {
+    defaultMessage: "Consent is now required before the Provider may use an emergency grant.",
+    description: "A95: policy turned on.",
+  },
+  "providerAccess.policy.disabled": {
+    defaultMessage: "Consent is no longer required; the Provider's two-custodian rule stands alone.",
+    description: "A95: policy turned off.",
+  },
+  "providerAccess.requests.heading": {
+    defaultMessage: "Provider emergency requests",
+    description: "A95: heading of the request list.",
+  },
+  "providerAccess.requests.none": {
+    defaultMessage: "No open Provider emergency request is recorded under this tenant.",
+    description: "A95: empty request list.",
+  },
+  "providerAccess.requests.expires": {
+    defaultMessage: "expires {at}",
+    description: "A95: request expiry.",
+  },
+  "providerAccess.requests.approvals": {
+    defaultMessage: "{count, plural, =0 {No approvals recorded yet} one {# approval recorded} other {# approvals recorded}}",
+    description: "A95: approvals recorded for a request.",
+  },
+  "providerAccess.requests.denied": {
+    defaultMessage: "Denied by this tenant",
+    description: "A95: a request this tenant denied.",
+  },
+  "providerAccess.decision.reason": {
+    defaultMessage: "Reason (required to deny)",
+    description: "A95: reason input for a decision.",
+  },
+  "providerAccess.decision.approve": {
+    defaultMessage: "Approve",
+    description: "A95: approve button.",
+  },
+  "providerAccess.decision.deny": {
+    defaultMessage: "Deny",
+    description: "A95: deny button.",
+  },
+  "providerAccess.decision.approved": {
+    defaultMessage: "Your approval of grant {grant} is recorded.",
+    description: "A95: approval recorded.",
+  },
+  "providerAccess.decision.denied": {
+    defaultMessage: "Your denial of grant {grant} is recorded.",
+    description: "A95: denial recorded.",
+  },
+  "provider.emergency.tenantApprovals": {
+    defaultMessage:
+      "{count, plural, =0 {Customer consent required: none recorded yet} one {Customer consent: # approval recorded} other {Customer consent: # approvals recorded}}",
+    description: "A95: the customer's consent standing in the Provider queue.",
+  },
+  "provider.emergency.tenantDenied": {
+    defaultMessage: "Denied by the customer",
+    description: "A95: the customer denied the grant.",
+  },
   "cmdb.setup.review": {
     defaultMessage: "Review CMDB schedule",
     description: "I2: show the exact binding before writing the schedule.",

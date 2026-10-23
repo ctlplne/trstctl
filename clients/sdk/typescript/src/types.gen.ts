@@ -5871,6 +5871,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/provider-access/consents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List this tenant's decisions on one Provider emergency grant */
+        get: operations["listProviderAccessConsents"];
+        put?: never;
+        /** Record this subject's approval or denial of one Provider emergency grant */
+        post: operations["consentProviderAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/provider-access/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read whether this tenant's own consent is required before a Provider emergency grant may be used */
+        get: operations["getProviderAccessPolicy"];
+        /** Require (or stop requiring) this tenant's own consent before a Provider emergency grant may be used */
+        put: operations["putProviderAccessPolicy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/provider-access/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the Provider emergency requests recorded under this tenant that have not expired, with this tenant's decisions */
+        get: operations["listProviderAccessRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/remediation/owner-actions": {
         parameters: {
             query?: never;
@@ -15360,6 +15413,57 @@ export interface components {
             /** @enum {string} */
             profile: "eval";
             protocols: string[];
+        };
+        ProviderAccessConsent: {
+            approve: boolean;
+            /** Format: date-time */
+            decided_at: string;
+            grant_id: string;
+            reason?: string;
+            subject: string;
+        };
+        ProviderAccessConsentInput: {
+            approve: boolean;
+            /** @description Required for a denial; the Provider reads it. */
+            reason?: string;
+        };
+        ProviderAccessConsentList: {
+            items: {
+                approve: boolean;
+                /** Format: date-time */
+                decided_at: string;
+                grant_id: string;
+                reason?: string;
+                subject: string;
+            }[];
+        };
+        ProviderAccessPolicy: {
+            approvals: number;
+            configured: boolean;
+            guidance: string;
+            /** @description A95: the Provider may use an emergency grant only after this tenant records the configured approvals and no denial for it. */
+            require_tenant_consent: boolean;
+            /** Format: date-time */
+            set_at?: string;
+            set_by?: string;
+        };
+        ProviderAccessPolicyInput: {
+            /** @description Distinct approving subjects required; default 2. */
+            approvals?: number;
+            require_tenant_consent: boolean;
+        };
+        ProviderAccessRequestList: {
+            items: {
+                approvals: number;
+                denied: boolean;
+                /** Format: date-time */
+                expires_at: string;
+                grant_id: string;
+                operator_email?: string;
+                reason?: string;
+                /** Format: date-time */
+                requested_at: string;
+            }[];
         };
         RCARequest: {
             question: string;
@@ -34277,6 +34381,216 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TSAQualification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listProviderAccessConsents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Provider grant id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccessConsentList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    consentProviderAccess: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Provider grant id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderAccessConsentInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccessConsent"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getProviderAccessPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccessPolicy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putProviderAccessPolicy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderAccessPolicyInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccessPolicy"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listProviderAccessRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderAccessRequestList"];
                 };
             };
             /** @description client error */

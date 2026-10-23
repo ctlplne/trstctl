@@ -225,6 +225,10 @@ var TenantScopedTables = []string{
 	"agent_cert_revocations",
 	// A91: the event-derived first-seen / offboarded record behind the agents gauge.
 	"agent_lifecycle_receipts",
+	// A95: the customer's Provider-access policy, the requests it saw and its decisions.
+	"provider_access_policy",
+	"provider_access_requests",
+	"provider_access_consents",
 	// A5: staged upgrade campaigns and their dispatch ledger are the tenant's
 	// own rollout history.
 	"agent_upgrade_campaigns",

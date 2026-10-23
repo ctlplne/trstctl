@@ -19474,6 +19474,11 @@
                 "getOIDCMappingStatus",
                 "listMembers",
                 "upsertMember",
+                "getProviderAccessPolicy",
+                "putProviderAccessPolicy",
+                "listProviderAccessRequests",
+                "listProviderAccessConsents",
+                "consentProviderAccess",
                 "offboardMember",
                 "listCapabilities"
             ],
@@ -19514,6 +19519,11 @@
                 "access roles",
                 "access oidc-mapping",
                 "access members list",
+                "provider-access policy show",
+                "provider-access policy set",
+                "provider-access requests",
+                "provider-access consents",
+                "provider-access consent",
                 "access members upsert",
                 "access members offboard",
                 "capabilities list"

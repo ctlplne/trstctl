@@ -283,8 +283,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A69 adds one deterministic ring placement operation beside the per-agent one.
 	// B4-8 adds the renewal resume after an operator rollback.
 	// A87's runCMDBReconcileNow raised it to 514, mapped onto the owners row.
-	if len(out) != 514 {
-		t.Fatalf("OpenAPI operationIds = %d, want 514", len(out))
+	// A95's five provider-access operations raised it to 519, mapped onto the access row.
+	if len(out) != 519 {
+		t.Fatalf("OpenAPI operationIds = %d, want 519", len(out))
 	}
 	return out
 }

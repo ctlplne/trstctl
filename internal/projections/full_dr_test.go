@@ -1185,6 +1185,13 @@ func seedRecoveredFromPostgresTables(
 		); err != nil {
 			return fmt.Errorf("seed Provider operator authority: %w", err)
 		}
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_roles
+			(tenant_id, name, description, permissions, created_by, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $6)`,
+			store.ZeroUUID, "full-dr-provisioner", "Full DR custom role", []string{"tenants:provision"}, "full-dr-operator", now,
+		); err != nil {
+			return fmt.Errorf("seed Provider custom role: %w", err)
+		}
 		if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_delegations
 			(tenant_id, operator_id, customer_tenant_id, operation, granted_by, granted_at, source, expires_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,

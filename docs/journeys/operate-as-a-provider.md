@@ -562,6 +562,13 @@ server records `provider.breakglass_withdrawn` and the queue shows
 keep their original immutable event type; their derived queue state uses the
 recorded requester identity to distinguish them from approver denials.
 
+A customer may require its own consent as well (`trstctl provider-access
+policy set` on the customer's side). Its people then approve or deny the grant
+by id; until the configured number of distinct customer approvals is recorded,
+the results call below is refused with `tenant_consent_pending`, and a customer
+denial refuses it with `tenant_denied`. The queue shows the customer's standing
+for each request.
+
 After both approvals, only the requester can send
 `POST /provider/v1/breakglass/{grant_id}/results` to obtain the customer snapshot.
 The server rechecks the requester's MFA, delegation, and grant expiry, and

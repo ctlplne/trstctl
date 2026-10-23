@@ -9849,6 +9849,65 @@ ProtocolProfileStatus = TypedDict(
     total=False,
 )
 
+ProviderAccessConsent = TypedDict(
+    'ProviderAccessConsent',
+    {
+        'approve': bool,
+        'decided_at': str,
+        'grant_id': str,
+        'reason': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+ProviderAccessConsentInput = TypedDict(
+    'ProviderAccessConsentInput',
+    {
+        'approve': bool,
+        'reason': str,
+    },
+    total=False,
+)
+
+ProviderAccessConsentList = TypedDict(
+    'ProviderAccessConsentList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ProviderAccessPolicy = TypedDict(
+    'ProviderAccessPolicy',
+    {
+        'approvals': int,
+        'configured': bool,
+        'guidance': str,
+        'require_tenant_consent': bool,
+        'set_at': str,
+        'set_by': str,
+    },
+    total=False,
+)
+
+ProviderAccessPolicyInput = TypedDict(
+    'ProviderAccessPolicyInput',
+    {
+        'approvals': int,
+        'require_tenant_consent': bool,
+    },
+    total=False,
+)
+
+ProviderAccessRequestList = TypedDict(
+    'ProviderAccessRequestList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 RCARequest = TypedDict(
     'RCARequest',
     {

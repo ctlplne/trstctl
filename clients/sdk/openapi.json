@@ -29378,6 +29378,178 @@
         ],
         "type": "object"
       },
+      "ProviderAccessConsent": {
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "grant_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_id",
+          "subject",
+          "approve",
+          "decided_at"
+        ],
+        "type": "object"
+      },
+      "ProviderAccessConsentInput": {
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "Required for a denial; the Provider reads it.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approve"
+        ],
+        "type": "object"
+      },
+      "ProviderAccessConsentList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "approve": {
+                  "type": "boolean"
+                },
+                "decided_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "grant_id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "subject": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "grant_id",
+                "subject",
+                "approve",
+                "decided_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ProviderAccessPolicy": {
+        "properties": {
+          "approvals": {
+            "type": "integer"
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "require_tenant_consent": {
+            "description": "A95: the Provider may use an emergency grant only after this tenant records the configured approvals and no denial for it.",
+            "type": "boolean"
+          },
+          "set_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "set_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "configured",
+          "require_tenant_consent",
+          "approvals",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "ProviderAccessPolicyInput": {
+        "properties": {
+          "approvals": {
+            "description": "Distinct approving subjects required; default 2.",
+            "type": "integer"
+          },
+          "require_tenant_consent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "require_tenant_consent"
+        ],
+        "type": "object"
+      },
+      "ProviderAccessRequestList": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "approvals": {
+                  "type": "integer"
+                },
+                "denied": {
+                  "type": "boolean"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "grant_id": {
+                  "type": "string"
+                },
+                "operator_email": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "requested_at": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "grant_id",
+                "requested_at",
+                "expires_at",
+                "approvals",
+                "denied"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "RCARequest": {
         "properties": {
           "question": {
@@ -61715,6 +61887,299 @@
         ],
         "summary": "Check tenant-bound TSA readiness without sending a TimeStampReq, calling the signer, or writing state",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/provider-access/consents/{id}": {
+      "get": {
+        "operationId": "listProviderAccessConsents",
+        "parameters": [
+          {
+            "description": "Provider grant id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderAccessConsentList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List this tenant's decisions on one Provider emergency grant",
+        "x-trstctl-permission": "access:read"
+      },
+      "post": {
+        "operationId": "consentProviderAccess",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Provider grant id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderAccessConsentInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderAccessConsent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Record this subject's approval or denial of one Provider emergency grant",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/provider-access/policy": {
+      "get": {
+        "operationId": "getProviderAccessPolicy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderAccessPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read whether this tenant's own consent is required before a Provider emergency grant may be used",
+        "x-trstctl-permission": "access:read"
+      },
+      "put": {
+        "operationId": "putProviderAccessPolicy",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderAccessPolicyInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderAccessPolicy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Require (or stop requiring) this tenant's own consent before a Provider emergency grant may be used",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/provider-access/requests": {
+      "get": {
+        "operationId": "listProviderAccessRequests",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderAccessRequestList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the Provider emergency requests recorded under this tenant that have not expired, with this tenant's decisions",
+        "x-trstctl-permission": "access:read"
       }
     },
     "/api/v1/remediation/owner-actions": {

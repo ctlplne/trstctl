@@ -182,6 +182,13 @@ export function ProviderBreakGlassPanel({
                 <div className="text-caption">
                   <p>{translateNow(stateKeys[grant.state])}</p>
                   <p>{translateNow("provider.emergency.approvals", { count: approvals })}</p>
+                  {grant.tenant_consent_required ? (
+                    <p className={grant.tenant_denied ? "text-status-danger" : "text-muted-foreground"}>
+                      {grant.tenant_denied
+                        ? translateNow("provider.emergency.tenantDenied")
+                        : translateNow("provider.emergency.tenantApprovals", { count: grant.tenant_approvals ?? 0 })}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-2">

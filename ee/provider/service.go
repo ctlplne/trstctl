@@ -100,6 +100,8 @@ type Config struct {
 	// ADMINISTRATION REFUSES: accepting a cap that cannot survive a restart
 	// would tell a provider their customer is limited when nothing is.
 	Quotas QuotaStore
+	// TenantConsent (A95) reads the customer's own consent policy and decisions.
+	TenantConsent TenantConsentReader
 	// Evidence is the L2 canonical document builder's durable reader,
 	// reconciler, and isolated-signer-backed signer. The Provider handler owns
 	// authentication plus delegation; billing owns the bytes. A nil Reader
@@ -207,6 +209,7 @@ type Service struct {
 	quotas           QuotaStore
 	brands           BrandStore
 	drills           IsolationDriller
+	tenantConsent    TenantConsentReader
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -246,7 +249,7 @@ func NewService(cfg Config) *Service {
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
 		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
-		drills: cfg.Drills, clock: clock, maxBreakGlassTTL: maxTTL}
+		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,
@@ -437,7 +440,11 @@ func (s *Service) ListBreakGlassGrants(ctx context.Context, actor Operator, cust
 		grants = grants[:limit]
 	}
 	for _, grant := range grants {
-		page.Items = append(page.Items, BreakGlassGrantView{BreakGlassGrant: grant, State: grant.State(now)})
+		view := BreakGlassGrantView{BreakGlassGrant: grant, State: grant.State(now)}
+		if standing, err := s.tenantConsentStanding(ctx, grant.TenantID, grant.ID); err == nil {
+			view.TenantConsentRequired, view.TenantApprovals, view.TenantDenied = standing.required, standing.approvals, standing.denied
+		}
+		page.Items = append(page.Items, view)
 	}
 	return page, nil
 }
@@ -742,7 +749,60 @@ func (s *Service) authorizeBreakGlassResults(ctx context.Context, actor Operator
 	default:
 		return BreakGlassGrant{}, ErrBreakGlassNotConsented
 	}
+	// A95: the customer's own consent, when its policy asks for it, is the
+	// last gate, re-read at use time like the delegation above.
+	standing, err := s.tenantConsentStanding(ctx, grant.TenantID, grant.ID)
+	if err != nil {
+		return BreakGlassGrant{}, err
+	}
+	switch {
+	case standing.denied:
+		return BreakGlassGrant{}, ErrBreakGlassTenantDenied
+	case standing.required && standing.approvals < standing.needed:
+		return BreakGlassGrant{}, ErrBreakGlassTenantConsentPending
+	}
 	return grant, nil
+}
+
+type tenantConsentStanding struct {
+	required  bool
+	needed    int
+	approvals int
+	denied    bool
+}
+
+// tenantConsentStanding resolves the customer's policy and distinct decisions
+// for one grant. Without a reader or a policy the customer has no say and the
+// two-custodian rule stands alone.
+func (s *Service) tenantConsentStanding(ctx context.Context, tenantID, grantID string) (tenantConsentStanding, error) {
+	var out tenantConsentStanding
+	if s.tenantConsent == nil {
+		return out, nil
+	}
+	policy, err := s.tenantConsent.TenantConsentPolicy(ctx, tenantID)
+	if err != nil {
+		return out, err
+	}
+	out.required, out.needed = policy.RequireTenantConsent, policy.Approvals
+	if out.required && out.needed <= 0 {
+		out.needed = 2
+	}
+	decisions, err := s.tenantConsent.TenantConsentDecisions(ctx, tenantID, grantID)
+	if err != nil {
+		return out, err
+	}
+	seen := map[string]bool{}
+	for _, d := range decisions {
+		if !d.Approve {
+			out.denied = true
+			continue
+		}
+		if !seen[d.Subject] {
+			seen[d.Subject] = true
+			out.approvals++
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID string) (TenantSnapshot, error) {

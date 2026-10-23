@@ -276,6 +276,7 @@ func attachEEProviderAPI(
 		SAML:                     samlAuth,
 		SCIM:                     providerSCIM,
 		Telemetry:                eeprovider.NewPGStore(deps.Store),
+		TenantConsent:            eeprovider.NewPGStore(deps.Store),
 		Quotas:                   eebilling.NewPGStore(deps.Store),
 		Evidence:                 billingEvidence.deps,
 		EvidenceVerificationJWKS: billingEvidence.verificationJWKS,

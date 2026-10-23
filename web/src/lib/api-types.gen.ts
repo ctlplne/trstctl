@@ -7147,6 +7147,41 @@ export interface ProtocolProfileStatus {
   protocols: string[];
 }
 
+export interface ProviderAccessConsent {
+  approve: boolean;
+  decided_at: string;
+  grant_id: string;
+  reason?: string;
+  subject: string;
+}
+
+export interface ProviderAccessConsentInput {
+  approve: boolean;
+  reason?: string;
+}
+
+export interface ProviderAccessConsentList {
+  items: { approve: boolean; decided_at: string; grant_id: string; reason?: string; subject: string }[];
+}
+
+export interface ProviderAccessPolicy {
+  approvals: number;
+  configured: boolean;
+  guidance: string;
+  require_tenant_consent: boolean;
+  set_at?: string;
+  set_by?: string;
+}
+
+export interface ProviderAccessPolicyInput {
+  approvals?: number;
+  require_tenant_consent: boolean;
+}
+
+export interface ProviderAccessRequestList {
+  items: { approvals: number; denied: boolean; expires_at: string; grant_id: string; operator_email?: string; reason?: string; requested_at: string }[];
+}
+
 export interface RCARequest {
   question: string;
   subject?: string;

@@ -320,8 +320,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A69 adds one deterministic ring placement command beside the per-agent one.
 	// B4-8 adds the renewal resume after an operator rollback.
 	// A87's `owners cmdb-schedule run` raised it to 568, mapped onto the owners row.
-	if len(out) != 568 {
-		t.Fatalf("CLI commands = %d, want 568", len(out))
+	// A95's five `provider-access` commands raised it to 573, mapped onto the access row.
+	if len(out) != 573 {
+		t.Fatalf("CLI commands = %d, want 573", len(out))
 	}
 	return out
 }

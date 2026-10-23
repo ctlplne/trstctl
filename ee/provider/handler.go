@@ -1136,6 +1136,10 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		w.Header().Set("Retry-After", "1")
 	case errors.Is(err, ErrTenantBandExhausted):
 		status, code = http.StatusForbidden, CodeTenantBandExhausted
+	case errors.Is(err, ErrBreakGlassTenantConsentPending):
+		status, code = http.StatusForbidden, "tenant_consent_pending"
+	case errors.Is(err, ErrBreakGlassTenantDenied):
+		status, code = http.StatusForbidden, "tenant_denied"
 	case errors.Is(err, ErrForbidden), errors.Is(err, ErrBreakGlassNotConsented), errors.Is(err, ErrBreakGlassWrongOperator), errors.Is(err, ErrBreakGlassExpired):
 		status, code = http.StatusForbidden, "forbidden"
 	case errors.Is(err, ErrProviderUnauthenticated):

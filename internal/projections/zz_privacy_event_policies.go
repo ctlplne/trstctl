@@ -263,6 +263,17 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/status", opaque), privacyRule("/changed_at", opaque),
 		privacyRule("/replacement_id", opaque),
 	)
+	// A95: the customer's Provider-access policy names who set it; a consent
+	// names the deciding subject and may carry a free-text reason.
+	providerAccessPolicy := privacyRules(
+		privacyRule("/require_tenant_consent", opaque), privacyRule("/approvals", opaque),
+		privacyRule("/set_by", exact), privacyRule("/set_at", opaque),
+	)
+	providerAccessConsent := privacyRules(
+		privacyRule("/grant_id", opaque), privacyRule("/subject", exact),
+		privacyRule("/approve", opaque), privacyRule("/reason", clear),
+		privacyRule("/decided_at", opaque),
+	)
 	tenantMember := privacyRules(
 		privacyRule("/subject", exact), privacyRule("/display_name", token),
 		privacyRule("/email", exact), privacyRule("/roles", opaque),
@@ -882,6 +893,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		),
 		{EventIdentityCreated, 1}:                                    identityCreated,
 		{EventTenantMemberUpserted, 1}:                               tenantMember,
+		{EventProviderAccessPolicySet, 1}:                            providerAccessPolicy,
+		{EventProviderAccessConsented, 1}:                            providerAccessConsent,
 		{EventSCIMWritebackRecorded, 1}:                              scimWriteback,
 		{EventLDAPWritebackRecorded, 1}:                              ldapWriteback,
 		{EventTenantMemberUpserted, TenantMemberSCIMSchemaVersion}:   tenantMemberSCIM,
@@ -1598,6 +1611,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventTenantMemberUpserted, TenantMemberSCIMSchemaVersion}:        privacyPayloadShape[TenantMemberUpserted](),
 		{EventTenantMemberOffboarded, TenantMemberSCIMSchemaVersion}:      privacyPayloadShape[TenantMemberOffboarded](),
 		{EventTenantMemberUpserted, 1}:                                    privacyPayloadShape[privacyTenantMemberUpsertedV1](),
+		{EventProviderAccessPolicySet, 1}:                                 privacyPayloadShape[ProviderAccessPolicySet](),
+		{EventProviderAccessConsented, 1}:                                 privacyPayloadShape[ProviderAccessConsented](),
 		{EventTenantMemberOffboarded, 1}:                                  privacyPayloadShape[privacyTenantMemberOffboardedV1](),
 		{EventAPITokenCreated, 1}:                                         privacyPayloadShape[APITokenCreated](),
 		{EventAPITokenRevoked, 1}:                                         privacyPayloadShape[APITokenRevoked](),

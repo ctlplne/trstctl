@@ -247,3 +247,26 @@ func scanBreakGlassGrant(row pgx.Row) (BreakGlassGrant, error) {
 	}
 	return g, nil
 }
+
+// TenantConsentPolicy implements TenantConsentReader (A95) over the customer's
+// own read model, under the customer's RLS.
+func (p *PGStore) TenantConsentPolicy(ctx context.Context, tenantID string) (TenantConsentPolicy, error) {
+	policy, found, err := p.store.ProviderAccessPolicyFor(ctx, tenantID)
+	if err != nil || !found {
+		return TenantConsentPolicy{}, err
+	}
+	return TenantConsentPolicy{RequireTenantConsent: policy.RequireTenantConsent, Approvals: policy.Approvals}, nil
+}
+
+// TenantConsentDecisions implements TenantConsentReader (A95).
+func (p *PGStore) TenantConsentDecisions(ctx context.Context, tenantID, grantID string) ([]TenantConsentDecision, error) {
+	consents, err := p.store.ProviderAccessConsentsFor(ctx, tenantID, grantID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TenantConsentDecision, 0, len(consents))
+	for _, c := range consents {
+		out = append(out, TenantConsentDecision{Subject: c.Subject, Approve: c.Approve, Reason: c.Reason, DecidedAt: c.DecidedAt})
+	}
+	return out, nil
+}

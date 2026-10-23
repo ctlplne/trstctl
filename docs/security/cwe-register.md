@@ -281,7 +281,7 @@ not this file.
 | `internal/perf/perf_test.go:242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/projections/projections.go:283` | an event type name, not a credential (CWE-798) |
+| `internal/projections/projections.go:286` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_integrations.go:226` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
@@ -548,10 +548,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5804` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5821` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5834` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5862` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5849` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5866` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5879` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5907` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -673,8 +673,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:522` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:537` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:531` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:546` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:63` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:81` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1167,8 +1167,8 @@ not this file.
 | `cmd/trstctl/connector.go:155` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:250` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:382` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `cmd/trstctl/ee_attach.go:326` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:366` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ee_attach.go:327` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:367` | operator-pinned local IdP metadata, validated as configuration. |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |

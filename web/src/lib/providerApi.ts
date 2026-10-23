@@ -116,6 +116,10 @@ export interface ProviderBreakGlassGrant {
 export type ProviderBreakGlassState = "pending" | "awaiting_co_consent" | "active" | "denied" | "withdrawn" | "revoked" | "expired";
 
 export interface ProviderBreakGlassGrantView extends ProviderBreakGlassGrant {
+  /** A95: the customer's own consent standing for this grant. */
+  tenant_consent_required?: boolean;
+  tenant_approvals?: number;
+  tenant_denied?: boolean;
   state: ProviderBreakGlassState;
 }
 

@@ -58,6 +58,10 @@ var (
 	// ErrBreakGlassAlreadyResolved rejects consenting to a grant that is no
 	// longer awaiting consent (already active, denied, revoked, or expired).
 	ErrBreakGlassAlreadyResolved = errors.New("provider: break-glass grant is no longer awaiting consent")
+	// A95: the customer's own consent policy gates the result after both
+	// Provider custodians have approved.
+	ErrBreakGlassTenantConsentPending = errors.New("provider: the customer requires its own consent for this grant and has not yet recorded enough distinct approvals")
+	ErrBreakGlassTenantDenied         = errors.New("provider: the customer denied this grant")
 )
 
 // OperatorRole names a provider-plane privilege set. Provider operators are not
@@ -179,6 +183,34 @@ type BreakGlassGrant struct {
 type BreakGlassGrantView struct {
 	BreakGlassGrant
 	State GrantState `json:"state"`
+	// A95: the customer's side. TenantConsentRequired says the customer's
+	// policy gates use; TenantApprovals counts its distinct approving
+	// subjects; TenantDenied says a customer subject denied the grant.
+	TenantConsentRequired bool `json:"tenant_consent_required"`
+	TenantApprovals       int  `json:"tenant_approvals"`
+	TenantDenied          bool `json:"tenant_denied"`
+}
+
+// TenantConsentPolicy is the customer's standing rule (A95).
+type TenantConsentPolicy struct {
+	RequireTenantConsent bool
+	Approvals            int
+}
+
+// TenantConsentDecision is one customer subject's decision on a grant (A95).
+type TenantConsentDecision struct {
+	Subject   string
+	Approve   bool
+	Reason    string
+	DecidedAt time.Time
+}
+
+// TenantConsentReader reads the customer's policy and decisions. The core
+// store implements it under the customer's RLS; nil means no customer policy
+// is consulted and the two-custodian rule stands alone.
+type TenantConsentReader interface {
+	TenantConsentPolicy(ctx context.Context, tenantID string) (TenantConsentPolicy, error)
+	TenantConsentDecisions(ctx context.Context, tenantID, grantID string) ([]TenantConsentDecision, error)
 }
 
 type BreakGlassGrantPage struct {

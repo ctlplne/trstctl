@@ -129,6 +129,9 @@ const (
 	// resolution is a JUDGMENT — which side was right and why — and a
 	// judgment that lives only in a mutable column cannot be audited later.
 	EventOwnershipConflictResolved = "ownership.conflict.resolved"
+	// A95: the customer's side of Provider emergency access.
+	EventProviderAccessPolicySet = "tenant.provider_access.policy_set"
+	EventProviderAccessConsented = "tenant.provider_access.consented"
 	// A5: a staged agent-upgrade campaign and every state change on it. The
 	// halt is the product, so it is an event: an automatic halt that lived only
 	// in a mutable column could not be audited after the fact.
@@ -582,6 +585,26 @@ type OwnershipConflictResolved struct {
 	ResolvedBy string    `json:"resolved_by"`
 	Resolution string    `json:"resolution"`
 	ResolvedAt time.Time `json:"resolved_at"`
+}
+
+// ProviderAccessPolicySet is the payload of tenant.provider_access.policy_set
+// (A95): whether this tenant's own consent is required before a Provider
+// emergency grant may be used, and how many distinct approvals it takes.
+type ProviderAccessPolicySet struct {
+	RequireTenantConsent bool      `json:"require_tenant_consent"`
+	Approvals            int       `json:"approvals"`
+	SetBy                string    `json:"set_by"`
+	SetAt                time.Time `json:"set_at"`
+}
+
+// ProviderAccessConsented is the payload of tenant.provider_access.consented
+// (A95): one tenant subject's decision on one Provider grant.
+type ProviderAccessConsented struct {
+	GrantID   string    `json:"grant_id"`
+	Subject   string    `json:"subject"`
+	Approve   bool      `json:"approve"`
+	Reason    string    `json:"reason"`
+	DecidedAt time.Time `json:"decided_at"`
 }
 
 // MDMDeviceCorrelated is the payload of an mdm.device.correlated event (I5).
@@ -4219,6 +4242,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventEdgeIssuanceReconciled:                   {1: true},
 	EventADCSDatabaseIngested:                     {1: true},
 	EventOwnershipConflictResolved:                {1: true},
+	EventProviderAccessPolicySet:                  {1: true},
+	EventProviderAccessConsented:                  {1: true},
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
 	EventAgentUpgradeRingAssigned:                 {1: true},
@@ -4703,6 +4728,26 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyOwnershipConflictResolvedTx(ctx, tx, e.TenantID, pl.ID, pl.ResolvedBy, pl.Resolution, pl.ResolvedAt)
+	case EventProviderAccessPolicySet:
+		var pl ProviderAccessPolicySet
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyProviderAccessPolicySetTx(ctx, tx, store.ProviderAccessPolicy{
+			TenantID: e.TenantID, RequireTenantConsent: pl.RequireTenantConsent, Approvals: pl.Approvals, SetBy: pl.SetBy, SetAt: pl.SetAt,
+		})
+	case EventProviderAccessConsented:
+		var pl ProviderAccessConsented
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.GrantID == "" || pl.Subject == "" {
+			return fmt.Errorf("projections: %s requires grant_id and subject", e.Type)
+		}
+		return p.store.ApplyProviderAccessConsentedTx(ctx, tx, store.ProviderAccessConsent{
+			TenantID: e.TenantID, GrantID: pl.GrantID, Subject: pl.Subject, Approve: pl.Approve, Reason: pl.Reason, DecidedAt: pl.DecidedAt,
+		})
+
 	case EventTicketIntakeConfigured:
 		var pl TicketIntakeConfigured
 		if err := decode(e, &pl); err != nil {

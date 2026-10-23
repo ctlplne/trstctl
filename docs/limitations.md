@@ -3416,10 +3416,23 @@ than sending an operator looking for a credential that was never there.
   `event_audit_stream` check proves on live JetStream that each probe tenant's
   stream received its own probe event and none of its neighbour's, then removes
   the probe streams (`event_audit_stream_cleanup`). Siloed placement itself is
-  still exercised by the drill rather than by customer provisioning. The
-  per-tenant KEK/HSM, tenant-scoped break-glass with dual consent, and the
-  provider assurance console remain unbuilt, and the doctor's operator-run
-  isolation suite does not yet drive an object-store lane against a live backend.
+  still exercised by the drill rather than by customer provisioning.
+  Tenant-scoped break-glass with dual consent is served (A95): a customer sets
+  `PUT /api/v1/provider-access/policy` (`trstctl provider-access policy set`)
+  to require its own consent and how many distinct approvals it takes; the
+  Provider's emergency requests appear under the customer at
+  `GET /api/v1/provider-access/requests` (projected from the Provider's own
+  `provider.breakglass_request` event recorded under that tenant); each
+  customer subject with `access:write` approves or denies a grant once through
+  `POST /api/v1/provider-access/consents/{grant_id}` (a denial needs a reason),
+  recorded as immutable `tenant.provider_access.*` events in the customer's own
+  history. After both Provider custodians approve, the Provider's
+  `POST /provider/v1/breakglass/{id}/results` is refused with
+  `tenant_consent_pending` until the customer's approvals are in and with
+  `tenant_denied` after a customer denial; the Provider queue shows the
+  customer's standing. The per-tenant KEK/HSM and the provider assurance
+  console remain unbuilt, and the doctor's operator-run isolation suite does
+  not yet drive an object-store lane against a live backend.
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before
   this, `roundSchedules` was declared and never assigned, so the worker —

@@ -662,6 +662,36 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileRunNow, CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
+
+/** A95: the customer's Provider-access policy. */
+export interface ProviderAccessPolicy {
+  configured: boolean;
+  require_tenant_consent: boolean;
+  approvals: number;
+  set_by?: string;
+  set_at?: string;
+  guidance: string;
+}
+
+/** A95: a Provider emergency request recorded under this tenant. */
+export interface ProviderAccessRequest {
+  grant_id: string;
+  operator_email: string;
+  reason: string;
+  requested_at: string;
+  expires_at: string;
+  approvals: number;
+  denied: boolean;
+}
+
+/** A95: one subject's decision on a Provider grant. */
+export interface ProviderAccessConsent {
+  grant_id: string;
+  subject: string;
+  approve: boolean;
+  reason?: string;
+  decided_at: string;
+}
 export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
 export type { TicketIntakeInput, TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollSchedule, MDMPollScheduleInput, MDMPollScheduleList } from "./api-types.gen";
@@ -1784,6 +1814,12 @@ export interface Api {
   /** I2: close a disagreement. The reason is required — see the route's own guard. */
   resolveOwnershipConflict(id: string, resolution: string): Promise<unknown>;
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
+  /** A95: the customer's side of Provider emergency access. */
+  providerAccessPolicy(): Promise<ProviderAccessPolicy>;
+  putProviderAccessPolicy(input: { require_tenant_consent: boolean; approvals?: number }, idempotencyKey?: string): Promise<ProviderAccessPolicy>;
+  providerAccessRequests(): Promise<ProviderAccessRequest[]>;
+  providerAccessConsents(grantId: string): Promise<ProviderAccessConsent[]>;
+  consentProviderAccess(grantId: string, input: { approve: boolean; reason?: string }, idempotencyKey?: string): Promise<ProviderAccessConsent>;
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   putCMDBSchedule(input: CMDBReconcileScheduleInput, idempotencyKey?: string): Promise<CMDBReconcileSchedule>;
   /** A87: start a sweep now as the scheduler's own durable relay job. */
@@ -2421,6 +2457,18 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<unknown>("POST", `/api/v1/owners/ownership-conflicts/${encodeURIComponent(id)}/resolve`, {
       resolution,
     }),
+  providerAccessPolicy: () => req<ProviderAccessPolicy>("/api/v1/provider-access/policy"),
+  putProviderAccessPolicy: (input, idempotencyKey) => mutate<ProviderAccessPolicy>("PUT", "/api/v1/provider-access/policy", input, idempotencyKey),
+  providerAccessRequests: async () => {
+    const out = await req<{ items: ProviderAccessRequest[] | null }>("/api/v1/provider-access/requests");
+    return out.items ?? [];
+  },
+  providerAccessConsents: async (grantId) => {
+    const out = await req<{ items: ProviderAccessConsent[] | null }>(`/api/v1/provider-access/consents/${encodeURIComponent(grantId)}`);
+    return out.items ?? [];
+  },
+  consentProviderAccess: (grantId, input, idempotencyKey) =>
+    mutate<ProviderAccessConsent>("POST", `/api/v1/provider-access/consents/${encodeURIComponent(grantId)}`, input, idempotencyKey),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   putCMDBSchedule: (input, idempotencyKey) => mutate<CMDBReconcileSchedule>("PUT", "/api/v1/owners/cmdb-schedule", input, idempotencyKey),
   runCMDBScheduleNow: (idempotencyKey) => mutate<CMDBReconcileRunNow>("POST", "/api/v1/owners/cmdb-schedule/run", undefined, idempotencyKey),

@@ -5334,6 +5334,25 @@ func componentSchemas() map[string]*Schema {
 		"removed_count":   {Type: "integer"}, "changed_count": {Type: "integer"},
 		"guidance": str(),
 	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "coverage_status", "removed_count", "changed_count", "guidance")
+	providerAccessPolicy := object(map[string]*Schema{
+		"configured": {Type: "boolean"}, "require_tenant_consent": {Type: "boolean", Description: "A95: the Provider may use an emergency grant only after this tenant records the configured approvals and no denial for it."},
+		"approvals": {Type: "integer"}, "set_by": str(), "set_at": timestamp(), "guidance": str(),
+	}, "configured", "require_tenant_consent", "approvals", "guidance")
+	providerAccessPolicyInput := object(map[string]*Schema{
+		"require_tenant_consent": {Type: "boolean"}, "approvals": {Type: "integer", Description: "Distinct approving subjects required; default 2."},
+	}, "require_tenant_consent")
+	providerAccessRequest := object(map[string]*Schema{
+		"grant_id": str(), "operator_email": str(), "reason": str(), "requested_at": timestamp(), "expires_at": timestamp(),
+		"approvals": {Type: "integer"}, "denied": {Type: "boolean"},
+	}, "grant_id", "requested_at", "expires_at", "approvals", "denied")
+	providerAccessRequestList := object(map[string]*Schema{"items": {Type: "array", Items: providerAccessRequest}}, "items")
+	providerAccessConsent := object(map[string]*Schema{
+		"grant_id": str(), "subject": str(), "approve": {Type: "boolean"}, "reason": str(), "decided_at": timestamp(),
+	}, "grant_id", "subject", "approve", "decided_at")
+	providerAccessConsentList := object(map[string]*Schema{"items": {Type: "array", Items: providerAccessConsent}}, "items")
+	providerAccessConsentInput := object(map[string]*Schema{
+		"approve": {Type: "boolean"}, "reason": {Type: "string", Description: "Required for a denial; the Provider reads it."},
+	}, "approve")
 	cmdbReconcileRunNow := object(map[string]*Schema{
 		"started":  {Type: "boolean", Description: "A87: a fresh sweep was dispatched as the scheduler's own durable network-relay job."},
 		"sweep_id": str(),
@@ -7175,6 +7194,12 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipResolveInput":                    ownershipResolveInput,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
 		"CMDBReconcileRunNow":                      cmdbReconcileRunNow,
+		"ProviderAccessPolicy":                     providerAccessPolicy,
+		"ProviderAccessPolicyInput":                providerAccessPolicyInput,
+		"ProviderAccessRequestList":                providerAccessRequestList,
+		"ProviderAccessConsent":                    providerAccessConsent,
+		"ProviderAccessConsentList":                providerAccessConsentList,
+		"ProviderAccessConsentInput":               providerAccessConsentInput,
 		"CMDBReconcileScheduleInput":               cmdbReconcileScheduleInput,
 		"IssuanceRequest":                          issuanceRequestSchema,
 		"Brand":                                    brandSchema,

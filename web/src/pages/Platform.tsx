@@ -24,6 +24,7 @@ import {
 } from "@/lib/api";
 import { optionalApiCall } from "@/lib/optionalApi";
 import { ManagedTenantProvisioning } from "@/pages/platform/ManagedTenantProvisioning";
+import { ProviderAccessConsentPanel } from "@/components/ProviderAccessConsentPanel";
 
 export { AdminAccess } from "@/pages/AdminAccess";
 
@@ -362,6 +363,7 @@ export function AdminSystem() {
             <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
             <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
             <UsageEvidencePanel />
+            <ProviderAccessConsentPanel />
           </div>
         </SystemDisclosure>
 

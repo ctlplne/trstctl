@@ -979,6 +979,16 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			return fmt.Errorf("provider: %s needs break-glass state", event.Type)
 		}
 		g := payload.Grant
+		if event.Type == AuditBreakGlassRequested {
+			// A95: the customer sees the Provider's request under its own
+			// tenant, so its people can approve or deny it by grant id.
+			if err := corestore.ProjectProviderAccessRequestTx(ctx, tx, corestore.ProviderAccessRequest{
+				TenantID: g.TenantID, GrantID: g.ID, OperatorEmail: g.OperatorEmail, Reason: g.Reason,
+				RequestedAt: g.RequestedAt, ExpiresAt: g.ExpiresAt,
+			}); err != nil {
+				return err
+			}
+		}
 		//trstctl:system-query — provider break-glass projection, keyed by the exact grant and event tenant.
 		_, err := tx.Exec(ctx, `INSERT INTO provider_breakglass_grants
 			(id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at,

@@ -9,4 +9,7 @@
 ALTER TABLE tenants
     ADD COLUMN IF NOT EXISTS managed_offering boolean NOT NULL DEFAULT false,
     ADD COLUMN IF NOT EXISTS provider_tenant_id uuid;
+-- tenants holds one row per tenant (tens to low thousands), so a partial index on a boolean
+-- builds in milliseconds and the SHARE lock cannot be observed by a running deployment.
+-- online-safe: tiny table, millisecond build, no observable lock.
 CREATE INDEX IF NOT EXISTS tenants_managed_offering_idx ON tenants (managed_offering) WHERE managed_offering;
