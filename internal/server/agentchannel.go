@@ -143,6 +143,9 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 		if err := crypto.VerifyCertificateSigner(persistedDER, remote.Public()); err != nil {
 			return fmt.Errorf("agent CA certificate %q does not match signer handle %q; refusing trust rotation: %w", certFile, agentCAHandle, err)
 		}
+		if err := checkStartupKeyBinding(fmt.Sprintf("agent CA (signer handle %q)", agentCAHandle), remote.Public(), remote); err != nil {
+			return err
+		}
 		s.agentCASigner = remote
 		s.agentCACertDER = persistedDER
 		return nil
@@ -164,6 +167,9 @@ func (s *Server) provisionAgentCA(ctx context.Context, c *signing.Client, certFi
 			"certificate_file", certFile, "signer_handle", agentCAHandle)
 	}
 
+	if err := checkStartupKeyBinding(fmt.Sprintf("agent CA (signer handle %q)", agentCAHandle), remote.Public(), remote); err != nil {
+		return err
+	}
 	caDER, err := crypto.SelfSignedCACert(remote, "trstctl Agent CA", 90*24*time.Hour)
 	if err != nil {
 		return err

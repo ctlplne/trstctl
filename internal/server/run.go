@@ -565,6 +565,10 @@ func runBreakglassConfig(
 		if err := signing.VerifyOfflineBreakglassKit(kit); err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("break-glass offline kit: %w", err)
 		}
+		// The offline key stays with the recovery side: weak-key check only.
+		if err := checkStartupKeyBinding("breakglass.offline_kit_file", crypto.PublicKey{DER: kit.PublicKeyDER}, nil); err != nil {
+			return nil, nil, nil, nil, err
+		}
 		if cfg.Breakglass.DeploymentID == "" || kit.Policy.DeploymentID != cfg.Breakglass.DeploymentID ||
 			cfg.Breakglass.TenantID == "" || kit.Policy.TenantID != cfg.Breakglass.TenantID ||
 			(cfg.License.DeploymentID != "" && cfg.License.DeploymentID != kit.Policy.DeploymentID) {

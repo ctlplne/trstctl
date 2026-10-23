@@ -135,6 +135,15 @@ func breakglassRotationFromConfig(ctx context.Context, cfg config.Breakglass, st
 	if err := runtime.replayRotations(ctx); err != nil {
 		return nil, err
 	}
+	// The handle that signs after replay (the configured one, or the latest
+	// rotation's) must hold its key: weak-key check and possession proof.
+	binding := fmt.Sprintf("breakglass.signer_handle %q", runtime.activeHandle)
+	if runtime.activeHandle != runtime.baseHandle {
+		binding = fmt.Sprintf("break-glass rotated signer handle %q", runtime.activeHandle)
+	}
+	if err := checkStartupKeyBinding(binding, runtime.activeSigner.Public(), runtime.activeSigner); err != nil {
+		return nil, err
+	}
 	return runtime, nil
 }
 

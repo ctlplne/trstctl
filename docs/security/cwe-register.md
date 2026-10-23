@@ -1426,7 +1426,7 @@ not this file.
 | `internal/server/backup_test.go:435` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:574` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/breakglass.go:166` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/breakglass.go:169` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/breakglass_material_test.go:67` | test-owned public kit under t.TempDir (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |
@@ -1473,9 +1473,9 @@ not this file.
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/run.go:554` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1087` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1271` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1674` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1091` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1275` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1678` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
@@ -1866,7 +1866,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/server/run.go:1087` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1091` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:44` | test-owned temp path |
 | `internal/server/secret_third_party_scan_signature_served_test.go:50` | test-owned temp path |
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |

@@ -156,6 +156,9 @@ func breakglassVerifierMaterialFromConfig(cfg config.Breakglass) (caCertDER, pub
 	if !bytes.Equal(certificatePublicDER, publicKeyDER) {
 		return nil, nil, errors.New("breakglass: CA certificate and public-key verifier name different keys")
 	}
+	if err := checkStartupKeyBinding("breakglass.public_key_file", crypto.PublicKey{DER: publicKeyDER}, nil); err != nil {
+		return nil, nil, err
+	}
 	return caCertDER, publicKeyDER, nil
 }
 

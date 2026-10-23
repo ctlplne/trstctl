@@ -49,6 +49,12 @@ The control plane only starts once Postgres and NATS report healthy
   certificate to clear it. Restore the matching pair from backup, or perform an
   explicit agent trust rotation and re-enrollment; the named file is left intact
   for recovery inspection.
+- `startup binding <name>: weak-key check failed` or `possession proof failed` is
+  also fatal by design. A weak-key failure means the agent CA or break-glass key
+  itself is unsafe (it names the check); replace it through a trust rotation rather
+  than restarting. A possession failure means the signer does not hold the key the
+  binding names, or its dual-control authorizer refused the startup challenge:
+  restore the matching signer volume, or allow the authorizer to sign it.
 
 ## The agent never registers in the wizard
 

@@ -1360,6 +1360,17 @@ tenant, an already-persisted dual-control signer handle whose public key matches
 files, a distinct operator roster, and a threshold of at least two. Reconciliation-
 only deployments do not need the online fields.
 
+Startup also checks the keys themselves. The configured public key and the offline
+kit's public key must pass the structural weak-key checks (small factors, close
+primes, ROCA, the operator blocklist, a small EC scalar, a bad RSA exponent); offline
+keys stay with the recovery side, so that is their whole check. With
+`online_enabled`, the signer handle that signs after any recorded rotation must also
+prove it holds its key by signing a fresh challenge, which goes through the
+dual-control authorizer like any other signature. A failure stops startup with
+`startup binding <name>: weak-key check failed: ...` or `... possession proof failed:
+...`, naming the binding (`breakglass.public_key_file`, `breakglass.offline_kit_file`,
+`breakglass.signer_handle "<handle>"`, or the rotated handle).
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_BREAKGLASS_ENABLED` | `false` | Enables verifier material for `POST /api/v1/breakglass/reconcile`. |
@@ -2228,7 +2239,10 @@ The served agent gRPC channel is a real listener the control plane exposes for
 steady-state agent heartbeat, renewal, and command fan-out (WIRE-004 / OPS-005) —
 separate from the one-shot bootstrap enrollment path, which always works. It is
 **off by default**; enabling it without a configured signer (the agent CA is
-custodied there) is a startup error.
+custodied there) is a startup error. At startup the agent CA's key must pass the
+weak-key checks and the signer must prove it holds that key by signing a fresh
+challenge; either failure stops startup with `startup binding agent CA (signer
+handle "agent-ca"): ...` naming the check.
 
 Both the gRPC and HTTPS renewal listeners request a 24-hour server certificate
 from the existing agent CA. Each listener renews when half of its current leaf's
