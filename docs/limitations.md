@@ -3430,9 +3430,19 @@ than sending an operator looking for a credential that was never there.
   `POST /provider/v1/breakglass/{id}/results` is refused with
   `tenant_consent_pending` until the customer's approvals are in and with
   `tenant_denied` after a customer denial; the Provider queue shows the
-  customer's standing. The per-tenant KEK/HSM and the provider assurance
-  console remain unbuilt, and the doctor's operator-run isolation suite does
-  not yet drive an object-store lane against a live backend.
+  customer's standing. The provider assurance readout is served (A96):
+  `GET /provider/v1/tenants/{id}/isolation` returns, under the customer's read
+  delegation, the isolation the deployment actually serves that customer (the
+  model, PostgreSQL schema, JetStream lane and object prefix from the live
+  tenancy router, and the customer's audit stream with its event count as
+  JetStream reports it, or a note saying why there is none); the Provider
+  console shows it in each customer's setup view beside health, and the
+  isolation drill with its lane and audit-stream checks sits on the same page.
+  The per-tenant KEK/HSM remains unbuilt. The object-key prefix is a
+  derivation only: the product ships no object-store client, the silo
+  provisioner's object-prefix plane has only an in-memory implementation used
+  by tests, so the doctor's operator-run isolation suite cannot yet drive an
+  object-store lane against a live backend (A97 stays open as a build item).
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before
   this, `roundSchedules` was declared and never assigned, so the worker —

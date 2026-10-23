@@ -277,6 +277,7 @@ func attachEEProviderAPI(
 		SCIM:                     providerSCIM,
 		Telemetry:                eeprovider.NewPGStore(deps.Store),
 		TenantConsent:            eeprovider.NewPGStore(deps.Store),
+		AuditStreams:             deps.Log,
 		Quotas:                   eebilling.NewPGStore(deps.Store),
 		Evidence:                 billingEvidence.deps,
 		EvidenceVerificationJWKS: billingEvidence.verificationJWKS,

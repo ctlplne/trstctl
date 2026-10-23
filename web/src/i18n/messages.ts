@@ -110,6 +110,34 @@ export const messages = {
       "The command writes the token to a private file in the current directory and refuses to overwrite an existing file. Transfer it securely to the customer's administrator. Do not paste the token into this Provider page.",
     description: "Protect the newly created customer credential.",
   },
+  "provider.assurance.isolation": {
+    defaultMessage: "Isolation this customer is served with",
+    description: "A96: heading of the per-customer isolation readout in the Provider assurance view.",
+  },
+  "provider.assurance.model": {
+    defaultMessage: "Model: {model}",
+    description: "A96: the customer's isolation model (pooled, siloed, hybrid).",
+  },
+  "provider.assurance.schema": {
+    defaultMessage: "schema {schema}",
+    description: "A96: the customer's PostgreSQL schema.",
+  },
+  "provider.assurance.lane": {
+    defaultMessage: "event lane {lane}",
+    description: "A96: the customer's JetStream subject lane.",
+  },
+  "provider.assurance.prefix": {
+    defaultMessage: "object prefix {prefix}",
+    description: "A96: the customer's object-key prefix.",
+  },
+  "provider.assurance.auditStream": {
+    defaultMessage: "Audit stream {name}: {count, plural, one {# event} other {# events}} sourced from this customer's lane.",
+    description: "A96: the customer's per-tenant audit stream and its size.",
+  },
+  "provider.assurance.noAuditStream": {
+    defaultMessage: "No per-tenant audit stream yet for this customer.",
+    description: "A96: the customer has no audit stream.",
+  },
   "provider.setup.metering": {
     defaultMessage:
       "Metering starts after the customer workspace is initialized. Provisioning alone does not prove observed usage. Check setup again after the administrator finishes.",

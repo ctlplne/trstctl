@@ -29,6 +29,12 @@ export function ProviderSetupPanel({
     panel.current?.focus();
   }, [tenant.id]);
   const health = useApiQuery(["provider", "setup", ...authorityKey, tenant.id], () => providerApi.customerHealth(tenant.id), { retry: false });
+  // A96: the assurance readout, the customer's isolation as the deployment
+  // serves it. Older or mocked clients without the read show nothing.
+  const isolation = useApiQuery(["provider", "isolation", ...authorityKey, tenant.id], async () =>
+    typeof providerApi.customerIsolation === "function" ? await providerApi.customerIsolation(tenant.id) : null,
+  );
+  const iso = !isolation.error && !isolation.fetching ? (isolation.data ?? null) : null;
   useEffect(() => {
     if (health.errorValue instanceof ProviderAuthError) onAuthError();
   }, [health.errorValue, onAuthError]);
@@ -56,6 +62,23 @@ export function ProviderSetupPanel({
               {configured === undefined ? <p className="mt-1 text-caption text-muted-foreground">{translateNow("provider.setup.unknownHelp")}</p> : null}
             </div>
           )}
+          {iso ? (
+            <div className="rounded-control border border-border p-2 text-caption" aria-label={translateNow("provider.assurance.isolation")}>
+              <p className="font-semibold">{translateNow("provider.assurance.isolation")}</p>
+              <p>
+                {translateNow("provider.assurance.model", { model: iso.model })}
+                {iso.postgres_schema ? ` · ${translateNow("provider.assurance.schema", { schema: iso.postgres_schema })}` : ""}
+                {iso.jetstream_subject_lane ? ` · ${translateNow("provider.assurance.lane", { lane: iso.jetstream_subject_lane })}` : ""}
+                {iso.object_key_prefix ? ` · ${translateNow("provider.assurance.prefix", { prefix: iso.object_key_prefix })}` : ""}
+              </p>
+              <p className="text-muted-foreground">
+                {iso.audit_stream.exists
+                  ? translateNow("provider.assurance.auditStream", { name: iso.audit_stream.name ?? "", count: iso.audit_stream.messages })
+                  : translateNow("provider.assurance.noAuditStream")}
+              </p>
+              {iso.note ? <p className="text-muted-foreground">{iso.note}</p> : null}
+            </div>
+          ) : null}
           {!active ? (
             <p className="text-caption">{translateNow("provider.setup.inactive")}</p>
           ) : configured === false ? (

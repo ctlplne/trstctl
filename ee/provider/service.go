@@ -102,6 +102,8 @@ type Config struct {
 	Quotas QuotaStore
 	// TenantConsent (A95) reads the customer's own consent policy and decisions.
 	TenantConsent TenantConsentReader
+	// AuditStreams (A96) reports a customer lane's audit stream for the assurance console.
+	AuditStreams AuditStreamReader
 	// Evidence is the L2 canonical document builder's durable reader,
 	// reconciler, and isolated-signer-backed signer. The Provider handler owns
 	// authentication plus delegation; billing owns the bytes. A nil Reader
@@ -210,6 +212,7 @@ type Service struct {
 	brands           BrandStore
 	drills           IsolationDriller
 	tenantConsent    TenantConsentReader
+	auditStreams     AuditStreamReader
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -249,7 +252,7 @@ func NewService(cfg Config) *Service {
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
 		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
-		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, clock: clock, maxBreakGlassTTL: maxTTL}
+		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

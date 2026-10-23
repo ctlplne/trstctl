@@ -31,6 +31,7 @@ const { providerMock } = vi.hoisted(() => ({
     putRole: vi.fn(),
     deleteRole: vi.fn(),
     customerHealth: vi.fn(),
+    customerIsolation: vi.fn(),
     usageEvidence: vi.fn(),
     verifyUsageEvidence: vi.fn(),
     downloadUsageEvidence: vi.fn(),

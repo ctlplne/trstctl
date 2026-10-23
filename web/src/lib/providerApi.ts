@@ -73,6 +73,17 @@ export interface ProviderDrillCheck {
   detail: string;
 }
 
+/** A96: one customer's isolation as the deployment serves it. */
+export interface ProviderCustomerIsolation {
+  tenant_id: string;
+  model: string;
+  postgres_schema?: string;
+  jetstream_subject_lane?: string;
+  object_key_prefix?: string;
+  audit_stream: { name?: string; exists: boolean; messages: number };
+  note?: string;
+}
+
 export interface ProviderDrillReport {
   passed: boolean;
   checks: ProviderDrillCheck[] | null;
@@ -460,6 +471,8 @@ export const providerApi = {
     return out.tenants ?? [];
   },
   customerHealth: providerCustomerHealth,
+  customerIsolation: (customerId: string): Promise<ProviderCustomerIsolation> =>
+    providerReq<ProviderCustomerIsolation>(`/provider/v1/tenants/${encodeURIComponent(customerId)}/isolation`),
   usageEvidence: (customerId: string, periodStart: string, periodEnd: string): Promise<ProviderUsageEvidence> =>
     providerReq<ProviderUsageEvidence>(providerEvidencePath(customerId, periodStart, periodEnd)),
   evidenceVerificationKeys: (): Promise<ProviderEvidenceJWKSet> => providerReq<ProviderEvidenceJWKSet>("/provider/v1/evidence/verification-keys"),

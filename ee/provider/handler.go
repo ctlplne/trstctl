@@ -195,6 +195,8 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.serveEvidenceVerificationKeys(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/health"):
 		h.serveTenantHealth(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/isolation"):
+		h.serveTenantIsolation(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/breakglass"):
 		h.listBreakGlassGrants(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/usage-evidence"):
@@ -1248,4 +1250,25 @@ func (h *handler) deleteRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// serveTenantIsolation (A96) answers the assurance console's per-customer
+// isolation readout.
+func (h *handler) serveTenantIsolation(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	customerID, ok := providerTenantPathID(r.URL.Path, "/isolation")
+	if !ok {
+		writeProviderError(w, errors.New("provider: isolation path must name exactly one customer"))
+		return
+	}
+	isolation, err := h.svc.CustomerIsolation(r.Context(), op, customerID)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, isolation)
 }

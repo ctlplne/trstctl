@@ -520,6 +520,17 @@ new attempt. Rebuilding the read model can recover a lost registration position
 when the original event is retained; it cannot replace missing source history.
 Do not create a new registration merely to bypass this refusal.
 
+### Read a customer's isolation assurance
+
+Open a customer's setup view, or call `GET /provider/v1/tenants/{id}/isolation`
+with the customer's `read` delegation, to see the isolation the deployment
+serves that customer: the isolation model, its PostgreSQL schema, JetStream
+event lane and object-key prefix as the live tenancy router resolves them, and
+its per-tenant audit stream with the number of events sourced from its lane.
+A pooled customer says so rather than listing targets it does not have. The
+isolation drill on the same page proves the substrate live, including that two
+distinct customers get disjoint lanes and audit streams.
+
 ### Request and approve emergency access
 
 Emergency access requires a requester and two distinct approvers. All three

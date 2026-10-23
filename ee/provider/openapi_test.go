@@ -149,9 +149,10 @@ func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 		operationCount += len(methods)
 	}
 	// A89 adds POST /provider/scim/v2/Bulk.
-	// A90 added the role catalog (GET /roles) and PUT/DELETE /roles/{id}: 34 paths, 43 operations.
-	if len(paths) != 34 || operationCount != 43 {
-		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 34 / 43", len(paths), operationCount)
+	// A90 added the role catalog (GET /roles) and PUT/DELETE /roles/{id}: 34 paths, 43 operations;
+	// A96 added GET /tenants/{id}/isolation: 35 / 44.
+	if len(paths) != 35 || operationCount != 44 {
+		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 35 / 44", len(paths), operationCount)
 	}
 	components := doc["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
