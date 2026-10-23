@@ -42,6 +42,12 @@ type CMDBRecord struct {
 	UApplication    string `json:"u_application"`
 	Environment     string `json:"used_for"`
 	Company         string `json:"company"`
+	// Dot-walked emails of the owner references (A88): ServiceNow returns
+	// them when sysparm_fields names owned_by.email and the like. An email
+	// matches a trstctl owner whose display name the CMDB spells differently.
+	OwnedByEmail      string `json:"owned_by.email"`
+	AssignedToEmail   string `json:"assigned_to.email"`
+	SupportGroupEmail string `json:"support_group.email"`
 }
 
 // cmdbResponse is the ServiceNow Table API envelope.
@@ -90,15 +96,18 @@ func ParseCMDBPage(r io.Reader) (CMDBPage, error) {
 	previous := ""
 	for _, row := range resp.Result {
 		rec := CMDBRecord{
-			SysID:           cmdbField(row, "sys_id"),
-			Name:            cmdbField(row, "name"),
-			AssignedTo:      cmdbField(row, "assigned_to"),
-			OwnedBy:         cmdbField(row, "owned_by"),
-			SupportGroup:    cmdbField(row, "support_group"),
-			BusinessService: cmdbField(row, "business_service"),
-			UApplication:    cmdbField(row, "u_application"),
-			Environment:     cmdbField(row, "used_for"),
-			Company:         cmdbField(row, "company"),
+			SysID:             cmdbField(row, "sys_id"),
+			Name:              cmdbField(row, "name"),
+			AssignedTo:        cmdbField(row, "assigned_to"),
+			OwnedBy:           cmdbField(row, "owned_by"),
+			SupportGroup:      cmdbField(row, "support_group"),
+			BusinessService:   cmdbField(row, "business_service"),
+			UApplication:      cmdbField(row, "u_application"),
+			Environment:       cmdbField(row, "used_for"),
+			Company:           cmdbField(row, "company"),
+			OwnedByEmail:      cmdbField(row, "owned_by.email"),
+			AssignedToEmail:   cmdbField(row, "assigned_to.email"),
+			SupportGroupEmail: cmdbField(row, "support_group.email"),
 		}
 		if !ValidCMDBSourceRef(rec.SysID) {
 			return CMDBPage{}, fmt.Errorf("ownership: cmdb_ci page row has no usable sys_id continuation key")
@@ -108,7 +117,7 @@ func ParseCMDBPage(r io.Reader) (CMDBPage, error) {
 		}
 		previous = rec.SysID
 		page.SourceRefs = append(page.SourceRefs, rec.SysID)
-		owner, _ := cmdbOwner(rec)
+		owner, ownerField := cmdbOwner(rec)
 		if owner == "" {
 			// A CI with no ownership at all. Named so an operator can see the
 			// gap; a count of "412 imported" that quietly excluded 38 of these
@@ -125,6 +134,7 @@ func ParseCMDBPage(r io.Reader) (CMDBPage, error) {
 		}
 		page.Records = append(page.Records, Record{
 			OwnerName:     owner,
+			Email:         cmdbOwnerEmail(rec, ownerField),
 			ApplicationID: firstNonEmpty(rec.UApplication, rec.BusinessService),
 			Service:       rec.BusinessService,
 			BusinessUnit:  rec.Company,
@@ -173,6 +183,30 @@ func cmdbOwner(rec CMDBRecord) (owner string, field string) {
 // display_value wins when present: "Payments Platform" is the answer a human
 // can act on, and a sys_id in an owner column is a value nobody can route a
 // certificate expiry notice to.
+// cmdbOwnerEmail returns the dot-walked email of the reference the owner
+// name came from (A88). It is paired with the field so a CI whose owned_by
+// has no mailbox never borrows assigned_to's address.
+func cmdbOwnerEmail(rec CMDBRecord, field string) string {
+	switch field {
+	case "owned_by":
+		return strings.ToLower(strings.TrimSpace(rec.OwnedByEmail))
+	case "assigned_to":
+		return strings.ToLower(strings.TrimSpace(rec.AssignedToEmail))
+	case "support_group":
+		return strings.ToLower(strings.TrimSpace(rec.SupportGroupEmail))
+	}
+	return ""
+}
+
+// CMDBPageFields are the cmdb_ci columns one page asks for, including the
+// dot-walked owner emails (A88). Naming them keeps a page to what the
+// reconciliation reads and makes the email join possible at all: ServiceNow
+// returns a reference's email only when asked by dotted name.
+var CMDBPageFields = []string{
+	"sys_id", "name", "assigned_to", "owned_by", "support_group", "business_service", "u_application", "used_for", "company",
+	"owned_by.email", "assigned_to.email", "support_group.email",
+}
+
 func cmdbField(row map[string]any, key string) string {
 	switch v := row[key].(type) {
 	case string:
@@ -252,6 +286,7 @@ func CMDBPageEndpoint(instanceURL, query string, limit int, afterSysID string) (
 	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/cmdb_ci"
 	q := url.Values{}
 	q.Set("sysparm_display_value", "all")
+	q.Set("sysparm_fields", strings.Join(CMDBPageFields, ","))
 	q.Set("sysparm_limit", fmt.Sprintf("%d", limit))
 	q.Set("sysparm_query", strings.Join(parts, "^"))
 	q.Set("sysparm_suppress_pagination_header", "false")

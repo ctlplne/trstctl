@@ -47,37 +47,47 @@ func (s *Server) reconcileCMDBRecords(ctx context.Context, tenantID, resultKey s
 	out := CMDBReconcileResult{Read: len(records), Unattributed: unattributed}
 
 	names := make([]string, 0, len(records))
+	emails := make([]string, 0, len(records))
 	for _, record := range records {
 		names = append(names, record.OwnerName)
+		if record.Email != "" {
+			emails = append(emails, record.Email)
+		}
 	}
 	owners, err := s.store.ListOwnersByNames(ctx, tenantID, names)
 	if err != nil {
 		return out, err
 	}
-	byName := make(map[string]store.Owner, len(owners))
-	ambiguous := make(map[string]bool)
-	for _, o := range owners {
-		key := strings.ToLower(strings.TrimSpace(o.Name))
-		if _, duplicate := byName[key]; duplicate {
-			delete(byName, key)
-			ambiguous[key] = true
-			continue
-		}
-		if !ambiguous[key] {
-			byName[key] = o
-		}
+	byName := uniqueOwnersBy(owners, func(o store.Owner) string { return o.Name })
+	// A88: the owner reference's mailbox is the second join key. A CMDB that
+	// spells "Payments Platform" where this estate says "payments" still
+	// reconciles when both carry payments@example.test; a name is a label, an
+	// address is where the expiry notice goes.
+	byEmailOwners, err := s.store.ListOwnersByEmails(ctx, tenantID, emails)
+	if err != nil {
+		return out, err
 	}
+	byEmail := uniqueOwnersBy(byEmailOwners, func(o store.Owner) string { return o.Email })
 	if observedAt.IsZero() {
 		return out, fmt.Errorf("server: CMDB relay report has no observation time")
 	}
 	for _, rec := range records {
-		existing, ok := byName[strings.ToLower(strings.TrimSpace(rec.OwnerName))]
+		existing, ok := byEmail[strings.ToLower(strings.TrimSpace(rec.Email))]
+		if !ok || rec.Email == "" {
+			existing, ok = byName[strings.ToLower(strings.TrimSpace(rec.OwnerName))]
+		}
 		if !ok {
 			// A CMDB naming an owner this estate has never heard of is NOT an
 			// invitation to create one. A CI's assignment group is not evidence
 			// that a trstctl owner should exist, and auto-creating would build a
-			// parallel estate out of the CMDB's typos. It is reported instead.
-			out.Unattributed = append(out.Unattributed, rec.OwnerName)
+			// parallel estate out of the CMDB's typos. It is counted instead;
+			// the label keeps the mailbox it carried for anyone reading the
+			// reconcile result.
+			label := rec.OwnerName
+			if rec.Email != "" {
+				label += " <" + rec.Email + ">"
+			}
+			out.Unattributed = append(out.Unattributed, label)
 			out.Observations = append(out.Observations, projections.CMDBCIObservation{SourceRef: rec.SourceRef})
 			continue
 		}
@@ -122,8 +132,33 @@ func (s *Server) reconcileCMDBRecords(ctx context.Context, tenantID, resultKey s
 			}
 		}
 		byName[strings.ToLower(strings.TrimSpace(rec.OwnerName))] = existing
+		if existing.Email != "" {
+			byEmail[strings.ToLower(strings.TrimSpace(existing.Email))] = existing
+		}
 	}
 	return out, nil
+}
+
+// uniqueOwnersBy indexes owners by a lower-cased key and drops any key two
+// owners share: an ambiguous match is no match, reported rather than guessed.
+func uniqueOwnersBy(owners []store.Owner, key func(store.Owner) string) map[string]store.Owner {
+	out := make(map[string]store.Owner, len(owners))
+	ambiguous := make(map[string]bool)
+	for _, o := range owners {
+		k := strings.ToLower(strings.TrimSpace(key(o)))
+		if k == "" {
+			continue
+		}
+		if _, duplicate := out[k]; duplicate {
+			delete(out, k)
+			ambiguous[k] = true
+			continue
+		}
+		if !ambiguous[k] {
+			out[k] = o
+		}
+	}
+	return out
 }
 
 // RunCMDBScheduler is the leader-only ticker. A failed sync stamps the schedule

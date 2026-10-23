@@ -224,3 +224,50 @@ func FuzzParseCMDBPageNeverInventsContinuationAUD46(f *testing.F) {
 		}
 	})
 }
+
+// A88: the owner reference's mailbox rides beside its display value, paired
+// with the field the name came from, and the page asks ServiceNow for it by
+// dotted name; without that the email join can never happen.
+func TestOwnerEmailIsReadFromTheDotWalkedReferenceA88(t *testing.T) {
+	t.Parallel()
+	const body = `{"result":[
+		{"sys_id":"ci-1","name":"payments-api",
+		 "owned_by":{"value":"6816f79cc0a8016401c5a33be04be441","display_value":"Payments Platform"},
+		 "owned_by.email":{"value":"Payments@Example.test","display_value":"Payments@Example.test"},
+		 "assigned_to.email":"oncall@example.test"},
+		{"sys_id":"ci-2","name":"batch-host","assigned_to":"Batch Team","assigned_to.email":"batch@example.test"},
+		{"sys_id":"ci-3","name":"legacy-host","support_group":"Legacy","owned_by.email":"nobody@example.test"}
+	]}`
+	recs, _, err := ParseCMDB(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 3 {
+		t.Fatalf("records = %+v, want 3", recs)
+	}
+	if recs[0].OwnerName != "Payments Platform" || recs[0].Email != "payments@example.test" {
+		t.Fatalf("owned_by record = %+v, want the owned_by mailbox, lower-cased, not assigned_to's", recs[0])
+	}
+	if recs[1].OwnerName != "Batch Team" || recs[1].Email != "batch@example.test" {
+		t.Fatalf("assigned_to record = %+v, want the assigned_to mailbox", recs[1])
+	}
+	// The support group has no mailbox of its own; a different reference's
+	// mailbox is never borrowed for it.
+	if recs[2].OwnerName != "Legacy" || recs[2].Email != "" {
+		t.Fatalf("support_group record = %+v, want no borrowed mailbox", recs[2])
+	}
+	endpoint, err := CMDBPageEndpoint("https://cmdb.example.test", "", 100, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := u.Query().Get("sysparm_fields")
+	for _, want := range []string{"owned_by.email", "assigned_to.email", "support_group.email", "sys_id", "owned_by", "u_application"} {
+		if !strings.Contains(","+fields+",", ","+want+",") {
+			t.Fatalf("sysparm_fields = %q, missing %q", fields, want)
+		}
+	}
+}

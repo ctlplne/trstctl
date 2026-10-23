@@ -2860,8 +2860,12 @@ than sending an operator looking for a credential that was never there.
   decision returns 409. The projection also pins `resolved_at IS NULL` so a
   second event cannot overwrite the first judgment. The console provides a
   reason field and Resolve control for each open disagreement. The
-  CI-to-CERTIFICATE mapping is by owner NAME, so a CMDB whose owner
-  labels do not match this estate's owner names reconciles nothing and says so.
+  CI-to-owner mapping joins on the owner reference's EMAIL first (the page
+  asks ServiceNow for `owned_by.email`, `assigned_to.email` and
+  `support_group.email` beside the display values) and on the owner NAME
+  second, both compared without regard to case; an ambiguous key is no match.
+  A CI whose mailbox and label both miss this estate's owners reconciles
+  nothing and is counted as unattributed; no owner is created from it.
 - Issuance requests as first-class objects (I3): the effect-free
   `POST /api/v1/issuance-requests/preview`, the mutating
   `POST/GET /api/v1/issuance-requests`, and `/{id}/approve|deny|cancel`

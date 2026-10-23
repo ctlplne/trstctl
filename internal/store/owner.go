@@ -693,3 +693,61 @@ func (s *Store) CMDBScheduleDue(ctx context.Context, tenantID string, now time.T
 	}
 	return sched, true, nil
 }
+
+// ListOwnersByEmails loads the owners whose email matches one of emails,
+// compared without regard to case (A88). It is the second join key of a CMDB
+// reconciliation: a CI whose owner reference carries a mailbox matches the
+// trstctl owner with that mailbox even when the CMDB spells the name
+// differently.
+func (s *Store) ListOwnersByEmails(ctx context.Context, tenantID string, emails []string) ([]Owner, error) {
+	seen := make(map[string]bool, len(emails))
+	normalized := make([]string, 0, len(emails))
+	for _, email := range emails {
+		email = strings.ToLower(strings.TrimSpace(email))
+		if email == "" || seen[email] {
+			continue
+		}
+		seen[email] = true
+		normalized = append(normalized, email)
+	}
+	if len(normalized) == 0 {
+		return []Owner{}, nil
+	}
+	if len(normalized) > 500 {
+		return nil, fmt.Errorf("store: owner-email lookup exceeds the 500-record CMDB page bound")
+	}
+	var out []Owner
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, tenant_id::text, kind, name, email, created_at,
+			        coalesce(application_id, ''), coalesce(service, ''),
+			        coalesce(business_unit, ''), coalesce(environment, ''),
+			        escalation_chain, ownership_verified_at,
+			        coalesce(ownership_verified_by, ''), coalesce(ownership_model_digest, ''),
+			        ownership_reattestation_requested_at, ownership_reattestation_requested_for,
+			        coalesce(ownership_source, ''), coalesce(ownership_source_ref, ''),
+			        ownership_source_observed_at
+			   FROM owners
+			  WHERE tenant_id = $1 AND email <> '' AND lower(btrim(email)) = ANY($2::text[])
+			  ORDER BY id`, tenantID, normalized)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var owner Owner
+			var kind string
+			if err := rows.Scan(&owner.ID, &owner.TenantID, &kind, &owner.Name, &owner.Email, &owner.CreatedAt,
+				&owner.ApplicationID, &owner.Service, &owner.BusinessUnit, &owner.Environment,
+				&owner.EscalationChain, &owner.OwnershipVerifiedAt, &owner.OwnershipVerifiedBy, &owner.OwnershipModelDigest,
+				&owner.OwnershipReattestationRequestedAt, &owner.OwnershipReattestationRequestedFor,
+				&owner.OwnershipSource, &owner.OwnershipSourceRef, &owner.OwnershipSourceObservedAt); err != nil {
+				return err
+			}
+			owner.Kind = OwnerKind(kind)
+			out = append(out, owner)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

@@ -200,6 +200,11 @@ configured, paused, incomplete, failed, and completed coverage.
 starts a sweep now, as the scheduler's own durable relay job, without waiting
 for the interval; it refuses a paused schedule and never stacks a read behind a
 sweep that is still in flight.
+A CI's owner reference is matched to a trstctl owner by its email first
+(`owned_by.email`, `assigned_to.email`, `support_group.email` are read beside
+the display values) and by its display name second, so an estate whose owner
+names differ from the CMDB's labels still reconciles when the mailboxes agree.
+A CI matching neither is counted as unattributed, never created.
 The deployment binding for this URL and reference must set `relay_only: true`;
 ticket and response-dispatch bindings remain separate `env:` references.
 For a private HTTPS CMDB whose issuing CA is absent from the network relay's
