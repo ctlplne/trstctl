@@ -111,8 +111,12 @@ export const messages = {
     description: "Protect the newly created customer credential.",
   },
   "provider.assurance.isolation": {
-    defaultMessage: "Isolation this customer is served with",
+    defaultMessage: "Isolation in force for this customer",
     description: "A96: heading of the per-customer isolation readout in the Provider assurance view.",
+  },
+  "provider.assurance.separator": {
+    defaultMessage: " · ",
+    description: "A96: separator between the isolation facts (model, schema, lane, prefix) on one line.",
   },
   "provider.assurance.model": {
     defaultMessage: "Model: {model}",

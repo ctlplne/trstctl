@@ -6,15 +6,7 @@
 // copy unless the catalog is intentionally regenerated.
 
 export const extractedMessages: Array<{ key: string; defaultMessage: string; sources: string[] }> = [
-  {
-    key: "source.value1.d610afc356",
-    defaultMessage: "· {value1}",
-    sources: [
-      "src/pages/provider/ProviderSetupPanel.tsx:70",
-      "src/pages/provider/ProviderSetupPanel.tsx:71",
-      "src/pages/provider/ProviderSetupPanel.tsx:72",
-    ],
-  },
+
 ] as const;
 
 export type ExtractedMessageKey = (typeof extractedMessages)[number]["key"];

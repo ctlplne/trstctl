@@ -66,10 +66,14 @@ export function ProviderSetupPanel({
             <div className="rounded-control border border-border p-2 text-caption" aria-label={translateNow("provider.assurance.isolation")}>
               <p className="font-semibold">{translateNow("provider.assurance.isolation")}</p>
               <p>
-                {translateNow("provider.assurance.model", { model: iso.model })}
-                {iso.postgres_schema ? ` · ${translateNow("provider.assurance.schema", { schema: iso.postgres_schema })}` : ""}
-                {iso.jetstream_subject_lane ? ` · ${translateNow("provider.assurance.lane", { lane: iso.jetstream_subject_lane })}` : ""}
-                {iso.object_key_prefix ? ` · ${translateNow("provider.assurance.prefix", { prefix: iso.object_key_prefix })}` : ""}
+                {[
+                  translateNow("provider.assurance.model", { model: iso.model }),
+                  iso.postgres_schema ? translateNow("provider.assurance.schema", { schema: iso.postgres_schema }) : "",
+                  iso.jetstream_subject_lane ? translateNow("provider.assurance.lane", { lane: iso.jetstream_subject_lane }) : "",
+                  iso.object_key_prefix ? translateNow("provider.assurance.prefix", { prefix: iso.object_key_prefix }) : "",
+                ]
+                  .filter(Boolean)
+                  .join(translateNow("provider.assurance.separator"))}
               </p>
               <p className="text-muted-foreground">
                 {iso.audit_stream.exists
