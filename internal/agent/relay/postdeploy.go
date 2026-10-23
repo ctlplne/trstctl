@@ -54,16 +54,18 @@ func postDeployVerificationWithNative(ctx context.Context, intent DeployIntent, 
 		// overclaim the epic exists to remove, one layer down.
 		return OutcomeExecuted, "", ""
 	}
-	certPEM, ok := material["credential.cert_pem"]
-	if !ok || len(certPEM) == 0 {
+	servingPEM, err := servingCertificatePEM(material)
+	if err != nil {
 		return OutcomeExecuted, "", ""
 	}
 
-	// The expectation comes from the bytes that were just deployed, not from
-	// the intent's fingerprint field. Both should agree; building from the
-	// material means a disagreement between them cannot silently become a
-	// verification against the wrong expectation.
-	expect, err := certinfo.ExpectationFromChain(certPEM)
+	// The expectation comes from the bytes that were just written, leaf and
+	// issuers alike (servingCertificatePEM, B10-L1), not from the intent's
+	// fingerprint field. Both should agree; building from the material means a
+	// disagreement between them cannot silently become a verification against
+	// the wrong expectation, and a listener serving none of the delivered
+	// issuers is seen rather than reported as serving the deployment.
+	expect, err := certinfo.ExpectationFromChain(servingPEM)
 	if err != nil {
 		return transport.OutcomeVerifyFailed,
 			"deployed certificate could not be inspected to build a verification expectation", ""
@@ -95,11 +97,12 @@ func postDeployVerificationWithNative(ctx context.Context, intent DeployIntent, 
 		convergenceWindow = verify.DefaultTimeout
 	}
 	deadline := time.Now().Add(convergenceWindow)
+	strictChain := StrictChainVerification(intent.TargetConfig)
 	var res verify.Result
 verifyLoop:
 	for {
 		res, err = verify.Endpoint(probeCtx, request)
-		if err != nil || res.OK() || time.Now().After(deadline) {
+		if err != nil || VerificationPasses(res.Transcript, strictChain) || time.Now().After(deadline) {
 			break
 		}
 		select {
@@ -138,7 +141,7 @@ verifyLoop:
 	}
 	evidence = res.Transcript.Digest()
 
-	if !res.OK() {
+	if !VerificationPasses(res.Transcript, strictChain) {
 		// This is what justifies a rollback: the files landed and the listener
 		// is still not serving them. Distinct from OutcomeFailed, which means
 		// the deploy itself did not complete — rolling back a deploy that never
@@ -146,4 +149,42 @@ verifyLoop:
 		return transport.OutcomeVerifyFailed, string(encoded), evidence
 	}
 	return transport.OutcomeVerified, string(encoded), evidence
+}
+
+// strictChainKey is the target option that makes a chain-only mismatch fail
+// verification (B10-L1).
+const strictChainKey = "strict_chain"
+
+// StrictChainVerification reports whether the target's configuration asks a
+// chain-only mismatch to fail deploy and rollback verification.
+func StrictChainVerification(targetConfig json.RawMessage) bool {
+	if len(targetConfig) == 0 {
+		return false
+	}
+	var fields map[string]any
+	if json.Unmarshal(targetConfig, &fields) != nil {
+		return false
+	}
+	strict, _ := fields[strictChainKey].(bool)
+	return strict
+}
+
+// VerificationPasses is the one rule deploy and rollback verification share
+// (B10-L1): the listener was reached and serves the expected leaf, inside its
+// validity window; a fingerprint, SAN or validity mismatch fails. A chain-only
+// mismatch — the right leaf served with other issuers, as a TLS terminator
+// serving its own chain does — passes, named on the receipt and recorded as a
+// posture finding, unless the target is strict.
+func VerificationPasses(tr transport.ProbeTranscript, strictChain bool) bool {
+	if !tr.Reached {
+		return false
+	}
+	switch tr.Mismatch {
+	case certinfo.MismatchNone:
+		return true
+	case certinfo.MismatchChain:
+		return !strictChain
+	default:
+		return false
+	}
 }

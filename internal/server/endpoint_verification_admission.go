@@ -111,6 +111,20 @@ func validateReceivedProbe(tr transport.ProbeTranscript) error {
 			return errors.New("clean verification did not establish the expected chain")
 		}
 	}
+	if tr.Mismatch == certinfo.MismatchChain {
+		// A chain-only mismatch can pass verification (B10-L1), so it must
+		// establish everything a clean one does except the chain, and show a
+		// chain that actually differs.
+		if tr.Error != "" || tr.ExpectedFingerprint != tr.ObservedFingerprint || tr.NotAfterUnix < tr.NotBeforeUnix || tr.ObservedAtUnix < tr.NotBeforeUnix || tr.ObservedAtUnix > tr.NotAfterUnix {
+			return errors.New("chain-only verification contradicts its identity or validity window")
+		}
+		if tr.ExpectedSANDigest != "" && (!tr.CheckedSANs || tr.ExpectedSANDigest != tr.ObservedSANDigest) {
+			return errors.New("chain-only verification did not establish the expected names")
+		}
+		if !tr.CheckedChain || tr.ExpectedChainDigest == "" || tr.ExpectedChainDigest == tr.ObservedChainDigest {
+			return errors.New("chain-only verification shows no chain difference")
+		}
+	}
 	return nil
 }
 
@@ -137,7 +151,9 @@ func validateDeploymentVerificationReport(intent relay.DeployIntent, expected ce
 	if tr.Digest() != evidenceDigest {
 		return empty, errors.New("deployment verification digest differs from its signed evidence")
 	}
-	healthy := tr.Reached && tr.Mismatch == certinfo.MismatchNone
+	// One rule for deploy and rollback (B10-L1): a chain-only mismatch passes
+	// unless the target is strict.
+	healthy := relay.VerificationPasses(tr, relay.StrictChainVerification(intent.TargetConfig))
 	if (outcome == transport.JobOutcomeVerified) != healthy {
 		return empty, errors.New("deployment outcome contradicts its verification observation")
 	}

@@ -996,6 +996,16 @@ to prove which certificate the application actually serves.
 
 `verify_address` plus `verify_server_name` tell the agent which listener to
 re-handshake after the reload, so a receipt is backed by an independent TLS check.
+The expectation is built from the bytes the agent actually wrote, the leaf and the
+issuers installed with it, and deploy and rollback verification apply one rule: a
+different leaf, missing or unexpected names, or a certificate outside its validity
+window fails. A chain-only mismatch — the deployed leaf served with other issuers
+than were written, as a TLS terminator serving its own chain does — passes: the
+receipt reason is `endpoint_serving_deployed_identity_chain_mismatch` (rollback:
+`rolled_back_and_reverified_chain_mismatch`) and names the mismatch, and an
+`endpoint-chain-mismatch` discovery finding records the listener until it is
+triaged. Set `"strict_chain": true` in the target configuration to fail a
+chain-only mismatch instead (`endpoint_serving_chain_mismatch`, `verify_failed`).
 For MySQL, preview, post-deployment checks, and endpoint verification first read
 the server greeting and send MySQL's SSLRequest. Select the `mysql` connector even
 when the listener uses a nondefault port; the agent does not guess the protocol

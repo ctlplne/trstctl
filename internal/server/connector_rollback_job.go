@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -34,6 +35,17 @@ var rollbackReceiptNamespace = uuid.MustParse("6f1d9a52-0f2a-4a5e-9a41-2f9c7f6b0
 // without it the receipt said only "re-verification failed" and the cause
 // was unrecoverable after the fact. Anything that does not decode is left
 // out; the receipt never carries raw agent text.
+// reportedChainMismatch reports whether a signed rollback verification
+// observed the predecessor leaf with other issuers (B10-L1).
+func reportedChainMismatch(agentDetail string) bool {
+	var report relay.EndpointVerifyReport
+	if err := decodeStrictJSON([]byte(agentDetail), &report); err != nil || len(report.Results) != 1 {
+		return false
+	}
+	tr := report.Results[0].Transcript
+	return tr.Reached && tr.Mismatch == certinfo.MismatchChain
+}
+
 func rollbackVerificationDetail(agentDetail string) string {
 	var report relay.EndpointVerifyReport
 	if err := decodeStrictJSON([]byte(agentDetail), &report); err != nil || len(report.Results) != 1 {
@@ -60,6 +72,9 @@ func rollbackVerificationDetail(agentDetail string) string {
 			out.WriteString(": " + tr.Error)
 		}
 		out.WriteString(".")
+	case tr.Mismatch == certinfo.MismatchChain:
+		out.WriteString(" served the expected predecessor " + short(tr.ObservedFingerprint) +
+			" with other issuers than were restored (chain mismatch; set strict_chain on the target to fail on this).")
 	case tr.Mismatch != "":
 		out.WriteString(" served " + short(tr.ObservedFingerprint) + " where " + short(tr.ExpectedFingerprint) + " was expected (" + string(tr.Mismatch) + " mismatch).")
 	default:
@@ -103,6 +118,9 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string
 	switch outcome {
 	case transport.JobOutcomeVerified:
 		receiptReason = "rolled_back_and_reverified"
+		if reportedChainMismatch(reason) {
+			receiptReason = "rolled_back_and_reverified_chain_mismatch"
+		}
 		detail += " The same agent re-handshook the listener and verified the predecessor is serving."
 		detail += rollbackVerificationDetail(reason)
 	case transport.JobOutcomeExecuted:

@@ -86,7 +86,20 @@ func (s *Server) recordDeployVerification(ctx context.Context, tenantID, agentNa
 	if err := s.appendEndpointVerificationWithEventID(ctx, tenantID, agentName, result.EndpointID, result.Transcript, result.Detail, eventID); err != nil {
 		return err
 	}
-
+	if tr := result.Transcript; tr.Reached && tr.Mismatch == certinfo.MismatchChain && req.Outcome == transport.JobOutcomeVerified {
+		// An accepted chain-only mismatch (B10-L1) stays visible as a posture
+		// finding after the next leaf-only sweep reads the endpoint as healthy.
+		_, rollback := deployIntentForVerificationReceipt(claim.Payload)
+		observedAt := time.Unix(tr.ObservedAtUnix, 0).UTC()
+		if tr.ObservedAtUnix == 0 {
+			observedAt = time.Now().UTC()
+		}
+		return s.orch.RecordEndpointChainMismatch(ctx, tenantID, attemptKey, orchestrator.EndpointChainMismatch{
+			EndpointID: result.EndpointID, Address: tr.Address, ServerName: tr.ServerName,
+			Connector: intent.Connector, Target: intent.Target, LeafFingerprint: tr.ObservedFingerprint,
+			Rollback: rollback, ObservedAt: observedAt,
+		})
+	}
 	return nil
 }
 
@@ -228,6 +241,13 @@ func deploymentVerificationReceipt(intent relay.DeployIntent, tr transport.Probe
 		if detail == "" {
 			detail = "the endpoint could not be reached to verify what it is serving"
 		}
+	} else if tr.Mismatch == certinfo.MismatchChain && !relay.StrictChainVerification(intent.TargetConfig) {
+		// B10-L1: the deployed leaf is being served, with other issuers than
+		// were written. The deploy passes; the receipt names the mismatch and
+		// a posture finding records it.
+		reason = "endpoint_serving_deployed_identity_chain_mismatch"
+		detail = strings.TrimSpace("the listener serves the deployed leaf with other issuers than were written; " +
+			"set strict_chain on the target to fail on this. " + detail)
 	} else if tr.Mismatch != "" {
 		status = servedstatus.ConnectorVerifyFailed
 		reason = "endpoint_serving_" + string(tr.Mismatch) + "_mismatch"

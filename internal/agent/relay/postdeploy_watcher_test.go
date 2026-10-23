@@ -87,12 +87,19 @@ func TestElasticsearchWatchedCertificateVerification(t *testing.T) {
 		serverName    string
 		cancelAfter   time.Duration
 		missingIssuer bool
+		strictChain   bool
+		splitChain    bool
 		want          string
 	}{
 		{name: "activates_on_five_second_file_watch", delay: 5 * time.Second, serverName: "search.example.test", want: transport.OutcomeVerified},
 		{name: "ignored_file_change_still_fails", delay: time.Hour, serverName: "search.example.test", want: transport.OutcomeVerifyFailed},
 		{name: "wrong_hostname_still_fails", delay: 0, serverName: "other.example.test", want: transport.OutcomeVerifyFailed},
-		{name: "missing_expected_issuer_still_fails", delay: 0, serverName: "search.example.test", missingIssuer: true, want: transport.OutcomeVerifyFailed},
+		// B10-L1: a chain-only mismatch passes, named, unless the target is strict.
+		{name: "missing_expected_issuer_passes_named", delay: 0, serverName: "search.example.test", missingIssuer: true, want: transport.OutcomeVerified},
+		{name: "missing_expected_issuer_fails_when_strict", delay: 0, serverName: "search.example.test", missingIssuer: true, strictChain: true, want: transport.OutcomeVerifyFailed},
+		// B10-L1: the expectation comes from the bytes written, so issuers
+		// delivered as credential.chain_pem are checked too.
+		{name: "written_issuers_are_checked", delay: 0, serverName: "search.example.test", missingIssuer: true, splitChain: true, want: transport.OutcomeVerified},
 		{name: "caller_cancellation_stops_wait", delay: time.Hour, serverName: "search.example.test", cancelAfter: 250 * time.Millisecond, want: transport.OutcomeVerifyFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -101,6 +108,9 @@ func TestElasticsearchWatchedCertificateVerification(t *testing.T) {
 			if tc.missingIssuer {
 				chain := append(append([]byte(nil), fresh.LeafPEM...), old.LeafPEM...)
 				material = Material{"credential.cert_pem": chain}
+				if tc.splitChain {
+					material = Material{"credential.cert_pem": fresh.LeafPEM, "credential.chain_pem": old.LeafPEM}
+				}
 				var err error
 				expectation, err = certinfo.ExpectationFromChain(chain)
 				if err != nil {
@@ -108,6 +118,9 @@ func TestElasticsearchWatchedCertificateVerification(t *testing.T) {
 				}
 			}
 			intent := DeployIntent{Connector: "elasticsearch", TargetID: "search-target", VerifyAddress: watchedTLSListener(t, old.Addr, fresh.Addr, tc.delay), VerifyServerName: tc.serverName}
+			if tc.strictChain {
+				intent.TargetConfig = json.RawMessage(`{"strict_chain":true}`)
+			}
 			ctx := t.Context()
 			if tc.cancelAfter > 0 {
 				var cancel context.CancelFunc
@@ -145,7 +158,11 @@ func TestElasticsearchWatchedCertificateVerification(t *testing.T) {
 			if err := tr.Validate(); err != nil {
 				t.Fatal(err)
 			}
-			if tc.want == transport.OutcomeVerified && (!tr.Reached || tr.Mismatch != certinfo.MismatchNone || tr.ObservedFingerprint != expectation.SHA256Fingerprint || tr.CheckedChain != (len(expectation.ChainFingerprints) > 0) || !tr.CheckedSANs || tr.ServerName != tc.serverName) {
+			wantMismatch := certinfo.MismatchNone
+			if tc.missingIssuer {
+				wantMismatch = certinfo.MismatchChain
+			}
+			if tc.want == transport.OutcomeVerified && (!tr.Reached || tr.Mismatch != wantMismatch || tr.ObservedFingerprint != expectation.SHA256Fingerprint || tr.CheckedChain != (len(expectation.ChainFingerprints) > 0) || !tr.CheckedSANs || tr.ServerName != tc.serverName) {
 				t.Fatalf("verification weakened: %+v", tr)
 			}
 		})
