@@ -48,6 +48,8 @@ import (
 )
 
 func main() {
+	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
+	netsec.HardenProcessDefaults()
 	showVersion := flag.Bool("version", false, "print version information and exit")
 	tomcatReloadURL := flag.String("tomcat-reload-url", "", "one-shot: reload TLS through the stock Tomcat Manager /manager/text/sslReload on a literal loopback address, then exit")
 	tomcatReloadUser := flag.String("tomcat-reload-user", "", "Tomcat Manager username with manager-script permission (one-shot TLS reload)")

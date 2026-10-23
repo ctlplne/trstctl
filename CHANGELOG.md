@@ -20,6 +20,17 @@
   in the images or guarded against another weak key under the same roots.
   `trstctl-trustbundle` (filter, probe, list) is the build-stage tool; the
   Node images read the system store (`NODE_OPTIONS=--use-openssl-ca`).
+- Every outbound TLS client now checks a runtime distrust list after normal
+  verification, on resumed sessions too: a verified chain through a distrusted
+  root, intermediate or key (the three emSign roots and the eight eMudhra
+  intermediates by SPKI, so their cross-signs are caught) fails the handshake
+  with the entry named, while a server that also presents a clean path still
+  connects, as Go's own distrust list behaves. The check lives in the shared
+  transport builders (`internal/netsec`, the egress guard), on the process
+  default transport every binary installs at startup, and on an
+  operator-pinned external CA root as well; operators add entries with
+  `trust.distrust_file` for sites that cannot take a release the day a CA is
+  distrusted, and the shipped entries cannot be removed.
 
 ### Fixed
 

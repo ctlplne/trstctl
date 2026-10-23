@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -131,6 +133,12 @@ func (g *Guard) WrapTransport(base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
+	// A plain transport handed to the guard leaves with the runtime distrust
+	// list on it (eMudhra response, Part 2), cloned so the caller's value and
+	// the process default are untouched.
+	if t, ok := base.(*http.Transport); ok {
+		base = trust.HardenTransport(t.Clone())
+	}
 	if g == nil || !g.enabled {
 		return base
 	}
@@ -140,7 +148,7 @@ func (g *Guard) WrapTransport(base http.RoundTripper) http.RoundTripper {
 // Client returns a guarded HTTP client. A non-positive timeout leaves the client
 // with the standard library's no-deadline behavior.
 func (g *Guard) Client(timeout time.Duration) *http.Client {
-	return &http.Client{Transport: g.WrapTransport(http.DefaultTransport), Timeout: timeout}
+	return &http.Client{Transport: g.WrapTransport(netsec.HardenedDefaultTransport()), Timeout: timeout}
 }
 
 type roundTripper struct {

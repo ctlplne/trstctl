@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // ValidateHTTPSOrInsecureLoopbackURL enforces the one narrow plaintext escape
@@ -69,12 +71,12 @@ func InsecureLoopbackClient(timeout time.Duration) *http.Client {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	transport := &http.Transport{
+	transport := trust.HardenTransport(&http.Transport{
 		DialContext:           dialLoopbackContext,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ResponseHeaderTimeout: 5 * time.Second,
 		DisableKeepAlives:     true,
-	}
+	})
 	return &http.Client{
 		Timeout:   timeout,
 		Transport: transport,

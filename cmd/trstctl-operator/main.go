@@ -35,10 +35,13 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/operator"
 )
 
 func main() {
+	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
+	netsec.HardenProcessDefaults()
 	showVersion := flag.Bool("version", false, "print version information and exit")
 	namespace := flag.String("namespace", "", "namespace to reconcile TrstctlControlPlane resources in (default: the operator's own namespace)")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the level-based reconcile runs")

@@ -33,6 +33,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/leader"
@@ -94,6 +95,9 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		slog.String("state", string(lic.State())))
 	egressGuard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
+		return err
+	}
+	if err := installOperatorDistrust(cfg.Trust, logger); err != nil {
 		return err
 	}
 
@@ -1049,6 +1053,30 @@ func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, err
 		return nil, fmt.Errorf("rate limit window: %w", err)
 	}
 	return ratelimit.FromRate(st, cfg.RateLimit.Requests, window), nil
+}
+
+// installOperatorDistrust adds the operator's distrust entries (trust.distrust_file)
+// to the shipped list every outbound TLS client checks. Configuration only adds.
+func installOperatorDistrust(cfg config.Trust, logger *slog.Logger) error {
+	path := strings.TrimSpace(cfg.DistrustFile)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path) // #nosec G304 G703 -- operator-configured local file path from deployment config (CWE-22)
+	if err != nil {
+		return fmt.Errorf("trust.distrust_file: %w", err)
+	}
+	extra, err := trust.Parse(data)
+	if err != nil {
+		return fmt.Errorf("trust.distrust_file: %w", err)
+	}
+	if err := trust.SetOperator(extra); err != nil {
+		return fmt.Errorf("trust.distrust_file: %w", err)
+	}
+	if logger != nil {
+		logger.Info("operator distrust entries installed", slog.Int("operator_entries", extra.Len()), slog.Int("active_entries", trust.Active().Len()))
+	}
+	return nil
 }
 
 func egressGuardFromConfig(cfg config.AirGap) (*egress.Guard, error) {

@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto/trust"
 )
 
 // ErrSSRFBlocked is returned when an outbound request is aimed at an address in a
@@ -136,13 +138,16 @@ func SafeTransport() *http.Transport {
 // SafeTransportWithOptions is SafeTransport with explicit private-CIDR allowances.
 func SafeTransportWithOptions(opts SafeClientOptions) *http.Transport {
 	d := &net.Dialer{Timeout: 5 * time.Second, Control: SafeDialControlWithOptions(opts)}
-	return &http.Transport{
+	// Every outbound transport also carries the runtime distrust list (eMudhra
+	// response, Part 2): after Go's own verification, a chain through a
+	// distrusted root, intermediate or key is refused, on resumed sessions too.
+	return trust.HardenTransport(&http.Transport{
 		DialContext:           d.DialContext,
 		TLSHandshakeTimeout:   5 * time.Second,
 		ResponseHeaderTimeout: 5 * time.Second,
 		// Don't reuse a connection across hosts/redirects — each dial is re-validated.
 		DisableKeepAlives: true,
-	}
+	})
 }
 
 // ValidatePublicHTTPSURL checks the cheap parts of an operator/tenant-supplied

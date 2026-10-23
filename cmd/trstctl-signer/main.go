@@ -27,10 +27,13 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/license"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/signing"
 )
 
 func main() {
+	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
+	netsec.HardenProcessDefaults()
 	showVersion := flag.Bool("version", false, "print version information and exit")
 	fipsRequired := flag.Bool("fips", false, "require an active Go FIPS 140-3 module before the signer loads or serves keys")
 	socket := flag.String("socket", "", "path to the Unix domain socket to listen on (single-node/sidecar transport)")

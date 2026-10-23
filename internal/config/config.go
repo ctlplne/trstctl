@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -98,6 +99,7 @@ type Config struct {
 	CodeSigning               CodeSigning              `json:"code_signing"`
 	ITSM                      ITSM                     `json:"itsm"`
 	AirGap                    AirGap                   `json:"air_gap"`
+	Trust                     Trust                    `json:"trust"`
 	OutboundEnvCredentialRefs []string                 `json:"outbound_env_credential_refs,omitempty"`
 	Telemetry                 Telemetry                `json:"telemetry"`
 	OTLP                      OTLP                     `json:"otlp"`
@@ -1589,6 +1591,16 @@ type NotificationSIEM struct {
 	AllowInsecureHTTP bool     `json:"allow_insecure_http,omitempty"`
 }
 
+// Trust configures the runtime certificate distrust list every outbound TLS
+// client checks (eMudhra response, Part 2). The shipped list in
+// internal/crypto/trust/distrust.json always applies; DistrustFile names a
+// file in the same shape whose entries are ADDED for deployments that cannot
+// take a release quickly (an air-gapped site). Configuration can never remove
+// a shipped entry.
+type Trust struct {
+	DistrustFile string `json:"distrust_file,omitempty"`
+}
+
 // AirGap configures the no-phone-home outbound HTTP guard. When enabled, public
 // destinations are denied unless the operator names an explicit host or CIDR.
 type AirGap struct {
@@ -2861,6 +2873,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyCodeSigningEnv(getenv, &c.CodeSigning)
 	applyProviderEnv(getenv, &c.Provider)
 	setServiceNowEnv(getenv, &c.ITSM.ServiceNow)
+	setString(getenv, "TRSTCTL_TRUST_DISTRUST_FILE", &c.Trust.DistrustFile)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
@@ -3963,6 +3976,7 @@ func validateOptionalServices(c *Config) []error {
 		}
 	}
 	errs = append(errs, validateAirGap(c)...)
+	errs = append(errs, validateTrust(c)...)
 	errs = append(errs, validateITSM(c)...)
 	errs = append(errs, validateOutboundEnvCredentialRefs(c)...)
 	if c.OTLP.Enabled {
@@ -4056,6 +4070,23 @@ func validateOptionalServices(c *Config) []error {
 		}
 	}
 	return errs
+}
+
+// validateTrust reads the operator distrust file at load so a malformed entry
+// fails startup instead of silently protecting nothing.
+func validateTrust(c *Config) []error {
+	path := strings.TrimSpace(c.Trust.DistrustFile)
+	if path == "" {
+		return nil
+	}
+	data, err := os.ReadFile(path) // #nosec G304 G703 -- operator-configured local file path from deployment config (CWE-22)
+	if err != nil {
+		return []error{fmt.Errorf("trust.distrust_file: %w", err)}
+	}
+	if _, err := trust.Parse(data); err != nil {
+		return []error{fmt.Errorf("trust.distrust_file %q: %w", path, err)}
+	}
+	return nil
 }
 
 func validateAirGap(c *Config) []error {

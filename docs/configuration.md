@@ -728,6 +728,7 @@ or CIDR. It is intended for disconnected networks and is paired with the Helm
 | `TRSTCTL_AIRGAP_ALLOW_PRIVATE` | `true` | Allows loopback, private, and link-local IP destinations. Leave true for private PostgreSQL/NATS/OTLP/local model endpoints. |
 | `TRSTCTL_AIRGAP_ALLOW_HOSTS` | — | Comma-separated host allowlist for operator-owned local services such as `otel-collector.observability.svc`. Hosts only; URLs are rejected. |
 | `TRSTCTL_AIRGAP_ALLOW_CIDRS` | — | Comma-separated CIDR allowlist for private service ranges, e.g. `10.0.0.0/8,172.16.0.0/12`. Invalid CIDRs fail startup. |
+| `TRSTCTL_TRUST_DISTRUST_FILE` | — | Optional JSON file in the shape of the shipped `internal/crypto/trust/distrust.json` whose entries are added to the runtime distrust list every outbound TLS client checks (a chain through a distrusted root, intermediate or key is refused after normal verification, on resumed sessions too). For deployments that cannot take a release the day a CA is distrusted. The shipped entries always apply and cannot be removed here; a malformed file fails startup. |
 | `TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS` | — | Comma-separated `env:NAME` references that API-authored discovery, response-integration, and scheduled audit-feed requests may use for outbound credentials. Unknown env refs are rejected before event/outbox enqueue. |
 
 When `TRSTCTL_AIRGAP_ENABLED=true`, trstctl rejects

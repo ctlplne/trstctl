@@ -39,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/crypto/trust"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/protocols/ari"
@@ -528,7 +529,8 @@ func externalCAHTTPClient(endpoint string, network config.ExternalCANetworkConfi
 		trusted.TLSHandshakeTimeout = safe.TLSHandshakeTimeout
 		trusted.ResponseHeaderTimeout = safe.ResponseHeaderTimeout
 		trusted.DisableKeepAlives = true
-		transport = trusted
+		// An operator-pinned root is still subject to the runtime distrust list.
+		transport = trust.HardenTransport(trusted)
 	}
 	roundTripper := http.RoundTripper(transport)
 	if guard != nil {
