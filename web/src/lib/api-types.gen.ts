@@ -5478,7 +5478,7 @@ export interface NHIComplianceSummary {
 }
 
 export interface NHIDecommissionItem {
-  action: "revoked" | "retired" | "skipped" | "failed";
+  action: "revoked" | "retired" | "skipped" | "refused" | "failed";
   error?: string;
   evidence_refs?: string[];
   from: string;
@@ -5517,6 +5517,7 @@ export interface NHIDecommissionSignal {
 
 export interface NHIDecommissionSummary {
   failed: number;
+  refused: number;
   retired: number;
   revoked: number;
   skipped: number;

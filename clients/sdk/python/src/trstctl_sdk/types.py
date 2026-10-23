@@ -7629,6 +7629,7 @@ NHIDecommissionSummary = TypedDict(
     'NHIDecommissionSummary',
     {
         'failed': int,
+        'refused': int,
         'retired': int,
         'revoked': int,
         'skipped': int,

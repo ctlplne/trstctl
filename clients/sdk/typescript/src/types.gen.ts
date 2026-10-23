@@ -13649,7 +13649,7 @@ export interface components {
         };
         NHIDecommissionItem: {
             /** @enum {string} */
-            action: "revoked" | "retired" | "skipped" | "failed";
+            action: "revoked" | "retired" | "skipped" | "refused" | "failed";
             error?: string;
             evidence_refs?: string[];
             from: string;
@@ -13691,6 +13691,7 @@ export interface components {
         };
         NHIDecommissionSummary: {
             failed: number;
+            refused: number;
             retired: number;
             revoked: number;
             skipped: number;

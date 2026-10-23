@@ -675,7 +675,12 @@ notifications use the [notification integrations](policy-and-governance.md).
   `/api/v1/remediation/playbooks`,
   `/api/v1/remediation/playbooks/{id}/runs`,
   `/api/v1/remediation/playbook-runs{,/{id}}`, `trstctl-cli remediation playbooks*`,
-  and `/incidents`; owner-driven self-remediation (CAP-REM-02) is served through
+  and `/incidents`. The revoke and rotate playbooks take the same lifecycle gate as
+  an identity's own revoke and issue (`certs:issue`, the ABAC overlay, the
+  default-deny policy, dual control); the rotate playbook decides both its issue
+  and its revoke before it creates the replacement. A playbook carries no exact
+  approval, so under dual control it refuses with `403` and names
+  `POST /api/v1/identities/{id}/transitions`, which does. Owner-driven self-remediation (CAP-REM-02) is served through
   `/api/v1/remediation/owner-actions`,
   `/api/v1/remediation/owner-actions/{id}/accept`,
   `trstctl-cli remediation owner-actions *`, and the `/incidents` console; NHI

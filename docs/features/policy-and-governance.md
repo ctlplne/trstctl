@@ -260,8 +260,14 @@ activity fields such as `last_seen_at` and `last_used_at`. Matched identities ar
 decommissioned through the normal lifecycle state machine: active issued,
 deployed, or renewing identities are revoked with the RFC 5280
 `cessationOfOperation` reason by default, and already-revoked identities are
-retired. The response is an evidence pack with the signal type, action, previous
-state, final state, and evidence refs for each item.
+retired. Each revocation takes the same lifecycle gate as the identity's own
+revoke: the caller needs `certs:issue`, and the ABAC overlay and default-deny
+policy must allow it. A decommission request carries no exact approval, so where
+dual control applies the identity is reported `refused` with the gate's reason
+and left as it was; revoke it through `POST /api/v1/identities/{id}/transitions`
+with a distinct approver's approval. The response is an evidence pack with the
+signal type, action, previous state, final state, and evidence refs for each
+item, and its summary counts `refused` apart from `failed`.
 
 The same workflow is exposed as `trstctl-cli nhi decommission -f
 nhi-decommission.json --force` and in the Identities console. It deliberately

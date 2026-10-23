@@ -5,10 +5,12 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -46,6 +48,7 @@ type nhiDecommissionSummary struct {
 	Revoked      int `json:"revoked"`
 	Retired      int `json:"retired"`
 	Skipped      int `json:"skipped"`
+	Refused      int `json:"refused"`
 	Failed       int `json:"failed"`
 }
 
@@ -81,7 +84,8 @@ func (a *API) decommissionNHI(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		resp, err := a.runNHIDecommission(ctx, tenantID, req)
+		principal, _ := ctx.Value(principalCtxKey).(authz.Principal)
+		resp, err := a.runNHIDecommission(ctx, tenantID, principal, req)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -89,7 +93,7 @@ func (a *API) decommissionNHI(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) runNHIDecommission(ctx context.Context, tenantID string, req nhiDecommissionRequest) (nhiDecommissionResponse, error) {
+func (a *API) runNHIDecommission(ctx context.Context, tenantID string, principal authz.Principal, req nhiDecommissionRequest) (nhiDecommissionResponse, error) {
 	req.Reason = strings.TrimSpace(req.Reason)
 	if req.Reason == "" {
 		req.Reason = "NHI decommission requested"
@@ -137,7 +141,7 @@ func (a *API) runNHIDecommission(ctx context.Context, tenantID string, req nhiDe
 				continue
 			}
 			seen[ident.ID] = true
-			item := a.applyNHIDecommissionAction(ctx, tenantID, ident, match, req.Reason, revocationReason)
+			item := a.applyNHIDecommissionAction(ctx, tenantID, principal, ident, match, req.Reason, revocationReason)
 			resp.Items = append(resp.Items, item)
 			resp.Summary.TotalMatched++
 			switch item.Action {
@@ -147,6 +151,8 @@ func (a *API) runNHIDecommission(ctx context.Context, tenantID string, req nhiDe
 				resp.Summary.Retired++
 			case "skipped":
 				resp.Summary.Skipped++
+			case "refused":
+				resp.Summary.Refused++
 			case "failed":
 				resp.Summary.Failed++
 			}
@@ -268,7 +274,7 @@ func matchOwnerSignal(ident store.Identity, owner store.Owner, idx nhiDecommissi
 	return len(attrFields) == 0 && strings.TrimSpace(ownerID) == "" && strings.TrimSpace(ownerName) == "" && strings.TrimSpace(subject) == ""
 }
 
-func (a *API) applyNHIDecommissionAction(ctx context.Context, tenantID string, ident store.Identity, match nhiDecommissionMatch, reason, revocationReason string) nhiDecommissionItem {
+func (a *API) applyNHIDecommissionAction(ctx context.Context, tenantID string, principal authz.Principal, ident store.Identity, match nhiDecommissionMatch, reason, revocationReason string) nhiDecommissionItem {
 	from := orchestrator.State(ident.Status)
 	item := nhiDecommissionItem{
 		IdentityID: ident.ID, Name: ident.Name, Kind: string(ident.Kind), OwnerID: ident.OwnerID,
@@ -289,6 +295,19 @@ func (a *API) applyNHIDecommissionAction(ctx context.Context, tenantID string, i
 		item.Action = "retired"
 		item.To = string(orchestrator.StateRetired)
 	case orchestrator.CanTransition(from, orchestrator.StateRevoked):
+		// A revocation takes the same gate as the identity's own revoke; a
+		// refusal (policy, ABAC, missing certs:issue, dual control) is
+		// reported per identity and leaves it as it was.
+		if err := a.gateOperatorTransition(ctx, principal, tenantID, ident.ID, orchestrator.StateRevoked); err != nil {
+			item.Action = "failed"
+			if detail, refused := operatorGateRefusal(err); refused {
+				item.Action = "refused"
+				err = errors.New(detail)
+			}
+			item.To = string(from)
+			item.Error = err.Error()
+			return item
+		}
 		if err := a.orch.Transition(ctx, tenantID, ident.ID, orchestrator.StateRevoked, revocationReason); err != nil {
 			item.Action = "failed"
 			item.To = string(from)

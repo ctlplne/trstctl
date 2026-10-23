@@ -2724,15 +2724,16 @@ func componentSchemas() map[string]*Schema {
 		"revoked":       {Type: "integer"},
 		"retired":       {Type: "integer"},
 		"skipped":       {Type: "integer"},
+		"refused":       {Type: "integer"},
 		"failed":        {Type: "integer"},
-	}, "total_matched", "revoked", "retired", "skipped", "failed")
+	}, "total_matched", "revoked", "retired", "skipped", "refused", "failed")
 	nhiDecommissionItem := object(map[string]*Schema{
 		"identity_id":   uuid(),
 		"name":          str(),
 		"kind":          str(),
 		"owner_id":      uuid(),
 		"signal_type":   {Type: "string", Enum: []string{"departure", "vendor_term", "inactivity"}},
-		"action":        {Type: "string", Enum: []string{"revoked", "retired", "skipped", "failed"}},
+		"action":        {Type: "string", Enum: []string{"revoked", "retired", "skipped", "refused", "failed"}},
 		"from":          str(),
 		"to":            str(),
 		"evidence_refs": {Type: "array", Items: str()},

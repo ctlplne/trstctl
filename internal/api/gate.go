@@ -199,6 +199,9 @@ type gateError struct {
 	status   int
 	detail   string
 	approval *ApprovalAuthority
+	// exactApprovalRequired marks the dual-control refusal of a caller that
+	// carries no exact approval intent (a batch or playbook action).
+	exactApprovalRequired bool
 }
 
 func (e *gateError) Error() string { return e.detail }
@@ -294,7 +297,7 @@ func (g MutationGate) checkWithApproval(ctx context.Context, p authz.Principal, 
 		}
 		exact, ok := g.Checker.(ExactApprovalChecker)
 		if !ok || intent == nil {
-			return nil, &gateError{status: http.StatusForbidden,
+			return nil, &gateError{status: http.StatusForbidden, exactApprovalRequired: true,
 				detail: "dual control: exact request ID, intent digest, target version, and evidence are required"}
 		}
 		bound := *intent

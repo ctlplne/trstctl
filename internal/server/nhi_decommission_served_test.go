@@ -22,7 +22,9 @@ import (
 // events instead of leaving decommissioning as tenant/member offboarding docs.
 func TestServedNHIDecommissionCAPGOV04EndToEnd(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
-	tok := seedScopedToken(t, h.store, h.tenant, "identities:read", "identities:write", "nhi:read")
+	// Revocation takes the lifecycle gate's privileged scope, as on the
+	// identity's own revoke; without it each revoke is reported refused.
+	tok := seedScopedToken(t, h.store, h.tenant, "identities:read", "identities:write", "nhi:read", "certs:issue")
 	ctx := context.Background()
 
 	alice, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerUser, Name: "Alice Departing", Email: "alice@example.test"})

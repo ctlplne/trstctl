@@ -710,7 +710,9 @@ export function Identities() {
       if (result.summary.total_matched > 0) {
         await load();
         await loadEvidence();
-        setNotice(`NHI decommission accepted: ${result.summary.revoked} revoked, ${result.summary.retired} retired, ${result.summary.skipped} skipped.`);
+        setNotice(
+          `NHI decommission accepted: ${result.summary.revoked} revoked, ${result.summary.retired} retired, ${result.summary.refused} refused, ${result.summary.skipped} skipped.`,
+        );
       }
     } catch (err) {
       setError(apiProblemContext(err, "NHI decommission failed"));
@@ -1156,12 +1158,13 @@ export function Identities() {
             <div role="status" className="mt-3 border-s-2 border-status-success ps-3 text-sm">
               <p className="font-medium">
                 {translateNow("source.cap.gov.04.matched.d376577cb5")} {decommissionResult.summary.total_matched}; revoked {decommissionResult.summary.revoked};
-                retired {decommissionResult.summary.retired}; failed {decommissionResult.summary.failed}
+                retired {decommissionResult.summary.retired}; refused {decommissionResult.summary.refused}; failed {decommissionResult.summary.failed}
               </p>
               <ul className="mt-2 space-y-1">
                 {decommissionResult.items.slice(0, 5).map((item) => (
                   <li key={item.identity_id}>
                     {item.name} {item.action} {translateNow("source.via.4d327af41f")} {item.signal_type}
+                    {item.error && <span className="ms-1 text-status-warning">{item.error}</span>}
                   </li>
                 ))}
               </ul>

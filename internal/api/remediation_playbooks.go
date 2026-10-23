@@ -363,6 +363,9 @@ func (a *API) runRevokePlaybook(ctx context.Context, tenantID string, principal 
 	if !incidentRevocable(orchestrator.State(identity.Status)) {
 		return store.RemediationPlaybookRun{}, errStatus(http.StatusConflict, "revoke playbook requires an issued, deployed, or renewing identity")
 	}
+	if err := a.gateOperatorTransition(ctx, principal, tenantID, identityID, orchestrator.StateRevoked); err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
 	reason := remediationReason(req.Reason, "revoke playbook")
 	if err := a.orch.Transition(ctx, tenantID, identityID, orchestrator.StateRevoked, "remediation playbook revoke: "+reason); err != nil {
 		return store.RemediationPlaybookRun{}, err
@@ -388,6 +391,15 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 	}
 	if !incidentRevocable(orchestrator.State(compromised.Status)) {
 		return store.RemediationPlaybookRun{}, errStatus(http.StatusConflict, "rotate playbook requires an issued, deployed, or renewing identity")
+	}
+	// Both privileged steps are decided before anything changes. The
+	// replacement inherits the compromised identity's kind, owner, issuer,
+	// attributes and profile, so its issuance is decided on that identity, and
+	// a refusal leaves no replacement behind.
+	for _, to := range []orchestrator.State{orchestrator.StateRevoked, orchestrator.StateIssued} {
+		if err := a.gateOperatorTransition(ctx, principal, tenantID, compromised.ID, to); err != nil {
+			return store.RemediationPlaybookRun{}, err
+		}
 	}
 	reason := remediationReason(req.Reason, "rotate playbook")
 	replacementName := strings.TrimSpace(req.ReplacementName)

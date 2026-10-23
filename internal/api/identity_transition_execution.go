@@ -79,22 +79,9 @@ func (a *API) executeIdentityTransition(ctx context.Context, tenantID string, pr
 	gate := a.gate
 	var profileReq orchestrator.ProfileApprovalRequirement
 	if state == orchestrator.StateIssued && a.orch != nil {
-		profileReq, err = a.orch.ProfileApprovalRequirement(ctx, tenantID, id)
+		profileReq, err = a.issuanceProfileRequirement(ctx, tenantID, id, gate.Profile)
 		if err != nil {
 			return 0, nil, err
-		}
-		// An identity-level profile wins. Otherwise resolve the configured
-		// served default when it exists, so a display label cannot stand in
-		// for the revision that will actually govern signing.
-		if profileReq.ProfileName == "" && gate.Profile != "" {
-			configured, resolveErr := a.orch.ProfileApprovalRequirementByName(ctx, tenantID, gate.Profile)
-			if resolveErr != nil {
-				// A configured label without a stored revision is not approval
-				// evidence. Fail before EnsureOperationApprovalRequest so the
-				// queue cannot advertise authority the dispatcher must reject.
-				return 0, nil, resolveErr
-			}
-			profileReq = configured
 		}
 		if err := a.validateIdentityProfileLifetime(ctx, tenantID, identity, profileReq, csrPEM); err != nil {
 			return 0, nil, err

@@ -22691,6 +22691,7 @@
               "revoked",
               "retired",
               "skipped",
+              "refused",
               "failed"
             ],
             "type": "string"
@@ -22846,6 +22847,9 @@
           "failed": {
             "type": "integer"
           },
+          "refused": {
+            "type": "integer"
+          },
           "retired": {
             "type": "integer"
           },
@@ -22864,6 +22868,7 @@
           "revoked",
           "retired",
           "skipped",
+          "refused",
           "failed"
         ],
         "type": "object"

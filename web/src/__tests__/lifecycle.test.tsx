@@ -520,7 +520,7 @@ describe("lifecycle actions from the UI", () => {
       capability: "CAP-GOV-04",
       coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
       reason: "departure decommission via UI",
-      summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+      summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, refused: 0, failed: 0 },
       items: [
         {
           identity_id: "dep-1",
@@ -1354,7 +1354,7 @@ describe("lifecycle actions from the UI", () => {
       capability: "CAP-GOV-04",
       coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
       reason: "vendor termination CAB-22",
-      summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+      summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, refused: 0, failed: 0 },
       items: [
         {
           identity_id: "dep-1",
@@ -1384,8 +1384,44 @@ describe("lifecycle actions from the UI", () => {
       reason: "vendor termination CAB-22",
       signals: [{ type: "vendor_term", vendor_name: "Acme SaaS", evidence_refs: ["ui:identities/decommission"] }],
     });
-    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 1; retired 0; failed 0/)).toBeInTheDocument();
+    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 1; retired 0; refused 0; failed 0/)).toBeInTheDocument();
     expect(screen.getByText("payments-api revoked via vendor_term")).toBeInTheDocument();
+  });
+
+  it("shows a decommission the lifecycle gate refused, with the gate's reason", async () => {
+    apiMock.identities.mockResolvedValue([{ id: "dep-2", name: "billing-api", kind: "api_key", owner_id: "owner-1", status: "deployed" }]);
+    apiMock.decommissionNHI.mockResolvedValueOnce({
+      capability: "CAP-GOV-04",
+      coverage: ["departure", "vendor_term", "inactivity", "revoke", "retire"],
+      reason: "vendor termination CAB-23",
+      summary: { total_matched: 1, revoked: 0, retired: 0, skipped: 0, refused: 1, failed: 0 },
+      items: [
+        {
+          identity_id: "dep-2",
+          name: "billing-api",
+          kind: "api_key",
+          owner_id: "owner-1",
+          signal_type: "vendor_term",
+          action: "refused",
+          from: "deployed",
+          to: "deployed",
+          error: "dual control: a distinct approver must approve this revoke",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    expect(await screen.findByText("billing-api")).toBeInTheDocument();
+    await user.click(screen.getByText("Open decommission controls"));
+    const form = screen.getByRole("form", { name: "NHI decommission" });
+    await user.selectOptions(within(form).getByLabelText("Signal"), "vendor_term");
+    await user.type(within(form).getByLabelText("Vendor"), "Acme SaaS");
+    await user.type(within(form).getByLabelText("Reason"), "vendor termination CAB-23");
+    await user.click(within(form).getByRole("button", { name: "Decommission" }));
+
+    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 0; retired 0; refused 1; failed 0/)).toBeInTheDocument();
+    expect(screen.getByText("dual control: a distinct approver must approve this revoke")).toBeInTheDocument();
   });
 
   it("explains an unmatched departure and lets an operator select one exact identity", async () => {
@@ -1396,14 +1432,14 @@ describe("lifecycle actions from the UI", () => {
         capability: "CAP-GOV-04",
         coverage: ["departure", "revoke"],
         reason: "QA departure",
-        summary: { total_matched: 0, revoked: 0, retired: 0, skipped: 0, failed: 0 },
+        summary: { total_matched: 0, revoked: 0, retired: 0, skipped: 0, refused: 0, failed: 0 },
         items: [],
       })
       .mockResolvedValueOnce({
         capability: "CAP-GOV-04",
         coverage: ["departure", "revoke"],
         reason: "QA departure",
-        summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, failed: 0 },
+        summary: { total_matched: 1, revoked: 1, retired: 0, skipped: 0, refused: 0, failed: 0 },
         items: [
           {
             identity_id: identityID,
@@ -1436,7 +1472,7 @@ describe("lifecycle actions from the UI", () => {
       reason: "departure decommission via UI",
       signals: [{ type: "departure", identity_id: identityID, evidence_refs: ["ui:identities/decommission"] }],
     });
-    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 1; retired 0; failed 0/)).toBeInTheDocument();
+    expect(await screen.findByText(/CAP-GOV-04: matched 1; revoked 1; retired 0; refused 0; failed 0/)).toBeInTheDocument();
   });
 
   it("removes static revocation endpoint prose from the identities page", async () => {
