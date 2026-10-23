@@ -839,6 +839,8 @@ func (a *agentService) ingestExecutedReport(
 		return a.recordEndpointPurgeResult(ctx, info, claim, req, result)
 	case relay.KindConnectorRightSize:
 		return a.ingestRightSizeReport(ctx, info.TenantID, claim, req)
+	case relay.KindTrustDistribute:
+		return a.recordDistrustRemovalResult(ctx, info, claim, req)
 	case relay.KindConnectorTakedown:
 		if req.Outcome != transport.JobOutcomeExecuted {
 			return errors.New("takedown result needs a terminal executed report")
@@ -1084,6 +1086,9 @@ func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.Pee
 			return false, "", status.Errorf(codes.Internal, "record failed connector takedown: %v", err)
 		}
 	}
+	if err := a.recordDistrustRemovalFailure(ctx, info, claim, req); err != nil {
+		return false, "", status.Errorf(codes.Internal, "record failed distrusted root removal: %v", err)
+	}
 	if claim.Destination == relay.KindConnectorRightSize && a.recordRightSize != nil {
 		// A64: a relay's failure closes the operation; the operator re-runs the
 		// playbook rather than the queue retrying a mutation the endpoint
@@ -1159,6 +1164,11 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	}
 	if claim.Destination == relay.KindConnectorTakedown {
 		terminalReason = "takedown_failed"
+	}
+	if _, removal := distrustRemovalJob(claim); removal {
+		// A refused or failed removal is reviewed by an operator, never
+		// retried against the host's trust store unattended.
+		permanent, terminalReason = true, "trust_anchor_removal_failed"
 	}
 	if claim.Destination == relay.KindConnectorRightSize {
 		permanent, terminalReason = true, "right_size_failed"

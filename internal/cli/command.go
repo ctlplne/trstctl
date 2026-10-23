@@ -56,7 +56,8 @@ func (c Command) Destructive() bool {
 	if strings.HasPrefix(name, "identities approve ") {
 		return false
 	}
-	if name == "connector target contain" || name == "identities compromise" || name == "identities compromise-retry" {
+	if name == "connector target contain" || name == "identities compromise" || name == "identities compromise-retry" ||
+		name == "discovery findings remove-distrusted-root" {
 		return true
 	}
 	for _, marker := range []string{
@@ -295,6 +296,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id"}, Summary: "List discovery findings"},
 	{Name: []string{"discovery", "findings", "claim"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/claim", Body: bodyFile, Summary: "Claim a discovery finding as managed"},
 	{Name: []string{"discovery", "findings", "dismiss"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/dismiss", Body: bodyFile, Summary: "Dismiss a discovery finding"},
+	{Name: []string{"discovery", "findings", "remove-distrusted-root"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/remove-distrusted-root", Body: bodyFile, Summary: "Queue removal of a distrusted root from the host trust store an agent found it in"},
 
 	{Name: []string{"connectors", "catalog"}, Method: "GET", Path: "/api/v1/connectors/catalog", Summary: "List connector kinds"},
 	{Name: []string{"connectors", "outbox-circuits"}, Method: "GET", Path: "/api/v1/connectors/outbox-circuits", Summary: "List outbox destination circuit breaker state"},

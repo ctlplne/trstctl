@@ -109,8 +109,13 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   signature the import records that possession was not proven. See
   [the key ceremony runbook](../runbooks/key-ceremony.md#key-checks-in-every-ceremony).
 
-Removal of a distrusted root from a host and the batch-GCD job are what comes
-next in this change set; this page grows with each.
+- **Removing a distrusted root from a host.** A trust-store finding the
+  distrust list names itself can be removed through trust distribution, by the
+  agent that found it, when the host profile allows the path and the file holds
+  only that root. See
+  [CA, trust-store & private-key discovery](../features/discovery-and-inventory.md#ca-trust-store-private-key-discovery).
+
+The batch-GCD job is what comes next in this change set.
 
 ## The distrust list
 

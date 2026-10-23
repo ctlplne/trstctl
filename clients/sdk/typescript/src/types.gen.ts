@@ -2588,6 +2588,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/remove-distrusted-root": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue removal of a distrusted root from the host trust store an agent found it in, through the host's trust-distribution executor */
+        post: operations["removeDistrustedRoot"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/monitoring": {
         parameters: {
             query?: never;
@@ -10562,7 +10579,7 @@ export interface components {
             reason?: string;
             rollback_ref?: string;
             /** @enum {string} */
-            status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "takedown_queued" | "taken_down" | "takedown_bound" | "takedown_absent" | "takedown_failed" | "takedown_refused" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+            status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "takedown_queued" | "taken_down" | "takedown_bound" | "takedown_absent" | "takedown_failed" | "trust_anchor_removal_queued" | "trust_anchor_removed" | "trust_anchor_absent" | "trust_anchor_removal_refused" | "trust_anchor_removal_failed" | "takedown_refused" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
             target: string;
             /** Format: uuid */
             tenant_id: string;
@@ -11176,6 +11193,13 @@ export interface components {
             /** @enum {string} */
             kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved";
             subject: string;
+        };
+        DistrustedRootRemovalRequest: {
+            /** @description The trust-store file the finding names, as reviewed. */
+            anchor_path: string;
+            /** @description The finding's certificate SHA-256 fingerprint, as reviewed. */
+            fingerprint: string;
+            reason?: string;
         };
         DriftRemediation: {
             capability: string;
@@ -24671,6 +24695,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryFinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeDistrustedRoot: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DistrustedRootRemovalRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectorDelivery"];
                 };
             };
             /** @description client error */

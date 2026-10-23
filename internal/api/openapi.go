@@ -507,6 +507,11 @@ func componentSchemas() map[string]*Schema {
 	caCreateRootReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "spec")
+	distrustedRootRemovalReq := object(map[string]*Schema{
+		"fingerprint": {Type: "string", Description: "The finding's certificate SHA-256 fingerprint, as reviewed."},
+		"anchor_path": {Type: "string", Description: "The trust-store file the finding names, as reviewed."},
+		"reason":      str(),
+	}, "fingerprint", "anchor_path")
 	caImportOfflineRootReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(), "spec": ref("CASpec"),
 		"possession_signature": {Type: "string", Description: "Optional. The offline root's signature, base64, over the bytes \"trstctl offline root proof of possession v1\", a zero byte, then ceremony_id: ECDSA or RSA (PKCS #1 v1.5) over SHA-256 of those bytes, Ed25519 over the bytes, ML-DSA over their SHA-256 digest. Without it the import records possession_proof not_proven."},
@@ -7321,6 +7326,7 @@ func componentSchemas() map[string]*Schema {
 		"CACeremonyPlanPreview":                    caCeremonyPlanPreview,
 		"CACreateRootRequest":                      caCreateRootReq,
 		"CAImportOfflineRootRequest":               caImportOfflineRootReq,
+		"DistrustedRootRemovalRequest":             distrustedRootRemovalReq,
 		"CAImportExistingRequest":                  caImportExistingReq,
 		"CAPrepareExistingImportCSRRequest":        caPrepareExistingImportCSRReq,
 		"CAExistingImportCSR":                      caExistingImportCSR,

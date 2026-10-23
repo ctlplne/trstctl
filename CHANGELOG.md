@@ -88,6 +88,13 @@
   verified against the exact public key going into the certificate, before it
   is certified as an intermediate or bound to an import. The managed-key
   custody probe now carries a fresh nonce.
+- A distrusted root an agent finds in a host trust store can be removed through
+  trust distribution (`POST /api/v1/discovery/findings/{id}/remove-distrusted-root`,
+  `trstctl-cli discovery findings remove-distrusted-root`). The exact host agent
+  reads the file, removes it only when it holds just that root and the agent's own
+  distrust list names it, and reports a signed result onto the receipt; bundles,
+  other certificates and paths outside the host profile are refused and left
+  alone. Agents take an operator distrust list with `--distrust-file`.
 - An offline root's import can carry `possession_signature`, the root's
   signature over the import ceremony's challenge, made on the offline system
   with the OpenSSL commands in the key ceremony runbook (the console prints

@@ -4437,6 +4437,16 @@ DiscoveryUnknown = TypedDict(
     total=False,
 )
 
+DistrustedRootRemovalRequest = TypedDict(
+    'DistrustedRootRemovalRequest',
+    {
+        'anchor_path': str,
+        'fingerprint': str,
+        'reason': str,
+    },
+    total=False,
+)
+
 DriftRemediation = TypedDict(
     'DriftRemediation',
     {

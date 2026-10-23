@@ -320,6 +320,7 @@ public final class OpenApiSchemas {
       "DiscoverySourceList",
       "DiscoverySourceRequest",
       "DiscoveryUnknown",
+      "DistrustedRootRemovalRequest",
       "DriftRemediation",
       "DriftRemediationDecision",
       "DriftRemediationDecisionRequest",

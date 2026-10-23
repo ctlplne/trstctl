@@ -230,6 +230,14 @@ const (
 	ConnectorTakedownAbsent  = "takedown_absent"
 	ConnectorTakedownFailed  = "takedown_failed"
 	ConnectorTakedownRefused = "takedown_refused"
+	// Trust-anchor removal takes a distrusted root out of a host trust store
+	// an agent discovered (eMudhra, Part 4). Only trust_anchor_removed
+	// describes a file removed.
+	ConnectorTrustAnchorRemovalQueued  = "trust_anchor_removal_queued"
+	ConnectorTrustAnchorRemoved        = "trust_anchor_removed"
+	ConnectorTrustAnchorAbsent         = "trust_anchor_absent"
+	ConnectorTrustAnchorRemovalRefused = "trust_anchor_removal_refused"
+	ConnectorTrustAnchorRemovalFailed  = "trust_anchor_removal_failed"
 )
 
 // ConnectorDelivery is the served vocabulary for connector delivery receipts.
@@ -268,6 +276,16 @@ var ConnectorDelivery = Registry{
 			Meaning: "The appliance holds no object of that name; there was nothing to remove."},
 		{Value: ConnectorTakedownFailed, ContactedTarget: true,
 			Meaning: "The relay reached the appliance and the deletion did not succeed. The object may remain."},
+		{Value: ConnectorTrustAnchorRemovalQueued,
+			Meaning: "Removal of one distrusted root from a host trust store is queued for the enrolled host agent that found it. Nothing has been removed."},
+		{Value: ConnectorTrustAnchorRemoved, ContactedTarget: true, MutatedTarget: true, Verified: true,
+			Meaning: "The host agent read the file, found exactly that one certificate, matched it against its own distrust list, removed exactly those bytes and read the path back absent. A trust bundle the host's tools build from that file is rebuilt only when they next run."},
+		{Value: ConnectorTrustAnchorAbsent, ContactedTarget: true, Verified: true,
+			Meaning: "Nothing exists at the trust-store path any more; there was nothing to remove."},
+		{Value: ConnectorTrustAnchorRemovalRefused, ContactedTarget: true,
+			Meaning: "The host agent removed nothing: the file is a bundle or holds another certificate, the host's own distrust list does not name it, or the host profile does not allow the path. The receipt names which."},
+		{Value: ConnectorTrustAnchorRemovalFailed, ContactedTarget: true,
+			Meaning: "The host agent could not complete the removal: a read, the removal or the readback failed, or the agent could not run it. The anchor may remain."},
 		{Value: ConnectorTakedownRefused,
 			Meaning: "The relay declined before contacting the appliance: the connector cannot remove objects, the payload was unusable, or no credential was granted."},
 		{

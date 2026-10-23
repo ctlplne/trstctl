@@ -81,6 +81,11 @@ func decodeMigrationReceiptClaim(destination string, payload []byte) (migrationR
 		if err := json.Unmarshal(payload, &intent); err != nil {
 			return claim, true, fmt.Errorf("server: decode migration trust claim: %w", err)
 		}
+		if intent.Operation == relay.TrustRemoveDistrusted {
+			// A distrusted-root removal (eMudhra, Part 4) answers a finding, not
+			// a migration run; its own receiver records it.
+			return claim, false, nil
+		}
 		claim = migrationReceiptClaim{runID: intent.RunID, waveID: intent.WaveID, identityID: intent.IdentityID, trust: &intent}
 		switch intent.Operation {
 		case relay.TrustInstall:

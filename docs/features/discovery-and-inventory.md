@@ -363,6 +363,27 @@ mistaking two same-name roots for the same authority. The control plane stamps t
 host from the reporting agent's verified mTLS identity, so several stores or anchor
 paths on one machine remain several stores across one host.
 
+**Removing a distrusted root.** When the control plane's distrust list names a
+trust-store anchor itself (for example emSign ECC Root CA - G3, by key), the finding
+can be removed from the host through trust distribution:
+`POST /api/v1/discovery/findings/{id}/remove-distrusted-root` with the finding's
+`fingerprint` and `anchor_path` as reviewed (`connectors:write`; CLI
+`trstctl-cli discovery findings remove-distrusted-root --force`). The removal is queued
+for the exact host agent that found the anchor, which must run with `--relay-claim`
+and a `--host-exec-profile` whose `allowed_roots` include the anchor's directory. The
+agent reads the file itself (the control plane never holds its bytes), and removes it
+only when it holds exactly that one certificate and the agent's own distrust list names
+it: the shipped entries plus any operator list given with `--distrust-file`. The
+receipt ends as `trust_anchor_removed`, `trust_anchor_absent`,
+`trust_anchor_removal_refused` (a bundle, another certificate, a root the agent's list
+does not name, or a path outside the profile or behind a symlink) or
+`trust_anchor_removal_failed`. A bundle such as `/etc/ssl/certs/ca-certificates.crt` is
+never edited: remove that root with the host's trust tool (`update-ca-certificates`,
+`update-ca-trust` or the platform equivalent). Only OS trust-store files are
+removable this way; Java keystores, NSS databases, browser exports and the Windows
+store need their own tools. A removed source file reaches bundles built from it the
+next time the host's trust tool runs.
+
 Private-key-material discovery answers the companion question: "what sensitive key
 files exist here?" Point the agent at canary directories with
 `--inventory-private-key-roots`. It reads each regular file locally, classifies PKCS#8,

@@ -321,8 +321,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// B4-8 adds the renewal resume after an operator rollback.
 	// A87's `owners cmdb-schedule run` raised it to 568, mapped onto the owners row.
 	// A95's five `provider-access` commands raised it to 573, mapped onto the access row.
-	if len(out) != 573 {
-		t.Fatalf("CLI commands = %d, want 573", len(out))
+	// eMudhra Part 4's `discovery findings remove-distrusted-root` raised it to 574, mapped onto the discovery row.
+	if len(out) != 574 {
+		t.Fatalf("CLI commands = %d, want 574", len(out))
 	}
 	return out
 }

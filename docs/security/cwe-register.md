@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1674 annotated sites across 26 rules. Each row is
+1679 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -460,7 +460,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:471` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:476` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:269` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -903,7 +903,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cli_test.go:2589` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:385` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:399` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:117` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
@@ -1080,7 +1080,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:577` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:582` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1120,13 +1120,14 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (470 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (475 sites)
 
 | Location | Reason |
 |---|---|
 | `clients/embedded/est_client_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
 | `clients/terraform/internal/terraformprovider/client.go:94` | operator-selected public trust bundle (CWE-22) |
 | `cmd/trstctl-agent/cosign_attach.go:208` | operator-configured local path from the agent's own config (CWE-22) |
+| `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |
 | `cmd/trstctl-agent/edgeca.go:119` | explicit operator file path |
 | `cmd/trstctl-agent/edgeca.go:124` | explicit operator file path |
 | `cmd/trstctl-agent/edgeca.go:142` | explicit operator file path |
@@ -1143,8 +1144,8 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:335` | exact test tempdir sentinel |
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:16` | a fixed test fixture, named by the test itself (CWE-22) |
-| `cmd/trstctl-agent/main.go:1089` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1709` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1094` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1714` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
@@ -1274,6 +1275,7 @@ not this file.
 | `internal/agent/relay/selfupgrade_test.go:259` | the test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/selfupgrade_test.go:274` | the test reads its own temp fixture (CWE-22) |
 | `internal/agent/relay/tomcat_activation_test.go:49` | fixed filenames below t.TempDir, no external input (CWE-22). |
+| `internal/agent/relay/trust_distrusted_test.go:17` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/agent/relay/trust_test.go:48` | path is created inside this test's TempDir (CWE-22). |
 | `internal/agent/relay/trust_test.go:73` | path is created inside this test's TempDir (CWE-22). |
 | `internal/agent/secretinject/secretinject.go:179` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
@@ -1331,7 +1333,7 @@ not this file.
 | `internal/config/config.go:4111` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:353` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:367` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
@@ -1435,6 +1437,9 @@ not this file.
 | `internal/server/ca_custody_test.go:269` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
+| `internal/server/distrust_removal_served_test.go:34` | a fixed test fixture, named by the test itself (CWE-22) |
+| `internal/server/distrust_removal_served_test.go:38` | a fixed test fixture, named by the test itself (CWE-22) |
+| `internal/server/distrust_removal_served_test.go:184` | the test's own temporary file (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
 | `internal/server/est_mtls_reenroll_served_test.go:150` | test reads its own tempdir path (CWE-22) |
@@ -1745,7 +1750,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:709` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:714` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

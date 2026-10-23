@@ -10857,6 +10857,11 @@
               "takedown_bound",
               "takedown_absent",
               "takedown_failed",
+              "trust_anchor_removal_queued",
+              "trust_anchor_removed",
+              "trust_anchor_absent",
+              "trust_anchor_removal_refused",
+              "trust_anchor_removal_failed",
               "takedown_refused",
               "queued",
               "delivered",
@@ -13226,6 +13231,26 @@
           "kind",
           "subject",
           "detail"
+        ],
+        "type": "object"
+      },
+      "DistrustedRootRemovalRequest": {
+        "properties": {
+          "anchor_path": {
+            "description": "The trust-store file the finding names, as reviewed.",
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "The finding's certificate SHA-256 fingerprint, as reviewed.",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "anchor_path"
         ],
         "type": "object"
       },
@@ -47835,6 +47860,83 @@
         ],
         "summary": "Dismiss a discovery finding",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/remove-distrusted-root": {
+      "post": {
+        "operationId": "removeDistrustedRoot",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DistrustedRootRemovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectorDelivery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue removal of a distrusted root from the host trust store an agent found it in, through the host's trust-distribution executor",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/discovery/monitoring": {

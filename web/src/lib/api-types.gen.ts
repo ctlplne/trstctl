@@ -2639,7 +2639,7 @@ export interface ConnectorDelivery {
   outbox_id?: number;
   reason?: string;
   rollback_ref?: string;
-  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "takedown_queued" | "taken_down" | "takedown_bound" | "takedown_absent" | "takedown_failed" | "takedown_refused" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
+  status: "containment_queued" | "containment_stopped" | "containment_different_leaf" | "containment_unverified" | "containment_failed" | "cancelled" | "purge_queued" | "purged" | "purge_different_leaf" | "purge_absent" | "purge_failed" | "takedown_queued" | "taken_down" | "takedown_bound" | "takedown_absent" | "takedown_failed" | "trust_anchor_removal_queued" | "trust_anchor_removed" | "trust_anchor_absent" | "trust_anchor_removal_refused" | "trust_anchor_removal_failed" | "takedown_refused" | "queued" | "delivered" | "failed" | "verified" | "verify_failed" | "config_validated" | "rollback_recorded" | "rollback_queued" | "rolled_back" | "rollback_refused" | "rollback_failed" | "dry_run_queued" | "dry_run_planned" | "dry_run_blocked" | "test_succeeded";
   target: string;
   tenant_id: string;
   updated_at: string;
@@ -3205,6 +3205,12 @@ export interface DiscoveryUnknown {
   detail: string;
   kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved";
   subject: string;
+}
+
+export interface DistrustedRootRemovalRequest {
+  anchor_path: string;
+  fingerprint: string;
+  reason?: string;
 }
 
 export interface DriftRemediation {

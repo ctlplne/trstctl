@@ -53,6 +53,7 @@ func main() {
 	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
 	netsec.HardenProcessDefaults()
 	showVersion := flag.Bool("version", false, "print version information and exit")
+	distrustFile := flag.String("distrust-file", "", "optional operator distrust list, in the control plane's trust.distrust_file format, added to the shipped entries; the agent rates discovered certificates and removes distrusted trust-store roots against it")
 	tomcatReloadURL := flag.String("tomcat-reload-url", "", "one-shot: reload TLS through the stock Tomcat Manager /manager/text/sslReload on a literal loopback address, then exit")
 	tomcatReloadUser := flag.String("tomcat-reload-user", "", "Tomcat Manager username with manager-script permission (one-shot TLS reload)")
 	tomcatReloadPasswordFile := flag.String("tomcat-reload-password-file", "", "private file containing the Tomcat Manager password; never pass it in argv")
@@ -221,6 +222,10 @@ func main() {
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: unexpected command or argument; use --help for usage")
 		os.Exit(2)
+	}
+	if err := installAgentDistrust(*distrustFile); err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+		os.Exit(1)
 	}
 	tpmPersistentHandleBase, err := checkedTPMPersistentHandleBase(*edgeTPMHandleBase)
 	if err != nil {

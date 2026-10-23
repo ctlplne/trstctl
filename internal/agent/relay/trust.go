@@ -34,6 +34,9 @@ type TrustDistributionIntent struct {
 	AnchorPEM         []byte `json:"anchor_pem,omitempty"`
 	AnchorFingerprint string `json:"anchor_fingerprint"`
 	RequiredAgentID   string `json:"required_agent_id,omitempty"`
+	// FindingID names the discovery finding a remove_distrusted intent acts
+	// on (eMudhra, Part 4). Migration intents leave it empty.
+	FindingID string `json:"finding_id,omitempty"`
 }
 
 // TrustDistributionReport is closed evidence derived by readback. Free-form
@@ -127,6 +130,9 @@ func runTrustDistribution(ctx context.Context, ch Channel, profile connector.Loc
 	if err := decodeJobPayload(job.Payload, &intent); err != nil {
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a trust distribution intent")
 		return false
+	}
+	if intent.Operation == TrustRemoveDistrusted {
+		return runDistrustedRootRemoval(ctx, ch, profile, job, intent)
 	}
 	result, err := ExecuteTrustDistribution(ctx, profile, intent)
 	if err != nil {

@@ -284,8 +284,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// B4-8 adds the renewal resume after an operator rollback.
 	// A87's runCMDBReconcileNow raised it to 514, mapped onto the owners row.
 	// A95's five provider-access operations raised it to 519, mapped onto the access row.
-	if len(out) != 519 {
-		t.Fatalf("OpenAPI operationIds = %d, want 519", len(out))
+	// eMudhra Part 4's distrusted-root removal raised it to 520, mapped onto the discovery row.
+	if len(out) != 520 {
+		t.Fatalf("OpenAPI operationIds = %d, want 520", len(out))
 	}
 	return out
 }

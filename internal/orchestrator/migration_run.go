@@ -406,8 +406,7 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 	}
 	effectLane := "migration:identity:" + action.IdentityID
 	if action.Kind == migration.ActionDistributeTrust || action.Kind == migration.ActionRemoveTrust {
-		effectLane = "migration:trust:" + uuid.NewSHA1(migrationEventNamespace,
-			[]byte(b.RequiredAgentID+"\x00"+b.TrustAnchorPath)).String()
+		effectLane = TrustAnchorEffectLane(b.RequiredAgentID, b.TrustAnchorPath)
 	}
 	entry := Entry{
 		TenantID: tenantID, Destination: destination,
@@ -427,6 +426,13 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		entry.RequiredAgentRole = mtls.AgentRoleNetwork
 	}
 	return entry, nil
+}
+
+// TrustAnchorEffectLane serializes every host trust-anchor change at one path
+// on one agent: a migration's install or rollback and a distrusted-root
+// removal (eMudhra, Part 4) never race each other there.
+func TrustAnchorEffectLane(agentID, anchorPath string) string {
+	return "migration:trust:" + uuid.NewSHA1(migrationEventNamespace, []byte(agentID+"\x00"+anchorPath)).String()
 }
 
 func migrationActionKey(run migration.Run, action migration.Action) string {

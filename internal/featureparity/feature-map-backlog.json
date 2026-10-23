@@ -343,7 +343,8 @@
                 "/api/v1/discovery/runs",
                 "/api/v1/discovery/runs/{id}/retry",
                 "/api/v1/discovery/monitoring",
-                "/api/v1/discovery/findings"
+                "/api/v1/discovery/findings",
+                "/api/v1/discovery/findings/{id}/remove-distrusted-root"
             ],
             "source_frontend": [
                 "web/src/pages/Discovery.tsx",
@@ -357,6 +358,7 @@
                 "createDiscoverySegment",
                 "createDiscoverySource",
                 "dismissDiscoveryFinding",
+                "removeDistrustedRoot",
                 "getADCSPosture",
                 "getADCSTemplateDrift",
                 "getDiscoveryCoverage",
@@ -403,6 +405,7 @@
                 "certificates list",
                 "discovery findings claim",
                 "discovery findings dismiss",
+                "discovery findings remove-distrusted-root",
                 "adcs ca-database ingest",
                 "adcs ca-database list"
             ],

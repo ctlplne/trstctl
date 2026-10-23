@@ -270,7 +270,7 @@ func (o *localOps) ReadFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("connector: local read %q is not a regular non-symlink file", clean)
+		return nil, refusedPath("connector: local read %q is not a regular non-symlink file", clean)
 	}
 	return os.ReadFile(clean) // #nosec G304 -- operator-configured local-ops connector path; local file deploy is the feature (CWE-22)
 }
@@ -323,6 +323,20 @@ func (o *localOps) WriteFile(path string, data []byte) error {
 	return syncLocalDirectory(parent)
 }
 
+// ErrLocalPathRefused marks a path the operator's host profile does not let
+// the host touch: outside the approved roots, a symlink, or not a regular
+// file. The error text still names the path and the reason.
+var ErrLocalPathRefused = errors.New("connector: local path refused by the operator profile")
+
+type refusedPathError struct{ msg string }
+
+func (e refusedPathError) Error() string        { return e.msg }
+func (e refusedPathError) Is(target error) bool { return target == ErrLocalPathRefused }
+
+func refusedPath(format string, args ...any) error {
+	return refusedPathError{msg: fmt.Sprintf(format, args...)}
+}
+
 // RemoveLocalFile removes one exact regular file inside operator-approved roots
 // and fsyncs its parent. expected, when non-empty, prevents a migration rollback
 // from deleting a trust object another run replaced at the same path.
@@ -347,7 +361,7 @@ func RemoveLocalFile(cfg LocalOpsConfig, path string, expected []byte) error {
 		return err
 	}
 	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("connector: local remove %q is not a regular non-symlink file", clean)
+		return refusedPath("connector: local remove %q is not a regular non-symlink file", clean)
 	}
 	if len(expected) > 0 {
 		current, readErr := os.ReadFile(clean) // #nosec G304 -- clean is confined to operator-approved local roots above (CWE-22)
@@ -411,12 +425,12 @@ func (o *localOps) allowedPath(raw string) (string, error) {
 		relative, err := filepath.Rel(root, clean)
 		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 			if info, statErr := os.Lstat(clean); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
-				return "", fmt.Errorf("connector: local path %q is a symlink", clean)
+				return "", refusedPath("connector: local path %q is a symlink", clean)
 			}
 			return clean, nil
 		}
 	}
-	return "", fmt.Errorf("connector: local path %q is outside operator-approved roots", clean)
+	return "", refusedPath("connector: local path %q is outside operator-approved roots", clean)
 }
 
 func canonicalExistingDir(raw string) (string, error) {
