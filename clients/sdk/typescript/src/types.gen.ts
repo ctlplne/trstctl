@@ -17187,6 +17187,8 @@ export interface components {
             primary_billable: boolean;
         };
         WorkloadAttesterTrustSource: {
+            /** @description Lower-cased GitHub repository owners this source admits. */
+            allowed_owners: string[];
             audience?: string;
             /** @description An accepted trust change is awaiting projection; old proof is denied until recovery completes. */
             authority_pending?: boolean;
@@ -17208,6 +17210,8 @@ export interface components {
             revoked_reason?: string;
             root_certs_pem: string[];
             rotation_version: number;
+            /** @description A84: the verified github_oidc token alone authenticates attested issuance for this tenant. */
+            self_authenticating: boolean;
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -17218,6 +17222,8 @@ export interface components {
             next_cursor?: string;
         };
         WorkloadAttesterTrustSourceRequest: {
+            /** @description GitHub repository owners (organisations or users) this source admits; compared without regard to case. */
+            allowed_owners?: string[];
             audience?: string;
             enabled?: boolean;
             expected_nonce_base64?: string;
@@ -17227,6 +17233,8 @@ export interface components {
             method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
             name: string;
             root_certs_pem?: string[];
+            /** @description A84: github_oidc only; the verified OIDC token is by itself the bearer credential of POST /api/v1/workloads/attested-issuance for this tenant. Requires allowed_owners. */
+            self_authenticating?: boolean;
         };
         WorkloadAttesterTrustSourceRevokeRequest: {
             reason?: string;

@@ -4360,6 +4360,8 @@ func componentSchemas() map[string]*Schema {
 		"root_certs_pem":        {Type: "array", Items: str()},
 		"expected_nonce_base64": str(),
 		"enabled":               {Type: "boolean"},
+		"self_authenticating":   {Type: "boolean", Description: "A84: github_oidc only; the verified OIDC token is by itself the bearer credential of POST /api/v1/workloads/attested-issuance for this tenant. Requires allowed_owners."},
+		"allowed_owners":        {Type: "array", Items: str(), Description: "GitHub repository owners (organisations or users) this source admits; compared without regard to case."},
 	}, "name", "method")
 	workloadAttesterTrustSourceRotateReq := object(map[string]*Schema{
 		"issuer":                str(),
@@ -4382,6 +4384,8 @@ func componentSchemas() map[string]*Schema {
 		"jwks":                  {Type: "object"},
 		"root_certs_pem":        {Type: "array", Items: str()},
 		"expected_nonce_base64": str(),
+		"self_authenticating":   {Type: "boolean", Description: "A84: the verified github_oidc token alone authenticates attested issuance for this tenant."},
+		"allowed_owners":        {Type: "array", Items: str(), Description: "Lower-cased GitHub repository owners this source admits."},
 		"enabled":               {Type: "boolean"},
 		"authority_pending":     {Type: "boolean", Description: "An accepted trust change is awaiting projection; old proof is denied until recovery completes."},
 		"revoked_at":            timestamp(),
@@ -4390,7 +4394,7 @@ func componentSchemas() map[string]*Schema {
 		"last_rotated_at":       timestamp(),
 		"created_at":            timestamp(),
 		"updated_at":            timestamp(),
-	}, "id", "tenant_id", "name", "method", "jwks", "root_certs_pem", "enabled", "rotation_version", "created_at", "updated_at")
+	}, "id", "tenant_id", "name", "method", "jwks", "root_certs_pem", "self_authenticating", "allowed_owners", "enabled", "rotation_version", "created_at", "updated_at")
 	workloadAttesterTrustSourceRotated := object(map[string]*Schema{
 		"trust_source": ref("WorkloadAttesterTrustSource"),
 	}, "trust_source")

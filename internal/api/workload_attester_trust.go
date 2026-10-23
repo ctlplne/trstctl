@@ -32,6 +32,11 @@ type workloadAttesterTrustSourceRequest struct {
 	RootCertsPEM        []string        `json:"root_certs_pem,omitempty"`
 	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
 	Enabled             *bool           `json:"enabled,omitempty"`
+	// SelfAuthenticating (A84): a github_oidc source whose verified token is by
+	// itself the bearer credential of attested issuance for this tenant. It
+	// requires AllowedOwners, the pin that keeps the rest of GitHub out.
+	SelfAuthenticating bool     `json:"self_authenticating,omitempty"`
+	AllowedOwners      []string `json:"allowed_owners,omitempty"`
 }
 
 type workloadAttesterTrustSourceRotateRequest struct {
@@ -57,6 +62,8 @@ type workloadAttesterTrustSourceResponse struct {
 	JWKS                json.RawMessage `json:"jwks"`
 	RootCertsPEM        []string        `json:"root_certs_pem"`
 	ExpectedNonceBase64 string          `json:"expected_nonce_base64,omitempty"`
+	SelfAuthenticating  bool            `json:"self_authenticating"`
+	AllowedOwners       []string        `json:"allowed_owners"`
 	Enabled             bool            `json:"enabled"`
 	AuthorityPending    bool            `json:"authority_pending"`
 	RevokedAt           string          `json:"revoked_at,omitempty"`
@@ -392,6 +399,7 @@ func (a *API) emitWorkloadAttesterTrustSource(ctx context.Context, tenantID, id,
 		ID: id, Name: req.Name, Method: req.Method, Issuer: req.Issuer, Audience: req.Audience,
 		JWKS: req.JWKS, RootCertsPEM: req.RootCertsPEM, ExpectedNonceBase64: req.ExpectedNonceBase64,
 		Enabled: *req.Enabled, RotationVersion: rotationVersion,
+		SelfAuthenticating: req.SelfAuthenticating, AllowedOwners: req.AllowedOwners,
 	})
 	if err != nil {
 		return err
@@ -492,9 +500,49 @@ func decodeWorkloadAttesterTrustSourceRequest(r *http.Request) (workloadAttester
 	if err := validateWorkloadAttesterTrustMaterial(req.Method, req.JWKS, req.RootCertsPEM, req.ExpectedNonceBase64); err != nil {
 		return workloadAttesterTrustSourceRequest{}, err
 	}
+	req.AllowedOwners = normalizeAllowedOwners(req.AllowedOwners)
+	if err := validateSelfAuthenticatingTrustSource(req.Method, req.SelfAuthenticating, req.AllowedOwners); err != nil {
+		return workloadAttesterTrustSourceRequest{}, err
+	}
 	req.JWKS = normalizeJWKSForMethod(req.Method, req.JWKS)
 	req.RootCertsPEM = normalizePEMList(req.RootCertsPEM)
 	return req, nil
+}
+
+// normalizeAllowedOwners lower-cases and de-duplicates GitHub owner pins:
+// GitHub treats owner names without regard to case.
+func normalizeAllowedOwners(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, v := range values {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v == "" || seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+// validateSelfAuthenticatingTrustSource (A84) fails closed: only a GitHub OIDC
+// token can stand in for an API token, and only for pinned owners. An unpinned
+// self-authenticating source would let every repository on GitHub mint under
+// this tenant, so it is refused at creation rather than trusted at issuance.
+func validateSelfAuthenticatingTrustSource(method string, selfAuthenticating bool, owners []string) error {
+	if len(owners) > 0 && method != "github_oidc" {
+		return errStatus(http.StatusBadRequest, "allowed_owners applies to github_oidc sources only")
+	}
+	if !selfAuthenticating {
+		return nil
+	}
+	if method != "github_oidc" {
+		return errStatus(http.StatusBadRequest, "self_authenticating is available for github_oidc sources only")
+	}
+	if len(owners) == 0 {
+		return errStatus(http.StatusBadRequest, "a self_authenticating source requires allowed_owners: without the owner pin every repository on GitHub could issue under this tenant")
+	}
+	return nil
 }
 
 func decodeWorkloadAttesterTrustSourceRotateRequest(r *http.Request, existing store.WorkloadAttesterTrustSource) (workloadAttesterTrustSourceRotateRequest, error) {
@@ -630,10 +678,15 @@ func toWorkloadAttesterTrustSourceResponse(rec store.WorkloadAttesterTrustSource
 	if roots == nil {
 		roots = []string{}
 	}
+	owners := rec.AllowedOwners
+	if owners == nil {
+		owners = []string{}
+	}
 	out := workloadAttesterTrustSourceResponse{
 		ID: rec.ID, TenantID: rec.TenantID, Name: rec.Name, Method: rec.Method,
 		Issuer: rec.Issuer, Audience: rec.Audience, JWKS: jwks, RootCertsPEM: roots,
 		ExpectedNonceBase64: rec.ExpectedNonceBase64, Enabled: rec.Enabled,
+		SelfAuthenticating: rec.SelfAuthenticating, AllowedOwners: owners,
 		AuthorityPending: rec.AuthorityPending,
 		RevokedReason:    rec.RevokedReason, RotationVersion: rec.RotationVersion,
 		CreatedAt: rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),

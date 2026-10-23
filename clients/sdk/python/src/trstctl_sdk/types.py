@@ -12240,6 +12240,7 @@ UsageMeterDefinition = TypedDict(
 WorkloadAttesterTrustSource = TypedDict(
     'WorkloadAttesterTrustSource',
     {
+        'allowed_owners': list[str],
         'audience': str,
         'authority_pending': bool,
         'created_at': str,
@@ -12255,6 +12256,7 @@ WorkloadAttesterTrustSource = TypedDict(
         'revoked_reason': str,
         'root_certs_pem': list[str],
         'rotation_version': int,
+        'self_authenticating': bool,
         'tenant_id': str,
         'updated_at': str,
     },
@@ -12273,6 +12275,7 @@ WorkloadAttesterTrustSourceList = TypedDict(
 WorkloadAttesterTrustSourceRequest = TypedDict(
     'WorkloadAttesterTrustSourceRequest',
     {
+        'allowed_owners': list[str],
         'audience': str,
         'enabled': bool,
         'expected_nonce_base64': str,
@@ -12281,6 +12284,7 @@ WorkloadAttesterTrustSourceRequest = TypedDict(
         'method': str,
         'name': str,
         'root_certs_pem': list[str],
+        'self_authenticating': bool,
     },
     total=False,
 )

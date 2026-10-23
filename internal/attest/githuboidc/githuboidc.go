@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/attest"
@@ -52,6 +53,22 @@ type ghClaims struct {
 	SHA               string `json:"sha"`
 	JobWorkflowRef    string `json:"job_workflow_ref"`
 	RunnerEnvironment string `json:"runner_environment"`
+}
+
+// ownerAllowed matches the pin the way GitHub treats owner names: without
+// regard to case, so a pin typed as "ACME" admits the token GitHub signs for
+// "acme" and never silently refuses the operator's own repositories.
+func (a *Attestor) ownerAllowed(owner string) bool {
+	if a.AllowedOwners[owner] {
+		return true
+	}
+	lower := strings.ToLower(owner)
+	for allowed := range a.AllowedOwners {
+		if strings.ToLower(allowed) == lower {
+			return true
+		}
+	}
+	return false
 }
 
 // FulcioBinding is the identity Sigstore Fulcio would bind into a short-lived
@@ -99,7 +116,7 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if c.Repository == "" {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: token missing repository")
 	}
-	if len(a.AllowedOwners) > 0 && !a.AllowedOwners[c.RepositoryOwner] {
+	if len(a.AllowedOwners) > 0 && !a.ownerAllowed(c.RepositoryOwner) {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: owner %s is not allowed", c.RepositoryOwner)
 	}
 	// Fulcio binds the SAN to the workflow identity (job_workflow_ref, falling back

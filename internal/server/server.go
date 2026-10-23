@@ -1664,6 +1664,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithAgentUpgradePublisherKey(s.agentUpgradePublisherKeyDER),
 		api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
 		api.WithAttestedIssuer(s),
+		api.WithAttestationPrincipalResolver(s),
 		api.WithSSHWorkflow(s),
 		api.WithBroker(s),
 		api.WithCertificateRevocationAuthority(s.certificateRevocationAuthority),

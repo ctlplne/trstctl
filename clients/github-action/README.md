@@ -1,12 +1,14 @@
 # trstctl attested issuance — GitHub Action
 
 Issue a short-lived X.509 certificate from a workflow **without the pipeline
-becoming a CA admin**. The workflow proves who it is with its ambient GitHub
-OIDC token; trstctl's `github_oidc` attestor verifies issuer, audience, expiry
-and (when configured) the allowed repository owners against GitHub's JWKS, and
-only then signs. The API token the workflow carries is scoped to
-`certs:issue` — it cannot approve, configure, or revoke — and the private key
-is generated inside the runner and never leaves it.
+holding a trstctl secret**. The workflow proves who it is with its ambient
+GitHub OIDC token; trstctl's `github_oidc` attestor verifies issuer, audience,
+expiry and the allowed repository owners against GitHub's JWKS, and only then
+signs. With a self-authenticating trust source the same verified token is also
+the credential: no API token exists in the pipeline. Where a tenant prefers an
+API token, it stays scoped to `certs:issue` — it cannot approve, configure, or
+revoke. Either way the private key is generated inside the runner and never
+leaves it.
 
 ## Sample workflow
 
@@ -30,21 +32,36 @@ jobs:
         id: cert
         with:
           url: https://trstctl.example.com
-          token: ${{ secrets.TRSTCTL_CI_TOKEN }}   # scoped to certs:issue only
+          tenant: 6d1f0c2e-7b1a-4a7e-9c6b-2f3e4d5c6b7a   # no secret: the OIDC token is the credential
           audience: trstctl
           ttl-seconds: "900"
       - run: openssl x509 -in "${{ steps.cert.outputs.certificate }}" -noout -subject -dates
 ```
 
+The `tenant` input names the trstctl tenant whose self-authenticating
+`github_oidc` trust source admits this repository's owner. To keep an API
+token instead, set `token: ${{ secrets.TRSTCTL_CI_TOKEN }}` (scoped to
+`certs:issue` only) and omit `tenant`; the Action refuses to run with neither.
+
 ## Server-side setup
 
-1. Configure a `github_oidc` attestation source (`attested_issuance` config
-   block): issuer `https://token.actions.githubusercontent.com`, the audience
-   your workflows request, and — recommended — `allowed_owners` pinning your
-   GitHub organization. An unpinned source attests every repository on GitHub.
-2. Mint an API token scoped to `certs:issue` and store it as a repository or
-   organization secret. The scope is the point: the OIDC attestation names the
-   workflow, and the token authorizes nothing but issuance.
+1. Create a `github_oidc` trust source for the tenant
+   (`POST /api/v1/workloads/attester-trust-sources`, or the console's
+   Workloads page): issuer `https://token.actions.githubusercontent.com`, the
+   audience your workflows request, GitHub's JWKS, `allowed_owners` pinning
+   your GitHub organization, and `self_authenticating: true`. The server
+   refuses to flag a source without an owner pin: an unpinned
+   self-authenticating source would let every repository on GitHub issue under
+   the tenant. The OIDC token is then accepted as the bearer credential of
+   `POST /api/v1/workloads/attested-issuance` alone, for that tenant, with
+   nothing but `certs:issue` there, and it must be the same token the request
+   carries as `payload_base64`. Issued certificates are attributed to
+   `github:` plus the repository name (for example `github:acme/payments`) in the event log.
+2. Alternatively, leave `self_authenticating` off (or use a process-level
+   `attested_issuance` source), mint an API token scoped to `certs:issue`, and
+   store it as a repository or organization secret. The scope is the point:
+   the OIDC attestation names the workflow, and the token authorizes nothing
+   but issuance.
 
 ## What the attestation binds
 

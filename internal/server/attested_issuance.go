@@ -427,7 +427,14 @@ func attestorFromTrustSource(source store.WorkloadAttesterTrustSource) (attest.A
 		if err != nil {
 			return nil, fmt.Errorf("trust source %s jwks: %w", source.ID, err)
 		}
-		return &githuboidc.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}, nil
+		attestor := &githuboidc.Attestor{JWKS: jwks, Issuer: source.Issuer, Audience: source.Audience}
+		if len(source.AllowedOwners) > 0 {
+			attestor.AllowedOwners = make(map[string]bool, len(source.AllowedOwners))
+			for _, owner := range source.AllowedOwners {
+				attestor.AllowedOwners[owner] = true
+			}
+		}
+		return attestor, nil
 	case "aws_iid":
 		roots, err := trustSourceRootCertDER(source)
 		if err != nil {
@@ -564,4 +571,51 @@ func attestedIssuanceFromConfig(c config.AttestedIssuance) AttestedIssuanceConfi
 		out.MaxTTL = d
 	}
 	return out
+}
+
+// ResolveAttestedPrincipal (A84) implements api.AttestationPrincipalResolver:
+// the tenant's enabled, self-authenticating github_oidc trust sources are the
+// only ones consulted, and the first that verifies the proof names the
+// principal github:<repository>. A tenant without such a source, a revoked or
+// disabled source, a token none verifies, or an owner outside the pin all end
+// in an error, which the API answers as 401.
+func (s *Server) ResolveAttestedPrincipal(ctx context.Context, tenantID string, proof []byte) (api.AttestedPrincipal, error) {
+	if s.attestedIssuance == nil {
+		return api.AttestedPrincipal{}, api.ErrAttestedIssuanceUnavailable
+	}
+	if strings.TrimSpace(tenantID) == "" || len(proof) == 0 {
+		return api.AttestedPrincipal{}, errors.New("server: attestation bearer needs a tenant and a proof")
+	}
+	sources, err := s.store.ListEnabledWorkloadAttesterTrustSources(ctx, tenantID, "github_oidc")
+	if err != nil {
+		return api.AttestedPrincipal{}, err
+	}
+	var failures []string
+	consulted := 0
+	for _, source := range sources {
+		if !source.SelfAuthenticating || source.RevokedAt != nil || len(source.AllowedOwners) == 0 {
+			continue
+		}
+		consulted++
+		attestor, err := attestorFromTrustSource(source)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+		att, err := attestor.Attest(ctx, proof)
+		if err != nil {
+			failures = append(failures, source.Name+": "+err.Error())
+			continue
+		}
+		repository := strings.TrimSpace(att.Claims["repository"])
+		if repository == "" {
+			failures = append(failures, source.Name+": verified token names no repository")
+			continue
+		}
+		return api.AttestedPrincipal{Subject: "github:" + repository, Method: attestor.Method()}, nil
+	}
+	if consulted == 0 {
+		return api.AttestedPrincipal{}, errors.New("server: the tenant has no enabled self-authenticating github_oidc trust source")
+	}
+	return api.AttestedPrincipal{}, fmt.Errorf("server: no self-authenticating trust source accepted the bearer proof: %s", strings.Join(failures, "; "))
 }

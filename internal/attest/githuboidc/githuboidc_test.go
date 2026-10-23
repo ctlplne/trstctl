@@ -72,3 +72,36 @@ func TestGitHubOIDCOwnerAllowlist(t *testing.T) {
 		t.Error("attested a repository owner not on the allowlist")
 	}
 }
+
+// A84: GitHub organisation names are case-insensitive; an owner pin written as
+// "ACME" must admit the token GitHub signs with repository_owner "acme" and
+// vice versa, so a pin the operator typed never silently refuses their own
+// repositories.
+func TestAllowedOwnersMatchCaseInsensitively(t *testing.T) {
+	signer, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer signer.Destroy()
+	jwk, err := crypto.PublicJWK(signer.Public(), "k1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := crypto.SignJWT(signer, "k1", map[string]any{
+		"iss": DefaultIssuer, "aud": "trstctl", "exp": time.Now().Add(5 * time.Minute).Unix(),
+		"sub": "repo:Acme/payments:ref:refs/heads/main", "repository": "Acme/payments", "repository_owner": "Acme",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pin := range []string{"acme", "ACME", "Acme"} {
+		a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{pin: true}}
+		if _, err := a.Attest(context.Background(), []byte(token)); err != nil {
+			t.Fatalf("pin %q refused repository_owner Acme: %v", pin, err)
+		}
+	}
+	a := &Attestor{JWKS: crypto.JWKS{Keys: []crypto.JWK{jwk}}, Audience: "trstctl", AllowedOwners: map[string]bool{"acme-labs": true}}
+	if _, err := a.Attest(context.Background(), []byte(token)); err == nil {
+		t.Fatal("a different owner was admitted")
+	}
+}

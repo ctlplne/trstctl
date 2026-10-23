@@ -1959,6 +1959,7 @@ func projectorRejectPrivacyRules() map[string][]events.PrivacyFieldRule {
 		},
 		EventWorkloadAttesterTrustSourceUpserted: {
 			privacyRule("/jwks", opaque),
+			privacyRule("/allowed_owners/*", opaque),
 		},
 		EventWorkloadAttesterTrustSourceRotated: {
 			privacyRule("/jwks", opaque),

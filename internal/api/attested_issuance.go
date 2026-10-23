@@ -146,6 +146,10 @@ func (a *API) previewAttestedSVID(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	if err := requireAttestationBearerIsPayload(r, command.Payload); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	tenantID, ok := a.tenant(r)
 	if !ok {
 		a.writeProblem(w, problemUnauthorized())
@@ -176,6 +180,10 @@ func (a *API) issueAttestedSVID(w http.ResponseWriter, r *http.Request) {
 	defer secret.Wipe(req.Payload)
 	principal, err := requestPrincipalSubject(r.Context())
 	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if err := requireAttestationBearerIsPayload(r, req.Payload); err != nil {
 		a.writeError(w, err)
 		return
 	}

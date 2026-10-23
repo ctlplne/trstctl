@@ -2943,8 +2943,17 @@ than sending an operator looking for a credential that was never there.
   `SHA256SUMS`, and SLSA provenance. Repository state is release-ready for
   `v0.6.0`, but that immutable tag is not published until an authenticated
   maintainer pushes the reviewed commits and creates the tag; the current
-  local remediation does neither. The Action still requires an API token
-  scoped to `certs:issue` alongside the OIDC attestation. Approving a request
+  local remediation does neither. The Action no longer needs an API token: a
+  `github_oidc` trust source created with `self_authenticating: true` and an
+  `allowed_owners` pin lets the workflow send its verified OIDC token as the
+  bearer credential of `POST /api/v1/workloads/attested-issuance` with the
+  tenant in `X-Tenant-ID` (the Action's `tenant` input). That principal is
+  `github:` plus the repository name (for example `github:acme/payments`), holds `certs:issue` on the attested-issuance
+  routes only, and must present the same token as `payload_base64`; the
+  server refuses to flag a source without an owner pin, and a disabled or
+  revoked source closes the door again. A `token` input scoped to
+  `certs:issue` remains supported. The live proof on a real GitHub Actions run
+  still needs the Action published from a pushed tag. Approving a request
   does not itself mint. The served
   `POST /api/v1/issuance-requests/{id}/prepare` command creates or recovers one
   deterministic requested identity, keeps the request at `approved`, and

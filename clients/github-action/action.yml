@@ -7,6 +7,10 @@
 # carries is scoped to certs:issue, and the OIDC attestation is what says
 # WHICH workflow, repository and ref asked.
 #
+# With a self-authenticating github_oidc trust source on the server (A84) the
+# pipeline holds no trstctl secret at all: the OIDC token is both the
+# attestation and the bearer credential, and the workflow names its tenant.
+#
 # The private key is generated INSIDE the runner and never leaves it. Only the
 # public key travels; the certificate comes back.
 name: "trstctl attested issuance"
@@ -21,8 +25,18 @@ inputs:
     description: "trstctl base URL, e.g. https://trstctl.example.com"
     required: true
   token:
-    description: "trstctl API token scoped to certs:issue (store it as a repository secret)"
-    required: true
+    description: >-
+      trstctl API token scoped to certs:issue (store it as a repository secret).
+      Leave it empty to issue on the OIDC attestation alone and set 'tenant' instead.
+    required: false
+    default: ""
+  tenant:
+    description: >-
+      trstctl tenant ID whose self-authenticating github_oidc trust source admits
+      this repository's owner. Used when 'token' is empty: the OIDC token is then
+      sent as the bearer credential with this tenant in X-Tenant-ID.
+    required: false
+    default: ""
   audience:
     description: "OIDC audience; must match the attestation source's configured audience"
     required: false
@@ -50,6 +64,7 @@ runs:
       env:
         TRSTCTL_URL: ${{ inputs.url }}
         TRSTCTL_TOKEN: ${{ inputs.token }}
+        TRSTCTL_TENANT: ${{ inputs.tenant }}
         TRSTCTL_AUDIENCE: ${{ inputs.audience }}
         TRSTCTL_TTL_SECONDS: ${{ inputs.ttl-seconds }}
         TRSTCTL_OUT_DIR: ${{ inputs.out-dir }}
@@ -72,6 +87,13 @@ runs:
           fi
         fi
 
+        # One of the two credential shapes must be named: an API token, or the
+        # tenant whose self-authenticating trust source admits this owner.
+        if [ -z "${TRSTCTL_TOKEN:-}" ] && [ -z "${TRSTCTL_TENANT:-}" ]; then
+          echo "::error::set 'token' (an API token scoped to certs:issue) or 'tenant' (the trstctl tenant ID whose self-authenticating github_oidc trust source admits this repository)" >&2
+          exit 1
+        fi
+
         # The id-token: write permission is what makes the two request
         # variables exist. Failing here with the fix beats a 401 later.
         if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
@@ -90,6 +112,14 @@ runs:
           "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${TRSTCTL_AUDIENCE}" | jq -r '.value')"
 
         PAYLOAD_B64="$(printf '%s' "$OIDC_JWT" | base64 | tr -d '\n')"
+
+        # Tokenless: the OIDC token is the bearer credential and the tenant is
+        # named; the server verifies it against the tenant's
+        # self-authenticating trust source and binds it to payload_base64.
+        AUTH_ARGS=(-H "Authorization: Bearer ${TRSTCTL_TOKEN:-$OIDC_JWT}")
+        if [ -n "${TRSTCTL_TENANT:-}" ]; then
+          AUTH_ARGS+=(-H "X-Tenant-ID: ${TRSTCTL_TENANT}")
+        fi
         PUBKEY_JSON="$(jq -Rs '.' < "$TRSTCTL_OUT_DIR/public.pem")"
         RUN_BINDING="$(printf '%s\0%s\0%s' "$GITHUB_RUN_ID" "$GITHUB_JOB" "$GITHUB_ACTION" \
           | openssl dgst -sha256 | awk '{print $2}')"
@@ -102,7 +132,7 @@ runs:
             '{method: $method, payload_base64: $payload, public_key_pem: $pubkey, ttl_seconds: $ttl}' \
           | curl --silent --show-error --output "$TRSTCTL_OUT_DIR/response.json" --write-out '%{http_code}' \
             -X POST "${TRSTCTL_URL%/}/api/v1/workloads/attested-issuance" \
-            -H "Authorization: Bearer ${TRSTCTL_TOKEN}" \
+            "${AUTH_ARGS[@]}" \
             -H "Content-Type: application/json" \
             -H "Idempotency-Key: gha-${RUN_BINDING}" \
             --data-binary @-)"

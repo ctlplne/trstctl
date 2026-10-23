@@ -119,6 +119,7 @@ type API struct {
 	externalCAs              ExternalCAService
 	certRevocationAuthority  CertificateRevocationAuthorityResolver
 	attestedIssuer           AttestedIssuerService
+	attestationPrincipals    AttestationPrincipalResolver
 	sshWorkflow              SSHWorkflowService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
@@ -262,6 +263,7 @@ type config struct {
 	externalCAs                 ExternalCAService
 	certRevocationAuthority     CertificateRevocationAuthorityResolver
 	attestedIssuer              AttestedIssuerService
+	attestationPrincipals       AttestationPrincipalResolver
 	sshWorkflow                 SSHWorkflowService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
@@ -582,6 +584,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		externalCAs:                 cfg.externalCAs,
 		certRevocationAuthority:     cfg.certRevocationAuthority,
 		attestedIssuer:              cfg.attestedIssuer,
+		attestationPrincipals:       cfg.attestationPrincipals,
 		sshWorkflow:                 cfg.sshWorkflow,
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,
@@ -1792,6 +1795,12 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 				return authz.Principal{}, errors.New("api: expired api token")
 			}
 			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes, Delegated: rec.Delegated}.Principal(), nil
+		}
+		// A84: a bearer that is not an API token may be a workload's own
+		// attestation proof, accepted on the attested-issuance routes alone
+		// when the named tenant has a self-authenticating trust source for it.
+		if a.attestationPrincipals != nil && attestedIssuanceRoute(r) {
+			return a.resolveAttestationBearer(r, tok)
 		}
 	}
 	if a.auth != nil {

@@ -267,7 +267,8 @@ func (s *Store) CompleteWorkloadAttesterTrustCommandTx(ctx context.Context, tx p
 		if err := scanWorkloadAttesterTrustSource(tx.QueryRow(ctx,
 			`SELECT id::text,tenant_id::text,name,method,issuer,audience,jwks,
 			        root_certs_pem,expected_nonce_base64,enabled,revoked_at,revoked_reason,
-			        rotation_version,last_rotated_at,created_at,updated_at
+			        rotation_version,last_rotated_at,created_at,updated_at,
+			        self_authenticating,allowed_owners
 			   FROM workload_attester_trust_sources WHERE tenant_id=$1 AND id=$2`,
 			event.TenantID, sourceID), &source); err != nil {
 			return err

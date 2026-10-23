@@ -1140,6 +1140,20 @@ export function Workloads() {
                 placeholder={translateNow("source.begin.certificate.ddddb6cbd3")}
               />
             </label>
+            {trustSourceMethod === "github_oidc" ? (
+              <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                <label className="grid gap-1 text-sm font-medium">
+                  {t("workloads.attestation.allowedOwners")}
+                  <input className="ui-input" name="allowed_owners" placeholder="acme, acme-labs" />
+                  <span className="text-xs font-normal text-muted-foreground">{t("workloads.attestation.allowedOwnersHelp")}</span>
+                </label>
+                <label className="flex items-center gap-2 self-end text-sm font-medium">
+                  <input className="h-4 w-4" type="checkbox" name="self_authenticating" />
+                  {t("workloads.attestation.selfAuthenticating")}
+                </label>
+                <p className="text-xs text-muted-foreground md:col-span-2">{t("workloads.attestation.selfAuthenticatingHelp")}</p>
+              </div>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-[1fr_auto]">
               <label className="grid gap-1 text-sm font-medium">
                 {t("workloads.attestation.expectedNonce")}
@@ -1410,6 +1424,14 @@ function trustSourceRequestFromForm(data: FormData, method: TrustSourceMethod): 
   if (roots.length > 0) input.root_certs_pem = roots;
   const expectedNonce = formString(data, "expected_nonce_base64");
   if (expectedNonce) input.expected_nonce_base64 = expectedNonce;
+  if (method === "github_oidc") {
+    const owners = formString(data, "allowed_owners")
+      .split(/[\s,]+/)
+      .map((owner) => owner.trim().toLowerCase())
+      .filter((owner) => owner.length > 0);
+    if (owners.length > 0) input.allowed_owners = owners;
+    if (data.get("self_authenticating") === "on") input.self_authenticating = true;
+  }
   return input;
 }
 

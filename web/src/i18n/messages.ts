@@ -21080,6 +21080,23 @@ export const messages = {
     defaultMessage: "Enabled",
     description: "Checkbox label and status label for enabled trust sources.",
   },
+  "workloads.attestation.allowedOwners": {
+    defaultMessage: "Allowed GitHub owners",
+    description: "Input label for the GitHub repository owners a github_oidc trust source admits.",
+  },
+  "workloads.attestation.allowedOwnersHelp": {
+    defaultMessage: "Organizations or users whose repositories this source admits, separated by commas. Without a pin, every repository on GitHub can attest.",
+    description: "Help text under the allowed GitHub owners input.",
+  },
+  "workloads.attestation.selfAuthenticating": {
+    defaultMessage: "Issue on the OIDC token alone",
+    description: "Checkbox label that lets the verified GitHub OIDC token be the credential for attested issuance, with no API token.",
+  },
+  "workloads.attestation.selfAuthenticatingHelp": {
+    defaultMessage:
+      "Workflows from the allowed owners send their OIDC token as the bearer credential of attested issuance and name this tenant; no trstctl API token lives in the pipeline. Requires at least one allowed owner.",
+    description: "Help text under the self-authenticating checkbox.",
+  },
   "workloads.attestation.createTrustSource": {
     defaultMessage: "Create trust source",
     description: "Button label for creating a workload attester trust source.",

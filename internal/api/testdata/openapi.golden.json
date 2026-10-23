@@ -36403,6 +36403,13 @@
       },
       "WorkloadAttesterTrustSource": {
         "properties": {
+          "allowed_owners": {
+            "description": "Lower-cased GitHub repository owners this source admits.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "audience": {
             "type": "string"
           },
@@ -36464,6 +36471,10 @@
           "rotation_version": {
             "type": "integer"
           },
+          "self_authenticating": {
+            "description": "A84: the verified github_oidc token alone authenticates attested issuance for this tenant.",
+            "type": "boolean"
+          },
           "tenant_id": {
             "format": "uuid",
             "type": "string"
@@ -36480,6 +36491,8 @@
           "method",
           "jwks",
           "root_certs_pem",
+          "self_authenticating",
+          "allowed_owners",
           "enabled",
           "rotation_version",
           "created_at",
@@ -36506,6 +36519,13 @@
       },
       "WorkloadAttesterTrustSourceRequest": {
         "properties": {
+          "allowed_owners": {
+            "description": "GitHub repository owners (organisations or users) this source admits; compared without regard to case.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "audience": {
             "type": "string"
           },
@@ -36540,6 +36560,10 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "self_authenticating": {
+            "description": "A84: github_oidc only; the verified OIDC token is by itself the bearer credential of POST /api/v1/workloads/attested-issuance for this tenant. Requires allowed_owners.",
+            "type": "boolean"
           }
         },
         "required": [

@@ -1091,6 +1091,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
 	296: true, // TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus
 	297: true, // TestMigration0297GivesExistingCampaignsNoSoak
+	298: true, // TestMigration0298LeavesExistingTrustSourcesTokenBound
 	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
@@ -5889,5 +5890,42 @@ func TestMigration0297GivesExistingCampaignsNoSoak(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `UPDATE agent_upgrade_campaigns SET soak_seconds = 600 WHERE tenant_id=$1 AND id=$2`, tenantA, campaignID); err != nil {
 		t.Fatalf("0297 refused a soak window: %v", err)
+	}
+}
+
+// A84: the self-authenticating flag and the owner pin arrive false and empty,
+// so every github_oidc trust source created before it still needs an API
+// token beside the attestation; no pipeline becomes tokenless by migration.
+func TestMigration0298LeavesExistingTrustSourcesTokenBound(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 298)
+	if target.noTx || target.name != "0298_self_authenticating_attester_trust.sql" {
+		t.Fatalf("migration 0298 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	sourceID := uuid(tenantA, 29801)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO workload_attester_trust_sources (id, tenant_id, name, method, issuer, audience, jwks, created_at, updated_at)
+		VALUES ($1, $2, 'ci', 'github_oidc', 'https://token.actions.githubusercontent.com', 'trstctl', '{"keys":[]}'::jsonb, now(), now())`,
+		sourceID, tenantA); err != nil {
+		t.Fatalf("seed pre-0298 trust source: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var selfAuthenticating bool
+	var owners []string
+	if err := pool.QueryRow(ctx, `SELECT self_authenticating, allowed_owners FROM workload_attester_trust_sources WHERE tenant_id=$1 AND id=$2`, tenantA, sourceID).Scan(&selfAuthenticating, &owners); err != nil {
+		t.Fatal(err)
+	}
+	if selfAuthenticating || len(owners) != 0 {
+		t.Fatalf("legacy trust source self_authenticating=%t allowed_owners=%v, want false and empty", selfAuthenticating, owners)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE workload_attester_trust_sources SET self_authenticating = true, allowed_owners = ARRAY['acme'] WHERE tenant_id=$1 AND id=$2`, tenantA, sourceID); err != nil {
+		t.Fatalf("0298 refused the flag and pin: %v", err)
 	}
 }

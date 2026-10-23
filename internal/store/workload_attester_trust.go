@@ -36,14 +36,20 @@ type WorkloadAttesterTrustSource struct {
 	JWKS                json.RawMessage
 	RootCertsPEM        []string
 	ExpectedNonceBase64 string
-	Enabled             bool
-	AuthorityPending    bool
-	RevokedAt           *time.Time
-	RevokedReason       string
-	RotationVersion     int
-	LastRotatedAt       *time.Time
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	// SelfAuthenticating (A84): the verified proof of this github_oidc source
+	// is itself the bearer credential of attested issuance for the tenant.
+	SelfAuthenticating bool
+	// AllowedOwners (A84): lower-cased GitHub repository owners this source
+	// admits; never empty when SelfAuthenticating.
+	AllowedOwners    []string
+	Enabled          bool
+	AuthorityPending bool
+	RevokedAt        *time.Time
+	RevokedReason    string
+	RotationVersion  int
+	LastRotatedAt    *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // ApplyWorkloadAttesterTrustSourceUpsertedTx projects a
@@ -54,6 +60,9 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 	}
 	if ts.RootCertsPEM == nil {
 		ts.RootCertsPEM = []string{}
+	}
+	if ts.AllowedOwners == nil {
+		ts.AllowedOwners = []string{}
 	}
 	if ts.RotationVersion <= 0 {
 		ts.RotationVersion = 1
@@ -98,9 +107,10 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO workload_attester_trust_sources
 		    (id, tenant_id, name, method, issuer, audience, jwks, root_certs_pem,
-		     expected_nonce_base64, enabled, rotation_version, created_at, updated_at)
+		     expected_nonce_base64, enabled, rotation_version, created_at, updated_at,
+		     self_authenticating, allowed_owners)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7::jsonb, $8,
-		         $9, $10, $11, $12, $13)
+		         $9, $10, $11, $12, $13, $14, $15)
 		 ON CONFLICT (id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     method = EXCLUDED.method,
@@ -110,6 +120,8 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		     root_certs_pem = EXCLUDED.root_certs_pem,
 		     expected_nonce_base64 = EXCLUDED.expected_nonce_base64,
 		     enabled = EXCLUDED.enabled,
+		     self_authenticating = EXCLUDED.self_authenticating,
+		     allowed_owners = EXCLUDED.allowed_owners,
 		     revoked_at = NULL,
 		     revoked_reason = '',
 		     rotation_version = GREATEST(workload_attester_trust_sources.rotation_version, EXCLUDED.rotation_version),
@@ -117,7 +129,8 @@ func (s *Store) ApplyWorkloadAttesterTrustSourceUpsertedTx(ctx context.Context, 
 		     updated_at = EXCLUDED.updated_at
 		 WHERE workload_attester_trust_sources.tenant_id = EXCLUDED.tenant_id`,
 		ts.ID, ts.TenantID, ts.Name, ts.Method, ts.Issuer, ts.Audience, jsonbOrEmpty(ts.JWKS),
-		ts.RootCertsPEM, ts.ExpectedNonceBase64, ts.Enabled, ts.RotationVersion, ts.CreatedAt, ts.UpdatedAt)
+		ts.RootCertsPEM, ts.ExpectedNonceBase64, ts.Enabled, ts.RotationVersion, ts.CreatedAt, ts.UpdatedAt,
+		ts.SelfAuthenticating, ts.AllowedOwners)
 	if err != nil {
 		return err
 	}
@@ -136,7 +149,8 @@ func (s *Store) GetWorkloadAttesterTrustSourceByName(ctx context.Context, tenant
 		return scanWorkloadAttesterTrustSource(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
-			        rotation_version, last_rotated_at, created_at, updated_at
+			        rotation_version, last_rotated_at, created_at, updated_at,
+			        self_authenticating, allowed_owners
 			   FROM workload_attester_trust_sources
 			  WHERE tenant_id = $1 AND lower(name) = lower($2)`,
 			tenantID, strings.TrimSpace(name)), &out)
@@ -224,7 +238,8 @@ func (s *Store) GetWorkloadAttesterTrustSource(ctx context.Context, tenantID, id
 		return scanWorkloadAttesterTrustSource(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
-			        rotation_version, last_rotated_at, created_at, updated_at
+			        rotation_version, last_rotated_at, created_at, updated_at,
+			        self_authenticating, allowed_owners
 			   FROM workload_attester_trust_sources
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
@@ -249,6 +264,7 @@ func (s *Store) GetEffectiveWorkloadAttesterTrustSource(ctx context.Context, ten
 			             THEN false ELSE trust.enabled END,
 			        trust.revoked_at, trust.revoked_reason, trust.rotation_version,
 			        trust.last_rotated_at, trust.created_at, trust.updated_at,
+			        trust.self_authenticating, trust.allowed_owners,
 			        COALESCE(command.status='pending', false)
 			   FROM workload_attester_trust_sources AS trust
 			   LEFT JOIN workload_attester_trust_commands AS command
@@ -274,7 +290,8 @@ func (s *Store) ListEnabledWorkloadAttesterTrustSources(ctx context.Context, ten
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, name, method, issuer, audience, jwks,
 			        root_certs_pem, expected_nonce_base64, enabled, revoked_at, revoked_reason,
-			        rotation_version, last_rotated_at, created_at, updated_at
+			        rotation_version, last_rotated_at, created_at, updated_at,
+			        self_authenticating, allowed_owners
 			   FROM workload_attester_trust_sources AS trust
 			  WHERE trust.tenant_id = $1 AND trust.method = $2 AND trust.enabled = true
 			    AND NOT EXISTS (SELECT 1 FROM workload_attester_trust_commands AS command
@@ -310,6 +327,7 @@ func (s *Store) listWorkloadAttesterTrustSources(ctx context.Context, tenantID, 
 		                 THEN false ELSE trust.enabled END,
 		               trust.revoked_at, trust.revoked_reason,
 		               trust.rotation_version, trust.last_rotated_at, trust.created_at, trust.updated_at,
+		               trust.self_authenticating, trust.allowed_owners,
 		               EXISTS (SELECT 1 FROM workload_attester_trust_commands AS pending
 		                 WHERE pending.tenant_id=trust.tenant_id AND pending.source_id=trust.id
 		                   AND pending.status='pending')
@@ -341,12 +359,13 @@ func (s *Store) listWorkloadAttesterTrustSources(ctx context.Context, tenantID, 
 func scanWorkloadAttesterTrustSource(row pgx.Row, ts *WorkloadAttesterTrustSource) error {
 	return row.Scan(&ts.ID, &ts.TenantID, &ts.Name, &ts.Method, &ts.Issuer, &ts.Audience,
 		&ts.JWKS, &ts.RootCertsPEM, &ts.ExpectedNonceBase64, &ts.Enabled, &ts.RevokedAt,
-		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt, &ts.UpdatedAt)
+		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt, &ts.UpdatedAt,
+		&ts.SelfAuthenticating, &ts.AllowedOwners)
 }
 
 func scanEffectiveWorkloadAttesterTrustSource(row pgx.Row, ts *WorkloadAttesterTrustSource) error {
 	return row.Scan(&ts.ID, &ts.TenantID, &ts.Name, &ts.Method, &ts.Issuer, &ts.Audience,
 		&ts.JWKS, &ts.RootCertsPEM, &ts.ExpectedNonceBase64, &ts.Enabled, &ts.RevokedAt,
 		&ts.RevokedReason, &ts.RotationVersion, &ts.LastRotatedAt, &ts.CreatedAt,
-		&ts.UpdatedAt, &ts.AuthorityPending)
+		&ts.UpdatedAt, &ts.SelfAuthenticating, &ts.AllowedOwners, &ts.AuthorityPending)
 }

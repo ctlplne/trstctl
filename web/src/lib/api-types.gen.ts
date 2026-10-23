@@ -8888,6 +8888,7 @@ export interface UsageMeterDefinition {
 }
 
 export interface WorkloadAttesterTrustSource {
+  allowed_owners: string[];
   audience?: string;
   authority_pending?: boolean;
   created_at: string;
@@ -8903,6 +8904,7 @@ export interface WorkloadAttesterTrustSource {
   revoked_reason?: string;
   root_certs_pem: string[];
   rotation_version: number;
+  self_authenticating: boolean;
   tenant_id: string;
   updated_at: string;
 }
@@ -8913,6 +8915,7 @@ export interface WorkloadAttesterTrustSourceList {
 }
 
 export interface WorkloadAttesterTrustSourceRequest {
+  allowed_owners?: string[];
   audience?: string;
   enabled?: boolean;
   expected_nonce_base64?: string;
@@ -8921,6 +8924,7 @@ export interface WorkloadAttesterTrustSourceRequest {
   method: "aws_iid" | "azure_imds" | "gcp_iit" | "github_oidc" | "k8s_sat" | "tpm";
   name: string;
   root_certs_pem?: string[];
+  self_authenticating?: boolean;
 }
 
 export interface WorkloadAttesterTrustSourceRevokeRequest {
