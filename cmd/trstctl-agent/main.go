@@ -615,10 +615,14 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		return errors.New("--relay-ca-bundle requires --relay-claim")
 	}
 	var relayClient *http.Client
+	var relayCAStatus func() *transport.RelayCABundleReport
 	if o.relayClaim {
 		relayClient, err = relayHTTPClient(o.relayCABundle)
 		if err != nil {
 			return err
+		}
+		if reloading, ok := relayClient.Transport.(*relayCATransport); ok {
+			relayCAStatus = reloading.Status
 		}
 	}
 	enroller := enrollmentEnroller(o, enrollClient)
@@ -685,7 +689,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		enrollmentProxy:    reportEnrollmentProxy,
 		revocationCaches:   reportRevocationCaches,
 		revocationIssuedAt: &atomic.Int64{},
-		executors:          func() *transport.ExecutorReport { return executorCensus(o) },
+		executors:          func() *transport.ExecutorReport { return executorCensus(o, relayCAStatus) },
 	}
 	if agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		ch.pluginIdentity = a.Identity()
@@ -1382,7 +1386,10 @@ func hostProfileCensus(o agentOptions) (pinsProbe bool, loadError string) {
 
 const hostProfileErrorLimit = 512
 
-func executorCensus(o agentOptions) *transport.ExecutorReport {
+// executorCensus builds the heartbeat self-report. relayCAStatus, when the
+// relay runs with --relay-ca-bundle, reports the bundle actually in force
+// (A86); nil means no relay bundle is configured.
+func executorCensus(o agentOptions, relayCAStatus func() *transport.RelayCABundleReport) *transport.ExecutorReport {
 	set := map[string]bool{
 		"--relay-claim":       o.relayClaim,
 		"--host-exec-profile": o.hostExecProfile != "",
@@ -1390,6 +1397,9 @@ func executorCensus(o agentOptions) *transport.ExecutorReport {
 	}
 	pinsProbe, profileError := hostProfileCensus(o)
 	report := &transport.ExecutorReport{Version: buildinfo.Version(), Kinds: []transport.ExecutorKind{}, HostTLSProbe: pinsProbe, HostProfileError: profileError}
+	if relayCAStatus != nil {
+		report.RelayCABundle = relayCAStatus()
+	}
 	for _, kind := range relay.ShippedJobKinds() {
 		missing := []string{}
 		for _, flag := range kind.Flags {

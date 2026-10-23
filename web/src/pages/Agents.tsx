@@ -982,6 +982,19 @@ function AgentDetail({ agent }: { agent: Agent }) {
                         at: agent.capabilities_reported_at ? formatAgentTime(agent.capabilities_reported_at) : "?",
                       })}
                     </span>
+                    {agent.reported_relay_ca_bundle ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {t("agents.executors.relayCABundle", {
+                          digest: agent.reported_relay_ca_bundle.sha256.slice(0, 16),
+                          at: formatAgentTime(agent.reported_relay_ca_bundle.loaded_at),
+                        })}
+                        {agent.reported_relay_ca_bundle.error ? (
+                          <span className="block text-status-warning">
+                            {t("agents.executors.relayCABundleError", { error: agent.reported_relay_ca_bundle.error })}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
                     {agent.reported_capabilities.length === 0 ? (
                       <span className="text-xs text-muted-foreground">{t("agents.executors.reportedNone")}</span>
                     ) : (

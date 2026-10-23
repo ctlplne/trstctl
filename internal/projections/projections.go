@@ -2047,6 +2047,16 @@ type AgentExecutorCensus struct {
 	// HostProfileError: why the host exec profile could not be loaded (B7);
 	// empty when it loaded.
 	HostProfileError string `json:"host_profile_error,omitempty"`
+	// RelayCABundle: the --relay-ca-bundle in force on the relay (A86).
+	RelayCABundle *AgentRelayCABundle `json:"relay_ca_bundle,omitempty"`
+}
+
+// AgentRelayCABundle is the relay's self-reported appliance CA bundle: the
+// digest and load time of the bundle in force and the last reload error.
+type AgentRelayCABundle struct {
+	SHA256   string    `json:"sha256"`
+	LoadedAt time.Time `json:"loaded_at"`
+	Error    string    `json:"error,omitempty"`
 }
 
 // AgentExecutorKind is one job kind in an agent's self-reported census.

@@ -3741,6 +3741,26 @@
           "reported_host_tls_probe": {
             "type": "boolean"
           },
+          "reported_relay_ca_bundle": {
+            "description": "A86: the relay's own account of its --relay-ca-bundle: the digest and load time of the bundle in force and the last reload error when the operator's latest replacement was unusable; absent until a relay with a bundle has reported.",
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "loaded_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sha256",
+              "loaded_at"
+            ],
+            "type": "object"
+          },
           "role_source": {
             "enum": [
               "certificate",

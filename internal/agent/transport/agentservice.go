@@ -131,6 +131,17 @@ type ExecutorReport struct {
 	// them wait on a claim that never comes. Empty when the profile loaded or
 	// none was configured.
 	HostProfileError string `json:"host_profile_error,omitempty"`
+	// RelayCABundle is the --relay-ca-bundle actually in force on this relay
+	// (A86): its digest, when it was loaded, and the last reload error if the
+	// operator's latest replacement was unusable. Nil when no bundle is set.
+	RelayCABundle *RelayCABundleReport `json:"relay_ca_bundle,omitempty"`
+}
+
+// RelayCABundleReport is the relay's own account of its appliance CA bundle.
+type RelayCABundleReport struct {
+	SHA256   string    `json:"sha256"`
+	LoadedAt time.Time `json:"loaded_at"`
+	Error    string    `json:"error,omitempty"`
 }
 
 // ExecutorKind is one shipped job kind as the binary itself reports it.

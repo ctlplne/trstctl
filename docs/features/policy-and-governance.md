@@ -203,8 +203,9 @@ system trust store, configure that agent with `--relay-ca-bundle
 /path/to/cmdb-ca.pem` as described in [Configuration](../configuration.md).
 The control-plane `--ca-bundle` authenticates trstctl only; it does not grant
 trust to CMDB servers. A failed TLS verification remains a failed schedule
-attempt until the relay is restarted with the correct CA and the next due job
-completes.
+attempt until the correct CA is in the bundle file (the relay re-reads a changed
+file without a restart and reports the bundle in force on the Agents page) and
+the next due job completes.
 The Ownership console exposes **Configure CMDB sync** in its Sources disclosure
 even before the first schedule exists. Review the exact URL, reference, query,
 interval, and enabled state before saving. An ambiguous response can be retried

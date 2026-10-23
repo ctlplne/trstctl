@@ -117,8 +117,8 @@ not this file.
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
-| `internal/agent/transport/agentservice.go:806` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:813` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:817` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:824` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -179,8 +179,8 @@ not this file.
 | `internal/config/audit_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:2718` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:3451` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:2728` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3462` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:389` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -547,10 +547,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5775` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5792` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5805` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5833` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5785` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5802` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5815` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5843` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -962,12 +962,12 @@ not this file.
 | `internal/server/pam_served_test.go:893` | fixed best-effort test cleanup bounded by a context deadline (CWE-78) |
 | `internal/server/pam_served_test.go:907` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/pam_served_test.go:938` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:311` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:370` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:400` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:519` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:572` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:587` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:323` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:382` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:412` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:531` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:584` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:599` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:382` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:401` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1135,13 +1135,13 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:253` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:335` | exact test tempdir sentinel |
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
-| `cmd/trstctl-agent/main.go:1081` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1654` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1085` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1664` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:403` | operator-supplied public issuer certificate (CWE-22) |
-| `cmd/trstctl-agent/relayloop.go:156` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
+| `cmd/trstctl-agent/relayloop.go:205` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
 | `cmd/trstctl-agent/sshkrl.go:51` | operator-selected public KRL input |
 | `cmd/trstctl-agent/sshkrl_test.go:24` | test fixture path created under t.TempDir |
 | `cmd/trstctl-agent/sshkrl_test.go:67` | test fixture target under t.TempDir |
@@ -1314,7 +1314,7 @@ not this file.
 | `internal/cli/pcas_kem_envelope.go:67` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:2812` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:2822` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:353` | clean is confined to operator-approved local roots above (CWE-22) |
@@ -1430,8 +1430,8 @@ not this file.
 | `internal/server/protocol_mounts.go:708` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:815` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/protocol_mounts.go:932` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1276` | operator-configured trust bundle path (CWE-22) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:590` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/protocol_mounts.go:1282` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:228` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:232` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:326` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1636,8 +1636,8 @@ not this file.
 | `internal/server/host_agent_remote_served_test.go:613` | public CA fixture (CWE-276) |
 | `internal/server/pam_served_test.go:826` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/pam_served_test.go:838` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:515` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/protocols_served_spiffe_ssh_test.go:569` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:527` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/protocols_served_spiffe_ssh_test.go:581` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1712,7 +1712,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:701` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:705` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

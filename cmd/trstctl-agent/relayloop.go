@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -15,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -153,15 +155,122 @@ func relayHTTPClient(caBundlePath string) (*http.Client, error) {
 		},
 	}
 	if caBundlePath != "" {
-		caPEM, err := os.ReadFile(caBundlePath) // #nosec G304 -- explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22).
+		transport, err := newRelayCATransport(caBundlePath)
 		if err != nil {
-			return nil, fmt.Errorf("read relay CA bundle: %w", err)
-		}
-		transport, err := mtls.HTTPTransportWithSystemRootsAndCA(caPEM)
-		if err != nil {
-			return nil, fmt.Errorf("build relay HTTPS trust: %w", err)
+			return nil, err
 		}
 		client.Transport = transport
 	}
 	return client, nil
+}
+
+// relayCATransport (A86) serves --relay-ca-bundle without a restart. Every
+// request first looks at the file (at most every relayCACheckEvery): a changed
+// file is re-read and, when it parses as CA material, becomes the trust for
+// the next connection; an unusable replacement keeps the bundle that worked
+// and is remembered as the last error. Startup is still fail-closed: the
+// first load must succeed, exactly as before. Status() is what the executor
+// census reports, so the console shows the bundle in use, not the file.
+type relayCATransport struct {
+	path       string
+	checkEvery time.Duration
+
+	mu        sync.Mutex
+	current   *http.Transport
+	modTime   time.Time
+	size      int64
+	sha256    string
+	loadedAt  time.Time
+	lastErr   string
+	lastCheck time.Time
+}
+
+const relayCACheckEvery = 5 * time.Second
+
+func newRelayCATransport(path string) (*relayCATransport, error) {
+	t := &relayCATransport{path: path, checkEvery: relayCACheckEvery}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("read relay CA bundle: %w", err)
+	}
+	if err := t.load(info); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// load reads and installs the bundle described by info. Errors leave the
+// current transport in place; the caller decides whether that is fatal.
+func (t *relayCATransport) load(info os.FileInfo) error {
+	caPEM, err := os.ReadFile(t.path) // #nosec G304 -- explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22).
+	if err != nil {
+		return fmt.Errorf("read relay CA bundle: %w", err)
+	}
+	digest := crypto.SHA256Hex(caPEM)
+	if digest == t.sha256 && t.current != nil {
+		t.modTime, t.size = info.ModTime(), info.Size()
+		return nil
+	}
+	next, err := mtls.HTTPTransportWithSystemRootsAndCA(caPEM)
+	if err != nil {
+		return fmt.Errorf("build relay HTTPS trust: %w", err)
+	}
+	previous := t.current
+	t.current, t.sha256, t.loadedAt, t.lastErr = next, digest, time.Now().UTC(), ""
+	t.modTime, t.size = info.ModTime(), info.Size()
+	if previous != nil {
+		previous.CloseIdleConnections()
+	}
+	return nil
+}
+
+// refresh re-reads a changed bundle. It never clears a working transport.
+func (t *relayCATransport) refresh() {
+	now := time.Now()
+	if t.checkEvery > 0 && !t.lastCheck.IsZero() && now.Sub(t.lastCheck) < t.checkEvery {
+		return
+	}
+	t.lastCheck = now
+	info, err := os.Stat(t.path)
+	if err != nil {
+		t.noteReloadError(fmt.Sprintf("relay CA bundle unreadable; keeping the bundle loaded at %s: %v", t.loadedAt.Format(time.RFC3339), err))
+		return
+	}
+	if info.ModTime().Equal(t.modTime) && info.Size() == t.size {
+		return
+	}
+	before := t.sha256
+	if err := t.load(info); err != nil {
+		// Remember the attempt so the same broken file is not re-parsed on
+		// every request, and keep the bundle that worked.
+		t.modTime, t.size = info.ModTime(), info.Size()
+		t.noteReloadError(fmt.Sprintf("relay CA bundle replacement rejected; keeping the bundle loaded at %s: %v", t.loadedAt.Format(time.RFC3339), err))
+		return
+	}
+	if t.sha256 != before {
+		fmt.Printf("trstctl-agent: relay CA bundle reloaded from %s (sha256 %s)\n", t.path, t.sha256[:16])
+	}
+}
+
+func (t *relayCATransport) noteReloadError(msg string) {
+	if t.lastErr != msg {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", msg)
+	}
+	t.lastErr = msg
+}
+
+// RoundTrip implements http.RoundTripper over the bundle currently in force.
+func (t *relayCATransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	t.mu.Lock()
+	t.refresh()
+	current := t.current
+	t.mu.Unlock()
+	return current.RoundTrip(r)
+}
+
+// Status is the census view of the bundle in force.
+func (t *relayCATransport) Status() *transport.RelayCABundleReport {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return &transport.RelayCABundleReport{SHA256: t.sha256, LoadedAt: t.loadedAt, Error: t.lastErr}
 }

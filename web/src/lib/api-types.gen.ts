@@ -908,6 +908,7 @@ export interface Agent {
   reported_executor_version?: string;
   reported_host_profile_error?: string;
   reported_host_tls_probe?: boolean;
+  reported_relay_ca_bundle?: { error?: string; loaded_at: string; sha256: string };
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
   status: string;

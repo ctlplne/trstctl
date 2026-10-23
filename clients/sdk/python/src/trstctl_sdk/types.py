@@ -1232,6 +1232,7 @@ Agent = TypedDict(
         'reported_executor_version': str,
         'reported_host_profile_error': str,
         'reported_host_tls_probe': bool,
+        'reported_relay_ca_bundle': dict[str, Any],
         'role_source': str,
         'roles': list[str],
         'status': str,

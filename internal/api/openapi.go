@@ -5470,6 +5470,9 @@ func componentSchemas() map[string]*Schema {
 		"reported_executor_version":   str(),
 		"reported_host_tls_probe":     {Type: "boolean"},
 		"reported_host_profile_error": {Type: "string", Description: "The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded."},
+		"reported_relay_ca_bundle": {Type: "object", Description: "A86: the relay's own account of its --relay-ca-bundle: the digest and load time of the bundle in force and the last reload error when the operator's latest replacement was unusable; absent until a relay with a bundle has reported.", Properties: map[string]*Schema{
+			"sha256": str(), "loaded_at": timestamp(), "error": str(),
+		}, Required: []string{"sha256", "loaded_at"}},
 		// A66/A67: the jobs this agent holds under an unexpired lease and the
 		// per-agent quota (0 = none) the channel enforces on new claims.
 		"live_claims":         {Type: "array", Items: ref("AgentLiveClaim")},

@@ -8630,6 +8630,13 @@ export interface components {
             /** @description The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded. */
             reported_host_profile_error?: string;
             reported_host_tls_probe?: boolean;
+            /** @description A86: the relay's own account of its --relay-ca-bundle: the digest and load time of the bundle in force and the last reload error when the operator's latest replacement was unusable; absent until a relay with a bundle has reported. */
+            reported_relay_ca_bundle?: {
+                error?: string;
+                /** Format: date-time */
+                loaded_at: string;
+                sha256: string;
+            };
             /** @enum {string} */
             role_source: "certificate" | "unreported";
             roles: ("host" | "network")[];

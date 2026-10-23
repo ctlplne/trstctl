@@ -13982,6 +13982,14 @@ export const messages = {
     defaultMessage: "The enrolled binary reports no job kind for this agent's certificate roles.",
     description: "A62: empty self-reported executor census.",
   },
+  "agents.executors.relayCABundle": {
+    defaultMessage: "Relay CA bundle in force: sha256 {digest}…, loaded {at}. A changed file is picked up without a restart.",
+    description: "A86: the relay's self-reported appliance CA bundle digest and load time.",
+  },
+  "agents.executors.relayCABundleError": {
+    defaultMessage: "Latest bundle replacement rejected; the previous bundle stays in force: {error}",
+    description: "A86: the relay's last CA bundle reload error.",
+  },
   "agents.executors.notReported": {
     defaultMessage: "This agent has not reported its own executors (an older agent build); the list below is this server build's census.",
     description: "A62: shown when an agent predates the executor census report.",

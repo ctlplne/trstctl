@@ -2292,7 +2292,12 @@ trust, start the network agent with `--relay-claim --relay-ca-bundle
 /path/to/appliance-ca.pem`. The relay adds the PEM certificates to the host's
 normal HTTPS trust roots; it still checks the URL hostname, requires TLS 1.2 or
 newer, and refuses credential-bearing redirects. An unreadable or invalid PEM
-stops the agent at startup. Restart the agent after changing the file. Keep the
+stops the agent at startup. After startup the relay re-reads the file when it
+changes (checked at most every five seconds, before the next request): a valid
+replacement is trusted from the next connection with no restart, and an
+unusable replacement keeps the bundle that worked and is reported, with the
+digest and load time of the bundle in force, in the agent's census on the Agents
+page (`reported_relay_ca_bundle` on `GET /api/v1/agents`). Keep the
 control-plane CA and appliance CA in separate files so adding appliance trust
 does not silently expand bootstrap trust. Windows service installation retains
 the relay CA path across service restarts.

@@ -131,6 +131,10 @@ type agentResponse struct {
 	// ReportedHostProfileError is the binary's own reason its host exec
 	// profile could not be loaded (B7); absent when it loaded.
 	ReportedHostProfileError string `json:"reported_host_profile_error,omitempty"`
+	// ReportedRelayCABundle is the relay's own account of its --relay-ca-bundle
+	// (A86): the digest and load time of the bundle in force and the last
+	// reload error; absent until a relay with a bundle has reported.
+	ReportedRelayCABundle *AgentRelayCABundleReport `json:"reported_relay_ca_bundle,omitempty"`
 	// WorkloadAPI is this host's SPIFFE Workload API posture (epic B3).
 	// LiveClaims are the jobs this agent holds under an unexpired lease (A67):
 	// job id, kind, attempt and lease expiry from the ledger, never a payload.
@@ -516,6 +520,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		out.ReportedExecutorVersion = census.Version
 		out.ReportedHostTLSProbe = agentReportedHostTLSProbe(a)
 		out.ReportedHostProfileError = AgentReportedHostProfileError(a)
+		out.ReportedRelayCABundle = agentReportedRelayCABundle(a)
 	}
 	if len(out.Roles) == 0 {
 		out.Roles = []string{}
@@ -961,4 +966,32 @@ func (a *API) canGrantRelayRole(r *http.Request) bool {
 		return false
 	}
 	return principal.Can(authz.AgentsGrantRelay, authz.Scope{TenantID: principal.TenantID})
+}
+
+// AgentRelayCABundleReport is the served shape of a relay's self-reported
+// appliance CA bundle (A86).
+type AgentRelayCABundleReport struct {
+	SHA256   string `json:"sha256"`
+	LoadedAt string `json:"loaded_at"`
+	Error    string `json:"error,omitempty"`
+}
+
+func agentReportedRelayCABundle(a store.Agent) *AgentRelayCABundleReport {
+	if len(a.Executors) == 0 {
+		return nil
+	}
+	var census struct {
+		RelayCABundle *struct {
+			SHA256   string    `json:"sha256"`
+			LoadedAt time.Time `json:"loaded_at"`
+			Error    string    `json:"error"`
+		} `json:"relay_ca_bundle"`
+	}
+	if err := json.Unmarshal(a.Executors, &census); err != nil || census.RelayCABundle == nil {
+		return nil
+	}
+	return &AgentRelayCABundleReport{
+		SHA256: census.RelayCABundle.SHA256, LoadedAt: census.RelayCABundle.LoadedAt.UTC().Format(time.RFC3339),
+		Error: strings.TrimSpace(census.RelayCABundle.Error),
+	}
 }

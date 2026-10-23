@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -58,11 +60,14 @@ func TestServedAgentsReportTheEnrolledBinaryExecutorCensus(t *testing.T) {
 	// connector.deploy, plus a host-only kind its certificate role filters out.
 	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{
 		AgentID: h.agent, Version: "relay-0.9.1", Status: "active",
-		Executors: &transport.ExecutorReport{Version: "relay-0.9.1", HostTLSProbe: true, Kinds: []transport.ExecutorKind{
-			{Kind: "connector.deploy", Connectors: []string{"f5", "kemp", "nginx", "future-appliance"}, MissingFlags: []string{"--relay-claim"}},
-			{Kind: "revocation.probe"},
-			{Kind: "trust.distribute", MissingFlags: []string{"--relay-claim", "--host-exec-profile"}},
-		}},
+		Executors: &transport.ExecutorReport{Version: "relay-0.9.1", HostTLSProbe: true,
+			// A86: the relay reports the appliance CA bundle actually in force.
+			RelayCABundle: &transport.RelayCABundleReport{SHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", LoadedAt: time.Date(2026, 10, 23, 4, 0, 0, 0, time.UTC), Error: "relay CA bundle replacement rejected; keeping the bundle loaded at 2026-10-23T04:00:00Z: build relay HTTPS trust: mtls: no CA certificates found in relay PEM"},
+			Kinds: []transport.ExecutorKind{
+				{Kind: "connector.deploy", Connectors: []string{"f5", "kemp", "nginx", "future-appliance"}, MissingFlags: []string{"--relay-claim"}},
+				{Kind: "revocation.probe"},
+				{Kind: "trust.distribute", MissingFlags: []string{"--relay-claim", "--host-exec-profile"}},
+			}},
 	}); err != nil {
 		t.Fatalf("heartbeat with executor census: %v", err)
 	}
@@ -74,6 +79,10 @@ func TestServedAgentsReportTheEnrolledBinaryExecutorCensus(t *testing.T) {
 	// probe an ML-DSA host migration needs.
 	if agent["reported_host_tls_probe"] != true {
 		t.Fatalf("reported_host_tls_probe = %v, want true from the census", agent["reported_host_tls_probe"])
+	}
+	bundle, _ := agent["reported_relay_ca_bundle"].(map[string]any)
+	if bundle == nil || bundle["sha256"] != "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" || bundle["loaded_at"] != "2026-10-23T04:00:00Z" || !strings.Contains(bundle["error"].(string), "replacement rejected") {
+		t.Fatalf("reported_relay_ca_bundle = %v, want the relay's digest, load time and last reload error", agent["reported_relay_ca_bundle"])
 	}
 	reported, _ := agent["reported_capabilities"].([]any)
 	byKind := map[string]map[string]any{}

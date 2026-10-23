@@ -33,17 +33,17 @@ func TestExecutorCensusReportsAnUnloadableHostProfile(t *testing.T) {
 		return path
 	}
 	broken := write("broken.json", map[string]any{"allowed_roots": []string{dir}, "tls_probe_openssl": link})
-	report := executorCensus(agentOptions{relayClaim: true, hostExecProfile: broken})
+	report := executorCensus(agentOptions{relayClaim: true, hostExecProfile: broken}, nil)
 	if report.HostTLSProbe || !strings.Contains(report.HostProfileError, "symbolic link to") || !strings.Contains(report.HostProfileError, "openssl-real") {
 		t.Fatalf("census for a symlinked probe = probe %v error %q, want the resolved path named", report.HostTLSProbe, report.HostProfileError)
 	}
 
 	loaded := write("loaded.json", map[string]any{"allowed_roots": []string{dir}, "tls_probe_openssl": real})
-	report = executorCensus(agentOptions{relayClaim: true, hostExecProfile: loaded})
+	report = executorCensus(agentOptions{relayClaim: true, hostExecProfile: loaded}, nil)
 	if !report.HostTLSProbe || report.HostProfileError != "" {
 		t.Fatalf("census for a loadable profile = probe %v error %q", report.HostTLSProbe, report.HostProfileError)
 	}
-	if report = executorCensus(agentOptions{relayClaim: true}); report.HostTLSProbe || report.HostProfileError != "" {
+	if report = executorCensus(agentOptions{relayClaim: true}, nil); report.HostTLSProbe || report.HostProfileError != "" {
 		t.Fatalf("census without a profile = probe %v error %q", report.HostTLSProbe, report.HostProfileError)
 	}
 }

@@ -2829,8 +2829,13 @@ than sending an operator looking for a credential that was never there.
   The relay verifies the CMDB's HTTPS certificate against host roots plus an
   optional operator-supplied `--relay-ca-bundle` PEM. That file is separate
   from the control-plane `--ca-bundle`; adding appliance trust must not widen
-  bootstrap trust. An invalid bundle fails agent startup, and a CA change
-  takes effect after the relay restarts. No skip-verification switch exists.
+  bootstrap trust. An invalid bundle fails agent startup. After startup a
+  changed bundle file is re-read before the next request (checked at most
+  every five seconds) and takes effect with no restart; an unusable
+  replacement keeps the previous bundle and is reported, with the digest and
+  load time of the bundle in force, as `reported_relay_ca_bundle` on
+  `GET /api/v1/agents` and on the Agents page. No skip-verification switch
+  exists.
 
   The source inventory stores only CI key, matched local
   owner ID, and the four contributed ownership values. At terminal completion

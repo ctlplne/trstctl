@@ -681,6 +681,17 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		if census.Version == "" {
 			census.Version = strings.TrimSpace(req.Version)
 		}
+		if bundle := req.Executors.RelayCABundle; bundle != nil {
+			// A86: bounded like every other self-reported field.
+			reported := projections.AgentRelayCABundle{SHA256: strings.TrimSpace(bundle.SHA256), LoadedAt: bundle.LoadedAt.UTC(), Error: strings.TrimSpace(bundle.Error)}
+			if len(reported.SHA256) > 64 {
+				reported.SHA256 = reported.SHA256[:64]
+			}
+			if len(reported.Error) > 512 {
+				reported.Error = reported.Error[:512]
+			}
+			census.RelayCABundle = &reported
+		}
 		for _, kind := range req.Executors.Kinds {
 			census.Kinds = append(census.Kinds, projections.AgentExecutorKind{
 				Kind: strings.TrimSpace(kind.Kind), Connectors: append([]string(nil), kind.Connectors...),
