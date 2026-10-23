@@ -15720,6 +15720,11 @@ export const messages = {
     defaultMessage: "Channel credential reference",
     description: "Label for notification channel credential reference.",
   },
+  "notifications.channels.familyDelivery": {
+    defaultMessage:
+      "Each family delivers in its own format: Slack and Teams incoming webhooks, PagerDuty and OpsGenie with the referenced key, a webhook signed under the referenced secret, and a bearer-authenticated SIEM event. The credential reference names a secret in this tenant's secret store (secret://name). Email and SMS are configured by the operator on the server.",
+    description: "Help text under the tenant notification channel form explaining per-family delivery and the credential reference.",
+  },
   "notifications.channels.enabled": {
     defaultMessage: "enabled",
     description: "Enabled status label for a notification channel.",

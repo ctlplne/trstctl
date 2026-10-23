@@ -827,7 +827,10 @@ the API keeps RFC 3339 UTC timestamps for exact evidence exchange.
 
 Three closed evidence sections keep the default page calm. **Channels and webhooks**
 shows every supported family from `GET /api/v1/notification-channels` (email, Slack,
-Teams, SMS, SIEM, and more) and whether each is ready. **Routing rules and templates**
+Teams, SMS, SIEM, and more) and whether each is ready; a tenant authors its own Slack,
+Teams, webhook, PagerDuty, OpsGenie, or SIEM channel there, each delivered in that
+family's format with the credential its `secret://` reference names, while email and
+SMS are the operator's to configure on the server. **Routing rules and templates**
 maps event severity to ready destinations, records an accountable owner, and queues a
 redacted test through durable outbox work. trstctl currently uses one fixed server
 alert envelope across channels; this build does not pretend to offer a tenant-editable

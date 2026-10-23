@@ -124,6 +124,12 @@ func (r integrationCredentialResolver) resolve(ctx context.Context, tenantID, re
 	}
 }
 
+// ResolveNotificationCredential opens a tenant notification channel's
+// credential reference for one delivery (A98, notify.CredentialResolver).
+func (r integrationCredentialResolver) ResolveNotificationCredential(ctx context.Context, tenantID, ref string) (*secret.Buffer, error) {
+	return r.resolve(ctx, tenantID, ref)
+}
+
 func secretIntegrationStoreAAD(tenantID, name string) []byte {
 	// Keep this wire-compatible with api.sealAAD. This scope is part of the
 	// secret-store ciphertext format, not an alternate storage path.

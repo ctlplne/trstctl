@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/tenantchannel"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -342,6 +343,11 @@ func (a *API) decodeNotificationChannelRequest(r *http.Request, tenantID, pathID
 	}
 	if id != channelType {
 		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "notification channel id must match channel_type")
+	}
+	// A98: email and SMS deliver only through the server's notifications
+	// configuration; a tenant row of those families could never deliver.
+	if tenantchannel.OperatorOnly(channelType) {
+		return store.NotificationChannel{}, errStatus(http.StatusBadRequest, tenantchannel.OperatorOnlyReason(channelType))
 	}
 	enabled := true
 	if req.Enabled != nil {
@@ -1259,7 +1265,7 @@ func toNotificationChannelResponse(ch store.NotificationChannel) notificationCha
 		Category:           notificationChannelCategory(channelType),
 		Configured:         ch.Enabled && strings.TrimSpace(ch.EndpointURL) != "",
 		Enabled:            ch.Enabled,
-		Delivery:           "tenant-authored notification.* outbox fanout",
+		Delivery:           tenantchannel.Describe(channelType),
 		Description:        notificationChannelDescription(channelType),
 		Source:             "tenant",
 		EndpointConfigured: strings.TrimSpace(ch.EndpointURL) != "",

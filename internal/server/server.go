@@ -44,6 +44,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/decommission/release"
 	"trstctl.com/trstctl/internal/dynsecret"
@@ -54,6 +55,7 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
+	"trstctl.com/trstctl/internal/notify/tenantchannel"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/observ/otlp"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -831,8 +833,11 @@ type Server struct {
 	// notifications is the served notification dispatcher. It fans notification.*
 	// outbox rows to operator-configured channels; nil preserves the prior no-channel
 	// behavior for notification rows while still letting producers enqueue intents.
-	notifications             *notify.Dispatcher
-	licensedBackgroundWorkers []BackgroundWorker
+	notifications *notify.Dispatcher
+	// notificationTenantChannels resolves tenant-authored channels at delivery
+	// time into their family's notifier with the tenant's own credential (A98).
+	notificationTenantChannels *notify.StoreChannelResolver
+	licensedBackgroundWorkers  []BackgroundWorker
 	// serviceNowBindings is the operator's approved ITSM egress allow-list. The
 	// CMDB scheduler resolves the private-egress grant from it at RUN time
 	// rather than from a copy taken when the schedule was configured, so
@@ -2038,7 +2043,13 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 		s.notifications = notify.NewDispatcher(d.NotificationChannels...)
 		if d.Store != nil {
 			s.notifications.SetPolicyResolver(notify.NewStorePolicyResolver(d.Store))
-			s.notifications.SetChannelResolver(notify.NewStoreChannelResolver(d.Store))
+			tenantChannels := notify.NewStoreChannelResolver(d.Store)
+			tenantChannels.SetCredentialResolver(integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto})
+			tenantChannels.SetChannelFactory(func(row store.NotificationChannel, credential *secret.Buffer, client notify.HTTPDoer) (notify.EphemeralNotifier, error) {
+				return tenantchannel.Build(row, credential, client)
+			})
+			s.notificationTenantChannels = tenantChannels
+			s.notifications.SetChannelResolver(tenantChannels)
 			s.notifications.SetThresholdDedupLedger(notify.NewStoreThresholdDedupLedger(d.Store, d.Log))
 			s.notifications.SetDeliveryReceiptLedger(notify.NewStoreDeliveryReceiptLedger(d.Store, d.Log))
 		}

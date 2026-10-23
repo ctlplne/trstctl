@@ -336,8 +336,19 @@ never live in the API process. What you can do end to end against the running bi
   through operator-wired Slack, Teams, email, SMS, SIEM, webhook, PagerDuty Events
   v2, or OpsGenie Alert v2 channels. The dispatcher holds credentials in locked
   memory and wipes them on shutdown; the payload carries the owner, approver
-  escalation recipients, severity, and threshold-day metadata. This is runtime
-  delivery, not a tenant channel-management API.
+  escalation recipients, severity, and threshold-day metadata. Tenants manage
+  their own channels at `/api/v1/notification-channels` (Slack, Teams, webhook,
+  PagerDuty, OpsGenie, SIEM) and routing policies that name them; since A98
+  each tenant-authored channel delivers in its family's own wire shape (a
+  Slack or Teams incoming-webhook message, a PagerDuty Events v2 trigger or
+  OpsGenie create carrying the key the row's `credential_ref` names in the
+  tenant's secret store, a webhook HMAC-signed under that secret, a
+  bearer-authenticated SIEM event) instead of one raw JSON POST, the credential
+  is opened into locked memory for one delivery and released after it, and a
+  row whose credential cannot be resolved fails only its own delivery with a
+  credential-free reason. Email and SMS stay operator-configured: the API
+  refuses a tenant row of those families because the record cannot carry the
+  SMTP or gateway settings they need.
 - Air-gapped alert delivery limit: operator-configured PagerDuty and OpsGenie
   channels can opt into bounded private CIDRs and HTTP; the partner lab grants
   only `127.0.0.1/32`. Operator-configured Slack, Teams, SIEM, SMS,

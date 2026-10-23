@@ -261,6 +261,15 @@ func (d *Dispatcher) dispatchAlert(ctx context.Context, message DeliveryMessage,
 	if err != nil {
 		return err
 	}
+	// Tenant-authored channels carry credential material for this delivery
+	// only (A98); release it once the wave below has joined.
+	defer func() {
+		for _, ch := range channels {
+			if ephemeral, ok := ch.(interface{ Release() }); ok {
+				ephemeral.Release()
+			}
+		}
+	}()
 	if len(channels) == 0 {
 		return noReceiverError{}
 	}

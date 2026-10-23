@@ -84,6 +84,42 @@ type StoreChannelResolver struct {
 	store                  *store.Store
 	client                 HTTPDoer
 	skipEndpointValidation bool
+	credentials            CredentialResolver
+	factory                ChannelFactory
+}
+
+// CredentialResolver opens a tenant channel's credential reference (a
+// secret:// name in the tenant's own secret store) into locked memory for one
+// delivery (A98). The caller owns the buffer.
+type CredentialResolver interface {
+	ResolveNotificationCredential(ctx context.Context, tenantID, ref string) (*secret.Buffer, error)
+}
+
+// EphemeralNotifier is a per-delivery notifier that holds credential material
+// and must be released once the alert's delivery wave is over.
+type EphemeralNotifier interface {
+	Notifier
+	Release()
+}
+
+// ChannelFactory builds the family-specific notifier for one tenant channel
+// row (A98). credential is nil when the row references none; the factory
+// takes ownership of it. client is non-nil only when a test injected one.
+type ChannelFactory func(row store.NotificationChannel, credential *secret.Buffer, client HTTPDoer) (EphemeralNotifier, error)
+
+// SetCredentialResolver wires the tenant secret store for credential references.
+func (r *StoreChannelResolver) SetCredentialResolver(c CredentialResolver) {
+	if r != nil {
+		r.credentials = c
+	}
+}
+
+// SetChannelFactory wires per-family delivery for tenant-authored channels.
+// Without a factory every tenant channel is the legacy unsigned JSON POST.
+func (r *StoreChannelResolver) SetChannelFactory(f ChannelFactory) {
+	if r != nil {
+		r.factory = f
+	}
 }
 
 // NewStoreChannelResolver builds a PostgreSQL-backed notification channel
@@ -147,6 +183,10 @@ func (r *StoreChannelResolver) ResolveNotificationChannels(ctx context.Context, 
 		if len(wanted) > 0 && !wanted[id] {
 			continue
 		}
+		if r.factory != nil {
+			out = append(out, r.build(ctx, tenantID, id, ch))
+			continue
+		}
 		out = append(out, tenantHTTPChannel{
 			id:                     id,
 			endpoint:               strings.TrimSpace(ch.EndpointURL),
@@ -155,6 +195,45 @@ func (r *StoreChannelResolver) ResolveNotificationChannels(ctx context.Context, 
 		})
 	}
 	return out, nil
+}
+
+// build resolves the row's credential and hands the row to the family factory.
+// A row that cannot be built still occupies its channel name, failing its own
+// delivery with a credential-free reason, so one broken tenant channel never
+// blocks the alert's other receivers and the failure is visible in the receipt.
+func (r *StoreChannelResolver) build(ctx context.Context, tenantID, id string, ch store.NotificationChannel) Notifier {
+	var credential *secret.Buffer
+	if ref := strings.TrimSpace(ch.CredentialRef); ref != "" {
+		if r.credentials == nil {
+			return failingChannel{id: id, reason: "a credential reference is set but no credential resolver is configured"}
+		}
+		buf, err := r.credentials.ResolveNotificationCredential(ctx, tenantID, ref)
+		if err != nil {
+			return failingChannel{id: id, reason: "the credential reference could not be resolved from the tenant secret store"}
+		}
+		credential = buf
+	}
+	var client HTTPDoer
+	if r.skipEndpointValidation {
+		client = r.client
+	}
+	notifier, err := r.factory(ch, credential, client)
+	if err != nil {
+		return failingChannel{id: id, reason: err.Error()}
+	}
+	return notifier
+}
+
+// failingChannel stands in for a tenant channel that cannot deliver.
+type failingChannel struct {
+	id     string
+	reason string
+}
+
+func (f failingChannel) Name() string { return f.id }
+
+func (f failingChannel) Notify(context.Context, Alert) error {
+	return errors.New("tenant channel " + f.id + ": " + f.reason)
 }
 
 // HTTPDoer is the minimal HTTP client seam used by tenant-authored channels.

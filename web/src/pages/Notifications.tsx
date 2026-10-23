@@ -107,7 +107,9 @@ const digestOptions = [
   { value: "604800", labelKey: "notifications.routing.intervalSevenDays" },
 ] as const;
 const testSeverityOptions: TestSeverity[] = ["critical", "warning", "informational", "low"];
-const channelTypeOptions = ["email", "slack", "msteams", "sms", "siem", "pagerduty", "opsgenie", "webhook"] as const;
+// A98: the families a tenant may author. Each delivers in its own wire shape
+// with the referenced tenant secret; email and SMS are operator-configured.
+const channelTypeOptions = ["slack", "msteams", "webhook", "pagerduty", "opsgenie", "siem"] as const;
 const notificationQueryKey = ["alert-center", "notifications"] as const;
 const channelQueryKey = ["alert-center", "channels"] as const;
 const policyQueryKey = ["alert-center", "routing-policies"] as const;
@@ -1138,6 +1140,7 @@ function ChannelAuthoring({
           required={Boolean(editing?.credential_ref)}
         />
       </div>
+      <p className="text-sm text-muted-foreground">{t("notifications.channels.familyDelivery")}</p>
       {editing ? <p className="text-sm text-muted-foreground">{t("notifications.channels.reenterWriteOnly")}</p> : null}
       <div className="flex flex-wrap items-center gap-3">
         <label className="inline-flex items-center gap-2 text-sm font-medium">
