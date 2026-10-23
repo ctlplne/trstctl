@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/cbom"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/keyposture"
 )
 
 // Prober performs the non-invasive TLS handshake. The default is tlsprobe.Probe;
@@ -112,7 +113,16 @@ func (s *Source) Scan(ctx context.Context) ([]cbom.Finding, error) {
 			failures++
 			continue
 		}
-		out = append(out, cbom.Finding{Kind: cbom.AssetCertKey, Location: addr, Algorithm: info.KeyAlgorithm, KeyBits: info.PublicKeyBits, CertificateFingerprint: info.SHA256Fingerprint})
+		keyFinding := cbom.Finding{Kind: cbom.AssetCertKey, Location: addr, Algorithm: info.KeyAlgorithm, KeyBits: info.PublicKeyBits, CertificateFingerprint: info.SHA256Fingerprint}
+		// Part 4: rate the served leaf with its served chain while the bytes
+		// are at hand; Classify turns the verdict into a weak rating.
+		if verdict, rateErr := keyposture.RateCertificate(res.PeerCertificates[0], res.PeerCertificates[1:]); rateErr == nil {
+			keyFinding.KeyWeakReasons = verdict.WeakReasons
+			if verdict.Distrusted() {
+				keyFinding.KeyDistrust = "the certificate depends on " + verdict.DistrustEntry + ", which is on the distrust list (" + verdict.DistrustHow + ")"
+			}
+		}
+		out = append(out, keyFinding)
 
 	}
 	if failures > 0 {

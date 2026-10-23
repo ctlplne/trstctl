@@ -76,6 +76,10 @@
   reports it as hashes and closed check codes (the scan protocol admits no
   certificate bytes or free text); the control plane applies its own distrust
   list and words the reasons.
+- CBOM certificate-key assets are rated from the served leaf and chain: a key
+  with a structural weakness, or one whose certificate depends on a
+  distrust-list entry, is weak and out of policy whatever its size, with the
+  reason and the migration plan that replaces it.
 
 ### Fixed
 

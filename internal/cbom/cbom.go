@@ -36,6 +36,12 @@ type Finding struct {
 	Cipher                 string         `json:"cipher,omitempty"`   // cipher suite name
 	Library                string         `json:"library,omitempty"`
 	Class                  Classification `json:"classification"`
+	// KeyWeakReasons and KeyDistrust are filled by a source while it holds the
+	// certificate (Part 4); Classify turns them into a weak, out-of-policy
+	// rating whose reasons say why. They are inputs only: the classification
+	// carries them, so they are not serialized.
+	KeyWeakReasons []string `json:"-"`
+	KeyDistrust    string   `json:"-"`
 }
 
 // Classified returns a copy of the finding with its classification filled in

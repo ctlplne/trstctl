@@ -81,10 +81,29 @@ func Classify(f Finding, p Policy) Classification {
 	case f.Cipher != "":
 		return ClassifyCipher(f.Cipher, p)
 	case f.Algorithm != "":
-		return ClassifyKey(f.Algorithm, f.KeyBits, p)
+		return withKeyVerdict(ClassifyKey(f.Algorithm, f.KeyBits, p), f.KeyWeakReasons, f.KeyDistrust)
 	default:
 		return Classification{Strength: StrengthAcceptable}
 	}
+}
+
+// withKeyVerdict rates a key weak, whatever its family and size, when the
+// source found a structural weakness or a distrusted issuer (Part 4), and
+// names the replacement path: the crypto migration plan for this asset.
+func withKeyVerdict(c Classification, weak []string, distrust string) Classification {
+	if len(weak) == 0 && distrust == "" {
+		return c
+	}
+	c.Strength = StrengthWeak
+	c.OutOfPolicy = true
+	for _, r := range weak {
+		c.Reasons = append(c.Reasons, "weak key: "+r)
+	}
+	if distrust != "" {
+		c.Reasons = append(c.Reasons, distrust)
+	}
+	c.Reasons = append(c.Reasons, "replace it: plan a re-issue for this asset (POST /api/v1/pqc/migrations/plan with its asset id)")
+	return c
 }
 
 // keyFamily normalizes an algorithm name to a family.

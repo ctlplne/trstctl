@@ -89,9 +89,18 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   sends those hashes and closed check codes only; the control plane matches
   them against its own distrust list and words the reasons.
 
-Ratings for CBOM assets, the signer's key ceremony, removal of a distrusted
-root from a host, and the batch-GCD job are what comes next in this change
-set; this page grows with each.
+- **The CBOM** (`POST /api/v1/cbom/scans`, the console's Algorithms and
+  future readiness screen). A TLS endpoint's certificate-key asset is rated
+  from the served leaf and the served chain while the scan holds them. A key
+  with a structural weakness, or a certificate that depends on a
+  distrust-list entry, is `weak` and out of policy whatever its algorithm and
+  size. Its reasons say why (`weak key: …`, or the entry and how it matched)
+  and name the replacement path: plan its re-issue through the crypto
+  migration flow (`POST /api/v1/pqc/migrations/plan` with the asset's id).
+
+The signer's key ceremony, removal of a distrusted root from a host, and the
+batch-GCD job are what comes next in this change set; this page grows with
+each.
 
 ## The distrust list
 
