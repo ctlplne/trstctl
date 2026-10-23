@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1667 annotated sites across 26 rules. Each row is
+1670 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1119,7 +1119,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (465 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (467 sites)
 
 | Location | Reason |
 |---|---|
@@ -1350,6 +1350,7 @@ not this file.
 | `internal/crypto/pfx/alias_test.go:120` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/possession_test.go:114` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/crypto/samltest/material.go:142` | operator-selected private identity directory, secured above |
 | `internal/crypto/samltest/material_test.go:46` | test-owned temporary identity file |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
@@ -1475,6 +1476,7 @@ not this file.
 | `internal/server/server.go:1443` | operator-configured key file path (CWE-22) |
 | `internal/server/server.go:2608` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/server.go:2685` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/signing/ceremony_test.go:129` | the test's own temporary journal directory (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
@@ -1484,8 +1486,8 @@ not this file.
 | `internal/signing/keystore_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:32` | signer operator supplies the one legacy migration path |
-| `internal/signing/managedkeys.go:566` | the signer's own keystore/journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:709` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:592` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:735` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
@@ -1716,12 +1718,13 @@ not this file.
 | `internal/crypto/tlsprobe/tlsprobe.go:189` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
 | `internal/crypto/trust/tls_test.go:140` | the test proves the check runs with verification off (CWE-295) |
 
-### G403 — CWE-326 Inadequate encryption strength (RSA key size) (3 sites)
+### G403 — CWE-326 Inadequate encryption strength (RSA key size) (4 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/jose/bounds_test.go:52` | deliberately undersized key; the test proves the verifier refuses it (CWE-326) |
 | `internal/crypto/keyinspect_test.go:121` | a deliberately weak RSA-1024 key, to prove it is named and rated weak (CWE-326) |
+| `internal/crypto/possession_test.go:283` | a throwaway test root key |
 | `internal/crypto/weakkey/weakkey_test.go:413` | a deliberately weak RSA-1024 key, to prove it is rated weak (CWE-326) |
 
 ### G404 — CWE-338 Cryptographically weak PRNG (29 sites)

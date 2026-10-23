@@ -199,6 +199,10 @@ func (s *Server) GenerateKey(ctx context.Context, req *signerpb.GenerateKeyReque
 		}
 		return nil, status.Errorf(codes.Internal, "generate key: %v", err)
 	}
+	if err := ceremonyCheck(ls); err != nil {
+		ls.Destroy()
+		return nil, status.Errorf(codes.Internal, "key ceremony check: %v", err)
+	}
 	id := req.GetRequestedId()
 	if id == "" {
 		raw, err := crypto.RandomBytes(16)

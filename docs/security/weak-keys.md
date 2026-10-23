@@ -98,9 +98,17 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   and name the replacement path: plan its re-issue through the crypto
   migration flow (`POST /api/v1/pqc/migrations/plan` with the asset's id).
 
-The signer's key ceremony, removal of a distrusted root from a host, and the
-batch-GCD job are what comes next in this change set; this page grows with
-each.
+- **The CA key ceremony.** The signer refuses a weak key it generates, mints
+  or imports; an HSM or KMS key that fails is zeroized and the operation fails
+  with `provider_key_weak`. No weak key is certified as a CA, and an imported
+  or cross-signed CA certificate that is weak or on the distrust list is
+  refused. Before a signer-held key is certified or bound to an import, it
+  signs a fresh challenge that must verify against the exact public key going
+  into the certificate. See
+  [the key ceremony runbook](../runbooks/key-ceremony.md#key-checks-in-every-ceremony).
+
+Removal of a distrusted root from a host and the batch-GCD job are what comes
+next in this change set; this page grows with each.
 
 ## The distrust list
 

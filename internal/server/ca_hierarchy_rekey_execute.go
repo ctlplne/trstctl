@@ -181,7 +181,7 @@ func (h *caHierarchyService) issueRekeyedCA(ctx context.Context, tx pgx.Tx, tena
 		if err != nil {
 			return crypto.IssuedHierarchyCA{}, "", err
 		}
-		issued, err := crypto.SignIntermediateHierarchyCA(parentDER, parentSigner, signer.Public(), cryptoProfile(spec))
+		issued, err := crypto.SignIntermediateHierarchyCAForSigner(parentDER, parentSigner, signer, cryptoProfile(spec))
 		if err != nil {
 			return crypto.IssuedHierarchyCA{}, "", fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}

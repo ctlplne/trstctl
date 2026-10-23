@@ -136,6 +136,9 @@ func VerifyImportedOfflineRoot(certDER []byte, profile HierarchyCAProfile) (Issu
 	if err := verifyCAUsable(cert, "offline root"); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
+	if err := refuseCeremonyCertificate(cert, "the offline root"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
 	if err := VerifyCertificateIssuedBy(cert, cert); err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: offline root is not self-signed: %w", err)
 	}
@@ -157,11 +160,17 @@ func VerifyOfflineSignedIntermediate(parentCertDER, certDER []byte, signerPublic
 	if err := verifyCAUsable(parent, "offline parent root"); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
+	if err := refuseCeremonyCertificate(parent, "the offline parent root"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse offline-signed intermediate: %w", err)
 	}
 	if err := verifyCAUsable(cert, "offline-signed intermediate"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
+	if err := refuseCeremonyCertificate(cert, "the offline-signed intermediate"); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
 	if err := VerifyCertificateIssuedBy(cert, parent); err != nil {
@@ -203,6 +212,13 @@ func VerifyImportedCAChain(chainDER [][]byte, signerPublic PublicKey, profile Hi
 			return IssuedHierarchyCA{}, "", fmt.Errorf("crypto: parse imported CA chain certificate %d: %w", i, err)
 		}
 		if err := verifyCAUsable(cert, "imported CA chain certificate"); err != nil {
+			return IssuedHierarchyCA{}, "", err
+		}
+		label := "the imported CA"
+		if i > 0 {
+			label = fmt.Sprintf("imported CA chain certificate %d", i)
+		}
+		if err := refuseCeremonyCertificate(cert, label); err != nil {
 			return IssuedHierarchyCA{}, "", err
 		}
 		certs = append(certs, cert)
@@ -343,6 +359,9 @@ func CrossSignHierarchyCA(issuerCertDER []byte, issuerSigner DigestSigner, targe
 	if err != nil {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: parse cross-sign target: %w", err)
 	}
+	if err := refuseCeremonyCertificate(target, "the cross-sign target"); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
 	if err := verifyCAUsable(target, "cross-sign target"); err != nil {
 		return IssuedHierarchyCA{}, err
 	}
@@ -439,6 +458,9 @@ func VerifyCrossSignedCA(issuerCertDER, targetCertDER, crossCertDER []byte) erro
 		return fmt.Errorf("crypto: parse imported cross-certificate: %w", err)
 	}
 	if err := verifyCAUsable(issuer, "cross-sign issuer"); err != nil {
+		return err
+	}
+	if err := refuseCeremonyCertificate(target, "the cross-sign target"); err != nil {
 		return err
 	}
 	if err := verifyCAUsable(target, "cross-sign target"); err != nil {
@@ -609,6 +631,11 @@ func compactSortedStrings(values []string) []string {
 }
 
 func signHierarchyCA(signer DigestSigner, subjectPublic PublicKey, issuer *x509.Certificate, profile HierarchyCAProfile) (IssuedHierarchyCA, error) {
+	// Never certify a weak key as a CA, whoever asks (eMudhra, Part 4): the
+	// served signer's own keys, a SPIRE CSR's, an edge device's.
+	if err := RefuseWeakKey(subjectPublic); err != nil {
+		return IssuedHierarchyCA{}, err
+	}
 	if profile.CommonName == "" {
 		return IssuedHierarchyCA{}, fmt.Errorf("crypto: CA common name is required")
 	}

@@ -175,6 +175,12 @@ func ImportSigner(ctx context.Context, sink EventSink, tenantID, keyID string, a
 	if err != nil {
 		return nil, fmt.Errorf("byok: import signing key: %w", err)
 	}
+	// eMudhra, Part 4: an externally generated key can arrive weak (a Debian
+	// 2008 key, a ROCA modulus, a tiny EC scalar). Refuse it at the door.
+	if err := crypto.RefuseWeakKey(ls.Public()); err != nil {
+		ls.Destroy()
+		return nil, fmt.Errorf("byok: import signing key: %w", err)
+	}
 	m := newManagedSigner(sink, keyID, ls, alg, OriginImported)
 	if err := m.emit(ctx, EventKeyImported, tenantID, 0); err != nil {
 		m.signer.Destroy()

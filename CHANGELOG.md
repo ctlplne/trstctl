@@ -80,6 +80,14 @@
   with a structural weakness, or one whose certificate depends on a
   distrust-list entry, is weak and out of policy whatever its size, with the
   reason and the migration plan that replaces it.
+- The CA key ceremony refuses weak keys and proves possession. The signer
+  refuses a weak key it generates, mints or imports, and an HSM or KMS key
+  that fails is zeroized (closed code `provider_key_weak`). No weak key is
+  certified as a CA, and imports and cross-signs refuse a CA certificate that
+  is weak or on the distrust list. A signer-held key signs a fresh challenge,
+  verified against the exact public key going into the certificate, before it
+  is certified as an intermediate or bound to an import. The managed-key
+  custody probe now carries a fresh nonce.
 
 ### Fixed
 

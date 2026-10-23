@@ -167,6 +167,10 @@ func (s *Server) GenerateSuccessorKey(handle string, alg crypto.Algorithm) (cryp
 	if err != nil {
 		return nil, fmt.Errorf("signing: generate successor key: %w", err)
 	}
+	if err := ceremonyCheck(ls); err != nil {
+		ls.Destroy()
+		return nil, fmt.Errorf("signing: successor key ceremony check: %w", err)
+	}
 	held := &heldKey{signer: ls}
 	// Persist BEFORE publishing, with the lock held across both — via the ONE
 	// shared mint path (mintHeldKey), so the ordering cannot diverge between

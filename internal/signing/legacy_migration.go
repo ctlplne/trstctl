@@ -51,6 +51,9 @@ func (s *Server) MigrateLegacySigningKeyFile(path, handle string, allowedPurpose
 	if legacy.Algorithm() != crypto.RSA2048 && legacy.Algorithm() != crypto.RSA3072 && legacy.Algorithm() != crypto.RSA4096 {
 		return false, fmt.Errorf("signing: legacy audit key is %s, want RSA", legacy.Algorithm())
 	}
+	if err := ceremonyCheck(legacy); err != nil {
+		return false, fmt.Errorf("signing: legacy key import ceremony check: %w", err)
+	}
 	constraints, err := constraintsFromGenerate(&signerpb.GenerateKeyRequest{AllowedPurposes: allowedPurposes})
 	if err != nil {
 		return false, err

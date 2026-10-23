@@ -623,6 +623,11 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	if err != nil {
 		return api.CAAuthority{}, err
 	}
+	// eMudhra, Part 4: the bound signer proves it holds the key the imported
+	// certificate names before the chain is accepted.
+	if err := crypto.ProvePossession(signer, signer.Public()); err != nil && !errors.Is(err, crypto.ErrPossessionUnsupported) {
+		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
 	issued, kind, err := crypto.VerifyImportedCAChain(chainDER, signer.Public(), cryptoProfile(req.Spec))
 	if err != nil {
 		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
@@ -749,7 +754,9 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		if err != nil {
 			return err
 		}
-		issued, err := crypto.SignIntermediateHierarchyCA(parentDER, parentSigner, childSigner.Public(), cryptoProfile(req.Spec))
+		// eMudhra, Part 4: the new key signs a fresh challenge that verifies
+		// against the exact public key going into the certificate first.
+		issued, err := crypto.SignIntermediateHierarchyCAForSigner(parentDER, parentSigner, childSigner, cryptoProfile(req.Spec))
 		if err != nil {
 			return fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 		}
@@ -869,6 +876,11 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 			return api.CAAuthority{}, fmt.Errorf("%w: offline intermediate CSR has not been generated", api.ErrCAHierarchyConflict)
 		}
 		return api.CAAuthority{}, err
+	}
+	// eMudhra, Part 4: the served signer proves it holds the key the
+	// offline-signed certificate names.
+	if err := crypto.ProvePossession(childSigner, childSigner.Public()); err != nil && !errors.Is(err, crypto.ErrPossessionUnsupported) {
+		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
 	issued, err := crypto.VerifyOfflineSignedIntermediate(parentDER, childDER, childSigner.Public(), cryptoProfile(req.Spec))
 	if err != nil {

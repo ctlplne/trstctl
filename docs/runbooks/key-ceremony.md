@@ -93,6 +93,34 @@ signing CA).
 The ceremony and its approvals are tenant-scoped rows under row-level security:
 `ca_key_ceremonies` (with the `threshold`) and `ca_ceremony_approvals`.
 
+## Key checks in every ceremony
+
+Two checks run wherever a CA key enters trstctl. Together they cover both ways
+a CA can end up with a key it should not have: a weak key generated inside an
+HSM, and a certificate that names a different key from the one the HSM holds.
+
+**Weak keys are refused.** The weak-key checks (see
+[Weak keys](../security/weak-keys.md)) run on every key the signer generates,
+mints as a PCAS successor or imports (the legacy audit key, a BYOK import), on
+every key an HSM or KMS generates or rotates, and on every key certified as a
+CA: a root, an intermediate, a re-key, an external intermediate CSR and an edge
+CA. Imports refuse a certificate whose key is weak or which is on the distrust
+list: an offline root, an offline-signed intermediate and its parent, every
+certificate of an existing chain, and a cross-sign target. A refused HSM or KMS
+key is zeroized at the provider and the operation fails with the closed code
+`provider_key_weak`; retrying the same operation repeats that answer without
+another provider call.
+
+**Possession is proven.** Before trstctl certifies a signer-held key as an
+intermediate (creation and re-key), or accepts an import bound to a signer
+handle (an existing chain, an offline-signed intermediate), the signer signs a
+fresh 32-byte challenge with that key and trstctl verifies the signature
+against the exact public key going into the certificate. A key that reports
+one public key and signs with another is refused. A root's own self-signature
+already proves its key. With `TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND`, the approval
+command therefore sees one more sign intent for the new key's handle: a
+SHA-256 digest of the challenge, before the certificate signature.
+
 ## Release one historical managed CA leaf dependency
 
 Use this narrow path for either an expired requester-held managed CA leaf, or

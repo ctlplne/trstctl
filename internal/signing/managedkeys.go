@@ -36,7 +36,15 @@ const (
 	managedKeyFailureProviderSign   = "provider_sign_failed"
 	managedKeyFailureProviderEmpty  = "provider_empty_signature"
 	managedKeyFailureJournal        = "provider_failure_journal_unavailable"
+	// managedKeyFailureWeakKey is the signer's own verdict, not provider text:
+	// the provider generated a key the weak-key checks refuse, and the signer
+	// zeroized it (eMudhra, Part 4). It is final; a retry repeats it.
+	managedKeyFailureWeakKey = "provider_key_weak"
 )
+
+// errManagedKeyWeak marks a custody proof that failed because the provider's
+// key is weak, so the operation journals managedKeyFailureWeakKey.
+var errManagedKeyWeak = errors.New("managed-key provider returned a weak key")
 
 var errManagedKeySignAuthorizationReplay = errors.New("managed-key sign authorization nonce was already consumed")
 
@@ -275,6 +283,9 @@ func (r *managedKeyRuntime) execute(ctx context.Context, req *signerpb.ManageKey
 				return managedKeyJournalResult{}, true, status.Error(codes.Aborted, "managed-key operation has an indeterminate provider outcome; configured provider cannot reconcile the durable operation id")
 			}
 			result, execErr := r.apply(ctx, provider, jr)
+			if errors.Is(execErr, errManagedKeyWeak) {
+				return managedKeyJournalResult{}, true, r.failWeakManagedKey(&prior)
+			}
 			if execErr != nil {
 				// Keep the intent executing. Provider text is untrusted and never
 				// persisted; an identical retry reconciles a provider mutation or
@@ -295,6 +306,9 @@ func (r *managedKeyRuntime) execute(ctx context.Context, req *signerpb.ManageKey
 		return managedKeyJournalResult{}, false, status.Errorf(codes.Internal, "persist managed-key intent: %v", err)
 	}
 	result, execErr := r.apply(ctx, provider, jr)
+	if errors.Is(execErr, errManagedKeyWeak) {
+		return managedKeyJournalResult{}, false, r.failWeakManagedKey(&op)
+	}
 	if execErr != nil {
 		if _, ok := provider.(crypto.OperationAwareRemoteKeyLifecycle); ok || jr.Action == int32(signerpb.ManagedKeyAction_MANAGED_KEY_ACTION_VERIFY_CUSTODY) {
 			// An operation-aware provider can reconcile a mutation; a read-only
@@ -506,12 +520,24 @@ func proveManagedKeyCustody(signer crypto.Signer) error {
 	if signer == nil || len(signer.Public().DER) == 0 {
 		return errors.New("managed-key provider returned no usable signer/public key")
 	}
+	// eMudhra, Part 4: an HSM or KMS can hand back a weak key. Refuse it; the
+	// caller zeroizes the unusable provider key.
+	if err := crypto.RefuseWeakKey(signer.Public()); err != nil {
+		return fmt.Errorf("%w: %v", errManagedKeyWeak, err)
+	}
+	// A fresh challenge every time, so a provider cannot answer with a
+	// signature it made once and kept.
+	nonce, err := crypto.RandomBytes(32)
+	if err != nil {
+		return fmt.Errorf("managed-key custody challenge: %w", err)
+	}
+	probe := append(append([]byte(nil), managedKeyCustodyProbe...), nonce...)
 	opts := crypto.SignOptions{Hash: crypto.SHA256}
-	signature, err := signer.Sign(managedKeyCustodyProbe, opts)
+	signature, err := signer.Sign(probe, opts)
 	if err != nil {
 		return fmt.Errorf("managed-key custody self-test sign: %w", err)
 	}
-	if err := crypto.Verify(signer.Public(), managedKeyCustodyProbe, signature, opts); err != nil {
+	if err := crypto.Verify(signer.Public(), probe, signature, opts); err != nil {
 		return fmt.Errorf("managed-key custody self-test verify: %w", err)
 	}
 	return nil
@@ -519,7 +545,7 @@ func proveManagedKeyCustody(signer crypto.Signer) error {
 
 func managedKeyCustodyFailure(proofErr, cleanupErr error) error {
 	if cleanupErr != nil {
-		return fmt.Errorf("%v; failed to destroy unusable provider key: %w", proofErr, cleanupErr)
+		return fmt.Errorf("%w; failed to destroy unusable provider key: %w", proofErr, cleanupErr)
 	}
 	return proofErr
 }
@@ -717,12 +743,25 @@ func atomicJSONFile(path string, value any) error {
 	return d.Close()
 }
 
+// failWeakManagedKey journals a weak provider key as a final failure. The
+// provider key is already zeroized, so the outcome is not ambiguous and is
+// never retried against the provider.
+func (r *managedKeyRuntime) failWeakManagedKey(op *managedKeyOperation) error {
+	op.Status = "failed"
+	op.Failure = managedKeyFailureWeakKey
+	if err := r.saveOperation(*op); err != nil {
+		return managedKeyClosedFailure(codes.Internal, managedKeyFailureJournal)
+	}
+	return managedKeyClosedFailure(codes.FailedPrecondition, managedKeyFailureWeakKey)
+}
+
 func closedManagedKeyFailureCode(in string) string {
 	switch in {
 	case managedKeyFailureProviderAction,
 		managedKeyFailureProviderSign,
 		managedKeyFailureProviderEmpty,
-		managedKeyFailureJournal:
+		managedKeyFailureJournal,
+		managedKeyFailureWeakKey:
 		return in
 	default:
 		// Old/corrupt journals may contain arbitrary text. Treat it as the only
