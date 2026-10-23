@@ -60,6 +60,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/projections"
@@ -1008,16 +1009,26 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			findingMetadata["host"] = info.CommonName
 			findingMetadata["agent_id"] = agentRowID(info.TenantID, info.CommonName)
 		}
-		meta, err := metadataJSON(findingMetadata)
-		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q metadata: %v", f.Ref, err)
-		}
 		risk := f.RiskScore
 		if risk < 0 {
 			risk = 0
 		}
 		if risk > 100 {
 			risk = 100
+		}
+		if kind == agentTrustStoreFindingKind || kind == "x509_certificate" {
+			// Part 4: the control plane's distrust list decides, not the report.
+			// The agent's own rating may predate an operator entry or come from an
+			// older agent, so the reported key and certificate hashes, authority
+			// key identifier and issuer are matched again and any distrust claim in
+			// the report is replaced; the agent's weak-key reasons stand, since only
+			// it held the bytes.
+			server := keyposture.RateReportedIdentity(findingMetadata["spki_sha256"], f.Fingerprint, findingMetadata["authority_key_id"], findingMetadata["issuer"])
+			findingMetadata, risk = keyposture.MergeReported(findingMetadata, server, risk)
+		}
+		meta, err := metadataJSON(findingMetadata)
+		if err != nil {
+			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q metadata: %v", f.Ref, err)
 		}
 		findings = append(findings, store.DiscoveryFinding{
 			Kind: kind, Ref: f.Ref, Provenance: f.Provenance, Fingerprint: f.Fingerprint,

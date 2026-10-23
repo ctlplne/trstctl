@@ -63,6 +63,15 @@
   with the reason. The distrust list carries each entry's subject key
   identifier, so a leaf under one of the eight intermediates is found from its
   authority key identifier. See docs/security/weak-keys.md.
+- Every certificate trstctl discovers is rated while its bytes are at hand:
+  agents rate what they find (files, Kubernetes, PKCS#11, Windows and every
+  trust store), cloud discovery rates what the provider returns, and the CT
+  monitor rates the hits it keeps. The verdict (weak key with reasons;
+  distrusted certificate or issuer, naming the entry) travels as finding
+  metadata and raises the risk to 85 or 95. The control plane re-rates every
+  agent report against its own distrust list and replaces any distrust claim
+  in it, so a host trust store holding emSign ECC Root CA - G3 is a finding
+  even from an older agent.
 
 ### Fixed
 

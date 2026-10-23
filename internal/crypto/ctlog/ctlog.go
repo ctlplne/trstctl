@@ -47,6 +47,11 @@ type Entry struct {
 	NotBefore         time.Time
 	NotAfter          time.Time
 	Precert           bool
+	// AuthorityKeyID names the issuer by key identifier, and DER is the logged
+	// certificate (or precertificate), kept so a monitor can rate a hit it
+	// keeps (Part 4); neither is stored.
+	AuthorityKeyID string
+	DER            []byte
 }
 
 // ParseSTH parses a get-sth response body.
@@ -105,6 +110,8 @@ func ParseEntries(start int64, body []byte) ([]Entry, error) {
 			NotBefore:         info.NotBefore,
 			NotAfter:          info.NotAfter,
 			Precert:           precert,
+			AuthorityKeyID:    info.AuthorityKeyID,
+			DER:               der,
 		})
 	}
 	return out, nil

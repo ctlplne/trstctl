@@ -35,6 +35,12 @@ type Found struct {
 	Location string        // where it was found (a path, label, or secret name)
 	Cert     certinfo.Info // its inventory metadata
 	Metadata map[string]string
+	// Raw is the certificate as the source read it (PEM or DER) and Chain the
+	// other certificates found beside it (DER), so the report can rate the key
+	// and the issuer against the distrust list while the bytes are at hand
+	// (Part 4). Neither is sent anywhere.
+	Raw   []byte
+	Chain [][]byte
 }
 
 // Source enumerates the certificates the agent can see in one place.
@@ -146,7 +152,7 @@ func (s *enumSource) Discover(ctx context.Context) ([]Found, error) {
 		if err != nil {
 			continue // not a certificate; skip
 		}
-		out = append(out, Found{Source: s.kind, Location: location(s.scope, label), Cert: info, Metadata: cloneMetadata(s.metadata)})
+		out = append(out, Found{Source: s.kind, Location: location(s.scope, label), Cert: info, Metadata: cloneMetadata(s.metadata), Raw: pem})
 	}
 	return out, nil
 }

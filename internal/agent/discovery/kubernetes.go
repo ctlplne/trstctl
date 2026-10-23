@@ -84,6 +84,7 @@ func (s *KubernetesSecretSource) Discover(ctx context.Context) ([]Found, error) 
 				Source:   SourceKubernetes,
 				Location: s.location(name),
 				Cert:     info,
+				Raw:      der,
 				Metadata: map[string]string{
 					"namespace":   s.namespace,
 					"secret_name": name, // #nosec G101 -- metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798)

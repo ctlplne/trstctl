@@ -38,6 +38,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/nhibehavior"
 	"trstctl.com/trstctl/internal/discovery/oauthgrant"
 	"trstctl.com/trstctl/internal/discovery/serviceaccount"
+	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -791,18 +792,32 @@ func cleanedUnique(values []string) []string {
 	return out
 }
 
+// ctFindingMetadata is a CT hit's finding metadata and risk, with the key
+// verdict the monitor computed from the logged certificate (Part 4).
+func ctFindingMetadata(f ctmonitor.Finding) (map[string]any, int) {
+	meta := map[string]any{
+		"log_url":          f.LogURL,
+		"index":            f.Index,
+		"subject":          f.Subject,
+		"issuer":           f.Issuer,
+		"serial":           f.Serial,
+		"sans":             f.DNSNames,
+		"not_after":        f.NotAfter,
+		"matched_domain":   f.MatchedDomain,
+		"authority_key_id": f.AuthorityKeyID,
+	}
+	f.Posture.AddTo(meta)
+	risk := discoveryRiskScore(f.NotAfter)
+	if floor := f.Posture.RiskFloor(); floor > risk {
+		risk = floor
+	}
+	return meta, risk
+}
+
 func (d *issuanceDispatcher) recordCTLogFindings(ctx context.Context, tenantID, sourceID, runID string, findings []ctmonitor.Finding) error {
 	for _, f := range findings {
-		meta, err := json.Marshal(map[string]any{
-			"log_url":        f.LogURL,
-			"index":          f.Index,
-			"subject":        f.Subject,
-			"issuer":         f.Issuer,
-			"serial":         f.Serial,
-			"sans":           f.DNSNames,
-			"not_after":      f.NotAfter,
-			"matched_domain": f.MatchedDomain,
-		})
+		metaMap, risk := ctFindingMetadata(f)
+		meta, err := json.Marshal(metaMap)
 		if err != nil {
 			return err
 		}
@@ -813,7 +828,7 @@ func (d *issuanceDispatcher) recordCTLogFindings(ctx context.Context, tenantID, 
 		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID: runID, SourceID: sourceID, Kind: "ct_unexpected_issuance", Ref: ref,
 			Provenance: "ct:" + f.LogURL, Fingerprint: f.Fingerprint,
-			RiskScore: discoveryRiskScore(f.NotAfter), Metadata: meta,
+			RiskScore: risk, Metadata: meta,
 		}); err != nil {
 			return err
 		}
@@ -1473,21 +1488,42 @@ type cloudSecretDiscoveryRunSink struct {
 	sourceID string
 }
 
+// cloudFindingMetadata is a cloud-discovered certificate's finding metadata
+// and risk: the inventory facts plus the key verdict (Part 4), rated from the
+// bytes the provider returned; a certificate whose bytes did not come back is
+// rated from what was recorded.
+func cloudFindingMetadata(f cloudcert.Found) (map[string]any, int) {
+	meta := map[string]any{
+		"provider":         f.Provider,
+		"resource_id":      f.ResourceID,
+		"location":         f.Location,
+		"subject":          f.Cert.Subject,
+		"issuer":           f.Cert.Issuer,
+		"serial":           f.Cert.SerialNumber,
+		"sans":             sansOf(f.Cert),
+		"not_before":       f.Cert.NotBefore,
+		"not_after":        f.Cert.NotAfter,
+		"key_algorithm":    f.Cert.KeyAlgorithm,
+		"public_key_bits":  f.Cert.PublicKeyBits,
+		"is_ca":            f.Cert.IsCA,
+		"spki_sha256":      f.Cert.SPKISHA256,
+		"authority_key_id": f.Cert.AuthorityKeyID,
+	}
+	verdict, err := keyposture.RateCertificateBytes(f.Raw)
+	if err != nil {
+		verdict = keyposture.RateReportedIdentity(f.Cert.SPKISHA256, f.Cert.SHA256Fingerprint, f.Cert.AuthorityKeyID, f.Cert.Issuer)
+	}
+	verdict.AddTo(meta)
+	risk := discoveryRiskScore(f.Cert.NotAfter)
+	if floor := verdict.RiskFloor(); floor > risk {
+		risk = floor
+	}
+	return meta, risk
+}
+
 func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) error {
-	meta, err := json.Marshal(map[string]any{
-		"provider":        f.Provider,
-		"resource_id":     f.ResourceID,
-		"location":        f.Location,
-		"subject":         f.Cert.Subject,
-		"issuer":          f.Cert.Issuer,
-		"serial":          f.Cert.SerialNumber,
-		"sans":            sansOf(f.Cert),
-		"not_before":      f.Cert.NotBefore,
-		"not_after":       f.Cert.NotAfter,
-		"key_algorithm":   f.Cert.KeyAlgorithm,
-		"public_key_bits": f.Cert.PublicKeyBits,
-		"is_ca":           f.Cert.IsCA,
-	})
+	metaMap, risk := cloudFindingMetadata(f)
+	meta, err := json.Marshal(metaMap)
 	if err != nil {
 		return err
 	}
@@ -1507,7 +1543,7 @@ func (s cloudDiscoveryRunSink) Record(ctx context.Context, f cloudcert.Found) er
 	_, err = s.orch.RecordDiscoveryFinding(ctx, s.tenantID, store.DiscoveryFinding{
 		RunID: s.runID, SourceID: s.sourceID, Kind: "x509_certificate", Ref: location,
 		Provenance: "cloud:" + f.Provider + ":" + location, Fingerprint: f.Cert.SHA256Fingerprint,
-		RiskScore: discoveryRiskScore(f.Cert.NotAfter), Metadata: meta,
+		RiskScore: risk, Metadata: meta,
 	})
 	return err
 }

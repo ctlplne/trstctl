@@ -84,6 +84,7 @@ func (s *trustStoreFileSource) Discover(ctx context.Context) ([]Found, error) {
 					Source:   SourceTrustStore,
 					Location: trustStoreLocation(s.kind, path),
 					Cert:     info,
+					Raw:      der,
 					Metadata: s.metadata(),
 				})
 			}
@@ -153,6 +154,7 @@ func (s *javaTrustStoreSource) Discover(ctx context.Context) ([]Found, error) {
 			Source:   SourceTrustStore,
 			Location: trustStoreLocation(trustStoreKindJava, location(s.path, alias)),
 			Cert:     info,
+			Raw:      pemBytes,
 			Metadata: meta,
 		})
 	}

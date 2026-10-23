@@ -108,7 +108,7 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudcert.Found, error) {
 		if err != nil {
 			return nil, fmt.Errorf("kvdisc: inspect %s: %w", id, err)
 		}
-		out = append(out, cloudcert.Found{Provider: e.Name(), ResourceID: id, Location: e.host, Cert: info})
+		out = append(out, cloudcert.Found{Provider: e.Name(), ResourceID: id, Location: e.host, Cert: info, Raw: der})
 	}
 	return out, nil
 }

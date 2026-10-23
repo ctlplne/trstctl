@@ -191,6 +191,53 @@ func RateRecorded(issuerDN, keyAlgorithm string) Verdict {
 	return v
 }
 
+// RateReportedIdentity applies the distrust list to a certificate known only
+// by what a reporter sent: its SPKI and certificate hashes, its authority key
+// identifier and its issuer name. It says nothing about weakness, which only a
+// holder of the bytes can judge.
+func RateReportedIdentity(spkiSHA256, certSHA256, authorityKeyID, issuerDN string) Verdict {
+	list := trust.Active()
+	spki, cert := strings.ToLower(strings.TrimSpace(spkiSHA256)), strings.ToLower(strings.TrimSpace(certSHA256))
+	if spki != "" || cert != "" {
+		if e, ok := list.MatchHashes(spki, cert); ok {
+			return Verdict{DistrustEntry: e.Name, DistrustHow: trust.ExposedItself, DistrustReason: e.Reason, DistrustSubject: e.Name}
+		}
+	}
+	if strings.TrimSpace(authorityKeyID) != "" {
+		if e, ok := list.MatchIssuerKeyID(authorityKeyID); ok {
+			return Verdict{DistrustEntry: e.Name, DistrustHow: trust.ExposedIssuer, DistrustReason: e.Reason, DistrustSubject: issuerDN}
+		}
+	}
+	if cn := CommonName(issuerDN); cn != "" {
+		if e, ok := list.MatchName(cn); ok {
+			return Verdict{DistrustEntry: e.Name, DistrustHow: DistrustedByName, DistrustReason: e.Reason, DistrustSubject: issuerDN}
+		}
+	}
+	return Verdict{}
+}
+
+// MergeReported keeps the weak-key reasons a reporter that held the bytes
+// sent, replaces any distrust claim in the report with the server's own
+// verdict, and returns the metadata with the risk raised to the floor.
+func MergeReported(meta map[string]string, server Verdict, risk int) (map[string]string, int) {
+	out := make(map[string]string, len(meta)+6)
+	for k, v := range meta {
+		out[k] = v
+	}
+	for _, k := range []string{MetaDistrustEntry, MetaDistrustHow, MetaDistrustReason, MetaDistrustSubject} {
+		delete(out, k)
+	}
+	reported := FromStringMetadata(out)
+	merged := Verdict{WeakReasons: reported.WeakReasons, DistrustEntry: server.DistrustEntry, DistrustHow: server.DistrustHow, DistrustReason: server.DistrustReason, DistrustSubject: server.DistrustSubject}
+	for k, v := range merged.StringMetadata() {
+		out[k] = v
+	}
+	if floor := merged.RiskFloor(); floor > risk {
+		risk = floor
+	}
+	return out, risk
+}
+
 // CommonName returns the CN of an RFC 4514 distinguished name as Go renders
 // it ("CN=EM OV TLS CA - G3C,O=eMudhra Inc,C=US"), honouring backslash escapes.
 func CommonName(dn string) string {

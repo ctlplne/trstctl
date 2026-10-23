@@ -58,12 +58,20 @@ func (s *FilesystemSource) Discover(ctx context.Context) ([]Found, error) {
 			if rerr != nil {
 				return nil
 			}
-			for _, der := range certBlocks(data) {
+			blocks := certBlocks(data)
+			for i, der := range blocks {
 				info, perr := certinfo.Inspect(der)
 				if perr != nil {
 					continue
 				}
-				out = append(out, Found{Source: SourceFilesystem, Location: path, Cert: info})
+				// The other certificates in the same file are its likely chain.
+				var chain [][]byte
+				for j, other := range blocks {
+					if j != i {
+						chain = append(chain, other)
+					}
+				}
+				out = append(out, Found{Source: SourceFilesystem, Location: path, Cert: info, Raw: der, Chain: chain})
 			}
 			return nil
 		})

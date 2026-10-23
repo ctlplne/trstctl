@@ -116,6 +116,7 @@ func (s *PKCS11Source) Discover(ctx context.Context) ([]Found, error) {
 			// like two different findings across a fleet.
 			Location: label,
 			Cert:     info,
+			Raw:      blobs[label],
 		})
 	}
 	return out, nil

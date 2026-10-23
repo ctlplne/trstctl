@@ -185,6 +185,7 @@ func (s *WindowsStoreSource) Discover(ctx context.Context) ([]Found, error) {
 			Source:   SourceWindowsCert,
 			Location: string(s.location) + "/" + s.store + "/" + locator,
 			Cert:     info,
+			Raw:      blobs[label],
 		})
 	}
 	// Fingerprint order, so the report is deterministic regardless of the order

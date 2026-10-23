@@ -30,6 +30,10 @@ type Found struct {
 	ResourceID string        // ARN / Key Vault id / GCP resource name
 	Location   string        // region / vault host / project-location
 	Cert       certinfo.Info // the certificate's inventory metadata
+	// Raw is the certificate as the provider returned it (PEM, possibly with
+	// its chain, or DER), kept so the sink can rate the key and the issuer
+	// while the bytes are at hand (Part 4). It is not stored.
+	Raw []byte
 }
 
 // Sink receives discovered certificates for merge into the inventory.

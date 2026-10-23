@@ -26,6 +26,7 @@ import (
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto/ctlog"
+	"trstctl.com/trstctl/internal/keyposture"
 )
 
 // defaultMaxBatch bounds how many entries a single Poll reads from a log.
@@ -64,6 +65,11 @@ type Finding struct {
 	DNSNames      []string
 	NotAfter      time.Time
 	MatchedDomain string
+	// AuthorityKeyID and Posture are the issuer's key identifier and the key
+	// verdict (weak key, distrusted issuer) rated from the logged certificate
+	// while its bytes were at hand (Part 4).
+	AuthorityKeyID string
+	Posture        keyposture.Verdict
 }
 
 // Fetcher reads RFC 6962 logs. Entries returns the entries in [start, end).
@@ -221,7 +227,13 @@ func (m *Monitor) Poll(ctx context.Context, tenantID string, log LogState) (LogS
 		f := Finding{
 			LogURL: log.URL, Index: e.Index, Subject: e.Subject, Issuer: e.Issuer,
 			Serial: e.SerialHex, Fingerprint: e.FingerprintSHA256, DNSNames: e.DNSNames,
-			NotAfter: e.NotAfter, MatchedDomain: domain,
+			NotAfter: e.NotAfter, MatchedDomain: domain, AuthorityKeyID: e.AuthorityKeyID,
+		}
+		// Rated only for the hits kept: a log batch can hold thousands of entries.
+		if v, err := keyposture.RateCertificate(e.DER, nil); err == nil {
+			f.Posture = v
+		} else {
+			f.Posture = keyposture.RateReportedIdentity("", e.FingerprintSHA256, e.AuthorityKeyID, e.Issuer)
 		}
 		if err := m.alert.Raise(ctx, tenantID, f); err != nil {
 			return log, nil, err

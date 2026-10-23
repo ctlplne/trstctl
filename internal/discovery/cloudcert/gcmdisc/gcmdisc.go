@@ -96,7 +96,7 @@ func (e *Enumerator) Enumerate(ctx context.Context) ([]cloudcert.Found, error) {
 			if err != nil {
 				return nil, fmt.Errorf("gcmdisc: inspect %s: %w", c.Name, err)
 			}
-			out = append(out, cloudcert.Found{Provider: e.Name(), ResourceID: c.Name, Location: e.cfg.Location, Cert: info})
+			out = append(out, cloudcert.Found{Provider: e.Name(), ResourceID: c.Name, Location: e.cfg.Location, Cert: info, Raw: []byte(c.PemCertificate)})
 		}
 		if page.NextPageToken == "" {
 			break

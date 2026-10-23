@@ -61,9 +61,30 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   read only the bare algorithm name, so every ECDSA certificate was flagged
   weak and no RSA-1024 certificate ever was.
 
-Ratings for discovered, CT-logged and CBOM certificates, host trust stores,
-the signer's key ceremony and the batch-GCD job are what comes next in this
-change set; this page grows with each.
+- **Certificates an agent finds** (files, Kubernetes secrets, PKCS#11 tokens,
+  the Windows store, and OS, NSS, browser and Java trust stores). The agent
+  rates each one while it holds the bytes, with the other certificates found
+  in the same file as its chain, and reports the verdict as metadata
+  (`key_strength`, `key_weak_reason`, `distrust_entry`, `distrust_how`,
+  `distrust_reason`, `distrust_subject`) with the risk raised to 85 for a weak
+  key and 95 for a distrusted certificate or issuer. A host trust store that
+  holds emSign ECC Root CA - G3 is such a finding (`distrust_how: itself`).
+- **The control plane re-rates every agent report** against its own distrust
+  list (shipped entries plus `trust.distrust_file`): by the reported key and
+  certificate hashes, the authority key identifier and the issuer name. An
+  agent's own distrust claim is replaced, never trusted; its weak-key reasons
+  stand, since only it held the bytes. So an older agent, or an entry added
+  after the agent rated a certificate, still produces the finding.
+- **Cloud certificate discovery** (AWS ACM, Azure Key Vault, Google
+  Certificate Manager) rates each certificate from the bytes the provider
+  returned, chain included where it comes back.
+- **The CT monitor** rates each hit it keeps (only those: a log batch can hold
+  thousands of entries), from the logged certificate or precertificate; the
+  rogue-certificate posture shows the verdict on the CT finding.
+
+Ratings for CBOM assets, the relay's network scans, the signer's key
+ceremony, removal of a distrusted root from a host, and the batch-GCD job are
+what comes next in this change set; this page grows with each.
 
 ## The distrust list
 

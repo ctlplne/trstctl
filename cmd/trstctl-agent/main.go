@@ -40,8 +40,10 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/revcacheposture"
@@ -1180,6 +1182,22 @@ func reportPrivateKeyInventory(ctx context.Context, a *agent.Agent, ch agent.Cha
 }
 
 func reportFoundInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelClient, sourceKind string, found []agentdiscovery.Found, risk int, label string) error {
+	findings := foundInventoryFindings(sourceKind, found, risk)
+	if len(findings) == 0 {
+		return nil
+	}
+	resp, err := a.ReportInventory(ctx, ch, sourceKind, findings)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("trstctl-agent: reported %d %s findings (run %s, rejected %d)\n", resp.Recorded, label, resp.RunID, resp.Rejected)
+	return nil
+}
+
+// foundInventoryFindings turns found certificates into inventory findings,
+// rating each key and issuer while the bytes are at hand (Part 4): the verdict
+// travels as metadata and raises the risk.
+func foundInventoryFindings(sourceKind string, found []agentdiscovery.Found, risk int) []agent.InventoryFinding {
 	findings := make([]agent.InventoryFinding, 0, len(found))
 	findingKind := "x509_certificate"
 	if sourceKind == agentdiscovery.SourceTrustStore {
@@ -1191,35 +1209,53 @@ func reportFoundInventory(ctx context.Context, a *agent.Agent, ch agent.ChannelC
 	}
 	for _, f := range found {
 		meta := map[string]string{
-			"subject":        f.Cert.Subject,
-			"issuer":         f.Cert.Issuer,
-			"serial":         f.Cert.SerialNumber,
-			"key_algorithm":  f.Cert.KeyAlgorithm,
-			"not_after":      f.Cert.NotAfter.Format(time.RFC3339),
-			"spki_sha256":    f.Cert.SPKISHA256,
-			"subject_key_id": f.Cert.SubjectKeyID,
+			"subject":          f.Cert.Subject,
+			"issuer":           f.Cert.Issuer,
+			"serial":           f.Cert.SerialNumber,
+			"key_algorithm":    f.Cert.KeyAlgorithm,
+			"public_key_bits":  strconv.Itoa(f.Cert.PublicKeyBits),
+			"not_after":        f.Cert.NotAfter.Format(time.RFC3339),
+			"spki_sha256":      f.Cert.SPKISHA256,
+			"subject_key_id":   f.Cert.SubjectKeyID,
+			"authority_key_id": f.Cert.AuthorityKeyID,
 		}
 		for k, v := range f.Metadata {
 			meta[k] = v
+		}
+		findingRisk := risk
+		if verdict, err := foundVerdict(f); err == nil {
+			for k, v := range verdict.StringMetadata() {
+				meta[k] = v
+			}
+			if floor := verdict.RiskFloor(); floor > findingRisk {
+				findingRisk = floor
+			}
 		}
 		findings = append(findings, agent.InventoryFinding{
 			Kind:        findingKind,
 			Ref:         f.Location,
 			Provenance:  f.Source + ":" + f.Location,
 			Fingerprint: f.Cert.SHA256Fingerprint,
-			RiskScore:   risk,
+			RiskScore:   findingRisk,
 			Metadata:    meta,
 		})
 	}
-	if len(findings) == 0 {
-		return nil
+	return findings
+}
+
+// foundVerdict rates a found certificate with whatever was read beside it.
+func foundVerdict(f agentdiscovery.Found) (keyposture.Verdict, error) {
+	if len(f.Raw) == 0 {
+		return keyposture.Verdict{}, errors.New("no certificate bytes")
 	}
-	resp, err := a.ReportInventory(ctx, ch, sourceKind, findings)
+	if len(f.Chain) == 0 {
+		return keyposture.RateCertificateBytes(f.Raw)
+	}
+	leaf, err := certinfo.LeafDER(f.Raw)
 	if err != nil {
-		return err
+		return keyposture.Verdict{}, err
 	}
-	fmt.Printf("trstctl-agent: reported %d %s findings (run %s, rejected %d)\n", resp.Recorded, label, resp.RunID, resp.Rejected)
-	return nil
+	return keyposture.RateCertificate(leaf, f.Chain)
 }
 
 func privateKeyInventoryFindings(found []agentdiscovery.PrivateKeyFound) []agent.InventoryFinding {
