@@ -3334,8 +3334,13 @@ than sending an operator looking for a credential that was never there.
   telemetry into a healthy zero. Another customer's active certificates cannot
   enter the count because the query carries and is confined by the selected
   customer's tenant identity.
-  break-glass request, consent, and result-use APIs are still not exposed in
-  this console.
+  The break-glass request, consent, and result-use APIs are exposed in this
+  console (A93): the exact-customer emergency panel lets a requester open a
+  bounded request without offering self-approval, offers consent only to a
+  distinct approver on the selected customer, shows the narrow result only to
+  the requester after two approvals, names a requester withdrawal apart from
+  an approver denial, and shows the queue without emergency mutation controls
+  in license read-only mode.
 - AD CS certificate-database lifecycle visibility (F4, PARTIAL): `POST
   /api/v1/adcs/ca-database/ingest` and `GET /api/v1/adcs/ca-database` (plus
   `trstctl adcs ca-database ingest|list` and a Posture console panel) turn
