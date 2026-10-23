@@ -156,12 +156,17 @@ func TestEndpointEnrollmentSelectsAndRetainsProfile(t *testing.T) {
 			}
 			code, body := secretsReq(t, h, http.MethodPost, "/api/v1/lifecycle/endpoint-bindings/preview", token, request)
 			if scenario == "unknown profile" || scenario == "existing policy conflict" {
-				want := http.StatusNotFound
+				// A profile with no active revision is refused by name (422, batch 7):
+				// the owner and target the caller named exist; the profile is the gap.
+				want := http.StatusUnprocessableEntity
 				if scenario == "existing policy conflict" {
 					want = http.StatusConflict
 				}
 				if code != want {
 					t.Fatalf("profile refusal: want=%d got=%d %s", want, code, body)
+				}
+				if scenario == "unknown profile" && !strings.Contains(string(body), "not-in-this-tenant") {
+					t.Fatalf("unknown-profile refusal does not name the profile: %s", body)
 				}
 				return
 			}
