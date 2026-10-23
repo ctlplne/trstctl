@@ -3407,9 +3407,18 @@ than sending an operator looking for a credential that was never there.
   uniqueness suffix, and a structural assurance test proves distinct tenants
   stay disjoint on all three axes (schema, lane, object prefix — with no prefix
   a prefix of another's) even when their slugs collide. Scope, stated exactly:
-  this hardens the derivation and adds the assurance; the per-tenant KEK/HSM,
-  the per-tenant audit stream, tenant-scoped break-glass with dual consent, and
-  the provider assurance console remain unbuilt, and the doctor's operator-run
+  this hardens the derivation and adds the assurance. The per-tenant audit
+  stream is served (A94): a siloed tenant's lane gets a JetStream stream of its
+  own, `TRSTCTL_AUDIT_<lane>`, that sources exactly `events.<lane>.>` from the
+  live events stream (it accepts no publishes of its own, so it cannot diverge
+  from the log), with its own name, retention, and deletion; the silo
+  provisioner ensures and drops it with the lane, and the isolation drill's
+  `event_audit_stream` check proves on live JetStream that each probe tenant's
+  stream received its own probe event and none of its neighbour's, then removes
+  the probe streams (`event_audit_stream_cleanup`). Siloed placement itself is
+  still exercised by the drill rather than by customer provisioning. The
+  per-tenant KEK/HSM, tenant-scoped break-glass with dual consent, and the
+  provider assurance console remain unbuilt, and the doctor's operator-run
   isolation suite does not yet drive an object-store lane against a live backend.
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before

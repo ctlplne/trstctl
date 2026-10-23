@@ -116,7 +116,7 @@ func TestLaneDrill_LiveStreamProvesLaneIsolation(t *testing.T) {
 
 	checks := drill.Run(context.Background())
 	byName := checksByName(checks)
-	for _, name := range []string{"event_lane_disjoint", "event_lane_active", "event_lane_cross_isolation", "event_lane_cleanup"} {
+	for _, name := range []string{"event_lane_disjoint", "event_lane_active", "event_lane_cross_isolation", "event_audit_stream", "event_audit_stream_cleanup", "event_lane_cleanup"} {
 		c, ok := byName[name]
 		if !ok {
 			t.Fatalf("drill did not run check %q (got %v)", name, checks)

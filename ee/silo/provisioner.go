@@ -12,9 +12,13 @@ import (
 type Plane interface {
 	EnsurePostgresSchema(ctx context.Context, schema string, ddl []string) error
 	EnsureEventLane(ctx context.Context, lane string) error
+	// EnsureAuditStream (A94) gives the tenant's lane an audit stream of its
+	// own, sourced from the live events stream; DropAuditStream removes it.
+	EnsureAuditStream(ctx context.Context, lane string) error
 	EnsureObjectPrefix(ctx context.Context, prefix string) error
 	DropPostgresSchema(ctx context.Context, schema string) error
 	DropEventLane(ctx context.Context, lane string) error
+	DropAuditStream(ctx context.Context, lane string) error
 	DropObjectPrefix(ctx context.Context, prefix string) error
 }
 
@@ -40,6 +44,9 @@ func (p *Provisioner) Provision(ctx context.Context, tenant Tenant) (tenancy.Tar
 	if err := p.plane.EnsureEventLane(ctx, targets.JetStreamSubjectLane); err != nil {
 		return tenancy.Targets{}, err
 	}
+	if err := p.plane.EnsureAuditStream(ctx, targets.JetStreamSubjectLane); err != nil {
+		return tenancy.Targets{}, err
+	}
 	if err := p.plane.EnsureObjectPrefix(ctx, targets.ObjectKeyPrefix); err != nil {
 		return tenancy.Targets{}, err
 	}
@@ -55,6 +62,9 @@ func (p *Provisioner) Teardown(ctx context.Context, tenant Tenant) error {
 		if err := p.plane.DropPostgresSchema(ctx, targets.PostgresSchema); err != nil {
 			return err
 		}
+	}
+	if err := p.plane.DropAuditStream(ctx, targets.JetStreamSubjectLane); err != nil {
+		return err
 	}
 	if err := p.plane.DropEventLane(ctx, targets.JetStreamSubjectLane); err != nil {
 		return err
@@ -82,6 +92,7 @@ type MemPlane struct {
 	schemas  map[string][]string
 	ensures  map[string]int
 	lanes    map[string]bool
+	audits   map[string]bool
 	prefixes map[string]bool
 }
 
@@ -90,6 +101,7 @@ func NewMemPlane() *MemPlane {
 		schemas:  map[string][]string{},
 		ensures:  map[string]int{},
 		lanes:    map[string]bool{},
+		audits:   map[string]bool{},
 		prefixes: map[string]bool{},
 	}
 }
@@ -168,4 +180,31 @@ func (p *MemPlane) SchemaDDL(schema string) []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]string(nil), p.schemas[schema]...)
+}
+
+// EnsureAuditStream records the lane's audit stream (A94).
+func (p *MemPlane) EnsureAuditStream(_ context.Context, lane string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.audits[lane] = true
+	return nil
+}
+
+// DropAuditStream forgets the lane's audit stream (A94).
+func (p *MemPlane) DropAuditStream(_ context.Context, lane string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.audits, lane)
+	return nil
+}
+
+// AuditStreams lists the lanes with an audit stream, for tests.
+func (p *MemPlane) AuditStreams() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]string, 0, len(p.audits))
+	for lane := range p.audits {
+		out = append(out, lane)
+	}
+	return out
 }

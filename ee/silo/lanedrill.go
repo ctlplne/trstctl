@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -58,7 +59,17 @@ func newLaneProbeTenantID() string {
 type LaneDrillLog interface {
 	Append(ctx context.Context, e events.Event) (events.Event, error)
 	LaneSubjectCount(ctx context.Context, lane string) (uint64, error)
+	// A94: the per-tenant audit stream, a JetStream stream sourcing exactly
+	// one tenant's lane. The drill proves it holds the tenant's own events
+	// and none of a neighbour's, then removes the probe streams.
+	EnsureTenantAuditStream(ctx context.Context, lane string) (events.TenantAuditStream, error)
+	TenantAuditStreamInfo(ctx context.Context, lane string) (events.TenantAuditStream, error)
+	DeleteTenantAuditStream(ctx context.Context, lane string) error
 }
+
+// auditStreamSettle bounds how long the drill waits for JetStream sourcing,
+// which is asynchronous, to deliver a probe event into its audit stream.
+const auditStreamSettle = 10 * time.Second
 
 // LaneDrill runs the event-lane checks against the live deployment.
 type LaneDrill struct {
@@ -101,7 +112,22 @@ func (d *LaneDrill) Run(ctx context.Context) (checks []corestore.IsolationDrillC
 
 	// Verified cleanup of REGISTRY rows runs however the drill exits. Probe
 	// events stay in the append-only log by design (see the file comment).
+	var auditLanes []string
 	defer func() {
+		for _, lane := range auditLanes {
+			if err := d.Log.DeleteTenantAuditStream(ctx, lane); err != nil {
+				fail("event_audit_stream_cleanup", "probe audit stream "+lane+" survived cleanup: "+err.Error())
+			}
+		}
+		if len(auditLanes) > 0 {
+			for _, lane := range auditLanes {
+				if info, err := d.Log.TenantAuditStreamInfo(ctx, lane); err != nil || info.Exists {
+					fail("event_audit_stream_cleanup", fmt.Sprintf("probe audit stream for lane %s still exists after cleanup (err=%v)", lane, err))
+					break
+				}
+			}
+			pass("event_audit_stream_cleanup", "probe audit streams removed; the probe events remain only in the append-only source stream")
+		}
 		_ = d.Registry.Remove(ctx, probeA)
 		_ = d.Registry.Remove(ctx, probeB)
 		d.Router.Invalidate()
@@ -214,6 +240,52 @@ func (d *LaneDrill) Run(ctx context.Context) (checks []corestore.IsolationDrillC
 			"tenant B's probe append moved tenant A's lane count (%d -> %d); one tenant's events are landing in another's lane", afterA_A, afterB_A))
 	default:
 		pass("event_lane_cross_isolation", "each probe tenant's append landed on its own lane and left the neighbor's lane count undisturbed, observed on the live stream in both directions")
+	}
+
+	// Check 4 (A94) — each probe tenant gets an audit stream of its own that
+	// sources exactly its lane: tenant A's stream fills with A's probe event
+	// and never with B's, and vice versa, observed on live JetStream.
+	streamA, errA := d.Log.EnsureTenantAuditStream(ctx, laneA)
+	streamB, errB := d.Log.EnsureTenantAuditStream(ctx, laneB)
+	if errA != nil || errB != nil {
+		fail("event_audit_stream", fmt.Sprintf("could not ensure per-tenant audit streams (a: %v, b: %v)", errA, errB))
+		return checks
+	}
+	auditLanes = append(auditLanes, laneA, laneB)
+	if streamA.Name == streamB.Name {
+		fail("event_audit_stream", fmt.Sprintf("two distinct probe tenants were given the same audit stream %q", streamA.Name))
+		return checks
+	}
+	wantA, wantB := afterB_A-baseA, afterB_B-baseB
+	settled := false
+	deadline := time.Now().Add(auditStreamSettle)
+	var infoA, infoB events.TenantAuditStream
+	for {
+		infoA, errA = d.Log.TenantAuditStreamInfo(ctx, laneA)
+		infoB, errB = d.Log.TenantAuditStreamInfo(ctx, laneB)
+		if errA != nil || errB != nil {
+			fail("event_audit_stream", fmt.Sprintf("could not read per-tenant audit streams (a: %v, b: %v)", errA, errB))
+			return checks
+		}
+		if infoA.Messages >= wantA && infoB.Messages >= wantB {
+			settled = true
+			break
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	switch {
+	case !settled:
+		fail("event_audit_stream", fmt.Sprintf(
+			"per-tenant audit streams did not receive the probe events within %s (a: %d of %d, b: %d of %d); sourcing from the live stream is not active", auditStreamSettle, infoA.Messages, wantA, infoB.Messages, wantB))
+	case infoA.Messages != wantA || infoB.Messages != wantB:
+		fail("event_audit_stream", fmt.Sprintf(
+			"per-tenant audit streams hold more than their own lane (a: %d, want %d; b: %d, want %d); a neighbour's events are entering a tenant's audit stream", infoA.Messages, wantA, infoB.Messages, wantB))
+	default:
+		pass("event_audit_stream", fmt.Sprintf(
+			"each probe tenant's audit stream (%s, %s) sourced exactly its own lane's probe event from the live stream and none of the neighbour's", streamA.Name, streamB.Name))
 	}
 	return checks
 }
