@@ -23,6 +23,11 @@ type Tenant struct {
 	Name      string
 	CreatedAt time.Time
 	EventSeq  uint64
+	// Managed and ProviderTenantID (A92): the tenant was provisioned through
+	// the managed offering by that Provider tenant. The licensed tenant band
+	// counts these rows.
+	Managed          bool
+	ProviderTenantID string
 }
 
 // UpsertTenant inserts one tenant registration or accepts its exact replay. It is
@@ -41,7 +46,7 @@ func (s *Store) UpsertTenant(ctx context.Context, t Tenant) error {
 func (s *Store) ListTenants(ctx context.Context) ([]Tenant, error) {
 	rows, err := s.pool.Query(ctx,
 		//trstctl:system-query — cross-tenant by design: enumerates the tenant registry (no tenant predicate); runs on the pool, not under RLS (AN-1 exemption).
-		"SELECT tenant_id::text, name, created_at, event_seq FROM tenants ORDER BY tenant_id")
+		"SELECT tenant_id::text, name, created_at, event_seq, managed_offering, coalesce(provider_tenant_id::text, '') FROM tenants ORDER BY tenant_id")
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +57,7 @@ func (s *Store) ListTenants(ctx context.Context) ([]Tenant, error) {
 			t   Tenant
 			seq int64
 		)
-		if err := rows.Scan(&t.TenantID, &t.Name, &t.CreatedAt, &seq); err != nil {
+		if err := rows.Scan(&t.TenantID, &t.Name, &t.CreatedAt, &seq, &t.Managed, &t.ProviderTenantID); err != nil {
 			return nil, err
 		}
 		t.EventSeq = uint64(seq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
@@ -70,9 +75,19 @@ func (s *Store) GetTenant(ctx context.Context, tenantID string) (Tenant, error) 
 	)
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return tx.QueryRow(ctx,
-			"SELECT tenant_id::text, name, created_at, event_seq FROM tenants WHERE tenant_id = $1",
-			tenantID).Scan(&t.TenantID, &t.Name, &t.CreatedAt, &seq)
+			"SELECT tenant_id::text, name, created_at, event_seq, managed_offering, coalesce(provider_tenant_id::text, '') FROM tenants WHERE tenant_id = $1",
+			tenantID).Scan(&t.TenantID, &t.Name, &t.CreatedAt, &seq, &t.Managed, &t.ProviderTenantID)
 	})
 	t.EventSeq = uint64(seq) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return t, err
+}
+
+// CountManagedTenants (A92) counts the hosted tenants provisioned through the
+// managed offering that are still registered. It is the number the licensed
+// tenant band is compared against at the create path.
+func (s *Store) CountManagedTenants(ctx context.Context) (int, error) {
+	var n int
+	//trstctl:system-query — cross-tenant by design: the licensed tenant band is a deployment-wide cap, so this counts managed tenants across ALL tenants on the pool, not under one tenant's RLS (AN-1 exemption, like the tenant list it sits beside).
+	err := s.pool.QueryRow(ctx, "SELECT count(*) FROM tenants WHERE managed_offering").Scan(&n)
+	return n, err
 }

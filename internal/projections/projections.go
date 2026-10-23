@@ -3610,6 +3610,21 @@ type tenantRegistered struct {
 	Name string `json:"name"`
 }
 
+// managedTenantMetadata (A92) reads the managed-offering relationship a
+// tenant.registered payload may carry (ManagedTenantRegistered). The plain
+// registration shape stays as it is so the two privacy shapes remain
+// mutually exclusive on managed_offering; a payload without it is simply not
+// a managed customer.
+func managedTenantMetadata(data []byte) (managed bool, providerTenantID string) {
+	var payload struct {
+		ManagedOffering *ManagedOfferingMetadata `json:"managed_offering"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil || payload.ManagedOffering == nil || !payload.ManagedOffering.Enabled {
+		return false, ""
+	}
+	return true, payload.ManagedOffering.ProviderTenantID
+}
+
 // tenantOffboarded is the payload of a tenant.offboarded event (TENANT-002). It
 // carries no secret material — only the count of rows the command-side erase
 // removed — so a replay does not need it to reproduce state (the projector
@@ -3914,8 +3929,10 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
+		managed, providerTenantID := managedTenantMetadata(e.Data)
 		return p.store.UpsertTenant(ctx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
+			Managed: managed, ProviderTenantID: providerTenantID,
 		})
 	}
 	if e.Type == EventTenantOffboarded {
@@ -4473,8 +4490,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
+		managed, providerTenantID := managedTenantMetadata(e.Data)
 		return p.store.RegisterTenantTx(ctx, tx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
+			Managed: managed, ProviderTenantID: providerTenantID,
 		})
 	case EventTenantOffboarded:
 		var payload tenantOffboarded
@@ -9187,8 +9206,10 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
+		managed, providerTenantID := managedTenantMetadata(e.Data)
 		return p.store.UpsertTenantTx(ctx, tx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
+			Managed: managed, ProviderTenantID: providerTenantID,
 		})
 	case EventTenantOffboarded:
 		if err := ValidateSchemaVersion(e); err != nil {

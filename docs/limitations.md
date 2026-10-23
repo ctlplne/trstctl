@@ -1450,7 +1450,13 @@ never live in the API process. What you can do end to end against the running bi
   materialized objects, not reservations. Lowering a cap still permits exact
   idempotent retries, rotations, and deletion of existing objects. New writes
   over the cap return 429; concurrent first writes can return a retryable 503.
-  The tenants cap is stored and reported but does not yet gate its create path.
+  The licensed tenant band gates the managed-offering create path:
+  `POST /api/v1/managed-offering/tenants` counts the hosted tenants already
+  registered under the projection lock and refuses the next one with a 429
+  naming the band and the count once it is full (an unreadable count is a
+  retryable 503, never a zero); the Provider plane's own provisioning enforced
+  the same band already, and `GET /api/v1/managed-offering/status` now reports
+  `managed_tenants_registered` beside `tenant_band`.
   Quota-read/count outages return a retryable 503 for new capped creation rather than silently
   treating an unknown count as zero. The tenant-self-service
   route still serves only the caller's own

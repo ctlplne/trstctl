@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/usage"
 
 	"github.com/google/uuid"
 
@@ -57,9 +58,57 @@ func (o *Orchestrator) ProvisionManagedTenant(
 	providerTenantID, idempotencyKey string,
 	in ManagedTenantProvisionRequest,
 ) (ManagedTenant, error) {
+	return o.ProvisionManagedTenantWithinBand(ctx, providerTenantID, idempotencyKey, in, 0)
+}
+
+// ErrManagedTenantBandExhausted (A92) is the create path's refusal when the
+// licensed tenant band already holds as many managed tenants as it allows.
+// It wraps usage.ErrQuotaExhausted so the API answers a structured 429.
+var ErrManagedTenantBandExhausted = fmt.Errorf("%w: managed tenant band", usage.ErrQuotaExhausted)
+
+// ProvisionManagedTenantWithinBand is ProvisionManagedTenant gated by the
+// licensed tenant band (A92). band 0 means unlimited. The count and the
+// registration run under the projection lock so two replicas cannot both
+// admit the last slot.
+func (o *Orchestrator) ProvisionManagedTenantWithinBand(
+	ctx context.Context,
+	providerTenantID, idempotencyKey string,
+	in ManagedTenantProvisionRequest,
+	band int,
+) (ManagedTenant, error) {
 	if o == nil || o.log == nil || o.proj == nil || o.store == nil || o.durableIdem == nil {
 		return ManagedTenant{}, errors.New("orchestrator: managed offering is not configured")
 	}
+	if band <= 0 {
+		return o.provisionManagedTenant(ctx, providerTenantID, idempotencyKey, in)
+	}
+	var out ManagedTenant
+	err := o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		// An exact replay of an admitted request must still answer, so the
+		// band is compared before a NEW registration only: a tenant already
+		// registered under this idempotency key is returned by the
+		// registration command itself.
+		if _, err := o.store.GetTenant(lockCtx, strings.TrimSpace(in.TenantID)); err != nil {
+			count, err := o.store.CountManagedTenants(lockCtx)
+			if err != nil {
+				return fmt.Errorf("%w: managed tenant count: %v", usage.ErrQuotaUnavailable, err)
+			}
+			if count >= band {
+				return fmt.Errorf("%w: the licensed tenant band already holds %d of %d managed tenants; offboard a hosted tenant or license a larger band before provisioning another", ErrManagedTenantBandExhausted, count, band)
+			}
+		}
+		var err error
+		out, err = o.provisionManagedTenant(lockCtx, providerTenantID, idempotencyKey, in)
+		return err
+	})
+	return out, err
+}
+
+func (o *Orchestrator) provisionManagedTenant(
+	ctx context.Context,
+	providerTenantID, idempotencyKey string,
+	in ManagedTenantProvisionRequest,
+) (ManagedTenant, error) {
 	providerTenantID = strings.TrimSpace(providerTenantID)
 	if providerTenantID == "" {
 		return ManagedTenant{}, errors.New("orchestrator: provider tenant id is required")

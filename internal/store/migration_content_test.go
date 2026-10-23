@@ -1093,6 +1093,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	297: true, // TestMigration0297GivesExistingCampaignsNoSoak
 	298: true, // TestMigration0298LeavesExistingTrustSourcesTokenBound
 	300: true, // TestMigration0300CapturesExistingAgentsAsLifecycleReceipts
+	301: true, // TestMigration0301LeavesExistingTenantsUnmanaged
 	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
@@ -5978,5 +5979,38 @@ func TestMigration0300CapturesExistingAgentsAsLifecycleReceipts(t *testing.T) {
 	var n int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM agent_lifecycle_receipts WHERE tenant_id=$1`, tenantA).Scan(&n); err != nil || n != 2 {
 		t.Fatalf("receipts = %d %v, want exactly the two pre-existing agents", n, err)
+	}
+}
+
+// A92: the managed-offering marker arrives false on every existing tenant: a
+// tenant registered any other way is not a managed customer and must not
+// count against the licensed band.
+func TestMigration0301LeavesExistingTenantsUnmanaged(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 301)
+	if target.noTx || target.name != "0301_managed_tenants.sql" {
+		t.Fatalf("migration 0301 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	if _, err := pool.Exec(ctx, `INSERT INTO tenants (tenant_id, name) VALUES ($1, 'legacy')`, tenantA); err != nil {
+		t.Fatalf("seed pre-0301 tenant: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var managed bool
+	var providerTenant *string
+	if err := pool.QueryRow(ctx, `SELECT managed_offering, provider_tenant_id::text FROM tenants WHERE tenant_id=$1`, tenantA).Scan(&managed, &providerTenant); err != nil {
+		t.Fatalf("legacy tenant row: %v", err)
+	}
+	if managed || providerTenant != nil {
+		t.Fatalf("legacy tenant managed=%t provider=%v, want false and nil", managed, providerTenant)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE tenants SET managed_offering = true, provider_tenant_id = $2 WHERE tenant_id = $1`, tenantA, "b7100000-0000-4000-8000-000000000002"); err != nil {
+		t.Fatalf("0301 refused the managed marker: %v", err)
 	}
 }

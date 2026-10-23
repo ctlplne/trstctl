@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,28 +25,37 @@ type managedOfferingStatus struct {
 	ProviderPlaneMode   license.Mode  `json:"provider_plane_mode"`
 	TenantBand          int           `json:"tenant_band,omitempty"`
 	ManagedCustomerBand int           `json:"managed_customer_band,omitempty"`
-	BillingUnit         string        `json:"billing_unit"`
-	ManagedBoundary     string        `json:"managed_boundary"`
-	IdempotencyRequired bool          `json:"idempotency_required"`
-	EventType           string        `json:"event_type"`
-	MutationPath        string        `json:"mutation_path"`
+	// ManagedTenantsRegistered (A92): hosted tenants the band already holds.
+	ManagedTenantsRegistered int    `json:"managed_tenants_registered"`
+	BillingUnit              string `json:"billing_unit"`
+	ManagedBoundary          string `json:"managed_boundary"`
+	IdempotencyRequired      bool   `json:"idempotency_required"`
+	EventType                string `json:"event_type"`
+	MutationPath             string `json:"mutation_path"`
 }
 
-func (a *API) getManagedOfferingStatus(w http.ResponseWriter, _ *http.Request) {
+func (a *API) getManagedOfferingStatus(w http.ResponseWriter, r *http.Request) {
 	mgr := a.licenseManager()
+	registered := 0
+	if a.store != nil {
+		if n, err := a.store.CountManagedTenants(r.Context()); err == nil {
+			registered = n
+		}
+	}
 	a.writeJSON(w, http.StatusOK, managedOfferingStatus{
-		Served:              true,
-		DeploymentModel:     orchestrator.ManagedOfferingDeploymentModel,
-		Tier:                mgr.Tier(),
-		LicenseState:        mgr.State(),
-		ProviderPlaneMode:   mgr.Mode(license.FeatureProviderPlane),
-		TenantBand:          mgr.TenantBand(),
-		ManagedCustomerBand: mgr.ManagedCustomerBand(),
-		BillingUnit:         usage.BillingUnitManagedCustomerBand,
-		ManagedBoundary:     "Provider/MSP normally uses one shared control plane with multiple customer tenants; dedicated customer deployments are also supported.",
-		IdempotencyRequired: true,
-		EventType:           "tenant.registered",
-		MutationPath:        "/api/v1/managed-offering/tenants",
+		ManagedTenantsRegistered: registered,
+		Served:                   true,
+		DeploymentModel:          orchestrator.ManagedOfferingDeploymentModel,
+		Tier:                     mgr.Tier(),
+		LicenseState:             mgr.State(),
+		ProviderPlaneMode:        mgr.Mode(license.FeatureProviderPlane),
+		TenantBand:               mgr.TenantBand(),
+		ManagedCustomerBand:      mgr.ManagedCustomerBand(),
+		BillingUnit:              usage.BillingUnitManagedCustomerBand,
+		ManagedBoundary:          "Provider/MSP normally uses one shared control plane with multiple customer tenants; dedicated customer deployments are also supported.",
+		IdempotencyRequired:      true,
+		EventType:                "tenant.registered",
+		MutationPath:             "/api/v1/managed-offering/tenants",
 	})
 }
 
@@ -72,7 +82,11 @@ func (a *API) provisionManagedTenant(w http.ResponseWriter, r *http.Request) {
 		if a.orch == nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "managed offering provisioning is not configured")
 		}
-		tenant, err := a.orch.ProvisionManagedTenant(ctx, providerTenantID, idempotencyKey, req)
+		tenant, err := a.orch.ProvisionManagedTenantWithinBand(ctx, providerTenantID, idempotencyKey, req, a.licenseManager().TenantBand())
+		if errors.Is(err, usage.ErrQuotaExhausted) || errors.Is(err, usage.ErrQuotaUnavailable) {
+			// A92: the band refusal keeps its structured 429 / retryable 503.
+			return 0, nil, err
+		}
 		if err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}

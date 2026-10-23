@@ -253,8 +253,9 @@ the tenant filter. A single-company deployment runs one tenant.
 trstctl also serves the provider-plane path needed for a managed or SaaS offering. A
 Provider-tier license enables `provider_plane`; without it, the status endpoint is still
 readable but tenant provisioning fails with `403`. Provider operators can inspect posture
-with `GET /api/v1/managed-offering/status` or `trstctl-cli managed-offering status`, then
-create a hosted tenant with:
+with `GET /api/v1/managed-offering/status` or `trstctl-cli managed-offering status`
+(including `tenant_band` and `managed_tenants_registered`, the hosted tenants the band
+already holds), then create a hosted tenant with:
 
 ```sh
 trstctl-cli --idempotency-key hosted-acme-create-001 \
