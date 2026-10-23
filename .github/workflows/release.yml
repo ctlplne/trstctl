@@ -97,7 +97,7 @@ jobs:
   release-evidence:
     name: release evidence / chaos
     runs-on: ubuntu-latest
-    timeout-minutes: 35 # RUNOPS-007 (chaos under the race detector)
+    timeout-minutes: 65 # RUNOPS-007 (chaos under the race detector) + the eMudhra Part 3 trust audit (eight image builds)
     permissions:
       contents: write # publish the chaos evidence to the tag's GitHub Release.
     needs: [test, required-checks]
@@ -143,6 +143,23 @@ jobs:
           name: release-embedded-postgres-security-evidence-linux-amd64
           path: dist/release-evidence/embedded-postgres-security-linux-amd64
           if-no-files-found: error
+
+      # eMudhra Part 3: every image's trust store, read the way Go reads it,
+      # compared with Mozilla's current websites list (CCADB) and the shipped
+      # distrust list. Every publishing job needs this job, so a failing audit
+      # stops the release; the reports are kept as release evidence.
+      - name: Audit every image's trust store against Mozilla and the distrust list
+        env:
+          TRUST_AUDIT_OUT: dist/release-evidence/trust-audit
+        run: make trust-audit
+
+      - name: Upload trust audit release evidence artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-trust-audit-evidence
+          path: dist/release-evidence/trust-audit/*.json
+          if-no-files-found: warn
 
       - name: Run chaos and write release evidence
         shell: bash

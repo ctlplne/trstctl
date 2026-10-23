@@ -42,6 +42,15 @@
   be private. The architecture linter (SEC-005) also refuses an `http.Transport`
   or `tls.Config` literal built outside `internal/netsec`, `internal/egress` and
   the crypto boundary.
+- `make trust-audit` builds every image and compares the roots Go loads from
+  each (Go's own Linux rule, `SSL_CERT_*` included) with Mozilla's current
+  websites trust list from CCADB and the shipped distrust list; a root Mozilla
+  does not trust for websites, a distrusted certificate or key, or a redirected
+  store fails and names the image and the root. It runs daily
+  (`.github/workflows/trust-audit.yml`) and gates the release workflow from the
+  `release-evidence` job, which every publishing job needs;
+  `trstctl-trustbundle audit` is the step behind it. Ordinary builds and pull
+  requests still use no network.
 
 ### Fixed
 

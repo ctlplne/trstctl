@@ -214,3 +214,18 @@ prints it; `trstctl-trustbundle probe host...` performs handshakes with the
 image's roots and reports the chain and any distrusted certificate on it. A
 root Mozilla drops is a distrust-file entry the same day; the pinned bundle
 moves when Alpine ships a new one.
+
+`make trust-audit` proves it: it builds every image, exports what Go would load
+as system roots from each (Go's Linux rule: the first bundle file in its list
+or `SSL_CERT_FILE`, then the certificate directories, skipping same-directory
+symlinks), and compares that with Mozilla's current websites list from CCADB
+and the distrust list. A root Mozilla does not trust for websites, anything on
+the distrust list, or an image that redirects the store with `SSL_CERT_FILE`
+(other than the shipped bundle path) or `SSL_CERT_DIR` fails the audit and
+names the image and the root; a Mozilla root an image lacks is a warning.
+`trstctl-trustbundle audit -root <exported fs> -mozilla <list>` is the step
+behind it. The audit runs daily (`.github/workflows/trust-audit.yml`), as a
+release gate (a step of the `release-evidence` job in `release.yml`, which every
+publishing job needs), at every batch close that touches `deploy/` or the
+distrust file, and is on the release checklist; it is the only place the
+build uses the network for trust data.

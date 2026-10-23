@@ -32,7 +32,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: trstctl-trustbundle filter|probe|list")
+		return errors.New("usage: trstctl-trustbundle filter|probe|list|audit")
 	}
 	switch args[0] {
 	case "filter":
@@ -41,8 +41,10 @@ func run(args []string) error {
 		return runProbe(args[1:])
 	case "list":
 		return runList(args[1:])
+	case "audit":
+		return runAudit(args[1:])
 	default:
-		return fmt.Errorf("unknown command %q (filter, probe, list)", args[0])
+		return fmt.Errorf("unknown command %q (filter, probe, list, audit)", args[0])
 	}
 }
 
@@ -133,5 +135,76 @@ func runList(args []string) error {
 	for _, e := range l.Entries() {
 		fmt.Printf("%-13s %s spki %s\n", e.Kind, e.Name, e.SPKISHA256)
 	}
+	return nil
+}
+
+// audit (Part 3): the certificates Go would load as system roots from an
+// exported image filesystem, compared with Mozilla's websites trust list and
+// the distrust list; exit 1 on any failing finding, warnings do not fail.
+func runAudit(args []string) error {
+	fs := flag.NewFlagSet("audit", flag.ContinueOnError)
+	root := fs.String("root", "", "exported image filesystem root (docker export / docker cp)")
+	mozilla := fs.String("mozilla", "", "Mozilla websites trust list, PEM (CCADB IncludedRootsPEMTxt?TrustBitsInclude=Websites)")
+	report := fs.String("report", "", "optional JSON report path")
+	label := fs.String("label", "", "image name for the report")
+	var env envFlags
+	fs.Var(&env, "env", "image environment entry KEY=VALUE (repeat; SSL_CERT_FILE/SSL_CERT_DIR are checked)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *root == "" || *mozilla == "" {
+		return errors.New("audit needs -root and -mozilla")
+	}
+	mozPEM, err := os.ReadFile(*mozilla) // #nosec G304 G703 -- audit input named by the operator (CWE-22)
+	if err != nil {
+		return err
+	}
+	roots, err := trust.SystemRootsLike(*root, env.m)
+	if err != nil {
+		return err
+	}
+	findings, err := trust.Audit(roots, mozPEM, trust.Shipped())
+	if err != nil {
+		return err
+	}
+	out := struct {
+		Image    string               `json:"image,omitempty"`
+		Roots    int                  `json:"roots"`
+		Sources  []string             `json:"sources"`
+		Skipped  int                  `json:"skipped_pem_blocks"`
+		Findings []trust.AuditFinding `json:"findings"`
+	}{Image: *label, Roots: len(roots.Roots), Sources: roots.Sources, Skipped: roots.Skipped, Findings: findings}
+	if *report != "" {
+		body, _ := json.MarshalIndent(out, "", "  ")
+		if err := os.WriteFile(*report, append(body, '\n'), 0o644); err != nil { // #nosec G306 G703 -- audit evidence at an operator path (CWE-276)
+			return err
+		}
+	}
+	fails := 0
+	fmt.Printf("%s: Go loads %d roots from %s\n", *label, len(roots.Roots), strings.Join(roots.Sources, ", "))
+	for _, f := range findings {
+		if f.Level == "fail" {
+			fails++
+		}
+		fmt.Printf("  %s %s: %s\n", f.Level, f.Subject, f.Reason)
+	}
+	if fails > 0 {
+		return fmt.Errorf("%d failing finding(s)", fails)
+	}
+	return nil
+}
+
+type envFlags struct{ m map[string]string }
+
+func (e *envFlags) String() string { return "" }
+func (e *envFlags) Set(v string) error {
+	if e.m == nil {
+		e.m = map[string]string{}
+	}
+	k, val, ok := strings.Cut(v, "=")
+	if !ok {
+		return fmt.Errorf("env entry %q is not KEY=VALUE", v)
+	}
+	e.m[k] = val
 	return nil
 }
