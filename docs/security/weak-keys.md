@@ -45,9 +45,25 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   `key_strength: weak`, the reason in `key_weak_reason`, and risk 95 instead
   of 85.
 
-Ratings for discovered, CT-logged, inventory and CBOM certificates, host trust
-stores, the signer's key ceremony and the batch-GCD job are what comes next in
-this change set; this page grows with each.
+- **Rogue certificate detection** (`GET /api/v1/revocation/rogue-certificates`,
+  the console's Estate health tab). An inventory certificate whose bytes
+  trstctl holds is rated from them: its key, its signature hash, and the
+  distrust list by key, recorded chain and authority key identifier. A row that
+  kept no bytes borrows the verdict its discovery reader recorded, or is rated
+  from its recorded key-algorithm name and issuer name. A weak key is the
+  `weak_key_algorithm` finding with its reasons in `weak_key_reasons`; a
+  certificate that is, or chains to, a distrusted CA or key is the
+  `distrusted_issuer` finding (risk 95, critical) with `distrust` naming the
+  entry and how it matched: `itself`, `chain`, `issuer_key_id`, or
+  `issuer_name` (the weakest: only the recorded issuer name matched). The
+  recommendation is to replace it from a trusted issuer: claim it as a managed
+  identity if it is not one and move it with a migration run. The old check
+  read only the bare algorithm name, so every ECDSA certificate was flagged
+  weak and no RSA-1024 certificate ever was.
+
+Ratings for discovered, CT-logged and CBOM certificates, host trust stores,
+the signer's key ceremony and the batch-GCD job are what comes next in this
+change set; this page grows with each.
 
 ## The distrust list
 

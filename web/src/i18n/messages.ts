@@ -8391,6 +8391,30 @@ export const messages = {
     defaultMessage: "Weak key",
     description: "Finding type label for a weak certificate key algorithm.",
   },
+  "certificates.rogue.typeDistrustedIssuer": {
+    defaultMessage: "Distrusted issuer",
+    description: "Finding type label for a certificate that is, or chains to, a CA or key on the distrust list.",
+  },
+  "certificates.rogue.weakKeyReasons": {
+    defaultMessage: "Why the key is weak: {reasons}",
+    description: "Reasons a certificate's key is rated weak, joined with semicolons.",
+  },
+  "certificates.rogue.distrustItself": {
+    defaultMessage: "{entry} is on the distrust list.",
+    description: "The certificate itself is a distrusted CA or key.",
+  },
+  "certificates.rogue.distrustChain": {
+    defaultMessage: "Its chain includes {entry}, which is on the distrust list.",
+    description: "An issuer in the certificate's recorded chain is distrusted.",
+  },
+  "certificates.rogue.distrustIssuerKeyID": {
+    defaultMessage: "Issued under {entry}, which is on the distrust list (matched by key identifier).",
+    description: "The certificate's authority key identifier names a distrusted CA.",
+  },
+  "certificates.rogue.distrustIssuerName": {
+    defaultMessage: "Issued under {entry}, which is on the distrust list (matched by issuer name only).",
+    description: "Only the recorded issuer name matched a distrusted CA; weaker than a key match.",
+  },
   "certificates.rogue.typeLifetime": {
     defaultMessage: "Lifetime exceeds policy",
     description: "Finding type label for a certificate lifetime that exceeds policy.",

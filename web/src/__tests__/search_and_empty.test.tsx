@@ -166,6 +166,7 @@ describe("inventory search", () => {
         non_compliant: 1,
         ct_unexpected: 1,
         weak_key: 1,
+        distrusted_issuer: 0,
         lifetime_violations: 0,
         expired_active: 0,
         owner_missing: 1,
@@ -184,11 +185,12 @@ describe("inventory search", () => {
           policy_status: "rogue",
           subject: "CN=shadow.example.com",
           source: "ct_log",
-          finding_types: ["ct_unexpected_issuance", "not_in_inventory"],
+          finding_types: ["ct_unexpected_issuance", "not_in_inventory", "distrusted_issuer"],
           severity: "critical",
           risk_score: 95,
           recommendation: "Investigate the unexpected CT hit.",
           evidence_refs: ["projection:discovery_findings:f1", "outbox:notification.ct"],
+          distrust: { entry: "EM OV TLS CA - G3C", how: "issuer_key_id", reason: "weak intermediate key" },
         },
         {
           id: "certificate:c1",
@@ -202,6 +204,7 @@ describe("inventory search", () => {
           risk_score: 85,
           recommendation: "Reissue with an approved key algorithm.",
           evidence_refs: ["projection:certificates:c1"],
+          weak_key_reasons: ["RSA-1024 is below the 2048-bit minimum"],
         },
       ],
       recommended_actions: ["Investigate unexpected CT hits."],
@@ -217,9 +220,12 @@ describe("inventory search", () => {
     expect(within(posture).getByText("2 findings")).toBeInTheDocument();
     expect(within(posture).getByText("CN=shadow.example.com")).toBeInTheDocument();
     expect(within(posture).getByText("CN=legacy.external.example.com")).toBeInTheDocument();
-    expect(within(posture).getByText("Unexpected CT issuance, Not in inventory")).toBeInTheDocument();
+    expect(within(posture).getByText("Unexpected CT issuance, Not in inventory, Distrusted issuer")).toBeInTheDocument();
     expect(within(posture).getByText("Weak key, Owner missing")).toBeInTheDocument();
     expect(within(posture).getByText("Reissue with an approved key algorithm.")).toBeInTheDocument();
+    // Part 4: why the key is weak, and which distrusted CA a certificate depends on.
+    expect(within(posture).getByText("Why the key is weak: RSA-1024 is below the 2048-bit minimum")).toBeInTheDocument();
+    expect(within(posture).getByText("Issued under EM OV TLS CA - G3C, which is on the distrust list (matched by key identifier).")).toBeInTheDocument();
   });
 
   it("shows signed CRL and OCSP freshness evidence in the CRL and CT workspace", async () => {

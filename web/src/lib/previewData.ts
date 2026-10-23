@@ -312,6 +312,7 @@ const previewReaders: Record<string, () => unknown> = {
       owner_missing: 1,
       recommendations: 1,
       weak_key: 1,
+      distrusted_issuer: 0,
     },
     findings: [],
   }),

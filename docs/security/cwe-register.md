@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1660 annotated sites across 26 rules. Each row is
+1662 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1119,7 +1119,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (458 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (460 sites)
 
 | Location | Reason |
 |---|---|
@@ -1293,6 +1293,7 @@ not this file.
 | `internal/agentid/delegation/reachtruststore.go:81` | signer-owned floor and validated key ID; open only to fsync the published directory |
 | `internal/agentid/orchestrator/reachability_key.go:152` | configured control-plane key directory; open only to fsync the sealed-key publication |
 | `internal/api/public_route_abuse_guard_test.go:91` | reads this package's own sources in a test (CWE-22) |
+| `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/api/sdk_spec_pinned_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/api/vault_compat_contract_test.go:255` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1361,6 +1362,7 @@ not this file.
 | `internal/featureparity/feature_facet_coverage_test.go:140` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/featureparity/mcp_rest_coverage.go:53` | fixed repo-relative catalog path read by tools and tests (CWE-22) |
 | `internal/fsatomic/fsatomic.go:19` | the caller's own state directory (CWE-22) |
+| `internal/keyposture/keyposture_test.go:14` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/license/license.go:352` | operator-supplied license file path (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |

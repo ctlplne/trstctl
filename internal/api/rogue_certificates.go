@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -20,6 +21,7 @@ var rogueCertificateCoverage = []string{
 	"certificate_inventory",
 	"ct_unexpected_issuance",
 	"weak_key_algorithm",
+	"distrusted_issuer",
 	"lifetime_policy",
 	"expired_active_certificates",
 	"owner_attribution",
@@ -60,6 +62,7 @@ type rogueCertificateSummary struct {
 	NonCompliant       int `json:"non_compliant"`
 	CTUnexpected       int `json:"ct_unexpected"`
 	WeakKey            int `json:"weak_key"`
+	DistrustedIssuer   int `json:"distrusted_issuer"`
 	LifetimeViolations int `json:"lifetime_violations"`
 	ExpiredActive      int `json:"expired_active"`
 	OwnerMissing       int `json:"owner_missing"`
@@ -98,6 +101,13 @@ type rogueCertificateFinding struct {
 	MatchedDomain  string   `json:"matched_domain,omitempty"`
 	Recommendation string   `json:"recommendation"`
 	EvidenceRefs   []string `json:"evidence_refs"`
+	// WeakKeyReasons says why the key is weak whatever its algorithm and size
+	// (Part 4): a small private scalar, a factorable modulus, a size below the
+	// floor, a broken signature hash.
+	WeakKeyReasons []string `json:"weak_key_reasons,omitempty"`
+	// Distrust names the distrust-list entry this certificate is, or was
+	// issued under, and how that was established.
+	Distrust *rogueCertificateDistrust `json:"distrust,omitempty"`
 	// PolicyViolations are the tenant certificate_posture rules this
 	// certificate violates (A42); each also appears in finding_types as
 	// customer_policy:<rule>.
@@ -141,6 +151,23 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 		EvidenceRefs: []string{"projection:certificates", "projection:discovery_findings", "outbox:notification.ct"},
 	}
 
+	// Discovery findings carry the key verdict their reader computed while the
+	// certificate's bytes were at hand (Part 4); an inventory row without bytes
+	// borrows it by fingerprint.
+	rows, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, 500)
+	if err != nil {
+		return rogueCertificatePostureResponse{}, err
+	}
+	discovered := map[string]keyposture.Verdict{}
+	for _, row := range rows {
+		meta := map[string]any{}
+		if row.Fingerprint == "" || json.Unmarshal(row.Metadata, &meta) != nil {
+			continue
+		}
+		if v := keyposture.FromMetadata(meta); !v.Empty() {
+			discovered[strings.ToLower(row.Fingerprint)] = v
+		}
+	}
 	certs, err := a.store.ListCertificatesPage(ctx, tenantID, store.ZeroUUID, nil, 500, nil)
 	if err != nil {
 		return rogueCertificatePostureResponse{}, err
@@ -160,7 +187,7 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 	}
 	out.Summary.TotalAnalyzed += len(certs)
 	for _, cert := range certs {
-		finding, ok := rogueCertificateFindingForCertificate(cert, now)
+		finding, ok := rogueCertificateFindingForCertificate(cert, now, discovered)
 		if ok {
 			out.addRogueCertificateFinding(finding)
 		}
@@ -186,10 +213,6 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 		out.applyRoguePolicyViolations(cert, existing, violations, moduleSHA)
 	}
 
-	rows, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, 500)
-	if err != nil {
-		return rogueCertificatePostureResponse{}, err
-	}
 	for _, row := range rows {
 		if row.Kind != "ct_unexpected_issuance" {
 			continue
@@ -234,6 +257,8 @@ func (r *rogueCertificatePostureResponse) addRogueCertificateFinding(finding rog
 			r.Summary.CTUnexpected++
 		case "weak_key_algorithm":
 			r.Summary.WeakKey++
+		case "distrusted_issuer":
+			r.Summary.DistrustedIssuer++
 		case "lifetime_exceeds_policy":
 			r.Summary.LifetimeViolations++
 		case "expired_active_certificate":
@@ -364,16 +389,64 @@ func (s *rogueCertificateSummary) adjustSeverity(from, to string) {
 	bump(to, 1)
 }
 
-func rogueCertificateFindingForCertificate(cert store.Certificate, now time.Time) (rogueCertificateFinding, bool) {
+// rogueCertificateDistrust is how a finding depends on the distrust list.
+type rogueCertificateDistrust struct {
+	Entry   string `json:"entry"`
+	How     string `json:"how"`
+	Reason  string `json:"reason,omitempty"`
+	Subject string `json:"subject,omitempty"`
+}
+
+func rogueDistrustOf(v keyposture.Verdict) *rogueCertificateDistrust {
+	if !v.Distrusted() {
+		return nil
+	}
+	return &rogueCertificateDistrust{Entry: v.DistrustEntry, How: v.DistrustHow, Reason: v.DistrustReason, Subject: v.DistrustSubject}
+}
+
+// rogueCertificateVerdict rates an inventory certificate (Part 4). With the
+// certificate's bytes it is the full rating: its key, its signature hash, and
+// the distrust list by key, recorded chain and authority key identifier. A
+// row that kept no bytes is rated from its recorded key-algorithm name and
+// issuer name. The old check read only the bare algorithm name, so every
+// ECDSA certificate matched "dsa" and an RSA-1024 certificate never matched.
+func rogueCertificateVerdict(cert store.Certificate, discovered map[string]keyposture.Verdict) keyposture.Verdict {
+	raw := cert.CertificatePEM
+	if len(raw) == 0 {
+		raw = cert.CertificateDER
+	}
+	if len(raw) > 0 {
+		if v, err := keyposture.RateCertificateBytes(raw); err == nil {
+			return v
+		}
+	}
+	// A discovered certificate's reader rated it while its bytes were at hand.
+	if v, ok := discovered[strings.ToLower(cert.Fingerprint)]; ok {
+		return v
+	}
+	return keyposture.RateRecorded(cert.Issuer, cert.KeyAlgorithm)
+}
+
+// applyKeyVerdict adds the weak-key and distrust finding types a verdict
+// calls for and returns the raised risk.
+func applyKeyVerdict(v keyposture.Verdict, types []string, risk int) ([]string, int) {
+	if v.Weak() {
+		types = append(types, "weak_key_algorithm")
+	}
+	if v.Distrusted() {
+		types = append(types, "distrusted_issuer")
+	}
+	return types, maxInt(risk, v.RiskFloor())
+}
+
+func rogueCertificateFindingForCertificate(cert store.Certificate, now time.Time, discovered map[string]keyposture.Verdict) (rogueCertificateFinding, bool) {
 	if cert.Status == "revoked" || cert.Status == "superseded" {
 		return rogueCertificateFinding{}, false
 	}
 	var types []string
 	risk := 0
-	if rogueCertificateWeakKey(cert.KeyAlgorithm) {
-		types = append(types, "weak_key_algorithm")
-		risk = maxInt(risk, 85)
-	}
+	verdict := rogueCertificateVerdict(cert, discovered)
+	types, risk = applyKeyVerdict(verdict, types, risk)
 	if cert.NotAfter != nil && cert.NotAfter.Before(now) && firstNonEmpty(cert.Status, "active") == "active" {
 		types = append(types, "expired_active_certificate")
 		risk = maxInt(risk, 92)
@@ -426,8 +499,10 @@ func rogueCertificateFindingForCertificate(cert store.Certificate, now time.Time
 			"projection:certificates:" + cert.ID,
 			"certificate:fingerprint:" + cert.Fingerprint,
 		},
-		NotBefore: cert.NotBefore,
-		NotAfter:  cert.NotAfter,
+		WeakKeyReasons: verdict.WeakReasons,
+		Distrust:       rogueDistrustOf(verdict),
+		NotBefore:      cert.NotBefore,
+		NotAfter:       cert.NotAfter,
 	}, true
 }
 
@@ -443,6 +518,13 @@ func rogueCertificateFindingForCT(row store.DiscoveryFinding) rogueCertificateFi
 	notAfter := rogueCertificateMetaTime(meta, "not_after")
 	discoveredAt := row.DiscoveredAt
 	risk := maxInt(row.RiskScore, 90)
+	// The CT reader rated the certificate while its bytes were at hand (Part 4).
+	verdict := keyposture.FromMetadata(meta)
+	types, risk := applyKeyVerdict(verdict, []string{"ct_unexpected_issuance", "not_in_inventory"}, risk)
+	recommendation := "Investigate this Certificate Transparency hit, claim it if sanctioned, or revoke and replace it from an approved CA."
+	if verdict.Distrusted() || verdict.Weak() {
+		recommendation = rogueCertificateRecommendation(types)
+	}
 	finding := rogueCertificateFinding{
 		ID:             "discovery:" + row.ID,
 		DiscoveryID:    row.ID,
@@ -457,12 +539,14 @@ func rogueCertificateFindingForCT(row store.DiscoveryFinding) rogueCertificateFi
 		DNSNames:       sans,
 		Source:         "ct_log",
 		Status:         firstNonEmpty(row.TriageStatus, "open"),
-		FindingTypes:   []string{"ct_unexpected_issuance", "not_in_inventory"},
+		FindingTypes:   types,
 		Severity:       rogueCertificateSeverity(risk),
 		RiskScore:      risk,
 		LogURL:         logURL,
 		MatchedDomain:  rogueCertificateMetaString(meta, "matched_domain"),
-		Recommendation: "Investigate this Certificate Transparency hit, claim it if sanctioned, or revoke and replace it from an approved CA.",
+		Recommendation: recommendation,
+		WeakKeyReasons: verdict.WeakReasons,
+		Distrust:       rogueDistrustOf(verdict),
 		EvidenceRefs: []string{
 			"projection:discovery_findings:" + row.ID,
 			"outbox:notification.ct",
@@ -477,20 +561,6 @@ func rogueCertificateFindingForCT(row store.DiscoveryFinding) rogueCertificateFi
 		finding.EvidenceRefs = append(finding.EvidenceRefs, "ct_log:"+logURL)
 	}
 	return finding
-}
-
-func rogueCertificateWeakKey(algorithm string) bool {
-	algo := strings.ToLower(strings.TrimSpace(algorithm))
-	if algo == "" {
-		return false
-	}
-	if strings.Contains(algo, "rsa") && (strings.Contains(algo, "512") || strings.Contains(algo, "1024")) {
-		return true
-	}
-	if strings.Contains(algo, "sha1") || strings.Contains(algo, "md5") || strings.Contains(algo, "dsa") {
-		return true
-	}
-	return false
 }
 
 func rogueCertificateOwnerRisk(source string) int {
@@ -515,6 +585,9 @@ func rogueCertificateSeverity(risk int) string {
 }
 
 func rogueCertificateRecommendation(types []string) string {
+	if rogueCertificateStringSliceContains(types, "distrusted_issuer") {
+		return "Replace this certificate from a trusted issuer: it is, or chains to, a CA or key on the distrust list. Claim it as a managed identity if it is not one, move it with a migration run, then revoke or remove the old certificate."
+	}
 	if rogueCertificateStringSliceContains(types, "expired_active_certificate") {
 		return "Revoke or replace the expired active certificate and remove it from production bindings."
 	}

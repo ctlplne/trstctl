@@ -46,6 +46,7 @@ function rogueTypeLabel(type: string, t: (key: MessageKey, values?: Record<strin
     ct_unexpected_issuance: "certificates.rogue.typeCTUnexpected",
     not_in_inventory: "certificates.rogue.typeNotInInventory",
     weak_key_algorithm: "certificates.rogue.typeWeakKey",
+    distrusted_issuer: "certificates.rogue.typeDistrustedIssuer",
     lifetime_exceeds_policy: "certificates.rogue.typeLifetime",
     expired_active_certificate: "certificates.rogue.typeExpiredActive",
     owner_missing: "certificates.rogue.typeOwnerMissing",
@@ -56,6 +57,19 @@ function rogueTypeLabel(type: string, t: (key: MessageKey, values?: Record<strin
   }
   const key = keys[type];
   return key ? t(key) : type.replaceAll("_", " ");
+}
+
+function rogueDistrustHowKey(how: string): MessageKey {
+  switch (how) {
+    case "itself":
+      return "certificates.rogue.distrustItself";
+    case "chain":
+      return "certificates.rogue.distrustChain";
+    case "issuer_name":
+      return "certificates.rogue.distrustIssuerName";
+    default:
+      return "certificates.rogue.distrustIssuerKeyID";
+  }
 }
 
 function severityClass(severity: RogueCertificateFinding["severity"]): string {
@@ -183,6 +197,16 @@ export function RogueCertificatePanel({ posture }: { posture: RogueCertificatePo
                   </td>
                   <td className="pl-4 py-2 align-top">
                     <span className="block max-w-[24rem] text-sm">{finding.recommendation}</span>
+                    {finding.weak_key_reasons?.length ? (
+                      <span className="mt-1 block max-w-[24rem] text-xs text-muted-foreground">
+                        {t("certificates.rogue.weakKeyReasons", { reasons: finding.weak_key_reasons.join("; ") })}
+                      </span>
+                    ) : null}
+                    {finding.distrust ? (
+                      <span className="mt-1 block max-w-[24rem] text-xs text-destructive">
+                        {t(rogueDistrustHowKey(finding.distrust.how), { entry: finding.distrust.entry })}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="pl-4 py-2 align-top">
                     {finding.installed_on?.length ? (

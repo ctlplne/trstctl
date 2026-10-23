@@ -7462,6 +7462,7 @@ export interface RogueCertificateFinding {
   certificate_id?: string;
   discovered_at?: string;
   discovery_id?: string;
+  distrust?: { entry: string; how: "itself" | "chain" | "issuer_key_id" | "issuer_name"; reason?: string; subject?: string };
   dns_names?: string[];
   evidence_refs: string[];
   finding_types: string[];
@@ -7489,6 +7490,7 @@ export interface RogueCertificateFinding {
   source_id?: string;
   status?: string;
   subject: string;
+  weak_key_reasons?: string[];
 }
 
 export interface RogueCertificatePosture {
@@ -7507,6 +7509,7 @@ export interface RogueCertificatePosture {
 export interface RogueCertificateSummary {
   critical: number;
   ct_unexpected: number;
+  distrusted_issuer?: number;
   expired_active: number;
   findings: number;
   high: number;

@@ -66,6 +66,14 @@
 
 ### Fixed
 
+- Rogue certificate detection flagged every ECDSA certificate as a weak key
+  (risk 85) and never an RSA-1024 one: it read only the bare algorithm name, so
+  "ecdsa" matched "dsa". It now rates the certificate itself when trstctl holds
+  it (key, signature hash, structural weaknesses), else the verdict discovery
+  recorded, else the recorded algorithm name, and gives the reasons in
+  `weak_key_reasons`. A certificate that is, or chains to, a CA or key on the
+  distrust list is a new critical `distrusted_issuer` finding naming the entry
+  and how it matched.
 - SSH fleet and Workloads no longer label every discovered raw host key as
   outside SSH CA trust. The inventory reports observed key locations and
   standing grants; proving CA posture requires sshd trust and served-certificate

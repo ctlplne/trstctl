@@ -10290,6 +10290,7 @@ RogueCertificateFinding = TypedDict(
         'certificate_id': str,
         'discovered_at': str,
         'discovery_id': str,
+        'distrust': dict[str, Any],
         'dns_names': list[str],
         'evidence_refs': list[str],
         'finding_types': list[str],
@@ -10317,6 +10318,7 @@ RogueCertificateFinding = TypedDict(
         'source_id': str,
         'status': str,
         'subject': str,
+        'weak_key_reasons': list[str],
     },
     total=False,
 )
@@ -10343,6 +10345,7 @@ RogueCertificateSummary = TypedDict(
     {
         'critical': int,
         'ct_unexpected': int,
+        'distrusted_issuer': int,
         'expired_active': int,
         'findings': int,
         'high': int,

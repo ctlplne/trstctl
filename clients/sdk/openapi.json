@@ -30613,6 +30613,33 @@
             "format": "uuid",
             "type": "string"
           },
+          "distrust": {
+            "properties": {
+              "entry": {
+                "type": "string"
+              },
+              "how": {
+                "enum": [
+                  "itself",
+                  "chain",
+                  "issuer_key_id",
+                  "issuer_name"
+                ],
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "subject": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "entry",
+              "how"
+            ],
+            "type": "object"
+          },
           "dns_names": {
             "items": {
               "type": "string"
@@ -30754,6 +30781,12 @@
           },
           "subject": {
             "type": "string"
+          },
+          "weak_key_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -30835,6 +30868,9 @@
             "type": "integer"
           },
           "ct_unexpected": {
+            "type": "integer"
+          },
+          "distrusted_issuer": {
             "type": "integer"
           },
           "expired_active": {

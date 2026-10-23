@@ -15752,6 +15752,13 @@ export interface components {
             discovered_at?: string;
             /** Format: uuid */
             discovery_id?: string;
+            distrust?: {
+                entry: string;
+                /** @enum {string} */
+                how: "itself" | "chain" | "issuer_key_id" | "issuer_name";
+                reason?: string;
+                subject?: string;
+            };
             dns_names?: string[];
             evidence_refs: string[];
             finding_types: string[];
@@ -15794,6 +15801,7 @@ export interface components {
             source_id?: string;
             status?: string;
             subject: string;
+            weak_key_reasons?: string[];
         };
         RogueCertificatePosture: {
             capability: string;
@@ -15811,6 +15819,7 @@ export interface components {
         RogueCertificateSummary: {
             critical: number;
             ct_unexpected: number;
+            distrusted_issuer?: number;
             expired_active: number;
             findings: number;
             high: number;
