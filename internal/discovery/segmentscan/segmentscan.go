@@ -19,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 )
 
@@ -364,6 +365,57 @@ type Finding struct {
 	NotAfter      string   `json:"not_after,omitempty"`
 	PublicKeyBits int      `json:"public_key_bits,omitempty"`
 	IsCA          bool     `json:"is_ca,omitempty"`
+	// What the relay's checks found while it held the served chain (Part 4),
+	// as hashes and closed check codes, never text: the control plane matches
+	// the hashes against its own distrust list and words the reasons.
+	SPKISHA256      string   `json:"spki_sha256,omitempty"`
+	AuthorityKeyID  string   `json:"authority_key_id,omitempty"`
+	ChainSPKISHA256 []string `json:"chain_spki_sha256,omitempty"`
+	ChainCertSHA256 []string `json:"chain_cert_sha256,omitempty"`
+	WeakKeyChecks   []string `json:"weak_key_checks,omitempty"`
+}
+
+// maxServedIssuers bounds the served chain a finding may describe.
+const maxServedIssuers = 8
+
+func isLowerHex(s string, min, max int) bool {
+	if len(s) < min || len(s) > max || len(s)%2 != 0 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// validateKeyObservation checks the Part 4 fields: lowercase hex hashes and
+// key identifiers, a bounded chain, known check codes.
+func validateKeyObservation(f Finding) error {
+	if f.SPKISHA256 != "" && !isLowerHex(f.SPKISHA256, 64, 64) {
+		return errors.New("spki_sha256 must be 64 lowercase hex characters")
+	}
+	if f.AuthorityKeyID != "" && !isLowerHex(f.AuthorityKeyID, 2, 128) {
+		return errors.New("authority_key_id must be lowercase hex")
+	}
+	if len(f.ChainSPKISHA256) > maxServedIssuers || len(f.ChainCertSHA256) > maxServedIssuers || len(f.ChainSPKISHA256) != len(f.ChainCertSHA256) {
+		return errors.New("the served chain is unbounded or its hash lists differ in length")
+	}
+	for i := range f.ChainSPKISHA256 {
+		if !isLowerHex(f.ChainSPKISHA256[i], 64, 64) || !isLowerHex(f.ChainCertSHA256[i], 64, 64) {
+			return errors.New("served chain hashes must be 64 lowercase hex characters")
+		}
+	}
+	if len(f.WeakKeyChecks) > 16 {
+		return errors.New("too many weak-key checks")
+	}
+	for _, code := range f.WeakKeyChecks {
+		if _, ok := weakkey.DescribeCheck(code); !ok {
+			return fmt.Errorf("unknown weak-key check %q", code)
+		}
+	}
+	return nil
 }
 
 // Report is the relay's bounded observation result.
@@ -450,6 +502,9 @@ func ValidateReport(intent Intent, report Report) error {
 		}
 		if finding.PublicKeyBits < 0 || len(finding.SANs) > 256 {
 			return fmt.Errorf("segment scan: finding %d has invalid public-key metadata", i)
+		}
+		if err := validateKeyObservation(finding); err != nil {
+			return fmt.Errorf("segment scan: finding %d: %w", i, err)
 		}
 		for _, san := range finding.SANs {
 			if err := boundedText("SAN", san); err != nil {

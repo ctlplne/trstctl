@@ -82,9 +82,16 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   thousands of entries), from the logged certificate or precertificate; the
   rogue-certificate posture shows the verdict on the CT finding.
 
-Ratings for CBOM assets, the relay's network scans, the signer's key
-ceremony, removal of a distrusted root from a host, and the batch-GCD job are
-what comes next in this change set; this page grows with each.
+- **A relay's network scan** observes the whole served chain: the leaf's key
+  hash and authority key identifier, each served issuer's key and certificate
+  hashes (up to eight), and the weak-key checks that fire on the leaf. The
+  scan protocol admits no certificate bytes and no free text, so the relay
+  sends those hashes and closed check codes only; the control plane matches
+  them against its own distrust list and words the reasons.
+
+Ratings for CBOM assets, the signer's key ceremony, removal of a distrusted
+root from a host, and the batch-GCD job are what comes next in this change
+set; this page grows with each.
 
 ## The distrust list
 

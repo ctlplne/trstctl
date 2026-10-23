@@ -25,6 +25,7 @@ import (
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -32,6 +33,54 @@ import (
 type Found struct {
 	Address string        // the host:port it was served from
 	Cert    certinfo.Info // the leaf certificate's inventory metadata
+	Keys    KeyObservation
+}
+
+// KeyObservation is what the scanner's checks found on the served chain, as
+// hashes and closed check codes (Part 4); the bytes never leave the scanner.
+type KeyObservation struct {
+	SPKISHA256      string
+	AuthorityKeyID  string
+	ChainSPKISHA256 []string
+	ChainCertSHA256 []string
+	WeakKeyChecks   []string
+}
+
+// ChainProber captures the served leaf and observes the served chain.
+type ChainProber func(ctx context.Context, addr string) (certinfo.Info, KeyObservation, error)
+
+// maxObservedIssuers bounds the served issuers described per target.
+const maxObservedIssuers = 8
+
+// DefaultChainProber is DefaultProber plus the observation of the served
+// chain: the leaf's key hash and authority key identifier, each served
+// issuer's key and certificate hashes, and the weak-key checks that fire on
+// the leaf.
+func DefaultChainProber(ctx context.Context, addr string) (certinfo.Info, KeyObservation, error) {
+	chain, err := probeChain(ctx, addr)
+	if err != nil {
+		return certinfo.Info{}, KeyObservation{}, err
+	}
+	info, err := certinfo.Inspect(chain[0])
+	if err != nil {
+		return certinfo.Info{}, KeyObservation{}, err
+	}
+	obs := KeyObservation{SPKISHA256: info.SPKISHA256, AuthorityKeyID: info.AuthorityKeyID}
+	for _, der := range chain[1:] {
+		if len(obs.ChainSPKISHA256) == maxObservedIssuers {
+			break
+		}
+		if issuer, err := certinfo.Inspect(der); err == nil {
+			obs.ChainSPKISHA256 = append(obs.ChainSPKISHA256, issuer.SPKISHA256)
+			obs.ChainCertSHA256 = append(obs.ChainCertSHA256, issuer.SHA256Fingerprint)
+		}
+	}
+	if findings, err := weakkey.Default().RateCertificate(chain[0]); err == nil {
+		for _, f := range findings {
+			obs.WeakKeyChecks = append(obs.WeakKeyChecks, f.Check)
+		}
+	}
+	return info, obs, nil
 }
 
 // Sink receives discovered certificates for merge into the inventory. Production
@@ -48,15 +97,27 @@ type Prober func(ctx context.Context, addr string) (certinfo.Info, error)
 // DefaultProber performs a non-invasive TLS handshake and returns the presented
 // leaf certificate's metadata.
 func DefaultProber(ctx context.Context, addr string) (certinfo.Info, error) {
+	chain, err := probeChain(ctx, addr)
+	if err != nil {
+		return certinfo.Info{}, err
+	}
+	return certinfo.Inspect(chain[0])
+}
+
+// probeChain performs the handshake and returns the served chain, leaf first.
+func probeChain(ctx context.Context, addr string) ([][]byte, error) {
 	res, err := tlsprobe.Probe(ctx, addr)
 	if err != nil {
 		negotiated, retryErr := probeWithNegotiation(ctx, addr, err)
 		if retryErr != nil {
-			return certinfo.Info{}, err
+			return nil, err
 		}
 		res = negotiated
 	}
-	return certinfo.Inspect(res.PeerCertificates[0])
+	if len(res.PeerCertificates) == 0 {
+		return nil, errors.New("netscan: the listener presented no certificate")
+	}
+	return res.PeerCertificates, nil
 }
 
 // probeWithNegotiation retries a reachable listener that rejected a bare
@@ -108,6 +169,7 @@ type TargetResult struct {
 
 type config struct {
 	prober        Prober
+	chainProber   ChainProber
 	workers       int
 	queue         int
 	backoff       time.Duration
@@ -133,6 +195,16 @@ func WithProber(p Prober) Option {
 	return func(c *config) {
 		if p != nil {
 			c.prober = p
+			c.chainProber = nil
+		}
+	}
+}
+
+// WithChainProber injects a prober that also observes the served chain.
+func WithChainProber(p ChainProber) Option {
+	return func(c *config) {
+		if p != nil {
+			c.chainProber = p
 		}
 	}
 }
@@ -192,6 +264,7 @@ func WithBlockedTargetHook(h BlockedTargetHook) Option {
 type Scanner struct {
 	sink          Sink
 	prober        Prober
+	chainProber   ChainProber
 	pool          *bulkhead.Pool
 	backoff       time.Duration
 	allowRFC1918  bool
@@ -201,13 +274,14 @@ type Scanner struct {
 
 // New builds a Scanner that records discoveries to sink.
 func New(sink Sink, opts ...Option) *Scanner {
-	cfg := config{prober: DefaultProber, workers: 16, queue: 256, backoff: 5 * time.Millisecond}
+	cfg := config{prober: DefaultProber, chainProber: DefaultChainProber, workers: 16, queue: 256, backoff: 5 * time.Millisecond}
 	for _, o := range opts {
 		o(&cfg)
 	}
 	return &Scanner{
 		sink:          sink,
 		prober:        cfg.prober,
+		chainProber:   cfg.chainProber,
 		pool:          bulkhead.New(bulkhead.Config{Name: "network-scan", Workers: cfg.workers, Queue: cfg.queue}),
 		backoff:       cfg.backoff,
 		allowRFC1918:  cfg.allowRFC1918,
@@ -262,9 +336,18 @@ func (s *Scanner) Scan(ctx context.Context, targets []string) Report {
 		wg.Add(1)
 		task := func() {
 			defer wg.Done()
-			info, err := s.prober(ctx, addr)
+			var (
+				info certinfo.Info
+				keys KeyObservation
+				err  error
+			)
+			if s.chainProber != nil {
+				info, keys, err = s.chainProber(ctx, addr)
+			} else {
+				info, err = s.prober(ctx, addr)
+			}
 			if err == nil {
-				err = s.sink.Record(ctx, Found{Address: addr, Cert: info})
+				err = s.sink.Record(ctx, Found{Address: addr, Cert: info, Keys: keys})
 			}
 			if err != nil {
 				outcome(addr, TargetFailed, err.Error())

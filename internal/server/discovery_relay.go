@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
+	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -139,6 +140,7 @@ func (s *Server) recordRelayDiscoveryFinding(ctx context.Context, tenantID, agen
 		metadata["public_key_bits"] = finding.PublicKeyBits
 		metadata["is_ca"] = finding.IsCA
 		riskScore = discoveryRiskScore(notAfter)
+		riskScore = applyRelayKeyObservation(metadata, finding, riskScore)
 		observation := intent.Mode + "\x00" + finding.Address + "\x00" + finding.Fingerprint
 		if _, err := s.orch.RecordCertificateWithEventID(ctx, tenantID,
 			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "certificate\x00"+observation), store.Certificate{
@@ -209,4 +211,24 @@ func relayTargetResults(report segmentscan.Report) []store.DiscoveryTargetResult
 		out = append(out, store.DiscoveryTargetResult{Kind: kind, Target: result.Target, Status: result.Status, Error: result.Error})
 	}
 	return out
+}
+
+// applyRelayKeyObservation rates what a relay's TLS scan reported (Part 4):
+// hashes and check codes only, matched against the control plane's own
+// distrust list and worded here. It writes the verdict into the finding's
+// metadata and returns the risk raised to the verdict's floor.
+func applyRelayKeyObservation(metadata map[string]any, finding segmentscan.Finding, risk int) int {
+	verdict := keyposture.RateObservation(finding.SPKISHA256, finding.Fingerprint, finding.AuthorityKeyID, finding.Issuer,
+		finding.ChainSPKISHA256, finding.ChainCertSHA256, finding.WeakKeyChecks)
+	if finding.SPKISHA256 != "" {
+		metadata["spki_sha256"] = finding.SPKISHA256
+	}
+	if finding.AuthorityKeyID != "" {
+		metadata["authority_key_id"] = finding.AuthorityKeyID
+	}
+	verdict.AddTo(metadata)
+	if floor := verdict.RiskFloor(); floor > risk {
+		risk = floor
+	}
+	return risk
 }

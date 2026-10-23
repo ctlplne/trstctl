@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1665 annotated sites across 26 rules. Each row is
+1666 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -502,7 +502,7 @@ not this file.
 | `internal/crypto/sshkeys/property_test.go:117` | generator bounds the value to 0..2 (CWE-190) |
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
 | `internal/crypto/weakkey/ec.go:187` | the baby-step index is below 2^16, so it fits a uint32 (CWE-190) |
-| `internal/crypto/weakkey/weakkey.go:377` | the sieve index is below 2^16, so it fits a uint64 (CWE-190) |
+| `internal/crypto/weakkey/weakkey.go:398` | the sieve index is below 2^16, so it fits a uint64 (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
 | `internal/decommission/store/projection.go:180` | rejected values above MaxInt64 immediately above. |
 | `internal/discovery/adcs/acl.go:76` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
@@ -1119,7 +1119,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (463 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (464 sites)
 
 | Location | Reason |
 |---|---|
@@ -1355,6 +1355,7 @@ not this file.
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
 | `internal/crypto/trust/systemroots.go:99` | audit input: a path resolved inside an exported image filesystem (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |
+| `internal/discovery/netscan/chain_observation_test.go:22` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/dynsecret/providers_real_test.go:258` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:138` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/events/protect_schema005_guard_test.go:157` | fixed repository source anchor, not caller input (CWE-22) |
@@ -1698,7 +1699,7 @@ not this file.
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:115` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
 | `internal/crypto/uuidv5.go:21` | RFC 4122 UUIDv5 public identifier, not a security digest. |
-| `internal/crypto/weakkey/weakkey.go:118` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
+| `internal/crypto/weakkey/weakkey.go:139` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 
 ### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (9 sites)
 

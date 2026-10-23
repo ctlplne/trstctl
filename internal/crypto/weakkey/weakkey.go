@@ -55,6 +55,27 @@ const (
 	MinimumECBits  = 256
 )
 
+// checkDescriptions words a check for a report that carries only its code
+// (a relay's network scan, whose protocol admits no free text).
+var checkDescriptions = map[string]string{
+	CheckECSmallScalar:   "the elliptic-curve private key is a small integer anyone can recover",
+	CheckRSASmallFactor:  "the RSA modulus has a small prime factor",
+	CheckRSAClosePrimes:  "the RSA primes are close enough for Fermat's method to factor the modulus",
+	CheckRSAROCA:         "the RSA modulus has the ROCA structure (CVE-2017-15361)",
+	CheckRSABlocklist:    "the RSA key is on a known-compromised key list",
+	CheckRSAExponent:     "the RSA public exponent is one no valid key has",
+	CheckRSASharedFactor: "the RSA modulus shares a prime with another key in the inventory",
+	CheckKeySize:         "the key is below the size floor (RSA 2048, curves 256)",
+	CheckKeyAlgorithm:    "the key algorithm is no longer accepted for certificates (DSA)",
+	CheckSignatureHash:   "the certificate is signed with a broken hash (MD2, MD5 or SHA-1)",
+}
+
+// DescribeCheck words a check code; ok is false for an unknown code.
+func DescribeCheck(code string) (string, bool) {
+	d, ok := checkDescriptions[code]
+	return d, ok
+}
+
 // Finding is one reason a public key must be treated as weak.
 type Finding struct {
 	Check  string `json:"check"`

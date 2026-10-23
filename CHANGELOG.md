@@ -72,6 +72,10 @@
   agent report against its own distrust list and replaces any distrust claim
   in it, so a host trust store holding emSign ECC Root CA - G3 is a finding
   even from an older agent.
+- A relay's network scan rates the whole served chain, not only the leaf, and
+  reports it as hashes and closed check codes (the scan protocol admits no
+  certificate bytes or free text); the control plane applies its own distrust
+  list and words the reasons.
 
 ### Fixed
 

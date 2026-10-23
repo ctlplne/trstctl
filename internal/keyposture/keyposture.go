@@ -216,6 +216,34 @@ func RateReportedIdentity(spkiSHA256, certSHA256, authorityKeyID, issuerDN strin
 	return Verdict{}
 }
 
+// RateObservation rates what a network scan reported without bytes or text:
+// the served leaf's key and certificate hashes, its authority key identifier
+// and issuer, the served issuers' hashes, and weak-key check codes. Distrust
+// is the server's own match; the reasons are worded here, never taken from
+// the report. Unknown codes are ignored.
+func RateObservation(spkiSHA256, certSHA256, authorityKeyID, issuerDN string, chainSPKI, chainCert []string, weakChecks []string) Verdict {
+	v := RateReportedIdentity(spkiSHA256, certSHA256, authorityKeyID, issuerDN)
+	if !v.Distrusted() || v.DistrustHow == DistrustedByName {
+		list := trust.Active()
+		for i := range chainSPKI {
+			cert := ""
+			if i < len(chainCert) {
+				cert = chainCert[i]
+			}
+			if e, ok := list.MatchHashes(strings.ToLower(chainSPKI[i]), strings.ToLower(cert)); ok {
+				v.DistrustEntry, v.DistrustHow, v.DistrustReason, v.DistrustSubject = e.Name, trust.ExposedChain, e.Reason, e.Name
+				break
+			}
+		}
+	}
+	for _, code := range weakChecks {
+		if d, ok := weakkey.DescribeCheck(code); ok {
+			v.WeakReasons = append(v.WeakReasons, d)
+		}
+	}
+	return v
+}
+
 // MergeReported keeps the weak-key reasons a reporter that held the bytes
 // sent, replaces any distrust claim in the report with the server's own
 // verdict, and returns the metadata with the risk raised to the floor.

@@ -107,3 +107,73 @@ func newServingTestServer(dnsNames []string, notBefore, notAfter time.Time) (*Se
 		Close:   func() { _ = ln.Close() },
 	}, nil
 }
+
+// NewServingTestServerUnder starts a loopback TLS listener presenting a fresh
+// leaf issued by a fresh CA whose subject key identifier is issuerKeyID (so
+// the leaf's authority key identifier names it), followed by the given chain
+// certificates as served issuers. It lets tests outside the crypto boundary
+// scan a listener whose leaf is "under" a real CA, such as one of the eMudhra
+// intermediates, without that CA's key (Part 4).
+func NewServingTestServerUnder(issuerKeyID []byte, chainDER [][]byte, dnsNames ...string) (*ServingTestServer, error) {
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	caTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "trstctl-verify-test-issuer"}, SubjectKeyId: issuerKeyID,
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	if err != nil {
+		return nil, err
+	}
+	ca, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		return nil, err
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	cn := "trstctl-verify-test"
+	if len(dnsNames) > 0 {
+		cn = dnsNames[0]
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: cn}, DNSNames: dnsNames,
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca, &key.PublicKey, caKey)
+	if err != nil {
+		return nil, err
+	}
+	served := append([][]byte{der}, chainDER...)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	cfg := &tls.Config{
+		Certificates: []tls.Certificate{{Certificate: served, PrivateKey: key}},
+		MinVersion:   tls.VersionTLS12,
+	}
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				tc := tls.Server(c, cfg)
+				_ = tc.Handshake()
+				_ = tc.Close()
+			}(conn)
+		}
+	}()
+	return &ServingTestServer{
+		Addr:    ln.Addr().String(),
+		LeafPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		Close:   func() { _ = ln.Close() },
+	}, nil
+}

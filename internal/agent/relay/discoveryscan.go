@@ -66,7 +66,13 @@ type relayScanSink struct {
 func (s *relayScanSink) Record(_ context.Context, f netscan.Found) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.findings = append(s.findings, discoveryFindingFromCert(f.Address, f.Cert))
+	finding := discoveryFindingFromCert(f.Address, f.Cert)
+	finding.SPKISHA256 = f.Keys.SPKISHA256
+	finding.AuthorityKeyID = f.Keys.AuthorityKeyID
+	finding.ChainSPKISHA256 = f.Keys.ChainSPKISHA256
+	finding.ChainCertSHA256 = f.Keys.ChainCertSHA256
+	finding.WeakKeyChecks = f.Keys.WeakKeyChecks
+	s.findings = append(s.findings, finding)
 	return nil
 }
 
