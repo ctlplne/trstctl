@@ -50,14 +50,18 @@ const (
 // certificate issued for the same public key (a cross-sign included);
 // CertSHA256, when set, also matches that exact certificate.
 type Entry struct {
-	Name       string   `json:"name"`
-	Kind       string   `json:"kind"`
-	SPKISHA256 string   `json:"spki_sha256"`
-	CertSHA256 string   `json:"cert_sha256,omitempty"`
-	Reason     string   `json:"reason"`
-	Sources    []string `json:"sources"`
-	Since      string   `json:"since"`
-	Origin     string   `json:"origin,omitempty"`
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	SPKISHA256 string `json:"spki_sha256"`
+	CertSHA256 string `json:"cert_sha256,omitempty"`
+	// SubjectKeyID is the entry certificate's subject key identifier (hex).
+	// A certificate whose authority key identifier names it was issued under
+	// the entry, which finds a leaf even when no chain was recorded with it.
+	SubjectKeyID string   `json:"subject_key_id,omitempty"`
+	Reason       string   `json:"reason"`
+	Sources      []string `json:"sources"`
+	Since        string   `json:"since"`
+	Origin       string   `json:"origin,omitempty"`
 }
 
 type file struct {
@@ -73,6 +77,7 @@ type List struct {
 	entries []Entry
 	bySPKI  map[string]int
 	byCert  map[string]int
+	bySKI   map[string]int
 }
 
 var (
@@ -114,10 +119,11 @@ func parse(data []byte, origin string) (*List, error) {
 }
 
 func build(updated string, entries []Entry) (*List, error) {
-	l := &List{updated: updated, bySPKI: map[string]int{}, byCert: map[string]int{}}
+	l := &List{updated: updated, bySPKI: map[string]int{}, byCert: map[string]int{}, bySKI: map[string]int{}}
 	for _, e := range entries {
 		e.SPKISHA256 = strings.ToLower(strings.TrimSpace(e.SPKISHA256))
 		e.CertSHA256 = strings.ToLower(strings.TrimSpace(e.CertSHA256))
+		e.SubjectKeyID = normalizeKeyID(e.SubjectKeyID)
 		e.Name = strings.TrimSpace(e.Name)
 		switch {
 		case e.Name == "":
@@ -128,6 +134,8 @@ func build(updated string, entries []Entry) (*List, error) {
 			return nil, fmt.Errorf("trust: distrust entry %q: spki_sha256 must be 64 hex characters", e.Name)
 		case e.CertSHA256 != "" && !isSHA256Hex(e.CertSHA256):
 			return nil, fmt.Errorf("trust: distrust entry %q: cert_sha256 must be 64 hex characters", e.Name)
+		case e.SubjectKeyID != "" && !isKeyIDHex(e.SubjectKeyID):
+			return nil, fmt.Errorf("trust: distrust entry %q: subject_key_id must be an even number of hex characters, at most 128", e.Name)
 		case strings.TrimSpace(e.Reason) == "":
 			return nil, fmt.Errorf("trust: distrust entry %q: a reason is required", e.Name)
 		case len(e.Sources) == 0:
@@ -145,9 +153,27 @@ func build(updated string, entries []Entry) (*List, error) {
 			}
 			l.byCert[e.CertSHA256] = len(l.entries)
 		}
+		if e.SubjectKeyID != "" {
+			if _, dup := l.bySKI[e.SubjectKeyID]; dup {
+				return nil, fmt.Errorf("trust: distrust entry %q repeats subject_key_id %s", e.Name, e.SubjectKeyID)
+			}
+			l.bySKI[e.SubjectKeyID] = len(l.entries)
+		}
 		l.entries = append(l.entries, e)
 	}
 	return l, nil
+}
+
+func normalizeKeyID(s string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(s), ":", ""))
+}
+
+func isKeyIDHex(s string) bool {
+	if len(s) == 0 || len(s) > 128 || len(s)%2 != 0 {
+		return false
+	}
+	_, err := hex.DecodeString(s)
+	return err == nil
 }
 
 func isSHA256Hex(s string) bool {
@@ -169,6 +195,9 @@ func (l *List) Merge(extra *List) (*List, error) {
 		for _, e := range extra.entries {
 			if _, known := l.bySPKI[e.SPKISHA256]; known {
 				continue // the shipped entry already covers this key
+			}
+			if _, known := l.bySKI[e.SubjectKeyID]; known && e.SubjectKeyID != "" {
+				continue // the shipped entry already names this CA
 			}
 			entries = append(entries, e)
 		}
@@ -235,6 +264,81 @@ func (l *List) MatchHashes(spkiSHA256, certSHA256 string) (Entry, bool) {
 		}
 	}
 	return Entry{}, false
+}
+
+// MatchIssuerKeyID reports the entry whose subject key identifier is aki,
+// the authority key identifier of a certificate issued under it.
+func (l *List) MatchIssuerKeyID(aki string) (Entry, bool) {
+	if l == nil {
+		return Entry{}, false
+	}
+	if i, ok := l.bySKI[normalizeKeyID(aki)]; ok && aki != "" {
+		return l.entries[i], true
+	}
+	return Entry{}, false
+}
+
+// MatchName reports the entry whose name is exactly name (the distrusted
+// certificate's common name), for inventory rows that kept only an issuer
+// name. A name is a weaker match than a key; callers say so.
+func (l *List) MatchName(name string) (Entry, bool) {
+	if l == nil || strings.TrimSpace(name) == "" {
+		return Entry{}, false
+	}
+	for _, e := range l.entries {
+		if e.Name == strings.TrimSpace(name) {
+			return e, true
+		}
+	}
+	return Entry{}, false
+}
+
+// How a certificate meets the distrust list.
+const (
+	ExposedItself = "itself"        // the certificate is a distrusted certificate or key
+	ExposedChain  = "chain"         // an issuer in its recorded chain is
+	ExposedIssuer = "issuer_key_id" // its (or a chain member's) authority key identifier names one
+)
+
+// Exposure is how one certificate depends on a distrusted CA or key.
+type Exposure struct {
+	Entry   Entry  `json:"entry"`
+	How     string `json:"how"`
+	Subject string `json:"subject"` // the distrusted certificate's subject, or the issuer named by key identifier
+}
+
+// ExposureOf checks a DER certificate and the DER chain recorded with it (may
+// be empty): the certificate itself, then each chain member, by SPKI or
+// certificate hash, then the authority key identifiers. It is the one entry
+// point for callers outside the crypto boundary (AN-3).
+func (l *List) ExposureOf(certDER []byte, chainDER [][]byte) (Exposure, bool, error) {
+	if l == nil {
+		return Exposure{}, false, nil
+	}
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return Exposure{}, false, fmt.Errorf("trust: certificate does not parse: %w", err)
+	}
+	if e, ok := l.Match(cert); ok {
+		return Exposure{Entry: e, How: ExposedItself, Subject: cert.Subject.String()}, true, nil
+	}
+	chain := make([]*x509.Certificate, 0, len(chainDER))
+	for _, der := range chainDER {
+		c, err := x509.ParseCertificate(der)
+		if err != nil {
+			return Exposure{}, false, fmt.Errorf("trust: chain certificate does not parse: %w", err)
+		}
+		chain = append(chain, c)
+	}
+	if c, e, ok := l.MatchChain(chain); ok {
+		return Exposure{Entry: e, How: ExposedChain, Subject: c.Subject.String()}, true, nil
+	}
+	for _, c := range append([]*x509.Certificate{cert}, chain...) {
+		if e, ok := l.MatchIssuerKeyID(hex.EncodeToString(c.AuthorityKeyId)); ok {
+			return Exposure{Entry: e, How: ExposedIssuer, Subject: c.Issuer.String()}, true, nil
+		}
+	}
+	return Exposure{}, false, nil
 }
 
 // MatchChain reports the first distrusted certificate in chain.

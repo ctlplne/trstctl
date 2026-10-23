@@ -51,6 +51,18 @@
   `release-evidence` job, which every publishing job needs;
   `trstctl-trustbundle audit` is the step behind it. Ordinary builds and pull
   requests still use no network.
+- Weak-key detection (`internal/crypto/weakkey`, modeled on badkeys): an
+  elliptic-curve key whose private scalar is small (|k| up to 2^24 + 2^16, by
+  baby-step giant-step; the eMudhra intermediates' were 4 to 237), RSA moduli
+  with small factors, close primes, the ROCA structure, impossible exponents,
+  a prime shared with another key in the same inventory (batch GCD), and keys
+  on operator-supplied blocklists such as Debian's 2008 list
+  (`TRSTCTL_TRUST_WEAK_KEY_BLOCKLIST_FILES`; trstctl ships none, the Debian list
+  is GPL-3). Private keys an agent finds are now named for every RSA size and
+  curve (an RSA-1024 key used to have no algorithm at all) and reported weak
+  with the reason. The distrust list carries each entry's subject key
+  identifier, so a leaf under one of the eight intermediates is found from its
+  authority key identifier. See docs/security/weak-keys.md.
 
 ### Fixed
 

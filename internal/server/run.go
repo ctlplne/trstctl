@@ -34,6 +34,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/trust"
+	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/leader"
@@ -95,6 +96,9 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		slog.String("state", string(lic.State())))
 	egressGuard, err := egressGuardFromConfig(cfg.AirGap)
 	if err != nil {
+		return err
+	}
+	if err := installWeakKeyBlocklists(cfg.Trust, logger); err != nil {
 		return err
 	}
 	if err := installOperatorDistrust(cfg.Trust, logger); err != nil {
@@ -1057,6 +1061,24 @@ func buildRateLimiter(cfg *config.Config, st *store.Store) (api.RateLimiter, err
 
 // installOperatorDistrust adds the operator's distrust entries (trust.distrust_file)
 // to the shipped list every outbound TLS client checks. Configuration only adds.
+// installWeakKeyBlocklists makes the operator's blocklists part of every
+// weak-key check this process runs (Part 4).
+func installWeakKeyBlocklists(cfg config.Trust, logger *slog.Logger) error {
+	lists, err := config.LoadWeakKeyBlocklists(cfg)
+	if err != nil {
+		return err
+	}
+	if len(lists) == 0 {
+		return nil
+	}
+	checker := weakkey.NewChecker(lists...)
+	weakkey.SetDefault(checker)
+	if logger != nil {
+		logger.Info("operator weak-key blocklists installed", slog.Any("lists", checker.Blocklists()))
+	}
+	return nil
+}
+
 func installOperatorDistrust(cfg config.Trust, logger *slog.Logger) error {
 	path := strings.TrimSpace(cfg.DistrustFile)
 	if path == "" {

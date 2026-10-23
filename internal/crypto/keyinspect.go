@@ -16,6 +16,8 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/ssh"
+
+	"trstctl.com/trstctl/internal/crypto/weakkey"
 )
 
 // PrivateKeyInfo is metadata about private-key material. It deliberately carries
@@ -27,7 +29,19 @@ type PrivateKeyInfo struct {
 	FingerprintSHA256 string
 	FingerprintBasis  string
 	Encrypted         bool
+	// WeakReasons says why the key must be treated as weak whatever its
+	// algorithm: an RSA modulus below 2048 bits, a curve below 256 bits, or a
+	// structural weakness of the public key (internal/crypto/weakkey). Empty
+	// for a sound key.
+	WeakReasons []string
 }
+
+// minimumRSABits and minimumECBits are the sizes below which a key is rated
+// weak (the CBOM default policy's floor).
+const (
+	minimumRSABits = 2048
+	minimumECBits  = 256
+)
 
 // InspectPrivateKey classifies private-key material behind the crypto boundary
 // (AN-3). The returned fingerprint is SHA-256 over the public SubjectPublicKeyInfo
@@ -134,19 +148,25 @@ func privateKeyInfoFromParsed(key any, format string) (PrivateKeyInfo, error) {
 		Algorithm:         classifyPrivateKey(key),
 		FingerprintSHA256: SHA256Hex(pubDER),
 		FingerprintBasis:  "public-spki-sha256",
+		WeakReasons:       privateKeyWeakReasons(key, signer.Public()),
 	}, nil
 }
 
+// classifyPrivateKey names every RSA size and every curve it can parse; an
+// unusual size is named ("RSA-1024", "RSA-8192"), never left blank, and
+// rated by privateKeyWeakReasons.
 func classifyPrivateKey(key any) Algorithm {
 	switch k := key.(type) {
 	case *rsa.PrivateKey:
-		switch k.N.BitLen() {
+		switch bits := k.N.BitLen(); bits {
 		case 2048:
 			return RSA2048
 		case 3072:
 			return RSA3072
 		case 4096:
 			return RSA4096
+		default:
+			return Algorithm(fmt.Sprintf("RSA-%d", bits))
 		}
 	case *ecdsa.PrivateKey:
 		switch k.Curve {
@@ -157,10 +177,31 @@ func classifyPrivateKey(key any) Algorithm {
 		case elliptic.P521():
 			return ECDSAP521
 		}
+		if k.Curve != nil {
+			return Algorithm("ECDSA-" + strings.ReplaceAll(k.Curve.Params().Name, "-", ""))
+		}
 	case ed25519.PrivateKey:
 		return Ed25519
 	}
 	return ""
+}
+
+func privateKeyWeakReasons(key any, pub stdcrypto.PublicKey) []string {
+	var reasons []string
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		if bits := k.N.BitLen(); bits < minimumRSABits {
+			reasons = append(reasons, fmt.Sprintf("RSA-%d is below the %d-bit minimum", bits, minimumRSABits))
+		}
+	case *ecdsa.PrivateKey:
+		if k.Curve != nil && k.Curve.Params().BitSize < minimumECBits {
+			reasons = append(reasons, fmt.Sprintf("%s is below the %d-bit curve minimum", k.Curve.Params().Name, minimumECBits))
+		}
+	}
+	for _, f := range weakkey.Default().CheckPublicKey(pub) {
+		reasons = append(reasons, f.Reason)
+	}
+	return reasons
 }
 
 func encryptedPEMBlock(block *pem.Block) bool {

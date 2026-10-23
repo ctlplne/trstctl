@@ -6,6 +6,8 @@ import (
 	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"math/big"
@@ -96,4 +98,56 @@ func wipeTestBytes(b []byte) {
 		b[i] = 0
 	}
 	runtime.KeepAlive(b)
+}
+
+// Part 4 (known bug): an RSA key of a size other than 2048, 3072 or 4096 used
+// to come back with an empty algorithm. Every size is now named, and a key
+// below the floor, or one with a structural weakness, is rated weak with the
+// reason; sound keys carry no reason.
+func TestInspectPrivateKeyNamesEverySizeAndRatesWeakKeys(t *testing.T) {
+	inspect := func(key any) PrivateKeyInfo {
+		t.Helper()
+		der, err := x509.MarshalPKCS8PrivateKey(key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer wipeTestBytes(der)
+		info, err := InspectPrivateKey(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info
+	}
+	small, err := rsa.GenerateKey(rand.Reader, 1024) // #nosec G403 -- a deliberately weak RSA-1024 key, to prove it is named and rated weak (CWE-326)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := inspect(small)
+	if info.Algorithm != "RSA-1024" || len(info.WeakReasons) != 1 || !strings.Contains(info.WeakReasons[0], "below the 2048-bit minimum") {
+		t.Fatalf("RSA-1024: %+v", info)
+	}
+	sound, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info := inspect(sound); info.Algorithm != RSA2048 || len(info.WeakReasons) != 0 {
+		t.Fatalf("RSA-2048: %+v", info)
+	}
+	// A P-384 key whose private scalar is 4, as eMudhra's intermediates had.
+	four := make([]byte, 48)
+	four[47] = 4
+	weakEC, err := ecdsa.ParseRawPrivateKey(elliptic.P384(), four)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info := inspect(weakEC); info.Algorithm != ECDSAP384 || len(info.WeakReasons) != 1 || !strings.Contains(info.WeakReasons[0], "private key is 4") {
+		t.Fatalf("P-384 with scalar 4: %+v", info)
+	}
+	soundEC, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info := inspect(soundEC); len(info.WeakReasons) != 0 {
+		t.Fatalf("a random P-384 key was rated weak: %+v", info)
+	}
 }

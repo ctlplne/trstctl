@@ -29,7 +29,10 @@ type PrivateKeyFound struct {
 	FingerprintBasis string
 	Encrypted        bool
 	Restricted       bool
-	Metadata         map[string]string
+	// WeakReasons rates the key weak whatever its algorithm (an RSA modulus
+	// below 2048 bits, a small curve, a structural weakness); empty when sound.
+	WeakReasons []string
+	Metadata    map[string]string
 }
 
 // PrivateKeySource walks filesystem roots and classifies private-key material.
@@ -83,6 +86,7 @@ func (s *PrivateKeySource) Discover(ctx context.Context) ([]PrivateKeyFound, err
 				FingerprintBasis: info.FingerprintBasis,
 				Encrypted:        info.Encrypted,
 				Restricted:       restricted,
+				WeakReasons:      info.WeakReasons,
 				Metadata:         metadata,
 			})
 			return nil

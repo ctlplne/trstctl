@@ -139,6 +139,7 @@ nav:
       - Security operations:
           - Report a vulnerability: security/reporting.md
           - Vulnerability management: security/vulnerability-management.md
+          - Weak keys: security/weak-keys.md
           - CWE register: security/cwe-register.md
           - CWE coverage ledger: security/cwe-coverage.md
           - Accepted advisory debt: security-exceptions.md

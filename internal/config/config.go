@@ -27,6 +27,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/trust"
+	"trstctl.com/trstctl/internal/crypto/weakkey"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -1599,6 +1600,10 @@ type NotificationSIEM struct {
 // a shipped entry.
 type Trust struct {
 	DistrustFile string `json:"distrust_file,omitempty"`
+	// WeakKeyBlocklistFiles are operator-supplied lists of known-compromised
+	// RSA keys in Debian's openssl-blacklist format (one per key size); the
+	// weak-key checks flag any key on them. trstctl ships no such list.
+	WeakKeyBlocklistFiles []string `json:"weak_key_blocklist_files,omitempty"`
 }
 
 // AirGap configures the no-phone-home outbound HTTP guard. When enabled, public
@@ -2874,6 +2879,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyProviderEnv(getenv, &c.Provider)
 	setServiceNowEnv(getenv, &c.ITSM.ServiceNow)
 	setString(getenv, "TRSTCTL_TRUST_DISTRUST_FILE", &c.Trust.DistrustFile)
+	setCSV(getenv, "TRSTCTL_TRUST_WEAK_KEY_BLOCKLIST_FILES", &c.Trust.WeakKeyBlocklistFiles)
 	setBool(getenv, "TRSTCTL_AIRGAP_ENABLED", &c.AirGap.Enabled)
 	setBool(getenv, "TRSTCTL_AIRGAP_ALLOW_PRIVATE", &c.AirGap.AllowPrivate)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
@@ -4075,18 +4081,44 @@ func validateOptionalServices(c *Config) []error {
 // validateTrust reads the operator distrust file at load so a malformed entry
 // fails startup instead of silently protecting nothing.
 func validateTrust(c *Config) []error {
+	var errs []error
+	if _, err := LoadWeakKeyBlocklists(c.Trust); err != nil {
+		errs = append(errs, err)
+	}
 	path := strings.TrimSpace(c.Trust.DistrustFile)
 	if path == "" {
-		return nil
+		return errs
 	}
 	data, err := os.ReadFile(path) // #nosec G304 G703 -- operator-configured local file path from deployment config (CWE-22)
 	if err != nil {
-		return []error{fmt.Errorf("trust.distrust_file: %w", err)}
+		return append(errs, fmt.Errorf("trust.distrust_file: %w", err))
 	}
 	if _, err := trust.Parse(data); err != nil {
-		return []error{fmt.Errorf("trust.distrust_file %q: %w", path, err)}
+		return append(errs, fmt.Errorf("trust.distrust_file %q: %w", path, err))
 	}
-	return nil
+	return errs
+}
+
+// LoadWeakKeyBlocklists reads trust.weak_key_blocklist_files; a missing,
+// empty or malformed list is an error, never a silently empty check.
+func LoadWeakKeyBlocklists(t Trust) ([]weakkey.Blocklist, error) {
+	var lists []weakkey.Blocklist
+	for _, raw := range t.WeakKeyBlocklistFiles {
+		path := strings.TrimSpace(raw)
+		if path == "" {
+			continue
+		}
+		data, err := os.ReadFile(path) // #nosec G304 G703 -- operator-configured local file path from deployment config (CWE-22)
+		if err != nil {
+			return nil, fmt.Errorf("trust.weak_key_blocklist_files: %w", err)
+		}
+		list, err := weakkey.LoadOpenSSLBlocklist(filepath.Base(path), data)
+		if err != nil {
+			return nil, fmt.Errorf("trust.weak_key_blocklist_files %q: %w", path, err)
+		}
+		lists = append(lists, list)
+	}
+	return lists, nil
 }
 
 func validateAirGap(c *Config) []error {

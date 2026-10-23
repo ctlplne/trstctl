@@ -1238,12 +1238,19 @@ func privateKeyInventoryFindings(found []agentdiscovery.PrivateKeyFound) []agent
 		for k, v := range f.Metadata {
 			meta[k] = v
 		}
+		risk := 85
+		if len(f.WeakReasons) > 0 {
+			// Part 4: a weak key is rated weak with the reason, whatever its algorithm.
+			meta["key_strength"] = "weak"
+			meta["key_weak_reason"] = strings.Join(f.WeakReasons, "; ")
+			risk = 95
+		}
 		findings = append(findings, agent.InventoryFinding{
 			Kind:        "private_key",
 			Ref:         f.Location,
 			Provenance:  f.Source + ":" + f.Location,
 			Fingerprint: f.Fingerprint,
-			RiskScore:   85,
+			RiskScore:   risk,
 			Metadata:    meta,
 		})
 	}
