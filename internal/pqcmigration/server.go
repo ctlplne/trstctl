@@ -925,11 +925,16 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 		if !active {
 			return RollbackResponse{}, api.ErrStatus(http.StatusConflict, "PQC certificate rollback successor is not the current CBOM leaf")
 		}
+		predecessorSerial := ""
+		if predecessor, err := s.store.GetCertificateByFingerprint(ctx, tenantID, completed.PredecessorFingerprint); err == nil {
+			predecessorSerial = predecessor.Serial
+		}
 		body, err := json.Marshal(relay.RollbackIntent{
 			Connector: completed.Connector, Target: current.Name, TargetID: current.ID, TargetRevision: current.RevisionID,
 			IdentityID: completed.IdentityID, TargetConfig: append(json.RawMessage(nil), current.Config...),
 			PredecessorFingerprint: completed.PredecessorFingerprint, SuccessorFingerprint: currentFingerprint,
-			VerifyAddress: config.VerifyAddress, VerifyServerName: config.VerifyServerName,
+			PredecessorSerial: predecessorSerial,
+			VerifyAddress:     config.VerifyAddress, VerifyServerName: config.VerifyServerName,
 			Reason: req.Reason, RequiredAgentID: agentID, PQCRunID: runID, PQCAssetID: assetID,
 		})
 		if err != nil {

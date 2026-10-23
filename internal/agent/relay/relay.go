@@ -284,6 +284,9 @@ type RollbackIntent struct {
 	// PredecessorFingerprint identifies the installed object to bind back to.
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
 	SuccessorFingerprint   string `json:"successor_fingerprint,omitempty"`
+	// PredecessorSerial is carried for the operator-facing receipt only; the
+	// restore selects by fingerprint.
+	PredecessorSerial string `json:"predecessor_serial,omitempty"`
 	// Host restores re-run the same local listener verification the successor
 	// deploy used. Empty still means "restored but not listener-verified".
 	VerifyAddress    string `json:"verify_address,omitempty"`

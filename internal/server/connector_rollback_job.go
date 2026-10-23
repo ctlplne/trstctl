@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
@@ -25,6 +26,50 @@ var rollbackReceiptNamespace = uuid.MustParse("6f1d9a52-0f2a-4a5e-9a41-2f9c7f6b0
 // agent performed the family-specific rollback. Collapsing them into a single
 // "rolled back" written at request time is exactly the memo-only receipt this
 // epic replaced.
+
+// rollbackVerificationDetail turns the agent's verification report (the same
+// EndpointVerifyReport shape a deploy carries) into the sentence an operator
+// needs when a restore ran but re-verification failed: what the listener
+// served against what was expected, or why it could not be reached. B9-R1:
+// without it the receipt said only "re-verification failed" and the cause
+// was unrecoverable after the fact. Anything that does not decode is left
+// out; the receipt never carries raw agent text.
+func rollbackVerificationDetail(agentDetail string) string {
+	var report relay.EndpointVerifyReport
+	if err := decodeStrictJSON([]byte(agentDetail), &report); err != nil || len(report.Results) != 1 {
+		return ""
+	}
+	result := report.Results[0]
+	tr := result.Transcript
+	short := func(fp string) string {
+		fp = strings.TrimSpace(fp)
+		if len(fp) > 12 {
+			return fp[:12] + "…"
+		}
+		return fp
+	}
+	var out strings.Builder
+	out.WriteString(" Listener " + strings.TrimSpace(tr.Address))
+	if strings.TrimSpace(tr.ServerName) != "" {
+		out.WriteString(" (SNI " + strings.TrimSpace(tr.ServerName) + ")")
+	}
+	switch {
+	case !tr.Reached:
+		out.WriteString(" could not be reached")
+		if tr.Error != "" {
+			out.WriteString(": " + tr.Error)
+		}
+		out.WriteString(".")
+	case tr.Mismatch != "":
+		out.WriteString(" served " + short(tr.ObservedFingerprint) + " where " + short(tr.ExpectedFingerprint) + " was expected (" + string(tr.Mismatch) + " mismatch).")
+	default:
+		out.WriteString(" served " + short(tr.ObservedFingerprint) + ", the expected predecessor.")
+	}
+	if d := strings.TrimSpace(result.Detail); d != "" {
+		out.WriteString(" " + d)
+	}
+	return out.String()
+}
 
 // rollbackReceipt records what an agent reported for a connector.rollback job.
 //
@@ -59,6 +104,7 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string
 	case transport.JobOutcomeVerified:
 		receiptReason = "rolled_back_and_reverified"
 		detail += " The same agent re-handshook the listener and verified the predecessor is serving."
+		detail += rollbackVerificationDetail(reason)
 	case transport.JobOutcomeExecuted:
 		detail += " No listener verification address was configured, so this receipt does not claim what is serving."
 		if reason == transport.RollbackExecutedLegacyObject {
@@ -73,7 +119,7 @@ func (s *Server) rollbackReceipt(ctx context.Context, tenantID, agentName string
 	case transport.JobOutcomeVerifyFailed:
 		status = servedstatus.ConnectorRollbackFailed
 		receiptReason = "rollback_restore_reverify_failed"
-		detail += " The restore ran, but the same agent's listener re-verification failed."
+		detail += " The restore ran, but the same agent's listener re-verification failed." + rollbackVerificationDetail(reason)
 	default:
 		// Contact is classified from the agent's closed-set reason, never
 		// assumed. Five of the failure reasons are refusals made before a socket
