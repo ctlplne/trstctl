@@ -200,6 +200,12 @@ var RecoveredFromPostgresBackup = []string{
 	// a redundant restore receiver; normal full-binary rebuild still erases and
 	// replays it from the immutable log.
 	"provider_operators",
+	// A90: custom Provider roles share provider_operators' dual recovery
+	// posture: the EE projection rebuilds them from provider.role.* events, and
+	// the full PostgreSQL artifact carries the rows for an event-only restore
+	// that starts without the Provider edition attached. Losing them fails
+	// closed the same quiet way: every operator on a custom role is refused.
+	"provider_roles",
 	// L1: provider operator delegations use the same dual recovery posture as
 	// provider_operators. AUD-62 made normal writes event-sourced; retaining the
 	// projected rows in a full backup also preserves pre-AUD-62 bootstrap state

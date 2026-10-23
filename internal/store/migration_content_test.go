@@ -1092,6 +1092,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	296: true, // TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus
 	297: true, // TestMigration0297GivesExistingCampaignsNoSoak
 	298: true, // TestMigration0298LeavesExistingTrustSourcesTokenBound
+	300: true, // TestMigration0300CapturesExistingAgentsAsLifecycleReceipts
 	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
@@ -5927,5 +5928,55 @@ func TestMigration0298LeavesExistingTrustSourcesTokenBound(t *testing.T) {
 	}
 	if _, err := pool.Exec(ctx, `UPDATE workload_attester_trust_sources SET self_authenticating = true, allowed_owners = ARRAY['acme'] WHERE tenant_id=$1 AND id=$2`, tenantA, sourceID); err != nil {
 		t.Fatalf("0298 refused the flag and pin: %v", err)
+	}
+}
+
+// A91: the agent lifecycle receipts start from the agents a tenant already had,
+// so a tenant that predates the receipts reconciles its agents gauge from the
+// same baseline the gauge counts; a later receipt never moves an earlier
+// first-seen time, and an offboarded agent keeps its offboarding instant.
+func TestMigration0300CapturesExistingAgentsAsLifecycleReceipts(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 300)
+	if target.noTx || target.name != "0300_agent_lifecycle_receipts.sql" {
+		t.Fatalf("migration 0300 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	live, gone := uuid(tenantA, 30001), uuid(tenantA, 30002)
+	created := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	offboarded := created.Add(48 * time.Hour)
+	if _, err := pool.Exec(ctx, `INSERT INTO agents (id, tenant_id, name, status, version, created_at) VALUES ($1, $2, 'live', 'active', '1.0', $3)`,
+		live, tenantA, created); err != nil {
+		t.Fatalf("seed pre-0300 live agent: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO agents (id, tenant_id, name, status, version, created_at, offboarded_at) VALUES ($1, $2, 'gone', 'offboarded', '1.0', $3, $4)`,
+		gone, tenantA, created, offboarded); err != nil {
+		t.Fatalf("seed pre-0300 offboarded agent: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	var liveSeen time.Time
+	var liveGone *time.Time
+	if err := pool.QueryRow(ctx, `SELECT first_seen_at, offboarded_at FROM agent_lifecycle_receipts WHERE tenant_id=$1 AND agent_id=$2`, tenantA, live).Scan(&liveSeen, &liveGone); err != nil {
+		t.Fatalf("live agent receipt: %v", err)
+	}
+	if !liveSeen.Equal(created) || liveGone != nil {
+		t.Fatalf("live receipt = seen %s offboarded %v, want %s and nil", liveSeen, liveGone, created)
+	}
+	var goneAt *time.Time
+	if err := pool.QueryRow(ctx, `SELECT offboarded_at FROM agent_lifecycle_receipts WHERE tenant_id=$1 AND agent_id=$2`, tenantA, gone).Scan(&goneAt); err != nil {
+		t.Fatalf("offboarded agent receipt: %v", err)
+	}
+	if goneAt == nil || !goneAt.Equal(offboarded) {
+		t.Fatalf("offboarded receipt = %v, want %s", goneAt, offboarded)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM agent_lifecycle_receipts WHERE tenant_id=$1`, tenantA).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("receipts = %d %v, want exactly the two pre-existing agents", n, err)
 	}
 }

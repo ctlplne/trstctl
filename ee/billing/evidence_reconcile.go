@@ -34,6 +34,24 @@ type EvidenceReconciler interface {
 }
 
 // ReconciliationLine is one meter's cross-check, on the document.
+// GaugeHistoryReconciler (A91) recounts a gauge meter at an instant from a
+// record independent of the gauge's own counter: agents from agent lifecycle
+// receipts, secrets_stored from application-secret mutation receipts, tenants
+// from the core tenant registration projection. PGStore implements it; a
+// reconciler without it leaves gauge lines unchecked as before.
+type GaugeHistoryReconciler interface {
+	GaugeAt(ctx context.Context, tenantID, meter string, at time.Time) (GaugeRecount, error)
+}
+
+// GaugeRecount is one independent recount. Checked false means no independent
+// record vouches for the whole number; Note then says which part is missing.
+type GaugeRecount struct {
+	Count   int64
+	Checked bool
+	Source  string
+	Note    string
+}
+
 type ReconciliationLine struct {
 	Meter string `json:"meter"`
 	// Metered is the durable counter's total for the period.
@@ -84,15 +102,26 @@ func ReconcileEvidence(ctx context.Context, rec EvidenceReconciler, p EvidencePe
 		out[0].Source = ""
 		out[0].Note = "issuance history is unavailable or unverified, including older issuer records containing only serial numbers; the measured value is retained, not treated as a verified zero"
 	}
+	gauges, _ := rec.(GaugeHistoryReconciler)
 	for _, l := range lines {
 		if l.Meter == usage.MeterCertificatesIssued {
 			continue
 		}
-		out = append(out, ReconciliationLine{
+		line := ReconciliationLine{
 			Meter: l.Meter, Metered: l.Value,
 			Checked: false, Matches: false,
 			Note: "no independent event source for this meter; the metered value stands alone",
-		})
+		}
+		if gauges != nil {
+			// A91: a gauge is a stock at the period's end; recount it there.
+			recount, err := gauges.GaugeAt(ctx, p.CustomerID, l.Meter, p.End)
+			if err != nil {
+				return nil, fmt.Errorf("billing: recount %s: %w", l.Meter, err)
+			}
+			line.EventHistory, line.Checked, line.Source, line.Note = recount.Count, recount.Checked, recount.Source, recount.Note
+			line.Matches = recount.Checked && recount.Count == l.Value
+		}
+		out = append(out, line)
 	}
 	return out, nil
 }

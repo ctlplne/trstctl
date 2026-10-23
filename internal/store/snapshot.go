@@ -170,7 +170,10 @@ import (
 // Version 55 retains emergency CA rotation and cross-sign public receipts.
 // Version 56 retains discovery schedule retirement and event ordering. A v55
 // snapshot could skip a pause or retirement event while restoring an enabled row.
-const SnapshotFormatVersion = 56
+// Version 57 retains agent lifecycle receipts (A91). A v56 snapshot carries none,
+// so restoring one would empty the record the agents usage gauge reconciles
+// against while the covered offset skipped the heartbeats that would rebuild it.
+const SnapshotFormatVersion = 57
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -242,7 +245,10 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"profile_edit_approvals",
 	// Format 32: parent before child for the delivery FK.
 	"audit_feed_destinations", "audit_feed_deliveries",
-	"honey_tokens", "aws_honey_scans", "aws_honey_uses"}
+	"honey_tokens", "aws_honey_scans", "aws_honey_uses",
+	// Format 57 (A91): agent lifecycle receipts, the record the agents usage
+	// gauge is reconciled against; same pairing with ReadModelTables.
+	"agent_lifecycle_receipts"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -465,6 +471,7 @@ SELECT jsonb_build_object(
   -- restore inserts each table as one statement in array order.
   'ca_authorities', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.created_at, t.id), '[]'::jsonb) FROM ca_authorities t),
   'agent_cert_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_cert_revocations t),
+  'agent_lifecycle_receipts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_lifecycle_receipts t),
   'owner_ownership_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM owner_ownership_conflicts t),
   'ownership_assignments', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.inventory_id), '[]'::jsonb) FROM ownership_assignments t),
   'cmdb_reconcile_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cmdb_reconcile_schedules t),

@@ -1421,11 +1421,20 @@ never live in the API process. What you can do end to end against the running bi
   behind the per-customer delegation gate (`PUT/GET
   /provider/v1/tenants/{id}/quota`), counted against the live read model, and
   ENFORCED at the served issuance transition with a structured 429 before the
-  orchestrator accepts anything. Scope, stated exactly: only
-  certificates_issued has an independent event source today — other meters say
-  in the document that the metered value stands alone. The Provider console
-  labels those unchecked meters separately from a checked meter that diverged;
-  the document's signable verdict determines whether finance may invoice. The
+  orchestrator accepts anything. Reconciliation sources, stated exactly:
+  `certificates_issued` is recounted from certificate issuance receipts;
+  `agents` from agent lifecycle receipts (first heartbeat or renewal before
+  the period end, not offboarded before it; existing agents were captured once
+  from their projected rows when the receipts arrived); `tenants` from the
+  core tenant registration projection; `secrets_stored` from application-secret
+  mutation receipts, vouched for as independent only while the tenant holds no
+  connector credentials, which have no event history and are then named in the
+  line's note. `certificates_stored` still has no independent record (receipts
+  carry mints but not revocation or expiry) and its line says so. A checked
+  gauge that diverges blocks signing like a diverging issuance count. The
+  Provider console labels unchecked meters separately from a checked meter that
+  diverged; the document's signable verdict determines whether finance may
+  invoice. The
   certificates_stored cap is enforced at a served create path. The agents cap
   is enforced when a new agent first heartbeats over the mTLS channel: the
   server serializes the live quota/count check through event projection across

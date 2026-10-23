@@ -1316,6 +1316,10 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// There is no FK, but this order prevents a partially inspected restore
 		// from showing grants whose operator lifecycle has not arrived yet.
 		"provider_operators",
+		// A90: custom Provider roles restore right after the operators that may
+		// hold them, so a partially inspected restore never shows an operator
+		// on a role that has not arrived yet.
+		"provider_roles",
 		// L1: provider operator delegations. No foreign keys either, and it
 		// restores after the meters for the same reason they restore last: this
 		// is authority data, and a half-restored grant table is worse than an

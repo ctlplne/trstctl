@@ -186,6 +186,8 @@ var TenantScopedTables = []string{
 	"provider_operator_delegations",
 	"provider_operator_grant_episodes", // fixed Provider partition; customer offboard revokes live episodes but retains history
 	"provider_operators",
+	// A90: custom Provider roles live under the fixed Provider authority tenant.
+	"provider_roles",
 	"provider_authority_projection_receipts", // same fixed Provider partition; no customer state or secret payload
 	"provider_authority_projection_state",    // upgrade/recovery status for the same fixed partition
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
@@ -221,6 +223,8 @@ var TenantScopedTables = []string{
 	"deployment_target_revisions",
 	"deployment_targets",
 	"agent_cert_revocations",
+	// A91: the event-derived first-seen / offboarded record behind the agents gauge.
+	"agent_lifecycle_receipts",
 	// A5: staged upgrade campaigns and their dispatch ledger are the tenant's
 	// own rollout history.
 	"agent_upgrade_campaigns",

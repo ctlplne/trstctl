@@ -301,7 +301,14 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		revocationCaches, a.RevocationCachesStatement, cacheSignature,
 		a.RevocationCachesSignerFingerprint, a.RevocationCachesReportedAt,
 		executors, a.ExecutorsReportedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	seenAt := a.CreatedAt
+	if a.LastSeenAt != nil {
+		seenAt = *a.LastSeenAt
+	}
+	return recordAgentLifecycleReceiptTx(ctx, tx, a.TenantID, a.ID, seenAt, nil)
 }
 
 // agentRoleArray keeps a nil grant out of a NOT NULL text[] column.
@@ -316,6 +323,31 @@ func agentRoleArray(roles []string) []string {
 // read model. A renewal proves the agent is alive and refreshes last_seen_at, but
 // it preserves the health/version reported by the latest heartbeat when the row
 // already exists.
+// recordAgentLifecycleReceiptTx (A91) keeps the event-derived first-seen /
+// offboarded record the usage gauge is reconciled against. It never reads the
+// agents row: the earliest first_seen_at and the earliest offboarded_at win,
+// so replay and concurrent projectors converge on the same receipt.
+func recordAgentLifecycleReceiptTx(ctx context.Context, tx pgx.Tx, tenantID, agentID string, seenAt time.Time, offboardedAt *time.Time) error {
+	if tenantID == "" || agentID == "" {
+		return nil
+	}
+	if seenAt.IsZero() {
+		seenAt = time.Now().UTC()
+	}
+	_, err := tx.Exec(ctx,
+		`INSERT INTO agent_lifecycle_receipts (tenant_id, agent_id, first_seen_at, offboarded_at)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (tenant_id, agent_id) DO UPDATE
+		    SET first_seen_at = LEAST(agent_lifecycle_receipts.first_seen_at, EXCLUDED.first_seen_at),
+		        offboarded_at = CASE
+		            WHEN EXCLUDED.offboarded_at IS NULL THEN agent_lifecycle_receipts.offboarded_at
+		            WHEN agent_lifecycle_receipts.offboarded_at IS NULL THEN EXCLUDED.offboarded_at
+		            ELSE LEAST(agent_lifecycle_receipts.offboarded_at, EXCLUDED.offboarded_at) END
+		  WHERE agent_lifecycle_receipts.tenant_id = EXCLUDED.tenant_id`,
+		tenantID, agentID, seenAt.UTC(), offboardedAt)
+	return err
+}
+
 func (s *Store) ApplyAgentCertRenewedTx(ctx context.Context, tx pgx.Tx, a Agent) error {
 	_, err := tx.Exec(ctx,
 		`INSERT INTO agents (id, tenant_id, name, status, version, last_seen_at)
@@ -325,7 +357,14 @@ func (s *Store) ApplyAgentCertRenewedTx(ctx context.Context, tx pgx.Tx, a Agent)
 		        last_seen_at = CASE WHEN agents.status = 'offboarded' THEN agents.last_seen_at ELSE EXCLUDED.last_seen_at END
 		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, a.LastSeenAt)
-	return err
+	if err != nil {
+		return err
+	}
+	seenAt := a.CreatedAt
+	if a.LastSeenAt != nil {
+		seenAt = *a.LastSeenAt
+	}
+	return recordAgentLifecycleReceiptTx(ctx, tx, a.TenantID, a.ID, seenAt, nil)
 }
 
 // ApplyAgentOffboardedTx projects an agent.offboarded event into the agents read
@@ -362,7 +401,10 @@ func (s *Store) ApplyAgentOffboardedTx(ctx context.Context, tx pgx.Tx, a Agent) 
 		        offboard_reason = CASE WHEN COALESCE(agents.offboard_reason, '') = '' THEN EXCLUDED.offboard_reason ELSE agents.offboard_reason END
 		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, name, offboardedAt, a.OffboardedBy, a.OffboardReason)
-	return err
+	if err != nil {
+		return err
+	}
+	return recordAgentLifecycleReceiptTx(ctx, tx, a.TenantID, a.ID, *offboardedAt, offboardedAt)
 }
 
 // ApplyAgentCertRevokedTx projects an agent.cert.revoked event into the served

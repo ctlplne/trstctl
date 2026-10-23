@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"trstctl.com/trstctl/internal/usage"
 
 	"github.com/jackc/pgx/v5"
 
@@ -288,4 +289,58 @@ func (p *PGStore) IssuedInPeriod(ctx context.Context, tenantID string, from, to 
 // policy that confines a read (AN-1).
 func (p *PGStore) tx(ctx context.Context, tenantID string, fn func(pgx.Tx) error) error {
 	return p.store.WithTenant(ctx, tenantID, fn)
+}
+
+// GaugeAt implements GaugeHistoryReconciler (A91). Each recount reads a record
+// the gauge counter never writes; where only part of a meter has such a
+// record, the recount is reported but not vouched for as independent.
+func (p *PGStore) GaugeAt(ctx context.Context, tenantID, meter string, at time.Time) (GaugeRecount, error) {
+	if p == nil || p.store == nil || tenantID == "" {
+		return GaugeRecount{Note: "no metering store is attached; the metered value stands alone"}, nil
+	}
+	at = at.UTC()
+	var out GaugeRecount
+	err := p.tx(ctx, tenantID, func(tx pgx.Tx) error {
+		switch meter {
+		case usage.MeterAgents:
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM agent_lifecycle_receipts
+				WHERE tenant_id = $1 AND first_seen_at < $2 AND (offboarded_at IS NULL OR offboarded_at >= $2)`, tenantID, at).Scan(&out.Count); err != nil {
+				return err
+			}
+			out.Checked, out.Source = true, "agent lifecycle receipts (first heartbeat or renewal before the period end, not offboarded before it)"
+		case usage.MeterSecretsStored:
+			var application, credentials int64
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM (
+				SELECT DISTINCT ON (secret_name) action FROM application_secret_mutation_receipts
+				WHERE tenant_id = $1 AND applied_at < $2
+				ORDER BY secret_name, applied_at DESC, result_version DESC) latest
+				WHERE latest.action <> 'delete'`, tenantID, at).Scan(&application); err != nil {
+				return err
+			}
+			if err := tx.QueryRow(ctx, `SELECT count(*) FROM credentials WHERE tenant_id = $1 AND created_at < $2`, tenantID, at).Scan(&credentials); err != nil {
+				return err
+			}
+			out.Count = application + credentials
+			if credentials == 0 {
+				out.Checked, out.Source = true, "application-secret mutation receipts (latest create/rotate/recover/delete per name before the period end)"
+			} else {
+				out.Note = fmt.Sprintf("application secrets recount from mutation receipts (%d); the %d connector credential(s) have no event history and are counted from their live table, so this meter is not vouched for as independent", application, credentials)
+			}
+		case usage.MeterTenants:
+			var present bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM tenants WHERE tenant_id = $1)`, tenantID).Scan(&present); err != nil {
+				return err
+			}
+			if present {
+				out.Count = 1
+			}
+			out.Checked, out.Source = true, "core tenant registration projection (tenant.registered without a later tenant.offboarded)"
+		case usage.MeterCertificatesStored:
+			out.Note = "certificate receipts record each mint but not revocation or expiry, so no independent record of the stored stock exists yet; the metered value stands alone"
+		default:
+			out.Note = "no independent event source for this meter; the metered value stands alone"
+		}
+		return nil
+	})
+	return out, err
 }
