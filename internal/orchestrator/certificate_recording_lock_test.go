@@ -84,7 +84,10 @@ func TestCertificateRecordingWaitsForRebuildTableBeforeFingerprint(t *testing.T)
 		completed <- err
 	}()
 	waiting := false
-	until := time.Now().Add(5 * time.Second)
+	// The writer opens its own pool connection before it can block on the
+	// relation; under the race-enabled parallel gate that takes seconds, so
+	// the budget is generous (the surrounding context still bounds the test).
+	until := time.Now().Add(15 * time.Second)
 	for time.Now().Before(until) {
 		select {
 		case err := <-completed:
