@@ -196,3 +196,10 @@ func TestBasePackagePathStripsTestVariantSuffix(t *testing.T) {
 		t.Fatalf("basePackagePath(plain) = %q, want %q", got, plain)
 	}
 }
+
+func TestReviewedExecAllowlistPinsNTLMHelper(t *testing.T) {
+	want := map[string]bool{"NTLMCommandHelper": true}
+	if got := reviewedExecUses["ee/enterpriseauth/ntlm.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ee/enterpriseauth/ntlm.go reviewed exec allowlist = %#v, want %#v", got, want)
+	}
+}

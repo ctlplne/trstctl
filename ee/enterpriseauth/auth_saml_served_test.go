@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"compress/flate"
 	"context"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -228,7 +227,7 @@ type mockSAMLIdP struct {
 	artifacts map[string][]byte
 	resolves  int
 	key       any
-	cert      *x509.Certificate
+	cert      any
 	// logoutRequests counts the SP-initiated LogoutRequests the IdP consumed
 	// (A78); lastLogoutNameID is the NameID the last one named.
 	logoutRequests   int

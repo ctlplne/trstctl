@@ -16,16 +16,17 @@ import (
 // (enveloped XMLDSig, RSA/ECDSA-SHA256) with the test IdP material, so tests
 // outside the cryptography boundary can produce signed LogoutRequest and
 // LogoutResponse messages without touching signature primitives.
-func SignEnvelopedXML(key stdcrypto.PrivateKey, cert *x509.Certificate, document []byte) ([]byte, error) {
+func SignEnvelopedXML(key any, cert any, document []byte) ([]byte, error) {
 	signer, ok := key.(stdcrypto.Signer)
-	if !ok || cert == nil {
+	certificate, certOK := cert.(*x509.Certificate)
+	if !ok || !certOK || certificate == nil {
 		return nil, errors.New("samltest: signing needs the IdP private key and certificate")
 	}
 	doc := etree.NewDocument()
 	if err := doc.ReadFromBytes(document); err != nil || doc.Root() == nil {
 		return nil, fmt.Errorf("samltest: parse document to sign: %v", err)
 	}
-	ctx, err := dsig.NewSigningContext(signer, [][]byte{cert.Raw})
+	ctx, err := dsig.NewSigningContext(signer, [][]byte{certificate.Raw})
 	if err != nil {
 		return nil, err
 	}

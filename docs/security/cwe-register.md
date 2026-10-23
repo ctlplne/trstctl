@@ -1886,8 +1886,8 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `ee/enterpriseauth/auth_saml_served_test.go:290` | test IdP redirects to the SP's own SLO URL read from its metadata (CWE-601) |
-| `ee/enterpriseauth/auth_saml_served_test.go:371` | test IdP redirects to the ACS it read from the SP's own metadata (CWE-601) |
+| `ee/enterpriseauth/auth_saml_served_test.go:289` | test IdP redirects to the SP's own SLO URL read from its metadata (CWE-601) |
+| `ee/enterpriseauth/auth_saml_served_test.go:370` | test IdP redirects to the ACS it read from the SP's own metadata (CWE-601) |
 | `ee/enterpriseauth/oidc_fixture_test.go:48` | test redirect within its own local server (CWE-601) |
 | `internal/server/auth_served_test.go:66` | test redirect within its own local server (CWE-601) |
 

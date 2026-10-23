@@ -264,6 +264,21 @@ func (d *issuanceDispatcher) Deliver(ctx context.Context, m orchestrator.Message
 	return err
 }
 
+// deliverDirectoryWriteback routes a directory writeback row (SCIM A73, LDAP
+// A83) to its licensed worker; an unconfigured worker is a definite no-effect.
+func (d *issuanceDispatcher) deliverDirectoryWriteback(ctx context.Context, m orchestrator.Message) error {
+	if m.Destination == orchestrator.DestinationLDAPWriteback {
+		if d.ldapWriteback == nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: LDAP directory writeback is not configured"))
+		}
+		return d.ldapWriteback.Deliver(ctx, m)
+	}
+	if d.scimWriteback == nil {
+		return orchestrator.DefiniteNoEffect(errors.New("server: SCIM directory writeback is not configured"))
+	}
+	return d.scimWriteback.Deliver(ctx, m)
+}
+
 func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message) error {
 	switch m.Destination {
 	case "ca.issue":
@@ -282,16 +297,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleIncidentMigrationRevoke(ctx, m)
 	case orchestrator.DestinationMigrationApplianceIssue:
 		return d.handleMigrationApplianceIssue(ctx, m)
-	case orchestrator.DestinationSCIMWriteback:
-		if d.scimWriteback == nil {
-			return orchestrator.DefiniteNoEffect(errors.New("server: SCIM directory writeback is not configured"))
-		}
-		return d.scimWriteback.Deliver(ctx, m)
-	case orchestrator.DestinationLDAPWriteback:
-		if d.ldapWriteback == nil {
-			return orchestrator.DefiniteNoEffect(errors.New("server: LDAP directory writeback is not configured"))
-		}
-		return d.ldapWriteback.Deliver(ctx, m)
+	case orchestrator.DestinationSCIMWriteback, orchestrator.DestinationLDAPWriteback:
+		return d.deliverDirectoryWriteback(ctx, m)
 	case orchestrator.DestinationConnectorRollback:
 		// Agent-executed rows are deferred so they stay claimable; a
 		// control_plane row (a cloud store's re-bind, A58) runs here. See

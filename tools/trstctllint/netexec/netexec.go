@@ -250,6 +250,16 @@ var reviewedExecUses = map[string]map[string]bool{
 	"cmd/trstctl/demo.go": {
 		"runDemoAgent": true,
 	},
+	// A80's NTLM login relays the handshake to a domain-joined helper. In
+	// command mode the helper is an operator-pinned absolute executable from
+	// deployment configuration (validated at startup), its argv is the fixed
+	// squid-2.5-ntlmssp protocol flag or operator-configured args, no shell is
+	// involved, no request byte reaches argv (the NTLM messages travel on
+	// stdin as base64 lines), one process serves one handshake under a
+	// deadline and is killed on close. Pinned by TestReviewedExecAllowlistPinsNTLMHelper.
+	"ee/enterpriseauth/ntlm.go": {
+		"NTLMCommandHelper": true,
+	},
 	"tools/pqclab/main.go": {
 		"newValidatedCommand": true,
 	},
