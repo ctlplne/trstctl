@@ -2704,6 +2704,27 @@ func componentSchemas() map[string]*Schema {
 		"summary":      ref("NHIExposureSummary"),
 		"findings":     {Type: "array", Items: ref("NHIExposureFinding")},
 	}, "capability", "generated_at", "coverage", "summary", "findings")
+	nhiPostureAutomationSummary := object(map[string]*Schema{
+		"violations": {Type: "integer"}, "revoke": {Type: "integer"}, "right_size": {Type: "integer"},
+		"report_only": {Type: "integer"}, "not_applicable": {Type: "integer"},
+	}, "violations", "revoke", "right_size", "report_only", "not_applicable")
+	nhiPostureAutomationRun := object(map[string]*Schema{
+		"id": uuid(), "playbook_id": str(), "status": str(), "phase": str(), "created_at": timestamp(),
+	}, "id", "playbook_id", "status", "phase", "created_at")
+	nhiPostureAutomationItem := object(map[string]*Schema{
+		"inventory_id": str(), "display_name": str(), "kind": str(), "status": str(),
+		"posture": {Type: "array", Items: str()}, "rule": str(), "severity": str(), "reason": str(),
+		"remediation": {Type: "string", Enum: []string{"revoke", "right_size"}},
+		"action":      {Type: "string", Enum: []string{"revoke", "right_size", "report_only", "not_applicable"}},
+		"detail":      str(),
+		"last_run":    ref("NHIPostureAutomationRun"),
+	}, "inventory_id", "display_name", "kind", "status", "posture", "rule", "action")
+	nhiPostureAutomation := object(map[string]*Schema{
+		"capability": str(), "generated_at": timestamp(), "coverage": {Type: "array", Items: str()},
+		"policy_module_sha256": str(), "policy_evaluated": {Type: "integer"}, "policy_evaluation_errors": {Type: "integer"},
+		"summary": ref("NHIPostureAutomationSummary"), "items": {Type: "array", Items: ref("NHIPostureAutomationItem")},
+		"evidence_refs": {Type: "array", Items: str()}, "per_tenant_sweep_limit": {Type: "integer"},
+	}, "capability", "generated_at", "coverage", "policy_evaluated", "policy_evaluation_errors", "summary", "items", "evidence_refs", "per_tenant_sweep_limit")
 	nhiDecommissionSignal := object(map[string]*Schema{
 		"type":            {Type: "string", Enum: []string{"departure", "vendor_term", "inactivity"}},
 		"subject":         str(),
@@ -6921,6 +6942,10 @@ func componentSchemas() map[string]*Schema {
 		"NHIExposureSummary":                       nhiExposureSummary,
 		"NHIExposureFinding":                       nhiExposureFinding,
 		"NHIExposurePosture":                       nhiExposurePosture,
+		"NHIPostureAutomationSummary":              nhiPostureAutomationSummary,
+		"NHIPostureAutomationRun":                  nhiPostureAutomationRun,
+		"NHIPostureAutomationItem":                 nhiPostureAutomationItem,
+		"NHIPostureAutomation":                     nhiPostureAutomation,
 		"NHIDecommissionSignal":                    nhiDecommissionSignal,
 		"NHIDecommissionRequest":                   nhiDecommissionRequest,
 		"NHIDecommissionSummary":                   nhiDecommissionSummary,

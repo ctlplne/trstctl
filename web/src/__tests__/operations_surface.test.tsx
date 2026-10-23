@@ -29,6 +29,7 @@ const { apiMock } = vi.hoisted(() => ({
     nhiStalePosture: vi.fn(),
     nhiStaticPosture: vi.fn(),
     nhiExposurePosture: vi.fn(),
+    nhiPostureAutomation: vi.fn(),
     rotationRuns: vi.fn(),
     rotationRun: vi.fn(),
     connectorDeliveries: vi.fn(),
@@ -112,6 +113,17 @@ describe("operational console surface", () => {
     apiMock.nhiStalePosture.mockResolvedValue(emptyNHIStalePosture());
     apiMock.nhiStaticPosture.mockResolvedValue(emptyNHIStaticPosture());
     apiMock.nhiExposurePosture.mockResolvedValue(emptyNHIExposurePosture());
+    apiMock.nhiPostureAutomation.mockResolvedValue({
+      capability: "CAP-POST-06",
+      generated_at: "2026-06-30T00:00:00Z",
+      coverage: ["nhi_posture_rules"],
+      policy_evaluated: 0,
+      policy_evaluation_errors: 0,
+      summary: { violations: 0, revoke: 0, right_size: 0, report_only: 0, not_applicable: 0 },
+      items: [],
+      evidence_refs: [],
+      per_tenant_sweep_limit: 25,
+    });
     apiMock.contextualRiskPriorities.mockResolvedValue(emptyContextualRiskPriorities());
     apiMock.approveIdentityAction.mockResolvedValue({ resource: "req-1", action: "issue", approver: "ra", approvals: 1 });
     apiMock.transitionIdentity.mockResolvedValue({ id: "req-1", name: "requested-svc", status: "retired" });
@@ -1117,6 +1129,49 @@ describe("operational console surface", () => {
         },
       ],
     });
+    apiMock.nhiPostureAutomation.mockResolvedValue({
+      capability: "CAP-POST-06",
+      generated_at: "2026-06-30T00:00:00Z",
+      coverage: ["nhi_posture_rules", "revoke", "right_size", "lifecycle_gate", "playbook_evidence"],
+      policy_module_sha256: "a".repeat(64),
+      policy_evaluated: 3,
+      policy_evaluation_errors: 0,
+      summary: { violations: 2, revoke: 1, right_size: 1, report_only: 0, not_applicable: 0 },
+      items: [
+        {
+          inventory_id: "identity/dormant-1",
+          display_name: "legacy-batch-key",
+          kind: "api_key",
+          status: "deployed",
+          posture: ["stale"],
+          rule: "dormant-managed-revoke",
+          severity: "high",
+          reason: "dormant managed NHIs are revoked",
+          remediation: "revoke",
+          action: "revoke",
+          last_run: {
+            id: "11111111-1111-1111-1111-111111111111",
+            playbook_id: "identity-revoke",
+            status: "refused",
+            phase: "lifecycle_gate_refused",
+            created_at: "2026-06-30T00:00:00Z",
+          },
+        },
+        {
+          inventory_id: "identity/wide-1",
+          display_name: "payments-bot",
+          kind: "service_account",
+          status: "deployed",
+          posture: ["overprivilege"],
+          rule: "unused-scopes-trim",
+          severity: "medium",
+          remediation: "right_size",
+          action: "right_size",
+        },
+      ],
+      evidence_refs: ["projection:nhi_inventory"],
+      per_tenant_sweep_limit: 25,
+    });
     apiMock.nhiExposurePosture.mockResolvedValue({
       ...emptyNHIExposurePosture(),
       summary: {
@@ -1273,6 +1328,14 @@ describe("operational console surface", () => {
     expect(screen.getByText("public-ci-api-key")).toBeInTheDocument();
     expect(screen.getByText("internet_exposed, insecure_transport, weak_authentication, wildcard_reachability")).toBeInTheDocument();
     expect(screen.getByText("internet / none / plaintext_http")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Automatic NHI posture actions" })).toBeInTheDocument();
+    expect(screen.getByText(/CAP-POST-06: 2 rule matches; 1 to revoke, 1 to right-size/)).toBeInTheDocument();
+    const automatic = screen.getByText("dormant-managed-revoke").closest("tr")!;
+    expect(within(automatic).getByText("Revoke through the lifecycle gate")).toBeInTheDocument();
+    expect(within(automatic).getByText("refused")).toBeInTheDocument();
+    const rightSize = screen.getByText("unused-scopes-trim").closest("tr")!;
+    expect(within(rightSize).getByText("Queue right-size of unused grants")).toBeInTheDocument();
+    expect(within(rightSize).getByText("None yet")).toBeInTheDocument();
     expect(screen.getAllByTestId("risk-subject").map((cell) => cell.textContent)).toEqual(["root-ca.example.test", "old-leaf.example.test"]);
     expect(screen.queryByRole("heading", { name: "Risk band legend" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Risk bands" })).toHaveAccessibleDescription(/Critical 90-100/);

@@ -14741,6 +14741,67 @@ export const messages = {
     defaultMessage: "Recommendation",
     description: "Exposed NHI table column for remediation recommendation.",
   },
+  "risk.nhiAutomation.heading": {
+    defaultMessage: "Automatic NHI posture actions",
+    description: "Risk page section heading for the automatic actions tenant nhi_posture rules ask for.",
+  },
+  "risk.nhiAutomation.summary": {
+    defaultMessage:
+      "CAP-POST-06: {violations} rule matches; {revoke} to revoke, {rightSize} to right-size, {reportOnly} reported only, {notApplicable} not applicable. Up to {limit} actions per sweep.",
+    description: "Risk page summary of the automatic NHI posture actions plan.",
+  },
+  "risk.nhiAutomation.noRules": {
+    defaultMessage: "No nhi_posture rule in the active policy asks for an action. Automatic actions are opt-in through the tenant policy module.",
+    description: "Empty state when the tenant policy declares no matching nhi_posture rules.",
+  },
+  "risk.nhiAutomation.loading": {
+    defaultMessage: "Loading automatic NHI posture actions.",
+    description: "Loading text for the automatic NHI posture actions plan.",
+  },
+  "risk.nhiAutomation.unavailableTitle": {
+    defaultMessage: "Automatic NHI posture actions unavailable",
+    description: "Title when the automatic NHI posture actions plan cannot be read.",
+  },
+  "risk.nhiAutomation.caption": {
+    defaultMessage: "Automatic actions the tenant's nhi_posture rules ask for",
+    description: "Screen-reader caption for the automatic NHI posture actions table.",
+  },
+  "risk.nhiAutomation.nhi": {
+    defaultMessage: "NHI",
+    description: "Automatic NHI posture actions table column for the NHI.",
+  },
+  "risk.nhiAutomation.rule": {
+    defaultMessage: "Rule",
+    description: "Automatic NHI posture actions table column for the policy rule.",
+  },
+  "risk.nhiAutomation.action": {
+    defaultMessage: "Action",
+    description: "Automatic NHI posture actions table column for what the sweep does.",
+  },
+  "risk.nhiAutomation.lastRun": {
+    defaultMessage: "Last automatic run",
+    description: "Automatic NHI posture actions table column for the latest automatic playbook run.",
+  },
+  "risk.nhiAutomation.never": {
+    defaultMessage: "None yet",
+    description: "Shown when no automatic run exists yet for a rule match.",
+  },
+  "risk.nhiAutomation.action.revoke": {
+    defaultMessage: "Revoke through the lifecycle gate",
+    description: "Automatic NHI posture action: revoke a managed identity.",
+  },
+  "risk.nhiAutomation.action.right_size": {
+    defaultMessage: "Queue right-size of unused grants",
+    description: "Automatic NHI posture action: queue the right-size connector intent.",
+  },
+  "risk.nhiAutomation.action.report_only": {
+    defaultMessage: "Reported only",
+    description: "Automatic NHI posture action: the rule asks for nothing the sweep recognizes.",
+  },
+  "risk.nhiAutomation.action.not_applicable": {
+    defaultMessage: "Not applicable",
+    description: "Automatic NHI posture action: the row cannot take the requested remediation.",
+  },
   "identities.decommission.ariaLabel": {
     defaultMessage: "NHI decommission",
     description: "Accessible label for the NHI decommission form on the identities page.",

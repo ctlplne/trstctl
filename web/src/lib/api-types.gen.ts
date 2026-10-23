@@ -5702,6 +5702,50 @@ export interface NHIPolicyComplianceSummary {
   violations: number;
 }
 
+export interface NHIPostureAutomation {
+  capability: string;
+  coverage: string[];
+  evidence_refs: string[];
+  generated_at: string;
+  items: NHIPostureAutomationItem[];
+  per_tenant_sweep_limit: number;
+  policy_evaluated: number;
+  policy_evaluation_errors: number;
+  policy_module_sha256?: string;
+  summary: NHIPostureAutomationSummary;
+}
+
+export interface NHIPostureAutomationItem {
+  action: "revoke" | "right_size" | "report_only" | "not_applicable";
+  detail?: string;
+  display_name: string;
+  inventory_id: string;
+  kind: string;
+  last_run?: NHIPostureAutomationRun;
+  posture: string[];
+  reason?: string;
+  remediation?: "revoke" | "right_size";
+  rule: string;
+  severity?: string;
+  status: string;
+}
+
+export interface NHIPostureAutomationRun {
+  created_at: string;
+  id: string;
+  phase: string;
+  playbook_id: string;
+  status: string;
+}
+
+export interface NHIPostureAutomationSummary {
+  not_applicable: number;
+  report_only: number;
+  revoke: number;
+  right_size: number;
+  violations: number;
+}
+
 export interface NHIReviewCampaign {
   certified_count: number;
   completed_at?: string;

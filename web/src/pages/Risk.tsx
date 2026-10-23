@@ -7,6 +7,7 @@ import {
   type ContextualRiskPriority,
   type CredentialRisk,
   type NHIExposurePosture,
+  type NHIPostureAutomation,
   type NHIOverPrivilegePosture,
   type NHIPolicyCompliance,
   type NHIStaticPosture,
@@ -82,6 +83,9 @@ export function Risk() {
   const [nhiExposurePosture, setNHIExposurePosture] = useState<NHIExposurePosture | null>(null);
   const [nhiExposurePostureLoading, setNHIExposurePostureLoading] = useState(true);
   const [nhiExposurePostureError, setNHIExposurePostureError] = useState<string | null>(null);
+  const [nhiAutomation, setNHIAutomation] = useState<NHIPostureAutomation | null>(null);
+  const [nhiAutomationLoading, setNHIAutomationLoading] = useState(true);
+  const [nhiAutomationError, setNHIAutomationError] = useState<string | null>(null);
   const [contextualRisk, setContextualRisk] = useState<ContextualRiskPriorities | null>(null);
   const [contextualRiskLoading, setContextualRiskLoading] = useState(true);
   const [contextualRiskError, setContextualRiskError] = useState<string | null>(null);
@@ -241,6 +245,29 @@ export function Risk() {
 
   useEffect(() => {
     let active = true;
+    setNHIAutomationLoading(true);
+    setNHIAutomationError(null);
+    api
+      .nhiPostureAutomation()
+      .then((plan) => {
+        if (!active) return;
+        setNHIAutomation(plan);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setNHIAutomation(null);
+        setNHIAutomationError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (active) setNHIAutomationLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
     setNHIExposurePostureLoading(true);
     setNHIExposurePostureError(null);
     api
@@ -364,6 +391,7 @@ export function Risk() {
           <NHIStalePanel posture={nhiStalePosture} loading={nhiStalePostureLoading} error={nhiStalePostureError} />
           <NHIStaticPanel posture={nhiStaticPosture} loading={nhiStaticPostureLoading} error={nhiStaticPostureError} />
           <NHIExposurePanel posture={nhiExposurePosture} loading={nhiExposurePostureLoading} error={nhiExposurePostureError} />
+          <NHIAutomationPanel plan={nhiAutomation} loading={nhiAutomationLoading} error={nhiAutomationError} />
 
           <section aria-labelledby="certificate-risk-heading" className="min-w-0">
             <h2 id="certificate-risk-heading" className="mb-1 text-title font-semibold">
@@ -865,6 +893,85 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
                     })}
                   </td>
                   <td>{finding.recommendation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const nhiAutomationActionKeys = {
+  revoke: "risk.nhiAutomation.action.revoke",
+  right_size: "risk.nhiAutomation.action.right_size",
+  report_only: "risk.nhiAutomation.action.report_only",
+  not_applicable: "risk.nhiAutomation.action.not_applicable",
+} as const;
+
+// A100: the actions the tenant's nhi_posture rules ask for, as the served plan
+// reads them, with the latest automatic playbook run for each.
+function NHIAutomationPanel({ plan, loading, error }: { plan: NHIPostureAutomation | null; loading: boolean; error: string | null }) {
+  const { t } = useTranslation();
+  const items = plan?.items?.slice(0, 8) ?? [];
+  return (
+    <section aria-labelledby="nhi-automation-heading" className="mb-4 border-b border-border pb-4">
+      <div>
+        <h2 id="nhi-automation-heading" className="text-title font-semibold">
+          {t("risk.nhiAutomation.heading")}
+        </h2>
+        {plan && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("risk.nhiAutomation.summary", {
+              violations: plan.summary.violations,
+              revoke: plan.summary.revoke,
+              rightSize: plan.summary.right_size,
+              reportOnly: plan.summary.report_only,
+              notApplicable: plan.summary.not_applicable,
+              limit: plan.per_tenant_sweep_limit,
+            })}
+          </p>
+        )}
+      </div>
+      {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiAutomation.loading")}</p>}
+      {error && (
+        <div className="mt-3">
+          <UnavailableState title={t("risk.nhiAutomation.unavailableTitle")}>{error}</UnavailableState>
+        </div>
+      )}
+      {!loading && !error && plan && items.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiAutomation.noRules")}</p>}
+      {!loading && !error && items.length > 0 && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="ui-table min-w-[62rem]">
+            <caption className="sr-only">{t("risk.nhiAutomation.caption")}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("risk.nhiAutomation.nhi")}</th>
+                <th scope="col">{t("risk.nhiAutomation.rule")}</th>
+                <th scope="col">{t("risk.nhiAutomation.action")}</th>
+                <th scope="col">{t("risk.nhiAutomation.lastRun")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={`${item.inventory_id}/${item.rule}`}>
+                  <td>
+                    <p className="font-medium">{item.display_name}</p>
+                    <p className="text-caption text-muted-foreground">{item.posture.join(", ")}</p>
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.severity && <StatusBadge vocabulary="risk" value={item.severity} />}
+                      <span>{item.rule}</span>
+                    </div>
+                    {item.reason && <p className="text-caption text-muted-foreground">{item.reason}</p>}
+                  </td>
+                  <td>
+                    <p>{t(nhiAutomationActionKeys[item.action])}</p>
+                    {item.detail && <p className="text-caption text-muted-foreground">{item.detail}</p>}
+                  </td>
+                  <td>{item.last_run ? <span>{item.last_run.status}</span> : t("risk.nhiAutomation.never")}</td>
                 </tr>
               ))}
             </tbody>

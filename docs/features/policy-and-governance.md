@@ -102,6 +102,44 @@ records the rule in the transition reason (`posture:<rule>`). Only `renew` is
 recognized; any other value queues nothing. The listing shows each violation's
 `remediation`.
 
+**NHI posture rules (CAP-POST-06).** The same module may declare an `nhi_posture`
+set over one NHI inventory row's merged posture: `input.action == "nhi_posture"` and
+`input.nhi` carrying `inventory_id`, `kind`, `source`, `display_name`, `owner_id`,
+`owner_status`, `status`, `managed` (a managed identity row), `posture` (the families
+that fired: `overprivilege`, `stale`, `static_credentials`, `exposure`),
+`finding_types`, `severity`, `risk_score`, `activity_age_days`, `credential_age_days`,
+`rotation_age_days`, and the `granted_scopes`, `unused_scopes` and
+`recommended_scopes` of usage-backed over-privilege. A rule may ask for one of two
+remediations:
+
+```rego
+nhi_posture contains {"rule": "dormant-managed-revoke", "severity": "high",
+	"reason": "dormant managed NHIs are revoked", "remediation": "revoke"} if {
+	input.action == "nhi_posture"
+	input.nhi.managed
+	"dormant_activity" in input.nhi.finding_types
+}
+```
+
+`"revoke"` revokes the managed identity behind the row, and only an issued, deployed,
+renewing or renewal_failed one, through the same lifecycle gate as the identity's own
+revoke: the sweep acts as `system:nhi-posture`, holding `certs:issue`, so the ABAC
+overlay and this module's own `revoke` decision see that actor and can deny it, and
+dual control refuses it because an automatic action carries no exact approval. The
+revocation reason is RFC 5280 `cessationOfOperation`. `"right_size"` queues the
+right-size playbook's `connector.right_size` intent for the row's usage-backed unused
+grants, once per row, rule and exact scope set. The leader's lifecycle sweep acts on
+them under the automation switch and maintenance-window deferral the renewals use, at
+most 25 actions per tenant per sweep. Each action is a remediation playbook run
+created by `system:nhi-posture` whose reason is `posture:<rule>` and whose evidence
+names the rule and the module digest. A gate refusal is recorded the same way (status
+`refused`) and retried after 24 hours. Any other remediation value is reported and
+never acted on. `GET /api/v1/nhi/posture/automation` (`trstctl-cli nhi posture
+automation`, and the Risk page panel) shows each match's action (`revoke`,
+`right_size`, `report_only`, or `not_applicable` with the reason) and its latest
+automatic run, and `POST /api/v1/policy/dry-run` with
+`{"action": "nhi_posture", "tenant_id": ..., "nhi": {...}}` previews a candidate rule.
+
 The lifecycle `allow`/`reason` are not consulted for posture, so a module that
 declares no posture rules reports nothing. Posture evaluation is a read and is
 not written to the `policy.decision` audit stream; the listing names the module

@@ -366,6 +366,7 @@ import type {
   NHIDecommissionRequest,
   NHIDecommissionResponse,
   NHIExposurePosture,
+  NHIPostureAutomation,
   NHIInventory,
   NHIInventoryItem,
   NHIOverPrivilegePosture,
@@ -1186,6 +1187,7 @@ export type {
   NHIDecommissionRequest,
   NHIDecommissionResponse,
   NHIExposurePosture,
+  NHIPostureAutomation,
   NHIInventory,
   NHIInventoryItem,
   NHIOverPrivilegePosture,
@@ -1920,6 +1922,7 @@ export interface Api {
   nhiStalePosture(): Promise<NHIStalePosture>;
   nhiStaticPosture(): Promise<NHIStaticPosture>;
   nhiExposurePosture(): Promise<NHIExposurePosture>;
+  nhiPostureAutomation(): Promise<NHIPostureAutomation>;
   decommissionNHI(input: NHIDecommissionRequest): Promise<NHIDecommissionResponse>;
   ownershipAttribution(): Promise<OwnershipAttribution>;
   getIdentity(id: string): Promise<Identity>;
@@ -2628,6 +2631,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   nhiStalePosture: () => req<NHIStalePosture>("/api/v1/nhi/posture/stale"),
   nhiStaticPosture: () => req<NHIStaticPosture>("/api/v1/nhi/posture/static-credentials"),
   nhiExposurePosture: () => req<NHIExposurePosture>("/api/v1/nhi/posture/exposure"),
+  nhiPostureAutomation: () => req<NHIPostureAutomation>("/api/v1/nhi/posture/automation"),
   decommissionNHI: (input) => mutate<NHIDecommissionResponse>("POST", "/api/v1/nhi/decommission", input),
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),
   getIdentity: (id) => req<Identity>(`/api/v1/identities/${encodeURIComponent(id)}`),

@@ -23627,6 +23627,181 @@
         ],
         "type": "object"
       },
+      "NHIPostureAutomation": {
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIPostureAutomationItem"
+            },
+            "type": "array"
+          },
+          "per_tenant_sweep_limit": {
+            "type": "integer"
+          },
+          "policy_evaluated": {
+            "type": "integer"
+          },
+          "policy_evaluation_errors": {
+            "type": "integer"
+          },
+          "policy_module_sha256": {
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/NHIPostureAutomationSummary"
+          }
+        },
+        "required": [
+          "capability",
+          "generated_at",
+          "coverage",
+          "policy_evaluated",
+          "policy_evaluation_errors",
+          "summary",
+          "items",
+          "evidence_refs",
+          "per_tenant_sweep_limit"
+        ],
+        "type": "object"
+      },
+      "NHIPostureAutomationItem": {
+        "properties": {
+          "action": {
+            "enum": [
+              "revoke",
+              "right_size",
+              "report_only",
+              "not_applicable"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "last_run": {
+            "$ref": "#/components/schemas/NHIPostureAutomationRun"
+          },
+          "posture": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "remediation": {
+            "enum": [
+              "revoke",
+              "right_size"
+            ],
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "display_name",
+          "kind",
+          "status",
+          "posture",
+          "rule",
+          "action"
+        ],
+        "type": "object"
+      },
+      "NHIPostureAutomationRun": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "playbook_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "playbook_id",
+          "status",
+          "phase",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "NHIPostureAutomationSummary": {
+        "properties": {
+          "not_applicable": {
+            "type": "integer"
+          },
+          "report_only": {
+            "type": "integer"
+          },
+          "revoke": {
+            "type": "integer"
+          },
+          "right_size": {
+            "type": "integer"
+          },
+          "violations": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "violations",
+          "revoke",
+          "right_size",
+          "report_only",
+          "not_applicable"
+        ],
+        "type": "object"
+      },
       "NHIReviewCampaign": {
         "properties": {
           "certified_count": {
@@ -56833,6 +57008,53 @@
           }
         ],
         "summary": "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose",
+        "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/automation": {
+      "get": {
+        "operationId": "listNHIPostureAutomation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIPostureAutomation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each",
         "x-trstctl-permission": "nhi:read"
       }
     },

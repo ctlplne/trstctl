@@ -188,6 +188,18 @@ const { apiMock, resolvePendingApiResponses } = vi.hoisted(() => {
           },
           findings: [],
         };
+      case "nhiPostureAutomation":
+        return {
+          capability: "CAP-POST-06",
+          generated_at: "2026-06-30T00:00:00Z",
+          coverage: ["nhi_posture_rules"],
+          policy_evaluated: 0,
+          policy_evaluation_errors: 0,
+          summary: { violations: 0, revoke: 0, right_size: 0, report_only: 0, not_applicable: 0 },
+          items: [],
+          evidence_refs: [],
+          per_tenant_sweep_limit: 25,
+        };
       case "nhiExposurePosture":
         return {
           summary: {

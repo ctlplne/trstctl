@@ -112,6 +112,8 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("NHIInventoryItem", "status", observationPredicate, "internal/api/nhi_inventory.go:API.nhiInventory"),
 	evidence("NHIOverPrivilegeFinding", "status", observationPredicate, "internal/api/nhi_posture.go:nhiOverPrivilegeForItem"),
 	evidence("NHIPolicyComplianceFinding", "status", observationPredicate, "internal/api/nhi_policy_compliance.go:nhiPolicyComplianceForItem"),
+	evidence("NHIPostureAutomationItem", "status", observationPredicate, "internal/api/nhi_posture_automation.go:API.nhiPostureAutomationPlan"),
+	evidence("NHIPostureAutomationRun", "status", eventProjectionPredicate, "internal/store/remediation_playbooks.go:Store.ApplyRemediationPlaybookRunRecordedTx"),
 	evidence("NHIReviewCampaign", "status", eventProjectionPredicate, "internal/orchestrator/nhi_access_review.go:Orchestrator.StartNHIReviewCampaign"),
 	evidence("NHIReviewItem", "status", eventProjectionPredicate, "internal/orchestrator/nhi_access_review.go:Orchestrator.DecideNHIReviewItem"),
 	evidence("NHIStaleFinding", "status", observationPredicate, "internal/api/nhi_stale_posture.go:nhiStaleFindingForItem"),

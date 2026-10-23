@@ -48,7 +48,8 @@ type DryRunResult struct {
 	Reason       string        `json:"reason,omitempty"`
 	Error        string        `json:"error,omitempty"`
 	Trace        []DryRunTrace `json:"trace"`
-	// Violations are the certificate_posture rules a posture dry run fired (A42).
+	// Violations are the certificate_posture (A42) or nhi_posture (A100)
+	// rules a posture dry run fired.
 	Violations []PostureViolation `json:"violations,omitempty"`
 }
 
@@ -100,8 +101,16 @@ func dryRunLifecycle(ctx context.Context, module string, input map[string]any, l
 		return result, nil
 	}
 	result.Valid = true
-	if action, _ := input["action"].(string); Action(strings.TrimSpace(action)) == ActionCertificatePosture {
-		result.Violations = postureFrom(rs)
+	action, _ := input["action"].(string)
+	set, remediations := "", map[string]bool(nil)
+	switch Action(strings.TrimSpace(action)) {
+	case ActionCertificatePosture:
+		set, remediations = "certificate_posture", certificatePostureRemediations
+	case ActionNHIPosture:
+		set, remediations = "nhi_posture", nhiPostureRemediations
+	}
+	if set != "" {
+		result.Violations = postureFrom(rs, set, remediations)
 		result.Deny = len(result.Violations) > 0
 		result.Allow = !result.Deny
 		if result.Deny {
@@ -179,8 +188,12 @@ func validateLifecycleDryRunInput(input map[string]any) error {
 		if _, ok := input["certificate"].(map[string]any); !ok {
 			return errors.New("policy: certificate_posture dry-run input.certificate must be an object of certificate facts")
 		}
+	case ActionNHIPosture:
+		if _, ok := input["nhi"].(map[string]any); !ok {
+			return errors.New("policy: nhi_posture dry-run input.nhi must be an object of NHI posture facts")
+		}
 	default:
-		return errors.New("policy: lifecycle dry-run input.action must be issue, deploy, revoke, code_sign, or certificate_posture")
+		return errors.New("policy: lifecycle dry-run input.action must be issue, deploy, revoke, code_sign, certificate_posture, or nhi_posture")
 	}
 	if tenant, _ := input["tenant_id"].(string); strings.TrimSpace(tenant) == "" {
 		return errors.New("policy: dry-run input.tenant_id is required")

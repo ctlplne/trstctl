@@ -644,6 +644,9 @@ trstctl-cli nhi posture static-credentials
 # List internet-exposed and insecure-deployment NHI posture findings.
 trstctl-cli nhi posture exposure
 
+# Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each.
+trstctl-cli nhi posture automation
+
 # List and run automated remediation playbooks.
 trstctl-cli remediation playbooks
 trstctl-cli remediation playbooks run nhi-right-size -f right-size.json --force

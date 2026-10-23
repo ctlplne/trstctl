@@ -122,6 +122,40 @@ func (s *Server) remediateTenantPosture(ctx context.Context, tenantID string, no
 	return queued, nil
 }
 
+// runNHIPostureAutomationOnce acts on the tenants' nhi_posture rules that ask
+// for revoke or right_size (A100): through the lifecycle gate and the
+// right-size playbook, bounded per tenant, each action a playbook run. One
+// tenant's failure is logged and does not stall the others.
+func (s *Server) runNHIPostureAutomationOnce(ctx context.Context, now time.Time) (api.NHIPostureAutomationResult, error) {
+	var total api.NHIPostureAutomationResult
+	if s.api == nil || s.store == nil {
+		return total, nil
+	}
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		return total, err
+	}
+	var errs []error
+	for _, tenant := range tenants {
+		r, err := s.api.RunNHIPostureAutomation(ctx, tenant.TenantID, now)
+		total.Revoked += r.Revoked
+		total.RightSized += r.RightSized
+		total.Refused += r.Refused
+		total.Skipped += r.Skipped
+		if err != nil {
+			errs = append(errs, err)
+			if s.logger != nil {
+				s.logger.Warn("NHI posture automation failed for a tenant", slog.String("tenant_id", tenant.TenantID), slog.String("error", err.Error()))
+			}
+		}
+		if s.logger != nil && r.Revoked+r.RightSized+r.Refused > 0 {
+			s.logger.Info("NHI posture automation acted", slog.String("tenant_id", tenant.TenantID),
+				slog.Int("revoked", r.Revoked), slog.Int("right_sized", r.RightSized), slog.Int("refused", r.Refused))
+		}
+	}
+	return total, errors.Join(errs...)
+}
+
 // postureRenewalRule names the first violation (rules are sorted) that asks
 // for a renewal, or "" when none does.
 func postureRenewalRule(violations []policy.PostureViolation) string {

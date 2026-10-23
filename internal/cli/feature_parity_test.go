@@ -322,8 +322,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A87's `owners cmdb-schedule run` raised it to 568, mapped onto the owners row.
 	// A95's five `provider-access` commands raised it to 573, mapped onto the access row.
 	// eMudhra Part 4's `discovery findings remove-distrusted-root` raised it to 574, mapped onto the discovery row.
-	if len(out) != 574 {
-		t.Fatalf("CLI commands = %d, want 574", len(out))
+	// A100's `nhi posture automation` raised it to 575, mapped onto the credential-risk row.
+	if len(out) != 575 {
+		t.Fatalf("CLI commands = %d, want 575", len(out))
 	}
 	return out
 }

@@ -39,6 +39,10 @@ const (
 	// `certificate_posture` set of violations is read, so a module that
 	// declares no posture rules reports nothing rather than denying everything.
 	ActionCertificatePosture Action = "certificate_posture"
+	// ActionNHIPosture evaluates a tenant's nhi_posture rules over one NHI
+	// inventory row's posture (A100). Like certificate_posture it is not a
+	// lifecycle gate: only the opt-in `nhi_posture` set of violations is read.
+	ActionNHIPosture Action = "nhi_posture"
 )
 
 // Input is the decision input. It is marshaled to the Rego document `input`, so policies
@@ -53,6 +57,9 @@ type Input struct {
 	// Certificate carries the inventory facts a certificate_posture rule may
 	// inspect; public metadata only, never PEM or key material.
 	Certificate *CertificateFacts `json:"certificate,omitempty"`
+	// NHI carries one NHI inventory row's posture for an nhi_posture rule;
+	// metadata only, never a credential value.
+	NHI *NHIFacts `json:"nhi,omitempty"`
 }
 
 // CertificateFacts is the input.certificate object posture rules see.
@@ -75,21 +82,65 @@ type CertificateFacts struct {
 	DeploymentLocation string     `json:"deployment_location,omitempty"`
 }
 
-// PostureViolation is one certificate_posture rule a certificate violates.
+// NHIFacts is the input.nhi object nhi_posture rules see: one NHI inventory
+// row and the posture families that fired for it, merged.
+type NHIFacts struct {
+	InventoryID string `json:"inventory_id"`
+	Kind        string `json:"kind"`
+	Source      string `json:"source"`
+	DisplayName string `json:"display_name,omitempty"`
+	OwnerID     string `json:"owner_id,omitempty"`
+	OwnerStatus string `json:"owner_status,omitempty"`
+	Status      string `json:"status,omitempty"`
+	// Managed is true for a managed identity row (inventory_id identity/<id>),
+	// the only rows an automatic revoke may act on.
+	Managed bool `json:"managed"`
+	// Posture names the families that fired: overprivilege, stale,
+	// static_credentials, exposure.
+	Posture []string `json:"posture"`
+	// FindingTypes is the union of the families' finding types.
+	FindingTypes      []string `json:"finding_types"`
+	Severity          string   `json:"severity,omitempty"`
+	RiskScore         int      `json:"risk_score"`
+	ActivityAgeDays   int      `json:"activity_age_days,omitempty"`
+	CredentialAgeDays int      `json:"credential_age_days,omitempty"`
+	RotationAgeDays   int      `json:"rotation_age_days,omitempty"`
+	GrantedScopes     []string `json:"granted_scopes,omitempty"`
+	UnusedScopes      []string `json:"unused_scopes,omitempty"`
+	RecommendedScopes []string `json:"recommended_scopes,omitempty"`
+}
+
+// PostureViolation is one posture rule (certificate_posture or nhi_posture)
+// a certificate or an NHI violates.
 type PostureViolation struct {
 	Rule     string `json:"rule"`
 	Severity string `json:"severity,omitempty"`
 	Reason   string `json:"reason,omitempty"`
-	// Remediation is what the tenant rule asks the lifecycle scheduler to do
-	// for a managed identity whose served certificate fires it (A47). The
-	// only recognized value is "renew": queue a renewal so the certificate is
-	// replaced. Any other value is dropped, so a typo never queues work.
+	// Remediation is what the tenant rule asks the scheduler to do. A
+	// certificate_posture rule may ask "renew" for a managed identity whose
+	// served certificate fires it (A47); an nhi_posture rule may ask "revoke"
+	// for a managed identity or "right_size" for usage-backed unused grants
+	// (A100). Any other value is dropped, so a typo never queues work.
 	Remediation string `json:"remediation,omitempty"`
 }
 
-// PostureRemediationRenew asks the scheduler to renew the identity whose
-// served certificate violates the rule.
-const PostureRemediationRenew = "renew"
+// The remediations a posture rule may ask for.
+const (
+	// PostureRemediationRenew asks the scheduler to renew the identity whose
+	// served certificate violates the rule.
+	PostureRemediationRenew = "renew"
+	// PostureRemediationRevoke asks the scheduler to revoke the managed
+	// identity behind an NHI row, through the lifecycle gate.
+	PostureRemediationRevoke = "revoke"
+	// PostureRemediationRightSize asks the scheduler to queue the right-size
+	// playbook's connector intent for the row's usage-backed unused grants.
+	PostureRemediationRightSize = "right_size"
+)
+
+var (
+	certificatePostureRemediations = map[string]bool{PostureRemediationRenew: true}
+	nhiPostureRemediations         = map[string]bool{PostureRemediationRevoke: true, PostureRemediationRightSize: true}
+)
 
 // Decision is the policy outcome.
 type Decision struct {
@@ -279,6 +330,17 @@ func (l *LiveEngine) EvaluatePosture(ctx context.Context, in Input) ([]PostureVi
 	return active.engine.EvaluatePosture(ctx, in)
 }
 
+// EvaluateNHIPosture evaluates the tenant's active module's nhi_posture rules
+// over in.NHI (A100), unaudited per call for the same reason as
+// EvaluatePosture.
+func (l *LiveEngine) EvaluateNHIPosture(ctx context.Context, in Input) ([]PostureViolation, error) {
+	active, err := l.active(ctx, in.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	return active.engine.EvaluateNHIPosture(ctx, in)
+}
+
 func (l *LiveEngine) PrepareModule(module string) (*Engine, ModuleInfo, string, error) {
 	eng, info, err := compileLifecycleEngine(module, l.pool, l.log)
 	if err != nil {
@@ -353,6 +415,20 @@ func (e *Engine) EvaluatePosture(ctx context.Context, in Input) ([]PostureViolat
 	if in.Action != ActionCertificatePosture || in.Certificate == nil {
 		return nil, errors.New("policy: posture evaluation requires action certificate_posture and certificate facts")
 	}
+	return e.evaluatePostureSet(ctx, in, "certificate_posture", certificatePostureRemediations)
+}
+
+// EvaluateNHIPosture runs the module and reads its nhi_posture set for one
+// NHI inventory row (A100). A module that declares no such rule yields no
+// violations; the lifecycle allow/reason are not consulted.
+func (e *Engine) EvaluateNHIPosture(ctx context.Context, in Input) ([]PostureViolation, error) {
+	if in.Action != ActionNHIPosture || in.NHI == nil {
+		return nil, errors.New("policy: NHI posture evaluation requires action nhi_posture and NHI facts")
+	}
+	return e.evaluatePostureSet(ctx, in, "nhi_posture", nhiPostureRemediations)
+}
+
+func (e *Engine) evaluatePostureSet(ctx context.Context, in Input, set string, remediations map[string]bool) ([]PostureViolation, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -369,7 +445,7 @@ func (e *Engine) EvaluatePosture(ctx context.Context, in Input) ([]PostureViolat
 		if err != nil {
 			return nil, fmt.Errorf("policy: eval: %w", err)
 		}
-		return postureFrom(rs), nil
+		return postureFrom(rs, set, remediations), nil
 	}
 	if e.pool == nil {
 		return eval()
@@ -390,10 +466,11 @@ func (e *Engine) EvaluatePosture(ctx context.Context, in Input) ([]PostureViolat
 	}
 }
 
-// postureFrom reads the certificate_posture set (or array) of rule objects
-// from the package result. Entries without a rule name are dropped; the rest
-// are sorted by rule so the same facts always read the same way.
-func postureFrom(rs rego.ResultSet) []PostureViolation {
+// postureFrom reads a posture set (or array) of rule objects from the package
+// result. Entries without a rule name are dropped, a remediation outside the
+// set's own closed list is dropped, and the rest are sorted by rule so the
+// same facts always read the same way.
+func postureFrom(rs rego.ResultSet, set string, remediations map[string]bool) []PostureViolation {
 	if len(rs) == 0 || len(rs[0].Expressions) == 0 {
 		return nil
 	}
@@ -401,7 +478,7 @@ func postureFrom(rs rego.ResultSet) []PostureViolation {
 	if !ok {
 		return nil
 	}
-	items, ok := m["certificate_posture"].([]interface{})
+	items, ok := m[set].([]interface{})
 	if !ok {
 		return nil
 	}
@@ -418,7 +495,7 @@ func postureFrom(rs rego.ResultSet) []PostureViolation {
 		severity, _ := fields["severity"].(string)
 		reason, _ := fields["reason"].(string)
 		remediation, _ := fields["remediation"].(string)
-		if remediation != PostureRemediationRenew {
+		if !remediations[remediation] {
 			remediation = ""
 		}
 		out = append(out, PostureViolation{Rule: rule, Severity: severity, Reason: reason, Remediation: remediation})

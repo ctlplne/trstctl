@@ -7864,6 +7864,66 @@ NHIPolicyComplianceSummary = TypedDict(
     total=False,
 )
 
+NHIPostureAutomation = TypedDict(
+    'NHIPostureAutomation',
+    {
+        'capability': str,
+        'coverage': list[str],
+        'evidence_refs': list[str],
+        'generated_at': str,
+        'items': list[dict[str, Any]],
+        'per_tenant_sweep_limit': int,
+        'policy_evaluated': int,
+        'policy_evaluation_errors': int,
+        'policy_module_sha256': str,
+        'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+NHIPostureAutomationItem = TypedDict(
+    'NHIPostureAutomationItem',
+    {
+        'action': str,
+        'detail': str,
+        'display_name': str,
+        'inventory_id': str,
+        'kind': str,
+        'last_run': dict[str, Any],
+        'posture': list[str],
+        'reason': str,
+        'remediation': str,
+        'rule': str,
+        'severity': str,
+        'status': str,
+    },
+    total=False,
+)
+
+NHIPostureAutomationRun = TypedDict(
+    'NHIPostureAutomationRun',
+    {
+        'created_at': str,
+        'id': str,
+        'phase': str,
+        'playbook_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
+NHIPostureAutomationSummary = TypedDict(
+    'NHIPostureAutomationSummary',
+    {
+        'not_applicable': int,
+        'report_only': int,
+        'revoke': int,
+        'right_size': int,
+        'violations': int,
+    },
+    total=False,
+)
+
 NHIReviewCampaign = TypedDict(
     'NHIReviewCampaign',
     {

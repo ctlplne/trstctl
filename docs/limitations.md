@@ -1280,8 +1280,17 @@ never live in the API process. What you can do end to end against the running bi
   signals to tenant-local managed NHIs, then drive event-sourced lifecycle
   revoke/retire transitions with per-item evidence.
 - NHI posture — metadata-only, drawn from the unified NHI inventory; every route
-  below returns recommendations, not automatic action, and each has a matching
-  `trstctl-cli nhi posture <name>` command:
+  below reports findings with recommendations and has a matching
+  `trstctl-cli nhi posture <name>` command. Automatic action is opt-in per tenant: an
+  `nhi_posture` rule in the active lifecycle policy module may ask the leader's
+  lifecycle sweep to revoke a managed identity (through the lifecycle gate, as
+  `system:nhi-posture`, with RFC 5280 `cessationOfOperation`) or right-size its
+  usage-backed unused grants (the right-size playbook's connector intent), at most 25
+  actions per tenant per sweep under the automation switch and maintenance deferral;
+  each action or gate refusal is a playbook run naming the rule and the module digest,
+  and `GET /api/v1/nhi/posture/automation` shows the plan. Under dual control an
+  automatic revoke is refused and retried after 24 hours; the operator revokes through
+  the identity transition with an approval:
   - Shadow (`GET /api/v1/nhi/posture/shadow`): unmanaged, unregistered, and
     ownerless external NHIs from discovery findings; the Discovery findings table
     lets an operator claim a finding and run rotate/revoke/decommission/

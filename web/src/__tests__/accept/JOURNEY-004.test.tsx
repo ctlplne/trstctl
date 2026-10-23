@@ -62,6 +62,7 @@ const { apiMock, clearApiCalls } = vi.hoisted(() => {
     if (name === "nhiStalePosture") return { generated_at: generatedAt, coverage: [], summary: {}, findings: [] };
     if (name === "nhiStaticPosture") return { generated_at: generatedAt, coverage: [], summary: {}, findings: [] };
     if (name === "nhiExposurePosture") return { generated_at: generatedAt, coverage: [], summary: {}, findings: [] };
+    if (name === "nhiPostureAutomation") return { generated_at: generatedAt, coverage: [], summary: {}, items: [] };
     if (name === "protocolStatuses") return { checked_at: generatedAt, items: [] };
     if (name === "acmeDNS01Providers") return page;
     if (name === "acmeDNS01ProviderConfigs") return page;

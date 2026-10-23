@@ -455,6 +455,17 @@ const previewReaders: Record<string, () => unknown> = {
       wildcard_reachability: 0,
     },
   }),
+  nhiPostureAutomation: () => ({
+    capability: "CAP-POST-06",
+    generated_at: generatedAt,
+    coverage: ["nhi_posture_rules", "revoke", "right_size", "lifecycle_gate", "playbook_evidence"],
+    policy_evaluated: 0,
+    policy_evaluation_errors: 0,
+    summary: { violations: 0, revoke: 0, right_size: 0, report_only: 0, not_applicable: 0 },
+    items: [],
+    evidence_refs: ["projection:nhi_inventory", "projection:remediation_playbook_runs"],
+    per_tenant_sweep_limit: 25,
+  }),
   rotationRuns: () => ({
     items: [
       {

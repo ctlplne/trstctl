@@ -76,11 +76,19 @@ access tokens, and discovery findings — across four conditions:
 | `GET /api/v1/nhi/posture/stale` | Which credentials are stale, dormant, unused, or orphaned? | Thresholds, activity/creation age, owner status, severity, evidence refs, remediation |
 | `GET /api/v1/nhi/posture/static-credentials` | Which credentials are long-lived, static, or overdue for rotation? | Credential age, TTL, rotation age, lifetime thresholds, owner status, severity, evidence refs, remediation |
 | `GET /api/v1/nhi/posture/exposure` | Which credentials are internet-exposed or insecurely deployed? | Sanitized endpoint/callback URLs, severity, evidence refs, remediation |
+| `GET /api/v1/nhi/posture/automation` | What will the tenant's `nhi_posture` rules do automatically? | Each rule match's action (revoke, right_size, report_only, not_applicable), the evaluated module digest, the latest automatic playbook run |
 
 Grants with no usage evidence stay unclassified rather than counting as a finding; the
 exposure route is read-only and never echoes credential values. For example,
 `trstctl-cli nhi posture stale` reports each stale credential's activity age, owner
 status, severity, and remediation.
+
+These routes report; they do not act. Acting is opt-in through the tenant's lifecycle
+policy module: an `nhi_posture` rule may ask the scheduler to revoke a managed identity
+or right-size its usage-backed unused grants (CAP-POST-06, see
+[policy and governance](policy-and-governance.md)). The automation route, `trstctl-cli
+nhi posture automation` and the Risk page's **Automatic NHI posture actions** panel show
+what each rule match will do and the last automatic run.
 
 ### Certificate Transparency monitoring (F17)
 

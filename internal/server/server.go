@@ -3854,6 +3854,12 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 				return queued, err
 			}
 			queued += remediated
+			// A100: tenant nhi_posture rules that ask for revoke or right_size
+			// act on the NHIs that fire them, under the same switch and
+			// deferral. A failed row is logged; it does not stop the sweep.
+			if _, err := s.runNHIPostureAutomationOnce(ctx, now); err != nil && s.logger != nil {
+				s.logger.Warn("NHI posture automation sweep incomplete", slog.String("error", err.Error()))
+			}
 		}
 	}
 	alerted, err := s.runLifecycleAlertsOnce(ctx)

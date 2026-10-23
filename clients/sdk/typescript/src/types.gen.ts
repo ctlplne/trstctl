@@ -4714,6 +4714,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/automation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each */
+        get: operations["listNHIPostureAutomation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/exposure": {
         parameters: {
             query?: never;
@@ -13883,6 +13900,51 @@ export interface components {
             rotation_violations: number;
             scope_violations: number;
             total_analyzed: number;
+            violations: number;
+        };
+        NHIPostureAutomation: {
+            capability: string;
+            coverage: string[];
+            evidence_refs: string[];
+            /** Format: date-time */
+            generated_at: string;
+            items: components["schemas"]["NHIPostureAutomationItem"][];
+            per_tenant_sweep_limit: number;
+            policy_evaluated: number;
+            policy_evaluation_errors: number;
+            policy_module_sha256?: string;
+            summary: components["schemas"]["NHIPostureAutomationSummary"];
+        };
+        NHIPostureAutomationItem: {
+            /** @enum {string} */
+            action: "revoke" | "right_size" | "report_only" | "not_applicable";
+            detail?: string;
+            display_name: string;
+            inventory_id: string;
+            kind: string;
+            last_run?: components["schemas"]["NHIPostureAutomationRun"];
+            posture: string[];
+            reason?: string;
+            /** @enum {string} */
+            remediation?: "revoke" | "right_size";
+            rule: string;
+            severity?: string;
+            status: string;
+        };
+        NHIPostureAutomationRun: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            phase: string;
+            playbook_id: string;
+            status: string;
+        };
+        NHIPostureAutomationSummary: {
+            not_applicable: number;
+            report_only: number;
+            revoke: number;
+            right_size: number;
             violations: number;
         };
         NHIReviewCampaign: {
@@ -30833,6 +30895,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIPolicyCompliance"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listNHIPostureAutomation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIPostureAutomation"];
                 };
             };
             /** @description client error */
