@@ -190,13 +190,9 @@ func connectorHTTPClientFromConfig(cfg config.Connectors, guard *egress.Guard) (
 	if guard != nil {
 		transport = guard.WrapTransport(transport)
 	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   timeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}, nil
+	return netsec.ClientFor(transport, timeout, func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}), nil
 }
 
 func nativeConnectorFactory(r nativeConnectorRuntime, name string) (connector.Factory, error) {

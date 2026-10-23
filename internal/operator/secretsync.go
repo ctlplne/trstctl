@@ -19,6 +19,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -403,7 +404,7 @@ type HTTPSecretResolver struct {
 
 func NewHTTPSecretResolver(k8s *Client, httpClient *http.Client) *HTTPSecretResolver {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		httpClient = netsec.HardenedClient(30 * time.Second)
 	}
 	return &HTTPSecretResolver{k8s: k8s, httpClient: httpClient}
 }

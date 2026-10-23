@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secrettext"
 )
 
@@ -52,7 +53,7 @@ func NewGitHubActionsPusher(cfg GitHubActionsConfig) (*GitHubActionsPusher, erro
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	token, err := lockOptionalSecret(cfg.Token)
 	if err != nil {
@@ -142,7 +143,7 @@ func NewAWSSecretsManagerPusher(cfg AWSSecretsManagerConfig) (*AWSSecretsManager
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	secretKey, err := lockOptionalSecret(cfg.SecretAccessKey)
 	if err != nil {
@@ -289,7 +290,7 @@ func NewGCPSecretManagerPusher(cfg GCPSecretManagerConfig) (*GCPSecretManagerPus
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	token, err := lockOptionalSecret(cfg.BearerToken)
 	if err != nil {
@@ -405,7 +406,7 @@ func NewAzureKeyVaultPusher(cfg AzureKeyVaultConfig) (*AzureKeyVaultPusher, erro
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	apiVersion := strings.TrimSpace(cfg.APIVersion)
 	if apiVersion == "" {
@@ -504,7 +505,7 @@ func NewGitLabCIPusher(cfg GitLabCIConfig) (*GitLabCIPusher, error) {
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	scope := strings.TrimSpace(cfg.EnvironmentScope)
 	if scope == "" {
@@ -573,7 +574,7 @@ func NewVercelPusher(cfg VercelConfig) (*VercelPusher, error) {
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	targets := append([]string(nil), cfg.Targets...)
 	if len(targets) == 0 {
@@ -710,7 +711,7 @@ func NewKubernetesPusher(cfg KubernetesConfig) (*KubernetesPusher, error) {
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	token, err := lockOptionalSecret(cfg.BearerToken)
 	if err != nil {
@@ -799,7 +800,7 @@ func NewJSONPusher(cfg JSONPusherConfig) (*JSONPusher, error) {
 	}
 	doer := cfg.HTTPClient
 	if doer == nil {
-		doer = http.DefaultClient
+		doer = netsec.HardenedClient(0)
 	}
 	token, err := lockOptionalSecret(cfg.BearerToken)
 	if err != nil {

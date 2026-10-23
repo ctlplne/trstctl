@@ -26,82 +26,6 @@ var Analyzer = &analysis.Analyzer{
 }
 
 var reviewedDefaultClientUses = map[string]map[string]bool{
-	"cmd/trstctl/connector.go": {
-		"": true,
-	},
-	"internal/authmethod/aws_iam.go": {
-		"GetCallerIdentity": true,
-	},
-	"internal/connector/azurekv/token.go": {
-		"NewClientCredentials": true,
-	},
-	"internal/connector/gcpcm/token.go": {
-		"NewMetadataToken": true,
-	},
-	"internal/connector/httpops.go": {
-		"NewHTTPOps": true,
-	},
-	"internal/discovery/cloudcert/acmdisc/acmdisc.go": {
-		"New": true,
-	},
-	"internal/discovery/cloudcert/gcmdisc/gcmdisc.go": {
-		"New": true,
-	},
-	"internal/discovery/cloudcert/kvdisc/kvdisc.go": {
-		"New": true,
-	},
-	"internal/dns/acmedns/acmedns.go": {
-		"New": true,
-	},
-	"internal/dns/akamai/akamai.go": {
-		"New": true,
-	},
-	"internal/dns/azuredns/azuredns.go": {
-		"New": true,
-	},
-	"internal/dns/cloudflare/cloudflare.go": {
-		"New": true,
-	},
-	"internal/dns/googledns/googledns.go": {
-		"New": true,
-	},
-	"internal/dns/ns1/ns1.go": {
-		"New": true,
-	},
-	"internal/dns/route53/route53.go": {
-		"New": true,
-	},
-	"internal/dns/ultradns/ultradns.go": {
-		"New": true,
-	},
-	"internal/dns/webhook/webhook.go": {
-		"New": true,
-	},
-	"internal/dynsecret/providers_real.go": {
-		"NewAWSIAMBackend":     true,
-		"NewAzureEntraBackend": true,
-		"NewGCPIAMBackend":     true,
-		"NewKubernetesBackend": true,
-	},
-	"internal/kms/awskms/awskms.go": {
-		"New": true,
-	},
-	"internal/kms/azurekv/azurekv.go": {
-		"New": true,
-	},
-	"internal/kms/gcpkms/gcpkms.go": {
-		"New": true,
-	},
-	"internal/secretsync/pushers.go": {
-		"NewAWSSecretsManagerPusher": true,
-		"NewAzureKeyVaultPusher":     true,
-		"NewGCPSecretManagerPusher":  true,
-		"NewGitHubActionsPusher":     true,
-		"NewGitLabCIPusher":          true,
-		"NewJSONPusher":              true,
-		"NewKubernetesPusher":        true,
-		"NewVercelPusher":            true,
-	},
 	"internal/spireupstream/plugin.go": {
 		"New":        true,
 		"httpClient": true,
@@ -134,22 +58,6 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	"cmd/trstctl-agent/main.go": {
 		"enrollmentHTTPClient": true,
 	},
-	"cmd/trstctl/main.go": {
-		"controlPlaneProbe": true,
-	},
-	"internal/agent/k8s/client.go": {
-		"InCluster": true,
-		"New":       true,
-	},
-	"internal/agent/k8s/signer.go": {
-		"NewHTTPSigner": true,
-	},
-	"internal/aimodel/http.go": {
-		"NewHTTPCompleter": true,
-	},
-	"internal/cli/cli.go": {
-		"httpClientForEnv": true,
-	},
 	"internal/crypto/mtls/server.go": {
 		"LoopbackProbeClient": true,
 	},
@@ -178,28 +86,6 @@ var reviewedAmbientHTTPClients = map[string]map[string]bool{
 	// comes from operator configuration and is egress-guarded by the caller
 	// (otlpExporterFromConfig wraps the transport); the ambient client here is
 	// the pre-guard base that the wrap replaces.
-	"internal/observ/otlp/otlp.go": {
-		"NewHTTPExporter": true,
-	},
-	"internal/operator/client.go": {
-		"InCluster": true,
-		"NewClient": true,
-	},
-	"internal/operator/secretsync.go": {
-		"NewHTTPSecretResolver": true,
-	},
-	"internal/server/auth.go": {
-		"buildOIDCAuthConfig": true,
-	},
-	"internal/server/external_ca_config.go": {
-		"externalCAHTTPClient": true,
-	},
-	"internal/server/run_connectors.go": {
-		"connectorHTTPClientFromConfig": true,
-	},
-	"internal/telemetry/poster.go": {
-		"HTTPPoster": true,
-	},
 	"tools/dodcensus/proof/launched.go": {
 		"Do": true,
 	},
@@ -360,6 +246,9 @@ func checkFile(pass *analysis.Pass, file *ast.File) {
 			if isHTTPClientLiteral(pass, x) && !isAmbientHTTPGuardPackage(pass) && !reviewedUse(pass, x.Pos(), funcName, reviewedAmbientHTTPClients) {
 				pass.Reportf(x.Pos(), "ambient http.Client construction is not allowed in new outbound surfaces (SEC-005); use internal/netsec.SafeClient, internal/netsec.InsecureLoopbackClient, or egress.Guard.Client so the SSRF and egress checks cannot be bypassed")
 			}
+			if kind := outboundTransportLiteralKind(pass, x); kind != "" && !isAmbientHTTPGuardPackage(pass) && !isCryptoBoundaryPackage(pass) && !reviewedUse(pass, x.Pos(), funcName, reviewedTransportLiterals) {
+				pass.Reportf(x.Pos(), "%s construction is not allowed outside internal/netsec, internal/egress and the crypto boundary (SEC-005): a transport built here trusts the system store without the runtime distrust list; use netsec.SafeTransport/SafeClient, netsec.HardenedDefaultTransport, or a crypto-boundary builder (in %s)", kind, funcName)
+			}
 		case *ast.CallExpr:
 			if isAmbientHTTPPackageCall(pass, x) {
 				pass.Reportf(x.Pos(), "http.Get/http.Head/http.Post/http.PostForm are not allowed (SEC-005); these use http.DefaultClient implicitly, so call the method on a client from internal/netsec or egress.Guard instead")
@@ -442,6 +331,49 @@ func isAmbientHTTPPackageCall(pass *analysis.Pass, call *ast.CallExpr) bool {
 		return true
 	}
 	return false
+}
+
+// outboundTransportLiteralKind names a composite literal that builds a
+// net/http.Transport or a crypto/tls.Config, the two values through which an
+// outbound client decides what it trusts. Resolved by type, so aliases cannot
+// spell past the rule.
+func outboundTransportLiteralKind(pass *analysis.Pass, lit *ast.CompositeLit) string {
+	tv, ok := pass.TypesInfo.Types[lit]
+	if !ok || tv.Type == nil {
+		return ""
+	}
+	named, ok := types.Unalias(tv.Type).(*types.Named)
+	if !ok || named.Obj() == nil || named.Obj().Pkg() == nil {
+		return ""
+	}
+	switch named.Obj().Pkg().Path() + "." + named.Obj().Name() {
+	case "net/http.Transport":
+		return "http.Transport"
+	case "crypto/tls.Config":
+		return "tls.Config"
+	}
+	return ""
+}
+
+// isCryptoBoundaryPackage reports whether the package lives under
+// internal/crypto, the one tree allowed to build TLS configurations directly
+// (AN-3); its builders carry the distrust list themselves.
+func isCryptoBoundaryPackage(pass *analysis.Pass) bool {
+	if pass.Pkg == nil {
+		return false
+	}
+	path := basePackagePath(pass.Pkg.Path())
+	return path == "trstctl.com/trstctl/internal/crypto" || strings.HasPrefix(path, "trstctl.com/trstctl/internal/crypto/")
+}
+
+// reviewedTransportLiterals is the Part 2 burn-down ledger for outbound
+// transports and TLS configurations built outside the sanctioned builders. Every
+// row is a client that still trusts the system store ambiently; rows leave as
+// clients move onto netsec/egress or a crypto-boundary builder. No row may be
+// added for new code.
+var reviewedTransportLiterals = map[string]map[string]bool{
+	// Seeded 2026-10-23 from the inventory at 4c80f7746 (see the Part 2 ledger).
+
 }
 
 func isAmbientHTTPGuardPackage(pass *analysis.Pass) bool {

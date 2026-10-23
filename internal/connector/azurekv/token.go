@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secretjson"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -91,7 +92,7 @@ func NewClientCredentials(tokenURL, clientID string, clientSecret []byte, opts .
 		clientID:     clientID,
 		clientSecret: secrettext.Clone(clientSecret),
 		scope:        DefaultScope,
-		client:       http.DefaultClient,
+		client:       netsec.HardenedClient(0),
 		now:          time.Now,
 	}
 	for _, o := range opts {

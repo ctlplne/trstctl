@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // AWSIdentity is the non-secret identity returned by STS GetCallerIdentity.
@@ -144,7 +145,7 @@ func (c HTTPSignedSTSClient) GetCallerIdentity(ctx context.Context, credential [
 	}
 	client := c.HTTPClient
 	if client == nil {
-		client = http.DefaultClient
+		client = netsec.HardenedClient(0)
 	}
 	closedClient := *client
 	closedClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {

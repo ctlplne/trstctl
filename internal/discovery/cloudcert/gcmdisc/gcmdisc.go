@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const defaultEndpoint = "https://certificatemanager.googleapis.com"
@@ -46,7 +47,7 @@ func New(cfg Config) (*Enumerator, error) {
 		cfg.Endpoint = defaultEndpoint
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = http.DefaultClient
+		cfg.HTTPClient = netsec.HardenedClient(0)
 	}
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()

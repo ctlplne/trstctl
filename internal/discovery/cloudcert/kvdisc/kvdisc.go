@@ -16,6 +16,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const defaultAPIVersion = "7.4"
@@ -51,7 +52,7 @@ func New(cfg Config) (*Enumerator, error) {
 		cfg.APIVersion = defaultAPIVersion
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = http.DefaultClient
+		cfg.HTTPClient = netsec.HardenedClient(0)
 	}
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()

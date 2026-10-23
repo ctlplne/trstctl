@@ -541,30 +541,27 @@ func externalCAHTTPClient(endpoint string, network config.ExternalCANetworkConfi
 		cleanup()
 		return nil, nil, err
 	}
-	return &http.Client{
-		Timeout: timeout, Transport: roundTripper,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return fmt.Errorf("%w: external CA redirect limit exceeded", netsec.ErrSSRFBlocked)
+	return netsec.ClientFor(roundTripper, timeout, func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("%w: external CA redirect limit exceeded", netsec.ErrSSRFBlocked)
+		}
+		if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+			return fmt.Errorf("%w: external CA redirect uses unsupported scheme", netsec.ErrSSRFBlocked)
+		}
+		if len(via) > 0 {
+			previous := via[len(via)-1].URL
+			if !strings.EqualFold(req.URL.Scheme, previous.Scheme) || !strings.EqualFold(req.URL.Host, previous.Host) {
+				return fmt.Errorf("%w: external CA cross-origin or scheme-changing redirect rejected", netsec.ErrSSRFBlocked)
 			}
-			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
-				return fmt.Errorf("%w: external CA redirect uses unsupported scheme", netsec.ErrSSRFBlocked)
-			}
-			if len(via) > 0 {
-				previous := via[len(via)-1].URL
-				if !strings.EqualFold(req.URL.Scheme, previous.Scheme) || !strings.EqualFold(req.URL.Host, previous.Host) {
-					return fmt.Errorf("%w: external CA cross-origin or scheme-changing redirect rejected", netsec.ErrSSRFBlocked)
-				}
-			}
-			if ip := net.ParseIP(req.URL.Hostname()); ip != nil && netsec.BlockedIP(ip) && !prefixContains(prefixes, ip) {
-				return fmt.Errorf("%w: redirect to %s", netsec.ErrSSRFBlocked, req.URL.Hostname())
-			}
-			if guard != nil {
-				return guard.CheckRequestURL(req.URL)
-			}
-			return nil
-		},
-	}, cleanup, nil
+		}
+		if ip := net.ParseIP(req.URL.Hostname()); ip != nil && netsec.BlockedIP(ip) && !prefixContains(prefixes, ip) {
+			return fmt.Errorf("%w: redirect to %s", netsec.ErrSSRFBlocked, req.URL.Hostname())
+		}
+		if guard != nil {
+			return guard.CheckRequestURL(req.URL)
+		}
+		return nil
+	}), cleanup, nil
 }
 
 func prefixContains(prefixes []netip.Prefix, ip net.IP) bool {

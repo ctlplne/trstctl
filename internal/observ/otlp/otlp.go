@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/observ"
 )
 
@@ -108,7 +109,7 @@ func NewHTTPExporter(cfg Config) (*Exporter, error) {
 	}
 	client := cfg.Client
 	if client == nil {
-		client = &http.Client{Transport: cloneDefaultTransport()}
+		client = netsec.HardenedClient(0)
 	}
 	exp := &Exporter{
 		endpoint:    strings.TrimRight(cfg.Endpoint, "/"),
@@ -122,13 +123,6 @@ func NewHTTPExporter(cfg Config) (*Exporter, error) {
 	}
 	go exp.runTraceWorker()
 	return exp, nil
-}
-
-func cloneDefaultTransport() http.RoundTripper {
-	if tr, ok := http.DefaultTransport.(*http.Transport); ok {
-		return tr.Clone()
-	}
-	return http.DefaultTransport
 }
 
 // Export queues a completed span without blocking the served request path. When

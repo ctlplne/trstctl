@@ -5,6 +5,7 @@ package connector
 import (
 	"fmt"
 	"net/http"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // httpOps is an Ops for API-based connectors: it performs HTTP requests through
@@ -24,7 +25,7 @@ var (
 // connectors — F5 BIG-IP and the cloud certificate stores.
 func NewHTTPOps(client *http.Client) Ops {
 	if client == nil {
-		client = http.DefaultClient
+		client = netsec.HardenedClient(0)
 	}
 	return &httpOps{client: client}
 }

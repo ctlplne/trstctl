@@ -24,6 +24,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -49,7 +50,7 @@ type Client struct {
 // the httptest server's client.
 func New(base, token, namespace string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		httpClient = netsec.HardenedClient(30 * time.Second)
 	}
 	base = strings.TrimRight(base, "/")
 	return &Client{base: base, token: token, namespace: namespace, clusterID: "sha256:" + crypto.SHA256Hex([]byte(base)), httpClient: httpClient}
@@ -80,7 +81,7 @@ func InCluster() (*Client, error) {
 		fmt.Sprintf("https://%s:%s", host, port),
 		strings.TrimSpace(string(token)),
 		strings.TrimSpace(string(ns)),
-		&http.Client{Transport: transport, Timeout: 30 * time.Second},
+		netsec.ClientFor(transport, 30*time.Second, nil),
 	)
 	client.clusterID = "sha256:" + crypto.SHA256Hex(caPEM)
 	return client, nil

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secretjson"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -96,7 +97,7 @@ func NewMetadataToken(opts ...MetadataOption) *MetadataToken {
 	m := &MetadataToken{
 		base:    defaultMetadataBase,
 		account: defaultServiceAcct,
-		client:  http.DefaultClient,
+		client:  netsec.HardenedClient(0),
 		now:     time.Now,
 	}
 	for _, o := range opts {

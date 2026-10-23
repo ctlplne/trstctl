@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // HTTPPoster returns a Poster that POSTs the payload as JSON to the endpoint
@@ -18,7 +19,7 @@ import (
 // error so reporting can never disrupt the control plane.
 func HTTPPoster(client *http.Client) Poster {
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
+		client = netsec.HardenedClient(10 * time.Second)
 	}
 	return func(ctx context.Context, endpoint string, body []byte) error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))

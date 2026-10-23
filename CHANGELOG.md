@@ -31,6 +31,17 @@
   operator-pinned external CA root as well; operators add entries with
   `trust.distrust_file` for sites that cannot take a release the day a CA is
   distrusted, and the shipped entries cannot be removed.
+- Ambient outbound clients that trusted the system store directly (the
+  identity-provider metadata and JWKS client, secret-sync pushers,
+  dynamic-secret backends, cloud token and discovery clients, AWS IAM, connector
+  HTTP operations, DNS-01 providers, telemetry, the OTLP exporter, the model
+  client, the CLI without a CA file, the operator's and the agent's Kubernetes
+  clients) now come from the `internal/netsec` builders, so the runtime distrust
+  check covers them, each at the timeout it had before; none gains the SSRF
+  guard, because their endpoints are operator-configured and may legitimately
+  be private. The architecture linter (SEC-005) also refuses an `http.Transport`
+  or `tls.Config` literal built outside `internal/netsec`, `internal/egress` and
+  the crypto boundary.
 
 ### Fixed
 

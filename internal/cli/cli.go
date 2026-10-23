@@ -29,6 +29,7 @@ import (
 	"trstctl.com/trstctl/internal/buildinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/secretjson"
 	"trstctl.com/trstctl/internal/secretscli"
 )
@@ -192,7 +193,7 @@ func httpClientForEnv(env Env, caFile string, minimumTimeout ...time.Duration) (
 		return &client, nil
 	}
 	if caFile == "" {
-		return &http.Client{Timeout: timeout}, nil
+		return netsec.HardenedClient(timeout), nil
 	}
 	caPEM, err := os.ReadFile(caFile) // #nosec G304 -- the operator explicitly names the public trust-bundle path (CWE-22)
 	if err != nil {
@@ -202,7 +203,7 @@ func httpClientForEnv(env Env, caFile string, minimumTimeout ...time.Duration) (
 	if err != nil {
 		return nil, err
 	}
-	return &http.Client{Timeout: timeout, Transport: transport}, nil
+	return netsec.ClientFor(transport, timeout, nil), nil
 }
 
 func runWithSecrets(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, stderr io.Writer, server, token, tenant, caFile string) int {

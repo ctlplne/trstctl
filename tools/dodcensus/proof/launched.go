@@ -36,6 +36,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	internalcrypto "trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const maxShippedBinaryBytes = 256 << 20
@@ -1740,10 +1741,15 @@ func (p *ShippedProcess) Do(request *http.Request) *launchedResponse {
 			}
 		},
 	}))
-	transport := &http.Transport{
-		Proxy: nil, DisableKeepAlives: false, MaxIdleConns: 1, MaxIdleConnsPerHost: 1,
-		DialContext: (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: -1}).DialContext,
-	}
+	// The proof's direct request to the launched process rides a transport from
+	// the sanctioned builder (SEC-005); the dialer and pool settings below are
+	// what the accepted-connection check needs, the proxy is deliberately off.
+	transport := netsec.HardenedDefaultTransport()
+	transport.Proxy = nil
+	transport.DisableKeepAlives = false
+	transport.MaxIdleConns = 1
+	transport.MaxIdleConnsPerHost = 1
+	transport.DialContext = (&net.Dialer{Timeout: 5 * time.Second, KeepAlive: -1}).DialContext
 	defer transport.CloseIdleConnections()
 	client := &http.Client{
 		Transport: transport, Timeout: 40 * time.Second,

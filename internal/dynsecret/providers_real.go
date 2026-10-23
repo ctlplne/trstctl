@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/redisacl"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -613,7 +614,7 @@ func NewKubernetesBackend(cfg KubernetesConfig) (*KubernetesBackend, error) {
 		cfg.Namespace = "default"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = http.DefaultClient
+		cfg.HTTPClient = netsec.HardenedClient(0)
 	}
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
@@ -900,7 +901,7 @@ func NewAWSIAMBackend(cfg AWSIAMConfig) (*AWSIAMBackend, error) {
 		cfg.Endpoint = "https://iam.amazonaws.com"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = http.DefaultClient
+		cfg.HTTPClient = netsec.HardenedClient(0)
 	}
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
@@ -1128,7 +1129,7 @@ func NewGCPIAMBackend(cfg GCPIAMConfig) (*GCPIAMBackend, error) {
 		cfg.Endpoint = "https://iam.googleapis.com"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = http.DefaultClient
+		cfg.HTTPClient = netsec.HardenedClient(0)
 	}
 	var token *secret.Buffer
 	var err error
@@ -1318,7 +1319,7 @@ func NewAzureEntraBackend(cfg AzureEntraConfig) (*AzureEntraBackend, error) {
 		cfg.Endpoint = "https://graph.microsoft.com"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = http.DefaultClient
+		cfg.HTTPClient = netsec.HardenedClient(0)
 	}
 	var token *secret.Buffer
 	var err error

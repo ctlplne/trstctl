@@ -420,7 +420,7 @@ func controlPlaneProbe(cfg *config.Config, path, label string) error {
 	client := mtls.LoopbackProbeClient(3 * time.Second)
 	if cfg.Server.TLS.Mode == config.TLSDisabled {
 		scheme = "http"
-		client = &http.Client{Timeout: 3 * time.Second}
+		client = netsec.InsecureLoopbackClient(3 * time.Second)
 	}
 	return probeURL(client, scheme+"://"+host+path, label)
 }

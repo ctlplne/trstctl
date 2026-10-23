@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -36,7 +37,7 @@ type HTTPCompleter struct {
 // completion URL to POST to; config validation owns URL safety before boot.
 func NewHTTPCompleter(endpoint, model, format string, client *http.Client) *HTTPCompleter {
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		client = netsec.HardenedClient(30 * time.Second)
 	}
 	if format == "" {
 		format = FormatOpenAIChat

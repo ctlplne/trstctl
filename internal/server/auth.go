@@ -35,6 +35,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
 	"trstctl.com/trstctl/internal/editionseam"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -192,7 +193,7 @@ func buildOIDCAuthConfig(o config.OIDC, secure bool, httpClient *http.Client, st
 	mapper := tenantMapperFromConfig(o)
 
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 10 * time.Second}
+		httpClient = netsec.HardenedClient(10 * time.Second)
 	}
 	secretSource, err := buildOIDCClientSecretSource(o, st, kek, tenantCrypto...)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const signerResponseLimit = 1 << 20
@@ -49,7 +50,7 @@ func WithBearerToken(token []byte) HTTPSignerOption {
 // client when nil).
 func NewHTTPSigner(url string, client *http.Client, opts ...HTTPSignerOption) *HTTPSigner {
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		client = netsec.HardenedClient(30 * time.Second)
 	}
 	s := &HTTPSigner{url: url, client: client}
 	for _, opt := range opts {

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -56,7 +57,7 @@ type Client struct {
 // server's client.
 func NewClient(base, token string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 30 * time.Second}
+		httpClient = netsec.HardenedClient(30 * time.Second)
 	}
 	return &Client{base: strings.TrimRight(base, "/"), token: token, httpClient: httpClient}
 }
@@ -86,7 +87,7 @@ func InCluster() (client *Client, namespace string, err error) {
 	c := NewClient(
 		fmt.Sprintf("https://%s:%s", host, port),
 		strings.TrimSpace(string(token)),
-		&http.Client{Transport: transport, Timeout: 30 * time.Second},
+		netsec.ClientFor(transport, 30*time.Second, nil),
 	)
 	return c, strings.TrimSpace(string(ns)), nil
 }

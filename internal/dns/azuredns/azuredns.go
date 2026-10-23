@@ -38,6 +38,7 @@ import (
 	"strings"
 
 	"trstctl.com/trstctl/internal/cloudhttp"
+	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/pluginhost"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/secrettext"
@@ -109,7 +110,7 @@ func New(subscriptionID, resourceGroup, zone string, creds Credentials, opts ...
 		resourceGroup:  resourceGroup,
 		zone:           strings.TrimSuffix(zone, "."),
 		creds:          creds,
-		doer:           http.DefaultClient,
+		doer:           netsec.HardenedClient(0),
 	}
 	p.setEndpoint(defaultEndpoint)
 	for _, o := range opts {

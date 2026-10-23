@@ -140,8 +140,27 @@ func TestAmbientHTTPBurnDownLedgerKeepsTheMigratedSitesOut(t *testing.T) {
 	// module for the MPL-2.0 clients/terraform module, outside this analyzer's
 	// scope. That site was not migrated: it still builds its own http.Client, and
 	// the ledger only counts sites the analyzer can see.
-	const sizeAfterTheFirstBurnDown = 19
+	// 5 since 2026-10-23 (eMudhra response, Part 2): the identity-provider client,
+	// secret sync, the operator and agent Kubernetes clients, the CLI, the probe,
+	// telemetry, OTLP, the model client, the external CA and connector clients
+	// all take their client from netsec (HardenedClient, InsecureLoopbackClient
+	// or ClientFor over a reviewed transport). What remains: the agent's
+	// enrollment client (pinned to the enrollment CA), the crypto boundary's
+	// loopback probe, and the census proof tool.
+	const sizeAfterTheFirstBurnDown = 5
 	migrated := []string{
+		"cmd/trstctl/main.go",
+		"internal/agent/k8s/client.go",
+		"internal/agent/k8s/signer.go",
+		"internal/aimodel/http.go",
+		"internal/cli/cli.go",
+		"internal/observ/otlp/otlp.go",
+		"internal/operator/client.go",
+		"internal/operator/secretsync.go",
+		"internal/server/auth.go",
+		"internal/server/external_ca_config.go",
+		"internal/server/run_connectors.go",
+		"internal/telemetry/poster.go",
 		"internal/agent/httpenroll.go",
 		"internal/discovery/ctmonitor/httpfetcher.go",
 		"internal/perf/live.go",
