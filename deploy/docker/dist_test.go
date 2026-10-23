@@ -1310,7 +1310,7 @@ func TestDockerignoreKeepsContextSmall(t *testing.T) {
 	mustContainAll(t, "Docker context canary gate", script,
 		`install -d -m 0700 "$root/.sandbox-build"`,
 		".sandbox-build/docker-context-audit", "operator-secret.tmp",
-		"--target context-audit", "64 * 1024", "planted secret excluded",
+		"--target context-audit", "80 * 1024", "planted secret excluded",
 	)
 	makefile := repoFile(t, "Makefile")
 	mustContainAll(t, "Docker entrypoints run context gate", makefile,

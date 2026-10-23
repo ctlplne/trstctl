@@ -14,13 +14,32 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -mod=readonly -trimpath -buildvcs=false -ldflags="-s -w -buildid=" \
     -o /out/nats-server github.com/nats-io/nats-server/v2
 
+# One current trust list for every image (eMudhra incident, 2026-10): the
+# pinned, checksum-verified Alpine ca-certificates bundle (Mozilla's websites
+# list) minus internal/crypto/trust/distrust.json, filtered by trstctl's own
+# deterministic tool, which fails the build unless exactly Mozilla's count
+# remains. The bundle package is the same bytes on every architecture; the
+# x86_64 package is the pinned input.
+FROM scratch AS trust-source
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk
+
+FROM --platform=$BUILDPLATFORM golang:1.26.10-bookworm@sha256:5b1f78db1f54cc8cb46e652c51d3f854441c4310a449161b6fe9fb553edab505 AS trust
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY internal/crypto/trust ./internal/crypto/trust
+COPY cmd/trstctl-trustbundle ./cmd/trstctl-trustbundle
+COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk
+RUN mkdir -p /out/trust \
+ && CGO_ENABLED=0 GOFLAGS=-mod=mod go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/trust/trstctl-trustbundle ./cmd/trstctl-trustbundle \
+ && /tmp/trust/trstctl-trustbundle filter -in /tmp/trust/ca-certificates-bundle.apk -out /out/trust/ca-certificates.crt -report /out/trust/report.json -expect 118
+
 FROM scratch AS patches
 ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk
 ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk
-ADD --checksum=sha256:a35f8cf2366d90294d0bb089af565fd17f3fa03721e61bcc7f02ed3d8334e7ea https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20260909-r0.apk /amd64/ca-certificates-bundle-20260909-r0.apk
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /amd64/ca-certificates-bundle-20261020-r0.apk
 ADD --checksum=sha256:2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk /arm64/libcrypto3-3.5.9-r0.apk
 ADD --checksum=sha256:20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk /arm64/libssl3-3.5.9-r0.apk
-ADD --checksum=sha256:81a2c508dcdb3295196e6a8987274e3bc3487f99ad8d18e985f20bb2c336b5e6 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260909-r0.apk /arm64/ca-certificates-bundle-20260909-r0.apk
+ADD --checksum=sha256:d0a573c27d337c369ad3abe3f39f09ffe67b95af23861577a8d134738375176a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20261020-r0.apk /arm64/ca-certificates-bundle-20261020-r0.apk
 
 # Keep Alpine's small HTTP health probe. Package installation is offline and
 # content-pinned on both platforms. /data retains the existing Compose ownership.
@@ -30,5 +49,8 @@ COPY --from=patches /${TARGETARCH}/ /tmp/trstctl-nats-patches/
 RUN --network=none apk add --no-network /tmp/trstctl-nats-patches/*.apk \
     && rm -rf /tmp/trstctl-nats-patches
 COPY --from=build /out/nats-server /usr/local/bin/nats-server
+# The image's trust store: Mozilla's current websites roots and nothing on the
+# distrust list, built by the trust stage above.
+COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 EXPOSE 4222 6222 8222
 ENTRYPOINT ["/usr/local/bin/nats-server"]

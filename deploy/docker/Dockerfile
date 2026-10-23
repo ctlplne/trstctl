@@ -159,6 +159,21 @@ RUN set -eu; \
 # runtime base. BASE_IMAGE is declared in the global scope at the top of this file
 # (it must be, to be usable here). See .github/workflows/release.yml ("Resolve …
 # by digest").
+# One current trust list for every image (eMudhra incident, 2026-10): the
+# pinned, checksum-verified Alpine ca-certificates bundle (Mozilla's websites
+# list) minus internal/crypto/trust/distrust.json, filtered by trstctl's own
+# deterministic tool, which fails the build unless exactly Mozilla's count
+# remains. The bundle package is the same bytes on every architecture; the
+# x86_64 package is the pinned input.
+FROM scratch AS trust-source
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk
+
+FROM build AS trust
+COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk
+RUN mkdir -p /out/trust \
+ && CGO_ENABLED=0 GOOS=$(go env GOHOSTOS) GOARCH=$(go env GOHOSTARCH) go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/trust/trstctl-trustbundle ./cmd/trstctl-trustbundle \
+ && /tmp/trust/trstctl-trustbundle filter -in /tmp/trust/ca-certificates-bundle.apk -out /out/trust/ca-certificates.crt -report /out/trust/report.json -expect 118
+
 FROM ${BASE_IMAGE} AS runtime
 
 # Distroless defaults to /home/nonroot. The application deliberately uses
@@ -176,6 +191,10 @@ COPY --from=build /out/trstctl-agent    /usr/local/bin/trstctl-agent
 # overriding the entrypoint to /usr/local/bin/trstctl-operator
 # (deploy/operator/operator.yaml). One image still serves every topology (OPS-002).
 COPY --from=build /out/trstctl-operator /usr/local/bin/trstctl-operator
+
+# The image's only trust file (distroless has no shell and no other store): Mozilla's current websites roots and nothing on the
+# distrust list, built by the trust stage above.
+COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Persistent mount points, owned by the nonroot uid (staged in the build stage). A
 # Docker named volume mounted over one of these inherits 65532 ownership on first

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1643 annotated sites across 26 rules. Each row is
+1647 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1017,7 +1017,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (49 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (50 sites)
 
 | Location | Reason |
 |---|---|
@@ -1025,6 +1025,7 @@ not this file.
 | `clients/embedded/est_client_test.go:138` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `clients/embedded/est_client_test.go:199` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:111` | deliberately loose, to prove it is tightened (CWE-276) |
+| `cmd/trstctl-trustbundle/main.go:77` | build-time output path named by the image build (CWE-22) |
 | `deploy/docker/dist_test.go:1105` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:79` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1116,7 +1117,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (452 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (453 sites)
 
 | Location | Reason |
 |---|---|
@@ -1163,6 +1164,7 @@ not this file.
 | `cmd/trstctl-signer/offline.go:214` | operator-selected public CSR input file (CWE-22) |
 | `cmd/trstctl-signer/offline_pcas_test.go:45` | path is under t.TempDir from this test's keygen (CWE-22) |
 | `cmd/trstctl-signer/offline_pcas_test.go:177` | test helper reads only t.TempDir fixture paths (CWE-22) |
+| `cmd/trstctl-trustbundle/main.go:61` | build-time input named by the image build (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `cmd/trstctl/backup_cmd_test.go:111` | test reads a fixed repository artifact (CWE-22) |
@@ -1573,7 +1575,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (92 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (94 sites)
 
 | Location | Reason |
 |---|---|
@@ -1587,6 +1589,8 @@ not this file.
 | `cmd/trstctl-agent/sshtrust_test.go:182` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-agent/sshtrust_test.go:224` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `cmd/trstctl-license/main.go:67` | writes the license PUBLIC key/inspection output; public material (CWE-276) |
+| `cmd/trstctl-trustbundle/main.go:80` | a public trust bundle at a build-time path (CWE-276) |
+| `cmd/trstctl-trustbundle/main.go:88` | build evidence at a build-time path, not a secret (CWE-276) |
 | `cmd/trstctl/backup_cmd_test.go:31` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `deploy/docker/dist_test.go:1108` | non-secret npm fixture manifest in t.TempDir (CWE-276) |
 | `deploy/docker/dist_test.go:1111` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1772,11 +1776,14 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (81 sites)
+### G703 — CWE-22 Path traversal (taint) (84 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
+| `cmd/trstctl-trustbundle/main.go:77` | build-time output path named by the image build (CWE-22) |
+| `cmd/trstctl-trustbundle/main.go:80` | a public trust bundle at a build-time path (CWE-276) |
+| `cmd/trstctl-trustbundle/main.go:88` | build evidence at a build-time path, not a secret (CWE-276) |
 | `cmd/trstctl/ssh.go:189` | operator-selected local proof file is checked for regular type and private permissions before reading |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |

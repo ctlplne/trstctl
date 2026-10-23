@@ -23,6 +23,21 @@ ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOFLAGS=-mod=readonly go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /out/trstctl ./cmd/trstctl
 
+# One current trust list for every image (eMudhra incident, 2026-10): the
+# pinned, checksum-verified Alpine ca-certificates bundle (Mozilla's websites
+# list) minus internal/crypto/trust/distrust.json, filtered by trstctl's own
+# deterministic tool, which fails the build unless exactly Mozilla's count
+# remains. The bundle package is the same bytes on every architecture; the
+# x86_64 package is the pinned input.
+FROM scratch AS trust-source
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk
+
+FROM build AS trust
+COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk
+RUN mkdir -p /out/trust \
+ && CGO_ENABLED=0 GOOS=$(go env GOHOSTOS) GOARCH=$(go env GOHOSTARCH) go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/trust/trstctl-trustbundle ./cmd/trstctl-trustbundle \
+ && /tmp/trust/trstctl-trustbundle filter -in /tmp/trust/ca-certificates-bundle.apk -out /out/trust/ca-certificates.crt -report /out/trust/report.json -expect 118
+
 # The seed and partner-lab bootstrap use Node built-ins plus the OpenSSL CLI.
 # Node 24.21.0 embeds OpenSSL 3.5.8; patch its separate Alpine libraries too.
 # Each package input is content-pinned, and installation has no network access.
@@ -30,11 +45,11 @@ FROM scratch AS runtime-packages
 ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk
 ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk
 ADD --checksum=sha256:9358e8f38eb19a1e035355626570c76bda1e5a49084c768fb0edc1e607251e99 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/openssl-3.5.9-r0.apk /amd64/openssl-3.5.9-r0.apk
-ADD --checksum=sha256:a35f8cf2366d90294d0bb089af565fd17f3fa03721e61bcc7f02ed3d8334e7ea https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20260909-r0.apk /amd64/ca-certificates-bundle-20260909-r0.apk
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /amd64/ca-certificates-bundle-20261020-r0.apk
 ADD --checksum=sha256:2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk /arm64/libcrypto3-3.5.9-r0.apk
 ADD --checksum=sha256:20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk /arm64/libssl3-3.5.9-r0.apk
 ADD --checksum=sha256:aa27b9edfeffbf7ebafbcf29df3f02eef4bf50f793a4874ae2f52aba6b53e653 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/openssl-3.5.9-r0.apk /arm64/openssl-3.5.9-r0.apk
-ADD --checksum=sha256:81a2c508dcdb3295196e6a8987274e3bc3487f99ad8d18e985f20bb2c336b5e6 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20260909-r0.apk /arm64/ca-certificates-bundle-20260909-r0.apk
+ADD --checksum=sha256:d0a573c27d337c369ad3abe3f39f09ffe67b95af23861577a8d134738375176a https://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/ca-certificates-bundle-20261020-r0.apk /arm64/ca-certificates-bundle-20261020-r0.apk
 
 FROM node:24.21.0-alpine@sha256:50c8e8ca1d27439048670df5883f32d57cf81cff6233222c893fd0d9884cbd81
 ARG TARGETARCH
@@ -45,6 +60,10 @@ RUN --network=none apk add --no-network /tmp/trstctl-seed-packages/*.apk \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
         /usr/local/bin/yarn /usr/local/bin/yarnpkg /usr/local/bin/pnpm /usr/local/bin/pnpx
 RUN install -d -o 65532 -g 65532 -m 0700 /seed-state
+# The image's trust store: Mozilla's current websites roots and nothing on the
+# distrust list, built by the trust stage above.
+COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+ENV NODE_OPTIONS=--use-openssl-ca
 COPY --from=build /out/trstctl /usr/local/bin/trstctl
 COPY deploy/demo/seed.mjs /demo/seed.mjs
 ENTRYPOINT ["node", "/demo/seed.mjs"]

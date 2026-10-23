@@ -32,7 +32,10 @@ fi
 case "$context_bytes" in
   ''|*[!0-9]*) echo "docker-context-audit: invalid archive byte count" >&2; exit 1 ;;
 esac
-max_context_kib=$((64 * 1024))
+# 80 MiB since 2026-10-23: the generated OpenAPI golden, SDK types, feature map
+# and message catalog grew the filtered context past 64 MiB (65.8 MiB measured);
+# the ceiling still catches caches, node_modules and build outputs leaking in.
+max_context_kib=$((80 * 1024))
 max_context_bytes=$((max_context_kib * 1024))
 if [ "$context_bytes" -gt "$max_context_bytes" ]; then
   echo "docker-context-audit: filtered context archive is ${context_bytes} bytes; limit is ${max_context_bytes} bytes" >&2

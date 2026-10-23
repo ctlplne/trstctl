@@ -197,3 +197,20 @@ cosign verify ghcr.io/ctlplne/trstctl:<tag> \
   --certificate-identity-regexp '^https://github.com/.*/trstctl/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+
+## Trust store
+
+Every image trusts exactly Mozilla's current websites roots. A build stage
+takes the pinned, checksum-verified Alpine `ca-certificates-bundle-20261020`
+package, removes everything in the shipped distrust list
+(`internal/crypto/trust/distrust.json`) with `trstctl-trustbundle filter`, and
+installs the result as `/etc/ssl/certs/ca-certificates.crt`, the only trust file
+in the image (the Debian-based HSM images do not install Debian's
+`ca-certificates`, which would link every root as its own file beside the
+bundle). The list is the eMudhra incident of October 2026: the three emSign
+roots Mozilla removed and, by public key, the eight intermediate CAs whose
+private keys are recoverable, cross-signs included. `trstctl-trustbundle list`
+prints it; `trstctl-trustbundle probe host...` performs handshakes with the
+image's roots and reports the chain and any distrusted certificate on it. A
+root Mozilla drops is a distrust-file entry the same day; the pinned bundle
+moves when Alpine ships a new one.

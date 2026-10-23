@@ -12,6 +12,25 @@
 # a clean image while carrying a known-vulnerable binary.
 # Only the two shipped OCI platforms are supported. Each patch is content-pinned;
 # offline installation cannot resolve a new package from an Alpine repository.
+# One current trust list for every image (eMudhra incident, 2026-10): the
+# pinned, checksum-verified Alpine ca-certificates bundle (Mozilla's websites
+# list) minus internal/crypto/trust/distrust.json, filtered by trstctl's own
+# deterministic tool, which fails the build unless exactly Mozilla's count
+# remains. The bundle package is the same bytes on every architecture; the
+# x86_64 package is the pinned input.
+FROM scratch AS trust-source
+ADD --checksum=sha256:bb008f6d214b6af7576324659856fb63dc8dcb4373f8345ff706388696f1254d https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/ca-certificates-bundle-20261020-r0.apk /ca-certificates-bundle-20261020-r0.apk
+
+FROM --platform=$BUILDPLATFORM golang:1.26.10-bookworm@sha256:5b1f78db1f54cc8cb46e652c51d3f854441c4310a449161b6fe9fb553edab505 AS trust
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY internal/crypto/trust ./internal/crypto/trust
+COPY cmd/trstctl-trustbundle ./cmd/trstctl-trustbundle
+COPY --from=trust-source /ca-certificates-bundle-20261020-r0.apk /tmp/trust/ca-certificates-bundle.apk
+RUN mkdir -p /out/trust \
+ && CGO_ENABLED=0 GOFLAGS=-mod=mod go build -trimpath -buildvcs=false -ldflags "-s -w -buildid=" -o /tmp/trust/trstctl-trustbundle ./cmd/trstctl-trustbundle \
+ && /tmp/trust/trstctl-trustbundle filter -in /tmp/trust/ca-certificates-bundle.apk -out /out/trust/ca-certificates.crt -report /out/trust/report.json -expect 118
+
 FROM scratch AS patches
 ADD --checksum=sha256:6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk /amd64/libcrypto3-3.5.9-r0.apk
 ADD --checksum=sha256:05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877 https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk /amd64/libssl3-3.5.9-r0.apk
@@ -29,4 +48,7 @@ COPY --from=patches /${TARGETARCH}/ /tmp/trstctl-postgres-patches/
 RUN --network=none apk add --no-network /tmp/trstctl-postgres-patches/*.apk \
     && rm -rf /tmp/trstctl-postgres-patches
 RUN rm -f /usr/local/bin/gosu && test ! -e /usr/local/bin/gosu
+# The image's trust store: Mozilla's current websites roots and nothing on the
+# distrust list, built by the trust stage above.
+COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER postgres

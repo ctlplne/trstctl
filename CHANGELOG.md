@@ -1,5 +1,26 @@
 ## [Unreleased]
 
+### Security
+
+- Every image now ships one trust store: the pinned, checksum-verified Alpine
+  `ca-certificates-bundle-20261020` filtered at build time by the shipped
+  distrust list (`internal/crypto/trust/distrust.json`), which leaves exactly
+  Mozilla's 118 websites roots. The list names the three emSign roots Mozilla
+  removed on 2026-10-20 and, by public key, the eight eMudhra intermediate CAs
+  whose P-384 private keys are small integers anyone can recover; matching by
+  key also catches their AAA Certificate Services cross-signs. The control
+  plane, signer-hsm and agent-pkcs11 images previously trusted the Debian or
+  distroless bundle (150 and 142 roots, including those emSign roots and AAA
+  Certificate Services, 42 and 49 roots Mozilla no longer trusts for websites,
+  and 10 and 25 it does that were missing); the Alpine-based images trusted
+  the three removed roots. Go 1.26.10, which trstctl has built on since
+  2026-10-21, already rejects any chain through the eight intermediates in
+  trstctl's own binaries; builds and images from before 2026-10-21 (v0.6.0
+  included) do not, and nothing before this change protected non-Go software
+  in the images or guarded against another weak key under the same roots.
+  `trstctl-trustbundle` (filter, probe, list) is the build-stage tool; the
+  Node images read the system store (`NODE_OPTIONS=--use-openssl-ca`).
+
 ### Fixed
 
 - SSH fleet and Workloads no longer label every discovered raw host key as

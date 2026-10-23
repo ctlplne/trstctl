@@ -17,6 +17,10 @@ RUN apk add --no-cache \
     && addgroup -S -g 65532 trstctl \
     && adduser -S -D -H -u 65532 -G trstctl trstctl
 COPY --from=trstctl /usr/local/bin/trstctl-agent /usr/local/bin/trstctl-agent
+# The same filtered trust bundle the control-plane image ships; the Alpine
+# per-root files apk may have added are removed so the bundle is the only store.
+RUN rm -rf /etc/ssl/certs/* /usr/share/ca-certificates /usr/local/share/ca-certificates
+COPY --from=trstctl /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY deploy/demo/lab/frontdoors/httpd-lab.conf /usr/local/apache2/conf/extra/httpd-lab.conf
 COPY deploy/demo/lab/frontdoors/nginx.conf /etc/nginx/nginx.conf
 COPY deploy/demo/lab/frontdoors/haproxy.cfg /lab/haproxy.cfg
