@@ -55,7 +55,7 @@ type legacyBrandStore interface {
 // turn an authorization on one tenancy into a write on another, and with a
 // custom domain that would be one customer seizing another's host.
 func (s *Service) SetTenantBrand(ctx context.Context, actor Operator, customerID string, brand TenantBrand, expectedRevision string) error {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermBrandWrite); err != nil {
 		return err
 	}
 	if err := s.authorize(ctx, actor, customerID, OpProvision); err != nil {

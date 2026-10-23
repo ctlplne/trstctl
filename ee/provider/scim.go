@@ -290,8 +290,10 @@ func (h *providerSCIMHandler) upsertUser(ctx context.Context, token SCIMToken, p
 	if role == "" && currentErr == nil {
 		role = current.Role
 	}
-	if !validOperatorRole(role) {
-		return OperatorIdentity{}, errors.New("roles must contain provider admin or operator")
+	if known, knownErr := h.roleKnown(ctx, role); knownErr != nil {
+		return OperatorIdentity{}, knownErr
+	} else if !known {
+		return OperatorIdentity{}, errors.New("roles must contain provider admin, operator, or a defined custom role")
 	}
 	now := h.clock().UTC()
 	identity := current
@@ -357,14 +359,43 @@ func (h *providerSCIMHandler) emitIdentity(ctx context.Context, token SCIMToken,
 func providerRoleFromSCIM(roles []providerSCIMRole) OperatorRole {
 	role := OperatorRole("")
 	for _, item := range roles {
-		switch strings.ToLower(strings.TrimSpace(item.Value)) {
+		value := strings.ToLower(strings.TrimSpace(item.Value))
+		switch value {
 		case "admin", "provider-admin", "provider_admin":
 			return OperatorAdmin
 		case "operator", "provider-operator", "provider_operator":
 			role = OperatorOperator
+		default:
+			// A90: a custom role name, kept only when no built-in value is
+			// present; the caller checks it is defined.
+			if role == "" && value != "" {
+				role = OperatorRole(strings.TrimPrefix(value, "provider-"))
+			}
 		}
 	}
 	return role
+}
+
+// roleKnown mirrors Service.roleKnown for the SCIM handler, which has the
+// access store but no Service.
+func (h *providerSCIMHandler) roleKnown(ctx context.Context, role OperatorRole) (bool, error) {
+	if builtInRole(role) {
+		return true, nil
+	}
+	store, ok := h.access.(RoleStore)
+	if !ok {
+		return false, nil
+	}
+	roles, err := store.ListRoles(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, item := range roles {
+		if item.Name == string(role) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func operatorIdentityToSCIM(identity OperatorIdentity, base string) providerSCIMUser {

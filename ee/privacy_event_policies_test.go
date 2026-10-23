@@ -100,6 +100,8 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: provider.EventDelegationRevoked, SchemaVersion: 1},
 		{EventType: provider.EventOperatorUpserted, SchemaVersion: 1},
 		{EventType: provider.EventOperatorOffboarded, SchemaVersion: 1},
+		{EventType: provider.EventRoleUpserted, SchemaVersion: 1},
+		{EventType: provider.EventRoleDeleted, SchemaVersion: 1},
 		{EventType: provider.EventTenantQuotaSet, SchemaVersion: 1},
 		{EventType: provider.EventTenantBrandSet, SchemaVersion: 1},
 		{EventType: provider.AuditBreakGlassRequested, SchemaVersion: 1},

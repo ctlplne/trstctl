@@ -131,7 +131,28 @@ export interface ProviderTenantSnapshot {
   workspace_initialized?: boolean;
 }
 
-export type ProviderOperatorRole = "admin" | "operator";
+/** A90: admin, operator, or the name of a custom role defined at /provider/v1/roles. */
+export type ProviderOperatorRole = string;
+
+export interface ProviderPermission {
+  name: string;
+  description: string;
+}
+
+export interface ProviderRole {
+  name: string;
+  description?: string;
+  permissions: string[];
+  built_in: boolean;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProviderRoleCatalog {
+  roles: ProviderRole[];
+  permissions: ProviderPermission[];
+}
 export type ProviderOperation = "read" | "provision" | "suspend" | "resume" | "offboard" | "break-glass";
 
 export interface ProviderConsoleCustomerAuthority {
@@ -151,6 +172,8 @@ export interface ProviderConsoleAuthority {
   access_write: boolean;
   provision: boolean;
   isolation_drill: boolean;
+  /** A90: may define or delete custom Provider roles. */
+  roles_write?: boolean;
   customers: Record<string, ProviderConsoleCustomerAuthority>;
 }
 
@@ -421,6 +444,13 @@ export const providerApi = {
     const out = await providerReq<{ operators: ProviderOperatorAccess[] | null }>("/provider/v1/operators");
     return out.operators ?? [];
   },
+  listRoles: async (): Promise<ProviderRoleCatalog> => {
+    const out = await providerReq<{ roles: ProviderRole[] | null; permissions: ProviderPermission[] | null }>("/provider/v1/roles");
+    return { roles: out.roles ?? [], permissions: out.permissions ?? [] };
+  },
+  putRole: (name: string, input: { description: string; permissions: string[] }): Promise<ProviderRole> =>
+    providerReq<ProviderRole>(`/provider/v1/roles/${encodeURIComponent(name)}`, { method: "PUT", body: JSON.stringify(input) }),
+  deleteRole: (name: string): Promise<void> => providerReq<void>(`/provider/v1/roles/${encodeURIComponent(name)}`, { method: "DELETE" }),
   listAccessCustomers: async (): Promise<ProviderTenant[]> => {
     const out = await providerReq<{ tenants: ProviderTenant[] | null }>("/provider/v1/access/customers");
     return out.tenants ?? [];

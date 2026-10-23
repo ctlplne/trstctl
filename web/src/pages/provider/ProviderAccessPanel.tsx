@@ -12,7 +12,15 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime } from "@/i18n/format";
-import { ProviderAuthError, providerApi, type ProviderOperation, type ProviderOperatorAccess, type ProviderOperatorRole } from "@/lib/providerApi";
+import {
+  ProviderAuthError,
+  providerApi,
+  type ProviderOperation,
+  type ProviderOperatorAccess,
+  type ProviderOperatorRole,
+  type ProviderRole,
+  type ProviderRoleCatalog,
+} from "@/lib/providerApi";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
 const operations = ["read", "provision", "suspend", "resume", "offboard", "break-glass"] as const satisfies readonly ProviderOperation[];
@@ -31,8 +39,27 @@ const grantSchema = z.object({
 });
 type GrantForm = z.infer<typeof grantSchema>;
 
-export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: () => void; canWrite: boolean }) {
+const builtInRoleCatalog: ProviderRoleCatalog = {
+  roles: [
+    { name: "admin", permissions: [], built_in: true },
+    { name: "operator", permissions: [], built_in: true },
+  ],
+  permissions: [],
+};
+
+export function ProviderAccessPanel({ onAuthError, canWrite, rolesWrite = false }: { onAuthError: () => void; canWrite: boolean; rolesWrite?: boolean }) {
   const access = useApiQuery(["provider", "operator-access"], providerApi.listOperatorAccess, { live: { intervalMs: 15_000 } });
+  // A90: the role catalog drives the role select and the custom-role editor.
+  // An older or mocked client without the roles read keeps the built-ins.
+  const roleCatalog = useApiQuery(["provider", "roles"], async () =>
+    typeof providerApi.listRoles === "function" ? ((await providerApi.listRoles()) ?? builtInRoleCatalog) : builtInRoleCatalog,
+  );
+  const catalog = roleCatalog.data ?? builtInRoleCatalog;
+  const [roleName, setRoleName] = useState("");
+  const [roleDescription, setRoleDescription] = useState("");
+  const [rolePermissions, setRolePermissions] = useState<string[]>([]);
+  const [roleStatus, setRoleStatus] = useState("");
+  const [roleError, setRoleError] = useState("");
   const customers = useApiQuery(["provider", "access-customers"], providerApi.listAccessCustomers, { live: { intervalMs: 15_000 } });
   const queryClient = useQueryClient();
   const [selectedOperatorId, setSelectedOperatorId] = useState<string | null>(null);
@@ -118,6 +145,51 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
       fail(error);
     }
   };
+  const refreshRoles = () => {
+    void queryClient.invalidateQueries({ queryKey: ["provider", "roles"] });
+    void queryClient.invalidateQueries({ queryKey: ["provider", "session"] });
+  };
+  const saveRole = async () => {
+    setRoleError("");
+    setRoleStatus("");
+    try {
+      const saved = await providerApi.putRole(roleName.trim(), { description: roleDescription.trim(), permissions: rolePermissions });
+      setRoleStatus(translateNow("provider.access.roles.saved", { name: saved.name }));
+      setRoleName("");
+      setRoleDescription("");
+      setRolePermissions([]);
+      refreshRoles();
+    } catch (error) {
+      if (error instanceof ProviderAuthError) {
+        onAuthError();
+        return;
+      }
+      setRoleError(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const deleteRole = async (role: ProviderRole) => {
+    setRoleError("");
+    setRoleStatus("");
+    try {
+      await providerApi.deleteRole(role.name);
+      setRoleStatus(translateNow("provider.access.roles.deleted", { name: role.name }));
+      refreshRoles();
+    } catch (error) {
+      if (error instanceof ProviderAuthError) {
+        onAuthError();
+        return;
+      }
+      setRoleError(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const editRole = (role: ProviderRole) => {
+    setRoleName(role.name);
+    setRoleDescription(role.description ?? "");
+    setRolePermissions([...role.permissions]);
+    setRoleStatus("");
+    setRoleError("");
+  };
+  const customRoles = catalog.roles.filter((role) => !role.built_in);
 
   return (
     <section className="mt-6" aria-labelledby="provider-access-heading">
@@ -208,6 +280,11 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
                 >
                   <option value="admin">{translateNow("source.provider.access.role.admin.aud580021")}</option>
                   <option value="operator">{translateNow("source.provider.access.role.operator.aud580022")}</option>
+                  {customRoles.map((role) => (
+                    <option key={role.name} value={role.name}>
+                      {role.name}
+                    </option>
+                  ))}
                 </Select>
               ) : (
                 <span>{row.identity.role}</span>
@@ -344,6 +421,76 @@ export function ProviderAccessPanel({ onAuthError, canWrite }: { onAuthError: ()
           ]}
         />
       </DetailDrawer>
+
+      {rolesWrite ? (
+        <section className="mt-6 rounded-control border border-border p-3" aria-labelledby="provider-roles-heading">
+          <h3 id="provider-roles-heading" className="text-sm font-semibold">
+            {translateNow("provider.access.roles.heading")}
+          </h3>
+          <p className="mt-1 text-caption text-muted-foreground">{translateNow("provider.access.roles.intro")}</p>
+          {customRoles.length === 0 ? (
+            <p className="mt-2 text-caption text-muted-foreground">{translateNow("provider.access.roles.none")}</p>
+          ) : (
+            <ul className="mt-2 grid gap-1">
+              {customRoles.map((role) => (
+                <li key={role.name} className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-mono">{role.name}</span>
+                  <span className="text-caption text-muted-foreground">{role.permissions.join(", ")}</span>
+                  <Button type="button" size="sm" variant="outline" onClick={() => editRole(role)}>
+                    {translateNow("provider.access.roles.edit")}
+                  </Button>
+                  <Button type="button" size="sm" variant="destructive-outline" onClick={() => void deleteRole(role)}>
+                    {translateNow("provider.access.roles.delete")}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              {translateNow("provider.access.roles.name")}
+              <Input value={roleName} onChange={(event) => setRoleName(event.target.value)} />
+            </label>
+            <label className="grid gap-1 text-sm">
+              {translateNow("provider.access.roles.description")}
+              <Input value={roleDescription} onChange={(event) => setRoleDescription(event.target.value)} />
+            </label>
+          </div>
+          <fieldset className="mt-2 grid gap-1 text-sm">
+            <legend className="font-medium">{translateNow("provider.access.roles.permissions")}</legend>
+            {catalog.permissions.map((permission) => (
+              <label key={permission.name} className="flex flex-wrap items-start gap-2">
+                <input
+                  type="checkbox"
+                  aria-label={permission.name}
+                  className="mt-1 h-4 w-4"
+                  checked={rolePermissions.includes(permission.name)}
+                  onChange={(event) =>
+                    setRolePermissions((current) => (event.target.checked ? [...current, permission.name] : current.filter((name) => name !== permission.name)))
+                  }
+                />
+                <span className="font-mono">{permission.name}</span>
+                <span className="block text-caption text-muted-foreground">{permission.description}</span>
+              </label>
+            ))}
+          </fieldset>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button type="button" disabled={!roleName.trim() || rolePermissions.length === 0} onClick={() => void saveRole()}>
+              {translateNow("provider.access.roles.save")}
+            </Button>
+            {roleStatus ? (
+              <span role="status" className="text-caption text-success">
+                {roleStatus}
+              </span>
+            ) : null}
+            {roleError ? (
+              <span role="alert" className="text-caption text-risk-critical">
+                {roleError}
+              </span>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }

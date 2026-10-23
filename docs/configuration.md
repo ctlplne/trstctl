@@ -898,7 +898,7 @@ error still refuses the request; an outage is never treated as absence.
 | `TRSTCTL_PROVIDER_OIDC_ISSUER` / `TRSTCTL_PROVIDER_OIDC_AUDIENCE` | unset | Required OIDC issuer and audience. |
 | `TRSTCTL_PROVIDER_OIDC_JWKS_FILE` / `TRSTCTL_PROVIDER_OIDC_JWKS_JSON` | unset | Exactly one offline-pinned IdP signing-key source. The partner lab's licensed profile pins its local IdP this way (`deploy/demo/lab/docker-compose.licensed.yml`). |
 | `TRSTCTL_PROVIDER_OIDC_ROLE_CLAIM` | `roles` | Signed claim containing Provider role values. |
-| `TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES` / `TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES` | unset | Maps signed values to the two Provider roles. |
+| `TRSTCTL_PROVIDER_OIDC_ADMIN_VALUES` / `TRSTCTL_PROVIDER_OIDC_OPERATOR_VALUES` | unset | Maps signed values to the two built-in Provider roles, which act as the ceiling for an operator's stored role. Custom roles (`/provider/v1/roles`) are assigned per operator through the role route, the access console, or SCIM; their permissions never exceed what the signed value allows. |
 | `TRSTCTL_PROVIDER_OIDC_MFA_CLAIM` / `TRSTCTL_PROVIDER_OIDC_MFA_VALUES` | `amr` / `mfa,otp,hwk,swk` | Signed claim and accepted values that positively prove MFA. |
 | `TRSTCTL_PROVIDER_SAML_ENABLED` | `false` | Enables the separate Provider SAML SP. |
 | `TRSTCTL_PROVIDER_SAML_ENTITY_ID` / `TRSTCTL_PROVIDER_SAML_METADATA_URL` / `TRSTCTL_PROVIDER_SAML_ACS_URL` | unset | HTTPS SP identity and served endpoint URLs. |

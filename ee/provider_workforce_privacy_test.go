@@ -78,3 +78,51 @@ func TestProviderWorkforceEventsPassRequiredPrivacyBoundary(t *testing.T) {
 		})
 	}
 }
+
+// A90: a custom role definition names the operator who wrote it. The
+// production-required privacy boundary must accept the event, and an erasure
+// of that operator must rewrite the author and audit subject while the role
+// itself (a Provider-chosen label and permission list) survives intact.
+func TestProviderRoleEventsPassRequiredPrivacyBoundary(t *testing.T) {
+	log, err := events.Open(t.Context(), config.NATS{
+		Mode: config.NATSEmbedded, StoreDir: t.TempDir(), SyncAlways: true,
+	}, events.WithRequiredPrivacyEventPolicies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+	const subject = "roles-admin@example.test"
+	for _, typ := range []string{provider.EventRoleUpserted, provider.EventRoleDeleted} {
+		t.Run(typ, func(t *testing.T) {
+			now := time.Now().UTC()
+			payload := provider.AuthorityEvent{
+				Role: &provider.ProviderRole{
+					Name: "customer-provisioner", Description: "provisions customers only",
+					Permissions: []provider.Permission{provider.PermTenantsProvision},
+					CreatedBy:   subject, CreatedAt: now, UpdatedAt: now,
+				},
+				EffectiveAt: now,
+				Audit: provider.AuditEvent{Type: typ, TenantID: store.ZeroUUID,
+					OperatorID: subject, OperatorEmail: subject, Subject: "customer-provisioner", At: now},
+			}
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := log.Append(t.Context(), events.Event{TenantID: store.ZeroUUID, Type: typ, Data: raw}); err != nil {
+				t.Fatalf("production-required privacy boundary rejected role event: %v", err)
+			}
+			rewritten, changed, err := events.PseudonymizeEventDataForSubject(raw, store.ZeroUUID, subject, typ, 1)
+			if err != nil || !changed || bytes.Contains(rewritten, []byte(subject)) {
+				t.Fatalf("role privacy rewrite failed: changed=%t err=%v", changed, err)
+			}
+			var decoded provider.AuthorityEvent
+			if err := json.Unmarshal(rewritten, &decoded); err != nil || decoded.Role == nil {
+				t.Fatalf("rewritten role authority no longer decodes: %v", err)
+			}
+			if decoded.Role.Name != "customer-provisioner" || len(decoded.Role.Permissions) != 1 || decoded.Role.CreatedBy == subject {
+				t.Fatalf("rewritten role = %+v, want the definition kept and the author erased", decoded.Role)
+			}
+		})
+	}
+}

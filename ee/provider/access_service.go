@@ -20,7 +20,7 @@ const providerHTTPDelegationSource = "provider_api"
 // currently MFA-authenticated Provider admin. Ordinary delegated operators do
 // not get to enumerate their coworkers or other customers' historical grants.
 func (s *Service) ListOperatorAccess(ctx context.Context, actor Operator) ([]OperatorAccess, error) {
-	if err := s.requireAdminAccessRead(actor); err != nil {
+	if err := s.requireAdminAccessRead(ctx, actor); err != nil {
 		return nil, err
 	}
 	if s.access == nil {
@@ -34,17 +34,24 @@ func (s *Service) ListOperatorAccess(ctx context.Context, actor Operator) ([]Ope
 // delegation-filtered, while an administrator cannot assign a not-yet-granted
 // customer if the selector hides it. Admin + current MFA is the boundary.
 func (s *Service) ListAccessCustomers(ctx context.Context, actor Operator) ([]Tenant, error) {
-	if err := s.requireAdminAccessRead(actor); err != nil {
+	if err := s.requireAdminAccessRead(ctx, actor); err != nil {
 		return nil, err
 	}
 	return s.store.ListTenants(ctx)
 }
 
-func (s *Service) requireAdminAccessRead(actor Operator) error {
+func (s *Service) requireAdminAccessRead(ctx context.Context, actor Operator) error {
 	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
 		return ErrUnlicensed
 	}
-	if err := s.requireOperator(actor); err != nil || actor.Role != OperatorAdmin {
+	if err := s.requireOperator(actor); err != nil {
+		return ErrForbidden
+	}
+	perms, err := s.permissionsFor(ctx, actor)
+	if err != nil {
+		return err
+	}
+	if !perms[PermOperatorsAdmin] {
 		return ErrForbidden
 	}
 	return nil
@@ -58,7 +65,7 @@ func (s *Service) GrantDelegations(
 	operations []Operation,
 	expiresAt time.Time,
 ) (OperatorAccess, error) {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermOperatorsAdmin); err != nil {
 		return OperatorAccess{}, err
 	}
 	if s.access == nil {
@@ -114,7 +121,7 @@ func (s *Service) RevokeDelegations(
 	operations []Operation,
 	reason string,
 ) (OperatorAccess, error) {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermOperatorsAdmin); err != nil {
 		return OperatorAccess{}, err
 	}
 	if s.access == nil {
@@ -155,14 +162,18 @@ func (s *Service) RevokeDelegations(
 // and this row on every request, so a console downgrade bites immediately and
 // a console promotion cannot exceed what the IdP asserted.
 func (s *Service) SetOperatorRole(ctx context.Context, actor Operator, operatorID string, role OperatorRole) (OperatorAccess, error) {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermOperatorsAdmin); err != nil {
 		return OperatorAccess{}, err
 	}
 	if s.access == nil {
 		return OperatorAccess{}, errors.New("provider: operator access store is not configured")
 	}
-	if !validOperatorRole(role) {
-		return OperatorAccess{}, errors.New("provider: role must be admin or operator")
+	known, err := s.roleKnown(ctx, role)
+	if err != nil {
+		return OperatorAccess{}, err
+	}
+	if !known {
+		return OperatorAccess{}, fmt.Errorf("%w: %q is neither built in nor a defined custom role", ErrRoleUnknown, string(role))
 	}
 	identity, err := s.access.ResolveOperator(ctx, strings.TrimSpace(operatorID))
 	if err != nil {

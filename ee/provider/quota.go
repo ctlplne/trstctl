@@ -37,7 +37,7 @@ type legacyQuotaStore interface {
 // was authorized against — a body that named a different customer would turn
 // an authorization on one tenancy into a write on another.
 func (s *Service) SetTenantQuota(ctx context.Context, actor Operator, customerID string, q billing.Quota) error {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermQuotaWrite); err != nil {
 		return err
 	}
 	if err := s.authorize(ctx, actor, customerID, OpProvision); err != nil {

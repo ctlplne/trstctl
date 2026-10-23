@@ -60,6 +60,13 @@ type providerOperatorAuthorityPayload struct {
 	Audit          provider.AuditEvent        `json:"audit"`
 }
 
+type providerRoleAuthorityPayload struct {
+	Role           *provider.ProviderRole `json:"role,omitempty"`
+	EffectiveAt    time.Time              `json:"effective_at,omitempty"`
+	RequestBinding string                 `json:"request_binding,omitempty"`
+	Audit          provider.AuditEvent    `json:"audit"`
+}
+
 type providerQuotaAuthorityPayload struct {
 	Quota          *billing.Quota      `json:"quota,omitempty"`
 	EffectiveAt    time.Time           `json:"effective_at,omitempty"`
@@ -271,6 +278,17 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		licensedPrivacyRule("/break_glass_grant/second_consented_by", events.PrivacyFieldIdentityExact),
 		licensedPrivacyRule("/break_glass_grant/denied_by", events.PrivacyFieldIdentityExact),
 	)
+	// A90: a role definition names its author; the name and permissions are
+	// the operator's own vocabulary, the description free text.
+	rolePolicy := providerPolicy[providerRoleAuthorityPayload](
+		licensedPrivacyRule("/role/name", events.PrivacyFieldSubjectToken),
+		licensedPrivacyRule("/role/description", events.PrivacyFieldFreeTextClear),
+		licensedPrivacyRule("/role/permissions/*", events.PrivacyFieldOpaqueExact),
+		licensedPrivacyRule("/role/built_in", events.PrivacyFieldOpaqueExact),
+		licensedPrivacyRule("/role/created_by", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/role/created_at", events.PrivacyFieldOpaqueExact),
+		licensedPrivacyRule("/role/updated_at", events.PrivacyFieldOpaqueExact),
+	)
 	catalog := []licensedPrivacyEventPolicy{
 		entry(provider.AuditTenantProvisioned, 1, tenantPolicy),
 		entry(provider.AuditTenantSuspended, 1, tenantPolicy),
@@ -284,6 +302,8 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		entry(provider.EventDelegationRevoked, 1, delegationPolicy),
 		entry(provider.EventOperatorUpserted, 1, operatorPolicy),
 		entry(provider.EventOperatorOffboarded, 1, operatorPolicy),
+		entry(provider.EventRoleUpserted, 1, rolePolicy),
+		entry(provider.EventRoleDeleted, 1, rolePolicy),
 		entry(provider.EventTenantQuotaSet, 1, providerPolicy[providerQuotaAuthorityPayload](
 			licensedPrivacyRule("/quota/updated_by", events.PrivacyFieldIdentityExact),
 		)),

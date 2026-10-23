@@ -449,7 +449,20 @@ never live in the API process. What you can do end to end against the running bi
   Bulk (`POST /provider/scim/v2/Bulk`, A89) applies User operations in order
   with `bulkId` references, each under its own idempotency key so a replayed
   request appends nothing twice; group operations are refused per operation.
-  Arbitrary custom Provider roles are not implemented; group remove/replace is
+  Custom Provider roles (A90): `GET /provider/v1/roles` serves the built-in
+  `admin` and `operator` roles, the defined custom roles, and the closed
+  permission vocabulary (`tenants:provision`, `tenants:lifecycle`,
+  `quota:write`, `brand:write`, `operators:admin`, `roles:admin`,
+  `isolation:drill`, `breakglass:request`, `breakglass:consent`,
+  `breakglass:results`); `PUT`/`DELETE /provider/v1/roles/{name}` (operators
+  holding `roles:admin`) define a role as a subset of that vocabulary or delete
+  one nobody holds, each an immutable `provider.role.upserted`/`deleted`
+  authority event. Every Provider mutation now asks for its permission rather
+  than for the admin role; a custom role is assigned through the role route,
+  the access console, or a SCIM `roles` value, and its effective permissions
+  are intersected with the ceiling the signed IdP role allows (`admin` or
+  `operator`), so a custom role never grants what the IdP would not. SCIM
+  Groups still expose only the two built-in roles; group remove/replace is
   refused in favor of an explicit User `active:false`/DELETE leaver event.
   Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
   console panel order every observed crypto asset by WHO DEPENDS ON IT, not by

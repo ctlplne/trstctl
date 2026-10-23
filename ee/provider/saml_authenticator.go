@@ -315,11 +315,11 @@ func (a *SAMLAuthenticator) bindDirectory(ctx context.Context, operator Operator
 	if !identity.Active {
 		return Operator{}, false
 	}
-	role := lesserRole(operator.Role, identity.Role)
+	role, ceiling := effectiveRole(operator.Role, identity.Role)
 	if role == "" {
 		return Operator{}, false
 	}
-	operator.ID, operator.Role = identity.ID, role
+	operator.ID, operator.Role, operator.Ceiling = identity.ID, role, ceiling
 	if strings.TrimSpace(identity.Email) != "" {
 		operator.Email = strings.TrimSpace(identity.Email)
 	}

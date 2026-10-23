@@ -226,3 +226,30 @@ func normalizeOperations(operations []Operation) ([]Operation, error) {
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out, nil
 }
+
+// ListRoles reads the projected custom Provider roles (A90).
+func (p *PGAccessStore) ListRoles(ctx context.Context) ([]ProviderRole, error) {
+	if p == nil || p.store == nil {
+		return nil, errors.New("provider: operator access store is not configured")
+	}
+	//trstctl:system-query — Provider-global role catalog is read before a customer tenant is selected; the fixed tenant_id is explicit and the table is FORCE RLS.
+	rows, err := p.store.SystemPool().Query(ctx, `SELECT name, description, permissions, created_by, created_at, updated_at
+		FROM provider_roles WHERE tenant_id = $1 ORDER BY name`, providerAuthorityTenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ProviderRole{}
+	for rows.Next() {
+		var role ProviderRole
+		var perms []string
+		if err := rows.Scan(&role.Name, &role.Description, &perms, &role.CreatedBy, &role.CreatedAt, &role.UpdatedAt); err != nil {
+			return nil, err
+		}
+		for _, p := range perms {
+			role.Permissions = append(role.Permissions, Permission(p))
+		}
+		out = append(out, role)
+	}
+	return out, rows.Err()
+}

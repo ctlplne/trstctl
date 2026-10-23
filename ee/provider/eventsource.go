@@ -77,6 +77,7 @@ type AuthorityEvent struct {
 	Grant                 *BreakGlassGrant      `json:"break_glass_grant,omitempty"`
 	Snapshot              *TenantSnapshot       `json:"tenant_snapshot,omitempty"`
 	Drill                 *IsolationDrillReport `json:"isolation_drill,omitempty"`
+	Role                  *ProviderRole         `json:"role,omitempty"`
 	EffectiveAt           time.Time             `json:"effective_at,omitempty"`
 	RequestBinding        string                `json:"request_binding,omitempty"`
 	Erasure               *TenantErasureRequest `json:"erasure,omitempty"`
@@ -427,6 +428,8 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 		`DELETE FROM provider_operator_delegations WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — the fixed Provider authority tenant is restored only from immutable Provider events.
 		`DELETE FROM provider_operators WHERE tenant_id = '` + providerAuthorityTenant + `'`,
+		//trstctl:system-query — custom Provider roles are rebuilt from their immutable definition events (A90).
+		`DELETE FROM provider_roles WHERE tenant_id = '` + providerAuthorityTenant + `'`,
 		//trstctl:system-query — same full-replay reset; this is a trusted projection writer, never a tenant route.
 		`DELETE FROM provider_breakglass_grants`,
 		//trstctl:system-query — same full-replay reset; the replay restores tenant_id on every row.
@@ -650,7 +653,7 @@ var providerAuthorityEventTypes = []string{
 	AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded,
 	AuditTenantErasureRequested, AuditUnregisteredTenantOffboarded,
 	AuditTenantErasureFailed, AuditTenantErasureCompleted,
-	EventOperatorUpserted, EventOperatorOffboarded,
+	EventOperatorUpserted, EventOperatorOffboarded, EventRoleUpserted, EventRoleDeleted,
 	EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
 	AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied,
 	AuditBreakGlassWithdrawn, AuditBreakGlassAccessed,
@@ -920,6 +923,23 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 				return err
 			}
 		}
+	case EventRoleUpserted, EventRoleDeleted:
+		if payload.Role == nil || payload.Role.Name == "" {
+			return fmt.Errorf("provider: %s needs role state", event.Type)
+		}
+		if event.Type == EventRoleDeleted {
+			//trstctl:system-query — fixed-tenant Provider role projection; no customer-selected tenant enters this statement.
+			_, err := tx.Exec(ctx, `DELETE FROM provider_roles WHERE tenant_id = $1 AND name = $2`, providerAuthorityTenant, payload.Role.Name)
+			return err
+		}
+		//trstctl:system-query — fixed-tenant Provider role projection; no customer-selected tenant enters this statement.
+		_, err := tx.Exec(ctx, `INSERT INTO provider_roles (tenant_id, name, description, permissions, created_by, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (tenant_id, name) DO UPDATE SET description = EXCLUDED.description, permissions = EXCLUDED.permissions,
+			created_by = EXCLUDED.created_by, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at`,
+			providerAuthorityTenant, payload.Role.Name, payload.Role.Description, permissionStrings(payload.Role.Permissions),
+			payload.Role.CreatedBy, payload.Role.CreatedAt.UTC(), effectiveAt)
+		return err
 	case EventTenantQuotaSet:
 		if payload.Quota == nil {
 			return errors.New("provider: quota event needs quota state")

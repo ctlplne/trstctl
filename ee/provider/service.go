@@ -292,7 +292,7 @@ func (s *Service) ListActivity(ctx context.Context, actor Operator, limit int) (
 		// undelegated activity and does not confer authority for a new command.
 		ownErasure := item.RequestEventID != "" && item.OperatorID == actor.ID
 		item.CanContinueOffboard = ownErasure && item.Type == AuditTenantErasureRequested &&
-			item.OffboardState == "pending" && s.requireMutation(actor, true) == nil
+			item.OffboardState == "pending" && s.requirePermission(ctx, actor, PermTenantsLifecycle) == nil
 		if ownErasure || visible[item.TenantID] ||
 			((item.TenantID == providerAuditTenant || item.TenantID == legacyProviderAuditTenant) && actor.Role == OperatorAdmin) {
 			out = append(out, item)
@@ -302,7 +302,7 @@ func (s *Service) ListActivity(ctx context.Context, actor Operator, limit int) (
 }
 
 func (s *Service) Provision(ctx context.Context, actor Operator, req ProvisionRequest) (Tenant, error) {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermTenantsProvision); err != nil {
 		return Tenant{}, err
 	}
 	slug := strings.TrimSpace(req.Slug)
@@ -452,7 +452,7 @@ func (s *Service) ListBreakGlassGrants(ctx context.Context, actor Operator, cust
 // the result — a FAILED drill is the one you most need on the record, so a
 // failure is returned as a report with Passed=false, not swallowed as an error.
 func (s *Service) RunIsolationDrill(ctx context.Context, actor Operator) (IsolationDrillReport, error) {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermIsolationDrill); err != nil {
 		return IsolationDrillReport{}, err
 	}
 	if s.drills == nil {
@@ -529,7 +529,7 @@ func (s *Service) DirectTenantSnapshot(ctx context.Context, actor Operator, tena
 }
 
 func (s *Service) RequestBreakGlass(ctx context.Context, actor Operator, req BreakGlassRequest) (BreakGlassGrant, error) {
-	if err := s.requireMutation(actor, false); err != nil {
+	if err := s.requirePermission(ctx, actor, PermBreakGlassRequest); err != nil {
 		return BreakGlassGrant{}, err
 	}
 	if strings.TrimSpace(req.Reason) == "" {
@@ -595,7 +595,7 @@ func (s *Service) RequestBreakGlass(ctx context.Context, actor Operator, req Bre
 // denials. An authenticated name alone cannot approve or veto another
 // customer's emergency request.
 func (s *Service) ConsentBreakGlass(ctx context.Context, actor Operator, tenantID, grantID string, approve bool) (BreakGlassGrant, error) {
-	if err := s.requireMutation(actor, false); err != nil {
+	if err := s.requirePermission(ctx, actor, PermBreakGlassConsent); err != nil {
 		return BreakGlassGrant{}, err
 	}
 	if err := s.authorize(ctx, actor, tenantID, OpBreakGlass); err != nil {
@@ -746,7 +746,7 @@ func (s *Service) authorizeBreakGlassResults(ctx context.Context, actor Operator
 }
 
 func (s *Service) BreakGlassResults(ctx context.Context, actor Operator, grantID string) (TenantSnapshot, error) {
-	if err := s.requireMutation(actor, false); err != nil {
+	if err := s.requirePermission(ctx, actor, PermBreakGlassResults); err != nil {
 		return TenantSnapshot{}, err
 	}
 	grant, err := s.authorizeBreakGlassResults(ctx, actor, grantID)
@@ -815,7 +815,7 @@ func (s *Service) setTenantStatusUnderServiceBarrier(ctx context.Context, actor 
 }
 
 func (s *Service) authorizeTenantStatus(ctx context.Context, actor Operator, tenantID string, status TenantStatus) error {
-	if err := s.requireMutation(actor, true); err != nil {
+	if err := s.requirePermission(ctx, actor, PermTenantsLifecycle); err != nil {
 		return err
 	}
 	// Suspend and offboard are separate grants. Suspend interrupts a live
@@ -930,18 +930,14 @@ func stableGrantID(tenantID, key string) string {
 	return "grant-" + uuid.NewSHA1(providerMutationNamespace, []byte(tenantID+"\x00"+strings.TrimSpace(key))).String()
 }
 
-func (s *Service) requireMutation(actor Operator, adminOnly bool) error {
+// requireMutationLicence is the licence half of every mutation gate; the
+// permission half is requirePermission (A90).
+func (s *Service) requireMutationLicence() error {
 	if s.license.Mode(license.FeatureProviderPlane) == license.ModeOff {
 		return ErrUnlicensed
 	}
 	if s.license.Mode(license.FeatureProviderPlane) == license.ModeReadOnly {
 		return ErrReadOnly
-	}
-	if err := s.requireOperator(actor); err != nil {
-		return err
-	}
-	if adminOnly && actor.Role != OperatorAdmin {
-		return ErrForbidden
 	}
 	return nil
 }

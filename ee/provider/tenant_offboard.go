@@ -73,7 +73,7 @@ func (o *TenantOffboarder) executeRequest(ctx context.Context, service *Service,
 // Check authority before revealing contention. Recheck it under the exclusive
 // fence below, since this preliminary read is not an authorization to mutate.
 func (o *TenantOffboarder) authorizeBeforeServiceBarrier(ctx context.Context, service *Service, actor Operator, tenantID, requestID string) error {
-	if err := service.requireMutation(actor, true); err != nil {
+	if err := service.requirePermission(ctx, actor, PermTenantsLifecycle); err != nil {
 		return err
 	}
 	key, binding := mutationKeyFromContext(ctx), mutationBindingFromContext(ctx)
@@ -112,7 +112,7 @@ func (o *TenantOffboarder) executeQuiesced(ctx context.Context, service *Service
 		if pendingSuspend {
 			return ErrTenantStateConflict
 		}
-		if err := service.requireMutation(actor, true); err != nil {
+		if err := service.requirePermission(ctx, actor, PermTenantsLifecycle); err != nil {
 			return err
 		}
 		key, binding := mutationKeyFromContext(ctx), mutationBindingFromContext(ctx)

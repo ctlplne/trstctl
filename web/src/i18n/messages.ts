@@ -143,6 +143,51 @@ export const messages = {
     defaultMessage: "Grant source",
     description: "Delegation entry point, separate from the operator's SCIM or IdP identity source.",
   },
+  "provider.access.roles.heading": {
+    defaultMessage: "Custom Provider roles",
+    description: "A90: heading of the custom role editor in the Provider access console.",
+  },
+  "provider.access.roles.intro": {
+    defaultMessage:
+      "admin and operator are built in. A custom role is a named subset of the Provider permissions below; an operator's effective rights are the role's permissions within the ceiling the signed IdP role allows. A role still assigned cannot be deleted.",
+    description: "A90: explains custom Provider roles.",
+  },
+  "provider.access.roles.name": {
+    defaultMessage: "Role name",
+    description: "A90: custom role name input label.",
+  },
+  "provider.access.roles.description": {
+    defaultMessage: "Description",
+    description: "A90: custom role description input label.",
+  },
+  "provider.access.roles.save": {
+    defaultMessage: "Save role",
+    description: "A90: saves a custom role definition.",
+  },
+  "provider.access.roles.delete": {
+    defaultMessage: "Delete",
+    description: "A90: deletes an unused custom role.",
+  },
+  "provider.access.roles.edit": {
+    defaultMessage: "Edit",
+    description: "A90: loads a custom role into the editor.",
+  },
+  "provider.access.roles.saved": {
+    defaultMessage: "Role {name} saved.",
+    description: "A90: a custom role was defined or replaced.",
+  },
+  "provider.access.roles.deleted": {
+    defaultMessage: "Role {name} deleted.",
+    description: "A90: a custom role was deleted.",
+  },
+  "provider.access.roles.none": {
+    defaultMessage: "No custom roles are defined.",
+    description: "A90: empty custom role list.",
+  },
+  "provider.access.roles.permissions": {
+    defaultMessage: "Permissions",
+    description: "A90: permission checklist label.",
+  },
   "provider.access.delegations.source.http": {
     defaultMessage: "Provider API / console",
     description: "Both stock HTTP clients and the Provider console use the Provider API.",

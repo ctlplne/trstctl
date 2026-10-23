@@ -727,6 +727,7 @@ function ProviderConsole({ onSignOut }: { onSignOut: (reason?: "authentication")
       {authority?.access_read ? (
         <ProviderAccessPanel
           canWrite={authority.access_write}
+          rolesWrite={authority.roles_write ?? false}
           onAuthError={() => {
             clearProviderToken();
             onSignOut("authentication");

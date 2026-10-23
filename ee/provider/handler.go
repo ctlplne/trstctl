@@ -181,6 +181,12 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.listTenants(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/activity":
 		h.listActivity(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/roles":
+		h.listRoles(w, r)
+	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/provider/v1/roles/"):
+		h.putRole(w, r)
+	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/provider/v1/roles/"):
+		h.deleteRole(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/operators":
 		h.listOperatorAccess(w, r)
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/access/customers":
@@ -1144,6 +1150,12 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusServiceUnavailable, "customer_health_unavailable"
 	case errors.Is(err, ErrTenantStateConflict):
 		status, code = http.StatusConflict, "customer_state_conflict"
+	case errors.Is(err, ErrRoleBuiltIn):
+		status, code = http.StatusConflict, "role_built_in"
+	case errors.Is(err, ErrRoleInUse):
+		status, code = http.StatusConflict, "role_in_use"
+	case errors.Is(err, ErrRoleInvalid), errors.Is(err, ErrRoleUnknown):
+		status, code = http.StatusBadRequest, "role_invalid"
 	case errors.Is(err, ErrMutationConflict), errors.Is(err, orchestrator.ErrIdempotencyConflict):
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, ErrBrandDomainConflict):
@@ -1176,4 +1188,60 @@ func retryAfterSeconds(err error) int {
 		return 0
 	}
 	return -1
+}
+
+// A90: custom Provider roles.
+
+func (h *handler) listRoles(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	catalog, err := h.svc.ListRoles(r.Context(), op)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, catalog)
+}
+
+func (h *handler) putRole(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	var body RoleDefinition
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	role, err := h.svc.UpsertRole(r.Context(), op, strings.TrimPrefix(r.URL.Path, "/provider/v1/roles/"), body)
+	if err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, role)
+}
+
+func (h *handler) deleteRole(w http.ResponseWriter, r *http.Request) {
+	op, ok := h.operatorFromRequest(r)
+	if !ok {
+		writeProviderError(w, ErrProviderUnauthenticated)
+		return
+	}
+	r, ok = h.withMutationKey(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteRole(r.Context(), op, strings.TrimPrefix(r.URL.Path, "/provider/v1/roles/")); err != nil {
+		writeProviderError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

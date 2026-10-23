@@ -71,9 +71,13 @@ const (
 
 // Operator is the authenticated provider principal.
 type Operator struct {
-	ID      string       `json:"id"`
-	Email   string       `json:"email"`
-	Role    OperatorRole `json:"role"`
+	ID    string       `json:"id"`
+	Email string       `json:"email"`
+	Role  OperatorRole `json:"role"`
+	// Ceiling is the built-in role the signed IdP credential allows (A90). A
+	// custom Role's permissions are intersected with it; for a built-in Role it
+	// equals Role. Empty is read as the operator ceiling, never as none.
+	Ceiling OperatorRole `json:"ceiling,omitempty"`
 	MFA     bool         `json:"mfa"`
 	Session string       `json:"session,omitempty"`
 }

@@ -27,6 +27,8 @@ var legacyProviderAuditTypes = map[string]struct{}{
 	"provider.delegation.revoked":             {},
 	"provider.operator.upserted":              {},
 	"provider.operator.offboarded":            {},
+	"provider.role.upserted":                  {},
+	"provider.role.deleted":                   {},
 	"provider.tenant.quota.set":               {},
 	"provider.tenant.brand.set":               {},
 }

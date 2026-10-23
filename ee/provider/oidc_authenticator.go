@@ -168,7 +168,7 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 			break
 		}
 	}
-	operator := Operator{ID: claims.Sub, Email: strings.TrimSpace(claims.Email), Role: role, MFA: mfa}
+	operator := Operator{ID: claims.Sub, Email: strings.TrimSpace(claims.Email), Role: role, Ceiling: role, MFA: mfa}
 	if a.cfg.Directory != nil {
 		identity, err := a.cfg.Directory.ResolveOperator(r.Context(), claims.Sub)
 		if err != nil {
@@ -180,12 +180,12 @@ func (a *OIDCAuthenticator) AuthenticateOperator(r *http.Request) (Operator, boo
 		if !identity.Active {
 			return Operator{}, false
 		}
-		role = lesserRole(role, identity.Role)
+		role, ceiling := effectiveRole(role, identity.Role)
 		if role == "" {
 			return Operator{}, false
 		}
 		operator.ID = identity.ID
-		operator.Role = role
+		operator.Role, operator.Ceiling = role, ceiling
 		if strings.TrimSpace(identity.Email) != "" {
 			operator.Email = strings.TrimSpace(identity.Email)
 		}
