@@ -77,9 +77,12 @@ func TestGaugeMetersReconcileAgainstIndependentRecordsA91(t *testing.T) {
 		t.Fatalf("secrets recount = %+v %v, want 1 checked (a live, b deleted, c later)", secrets, err)
 	}
 	// A connector credential has no mutation receipt: the recount still names
-	// the number but the line is no longer vouched for as independent.
+	// the number but the line is no longer vouched for as independent. The row
+	// is dated inside the period explicitly; the fixed period end above is a
+	// calendar date, so a default created_at of now() would fall outside it
+	// once the clock passes it (the batch-8 pre-gate found exactly that).
 	if err := cs.WithTenant(ctx, quotaTenant, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO credentials (id, tenant_id, scope, ref, name, sealed) VALUES (gen_random_uuid(), $1, 'connector', 'f5-1', 'password', '\x00')`, quotaTenant)
+		_, err := tx.Exec(ctx, `INSERT INTO credentials (id, tenant_id, scope, ref, name, sealed, created_at) VALUES (gen_random_uuid(), $1, 'connector', 'f5-1', 'password', '\x00', $2)`, quotaTenant, before)
 		return err
 	}); err != nil {
 		t.Fatal(err)
