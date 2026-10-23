@@ -807,6 +807,9 @@ func ctFindingMetadata(f ctmonitor.Finding) (map[string]any, int) {
 		"authority_key_id": f.AuthorityKeyID,
 	}
 	f.Posture.AddTo(meta)
+	if f.RSASPKI != "" {
+		meta[keyposture.MetaRSASPKI] = f.RSASPKI
+	}
 	risk := discoveryRiskScore(f.NotAfter)
 	if floor := f.Posture.RiskFloor(); floor > risk {
 		risk = floor
@@ -1514,6 +1517,9 @@ func cloudFindingMetadata(f cloudcert.Found) (map[string]any, int) {
 		verdict = keyposture.RateReportedIdentity(f.Cert.SPKISHA256, f.Cert.SHA256Fingerprint, f.Cert.AuthorityKeyID, f.Cert.Issuer)
 	}
 	verdict.AddTo(meta)
+	if rsaKey := keyposture.RSASPKIMetadata(f.Raw); rsaKey != "" {
+		meta[keyposture.MetaRSASPKI] = rsaKey
+	}
 	risk := discoveryRiskScore(f.Cert.NotAfter)
 	if floor := verdict.RiskFloor(); floor > risk {
 		risk = floor

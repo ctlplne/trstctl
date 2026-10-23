@@ -165,7 +165,8 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 			continue
 		}
 		if v := keyposture.FromMetadata(meta); !v.Empty() {
-			discovered[strings.ToLower(row.Fingerprint)] = v
+			fp := strings.ToLower(row.Fingerprint)
+			discovered[fp] = discovered[fp].Merge(v)
 		}
 	}
 	certs, err := a.store.ListCertificatesPage(ctx, tenantID, store.ZeroUUID, nil, 500, nil)
@@ -415,14 +416,17 @@ func rogueCertificateVerdict(cert store.Certificate, discovered map[string]keypo
 	if len(raw) == 0 {
 		raw = cert.CertificateDER
 	}
+	found, ok := discovered[strings.ToLower(cert.Fingerprint)]
 	if len(raw) > 0 {
 		if v, err := keyposture.RateCertificateBytes(raw); err == nil {
-			return v
+			// The bytes rate the certificate; a discovery verdict adds what only
+			// an inventory-wide check knows (a prime shared with another key).
+			return v.Merge(found)
 		}
 	}
 	// A discovered certificate's reader rated it while its bytes were at hand.
-	if v, ok := discovered[strings.ToLower(cert.Fingerprint)]; ok {
-		return v
+	if ok {
+		return found
 	}
 	return keyposture.RateRecorded(cert.Issuer, cert.KeyAlgorithm)
 }

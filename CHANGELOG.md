@@ -88,6 +88,12 @@
   verified against the exact public key going into the certificate, before it
   is certified as an intermediate or bound to an import. The managed-key
   custody probe now carries a fresh nonce.
+- The leader runs batch GCD over each tenant's RSA public keys every six hours
+  (CA authorities, inventory certificates and the keys agents, cloud discovery
+  and the CT monitor now report) and records a `weak-key` finding wherever a key
+  shares a prime with another, as a discovery run under the product-owned
+  `weak-key-audit:batch-gcd` source. Reported RSA keys are also rated against
+  the operator's blocklists, which only the control plane holds.
 - A distrusted root an agent finds in a host trust store can be removed through
   trust distribution (`POST /api/v1/discovery/findings/{id}/remove-distrusted-root`,
   `trstctl-cli discovery findings remove-distrusted-root`, or **Remove from host

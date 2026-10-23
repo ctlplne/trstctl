@@ -70,6 +70,9 @@ type Finding struct {
 	// while its bytes were at hand (Part 4).
 	AuthorityKeyID string
 	Posture        keyposture.Verdict
+	// RSASPKI is the hit's RSA public key (keyposture.MetaRSASPKI), for the
+	// batch-GCD audit; empty for other keys or when the log gave no bytes.
+	RSASPKI string
 }
 
 // Fetcher reads RFC 6962 logs. Entries returns the entries in [start, end).
@@ -232,6 +235,7 @@ func (m *Monitor) Poll(ctx context.Context, tenantID string, log LogState) (LogS
 		// Rated only for the hits kept: a log batch can hold thousands of entries.
 		if v, err := keyposture.RateCertificate(e.DER, nil); err == nil {
 			f.Posture = v
+			f.RSASPKI = keyposture.RSASPKIMetadata(e.DER)
 		} else {
 			f.Posture = keyposture.RateReportedIdentity("", e.FingerprintSHA256, e.AuthorityKeyID, e.Issuer)
 		}

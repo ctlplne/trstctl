@@ -78,6 +78,13 @@ func TestRoguePostureNamesDistrustedIssuers(t *testing.T) {
 	if f, ok := rogueCertificateFindingForCertificate(byName, now, nil); !ok || f.Distrust == nil || f.Distrust.How != keyposture.DistrustedByName {
 		t.Fatalf("recorded issuer name: %+v", f)
 	}
+	// A certificate rated from its own bytes still carries what only the
+	// inventory-wide batch-GCD audit knows.
+	shared := map[string]keyposture.Verdict{"fp-ecdsa": {WeakReasons: []string{"the RSA modulus shares a prime with 1 other key(s) in this inventory, so each of them can be factored"}}}
+	withBytes := roguePostureCert("ecdsa", "CN=Internal CA", "ECDSA", keypostureFixture(t, "ecdsa-p256-ordinary.pem"))
+	if f, ok := rogueCertificateFindingForCertificate(withBytes, now, shared); !ok || !hasType(f, "weak_key_algorithm") || !strings.Contains(strings.Join(f.WeakKeyReasons, "|"), "shares a prime") {
+		t.Fatalf("audit verdict on a certificate with bytes: %+v", f)
+	}
 	discovered := map[string]keyposture.Verdict{"fp-cloud": {WeakReasons: []string{"the P-384 public key is 4·G: its private key is 4, which anyone can recover"}}}
 	cloud := roguePostureCert("cloud", "CN=Cloud CA", "ECDSA", nil)
 	if f, ok := rogueCertificateFindingForCertificate(cloud, now, discovered); !ok || !hasType(f, "weak_key_algorithm") || !strings.Contains(f.WeakKeyReasons[0], "4·G") {

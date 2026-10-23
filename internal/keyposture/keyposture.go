@@ -43,6 +43,25 @@ func (v Verdict) Distrusted() bool { return v.DistrustEntry != "" }
 // Empty reports a sound certificate.
 func (v Verdict) Empty() bool { return !v.Weak() && !v.Distrusted() }
 
+// Merge combines two readers' verdicts on the same certificate: every weak-key
+// reason either found (once each), and v's distrust match, else o's. A
+// certificate rated from its bytes still carries what only an inventory-wide
+// check can know, such as a prime shared with another key.
+func (v Verdict) Merge(o Verdict) Verdict {
+	out := Verdict{DistrustEntry: v.DistrustEntry, DistrustHow: v.DistrustHow, DistrustReason: v.DistrustReason, DistrustSubject: v.DistrustSubject}
+	if !v.Distrusted() {
+		out.DistrustEntry, out.DistrustHow, out.DistrustReason, out.DistrustSubject = o.DistrustEntry, o.DistrustHow, o.DistrustReason, o.DistrustSubject
+	}
+	seen := map[string]bool{}
+	for _, r := range append(append([]string(nil), v.WeakReasons...), o.WeakReasons...) {
+		if r != "" && !seen[r] {
+			seen[r] = true
+			out.WeakReasons = append(out.WeakReasons, r)
+		}
+	}
+	return out
+}
+
 // Risk floors: a distrusted certificate or issuer outranks a weak key, which
 // outranks anything an expiry date alone can say.
 const (
@@ -256,7 +275,11 @@ func MergeReported(meta map[string]string, server Verdict, risk int) (map[string
 		delete(out, k)
 	}
 	reported := FromStringMetadata(out)
-	merged := Verdict{WeakReasons: reported.WeakReasons, DistrustEntry: server.DistrustEntry, DistrustHow: server.DistrustHow, DistrustReason: server.DistrustReason, DistrustSubject: server.DistrustSubject}
+	// The server's own distrust verdict replaces the report's; weak-key reasons
+	// from both stand (the reporter held the bytes, the server holds the
+	// operator's blocklists).
+	merged := Verdict{WeakReasons: reported.WeakReasons}.Merge(Verdict{WeakReasons: server.WeakReasons})
+	merged.DistrustEntry, merged.DistrustHow, merged.DistrustReason, merged.DistrustSubject = server.DistrustEntry, server.DistrustHow, server.DistrustReason, server.DistrustSubject
 	for k, v := range merged.StringMetadata() {
 		out[k] = v
 	}

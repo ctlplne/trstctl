@@ -10494,6 +10494,14 @@ export const messages = {
   "discovery.kind.tlsCertificate": { defaultMessage: "TLS certificate", description: "Human label for certificate discovery findings." },
   "discovery.kind.apiKey": { defaultMessage: "API key", description: "Human label for API key or token discovery findings." },
   "discovery.kind.secret": { defaultMessage: "Secret", description: "Human label for secret discovery findings." },
+  "discovery.kind.trustStoreRoot": {
+    defaultMessage: "Trust-store root",
+    description: "Human label for a CA certificate an agent found installed as trusted in a host trust store.",
+  },
+  "discovery.kind.weakKey": {
+    defaultMessage: "Weak key",
+    description: "Human label for a key the inventory weak-key audit found factorable, such as one sharing a prime with another key.",
+  },
   "discovery.kind.sshCertificate": { defaultMessage: "SSH certificate", description: "Human label for SSH certificate discovery findings." },
   "discovery.kind.sshKey": { defaultMessage: "SSH key", description: "Human label for SSH public-key discovery findings." },
   "discovery.kind.oauthGrant": { defaultMessage: "OAuth grant", description: "Human label for OAuth grant discovery findings." },

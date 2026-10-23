@@ -618,6 +618,7 @@ describe("discovery control-plane surface", () => {
     await user.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Review finding" }));
     const detail = screen.getByRole("heading", { name: "Finding detail" }).closest("aside") as HTMLElement;
     expect(within(detail).getByRole("heading", { name: "On the distrust list: emSign ECC Root CA - G3" })).toBeInTheDocument();
+    expect(within(detail).getByText("Trust-store root")).toBeInTheDocument();
     await user.click(within(detail).getByRole("button", { name: "Remove from host trust store" }));
     expect(within(detail).getByText(/Remove \/etc\/ssl\/certs\/emSign_ECC_Root_CA_-_G3\.pem from web-01\?/)).toBeInTheDocument();
     await user.click(within(detail).getByRole("button", { name: "Queue removal" }));

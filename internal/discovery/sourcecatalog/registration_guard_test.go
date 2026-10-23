@@ -25,6 +25,7 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 		"internal/api/secrets_scanning.go:receiveSecretRepoWebhook":   "product-owned repository secret scan",
 		"internal/orchestrator/discovery.go:RecordAgentInventory":     "product-owned authenticated agent inventory",
 		"internal/orchestrator/discovery.go:RecordSecretScan":         "product-owned local secret scan",
+		"internal/orchestrator/weak_key_audit.go:RecordWeakKeyAudit":  "product-owned inventory weak-key audit",
 	}
 	found := make(map[string]bool)
 	for _, tree := range []string{"internal", "cmd", "ee", "deploy", "plugins", "clients"} {
@@ -85,6 +86,7 @@ func TestEveryProductSourceNamespaceIsRegistered(t *testing.T) {
 		SecretScanSourcePrefix:       "product secret scan",
 		SecretRepositorySourcePrefix: "repository secret scan",
 		ThirdPartySecretSourcePrefix: "third-party secret scan",
+		WeakKeyAuditSourcePrefix:     "inventory weak-key audit",
 	}
 	seen := make(map[string]bool)
 	for _, namespace := range ReservedNamespaces() {

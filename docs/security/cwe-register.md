@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1679 annotated sites across 26 rules. Each row is
+1681 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1143,9 +1143,9 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:253` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:335` | exact test tempdir sentinel |
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
-| `cmd/trstctl-agent/found_inventory_posture_test.go:16` | a fixed test fixture, named by the test itself (CWE-22) |
+| `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/main.go:1094` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1714` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1720` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
@@ -1475,7 +1475,7 @@ not this file.
 | `internal/server/run.go:554` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1087` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1271` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1671` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1674` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
@@ -1700,7 +1700,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:101` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:228` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G401 — CWE-328 Use of weak hash (8 sites)
+### G401 — CWE-328 Use of weak hash (9 sites)
 
 | Location | Reason |
 |---|---|
@@ -1712,6 +1712,7 @@ not this file.
 | `internal/crypto/tsa_verify.go:115` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
 | `internal/crypto/uuidv5.go:21` | RFC 4122 UUIDv5 public identifier, not a security digest. |
 | `internal/crypto/weakkey/weakkey.go:139` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
+| `internal/crypto/weakkey/weakkeytest/rsa.go:51` | Debian blocklist entry format, not a security use of SHA-1 (CWE-328) |
 
 ### G402 — CWE-295 Improper certificate validation (InsecureSkipVerify) (9 sites)
 
@@ -1770,7 +1771,7 @@ not this file.
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (8 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (9 sites)
 
 | Location | Reason |
 |---|---|
@@ -1782,6 +1783,7 @@ not this file.
 | `internal/crypto/tsa_verify.go:7` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |
 | `internal/crypto/uuidv5.go:6` | RFC 4122 UUIDv5 uses SHA-1 only for a public identity label, never integrity (CWE-328). |
 | `internal/crypto/weakkey/weakkey.go:24` | the Debian blocklist format is defined over SHA-1 of the modulus text; not used for security (CWE-328) |
+| `internal/crypto/weakkey/weakkeytest/rsa.go:8` | Debian's blocklist format is defined over SHA-1; not a security use (CWE-328) |
 
 ### G602 — CWE-118 Incorrect access of indexable resource (5 sites)
 

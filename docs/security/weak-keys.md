@@ -115,7 +115,23 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   only that root. See
   [CA, trust-store & private-key discovery](../features/discovery-and-inventory.md#ca-trust-store-private-key-discovery).
 
-The batch-GCD job is what comes next in this change set.
+- **The inventory weak-key audit.** Every six hours the leader runs batch GCD
+  over each tenant's distinct RSA public keys: its CA authorities, the
+  inventory certificates whose bytes trstctl holds, and the keys discovery
+  readers report. Agents, cloud discovery and the CT monitor attach an RSA
+  certificate's public key (`rsa_spki`, the base64 SubjectPublicKeyInfo); the
+  control plane keeps it only when it hashes to the reported `spki_sha256`.
+  Each run is a discovery run under the `weak-key-audit:batch-gcd` source, and
+  every place a key that shares a prime appears gets a `weak-key` finding (risk
+  95) that the rogue-certificate posture shows as a weak key, even for a
+  certificate whose bytes trstctl holds. One run checks at most 20,000 distinct
+  keys, CA authorities first, then inventory certificates, then reported keys;
+  a larger inventory's run is `partial` and says how many keys it left out.
+  Relay network scans report key hashes only, so their keys are not in the
+  audit yet: that is what comes next for it.
+- **Operator blocklists apply to what agents find.** A reported RSA key is
+  rated again on the control plane, which holds the operator's blocklists
+  (`trust.weak_key_blocklist_files`); agents do not.
 
 ## The distrust list
 

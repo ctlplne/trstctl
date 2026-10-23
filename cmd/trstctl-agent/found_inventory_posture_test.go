@@ -9,6 +9,7 @@ import (
 
 	agentdiscovery "trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/keyposture"
 )
 
 func agentFixture(t *testing.T, name string) []byte {
@@ -53,5 +54,22 @@ func TestFoundInventoryFindingsRateTrustStoresAndLeaves(t *testing.T) {
 	got = foundInventoryFindings(agentdiscovery.SourceFilesystem, []agentdiscovery.Found{{Source: agentdiscovery.SourceFilesystem, Location: "/etc/ssl/api.pem", Cert: ordInfo, Raw: ordinary}}, 10)
 	if len(got) != 1 || got[0].RiskScore != 10 || got[0].Metadata["key_strength"] != "" || got[0].Metadata["distrust_entry"] != "" {
 		t.Fatalf("an ordinary certificate was rated: %+v", got)
+	}
+	if got[0].Metadata["rsa_spki"] != "" {
+		t.Fatalf("an ECDSA certificate carried an RSA key: %+v", got[0].Metadata)
+	}
+	// An RSA certificate's public key travels with it for the control plane's
+	// blocklists and batch-GCD audit, and hashes to the reported spki_sha256.
+	rsaPEM := agentFixture(t, "rsa-1024.pem")
+	rsaInfo, err := certinfo.Inspect(rsaPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = foundInventoryFindings(agentdiscovery.SourceFilesystem, []agentdiscovery.Found{{Source: agentdiscovery.SourceFilesystem, Location: "/etc/ssl/legacy.pem", Cert: rsaInfo, Raw: rsaPEM}}, 10)
+	if len(got) != 1 {
+		t.Fatalf("RSA certificate: %+v", got)
+	}
+	if _, ok := keyposture.ReportedRSAKey(got[0].Metadata["rsa_spki"], got[0].Metadata["spki_sha256"]); !ok {
+		t.Fatalf("the RSA key does not match the reported spki_sha256: %+v", got[0].Metadata)
 	}
 }

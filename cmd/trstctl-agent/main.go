@@ -1227,6 +1227,12 @@ func foundInventoryFindings(sourceKind string, found []agentdiscovery.Found, ris
 		for k, v := range f.Metadata {
 			meta[k] = v
 		}
+		// eMudhra, Part 4: an RSA certificate's public key travels with it, so
+		// the control plane can apply the operator's blocklists and find a
+		// prime shared with another key in the inventory (batch GCD).
+		if rsaKey := keyposture.RSASPKIMetadata(f.Raw); rsaKey != "" {
+			meta[keyposture.MetaRSASPKI] = rsaKey
+		}
 		findingRisk := risk
 		if verdict, err := foundVerdict(f); err == nil {
 			for k, v := range verdict.StringMetadata() {

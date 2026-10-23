@@ -1442,6 +1442,9 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// this registered producer, the relay executor and health view remain
 			// library-only and no running binary ever asks an internal relay to look.
 			startRuntimeWorker(workCtx, srv.RunRevocationHealthScheduler),
+			// eMudhra, Part 4: batch GCD over each tenant's RSA keys. Without this
+			// line the shared-prime check would be library code no deployment runs.
+			startRuntimeWorker(workCtx, srv.RunWeakKeyAudit),
 			startRuntimeWorker(workCtx, srv.RunLicensedBackgroundWorkers),
 		}
 		<-workCtx.Done()

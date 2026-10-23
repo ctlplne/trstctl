@@ -2820,6 +2820,10 @@ function discoveryFindingKindLabel(t: (key: MessageKey) => string, kind: string)
     case "spiffe_svid":
     case "workload_identity":
       return t("discovery.kind.workloadIdentity");
+    case "trust_store":
+      return t("discovery.kind.trustStoreRoot");
+    case "weak_key":
+      return t("discovery.kind.weakKey");
     default:
       return t("discovery.kind.unknown");
   }

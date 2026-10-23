@@ -12,6 +12,7 @@ const (
 	SecretScanSourcePrefix       = "secretscan:"
 	SecretRepositorySourcePrefix = "secret-repo:"
 	ThirdPartySecretSourcePrefix = "secret-third-party:"
+	WeakKeyAuditSourcePrefix     = "weak-key-audit:"
 )
 
 type ReservedNamespace struct {
@@ -24,6 +25,7 @@ var reservedNamespaces = [...]ReservedNamespace{
 	{SecretScanSourcePrefix, "product secret scan"},
 	{SecretRepositorySourcePrefix, "repository secret scan"},
 	{ThirdPartySecretSourcePrefix, "third-party secret scan"},
+	{WeakKeyAuditSourcePrefix, "inventory weak-key audit"},
 }
 
 // ReservedNamespaces returns a copy for the registration guard and docs.

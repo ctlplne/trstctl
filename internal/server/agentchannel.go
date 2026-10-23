@@ -1024,7 +1024,17 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			// the report is replaced; the agent's weak-key reasons stand, since only
 			// it held the bytes.
 			server := keyposture.RateReportedIdentity(findingMetadata["spki_sha256"], f.Fingerprint, findingMetadata["authority_key_id"], findingMetadata["issuer"])
+			// A reported RSA key is rated again with the control plane's own
+			// checks, which include the operator's blocklists, and kept for the
+			// batch-GCD audit only when it is the certificate's own key.
+			rsaKey, rsaReported := keyposture.ReportedRSAKey(findingMetadata[keyposture.MetaRSASPKI], findingMetadata["spki_sha256"])
+			if rsaReported {
+				server = server.Merge(keyposture.RateReportedRSAKey(rsaKey))
+			}
 			findingMetadata, risk = keyposture.MergeReported(findingMetadata, server, risk)
+			if !rsaReported {
+				delete(findingMetadata, keyposture.MetaRSASPKI)
+			}
 		}
 		meta, err := metadataJSON(findingMetadata)
 		if err != nil {
