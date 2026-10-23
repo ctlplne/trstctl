@@ -106,6 +106,12 @@
 
 ### Changed
 
+- The outbound clients that used Go's default client with no timeout at all
+  (secret-sync pushers, dynamic-secret backends, the ACM, Certificate Manager
+  and Key Vault discovery clients, the Azure and GCP token clients, AWS IAM,
+  connector HTTP operations, the nine DNS-01 providers and the CLI connector
+  client) now time out after 30 seconds; a request that needs longer fails
+  instead of hanging. Callers that inject their own client are unaffected.
 - Tenant SAML, LDAP and SCIM now require Enterprise SSO, included in Enterprise
   and inherited by Provider. Their implementations live under `ee/enterpriseauth`;
   OIDC, shared session persistence and tenant authorization stay core. Configuring

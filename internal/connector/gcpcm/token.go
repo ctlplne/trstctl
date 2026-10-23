@@ -97,7 +97,7 @@ func NewMetadataToken(opts ...MetadataOption) *MetadataToken {
 	m := &MetadataToken{
 		base:    defaultMetadataBase,
 		account: defaultServiceAcct,
-		client:  netsec.HardenedClient(0),
+		client:  netsec.HardenedClient(30 * time.Second),
 		now:     time.Now,
 	}
 	for _, o := range opts {

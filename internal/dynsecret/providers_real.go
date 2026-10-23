@@ -614,7 +614,7 @@ func NewKubernetesBackend(cfg KubernetesConfig) (*KubernetesBackend, error) {
 		cfg.Namespace = "default"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = netsec.HardenedClient(0)
+		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
 	}
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
@@ -901,7 +901,7 @@ func NewAWSIAMBackend(cfg AWSIAMConfig) (*AWSIAMBackend, error) {
 		cfg.Endpoint = "https://iam.amazonaws.com"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = netsec.HardenedClient(0)
+		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
 	}
 	if cfg.UsernamePrefix == "" {
 		cfg.UsernamePrefix = defaultDynsecretPrefix
@@ -1129,7 +1129,7 @@ func NewGCPIAMBackend(cfg GCPIAMConfig) (*GCPIAMBackend, error) {
 		cfg.Endpoint = "https://iam.googleapis.com"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = netsec.HardenedClient(0)
+		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
 	}
 	var token *secret.Buffer
 	var err error
@@ -1319,7 +1319,7 @@ func NewAzureEntraBackend(cfg AzureEntraConfig) (*AzureEntraBackend, error) {
 		cfg.Endpoint = "https://graph.microsoft.com"
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = netsec.HardenedClient(0)
+		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
 	}
 	var token *secret.Buffer
 	var err error

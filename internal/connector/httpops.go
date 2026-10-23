@@ -5,6 +5,7 @@ package connector
 import (
 	"fmt"
 	"net/http"
+	"time"
 	"trstctl.com/trstctl/internal/netsec"
 )
 
@@ -25,7 +26,7 @@ var (
 // connectors — F5 BIG-IP and the cloud certificate stores.
 func NewHTTPOps(client *http.Client) Ops {
 	if client == nil {
-		client = netsec.HardenedClient(0)
+		client = netsec.HardenedClient(30 * time.Second)
 	}
 	return &httpOps{client: client}
 }

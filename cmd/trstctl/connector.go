@@ -23,7 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 )
 
-var connectorHTTPClient = netsec.HardenedClient(0)
+var connectorHTTPClient = netsec.HardenedClient(30 * time.Second)
 
 type connectorCLIConfig struct {
 	baseURL        string

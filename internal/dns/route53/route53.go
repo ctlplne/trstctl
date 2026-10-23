@@ -104,7 +104,7 @@ func New(hostedZoneID string, creds Credentials, opts ...Option) *Provider {
 	p := &Provider{
 		zoneID: normalizeZoneID(hostedZoneID),
 		creds:  creds,
-		doer:   netsec.HardenedClient(0),
+		doer:   netsec.HardenedClient(30 * time.Second),
 		now:    time.Now,
 	}
 	p.setEndpoint("https://route53.amazonaws.com")

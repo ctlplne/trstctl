@@ -92,7 +92,7 @@ func NewClientCredentials(tokenURL, clientID string, clientSecret []byte, opts .
 		clientID:     clientID,
 		clientSecret: secrettext.Clone(clientSecret),
 		scope:        DefaultScope,
-		client:       netsec.HardenedClient(0),
+		client:       netsec.HardenedClient(30 * time.Second),
 		now:          time.Now,
 	}
 	for _, o := range opts {

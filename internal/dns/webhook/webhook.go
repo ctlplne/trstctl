@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strings"
 
+	"time"
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -58,7 +59,7 @@ func WithHTTPClient(d HTTPDoer) Option {
 // provider calls /present and /cleanup below it.
 func New(endpoint string, creds Credentials, opts ...Option) *Provider {
 	creds.BearerToken = secrettext.Clone(creds.BearerToken)
-	p := &Provider{creds: creds, doer: netsec.HardenedClient(0)}
+	p := &Provider{creds: creds, doer: netsec.HardenedClient(30 * time.Second)}
 	p.setEndpoint(endpoint)
 	for _, o := range opts {
 		o(p)

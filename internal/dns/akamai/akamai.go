@@ -137,7 +137,7 @@ func New(zone string, creds Credentials, opts ...Option) *Provider {
 	p := &Provider{
 		zone:  strings.TrimSuffix(zone, "."),
 		creds: creds,
-		doer:  netsec.HardenedClient(0),
+		doer:  netsec.HardenedClient(30 * time.Second),
 		now:   time.Now,
 		nonce: defaultNonce,
 	}

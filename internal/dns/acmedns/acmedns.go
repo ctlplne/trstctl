@@ -43,6 +43,7 @@ import (
 	"net/url"
 	"strings"
 
+	"time"
 	"trstctl.com/trstctl/internal/cloudhttp"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -105,7 +106,7 @@ func New(subdomain string, creds Credentials, opts ...Option) *Provider {
 	p := &Provider{
 		subdomain: subdomain,
 		creds:     creds,
-		doer:      netsec.HardenedClient(0),
+		doer:      netsec.HardenedClient(30 * time.Second),
 	}
 	p.setEndpoint(defaultEndpoint)
 	for _, o := range opts {

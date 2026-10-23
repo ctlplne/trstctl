@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"time"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/discovery/cloudcert"
 	"trstctl.com/trstctl/internal/netsec"
@@ -47,7 +48,7 @@ func New(cfg Config) (*Enumerator, error) {
 		cfg.Endpoint = defaultEndpoint
 	}
 	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = netsec.HardenedClient(0)
+		cfg.HTTPClient = netsec.HardenedClient(30 * time.Second)
 	}
 	if cfg.Retry.Max == 0 && cfg.Retry.Base == 0 {
 		cfg.Retry = cloudcert.DefaultRetry()
