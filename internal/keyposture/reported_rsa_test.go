@@ -44,7 +44,7 @@ func TestReportedRSAKeysAreCheckedAndRatedByTheControlPlane(t *testing.T) {
 	}
 
 	// The operator's blocklist lives only on the control plane.
-	line, err := weakkeytest.OpenSSLBlocklistLine(a)
+	line, err := weakkeytest.DebianBlocklistLine(a)
 	if err != nil {
 		t.Fatal(err)
 	}

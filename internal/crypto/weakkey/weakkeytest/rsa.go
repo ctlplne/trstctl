@@ -36,10 +36,10 @@ func SharedPrimeRSASPKIs(bits int) ([]byte, []byte, error) {
 	return out[0], out[1], nil
 }
 
-// OpenSSLBlocklistLine returns the line Debian's openssl-blacklist format
+// DebianBlocklistLine returns the line Debian's openssl-blacklist format
 // carries for an RSA SubjectPublicKeyInfo: the last 20 hex digits of
 // SHA-1("Modulus=" + uppercase hex modulus + "\n").
-func OpenSSLBlocklistLine(spki []byte) (string, error) {
+func DebianBlocklistLine(spki []byte) (string, error) {
 	pub, err := x509.ParsePKIXPublicKey(spki)
 	if err != nil {
 		return "", err
