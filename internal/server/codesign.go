@@ -298,7 +298,7 @@ func (s *servedCodeSigningService) submitAndWait(ctx context.Context, tenantID, 
 		response, err = s.submitAndWaitFenced(scoped, tenantID, idempotencyKey, command)
 		return err
 	})
-	return response, err
+	return response, requestDeadlineError(ctx, "codesign", err)
 }
 
 func (s *servedCodeSigningService) submitAndWaitFenced(ctx context.Context, tenantID, idempotencyKey string, command codeSigningCommand) (api.CodeSigningResponse, error) {

@@ -154,7 +154,10 @@ byte-for-byte without signing again, and reusing the key for a different digest,
 artifact type, principal, or identity proof is rejected. A terminal worker failure
 projects an immutable `codesign.failed` fact before the outbox dead-letters it, even if
 the caller disconnected; failure values are closed-form codes, never an upstream error
-string that could echo identity material.
+string that could echo identity material. A request whose deadline passes before the
+outcome is confirmed, including in the middle of a database write, is answered as the
+deadline (a retryable `503` with `Retry-After`), never as a socket error; retrying with
+the same `Idempotency-Key` returns the recorded command's result.
 
 When `ca.policy.require_approval` is enabled, the first denied response is `403` with
 a non-secret `approval_required:codesign:<sha256>` resource. A distinct approver
