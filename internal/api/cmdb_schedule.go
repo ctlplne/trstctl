@@ -206,3 +206,70 @@ func cmdbCoverageStatus(s store.CMDBReconcileSchedule, found bool) string {
 		return "in_progress"
 	}
 }
+
+// A87: run a CMDB sweep now.
+//
+// The scheduler dispatches a sweep when the interval elapses; after fixing a
+// token reference or a CI query an operator should not have to wait an hour
+// to learn whether the read works. Run-now is the scheduler's own dispatch,
+// started on request: the same event, the same durable network-relay job, the
+// same refusal to stack a read behind an incomplete sweep.
+
+// CMDBRunNow starts a sweep outside the interval. The server owns it because
+// dispatch is the scheduler's code path.
+type CMDBRunNow interface {
+	RunCMDBSweepNow(ctx context.Context, tenantID string) (CMDBRunNowOutcome, error)
+}
+
+// CMDBRunNowOutcome is what the server did: Started with a fresh sweep, or
+// InFlight naming the sweep (or unclaimed job) already covering the tenant.
+type CMDBRunNowOutcome struct {
+	Schedule store.CMDBReconcileSchedule
+	Started  bool
+	InFlight bool
+	SweepID  string
+}
+
+var (
+	ErrCMDBScheduleNotConfigured = errors.New("api: no CMDB schedule is configured")
+	ErrCMDBSchedulePaused        = errors.New("api: the CMDB schedule is paused")
+)
+
+// WithCMDBRunNow wires the run-now command. Without it the route answers 503.
+func WithCMDBRunNow(run CMDBRunNow) Option {
+	return func(c *config) { c.cmdbRunNow = run }
+}
+
+type cmdbRunNowResponse struct {
+	Started  bool                 `json:"started"`
+	SweepID  string               `json:"sweep_id,omitempty"`
+	Detail   string               `json:"detail"`
+	Schedule cmdbScheduleResponse `json:"schedule"`
+}
+
+//trstctl:mutation
+func (a *API) runCMDBScheduleNow(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.cmdbRunNow == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "CMDB run-now is not configured on this control plane")
+		}
+		outcome, err := a.cmdbRunNow.RunCMDBSweepNow(ctx, tenantID)
+		switch {
+		case errors.Is(err, ErrCMDBScheduleNotConfigured):
+			return 0, nil, errStatus(http.StatusNotFound, "no CMDB schedule is configured; PUT /api/v1/owners/cmdb-schedule first")
+		case errors.Is(err, ErrCMDBSchedulePaused):
+			return 0, nil, errStatus(http.StatusConflict, "the CMDB schedule is paused; enable it before running a sweep, so a run-now cannot read behind a deliberate pause")
+		case err != nil:
+			return 0, nil, err
+		}
+		if outcome.InFlight {
+			return 0, nil, errStatus(http.StatusConflict, "a CMDB sweep is already in flight (sweep "+outcome.SweepID+"); its retained cursor finishes before another read starts, and run-now never stacks a second read behind it")
+		}
+		return http.StatusAccepted, cmdbRunNowResponse{
+			Started: outcome.Started, SweepID: outcome.SweepID,
+			Detail:   "a CMDB sweep was dispatched as a durable network-relay job; coverage, cursor and the terminal result are served by GET /api/v1/owners/cmdb-schedule",
+			Schedule: cmdbScheduleFrom(outcome.Schedule, true),
+		}, nil
+	})
+}

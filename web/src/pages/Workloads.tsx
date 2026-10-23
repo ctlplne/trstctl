@@ -1144,7 +1144,7 @@ export function Workloads() {
               <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                 <label className="grid gap-1 text-sm font-medium">
                   {t("workloads.attestation.allowedOwners")}
-                  <input className="ui-input" name="allowed_owners" placeholder="acme, acme-labs" />
+                  <input className="ui-input" name="allowed_owners" placeholder={translateNow("workloads.attestation.allowedOwnersPlaceholder")} />
                   <span className="text-xs font-normal text-muted-foreground">{t("workloads.attestation.allowedOwnersHelp")}</span>
                 </label>
                 <label className="flex items-center gap-2 self-end text-sm font-medium">

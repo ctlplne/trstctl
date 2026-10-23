@@ -5334,6 +5334,12 @@ func componentSchemas() map[string]*Schema {
 		"removed_count":   {Type: "integer"}, "changed_count": {Type: "integer"},
 		"guidance": str(),
 	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "coverage_status", "removed_count", "changed_count", "guidance")
+	cmdbReconcileRunNow := object(map[string]*Schema{
+		"started":  {Type: "boolean", Description: "A87: a fresh sweep was dispatched as the scheduler's own durable network-relay job."},
+		"sweep_id": str(),
+		"detail":   str(),
+		"schedule": ref("CMDBReconcileSchedule"),
+	}, "started", "detail", "schedule")
 	ownershipResolveInput := object(map[string]*Schema{"resolution": str()}, "resolution")
 	ownershipConflictList := object(map[string]*Schema{
 		"items":    {Type: "array", Items: ref("OwnershipConflict")},
@@ -7168,6 +7174,7 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipConflictList":                    ownershipConflictList,
 		"OwnershipResolveInput":                    ownershipResolveInput,
 		"CMDBReconcileSchedule":                    cmdbReconcileSchedule,
+		"CMDBReconcileRunNow":                      cmdbReconcileRunNow,
 		"CMDBReconcileScheduleInput":               cmdbReconcileScheduleInput,
 		"IssuanceRequest":                          issuanceRequestSchema,
 		"Brand":                                    brandSchema,

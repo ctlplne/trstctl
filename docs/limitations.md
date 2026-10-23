@@ -2843,8 +2843,14 @@ than sending an operator looking for a credential that was never there.
   never a human attestation or later edit, and serves changed/removed counts.
   One page is in flight per tenant; a second due tick leaves that incomplete
   checkpoint untouched instead of stacking an identical read. Scope, stated
-  exactly: relay execution is mandatory; there is no run-now endpoint (a newly
-  enabled schedule is due immediately and fires within one scheduler tick).
+  exactly: relay execution is mandatory. `POST /api/v1/owners/cmdb-schedule/run`
+  (`trstctl owners cmdb-schedule run`, the panel's **Run CMDB sweep now**)
+  starts a sweep without waiting for the interval, as the scheduler's own
+  durable relay job: it refuses an unconfigured (404) or paused (409) schedule
+  by name, answers 409 naming the sweep already in flight rather than stacking
+  a read, replays under its idempotency key, and starts a fresh sweep after a
+  terminal page. A newly enabled schedule is still due immediately and fires
+  within one scheduler tick.
   A disagreement is CLOSED through `POST /api/v1/owners/ownership-conflicts/{id}/resolve`
   (`trstctl owners resolve-conflict`), which REQUIRES both a reason and an
   attributed operator — "resolved" with no explanation tells the next reader

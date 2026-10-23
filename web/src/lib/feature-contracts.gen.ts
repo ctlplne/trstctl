@@ -6962,6 +6962,7 @@ export const canonicalCapabilities = [
             "CLI command: owners resolve-conflict",
             "CLI command: owners cmdb-schedule set",
             "CLI command: owners cmdb-schedule show",
+            "CLI command: owners cmdb-schedule run",
             "CLI command: issuance-requests open",
             "CLI command: issuance-requests list",
             "CLI command: issuance-requests approve",

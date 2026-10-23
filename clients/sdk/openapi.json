@@ -8191,6 +8191,29 @@
         },
         "type": "object"
       },
+      "CMDBReconcileRunNow": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/CMDBReconcileSchedule"
+          },
+          "started": {
+            "description": "A87: a fresh sweep was dispatched as the scheduler's own durable network-relay job.",
+            "type": "boolean"
+          },
+          "sweep_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "started",
+          "detail",
+          "schedule"
+        ],
+        "type": "object"
+      },
       "CMDBReconcileSchedule": {
         "properties": {
           "allow_private_endpoint": {
@@ -58193,6 +58216,64 @@
           }
         ],
         "summary": "Configure scheduled read-only reconciliation of ownership against a ServiceNow CMDB",
+        "x-trstctl-permission": "owners:write"
+      }
+    },
+    "/api/v1/owners/cmdb-schedule/run": {
+      "post": {
+        "operationId": "runCMDBReconcileNow",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMDBReconcileRunNow"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start a CMDB ownership sweep now, as the scheduler's own durable relay job, without waiting for the interval",
         "x-trstctl-permission": "owners:write"
       }
     },

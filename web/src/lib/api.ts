@@ -31,6 +31,7 @@ import type {
   CapabilityView,
   CryptoReadiness,
   CryptoReadinessExport,
+  CMDBReconcileRunNow,
   CMDBReconcileSchedule,
   CMDBReconcileScheduleInput,
   IssuanceRequest,
@@ -660,7 +661,7 @@ export type { CTMonitoring, CTMonitoringRequest };
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
-export type { CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
+export type { CMDBReconcileRunNow, CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
 export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
 export type { TicketIntakeInput, TicketIntakeSchedule } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollSchedule, MDMPollScheduleInput, MDMPollScheduleList } from "./api-types.gen";
@@ -1785,6 +1786,8 @@ export interface Api {
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
   cmdbSchedule(): Promise<CMDBReconcileSchedule>;
   putCMDBSchedule(input: CMDBReconcileScheduleInput, idempotencyKey?: string): Promise<CMDBReconcileSchedule>;
+  /** A87: start a sweep now as the scheduler's own durable relay job. */
+  runCMDBScheduleNow(idempotencyKey?: string): Promise<CMDBReconcileRunNow>;
   /** I3: the request queue, including the denied and expired rows an audit needs. */
   issuanceRequests(): Promise<IssuanceRequestList>;
   issuanceRequest(id: string): Promise<IssuanceRequest>;
@@ -2420,6 +2423,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     }),
   cmdbSchedule: () => req<CMDBReconcileSchedule>("/api/v1/owners/cmdb-schedule"),
   putCMDBSchedule: (input, idempotencyKey) => mutate<CMDBReconcileSchedule>("PUT", "/api/v1/owners/cmdb-schedule", input, idempotencyKey),
+  runCMDBScheduleNow: (idempotencyKey) => mutate<CMDBReconcileRunNow>("POST", "/api/v1/owners/cmdb-schedule/run", undefined, idempotencyKey),
   issuanceRequests: () => req<IssuanceRequestList>("/api/v1/issuance-requests"),
   issuanceRequest: (id) => req<IssuanceRequest>(`/api/v1/issuance-requests/${encodeURIComponent(id)}`),
   identityIssuanceResult: (id, requestKey) =>

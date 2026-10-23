@@ -196,6 +196,10 @@ The served OpenAPI declares this import as a required `text/csv` body (up to
 URL, a `secret://` token reference, an interval of at least 300 seconds, and
 relay execution. `GET /api/v1/owners/cmdb-schedule` distinguishes never
 configured, paused, incomplete, failed, and completed coverage.
+`POST /api/v1/owners/cmdb-schedule/run` (`trstctl owners cmdb-schedule run`)
+starts a sweep now, as the scheduler's own durable relay job, without waiting
+for the interval; it refuses a paused schedule and never stacks a read behind a
+sweep that is still in flight.
 The deployment binding for this URL and reference must set `relay_only: true`;
 ticket and response-dispatch bindings remain separate `env:` references.
 For a private HTTPS CMDB whose issuing CA is absent from the network relay's

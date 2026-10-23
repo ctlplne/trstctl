@@ -2822,6 +2822,17 @@ CBOMScanRequest = TypedDict(
     total=False,
 )
 
+CMDBReconcileRunNow = TypedDict(
+    'CMDBReconcileRunNow',
+    {
+        'detail': str,
+        'schedule': dict[str, Any],
+        'started': bool,
+        'sweep_id': str,
+    },
+    total=False,
+)
+
 CMDBReconcileSchedule = TypedDict(
     'CMDBReconcileSchedule',
     {

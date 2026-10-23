@@ -6,13 +6,7 @@
 // copy unless the catalog is intentionally regenerated.
 
 export const extractedMessages: Array<{ key: string; defaultMessage: string; sources: string[] }> = [
-  {
-    key: "source.acme.acme.labs.7d12413e5c",
-    defaultMessage: "acme, acme-labs",
-    sources: [
-      "src/pages/Workloads.tsx:1147",
-    ],
-  },
+
 ] as const;
 
 export type ExtractedMessageKey = (typeof extractedMessages)[number]["key"];

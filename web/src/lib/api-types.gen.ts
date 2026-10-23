@@ -2020,6 +2020,13 @@ export interface CBOMScanRequest {
   tls_endpoints?: string[];
 }
 
+export interface CMDBReconcileRunNow {
+  detail: string;
+  schedule: CMDBReconcileSchedule;
+  started: boolean;
+  sweep_id?: string;
+}
+
 export interface CMDBReconcileSchedule {
   allow_private_endpoint?: boolean;
   changed_count: number;

@@ -5062,6 +5062,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/owners/cmdb-schedule/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a CMDB ownership sweep now, as the scheduler's own durable relay job, without waiting for the interval */
+        post: operations["runCMDBReconcileNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/owners/import": {
         parameters: {
             query?: never;
@@ -9822,6 +9839,13 @@ export interface components {
         CBOMScanRequest: {
             host_configs?: string[];
             tls_endpoints?: string[];
+        };
+        CMDBReconcileRunNow: {
+            detail: string;
+            schedule: components["schemas"]["CMDBReconcileSchedule"];
+            /** @description A87: a fresh sweep was dispatched as the scheduler's own durable network-relay job. */
+            started: boolean;
+            sweep_id?: string;
         };
         CMDBReconcileSchedule: {
             allow_private_endpoint?: boolean;
@@ -31828,6 +31852,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CMDBReconcileSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    runCMDBReconcileNow: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMDBReconcileRunNow"];
                 };
             };
             /** @description client error */

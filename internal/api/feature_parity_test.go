@@ -282,8 +282,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Secret sync adds one reconcile operation for a lost receiver result.
 	// A69 adds one deterministic ring placement operation beside the per-agent one.
 	// B4-8 adds the renewal resume after an operator rollback.
-	if len(out) != 513 {
-		t.Fatalf("OpenAPI operationIds = %d, want 513", len(out))
+	// A87's runCMDBReconcileNow raised it to 514, mapped onto the owners row.
+	if len(out) != 514 {
+		t.Fatalf("OpenAPI operationIds = %d, want 514", len(out))
 	}
 	return out
 }

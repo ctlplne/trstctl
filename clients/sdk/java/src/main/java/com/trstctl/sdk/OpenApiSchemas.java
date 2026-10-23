@@ -213,6 +213,7 @@ public final class OpenApiSchemas {
       "CBOMScan",
       "CBOMScanPreview",
       "CBOMScanRequest",
+      "CMDBReconcileRunNow",
       "CMDBReconcileSchedule",
       "CMDBReconcileScheduleInput",
       "CMPQualification",

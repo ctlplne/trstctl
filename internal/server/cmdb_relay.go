@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -49,16 +50,38 @@ type CMDBSyncReport = ownership.CMDBSyncReport
 // the schedule says which state the operator is in — dispatched-and-waiting is
 // different from failing, and both are different from healthy.
 func (s *Server) dispatchCMDBSyncJob(ctx context.Context, tenantID string, sched store.CMDBReconcileSchedule) {
-	pending, err := s.store.HasPendingAgentJob(ctx, tenantID, agentJobKindCMDBSync)
+	outcome, err := s.startCMDBSweep(ctx, tenantID, sched)
 	if err != nil {
-		s.logger.Warn("cmdb relay dispatch: pending check failed",
+		s.logger.Warn("cmdb relay dispatch failed",
 			slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
 		return
+	}
+	if outcome.Started {
+		s.logger.Info("cmdb sync dispatched to relay", slog.String("tenant_id", tenantID))
+	}
+}
+
+// cmdbSweepStart says what a sweep start did: Started with the sweep that is
+// now (or was already) in flight, or not started and why. The scheduler tick
+// and the run-now command (A87) share it, so a command can never queue a read
+// the tick would have refused.
+type cmdbSweepStart struct {
+	Started bool
+	SweepID string
+	// InFlight is set when an unclaimed job or an incomplete sweep already
+	// covers the tenant; Started is false and SweepID names it.
+	InFlight bool
+}
+
+func (s *Server) startCMDBSweep(ctx context.Context, tenantID string, sched store.CMDBReconcileSchedule) (cmdbSweepStart, error) {
+	pending, err := s.store.HasPendingAgentJob(ctx, tenantID, agentJobKindCMDBSync)
+	if err != nil {
+		return cmdbSweepStart{}, fmt.Errorf("cmdb relay dispatch: pending check failed: %w", err)
 	}
 	if pending {
 		// Waiting is visible as incomplete coverage plus last_attempt_at. It is
 		// not a run, and therefore must never manufacture last_run_at success.
-		return
+		return cmdbSweepStart{InFlight: true, SweepID: sched.CurrentSweepID}, nil
 	}
 	intent := cmdbSyncIntent(sched)
 	now := time.Now().UTC()
@@ -66,20 +89,44 @@ func (s *Server) dispatchCMDBSyncJob(ctx context.Context, tenantID string, sched
 		// Restart recovery: re-derive the exact missing page command from the
 		// durable checkpoint. EnqueueIfAbsent makes this harmless when the row
 		// merely has not been claimed yet.
-		err = s.orch.ResumeCMDBSweep(ctx, tenantID, intent)
-	} else {
-		intent.SweepID = uuid.NewString()
-		intent.AfterSysID = ""
-		intent.ReadCount = 0
-		intent.ExpectedCount = nil
-		err = s.orch.QueueCMDBSweep(ctx, tenantID, intent, now)
+		if err := s.orch.ResumeCMDBSweep(ctx, tenantID, intent); err != nil {
+			return cmdbSweepStart{}, err
+		}
+		return cmdbSweepStart{InFlight: true, SweepID: intent.SweepID}, nil
 	}
+	intent.SweepID = uuid.NewString()
+	intent.AfterSysID = ""
+	intent.ReadCount = 0
+	intent.ExpectedCount = nil
+	if err := s.orch.QueueCMDBSweep(ctx, tenantID, intent, now); err != nil {
+		return cmdbSweepStart{}, err
+	}
+	return cmdbSweepStart{Started: true, SweepID: intent.SweepID}, nil
+}
+
+// RunCMDBSweepNow (A87) implements api.CMDBRunNow: the operator's run-now is
+// the scheduler's own dispatch, started outside the interval. It refuses a
+// paused schedule and reports, rather than stacks, a sweep already in flight.
+func (s *Server) RunCMDBSweepNow(ctx context.Context, tenantID string) (api.CMDBRunNowOutcome, error) {
+	sched, found, err := s.store.GetCMDBReconcileSchedule(ctx, tenantID)
 	if err != nil {
-		s.logger.Warn("cmdb relay dispatch failed",
-			slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
-		return
+		return api.CMDBRunNowOutcome{}, err
 	}
-	s.logger.Info("cmdb sync dispatched to relay", slog.String("tenant_id", tenantID))
+	if !found {
+		return api.CMDBRunNowOutcome{}, api.ErrCMDBScheduleNotConfigured
+	}
+	if !sched.Enabled {
+		return api.CMDBRunNowOutcome{Schedule: sched}, api.ErrCMDBSchedulePaused
+	}
+	start, err := s.startCMDBSweep(ctx, tenantID, sched)
+	if err != nil {
+		return api.CMDBRunNowOutcome{Schedule: sched}, err
+	}
+	after, _, err := s.store.GetCMDBReconcileSchedule(ctx, tenantID)
+	if err != nil {
+		return api.CMDBRunNowOutcome{}, err
+	}
+	return api.CMDBRunNowOutcome{Schedule: after, Started: start.Started, SweepID: start.SweepID, InFlight: start.InFlight}, nil
 }
 
 // recordCMDBSync ingests a relay's reported observation: the reconcile core

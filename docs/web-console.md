@@ -221,7 +221,9 @@ a problem:
   operator's approved HTTPS ServiceNow URL and `relay_only` binding, `secret://` reference, CI query, interval,
   and enabled state. Saving a schedule does not claim a CMDB read completed;
   the panel separately reports relay progress, retained cursor, failure and
-  terminal coverage.
+  terminal coverage, and **Run CMDB sweep now** starts the next sweep without
+  waiting for the interval (refused while a sweep is in flight or the schedule
+  is paused).
 
 Backed by
 `/api/v1/owners`, `/api/v1/owners/{id}`, `/api/v1/owners/{id}/attest`,

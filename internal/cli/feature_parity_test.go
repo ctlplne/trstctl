@@ -319,8 +319,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// Secret sync adds one reconcile command for a lost receiver result.
 	// A69 adds one deterministic ring placement command beside the per-agent one.
 	// B4-8 adds the renewal resume after an operator rollback.
-	if len(out) != 567 {
-		t.Fatalf("CLI commands = %d, want 567", len(out))
+	// A87's `owners cmdb-schedule run` raised it to 568, mapped onto the owners row.
+	if len(out) != 568 {
+		t.Fatalf("CLI commands = %d, want 568", len(out))
 	}
 	return out
 }

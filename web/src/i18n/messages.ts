@@ -21101,6 +21101,10 @@ export const messages = {
     defaultMessage: "Allowed GitHub owners",
     description: "Input label for the GitHub repository owners a github_oidc trust source admits.",
   },
+  "workloads.attestation.allowedOwnersPlaceholder": {
+    defaultMessage: "acme, acme-labs",
+    description: "Placeholder example for the allowed GitHub owners input.",
+  },
   "workloads.attestation.allowedOwnersHelp": {
     defaultMessage: "Organizations or users whose repositories this source admits, separated by commas. Without a pin, every repository on GitHub can attest.",
     description: "Help text under the allowed GitHub owners input.",
@@ -26531,6 +26535,18 @@ export const messages = {
   "cmdb.setup.review": {
     defaultMessage: "Review CMDB schedule",
     description: "I2: show the exact binding before writing the schedule.",
+  },
+  "cmdb.runNow": {
+    defaultMessage: "Run CMDB sweep now",
+    description: "A87: start a CMDB ownership sweep without waiting for the interval.",
+  },
+  "cmdb.runNow.running": {
+    defaultMessage: "Starting sweep…",
+    description: "A87: the run-now request is in flight.",
+  },
+  "cmdb.runNow.started": {
+    defaultMessage: "Sweep {sweep} dispatched to the network relay; coverage and the terminal result appear above as pages complete.",
+    description: "A87: a run-now sweep was dispatched.",
   },
   "cmdb.setup.reviewed": {
     defaultMessage: "Reviewed CMDB schedule",

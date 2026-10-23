@@ -120,6 +120,7 @@ type API struct {
 	certRevocationAuthority  CertificateRevocationAuthorityResolver
 	attestedIssuer           AttestedIssuerService
 	attestationPrincipals    AttestationPrincipalResolver
+	cmdbRunNow               CMDBRunNow
 	sshWorkflow              SSHWorkflowService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
@@ -264,6 +265,7 @@ type config struct {
 	certRevocationAuthority     CertificateRevocationAuthorityResolver
 	attestedIssuer              AttestedIssuerService
 	attestationPrincipals       AttestationPrincipalResolver
+	cmdbRunNow                  CMDBRunNow
 	sshWorkflow                 SSHWorkflowService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
@@ -585,6 +587,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		certRevocationAuthority:     cfg.certRevocationAuthority,
 		attestedIssuer:              cfg.attestedIssuer,
 		attestationPrincipals:       cfg.attestationPrincipals,
+		cmdbRunNow:                  cfg.cmdbRunNow,
 		sshWorkflow:                 cfg.sshWorkflow,
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,

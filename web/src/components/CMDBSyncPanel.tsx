@@ -2,7 +2,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { api, type CMDBReconcileSchedule, type CMDBReconcileScheduleInput } from "@/lib/api";
+import { api, type CMDBReconcileRunNow, type CMDBReconcileSchedule, type CMDBReconcileScheduleInput } from "@/lib/api";
 import { newIdempotencyKey } from "@/lib/apiTransport";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 import { optionalApiCall } from "@/lib/optionalApi";
@@ -66,6 +66,9 @@ export function CMDBSyncPanel() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runOutcome, setRunOutcome] = useState<CMDBReconcileRunNow | null>(null);
+  const [runError, setRunError] = useState("");
   const s = schedule.data ?? undefined;
   // Older preview/test clients may omit this optional surface. The production
   // client has both methods; a real fetch failure is shown instead of hidden.
@@ -118,6 +121,25 @@ export function CMDBSyncPanel() {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
+    }
+  }
+
+  // A87: run a sweep now, as the scheduler's own relay job. A refusal (paused,
+  // sweep in flight) is the server's sentence, shown as it came.
+  async function runNow() {
+    if (running || typeof api.runCMDBScheduleNow !== "function") return;
+    setRunning(true);
+    setRunError("");
+    setRunOutcome(null);
+    try {
+      const outcome = await api.runCMDBScheduleNow(newIdempotencyKey());
+      setRunOutcome(outcome);
+      queryClient.setQueryData(["cmdb-schedule"], outcome.schedule);
+      void queryClient.invalidateQueries({ queryKey: ["cmdb-schedule"] });
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -178,10 +200,27 @@ export function CMDBSyncPanel() {
       {s?.execution === "relay" ? <p className="text-caption text-muted-foreground">{translateNow("source.cmdb.sync.relay.i2own00014")}</p> : null}
       {s?.guidance && <p className="text-caption text-muted-foreground">{s.guidance}</p>}
       {canWrite && !editing && s && (
-        <Button type="button" variant="outline" onClick={openEditor}>
-          {translateNow(s.configured ? "cmdb.setup.edit" : "cmdb.setup.configure")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={openEditor}>
+            {translateNow(s.configured ? "cmdb.setup.edit" : "cmdb.setup.configure")}
+          </Button>
+          {s.configured && s.enabled && typeof api.runCMDBScheduleNow === "function" ? (
+            <Button type="button" variant="outline" disabled={running} onClick={() => void runNow()}>
+              {translateNow(running ? "cmdb.runNow.running" : "cmdb.runNow")}
+            </Button>
+          ) : null}
+        </div>
       )}
+      {runOutcome?.started ? (
+        <p role="status" className="text-sm text-success">
+          {translateNow("cmdb.runNow.started", { sweep: runOutcome.sweep_id ?? "" })}
+        </p>
+      ) : null}
+      {runError ? (
+        <p role="alert" className="text-sm text-risk-warning">
+          {runError}
+        </p>
+      ) : null}
       {saved && (
         <p role="status" className="text-sm text-success">
           {translateNow("cmdb.setup.saved")}
