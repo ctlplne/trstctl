@@ -666,7 +666,11 @@ remain UTC.
   event-projected public trust-path receipt; a lost browser response is recovered
   by entering the ceremony ID and refreshing. The private keys stay on the
   disconnected systems. Independently verify both returned chains before
-  distributing a new trust anchor. The private key of an imported offline root
+  distributing a new trust anchor. The offline-root import takes an optional
+  possession signature: once the ceremony ID is entered, the panel prints the
+  OpenSSL commands that sign the ceremony's challenge on the offline system,
+  and after import it shows whether key possession was proven by that
+  signature or not proven. The private key of an imported offline root
   stays outside trstctl. Its detail view opens the
   signer-held intermediate workflow and does not offer direct signing actions.
   The API returns a conflict with that recovery path if a client tries direct

@@ -9506,6 +9506,11 @@ export interface components {
             /** Format: uuid */
             parent_id?: string;
             permitted_dns_names?: string[];
+            /**
+             * @description How possession of the authority's key was established by the call that created or imported it. Present on that call's response and in the creation event; listings omit it.
+             * @enum {string}
+             */
+            possession_proof?: "self_signature" | "signer_challenge" | "offline_signature" | "not_proven";
             /** Format: uuid */
             replaces_id?: string;
             serial: string;
@@ -9716,6 +9721,8 @@ export interface components {
             /** Format: uuid */
             ceremony_id: string;
             certificate_pem: string;
+            /** @description Optional. The offline root's signature, base64, over the bytes "trstctl offline root proof of possession v1", a zero byte, then ceremony_id: ECDSA or RSA (PKCS #1 v1.5) over SHA-256 of those bytes, Ed25519 over the bytes, ML-DSA over their SHA-256 digest. Without it the import records possession_proof not_proven. */
+            possession_signature?: string;
             spec: components["schemas"]["CASpec"];
         };
         CAIntermediateCSR: {

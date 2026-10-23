@@ -507,7 +507,7 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
-		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, false, "")
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, false, "", api.CAPossessionSelfSignature)
 		appended = ev
 		if err != nil {
 			return err
@@ -528,7 +528,7 @@ func (h *caHierarchyService) CreateRoot(ctx context.Context, tenantID string, re
 		}
 	}
 	h.rememberSigner(created.ID, signer)
-	return authorityResponse(created), nil
+	return withPossession(authorityResponse(created), api.CAPossessionSelfSignature), nil
 }
 
 func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID string, req api.CAImportOfflineRootRequest) (api.CAAuthority, error) {
@@ -542,6 +542,10 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 	issued, err := crypto.VerifyImportedOfflineRoot(rootDER, cryptoProfile(req.Spec))
 	if err != nil {
 		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	possession, err := offlineRootPossession(rootDER, req)
+	if err != nil {
+		return api.CAAuthority{}, err
 	}
 	purpose, err := offlineRootPurpose(rootDER, req.Spec)
 	if err != nil {
@@ -560,7 +564,7 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 			CertificatePEM: rootPEM, Serial: issued.Serial, NotAfter: &notAfter,
 			MaxPathLen: issued.MaxPathLen, PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
-		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, true, "")
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCARootCreated, created, req.CeremonyID, true, "", possession)
 		appended = ev
 		if err != nil {
 			return err
@@ -577,7 +581,7 @@ func (h *caHierarchyService) ImportOfflineRoot(ctx context.Context, tenantID str
 			return api.CAAuthority{}, err
 		}
 	}
-	return authorityResponse(created), nil
+	return withPossession(authorityResponse(created), possession), nil
 }
 
 func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string, req api.CAImportExistingRequest) (api.CAAuthority, error) {
@@ -625,8 +629,9 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 	}
 	// eMudhra, Part 4: the bound signer proves it holds the key the imported
 	// certificate names before the chain is accepted.
-	if err := crypto.ProvePossession(signer, signer.Public()); err != nil && !errors.Is(err, crypto.ErrPossessionUnsupported) {
-		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	possession, err := signerPossession(signer)
+	if err != nil {
+		return api.CAAuthority{}, err
 	}
 	issued, kind, err := crypto.VerifyImportedCAChain(chainDER, signer.Public(), cryptoProfile(req.Spec))
 	if err != nil {
@@ -679,7 +684,7 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
-		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAAuthorityImported, created, req.CeremonyID, false, crypto.SHA256Hex([]byte(chainPEM)))
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAAuthorityImported, created, req.CeremonyID, false, crypto.SHA256Hex([]byte(chainPEM)), possession)
 		appended = ev
 		if err != nil {
 			return err
@@ -697,7 +702,7 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 		}
 	}
 	h.rememberSigner(created.ID, signer)
-	return authorityResponse(created), nil
+	return withPossession(authorityResponse(created), possession), nil
 }
 
 func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID string, req api.CACreateIntermediateRequest) (api.CAAuthority, error) {
@@ -770,7 +775,7 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
-		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, false, "")
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, false, "", api.CAPossessionSignerChallenge)
 		appended = ev
 		if err != nil {
 			return err
@@ -791,7 +796,7 @@ func (h *caHierarchyService) CreateIntermediate(ctx context.Context, tenantID st
 		}
 	}
 	h.rememberSigner(created.ID, childSigner)
-	return authorityResponse(created), nil
+	return withPossession(authorityResponse(created), api.CAPossessionSignerChallenge), nil
 }
 
 func (h *caHierarchyService) CreateOfflineIntermediateCSR(ctx context.Context, tenantID, caID string, req api.CACreateOfflineIntermediateCSRRequest) (api.CAIntermediateCSR, error) {
@@ -879,8 +884,9 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 	}
 	// eMudhra, Part 4: the served signer proves it holds the key the
 	// offline-signed certificate names.
-	if err := crypto.ProvePossession(childSigner, childSigner.Public()); err != nil && !errors.Is(err, crypto.ErrPossessionUnsupported) {
-		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
+	possession, err := signerPossession(childSigner)
+	if err != nil {
+		return api.CAAuthority{}, err
 	}
 	issued, err := crypto.VerifyOfflineSignedIntermediate(parentDER, childDER, childSigner.Public(), cryptoProfile(req.Spec))
 	if err != nil {
@@ -903,7 +909,7 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 			NotAfter: &notAfter, MaxPathLen: issued.MaxPathLen,
 			PermittedDNSNames: issued.PermittedDNSDomains, EKUs: issued.EKUs,
 		}
-		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, true, "")
+		ev, err := h.appendAuthorityCreatedEventTx(ctx, tx, tenantID, projections.EventCAIntermediateCreated, created, req.CeremonyID, true, "", possession)
 		appended = ev
 		if err != nil {
 			return err
@@ -921,7 +927,7 @@ func (h *caHierarchyService) ImportOfflineIntermediate(ctx context.Context, tena
 		}
 	}
 	h.rememberSigner(created.ID, childSigner)
-	return authorityResponse(created), nil
+	return withPossession(authorityResponse(created), possession), nil
 }
 
 func (h *caHierarchyService) IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req api.CAIssueIntermediateRequest) (api.CAIssuedIntermediate, error) {

@@ -323,16 +323,45 @@ for ceremonies.
    ```
 
 3. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals`.
-4. **Import the public offline root** with
+4. **Prove possession of the root key on the offline system** (recommended).
+   The root key never enters the signer, so trstctl cannot challenge it
+   directly. Instead the root signs this ceremony's challenge where it lives:
+   the bytes `trstctl offline root proof of possession v1`, a zero byte, then
+   the ceremony ID. With the ceremony ID in `CEREMONY_ID` and the root key in
+   `root-key.pem`:
+
+   ```sh
+   printf 'trstctl offline root proof of possession v1\000%s' "$CEREMONY_ID" > possession-message.bin
+   # ECDSA or RSA root (PKCS #1 v1.5 over SHA-256):
+   openssl dgst -sha256 -sign root-key.pem -out possession.sig possession-message.bin
+   # Ed25519 root (signs the bytes themselves):
+   openssl pkeyutl -sign -inkey root-key.pem -rawin -in possession-message.bin -out possession.sig
+   # ML-DSA root (OpenSSL 3.5 or newer; signs the SHA-256 digest):
+   openssl dgst -sha256 -binary -out possession-digest.bin possession-message.bin
+   openssl pkeyutl -sign -inkey root-key.pem -rawin -in possession-digest.bin -out possession.sig
+   # Then, for any root:
+   openssl base64 -A -in possession.sig
+   ```
+
+   Bring back only the base64 signature. It names this ceremony, so it cannot
+   be replayed into another import. The console prints the ECDSA/RSA commands
+   with the ceremony ID filled in.
+5. **Import the public offline root** with
    `POST /api/v1/ca/authorities/offline-roots` (same `ceremony_id`,
-   `certificate_pem`, `spec`). The server accepts exactly one certificate PEM,
-   rejects private-key blocks, verifies the root is self-signed and CA-capable,
-   checks the reviewed key algorithm and remaining-validity cap again, and
-   stores the authority with no signer handle.
-5. **Open the offline-intermediate ceremony** with operation
+   `certificate_pem`, `spec`, and the signature as `possession_signature`).
+   The server accepts exactly one certificate PEM, rejects private-key blocks,
+   refuses a root on the distrust list or with a weak key, verifies the root is
+   self-signed and CA-capable, checks the reviewed key algorithm and
+   remaining-validity cap again, verifies the possession signature before the
+   ceremony is consumed, and stores the authority with no signer handle. The
+   response's `possession_proof` is `offline_signature`. Without a signature
+   the import still succeeds and records `not_proven`, in the response and in
+   the `ca.root.created` event, so an auditor can see which roots were imported
+   on trust alone.
+6. **Open the offline-intermediate ceremony** with operation
    `create_offline_intermediate`, `parent_id` set to the imported root authority,
    and the intermediate `CASpec`; collect approvals as above.
-6. **Generate the signer-held CSR** with
+7. **Generate the signer-held CSR** with
    `POST /api/v1/ca/authorities/{offline-root-id}/offline-intermediates/csr`; the
    signer creates and keeps the intermediate private key, returning only a CSR
    PEM plus signer handle. If a failed attempt destroyed this ceremony's signer
@@ -340,14 +369,15 @@ for ceremonies.
    recreates a destroyed handle: cancel the pending ceremony in Key custody (or
    via the ceremony cancel API), start a new intermediate ceremony, collect fresh
    approvals, and request a new CSR.
-7. **Sign the CSR on the offline root system**: move only the CSR over, sign it
+8. **Sign the CSR on the offline root system**: move only the CSR over, sign it
    as a CA certificate under the offline root, and bring back only the signed
    certificate PEM.
-8. **Import the offline-signed intermediate** with
+9. **Import the offline-signed intermediate** with
    `POST /api/v1/ca/authorities/{offline-root-id}/offline-intermediates`; the
    server verifies the certificate chains to the offline root, matches the
    reviewed `CASpec`, obeys path-length constraints, and contains the exact
-   public key from the CSR.
+   public key from the CSR. The signer-held key also answers a fresh
+   possession challenge before the import is accepted.
 
 Leaf issuance then uses `POST /api/v1/ca/authorities/{intermediate-id}/issue`.
 Issuing directly from the imported offline root returns HTTP 409 with the

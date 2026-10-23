@@ -1526,6 +1526,37 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.queryByRole("button", { name: "Generate managed key" })).not.toBeInTheDocument();
   });
 
+  it("sends an offline root's possession signature and shows how possession was established", async () => {
+    const user = userEvent.setup();
+    apiMock.importOfflineRootCA.mockResolvedValueOnce({
+      id: "ca-offline-root",
+      tenant_id: "tenant-1",
+      kind: "root",
+      common_name: "Offline Root CA",
+      signer_handle: "",
+      certificate_pem: "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----",
+      serial: "01",
+      max_path_len: 1,
+      status: "active",
+      created_at: "2026-06-26T14:00:00Z",
+      possession_proof: "offline_signature",
+    });
+    renderCAHierarchy();
+
+    await user.type(await screen.findByLabelText("Offline root certificate PEM"), "-----BEGIN CERTIFICATE-----\nROOT\n-----END CERTIFICATE-----");
+    expect(screen.queryByText(/trstctl offline root proof of possession v1/)).not.toBeInTheDocument();
+    const ceremonyID = "3f2a9c1e-7b4d-4e8a-9c0f-5d6e7f809a1b";
+    await user.type(screen.getByLabelText("Root ceremony ID"), ceremonyID);
+    expect(screen.getByText(/trstctl offline root proof of possession v1/)).toHaveTextContent(ceremonyID);
+
+    await user.type(screen.getByLabelText("Possession signature (optional)"), "MEUCIQ==");
+    await user.click(screen.getByRole("button", { name: "Import offline root" }));
+    await waitFor(() =>
+      expect(apiMock.importOfflineRootCA).toHaveBeenCalledWith(expect.objectContaining({ ceremony_id: ceremonyID, possession_signature: "MEUCIQ==" })),
+    );
+    expect(await screen.findByText("Proven by an offline signature")).toBeInTheDocument();
+  });
+
   it("drives the offline-root import and offline-signed intermediate workflow", async () => {
     const user = userEvent.setup();
     renderCAHierarchy();

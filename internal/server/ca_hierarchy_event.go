@@ -13,8 +13,8 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-func (h *caHierarchyService) appendAuthorityCreatedEventTx(ctx context.Context, tx pgx.Tx, tenantID, eventType string, authority store.CAAuthority, ceremonyID string, offlineRoot bool, chainSHA256 string) (events.Event, error) {
-	ev, err := h.appendVersionedEvent(ctx, tenantID, eventType, projections.CAAuthorityCreatedEventSchemaVersion, caAuthorityCreatedPayload(authority, ceremonyID, offlineRoot, chainSHA256))
+func (h *caHierarchyService) appendAuthorityCreatedEventTx(ctx context.Context, tx pgx.Tx, tenantID, eventType string, authority store.CAAuthority, ceremonyID string, offlineRoot bool, chainSHA256, possession string) (events.Event, error) {
+	ev, err := h.appendVersionedEvent(ctx, tenantID, eventType, projections.CAAuthorityCreatedEventSchemaVersion, caAuthorityCreatedPayload(authority, ceremonyID, offlineRoot, chainSHA256, possession))
 	if err != nil {
 		return events.Event{}, err
 	}
@@ -35,7 +35,7 @@ func (h *caHierarchyService) appendAuthorityCreatedEventTx(ctx context.Context, 
 	return ev, nil
 }
 
-func caAuthorityCreatedPayload(authority store.CAAuthority, ceremonyID string, offlineRoot bool, chainSHA256 string) projections.CAAuthorityCreated {
+func caAuthorityCreatedPayload(authority store.CAAuthority, ceremonyID string, offlineRoot bool, chainSHA256, possession string) projections.CAAuthorityCreated {
 	notAfter := time.Time{}
 	if authority.NotAfter != nil {
 		notAfter = *authority.NotAfter
@@ -46,5 +46,6 @@ func caAuthorityCreatedPayload(authority store.CAAuthority, ceremonyID string, o
 		Serial: authority.Serial, NotAfter: notAfter, MaxPathLen: authority.MaxPathLen,
 		PermittedDNSNames: authority.PermittedDNSNames, EKUs: authority.EKUs,
 		CeremonyID: ceremonyID, OfflineRoot: offlineRoot, ChainSHA256: chainSHA256,
+		PossessionProof: possession,
 	}
 }

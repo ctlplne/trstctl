@@ -104,7 +104,9 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   or cross-signed CA certificate that is weak or on the distrust list is
   refused. Before a signer-held key is certified or bound to an import, it
   signs a fresh challenge that must verify against the exact public key going
-  into the certificate. See
+  into the certificate. An offline root, whose key never enters the signer,
+  can sign its import ceremony's challenge on the offline system; without that
+  signature the import records that possession was not proven. See
   [the key ceremony runbook](../runbooks/key-ceremony.md#key-checks-in-every-ceremony).
 
 Removal of a distrusted root from a host and the batch-GCD job are what comes

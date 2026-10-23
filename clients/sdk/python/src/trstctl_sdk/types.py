@@ -2276,6 +2276,7 @@ CAAuthority = TypedDict(
         'not_after': str,
         'parent_id': str,
         'permitted_dns_names': list[str],
+        'possession_proof': str,
         'replaces_id': str,
         'serial': str,
         'signer_handle': str,
@@ -2567,6 +2568,7 @@ CAImportOfflineRootRequest = TypedDict(
     {
         'ceremony_id': str,
         'certificate_pem': str,
+        'possession_signature': str,
         'spec': dict[str, Any],
     },
     total=False,

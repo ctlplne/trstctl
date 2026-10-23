@@ -179,7 +179,7 @@ func TestCAAuthorityAppendSurvivesRolledBackInlineProjection(t *testing.T) {
 		CertificatePEM: "-----BEGIN CERTIFICATE-----\nMIIBAA==\n-----END CERTIFICATE-----\n",
 		SignerHandle:   "ca-recovered-root", Serial: "01", NotAfter: &notAfter, MaxPathLen: 1,
 	}
-	payload, err := json.Marshal(caAuthorityCreatedPayload(expected, ceremonyID, false, ""))
+	payload, err := json.Marshal(caAuthorityCreatedPayload(expected, ceremonyID, false, "", api.CAPossessionSelfSignature))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -547,6 +547,9 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if root.Kind != "root" || root.CommonName != rootSpec["common_name"] || root.CertificatePEM == "" || root.SignerHandle == "" {
 		t.Fatalf("root response = %+v; want root with certificate and signer handle", root)
 	}
+	if root.PossessionProof != "self_signature" {
+		t.Fatalf("root possession = %q; want self_signature", root.PossessionProof)
+	}
 
 	interSpec := map[string]any{
 		"common_name":           "trstctl customer issuing intermediate",
@@ -561,6 +564,10 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	inter := createIntermediateCA(t, h, openerToken, interCeremony.ID, root.ID, interSpec, "intermediate-create")
 	if inter.Kind != "intermediate" || inter.ParentID == nil || *inter.ParentID != root.ID || inter.SignerHandle == "" {
 		t.Fatalf("intermediate response = %+v; want child of root with signer handle", inter)
+	}
+	// eMudhra, Part 4: the new key answered a fresh challenge before it was certified.
+	if inter.PossessionProof != "signer_challenge" {
+		t.Fatalf("intermediate possession = %q; want signer_challenge", inter.PossessionProof)
 	}
 
 	client := h.signer.Client()
@@ -1871,6 +1878,9 @@ type servedCAAuthority struct {
 	CertificatePEM string  `json:"certificate_pem"`
 	SignerHandle   string  `json:"signer_handle"`
 	ReplacesID     *string `json:"replaces_id"`
+	// PossessionProof is how the creating call established possession of
+	// the key (eMudhra, Part 4).
+	PossessionProof string `json:"possession_proof"`
 }
 
 type servedCAIssuedLeaf struct {

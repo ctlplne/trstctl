@@ -1644,6 +1644,7 @@ export interface CAAuthority {
   not_after?: string;
   parent_id?: string;
   permitted_dns_names?: string[];
+  possession_proof?: "self_signature" | "signer_challenge" | "offline_signature" | "not_proven";
   replaces_id?: string;
   serial: string;
   signer_handle: string;
@@ -1843,6 +1844,7 @@ export interface CAImportOfflineIntermediateRequest {
 export interface CAImportOfflineRootRequest {
   ceremony_id: string;
   certificate_pem: string;
+  possession_signature?: string;
   spec: CASpec;
 }
 

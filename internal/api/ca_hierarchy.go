@@ -145,6 +145,11 @@ type CAImportOfflineRootRequest struct {
 	CeremonyID     string `json:"ceremony_id"`
 	CertificatePEM string `json:"certificate_pem"`
 	Spec           CASpec `json:"spec"`
+	// PossessionSignature is the offline root's signature, base64, over
+	// crypto.OfflinePossessionMessage(CeremonyID), made where the root key
+	// lives during the import ceremony. Without it the import records that
+	// possession was not proven (eMudhra, Part 4).
+	PossessionSignature string `json:"possession_signature,omitempty"`
 }
 
 type CAImportExistingRequest struct {
@@ -308,7 +313,29 @@ type CAAuthority struct {
 	// certificate itself.
 	KeyAlgorithm string    `json:"key_algorithm,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
+	// PossessionProof is how possession of the authority's key was
+	// established by the call that created or imported it: one of the
+	// CAPossession* values. That call's response and the creation event
+	// carry it; listings omit it.
+	PossessionProof string `json:"possession_proof,omitempty"`
 }
+
+// How possession of a CA key was established when an authority was created
+// or imported (eMudhra, Part 4).
+const (
+	// CAPossessionSelfSignature: a root trstctl created; its self-signature,
+	// made by the signer-held key, verifies under the certified key.
+	CAPossessionSelfSignature = "self_signature"
+	// CAPossessionSignerChallenge: the signer-held key signed a fresh
+	// challenge that verified against the certified public key.
+	CAPossessionSignerChallenge = "signer_challenge"
+	// CAPossessionOfflineSignature: the offline root signed the import
+	// ceremony's challenge where its key lives.
+	CAPossessionOfflineSignature = "offline_signature"
+	// CAPossessionNotProven: no proof was made, and the record says so
+	// rather than claim possession.
+	CAPossessionNotProven = "not_proven"
+)
 
 type CAAuthorityRotationIssuer struct {
 	AuthorityID string `json:"authority_id"`

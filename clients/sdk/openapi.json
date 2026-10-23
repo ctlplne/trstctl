@@ -6764,6 +6764,16 @@
             },
             "type": "array"
           },
+          "possession_proof": {
+            "description": "How possession of the authority's key was established by the call that created or imported it. Present on that call's response and in the creation event; listings omit it.",
+            "enum": [
+              "self_signature",
+              "signer_challenge",
+              "offline_signature",
+              "not_proven"
+            ],
+            "type": "string"
+          },
           "replaces_id": {
             "format": "uuid",
             "type": "string"
@@ -7543,6 +7553,10 @@
             "type": "string"
           },
           "certificate_pem": {
+            "type": "string"
+          },
+          "possession_signature": {
+            "description": "Optional. The offline root's signature, base64, over the bytes \"trstctl offline root proof of possession v1\", a zero byte, then ceremony_id: ECDSA or RSA (PKCS #1 v1.5) over SHA-256 of those bytes, Ed25519 over the bytes, ML-DSA over their SHA-256 digest. Without it the import records possession_proof not_proven.",
             "type": "string"
           },
           "spec": {

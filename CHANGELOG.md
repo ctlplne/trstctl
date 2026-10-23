@@ -88,6 +88,12 @@
   verified against the exact public key going into the certificate, before it
   is certified as an intermediate or bound to an import. The managed-key
   custody probe now carries a fresh nonce.
+- An offline root's import can carry `possession_signature`, the root's
+  signature over the import ceremony's challenge, made on the offline system
+  with the OpenSSL commands in the key ceremony runbook (the console prints
+  them). Every CA creation and import now records how possession of the key
+  was established (`self_signature`, `signer_challenge`, `offline_signature`
+  or `not_proven`) in its response and its creation event.
 
 ### Fixed
 

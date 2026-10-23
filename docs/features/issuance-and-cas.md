@@ -259,7 +259,12 @@ chain/profile before serving normal leaf issuance. A durable, global first-write
 fence binds that handle to one tenant and reviewed ceremony before the authority
 event; a conflicting tenant cannot reuse the same signer-held key, including after
 the first tenant offboards. Offline-root import accepts
-exactly one public certificate PEM (never a private key), generates a signer-held
+exactly one public certificate PEM (never a private key) and an optional
+`possession_signature`: the root's signature, made on the offline system, over
+the import ceremony's challenge. With it the authority records possession as
+`offline_signature`; without it, as `not_proven` (see
+[the key ceremony runbook](../runbooks/key-ceremony.md#procedure-offline-root-with-served-intermediate)).
+It then generates a signer-held
 intermediate CSR for the operator to sign outside trstctl, and imports the result
 only if it chains to the offline root, matches the reviewed `CASpec`, and carries the
 signer-held public key. Rotation and re-key activations both promote a signer-backed

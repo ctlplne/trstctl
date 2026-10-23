@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1670 annotated sites across 26 rules. Each row is
+1674 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -552,10 +552,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5849` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5866` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5879` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5907` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5854` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5871` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5884` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5912` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -827,7 +827,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (187 sites)
+### G204 — CWE-78 OS command injection (188 sites)
 
 | Location | Reason |
 |---|---|
@@ -907,6 +907,7 @@ not this file.
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:117` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
+| `internal/crypto/possession_openssl_test.go:25` | the test's own openssl binary and fixed arguments (CWE-78) |
 | `internal/crypto/pqc_x509_test.go:61` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/crypto/pqc_x509_test.go:70` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/crypto/tlsprobe/openssl.go:106` | trusted absolute local executable; fixed verb/options; no shell or remote command. |
@@ -1119,7 +1120,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (467 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (470 sites)
 
 | Location | Reason |
 |---|---|
@@ -1350,6 +1351,9 @@ not this file.
 | `internal/crypto/pfx/alias_test.go:120` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/possession_openssl_test.go:39` | the test's own temporary file (CWE-22) |
+| `internal/crypto/possession_openssl_test.go:81` | the test's own temporary file (CWE-22) |
+| `internal/crypto/possession_openssl_test.go:85` | the test's own temporary file (CWE-22) |
 | `internal/crypto/possession_test.go:114` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/crypto/samltest/material.go:142` | operator-selected private identity directory, secured above |
 | `internal/crypto/samltest/material_test.go:46` | test-owned temporary identity file |

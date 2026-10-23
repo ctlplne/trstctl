@@ -189,6 +189,7 @@ export function CAHierarchy() {
   const [offlineRootForm, setOfflineRootForm] = useState<OfflineCAForm>(offlineRootDefaults);
   const [offlineIntermediateForm, setOfflineIntermediateForm] = useState<OfflineIntermediateForm>(offlineIntermediateDefaults);
   const [offlineRootCeremonyID, setOfflineRootCeremonyID] = useState("");
+  const [offlineRootPossessionSignature, setOfflineRootPossessionSignature] = useState("");
   const [offlineIntermediateCeremonyID, setOfflineIntermediateCeremonyID] = useState("");
   const [offlineRoot, setOfflineRoot] = useState<CAAuthority | null>(null);
   const [offlineCSR, setOfflineCSR] = useState<CAIntermediateCSR | null>(null);
@@ -474,10 +475,12 @@ export function CAHierarchy() {
     setOfflineBusy(true);
     setOfflineError(null);
     try {
+      const possessionSignature = offlineRootPossessionSignature.trim();
       const next = await api.importOfflineRootCA({
         ceremony_id: offlineRootCeremonyID.trim(),
         certificate_pem: offlineRootForm.certificatePEM.trim(),
         spec: offlineFormSpec(offlineRootForm),
+        ...(possessionSignature ? { possession_signature: possessionSignature } : {}),
       });
       setOfflineRoot(next);
       setOfflineIntermediateForm((current) => ({ ...current, parentID: next.id }));
@@ -1030,12 +1033,14 @@ export function CAHierarchy() {
           root={offlineRoot}
           rootCeremonyID={offlineRootCeremonyID}
           rootForm={offlineRootForm}
+          rootPossessionSignature={offlineRootPossessionSignature}
           onCreateCSR={() => void createOfflineIntermediateCSR()}
           onImportIntermediate={() => void importOfflineIntermediate()}
           onImportRoot={() => void importOfflineRoot()}
           onIntermediateCeremonyIDChange={setOfflineIntermediateCeremonyID}
           onIntermediateFormChange={(patch) => setOfflineIntermediateForm((current) => ({ ...current, ...patch }))}
           onRootCeremonyIDChange={setOfflineRootCeremonyID}
+          onRootPossessionSignatureChange={setOfflineRootPossessionSignature}
           onRootFormChange={(patch) => setOfflineRootForm((current) => ({ ...current, ...patch }))}
           onStartIntermediateCeremony={() => void startOfflineIntermediateCeremony()}
           onStartRootCeremony={() => void startOfflineRootCeremony()}
@@ -1524,6 +1529,22 @@ function caDiscoverySourceLabel(source: string, t: ReturnType<typeof useTranslat
   }
 }
 
+// offlinePossessionCommands spells out, for a server-issued ceremony ID, the
+// OpenSSL commands an ECDSA or RSA offline root's custodians run where the
+// key lives (eMudhra, Part 4). Anything that is not a UUID gets no commands,
+// so the console never prints a shell line built from arbitrary input.
+function offlinePossessionCommands(ceremonyID: string): string | null {
+  const id = ceremonyID.trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return null;
+  }
+  return [
+    `printf 'trstctl offline root proof of possession v1\\000%s' '${id}' > possession-message.bin`,
+    "openssl dgst -sha256 -sign root-key.pem -out possession.sig possession-message.bin",
+    "openssl base64 -A -in possession.sig",
+  ].join("\n");
+}
+
 function OfflineRootWorkflow({
   busy,
   error,
@@ -1538,11 +1559,13 @@ function OfflineRootWorkflow({
   onIntermediateFormChange,
   onRootCeremonyIDChange,
   onRootFormChange,
+  onRootPossessionSignatureChange,
   onStartIntermediateCeremony,
   onStartRootCeremony,
   root,
   rootCeremonyID,
   rootForm,
+  rootPossessionSignature,
 }: {
   busy: boolean;
   error: string | null;
@@ -1553,6 +1576,7 @@ function OfflineRootWorkflow({
   root: CAAuthority | null;
   rootCeremonyID: string;
   rootForm: OfflineCAForm;
+  rootPossessionSignature: string;
   onCreateCSR: () => void;
   onImportIntermediate: () => void;
   onImportRoot: () => void;
@@ -1560,6 +1584,7 @@ function OfflineRootWorkflow({
   onIntermediateFormChange: (patch: Partial<OfflineIntermediateForm>) => void;
   onRootCeremonyIDChange: (value: string) => void;
   onRootFormChange: (patch: Partial<OfflineCAForm>) => void;
+  onRootPossessionSignatureChange: (value: string) => void;
   onStartIntermediateCeremony: () => void;
   onStartRootCeremony: () => void;
 }) {
@@ -1630,10 +1655,44 @@ function OfflineRootWorkflow({
               onChange={onRootCeremonyIDChange}
               placeholder={t("caHierarchy.offline.placeholderCeremonyID")}
             />
+            <div className="grid gap-2">
+              <label className="text-sm font-medium" htmlFor="offline-root-possession">
+                {t("caHierarchy.offline.possessionSignature")}
+              </label>
+              <textarea
+                id="offline-root-possession"
+                rows={3}
+                value={rootPossessionSignature}
+                onChange={(event) => onRootPossessionSignatureChange(event.target.value)}
+                aria-describedby="offline-root-possession-help"
+                className="min-h-20 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/30"
+              />
+              <p id="offline-root-possession-help" className="text-xs text-muted-foreground">
+                {t("caHierarchy.offline.possessionSignatureHelp")}
+              </p>
+              {offlinePossessionCommands(rootCeremonyID) && (
+                <div className="grid gap-1">
+                  <p className="text-xs text-muted-foreground">{t("caHierarchy.offline.possessionCommands")}</p>
+                  <pre className="overflow-x-auto rounded-control border border-border bg-muted/40 p-2 font-mono text-xs">
+                    {offlinePossessionCommands(rootCeremonyID)}
+                  </pre>
+                </div>
+              )}
+            </div>
             {root && (
               <dl className="grid gap-3 sm:grid-cols-2">
                 <KeyValue label={t("caHierarchy.offline.commonName")} value={root.common_name} />
                 <KeyValue label={t("caHierarchy.offline.signerHandle")} value={root.signer_handle || t("caHierarchy.offline.signerOffline")} mono />
+                {root.possession_proof && (
+                  <KeyValue
+                    label={t("caHierarchy.offline.possessionProof")}
+                    value={
+                      root.possession_proof === "offline_signature"
+                        ? t("caHierarchy.offline.possessionOfflineSignature")
+                        : t("caHierarchy.offline.possessionNotProven")
+                    }
+                  />
+                )}
               </dl>
             )}
           </div>

@@ -1874,6 +1874,11 @@ type CAAuthorityCreated struct {
 	CeremonyID        string    `json:"ceremony_id"`
 	OfflineRoot       bool      `json:"offline_root,omitempty"`
 	ChainSHA256       string    `json:"chain_sha256,omitempty"`
+	// PossessionProof records how possession of the authority's key was
+	// established at creation (self_signature, signer_challenge,
+	// offline_signature, not_proven). Events written before eMudhra Part 4
+	// carry none.
+	PossessionProof string `json:"possession_proof,omitempty"`
 }
 
 // CAAuthorityRotated is the payload of ca.authority.rotated. It carries the

@@ -509,6 +509,7 @@ func componentSchemas() map[string]*Schema {
 	}, "ceremony_id", "spec")
 	caImportOfflineRootReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(), "spec": ref("CASpec"),
+		"possession_signature": {Type: "string", Description: "Optional. The offline root's signature, base64, over the bytes \"trstctl offline root proof of possession v1\", a zero byte, then ceremony_id: ECDSA or RSA (PKCS #1 v1.5) over SHA-256 of those bytes, Ed25519 over the bytes, ML-DSA over their SHA-256 digest. Without it the import records possession_proof not_proven."},
 	}, "ceremony_id", "certificate_pem", "spec")
 	caImportExistingReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(), "signer_handle": str(), "parent_id": uuid(), "spec": ref("CASpec"),
@@ -832,6 +833,8 @@ func componentSchemas() map[string]*Schema {
 		"key_algorithm":       str(),
 		"created_at":          timestamp(),
 		"horizon":             ref("CAAuthorityHorizon"),
+		"possession_proof": {Type: "string", Enum: []string{"self_signature", "signer_challenge", "offline_signature", "not_proven"},
+			Description: "How possession of the authority's key was established by the call that created or imported it. Present on that call's response and in the creation event; listings omit it."},
 	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")
 	caAuthorityRotationIssuer := object(map[string]*Schema{
 		"authority_id": uuid(), "role": str(), "status": str(), "issue_path": str(),

@@ -10684,6 +10684,31 @@ export const messages = {
     defaultMessage: "Root ceremony ID",
     description: "Field label for the offline root import ceremony id.",
   },
+  "caHierarchy.offline.possessionSignature": {
+    defaultMessage: "Possession signature (optional)",
+    description: "Field label for the offline root's base64 signature over the import ceremony's challenge.",
+  },
+  "caHierarchy.offline.possessionSignatureHelp": {
+    defaultMessage:
+      "Prove the root key is held: on the offline system, sign this ceremony's challenge with the root key and paste the signature in base64. Leave it empty and the import records that possession was not proven.",
+    description: "Help text under the offline root possession signature field.",
+  },
+  "caHierarchy.offline.possessionCommands": {
+    defaultMessage: "For an ECDSA or RSA root, run these where the key lives. Ed25519 and ML-DSA roots: see the key ceremony runbook.",
+    description: "Caption above the generated OpenSSL commands that sign the offline root's possession challenge.",
+  },
+  "caHierarchy.offline.possessionProof": {
+    defaultMessage: "Key possession",
+    description: "Metadata label for how possession of the imported root key was established.",
+  },
+  "caHierarchy.offline.possessionOfflineSignature": {
+    defaultMessage: "Proven by an offline signature",
+    description: "Key possession value when the offline root signed the import ceremony's challenge.",
+  },
+  "caHierarchy.offline.possessionNotProven": {
+    defaultMessage: "Not proven",
+    description: "Key possession value when the import carried no possession signature.",
+  },
   "caHierarchy.offline.intermediate": {
     defaultMessage: "Intermediate",
     description: "Subheading for the offline intermediate panel.",
