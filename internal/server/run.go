@@ -828,7 +828,7 @@ func buildRunOutboundDeps(
 }
 
 func runNotifications(cfg config.Notifications, guard *egress.Guard) ([]notify.Notifier, *notificationChannelOwnership, error) {
-	channels, err := notificationChannelsFromConfig(cfg)
+	channels, err := notificationChannelsFromConfig(cfg, guard)
 	if err != nil {
 		return nil, nil, fmt.Errorf("notifications: %w", err)
 	}
@@ -1124,13 +1124,34 @@ func otlpExporterFromConfig(cfg config.OTLP, guard *egress.Guard) (*otlp.Exporte
 	return exp, nil
 }
 
-func notificationChannelsFromConfig(cfg config.Notifications) ([]notify.Notifier, error) {
+// notificationChannelsFromConfig builds the operator-configured core channels.
+// Slack, Teams, SMS and SIEM honour the operator's private-egress policy (A99):
+// when a channel grants exact private CIDRs, loopback insecure HTTP, or the
+// air-gap guard is armed, its transport is the same bounded SSRF-safe client
+// the incident channels use, validated here so a bad policy fails startup.
+func notificationChannelsFromConfig(cfg config.Notifications, guard *egress.Guard) ([]notify.Notifier, error) {
 	var channels []notify.Notifier
 	if cfg.Slack.Enabled {
-		channels = append(channels, slack.New(cfg.Slack.WebhookURL))
+		opts := []slack.Option{}
+		client, err := operatorNotificationHTTPClient(cfg.Slack.WebhookURL, cfg.Slack.AllowPrivateCIDRs, cfg.Slack.AllowInsecureHTTP, guard)
+		if err != nil {
+			return nil, fmt.Errorf("slack: %w", err)
+		}
+		if client != nil {
+			opts = append(opts, slack.WithHTTPClient(client))
+		}
+		channels = append(channels, slack.New(cfg.Slack.WebhookURL, opts...))
 	}
 	if cfg.Teams.Enabled {
-		channels = append(channels, teams.New(cfg.Teams.WebhookURL))
+		opts := []teams.Option{}
+		client, err := operatorNotificationHTTPClient(cfg.Teams.WebhookURL, cfg.Teams.AllowPrivateCIDRs, cfg.Teams.AllowInsecureHTTP, guard)
+		if err != nil {
+			return nil, fmt.Errorf("teams: %w", err)
+		}
+		if client != nil {
+			opts = append(opts, teams.WithHTTPClient(client))
+		}
+		channels = append(channels, teams.New(cfg.Teams.WebhookURL, opts...))
 	}
 	if cfg.Email.Enabled {
 		opts := []notifyemail.Option{}
@@ -1150,7 +1171,15 @@ func notificationChannelsFromConfig(cfg config.Notifications) ([]notify.Notifier
 			return nil, err
 		}
 		defer zeroBytes(token)
-		channels = append(channels, sms.New(cfg.SMS.Endpoint, cfg.SMS.From, cfg.SMS.To, token))
+		opts := []sms.Option{}
+		client, err := operatorNotificationHTTPClient(cfg.SMS.Endpoint, cfg.SMS.AllowPrivateCIDRs, cfg.SMS.AllowInsecureHTTP, guard)
+		if err != nil {
+			return nil, fmt.Errorf("sms: %w", err)
+		}
+		if client != nil {
+			opts = append(opts, sms.WithHTTPClient(client))
+		}
+		channels = append(channels, sms.New(cfg.SMS.Endpoint, cfg.SMS.From, cfg.SMS.To, token, opts...))
 	}
 	if cfg.SIEM.Enabled {
 		token, err := notificationSecret(cfg.SIEM.Token, cfg.SIEM.TokenFile, "siem token")
@@ -1162,9 +1191,26 @@ func notificationChannelsFromConfig(cfg config.Notifications) ([]notify.Notifier
 		if cfg.SIEM.Source != "" {
 			opts = append(opts, siem.WithSource(cfg.SIEM.Source))
 		}
+		client, err := operatorNotificationHTTPClient(cfg.SIEM.Endpoint, cfg.SIEM.AllowPrivateCIDRs, cfg.SIEM.AllowInsecureHTTP, guard)
+		if err != nil {
+			return nil, fmt.Errorf("siem: %w", err)
+		}
+		if client != nil {
+			opts = append(opts, siem.WithHTTPClient(client))
+		}
 		channels = append(channels, siem.New(cfg.SIEM.Endpoint, token, opts...))
 	}
 	return channels, nil
+}
+
+// operatorNotificationHTTPClient returns the bounded private-egress client for
+// a core channel, or nil when the channel has no policy and no air-gap guard,
+// in which case the channel keeps its own public-HTTPS-only SSRF-safe default.
+func operatorNotificationHTTPClient(endpoint string, rawCIDRs []string, allowInsecureHTTP bool, guard *egress.Guard) (*http.Client, error) {
+	if len(rawCIDRs) == 0 && !allowInsecureHTTP && (guard == nil || !guard.Enabled()) {
+		return nil, nil
+	}
+	return incidentNotificationHTTPClient(endpoint, func() (time.Duration, error) { return 10 * time.Second, nil }, rawCIDRs, allowInsecureHTTP, guard)
 }
 
 func notificationSecret(inline []byte, file, label string) ([]byte, error) {

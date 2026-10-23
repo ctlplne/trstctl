@@ -1542,10 +1542,15 @@ type Notifications struct {
 	OpsGenie  NotificationOpsGenie  `json:"opsgenie,omitempty"`
 }
 
-// NotificationWebhook configures one incoming-webhook-style channel.
+// NotificationWebhook configures one incoming-webhook-style channel. The
+// private-egress fields (A99) are the operator's bounded exception to the SSRF
+// guard: exact private CIDRs the webhook may resolve into, and loopback-only
+// insecure HTTP for a development emulator. They mirror the incident channels.
 type NotificationWebhook struct {
-	Enabled    bool   `json:"enabled,omitempty"`
-	WebhookURL string `json:"webhook_url,omitempty"`
+	Enabled           bool     `json:"enabled,omitempty"`
+	WebhookURL        string   `json:"webhook_url,omitempty"`
+	AllowPrivateCIDRs []string `json:"allow_private_cidrs,omitempty"`
+	AllowInsecureHTTP bool     `json:"allow_insecure_http,omitempty"`
 }
 
 // NotificationEmail configures the SMTP email channel.
@@ -1559,23 +1564,29 @@ type NotificationEmail struct {
 	PasswordFile string   `json:"password_file,omitempty"`
 }
 
-// NotificationSMS configures the SMS gateway channel.
+// NotificationSMS configures the SMS gateway channel. See NotificationWebhook
+// for the private-egress fields (A99).
 type NotificationSMS struct {
-	Enabled   bool     `json:"enabled,omitempty"`
-	Endpoint  string   `json:"endpoint,omitempty"`
-	From      string   `json:"from,omitempty"`
-	To        []string `json:"to,omitempty"`
-	Token     []byte   `json:"token,omitempty"`
-	TokenFile string   `json:"token_file,omitempty"`
+	Enabled           bool     `json:"enabled,omitempty"`
+	Endpoint          string   `json:"endpoint,omitempty"`
+	From              string   `json:"from,omitempty"`
+	To                []string `json:"to,omitempty"`
+	Token             []byte   `json:"token,omitempty"`
+	TokenFile         string   `json:"token_file,omitempty"`
+	AllowPrivateCIDRs []string `json:"allow_private_cidrs,omitempty"`
+	AllowInsecureHTTP bool     `json:"allow_insecure_http,omitempty"`
 }
 
-// NotificationSIEM configures the SIEM collector channel.
+// NotificationSIEM configures the SIEM collector channel. See
+// NotificationWebhook for the private-egress fields (A99).
 type NotificationSIEM struct {
-	Enabled   bool   `json:"enabled,omitempty"`
-	Endpoint  string `json:"endpoint,omitempty"`
-	Token     []byte `json:"token,omitempty"`
-	TokenFile string `json:"token_file,omitempty"`
-	Source    string `json:"source,omitempty"`
+	Enabled           bool     `json:"enabled,omitempty"`
+	Endpoint          string   `json:"endpoint,omitempty"`
+	Token             []byte   `json:"token,omitempty"`
+	TokenFile         string   `json:"token_file,omitempty"`
+	Source            string   `json:"source,omitempty"`
+	AllowPrivateCIDRs []string `json:"allow_private_cidrs,omitempty"`
+	AllowInsecureHTTP bool     `json:"allow_insecure_http,omitempty"`
 }
 
 // AirGap configures the no-phone-home outbound HTTP guard. When enabled, public
@@ -3427,8 +3438,12 @@ func setJSONBytes(getenv func(string) string, key string, dst *secret.JSONBytes)
 func setNotificationEnv(getenv func(string) string, n *Notifications) {
 	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SLACK_ENABLED", &n.Slack.Enabled)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SLACK_WEBHOOK_URL", &n.Slack.WebhookURL)
+	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_SLACK_ALLOW_PRIVATE_CIDRS", &n.Slack.AllowPrivateCIDRs)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SLACK_ALLOW_INSECURE_HTTP", &n.Slack.AllowInsecureHTTP)
 	setBool(getenv, "TRSTCTL_NOTIFICATIONS_TEAMS_ENABLED", &n.Teams.Enabled)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_TEAMS_WEBHOOK_URL", &n.Teams.WebhookURL)
+	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_TEAMS_ALLOW_PRIVATE_CIDRS", &n.Teams.AllowPrivateCIDRs)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_TEAMS_ALLOW_INSECURE_HTTP", &n.Teams.AllowInsecureHTTP)
 	setBool(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_ENABLED", &n.Email.Enabled)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_SMTP_ADDR", &n.Email.SMTPAddr)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_EMAIL_FROM", &n.Email.From)
@@ -3442,11 +3457,15 @@ func setNotificationEnv(getenv func(string) string, n *Notifications) {
 	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_SMS_TO", &n.SMS.To)
 	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_SMS_TOKEN", &n.SMS.Token)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SMS_TOKEN_FILE", &n.SMS.TokenFile)
+	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_SMS_ALLOW_PRIVATE_CIDRS", &n.SMS.AllowPrivateCIDRs)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SMS_ALLOW_INSECURE_HTTP", &n.SMS.AllowInsecureHTTP)
 	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_ENABLED", &n.SIEM.Enabled)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_ENDPOINT", &n.SIEM.Endpoint)
 	setBytes(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_TOKEN", &n.SIEM.Token)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_TOKEN_FILE", &n.SIEM.TokenFile)
 	setString(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_SOURCE", &n.SIEM.Source)
+	setCSV(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_ALLOW_PRIVATE_CIDRS", &n.SIEM.AllowPrivateCIDRs)
+	setBool(getenv, "TRSTCTL_NOTIFICATIONS_SIEM_ALLOW_INSECURE_HTTP", &n.SIEM.AllowInsecureHTTP)
 	setIncidentNotificationEnv(getenv, &n.PagerDuty, &n.OpsGenie)
 }
 
@@ -3882,8 +3901,14 @@ func validateNotifications(n Notifications) []error {
 	if n.Slack.Enabled && strings.TrimSpace(n.Slack.WebhookURL) == "" {
 		errs = append(errs, errors.New("notifications.slack.webhook_url is required when Slack notifications are enabled"))
 	}
+	if n.Slack.Enabled {
+		errs = append(errs, validateNotificationEgress("notifications.slack", "webhook_url", n.Slack.WebhookURL, n.Slack.AllowPrivateCIDRs, n.Slack.AllowInsecureHTTP)...)
+	}
 	if n.Teams.Enabled && strings.TrimSpace(n.Teams.WebhookURL) == "" {
 		errs = append(errs, errors.New("notifications.teams.webhook_url is required when Teams notifications are enabled"))
+	}
+	if n.Teams.Enabled {
+		errs = append(errs, validateNotificationEgress("notifications.teams", "webhook_url", n.Teams.WebhookURL, n.Teams.AllowPrivateCIDRs, n.Teams.AllowInsecureHTTP)...)
 	}
 	if n.Email.Enabled {
 		if strings.TrimSpace(n.Email.SMTPAddr) == "" {
@@ -3906,9 +3931,13 @@ func validateNotifications(n Notifications) []error {
 		if len(n.SMS.To) == 0 {
 			errs = append(errs, errors.New("notifications.sms.to must name at least one recipient when SMS notifications are enabled"))
 		}
+		errs = append(errs, validateNotificationEgress("notifications.sms", "endpoint", n.SMS.Endpoint, n.SMS.AllowPrivateCIDRs, n.SMS.AllowInsecureHTTP)...)
 	}
 	if n.SIEM.Enabled && strings.TrimSpace(n.SIEM.Endpoint) == "" {
 		errs = append(errs, errors.New("notifications.siem.endpoint is required when SIEM notifications are enabled"))
+	}
+	if n.SIEM.Enabled {
+		errs = append(errs, validateNotificationEgress("notifications.siem", "endpoint", n.SIEM.Endpoint, n.SIEM.AllowPrivateCIDRs, n.SIEM.AllowInsecureHTTP)...)
 	}
 	errs = append(errs, validateIncidentNotifications(n.PagerDuty, n.OpsGenie)...)
 	return errs

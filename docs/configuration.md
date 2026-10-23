@@ -589,17 +589,25 @@ must provide distinct operation IDs to distinguish otherwise identical alerts.
 | `TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD` / `TRSTCTL_NOTIFICATIONS_EMAIL_PASSWORD_FILE` | empty | Optional SMTP password as bytes or a file. |
 | `TRSTCTL_NOTIFICATIONS_SLACK_ENABLED` | `false` | Enable Slack incoming-webhook delivery. |
 | `TRSTCTL_NOTIFICATIONS_SLACK_WEBHOOK_URL` | empty | Slack incoming-webhook URL. |
+| `TRSTCTL_NOTIFICATIONS_SLACK_ALLOW_PRIVATE_CIDRS` | empty | Comma-separated exact private CIDRs the Slack webhook may resolve into (an internal relay or proxy); everything else stays behind the SSRF guard. |
+| `TRSTCTL_NOTIFICATIONS_SLACK_ALLOW_INSECURE_HTTP` | `false` | Loopback-only `http://` for a development emulator; never plaintext to a non-loopback host. |
 | `TRSTCTL_NOTIFICATIONS_TEAMS_ENABLED` | `false` | Enable Microsoft Teams incoming-webhook delivery. |
 | `TRSTCTL_NOTIFICATIONS_TEAMS_WEBHOOK_URL` | empty | Teams webhook URL. |
+| `TRSTCTL_NOTIFICATIONS_TEAMS_ALLOW_PRIVATE_CIDRS` | empty | Exact private CIDRs the Teams webhook may resolve into. |
+| `TRSTCTL_NOTIFICATIONS_TEAMS_ALLOW_INSECURE_HTTP` | `false` | Loopback-only `http://` for a development emulator. |
 | `TRSTCTL_NOTIFICATIONS_SMS_ENABLED` | `false` | Enable SMS gateway delivery. |
 | `TRSTCTL_NOTIFICATIONS_SMS_ENDPOINT` | empty | HTTPS endpoint for the operator SMS gateway. |
 | `TRSTCTL_NOTIFICATIONS_SMS_FROM` | empty | Optional sender label or number. |
 | `TRSTCTL_NOTIFICATIONS_SMS_TO` | empty | Comma-separated SMS recipients. |
 | `TRSTCTL_NOTIFICATIONS_SMS_TOKEN` / `TRSTCTL_NOTIFICATIONS_SMS_TOKEN_FILE` | empty | Optional gateway bearer token as bytes or a file. |
+| `TRSTCTL_NOTIFICATIONS_SMS_ALLOW_PRIVATE_CIDRS` | empty | Exact private CIDRs the SMS gateway may resolve into. |
+| `TRSTCTL_NOTIFICATIONS_SMS_ALLOW_INSECURE_HTTP` | `false` | Loopback-only `http://` for a development emulator. |
 | `TRSTCTL_NOTIFICATIONS_SIEM_ENABLED` | `false` | Enable SIEM collector delivery. |
 | `TRSTCTL_NOTIFICATIONS_SIEM_ENDPOINT` | empty | HTTPS endpoint for the SIEM collector or forwarding gateway. |
 | `TRSTCTL_NOTIFICATIONS_SIEM_TOKEN` / `TRSTCTL_NOTIFICATIONS_SIEM_TOKEN_FILE` | empty | Optional collector bearer token as bytes or a file. |
 | `TRSTCTL_NOTIFICATIONS_SIEM_SOURCE` | `trstctl` | Source label in SIEM events. |
+| `TRSTCTL_NOTIFICATIONS_SIEM_ALLOW_PRIVATE_CIDRS` | empty | Exact private CIDRs the SIEM collector may resolve into (the usual case: a collector on the operator's own network). |
+| `TRSTCTL_NOTIFICATIONS_SIEM_ALLOW_INSECURE_HTTP` | `false` | Loopback-only `http://` for a development emulator. |
 | `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ENABLED` | `false` | Enable native PagerDuty Events API v2 delivery. |
 | `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ENDPOINT` | PagerDuty public Events v2 endpoint | Override the enqueue URL; production endpoints must use HTTPS. |
 | `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY` / `TRSTCTL_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY_FILE` | empty | PagerDuty integration routing key. Set exactly one when enabled; the file form keeps the key out of the environment. |
@@ -616,6 +624,14 @@ startup and wiped on shutdown. Both integrations send deterministic vendor idemp
 identifiers, require the vendor's exact acceptance receipt, and redact remote error
 bodies. `*_ALLOW_INSECURE_HTTP` exists only for a loopback development emulator; even
 when set, it cannot enable cleartext delivery to a non-loopback host.
+
+The same private-egress policy applies to the Slack, Teams, SMS, and SIEM channels:
+`*_ALLOW_PRIVATE_CIDRS` names the exact private ranges that one channel may resolve
+into, entries are validated at config load (no wildcard, no host bits), and the
+channel then uses the same bounded SSRF-safe client as the incident channels, with
+the air-gap guard wrapped when air-gap mode is on. A channel with no policy keeps the
+public-HTTPS-only default. Tenant-authored channels never inherit any of these
+allowances; they remain public-HTTPS-only.
 
 ## Code signing
 

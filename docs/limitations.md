@@ -349,14 +349,16 @@ never live in the API process. What you can do end to end against the running bi
   credential-free reason. Email and SMS stay operator-configured: the API
   refuses a tenant row of those families because the record cannot carry the
   SMTP or gateway settings they need.
-- Air-gapped alert delivery limit: operator-configured PagerDuty and OpsGenie
-  channels can opt into bounded private CIDRs and HTTP; the partner lab grants
-  only `127.0.0.1/32`. Operator-configured Slack, Teams, SIEM, SMS,
-  and generic webhook channels have no equivalent private-address allowlist,
-  so they cannot be pointed at an internal receiver while retaining the SSRF
-  guard. Tenant-authored webhooks also remain public-HTTPS-only. These channels
-  need a separately designed operator-owned private-egress policy before they
-  can serve an air-gapped deployment; no tenant-controlled bypass is available.
+- Air-gapped alert delivery: operator-configured PagerDuty, OpsGenie and, since
+  A99, Slack, Teams, SIEM and SMS channels can each opt into the operator's
+  bounded private-egress policy (`*_ALLOW_PRIVATE_CIDRS`, exact network
+  addresses validated at config load, plus loopback-only `*_ALLOW_INSECURE_HTTP`
+  for an emulator), so an internal relay, proxy, gateway or collector can
+  receive alerts while every other destination stays behind the SSRF guard; a
+  channel with a policy also carries the air-gap guard when air-gap mode is on,
+  and a channel without one keeps the public-HTTPS-only default. The partner
+  lab grants only `127.0.0.1/32`. Tenant-authored channels remain
+  public-HTTPS-only by design: no tenant-controlled bypass exists.
 - Deployment connector orchestration serves target metadata, identity binding,
   outbox intent, receipts, provenance-verified WASM dispatch, and all 24 advertised native connectors.
   Device proof (E1): every appliance family — a10, cisco, f5, fortigate, kemp,

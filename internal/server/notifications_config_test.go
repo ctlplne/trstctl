@@ -21,7 +21,7 @@ func TestNotificationChannelsFromConfigBuildsFiveCAPOBS05(t *testing.T) {
 			To: []string{"+15550100"}, Token: []byte("sms-token"),
 		},
 		SIEM: config.NotificationSIEM{Enabled: true, Endpoint: "https://siem.example/collector", Token: []byte("siem-token")},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("notificationChannelsFromConfig: %v", err)
 	}
