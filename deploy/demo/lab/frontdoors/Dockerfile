@@ -7,10 +7,10 @@ FROM ${TRSTCTL_IMAGE} AS trstctl
 FROM ${APACHE_IMAGE}
 
 RUN apk add --no-cache \
-    nginx=1.30.4-r1 \
-    haproxy=3.4.6-r0 \
-    caddy=2.11.4-r1 \
-    traefik=3.7.1-r1 \
+    nginx=1.30.6-r0 \
+    haproxy=3.4.7-r0 \
+    caddy=2.11.4-r2 \
+    traefik=3.7.1-r2 \
     postgresql16=16.15-r0 \
     postgresql16-client=16.15-r0 \
     openssl=3.5.9-r0 \
