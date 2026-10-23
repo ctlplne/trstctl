@@ -15600,6 +15600,8 @@ export interface components {
             recommended_scopes?: string[];
             remove_scopes?: string[];
             replacement_name?: string;
+            /** @description RFC 5280 reason the identity-revoke (default unspecified) and credential-rotate (default superseded) playbooks revoke with; keyCompromise goes through the identity transition */
+            revocation_reason?: string;
             rollback_ref?: string;
             target?: string;
             /** Format: uuid */

@@ -29985,6 +29985,10 @@
           "replacement_name": {
             "type": "string"
           },
+          "revocation_reason": {
+            "description": "RFC 5280 reason the identity-revoke (default unspecified) and credential-rotate (default superseded) playbooks revoke with; keyCompromise goes through the identity transition",
+            "type": "string"
+          },
           "rollback_ref": {
             "type": "string"
           },

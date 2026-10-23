@@ -680,7 +680,11 @@ notifications use the [notification integrations](policy-and-governance.md).
   default-deny policy, dual control); the rotate playbook decides both its issue
   and its revoke before it creates the replacement. A playbook carries no exact
   approval, so under dual control it refuses with `403` and names
-  `POST /api/v1/identities/{id}/transitions`, which does. Owner-driven self-remediation (CAP-REM-02) is served through
+  `POST /api/v1/identities/{id}/transitions`, which does. Both revoke with an
+  RFC 5280 `revocation_reason` (identity-revoke defaults to `unspecified`,
+  credential-rotate to `superseded`), so the revocation reaches CRL and OCSP; the
+  run keeps the operator's free-text `reason`, and `keyCompromise` goes through
+  the identity transition, which contains the key on its hosts first. Owner-driven self-remediation (CAP-REM-02) is served through
   `/api/v1/remediation/owner-actions`,
   `/api/v1/remediation/owner-actions/{id}/accept`,
   `trstctl-cli remediation owner-actions *`, and the `/incidents` console; NHI

@@ -57,6 +57,9 @@ type remediationPlaybookRunRequest struct {
 	RemoveScopes      []string `json:"remove_scopes"`
 	RecommendedScopes []string `json:"recommended_scopes"`
 	RollbackRef       string   `json:"rollback_ref"`
+	// RevocationReason is the RFC 5280 reason the revoke and rotate playbooks
+	// revoke with; Reason stays the operator's free text on the run.
+	RevocationReason string `json:"revocation_reason,omitempty"`
 }
 
 type remediationPlaybookRunResponse struct {
@@ -363,21 +366,44 @@ func (a *API) runRevokePlaybook(ctx context.Context, tenantID string, principal 
 	if !incidentRevocable(orchestrator.State(identity.Status)) {
 		return store.RemediationPlaybookRun{}, errStatus(http.StatusConflict, "revoke playbook requires an issued, deployed, or renewing identity")
 	}
+	revocationReason, err := playbookRevocationReason(req.RevocationReason, crypto.RevocationReasonUnspecified)
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
 	if err := a.gateOperatorTransition(ctx, principal, tenantID, identityID, orchestrator.StateRevoked); err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
 	reason := remediationReason(req.Reason, "revoke playbook")
-	if err := a.orch.Transition(ctx, tenantID, identityID, orchestrator.StateRevoked, "remediation playbook revoke: "+reason); err != nil {
+	if err := a.orch.Transition(ctx, tenantID, identityID, orchestrator.StateRevoked, revocationReason); err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
 	return a.orch.RecordRemediationPlaybookRun(ctx, tenantID, store.RemediationPlaybookRun{
 		ID: guuid.NewString(), PlaybookID: remediationPlaybookRevokeIdentity, TargetIdentityID: identityID,
 		InventoryID: "identity/" + identityID, Status: "executed", Phase: "identity_revoked",
 		Action: "revoke", Reason: reason, ScopeDelta: json.RawMessage(`{}`),
-		EvidenceRefs:   []string{"identity:" + identityID, "state:" + string(orchestrator.StateRevoked)},
+		EvidenceRefs: []string{"identity:" + identityID, "state:" + string(orchestrator.StateRevoked),
+			"revocation_reason:" + revocationReason},
 		RollbackRefs:   remediationRollbackRefs(req.RollbackRef, "restore prior credential binding after revocation rollback approval"),
 		IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
 	}, "")
+}
+
+// playbookRevocationReason is the RFC 5280 reason a playbook revokes with.
+// The revocation publisher accepts nothing else, so free text here would
+// leave the identity revoked while its certificates never reach CRL or OCSP.
+// keyCompromise is refused: that revocation first contains the key on its
+// hosts, which only the identity's own transition carries.
+func playbookRevocationReason(requested string, fallback crypto.RevocationReason) (string, error) {
+	reason := strings.TrimSpace(requested)
+	switch {
+	case reason == "":
+		return string(fallback), nil
+	case !crypto.IsValidRevocationReason(reason) || reason == string(crypto.RevocationReasonRemoveFromCRL):
+		return "", errStatus(http.StatusBadRequest, "invalid revocation_reason: use an RFC 5280 reason such as unspecified, superseded, cessationOfOperation or privilegeWithdrawn")
+	case reason == string(crypto.RevocationReasonKeyCompromise):
+		return "", errStatus(http.StatusUnprocessableEntity, "a keyCompromise revocation contains the key on its hosts first: apply it through POST /api/v1/identities/{id}/transitions with the compromise details")
+	}
+	return reason, nil
 }
 
 func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal authz.Principal, req remediationPlaybookRunRequest, idempotencyKey string) (store.RemediationPlaybookRun, error) {
@@ -391,6 +417,10 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 	}
 	if !incidentRevocable(orchestrator.State(compromised.Status)) {
 		return store.RemediationPlaybookRun{}, errStatus(http.StatusConflict, "rotate playbook requires an issued, deployed, or renewing identity")
+	}
+	revocationReason, err := playbookRevocationReason(req.RevocationReason, crypto.RevocationReasonSuperseded)
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
 	}
 	// Both privileged steps are decided before anything changes. The
 	// replacement inherits the compromised identity's kind, owner, issuer,
@@ -419,7 +449,7 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 	if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateDeployed, "remediation playbook replacement deployed: "+reason); err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
-	if err := a.orch.Transition(ctx, tenantID, compromised.ID, orchestrator.StateRevoked, "remediation playbook compromised identity revoked: "+reason); err != nil {
+	if err := a.orch.Transition(ctx, tenantID, compromised.ID, orchestrator.StateRevoked, revocationReason); err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
 	deliveryReq := incidentExecutionRequest{
@@ -443,7 +473,8 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 		InventoryID: "identity/" + compromised.ID, Status: "executed", Phase: "replacement_deployed_and_original_revoked",
 		Action: "rotate", Reason: reason, Connector: delivery.Connector, Target: delivery.Target,
 		ConnectorDeliveryID: &deliveryID, ScopeDelta: scopeDelta,
-		EvidenceRefs:   []string{"identity:" + compromised.ID, "replacement:" + replacement.ID, "connector_delivery:" + delivery.ID},
+		EvidenceRefs: []string{"identity:" + compromised.ID, "replacement:" + replacement.ID, "connector_delivery:" + delivery.ID,
+			"revocation_reason:" + revocationReason},
 		RollbackRefs:   incidentRollbackRefs(compromised.ID, replacement.ID, delivery.RollbackRef),
 		IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
 	}, "")

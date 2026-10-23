@@ -10066,6 +10066,7 @@ RemediationPlaybookRunRequest = TypedDict(
         'recommended_scopes': list[str],
         'remove_scopes': list[str],
         'replacement_name': str,
+        'revocation_reason': str,
         'rollback_ref': str,
         'target': str,
         'target_identity_id': str,

@@ -3675,6 +3675,7 @@ func componentSchemas() map[string]*Schema {
 		"remove_scopes":      {Type: "array", Items: str()},
 		"recommended_scopes": {Type: "array", Items: str()},
 		"rollback_ref":       str(),
+		"revocation_reason":  {Type: "string", Description: "RFC 5280 reason the identity-revoke (default unspecified) and credential-rotate (default superseded) playbooks revoke with; keyCompromise goes through the identity transition"},
 	})
 	remediationPlaybookRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "playbook_id": str(),

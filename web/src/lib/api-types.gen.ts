@@ -7294,6 +7294,7 @@ export interface RemediationPlaybookRunRequest {
   recommended_scopes?: string[];
   remove_scopes?: string[];
   replacement_name?: string;
+  revocation_reason?: string;
   rollback_ref?: string;
   target?: string;
   target_identity_id?: string;
