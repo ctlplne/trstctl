@@ -353,10 +353,18 @@ client; it does not claim that a workload has fetched an identity. Final wire pr
 still uses a stock go-spiffe or spiffe-helper client against the reported
 `unix://...` path.
 
-The control-plane-local socket is a compatibility path. For normal deployments,
-run `trstctl-agent` on each host, bind registration entries to that node, and mount
+The control plane's own socket no longer issues SVIDs to workloads by default. Run
+`trstctl-agent` on each host, bind registration entries to that node, and mount
 only the host-local Workload API socket into workloads. This limits a compromised
 host to identities assigned to that host instead of widening it to the trust domain.
+The control-plane socket keeps serving `FetchX509Bundles`, `FetchJWTBundles`, and
+`ValidateJWTSVID` for validators; a workload that still dials it for an SVID is
+refused with a message naming the host socket, and the attempt is recorded as
+`spiffe.workload_api.local_socket_used`. `protocols.spiffe.serve_local_workloads:
+true` (or `TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS=true`) keeps local
+issuance on for a single-machine deployment, audited on every SVID; the eval profile
+sets it. The readiness check and its `local_workloads_served` field say which mode
+the running socket is in.
 
 ### SPIRE upstream authority — keep SPIRE, anchor it in trstctl
 

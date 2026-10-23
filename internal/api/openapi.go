@@ -445,7 +445,7 @@ func componentSchemas() map[string]*Schema {
 	spiffeQualification := object(map[string]*Schema{
 		"checked_at": timestamp(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"trust_domain": str(), "socket_uri": str(), "transport": {Type: "string", Enum: []string{"unix"}}, "socket_mode": str(),
-		"registration_entry_count": {Type: "integer"}, "local_socket_deprecated": {Type: "boolean"}, "hybrid_svids": {Type: "boolean", Description: "Whether this socket returns a classical plus ML-DSA-65 SVID pair. Stock go-spiffe v2.8.1 requires false."},
+		"registration_entry_count": {Type: "integer"}, "local_socket_deprecated": {Type: "boolean"}, "local_workloads_served": {Type: "boolean", Description: "A85: whether this control-plane socket still issues SVIDs to local workloads (protocols.spiffe.serve_local_workloads). False means it serves bundles and JWT validation only; workloads fetch from their host agent's socket."}, "hybrid_svids": {Type: "boolean", Description: "Whether this socket returns a classical plus ML-DSA-65 SVID pair. Stock go-spiffe v2.8.1 requires false."},
 		"supported_operations":     {Type: "array", Items: str()},
 		"checks":                   {Type: "array", Items: ref("SPIFFEQualificationCheck")},
 		"preview_writes":           {Type: "array", Items: str()},
@@ -453,7 +453,7 @@ func componentSchemas() map[string]*Schema {
 		"preview_signer_calls":     {Type: "array", Items: str()},
 		"proof":                    {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
 		"client_boundary": str(),
-	}, "checked_at", "ready", "effect_free", "trust_domain", "socket_uri", "transport", "socket_mode", "registration_entry_count", "local_socket_deprecated", "hybrid_svids", "supported_operations", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers", "client_boundary")
+	}, "checked_at", "ready", "effect_free", "trust_domain", "socket_uri", "transport", "socket_mode", "registration_entry_count", "local_socket_deprecated", "local_workloads_served", "hybrid_svids", "supported_operations", "checks", "preview_writes", "preview_external_effects", "preview_signer_calls", "proof", "blockers", "client_boundary")
 
 	caSpec := object(map[string]*Schema{
 		"common_name":           str(),

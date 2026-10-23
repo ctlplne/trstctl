@@ -7536,6 +7536,7 @@ export interface SPIFFEQualification {
   effect_free: boolean;
   hybrid_svids: boolean;
   local_socket_deprecated: boolean;
+  local_workloads_served: boolean;
   preview_external_effects: string[];
   preview_signer_calls: string[];
   preview_writes: string[];

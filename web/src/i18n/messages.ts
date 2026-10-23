@@ -11300,8 +11300,17 @@ export const messages = {
   },
   "protocols.spiffeCheck.migrationBody": {
     defaultMessage:
-      "This control-plane socket is a compatibility path. Run the trstctl agent on each host and mount only that host's socket into its workloads.",
-    description: "SPIFFE host-socket migration guidance.",
+      "This control-plane socket still issues SVIDs because protocols.spiffe.serve_local_workloads is on; every SVID it issues is recorded. Run the trstctl agent on each host, mount only that host's socket into its workloads, then turn the switch off.",
+    description: "SPIFFE host-socket migration guidance while local issuance is explicitly kept on.",
+  },
+  "protocols.spiffeCheck.localIssuanceOffHeading": {
+    defaultMessage: "Workloads fetch from their host agent",
+    description: "Heading shown when the control-plane SPIFFE socket does not issue SVIDs to local workloads.",
+  },
+  "protocols.spiffeCheck.localIssuanceOffBody": {
+    defaultMessage:
+      "This control-plane socket serves trust bundles and JWT validation only. SVIDs come from each host's trstctl agent socket (--workload-api-socket); a workload that still dials this socket is refused and recorded.",
+    description: "Body shown when the control-plane SPIFFE socket does not issue SVIDs to local workloads.",
   },
   "protocols.spiffeCheck.effectProof": {
     defaultMessage: "0 writes · 0 outside calls · 0 signer calls · 0 identities minted. A stock workload client remains the final wire proof.",

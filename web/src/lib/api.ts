@@ -1498,6 +1498,7 @@ export interface SPIFFEQualification {
   registration_entry_count: number;
   hybrid_svids: boolean;
   local_socket_deprecated: boolean;
+  local_workloads_served: boolean;
   supported_operations: string[];
   checks: SPIFFEQualificationCheck[];
   preview_writes: string[];

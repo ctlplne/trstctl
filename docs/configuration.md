@@ -2201,6 +2201,7 @@ an account without EAB, even if the account predates the configuration change.
 | `TRSTCTL_PROTOCOLS_SPIFFE_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SPIFFE Workload API UDS for the named tenant. Requires `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN`. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH` | `/tmp/trstctl-spiffe-workload.sock` | UDS path for the SPIFFE Workload API when enabled. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN` | — | SPIFFE trust domain, for example `example.org`. Required when SPIFFE is enabled. |
+| `TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS` | `false` | Keep the control plane's own Workload API socket issuing SVIDs to workloads on the control-plane machine (`protocols.spiffe.serve_local_workloads`). Off, the socket serves trust bundles and JWT validation only and refuses `FetchX509SVID`/`FetchJWTSVID`, naming the host agent's `--workload-api-socket`; every refusal and, when on, every issuance is recorded as `spiffe.workload_api.local_socket_used`. The eval profile turns it on. |
 | `TRSTCTL_PROTOCOLS_SSH_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SSH CA JSON endpoints and KRL for the named tenant. |
 
 ## Agent mTLS channel

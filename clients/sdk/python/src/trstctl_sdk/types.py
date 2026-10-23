@@ -10372,6 +10372,7 @@ SPIFFEQualification = TypedDict(
         'effect_free': bool,
         'hybrid_svids': bool,
         'local_socket_deprecated': bool,
+        'local_workloads_served': bool,
         'preview_external_effects': list[str],
         'preview_signer_calls': list[str],
         'preview_writes': list[str],

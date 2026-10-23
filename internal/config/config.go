@@ -1104,6 +1104,9 @@ func (p Protocols) Effective() (Protocols, error) {
 		}
 		p.SPIFFE.Enabled = true
 		p.SPIFFE.TenantID = tenantID
+		// The eval preset is one machine with no host agent: its own socket
+		// stays the workload socket, audited on every SVID (A85).
+		p.SPIFFE.ServeLocalWorkloads = true
 		if trustDomain := strings.TrimSpace(p.EvalSPIFFETrustDomain); trustDomain != "" {
 			p.SPIFFE.TrustDomain = trustDomain
 		} else if strings.TrimSpace(p.SPIFFE.TrustDomain) == "" {
@@ -1233,6 +1236,13 @@ type SPIFFEProtocol struct {
 	// Stock go-spiffe cannot parse that private key, so operators must opt in only
 	// for clients that understand both entries. PQC remains available in core.
 	HybridSVIDs bool `json:"hybrid_svids,omitempty"`
+	// ServeLocalWorkloads (A85) keeps the control plane's own socket issuing SVIDs
+	// to workloads on the control-plane machine. The default is off: the socket
+	// still serves trust bundles and JWT validation, but FetchX509SVID and
+	// FetchJWTSVID refuse and name the host agent's --workload-api-socket, which
+	// is where workload identity is delivered. The retention release is over;
+	// this switch is the last, explicit, audited escape hatch.
+	ServeLocalWorkloads bool `json:"serve_local_workloads,omitempty"`
 }
 
 // ValidateTenantBindings reports AN-1 configuration errors for enabled served
@@ -3305,6 +3315,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH", &p.SPIFFE.SocketPath)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN", &p.SPIFFE.TrustDomain)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_HYBRID_SVIDS_ENABLED", &p.SPIFFE.HybridSVIDs)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS", &p.SPIFFE.ServeLocalWorkloads)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS", &p.SSHUserPrincipals)

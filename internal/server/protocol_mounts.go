@@ -1102,6 +1102,11 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		socket = defaultSPIFFESocket
 	}
 	var workloadOpts []spiffe.WorkloadAPIOption
+	if !cfg.ServeLocalWorkloads {
+		// A85: the control plane's own socket no longer issues to local
+		// workloads unless the operator says so explicitly.
+		workloadOpts = append(workloadOpts, spiffe.WithLocalWorkloadsRefused())
+	}
 	if cfg.HybridSVIDs {
 		if s.licensedSPIFFESVIDFactory == nil {
 			return nil, errors.New("server: hybrid SPIFFE SVIDs requested but the additional issuer is unavailable")
@@ -1121,6 +1126,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		tenantID:               tenant,
 		registrationEntryCount: len(entries),
 		bulkheadReady:          pool != nil,
+		localWorkloadsServed:   cfg.ServeLocalWorkloads,
 		// B3: the agent channel issues through the SAME server, so a workload
 		// gets the same identity whichever socket it reached — the control
 		// plane's during the deprecation window, or its own host's after.

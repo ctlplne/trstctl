@@ -453,7 +453,9 @@ type spiffeProtocol struct {
 	tenantID               string
 	registrationEntryCount int
 	bulkheadReady          bool
-	running                atomic.Bool
+	// localWorkloadsServed (A85): protocols.spiffe.serve_local_workloads.
+	localWorkloadsServed bool
+	running              atomic.Bool
 	// wl is the underlying issuance server, kept so the agent channel can reach
 	// it for node-scoped fetches (epic B3). The Workload API server above wraps
 	// the same value for the control plane's own socket; the agent path needs

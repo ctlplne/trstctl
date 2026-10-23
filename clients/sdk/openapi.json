@@ -30915,6 +30915,10 @@
           "local_socket_deprecated": {
             "type": "boolean"
           },
+          "local_workloads_served": {
+            "description": "A85: whether this control-plane socket still issues SVIDs to local workloads (protocols.spiffe.serve_local_workloads). False means it serves bundles and JWT validation only; workloads fetch from their host agent's socket.",
+            "type": "boolean"
+          },
           "preview_external_effects": {
             "items": {
               "type": "string"
@@ -30977,6 +30981,7 @@
           "socket_mode",
           "registration_entry_count",
           "local_socket_deprecated",
+          "local_workloads_served",
           "hybrid_svids",
           "supported_operations",
           "checks",

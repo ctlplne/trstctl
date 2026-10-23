@@ -4520,10 +4520,16 @@ This is a deliberate, documented trust boundary, not an accident.
     and scoping an entry moves it rather than duplicating it.
     SCOPE, stated exactly: darwin reports uid and gid but not the peer's pid, so
     `unix:path:` selectors are unavailable there and an entry requiring one will
-    not match on a darwin host. The control plane's own socket is retained for one
-    release and now emits a `spiffe.workload_api.local_socket_used` audit event on
-    every issuance, so an operator can see which workloads have not yet moved
-    rather than assuming they all have. The Workloads console reports, per host,
+    not match on a darwin host. The control plane's own socket no longer issues
+    SVIDs to workloads unless `protocols.spiffe.serve_local_workloads: true` is
+    set: `FetchX509SVID` and `FetchJWTSVID` on it are refused with a message
+    naming the host agent's `--workload-api-socket`, while trust bundles and JWT
+    validation stay served for validators. Each refusal, and each issuance when
+    the switch is on, emits the `spiffe.workload_api.local_socket_used` audit
+    event, so an operator can see which workloads have not yet moved rather than
+    assuming they all have; the SPIFFE readiness check reports
+    `local_workloads_served`. The eval profile keeps the switch on, being one
+    machine with no host agent. The Workloads console reports, per host,
     whether it serves the socket, how many SVIDs it has issued since its agent
     started (a counter that resets on restart, and says so), and when it last
     reported — with "not reported" kept distinct from "not serving", because the

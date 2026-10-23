@@ -34,8 +34,11 @@ type SPIFFERuntimePosture struct {
 	IssuingPathReady       bool
 	BulkheadReady          bool
 	LocalSocketDeprecated  bool
-	HybridSVIDs            bool
-	SupportedOperations    []string
+	// LocalWorkloadsServed (A85): whether this control-plane socket still issues
+	// SVIDs to local workloads (protocols.spiffe.serve_local_workloads).
+	LocalWorkloadsServed bool
+	HybridSVIDs          bool
+	SupportedOperations  []string
 }
 
 // SPIFFEQualificationPosture reads only served process and socket metadata. It
@@ -64,6 +67,7 @@ type SPIFFEQualification struct {
 	SocketMode             string                     `json:"socket_mode"`
 	RegistrationEntryCount int                        `json:"registration_entry_count"`
 	LocalSocketDeprecated  bool                       `json:"local_socket_deprecated"`
+	LocalWorkloadsServed   bool                       `json:"local_workloads_served"`
 	HybridSVIDs            bool                       `json:"hybrid_svids"`
 	SupportedOperations    []string                   `json:"supported_operations"`
 	Checks                 []SPIFFEQualificationCheck `json:"checks"`
@@ -145,8 +149,9 @@ func buildSPIFFEQualification(posture SPIFFERuntimePosture, checkedAt time.Time)
 		CheckedAt: checkedAt.Format(time.RFC3339), Ready: ready, EffectFree: true,
 		TrustDomain: posture.TrustDomain, SocketURI: posture.SocketURI, Transport: "unix", SocketMode: posture.SocketMode,
 		RegistrationEntryCount: posture.RegistrationEntryCount, LocalSocketDeprecated: posture.LocalSocketDeprecated,
-		HybridSVIDs:         posture.HybridSVIDs,
-		SupportedOperations: append([]string(nil), posture.SupportedOperations...), Checks: checks,
+		LocalWorkloadsServed: posture.LocalWorkloadsServed,
+		HybridSVIDs:          posture.HybridSVIDs,
+		SupportedOperations:  append([]string(nil), posture.SupportedOperations...), Checks: checks,
 		PreviewWrites: []string{}, PreviewExternalEffects: []string{}, PreviewSignerCalls: []string{},
 		Proof: []string{
 			"This qualification reads only in-memory served posture and Unix socket file metadata for the authenticated tenant.",

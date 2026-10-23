@@ -26,6 +26,7 @@ function isSPIFFEQualification(value: unknown): value is SPIFFEQualification {
     typeof result.registration_entry_count === "number" &&
     typeof result.hybrid_svids === "boolean" &&
     typeof result.local_socket_deprecated === "boolean" &&
+    typeof result.local_workloads_served === "boolean" &&
     Array.isArray(result.supported_operations) &&
     Array.isArray(result.checks) &&
     result.checks.every(
@@ -149,12 +150,17 @@ export function SPIFFEOperatorPanel({ onResult }: { onResult?: (result: SPIFFEQu
               ))}
             </ul>
 
-            {result.local_socket_deprecated ? (
+            {result.local_workloads_served ? (
               <div className="rounded-control border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-sm">
                 <p className="font-medium">{t("protocols.spiffeCheck.migrationHeading")}</p>
                 <p className="mt-1 text-caption text-muted-foreground">{t("protocols.spiffeCheck.migrationBody")}</p>
               </div>
-            ) : null}
+            ) : (
+              <div className="rounded-control border border-border bg-muted/30 px-3 py-2 text-sm">
+                <p className="font-medium">{t("protocols.spiffeCheck.localIssuanceOffHeading")}</p>
+                <p className="mt-1 text-caption text-muted-foreground">{t("protocols.spiffeCheck.localIssuanceOffBody")}</p>
+              </div>
+            )}
 
             <div className="rounded-control border border-status-success/30 bg-status-success/5 px-3 py-2 text-caption text-muted-foreground">
               {t("protocols.spiffeCheck.effectProof")}

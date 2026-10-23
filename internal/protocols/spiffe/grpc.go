@@ -56,7 +56,19 @@ type WorkloadAPIServer struct {
 	// selectors is unreachable and entries are matched by these defaults.
 	selectors                []string
 	additionalX509SVIDIssuer AdditionalX509SVIDIssuer
+	// refuseLocalWorkloads (A85): this is the control plane's own socket and
+	// its retention release is over. FetchX509SVID and FetchJWTSVID refuse,
+	// naming the host socket; bundles and validation keep being served.
+	refuseLocalWorkloads bool
 }
+
+// LocalWorkloadsRefusedMessage is the exact refusal a workload sees on the
+// control plane's own socket once local issuance is off (A85). It names both
+// the place workload identity is delivered and the explicit switch that keeps
+// the old path, so the operator reading a workload's log knows what to change.
+const LocalWorkloadsRefusedMessage = "spiffe: the control plane's own Workload API socket no longer issues SVIDs; " +
+	"fetch from the host agent's socket (trstctl-agent --workload-api-socket) and scope the registration entry " +
+	"to that node, or set protocols.spiffe.serve_local_workloads: true to keep issuing here (audited on every SVID)"
 
 // AdditionalX509SVID is one extra key/certificate pair in the standard
 // repeated X509SVID response. It is the feature-neutral extension point used by
@@ -78,6 +90,21 @@ type WorkloadAPIOption func(*WorkloadAPIServer)
 
 func WithAdditionalX509SVIDIssuer(issuer AdditionalX509SVIDIssuer) WorkloadAPIOption {
 	return func(s *WorkloadAPIServer) { s.additionalX509SVIDIssuer = issuer }
+}
+
+// WithLocalWorkloadsRefused (A85) turns SVID issuance off on the control
+// plane's own socket. Only the control plane passes it: a host agent's socket
+// is where workloads are meant to fetch.
+func WithLocalWorkloadsRefused() WorkloadAPIOption {
+	return func(s *WorkloadAPIServer) { s.refuseLocalWorkloads = true }
+}
+
+// refuseLocalIssuance records the attempt in the same audit event the
+// retention release used, so an operator can still see which workloads dial
+// the old path, and returns the refusal.
+func (s *WorkloadAPIServer) refuseLocalIssuance(ctx context.Context, kind string) error {
+	s.recordLocalSocketDeprecation(ctx, kind+"_refused")
+	return status.Error(codes.PermissionDenied, LocalWorkloadsRefusedMessage)
 }
 
 // NewWorkloadAPIServer wraps a spiffe.Server as the gRPC Workload API service.
@@ -120,6 +147,9 @@ func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream 
 	ctx := stream.Context()
 	if err := requireSecurityHeader(ctx); err != nil {
 		return err
+	}
+	if s.refuseLocalWorkloads {
+		return s.refuseLocalIssuance(ctx, "x509")
 	}
 	for {
 		expiresAt, err := s.sendX509SVIDResponse(stream)
@@ -322,6 +352,9 @@ func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JW
 		if _, err := crypto.ParseSPIFFEID(wantID); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "spiffe: invalid requested SPIFFE ID: %v", err)
 		}
+	}
+	if s.refuseLocalWorkloads {
+		return nil, s.refuseLocalIssuance(ctx, "jwt")
 	}
 	ctx, release, err := s.wl.cfg.TenantServiceWork.Begin(ctx, s.wl.cfg.TenantID)
 	if err != nil {

@@ -310,6 +310,7 @@ describe("protocol surface", () => {
       registration_entry_count: 1,
       hybrid_svids: false,
       local_socket_deprecated: true,
+      local_workloads_served: true,
       supported_operations: ["FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"],
       checks: [
         { id: "configured", label: "SPIFFE enabled", passed: true, detail: "SPIFFE is enabled in startup configuration." },
@@ -1566,7 +1567,7 @@ describe("protocol surface", () => {
     expect(within(panel).getByText("1 active rule(s)")).toBeInTheDocument();
     expect(within(panel).getByText("5 supported operations")).toBeInTheDocument();
     expect(within(panel).getByText(/0 writes · 0 outside calls · 0 signer calls · 0 identities minted/i)).toBeInTheDocument();
-    expect(within(panel).getByText(/control-plane socket is a compatibility path/i)).toBeInTheDocument();
+    expect(within(panel).getByText(/still issues SVIDs because protocols.spiffe.serve_local_workloads is on/i)).toBeInTheDocument();
 
     apiMock.spiffeQualification.mockResolvedValueOnce({
       checked_at: "2026-08-29T12:01:00Z",
@@ -1579,6 +1580,7 @@ describe("protocol surface", () => {
       registration_entry_count: 1,
       hybrid_svids: false,
       local_socket_deprecated: true,
+      local_workloads_served: true,
       supported_operations: ["FetchX509SVID", "FetchX509Bundles", "FetchJWTSVID", "FetchJWTBundles", "ValidateJWTSVID"],
       checks: [
         {

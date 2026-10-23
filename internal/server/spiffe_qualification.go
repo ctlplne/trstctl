@@ -64,6 +64,11 @@ func (source spiffeQualificationSource) read(_ context.Context, tenantID string)
 	posture.TrustDomain = sp.trustDomain
 	posture.SocketURI = "unix://" + sp.socket
 	posture.RegistrationEntryCount = sp.registrationEntryCount
+	posture.LocalWorkloadsServed = sp.localWorkloadsServed
+	if !sp.localWorkloadsServed {
+		// A85: this socket answers validators, not workloads.
+		posture.SupportedOperations = []string{"FetchX509Bundles", "FetchJWTBundles", "ValidateJWTSVID"}
+	}
 	posture.IssuingPathReady = source.server.caSigner != nil && len(source.server.caCertDER) > 0 && sp.server != nil && sp.wl != nil
 	posture.BulkheadReady = sp.bulkheadReady
 	if info, err := os.Lstat(sp.socket); err == nil && sp.running.Load() && info.Mode()&os.ModeSocket != 0 {

@@ -50,6 +50,9 @@ func TestServedSPIFFEWorkloadAPIEndToEnd(t *testing.T) {
 			TenantID:    servedTestTenant,
 			TrustDomain: "served.test",
 			SocketPath:  socket,
+			// A85: these tests exercise the Workload API wire contract on the
+			// control plane's own socket, which now issues only when opted in.
+			ServeLocalWorkloads: true,
 		},
 	})
 	if !protoContains(h.srv.ServedProtocols(), "spiffe") {
@@ -150,6 +153,9 @@ func TestServedSPIFFEGoSpiffeClient(t *testing.T) {
 			TenantID:    servedTestTenant,
 			TrustDomain: "served.test",
 			SocketPath:  socket,
+			// A85: these tests exercise the Workload API wire contract on the
+			// control plane's own socket, which now issues only when opted in.
+			ServeLocalWorkloads: true,
 		},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -224,6 +230,9 @@ func TestServedSPIFFEGoSpiffeJWTClient(t *testing.T) {
 			TenantID:    servedTestTenant,
 			TrustDomain: "served.test",
 			SocketPath:  socket,
+			// A85: these tests exercise the Workload API wire contract on the
+			// control plane's own socket, which now issues only when opted in.
+			ServeLocalWorkloads: true,
 		},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -277,6 +286,9 @@ func TestServedSPIFFESpiffeHelperWritesSVID(t *testing.T) {
 			TenantID:    servedTestTenant,
 			TrustDomain: "served.test",
 			SocketPath:  socket,
+			// A85: these tests exercise the Workload API wire contract on the
+			// control plane's own socket, which now issues only when opted in.
+			ServeLocalWorkloads: true,
 		},
 	})
 	ctx, cancel := context.WithCancel(context.Background())
