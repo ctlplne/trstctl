@@ -284,3 +284,6 @@ evidence: the issuing CA may have changed since it was minted. A version-1 mint
 kept only the serial; submit the leaf's public certificate with
 `trstctl certificates recover-pki-secret -f leaf.pem` to give it the same
 inventory row once the issuing CA's signature and the recorded serial match.
+The same sweep recovers a managed-CA leaf recorded only in the version-2
+responder form of `ca.endentity.issued` when no other event inventoried it,
+checking it against that managed CA's stored certificate.

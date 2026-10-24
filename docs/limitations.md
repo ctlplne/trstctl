@@ -5095,7 +5095,14 @@ their original extensions, so reissue them to add discoverable pointers.
 
 Older managed-CA hierarchy version-2 issuance events include the public leaf
 and are replayed into inventory on upgrade after exact issuer-signature
-verification. Same-version responder-only events remain serial evidence.
+verification. Same-version responder-only events (an issuance surface recorded
+the leaf for OCSP and CRL, usually beside another event that inventoried it)
+stay serial evidence in the projection; when no event inventoried that leaf,
+the first lifecycle sweep after an upgrade checks it against the managed CA's
+stored certificate and its serial against the CA ledger, then appends one
+`ca.certificate.inventory_recovered` event that gives it its own inventory row
+(custody unknown). The inventory workflow then revokes it against that
+managed CA.
 The inventory identity stays stable across rebuilds and the original issuance
 event remains its revocation authority. Version-1 events retain only a serial;
 trstctl cannot reconstruct their missing public certificate or infer key custody

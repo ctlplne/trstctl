@@ -1805,12 +1805,13 @@ type CASecretCertificateInventoried struct {
 	KeyOrigin            string `json:"key_origin"`
 }
 
-// CACertificateInventoryRecovered gives a historical PKI-secret leaf, minted
-// by a v1 or v2 ca.certificate.issued event that projected only its responder
-// serial, the inventory row a v3 mint would have had (A111). The server
-// appends it only after checking the leaf against that mint's CA and serial;
-// the projector checks the same facts again. Subject-key custody is unknown
-// and stays unknown: it is never inferred.
+// CACertificateInventoryRecovered gives a historical leaf whose mint projected
+// only its responder serial the inventory row it never had: a PKI-secret leaf
+// minted by a v1 or v2 ca.certificate.issued event (A111), or a managed CA
+// leaf minted by a v2 responder-form ca.endentity.issued event (A113). The
+// server appends it only after checking the leaf against that mint's CA and
+// serial; the projector checks the same facts again. Subject-key custody is
+// unknown and stays unknown: it is never inferred.
 type CACertificateInventoryRecovered struct {
 	OriginalEventID      string    `json:"original_event_id"`
 	CAID                 string    `json:"ca_id"`
@@ -1830,7 +1831,19 @@ const (
 	// operator supplied the public leaf, which the CA's signature and the
 	// serial ledger confirm.
 	RecoveredFromOperatorLeaf = "operator_public_leaf"
+	// RecoveredFromRetainedResponderLeaf: a managed CA's v2 responder-form
+	// ca.endentity.issued mint retained the public leaf (A113).
+	RecoveredFromRetainedResponderLeaf = "retained_v2_responder_leaf"
 )
+
+// RecoveredInventoryID is the inventory ID a recovery event projects: the
+// identity bound to the original mint for that kind of leaf.
+func RecoveredInventoryID(tenantID string, recovered CACertificateInventoryRecovered) string {
+	if recovered.Evidence == RecoveredFromRetainedResponderLeaf {
+		return caevent.RecoveredManagedResponderInventoryID(tenantID, recovered.OriginalEventID)
+	}
+	return RecoveredSecretPKIInventoryID(tenantID, recovered.OriginalEventID)
+}
 
 // RecoveredSecretPKIInventoryID is the inventory ID of a recovered leaf: the
 // one its original mint event would have had.
@@ -5355,7 +5368,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if pl.OriginalEventID == "" || len(pl.OriginalEventID) > 128 || e.ID == "" || pl.CAID == "" || info.IsCA ||
 			pl.Serial != info.SerialNumber || pl.Fingerprint != info.SHA256Fingerprint ||
-			(pl.Evidence != RecoveredFromRetainedLeaf && pl.Evidence != RecoveredFromOperatorLeaf) ||
+			(pl.Evidence != RecoveredFromRetainedLeaf && pl.Evidence != RecoveredFromOperatorLeaf &&
+				pl.Evidence != RecoveredFromRetainedResponderLeaf) ||
 			cryptoboundary.VerifyLeafSignedByCA(pl.CertificateDER, pl.IssuerCertificateDER) != nil {
 			return errors.New("projections: recovered PKI secret leaf differs from its exact issuer evidence")
 		}
@@ -5370,7 +5384,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		notBefore, notAfter := info.NotBefore, info.NotAfter
 		return p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
-			ID: RecoveredSecretPKIInventoryID(e.TenantID, pl.OriginalEventID), TenantID: e.TenantID, CAID: pl.CAID,
+			ID: RecoveredInventoryID(e.TenantID, pl), TenantID: e.TenantID, CAID: pl.CAID,
 			Subject: info.Subject, SANs: certificateInfoSANs(info), Issuer: info.Issuer,
 			Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
 			NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued",

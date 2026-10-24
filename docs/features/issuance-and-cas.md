@@ -320,6 +320,11 @@ meaning. When the hierarchy event contains public DER and its exact fingerprint,
 trstctl verifies the leaf against the named issuing CA and recovers
 one stable certificate inventory row. The original event remains the mint; this
 does not sign a replacement or claim where the leaf's private key was held.
+A same-version responder-only payload keeps its serial meaning in the
+projection; if no other event inventoried its leaf, the first lifecycle sweep
+verifies that leaf against the managed CA's stored certificate and records a
+`ca.certificate.inventory_recovered` event, which gives it one inventory row
+that revokes against the same CA.
 Version-1 serial-only events cannot supply a public certificate for this replay.
 For those, use a supported certificate import to record an independently obtained
 public PEM; an import is an observation and does not by itself prove trstctl

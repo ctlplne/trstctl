@@ -62,6 +62,22 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 		if err != nil {
 			return "", err
 		}
+		if found && event.Type == projections.EventCACertificateInventoryRecovered {
+			// A recovered historical leaf (A111, A113): its recovery event names
+			// the CA its original mint did. The issuing CA's leaves continue to
+			// the served revocation authority below; a managed CA's leaf is
+			// checked against that authority here.
+			var recovered projections.CACertificateInventoryRecovered
+			if json.Unmarshal(event.Data, &recovered) != nil || event.TenantID != certificate.TenantID ||
+				projections.RecoveredInventoryID(event.TenantID, recovered) != certificate.ID ||
+				recovered.Fingerprint != certificate.Fingerprint || recovered.Serial != certificate.Serial ||
+				!bytes.Equal(recovered.CertificateDER, certificate.CertificateDER) {
+				return "", orchestrator.ErrCertificateRevocationUnsupported
+			}
+			if recovered.CAID != IssuingCAID() {
+				return s.managedLeafRevocationAuthority(ctx, certificate.TenantID, recovered.CAID, recovered.CertificateDER, recovered.Serial)
+			}
+		}
 		managed, err := projections.LegacyManagedCALeafEvidence(event)
 		if err != nil {
 			return "", orchestrator.ErrCertificateRevocationUnsupported
@@ -165,6 +181,34 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 		return "", orchestrator.ErrCertificateRevocationUnsupported
 	}
 	return s.revoc.caID, nil
+}
+
+// managedLeafRevocationAuthority returns the managed CA that signed der and
+// whose ledger holds serial, refusing a CA without a signer, a leaf it did not
+// sign, a serial it never minted, and a CA whose key was destroyed.
+func (s *Server) managedLeafRevocationAuthority(ctx context.Context, tenantID, caID string, der []byte, serial string) (string, error) {
+	authority, err := s.store.GetCAAuthority(ctx, tenantID, caID)
+	if store.IsNotFound(err) || (err == nil && authority.SignerHandle == "") {
+		return "", orchestrator.ErrCertificateRevocationUnsupported
+	}
+	if err != nil {
+		return "", err
+	}
+	issuerDER, err := firstCertDER(authority.CertificatePEM)
+	if err != nil || crypto.VerifyLeafSignedByCA(der, issuerDER) != nil {
+		return "", orchestrator.ErrCertificateRevocationUnsupported
+	}
+	if _, found, err := s.store.LookupIssuedCert(ctx, tenantID, caID, serial); err != nil {
+		return "", err
+	} else if !found {
+		return "", orchestrator.ErrCertificateRevocationUnsupported
+	}
+	if destroyed, err := caKeyDestroyed(ctx, s.caKeyRetirementState, tenantID, caID); err != nil {
+		return "", err
+	} else if destroyed {
+		return "", orchestrator.ErrCertificateAuthorityKeyDestroyed
+	}
+	return caID, nil
 }
 
 // handleCertificateCRLPublication has no issuance or identity fan-out. The

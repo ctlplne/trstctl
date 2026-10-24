@@ -21,14 +21,17 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-// Historical PKI-secret leaves (A111). Before ca.certificate.issued v3, a
+// Historical leaves (A111, A113). Before ca.certificate.issued v3, a
 // PKI-secret mint projected only its responder serial: v2 retained the public
 // leaf, v1 only the serial. Neither had an inventory row, so the inventory
 // revocation workflow could not reach the leaf. The control plane recovers a
 // v2 leaf from its own retained evidence, after checking it against the
 // issuing CA's certificate this process holds; the projector checks the same
 // facts again. Custody stays unknown, and a leaf this CA did not sign is left
-// as serial evidence.
+// as serial evidence. The same recovery gives a managed CA leaf recorded only
+// in the v2 responder form of ca.endentity.issued its inventory row, checked
+// against that managed CA's stored certificate, when no other event already
+// inventoried the leaf.
 
 var pkiSecretRecoveryNamespace = uuid.MustParse("7d3f0a52-1c7b-4b9e-a2a1-5f0e6c1d2b84")
 
@@ -46,16 +49,20 @@ type pkiSecretRecovery struct {
 }
 
 type pkiSecretRecoveryCandidate struct {
-	event  events.Event
-	issued projections.CAIssuedCertificate
+	event    events.Event
+	issued   projections.CAIssuedCertificate
+	evidence string
 }
 
-// recoverLegacyPKISecretInventory recovers every retained v2 PKI-secret leaf
-// the issuing CA signed that has no inventory row yet. A retry converges: each
-// original mint has one deterministic recovery event.
+// recoverLegacyPKISecretInventory recovers every retained v2 leaf that has no
+// inventory row yet and that its CA signed: PKI-secret leaves of the issuing
+// CA this process holds (A111), and managed CA leaves an issuance surface
+// recorded in the v2 responder form, checked against that CA's stored
+// certificate (A113). A retry converges: each original mint has one
+// deterministic recovery event.
 func (s *Server) recoverLegacyPKISecretInventory(ctx context.Context) (pkiSecretRecovery, error) {
 	var out pkiSecretRecovery
-	if s.log == nil || s.store == nil || len(s.caCertDER) == 0 {
+	if s.log == nil || s.store == nil {
 		return out, nil
 	}
 	issuingCAID := IssuingCAID()
@@ -65,28 +72,48 @@ func (s *Server) recoverLegacyPKISecretInventory(ctx context.Context) (pkiSecret
 		if err != nil || head == 0 {
 			return err
 		}
-		return s.log.ReplayTypesThrough(readCtx, 1, head, []string{projections.EventCAIssuedCertificate}, func(e events.Event) error {
-			if e.SchemaVersion != projections.CAIssuedCertificateEvidenceSchemaVersion {
+		return s.log.ReplayTypesThrough(readCtx, 1, head,
+			[]string{projections.EventCAIssuedCertificate, projections.EventCAEndEntityIssued}, func(e events.Event) error {
+				if e.SchemaVersion != projections.CAIssuedCertificateEvidenceSchemaVersion {
+					return nil
+				}
+				var issued projections.CAIssuedCertificate
+				if err := json.Unmarshal(e.Data, &issued); err != nil {
+					return fmt.Errorf("server: decode historical mint %s: %w", e.ID, err)
+				}
+				if len(issued.CertificateDER) == 0 {
+					return nil
+				}
+				switch e.Type {
+				case projections.EventCAIssuedCertificate:
+					if issued.Source == "pkisecret" {
+						candidates = append(candidates, pkiSecretRecoveryCandidate{event: e, issued: issued, evidence: projections.RecoveredFromRetainedLeaf})
+					}
+				case projections.EventCAEndEntityIssued:
+					// A v2 hierarchy mint with a subject is projected into inventory
+					// by the projector itself; only the responder form needs this.
+					managed, err := projections.LegacyManagedCALeafEvidence(e)
+					if err != nil {
+						return err
+					}
+					if !managed {
+						candidates = append(candidates, pkiSecretRecoveryCandidate{event: e, issued: issued, evidence: projections.RecoveredFromRetainedResponderLeaf})
+					}
+				}
 				return nil
-			}
-			var issued projections.CAIssuedCertificate
-			if err := json.Unmarshal(e.Data, &issued); err != nil {
-				return fmt.Errorf("server: decode PKI secret mint %s: %w", e.ID, err)
-			}
-			if issued.Source != "pkisecret" || len(issued.CertificateDER) == 0 {
-				return nil
-			}
-			candidates = append(candidates, pkiSecretRecoveryCandidate{event: e, issued: issued})
-			return nil
-		})
+			})
 	})
 	if err != nil {
 		return out, err
 	}
 	for _, c := range candidates {
+		issuerDER, err := s.historicalLeafIssuer(ctx, c, issuingCAID)
+		if err != nil {
+			return out, err
+		}
 		info, err := certinfo.Inspect(c.issued.CertificateDER)
-		if err != nil || c.issued.CAID != issuingCAID || info.IsCA || info.SerialNumber != c.issued.Serial ||
-			info.SHA256Fingerprint != c.issued.Fingerprint || crypto.VerifyLeafSignedByCA(c.issued.CertificateDER, s.caCertDER) != nil {
+		if err != nil || issuerDER == nil || info.IsCA || info.SerialNumber != c.issued.Serial ||
+			info.SHA256Fingerprint != c.issued.Fingerprint || crypto.VerifyLeafSignedByCA(c.issued.CertificateDER, issuerDER) != nil {
 			out.Unverifiable++
 			continue
 		}
@@ -98,15 +125,15 @@ func (s *Server) recoverLegacyPKISecretInventory(ctx context.Context) (pkiSecret
 			continue
 		}
 		if _, err := s.store.GetCertificateByFingerprint(ctx, c.event.TenantID, c.issued.Fingerprint); err == nil {
-			// An operator already holds this leaf in inventory (an import, say);
-			// recovery adds no second row and does not change that one.
+			// Another event already inventoried this leaf (a protocol issuance
+			// or an import, say); recovery adds no second row and changes none.
 			out.InInventory++
 			continue
 		} else if !store.IsNotFound(err) {
 			return out, err
 		}
 		if err := s.appendPKISecretRecovery(ctx, c.event.TenantID, c.event.ID, recoveryID, c.issued.CAID, c.issued.Serial,
-			c.issued.Fingerprint, c.issued.CertificateDER, projections.RecoveredFromRetainedLeaf); err != nil {
+			c.issued.Fingerprint, c.issued.CertificateDER, issuerDER, c.evidence); err != nil {
 			return out, err
 		}
 		out.Recovered++
@@ -114,10 +141,34 @@ func (s *Server) recoverLegacyPKISecretInventory(ctx context.Context) (pkiSecret
 	return out, nil
 }
 
-func (s *Server) appendPKISecretRecovery(ctx context.Context, tenantID, originalEventID, recoveryID, caID, serial, fingerprint string, der []byte, evidence string) error {
+// historicalLeafIssuer is the CA certificate a historical leaf must verify
+// against, or nil when this control plane cannot name it: the issuing CA it
+// holds for PKI secrets, or the managed CA's stored certificate.
+func (s *Server) historicalLeafIssuer(ctx context.Context, c pkiSecretRecoveryCandidate, issuingCAID string) ([]byte, error) {
+	if c.evidence == projections.RecoveredFromRetainedLeaf {
+		if c.issued.CAID != issuingCAID || len(s.caCertDER) == 0 {
+			return nil, nil
+		}
+		return s.caCertDER, nil
+	}
+	authority, err := s.store.GetCAAuthority(ctx, c.event.TenantID, c.issued.CAID)
+	if store.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	der, err := firstCertDER(authority.CertificatePEM)
+	if err != nil {
+		return nil, nil
+	}
+	return der, nil
+}
+
+func (s *Server) appendPKISecretRecovery(ctx context.Context, tenantID, originalEventID, recoveryID, caID, serial, fingerprint string, der, issuerDER []byte, evidence string) error {
 	payload, err := json.Marshal(projections.CACertificateInventoryRecovered{
 		OriginalEventID: originalEventID, CAID: caID, Serial: serial, Fingerprint: fingerprint,
-		CertificateDER: der, IssuerCertificateDER: s.caCertDER, Evidence: evidence, RecoveredAt: time.Now().UTC(),
+		CertificateDER: der, IssuerCertificateDER: issuerDER, Evidence: evidence, RecoveredAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return err
@@ -214,7 +265,7 @@ func (s *Server) RecoverPKISecretLeaf(ctx context.Context, tenantID string, cert
 		return api.PKISecretLeafRecovery{}, err
 	}
 	if err := s.appendPKISecretRecovery(ctx, tenantID, mint.ID, recoveryID, IssuingCAID(), info.SerialNumber,
-		info.SHA256Fingerprint, der, evidence); err != nil {
+		info.SHA256Fingerprint, der, s.caCertDER, evidence); err != nil {
 		return api.PKISecretLeafRecovery{}, err
 	}
 	return out, nil

@@ -84,6 +84,13 @@ func SecretPKIInventoryID(e eventspec.Event) string {
 	return crypto.UUIDv5OID([]byte("secret-pki-inventory\x00" + e.TenantID + "\x00" + e.ID))
 }
 
+// RecoveredManagedResponderInventoryID is the inventory identity of a managed
+// CA leaf whose v2 responder-form mint retained the public leaf but projected
+// only its serial (A113). It is bound to that mint event.
+func RecoveredManagedResponderInventoryID(tenantID, originalEventID string) string {
+	return crypto.UUIDv5OID([]byte("managed-ca-responder-inventory\x00" + tenantID + "\x00" + originalEventID))
+}
+
 // RecoveredSecretPKIInventoryID is the inventory identity of a historical
 // PKI-secret leaf recovered later (A111): the identity its original mint
 // event would have had, so recovery never invents a second one.
