@@ -81,6 +81,13 @@ const revocationBodyLimit = 32 << 20
 // Every endpoint is probed even after one fails: an operator needs the whole
 // picture, and stopping at the first failure would hide the other nine.
 func ProbeRevocation(ctx context.Context, client *http.Client, intent RevocationProbeIntent) (RevocationReport, error) {
+	return ProbeRevocationWithDirectory(ctx, client, intent, nil)
+}
+
+// ProbeRevocationWithDirectory is ProbeRevocation for a batch that carries an
+// LDAP binding (A107): material holds the bind credential redeemed for this
+// attempt. One bound directory connection serves the whole batch.
+func ProbeRevocationWithDirectory(ctx context.Context, client *http.Client, intent RevocationProbeIntent, material Material) (RevocationReport, error) {
 	if client == nil {
 		return RevocationReport{}, errors.New("relay: revocation probe needs an HTTP client")
 	}
@@ -102,10 +109,18 @@ func ProbeRevocation(ctx context.Context, client *http.Client, intent Revocation
 		return RevocationReport{}, errors.New("relay: revocation probe names no endpoints")
 	}
 	staleWithin := time.Duration(intent.StaleWithinSeconds) * time.Second
+	dir := probeDirectory{binding: intent.LDAPBinding}
+	if intent.LDAPBinding != nil {
+		if password := material[strings.TrimSpace(intent.LDAPBinding.PasswordRef)]; len(password) == 0 {
+			dir.err = errors.New("the directory bind credential was not redeemed for this attempt")
+		} else if dir.directory, dir.err = openCRLDirectory(*intent.LDAPBinding, password); dir.directory != nil {
+			defer func() { _ = dir.directory.Close() }()
+		}
+	}
 
 	report := RevocationReport{Healthy: true}
 	for _, target := range targets {
-		finding := probeRevocationTarget(ctx, client, target, staleWithin)
+		finding := probeRevocationTarget(ctx, client, target, staleWithin, dir)
 		if finding.Status != RevocationFresh {
 			report.Healthy = false
 		}
@@ -119,23 +134,43 @@ func ProbeRevocation(ctx context.Context, client *http.Client, intent Revocation
 	return report, nil
 }
 
+// probeDirectory is a batch's LDAP binding and its bound directory (A107);
+// zero for a batch with no binding.
+type probeDirectory struct {
+	binding   *revocationhealth.LDAPBinding
+	directory crlDirectory
+	err       error
+}
+
 func probeRevocationTarget(
 	ctx context.Context,
 	client *http.Client,
 	target revocationhealth.Target,
 	staleWithin time.Duration,
+	dir probeDirectory,
 ) RevocationFinding {
 	finding := RevocationFinding{TargetKey: target.Key, Protocol: target.Protocol, Endpoint: target.Endpoint}
 	parsed, err := url.Parse(target.Endpoint)
+	// An LDAP CRL is read through the AD CS binding (A107); AD CS names it
+	// with no host.
+	if err == nil && target.Protocol == revocationhealth.ProtocolCRL && (parsed.Scheme == "ldap" || parsed.Scheme == "ldaps") {
+		if len(target.IssuerDER) == 0 && target.CertificateID != "" {
+			finding.Status = RevocationUnparseable
+			finding.DetailCode = "issuer_unavailable"
+			finding.Detail = "the issuer certificate is unavailable, so responder evidence cannot be verified"
+			return finding
+		}
+		return probeLDAPCRL(ctx, dir.binding, dir.directory, dir.err, target, staleWithin, finding)
+	}
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		finding.Status = RevocationUnparseable
 		finding.DetailCode = "invalid_endpoint"
 		finding.Detail = "distribution point is not a usable URL"
 		return finding
 	}
-	// LDAP CDPs exist in AD CS estates and are not fetchable over HTTP. Saying
-	// so is better than reporting them unreachable, which would send an operator
-	// to check a network path that was never the problem.
+	// Any other scheme is not fetchable here. Saying so is better than
+	// reporting it unreachable, which would send an operator to check a
+	// network path that was never the problem.
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		finding.Status = RevocationUnparseable
 		finding.DetailCode = "unsupported_scheme"
@@ -194,7 +229,12 @@ func probeCRL(ctx context.Context, client *http.Client, target revocationhealth.
 		finding.Detail = "could not read the CRL body"
 		return finding
 	}
+	return evaluateCRL(body, target, staleWithin, finding)
+}
 
+// evaluateCRL judges fetched CRL bytes, however they were fetched (HTTP, or
+// an LDAP directory for A107).
+func evaluateCRL(body []byte, target revocationhealth.Target, staleWithin time.Duration, finding RevocationFinding) RevocationFinding {
 	// Parse and, when an issuer is supplied, VERIFY. A proxy or captive portal
 	// returning HTML with a 200 is the case this catches — it looks like
 	// success to anything that only checks the status code.
@@ -395,7 +435,24 @@ func runRevocationProbe(ctx context.Context, ch Channel, client *http.Client, jo
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a revocation probe intent")
 		return false
 	}
-	probeReport, err := ProbeRevocation(ctx, client, intent)
+	var material Material
+	if intent.LDAPBinding != nil {
+		// A107: a batch of LDAP distribution points is read after a directory
+		// bind, so it redeems its bind credential for this attempt.
+		items, err := ch.RedeemJobCredential(ctx, job.JobID, job.Attempt)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "credential redemption was not granted")
+			return false
+		}
+		adopted, destroy, err := AdoptMaterial(items)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, "redeemed material could not be taken into locked memory")
+			return false
+		}
+		defer destroy()
+		material = adopted
+	}
+	probeReport, err := ProbeRevocationWithDirectory(ctx, client, intent, material)
 	if err != nil {
 		report(ctx, ch, job, OutcomeFailed, "revocation probe could not run")
 		return false

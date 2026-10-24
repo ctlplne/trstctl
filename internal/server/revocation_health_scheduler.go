@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -88,35 +89,134 @@ func (s *Server) RunRevocationHealthOnce(ctx context.Context) (int, error) {
 			}
 			continue
 		}
-		batches := (len(targets) + revocationhealth.MaxTargets - 1) / revocationhealth.MaxTargets
-		for start := 0; start < len(targets); start += revocationhealth.MaxTargets {
-			end := start + revocationhealth.MaxTargets
-			if end > len(targets) {
-				end = len(targets)
+		plain, groups, err := s.groupLDAPRevocationTargets(ctx, tenantID, targets)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
 			}
-			batch := append([]revocationhealth.Target(nil), targets[start:end]...)
-			batchIndex := start/revocationhealth.MaxTargets + 1
-			basis := tenantID + "\x00" + bucket + "\x00" +
-				fmt.Sprintf("%d/%d\x00", batchIndex, batches) + strings.Join(revocationTargetIdentities(batch), ",")
-			intent := revocationhealth.Intent{
-				ID:     uuid.NewSHA1(revocationProbeNamespace, []byte(basis)).String(),
-				Bucket: bucket, BatchIndex: batchIndex, BatchCount: batches, Targets: batch,
-				StaleWithinSeconds: int(revocationHealthStaleWithin.Seconds()),
-				RequiredAgentRole:  revocationhealth.RequiredRoleNetwork,
-			}
-			_, inserted, err := s.orch.QueueRevocationProbe(ctx, tenantID, intent)
-			if err != nil {
-				if !errors.Is(err, store.ErrIdempotencyConflict) && firstErr == nil {
-					firstErr = err
-				}
-				continue
-			}
-			if inserted {
-				queued += len(batch)
+			continue
+		}
+		n, err := s.queueRevocationBatches(ctx, tenantID, bucket, plain, nil, "")
+		queued += n
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		for _, group := range groups {
+			binding := group.binding
+			n, err := s.queueRevocationBatches(ctx, tenantID, bucket, group.targets, &binding, group.agentID)
+			queued += n
+			if err != nil && firstErr == nil {
+				firstErr = err
 			}
 		}
 	}
 	return queued, firstErr
+}
+
+// queueRevocationBatches queues targets in bounded batches. A batch with an
+// LDAP binding (A107) is pinned to the binding's relay when the AD CS source
+// names one, and its job ID names the binding, so it never collides with an
+// HTTP batch of the same hour.
+func (s *Server) queueRevocationBatches(ctx context.Context, tenantID, bucket string, targets []revocationhealth.Target,
+	binding *revocationhealth.LDAPBinding, agentID string) (int, error) {
+	queued := 0
+	var firstErr error
+	batches := (len(targets) + revocationhealth.MaxTargets - 1) / revocationhealth.MaxTargets
+	for start := 0; start < len(targets); start += revocationhealth.MaxTargets {
+		end := start + revocationhealth.MaxTargets
+		if end > len(targets) {
+			end = len(targets)
+		}
+		batch := append([]revocationhealth.Target(nil), targets[start:end]...)
+		batchIndex := start/revocationhealth.MaxTargets + 1
+		basis := tenantID + "\x00" + bucket + "\x00" +
+			fmt.Sprintf("%d/%d\x00", batchIndex, batches) + strings.Join(revocationTargetIdentities(batch), ",")
+		if binding != nil {
+			basis += "\x00ldap:" + binding.SourceID
+		}
+		intent := revocationhealth.Intent{
+			ID:     uuid.NewSHA1(revocationProbeNamespace, []byte(basis)).String(),
+			Bucket: bucket, BatchIndex: batchIndex, BatchCount: batches, Targets: batch,
+			StaleWithinSeconds: int(revocationHealthStaleWithin.Seconds()),
+			RequiredAgentRole:  revocationhealth.RequiredRoleNetwork,
+			RequiredAgentID:    agentID, LDAPBinding: binding,
+		}
+		_, inserted, err := s.orch.QueueRevocationProbe(ctx, tenantID, intent)
+		if err != nil {
+			if !errors.Is(err, store.ErrIdempotencyConflict) && firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if inserted {
+			queued += len(batch)
+		}
+	}
+	return queued, firstErr
+}
+
+// ldapRevocationGroup is the LDAP distribution points one AD CS binding reads.
+type ldapRevocationGroup struct {
+	binding revocationhealth.LDAPBinding
+	agentID string
+	targets []revocationhealth.Target
+}
+
+// groupLDAPRevocationTargets moves each LDAP distribution point to the AD CS
+// discovery source whose configuration DN covers it (A107). One whose forest
+// no source covers stays in the plain batches, where the relay reports that
+// it needs a binding instead of dropping it.
+func (s *Server) groupLDAPRevocationTargets(ctx context.Context, tenantID string, targets []revocationhealth.Target) ([]revocationhealth.Target, []ldapRevocationGroup, error) {
+	var plain, ldapTargets []revocationhealth.Target
+	for _, target := range targets {
+		if target.Protocol == revocationhealth.ProtocolCRL && revocationhealth.IsLDAPEndpoint(target.Endpoint) {
+			ldapTargets = append(ldapTargets, target)
+			continue
+		}
+		plain = append(plain, target)
+	}
+	if len(ldapTargets) == 0 {
+		return targets, nil, nil
+	}
+	sources, err := s.store.ListDiscoverySourcesOfKind(ctx, tenantID, adcsdiscovery.SourceKind)
+	if err != nil {
+		return nil, nil, err
+	}
+	var candidates []ldapRevocationGroup
+	for _, source := range sources {
+		resolved, err := adcsdiscovery.ResolveInventoryIntent(source.Config)
+		if err != nil {
+			continue // a source whose configuration no longer resolves binds nothing
+		}
+		candidates = append(candidates, ldapRevocationGroup{agentID: resolved.RequiredAgentID, binding: revocationhealth.LDAPBinding{
+			SourceID: source.ID, URL: resolved.URL, ConfigurationDN: resolved.ConfigurationDN,
+			BindDN: resolved.BindDN, PasswordRef: resolved.PasswordRef, InsecureSkipVerify: resolved.InsecureSkipVerify,
+		}})
+	}
+	for _, target := range ldapTargets {
+		matched := false
+		if dn, err := revocationhealth.LDAPEndpointDN(target.Endpoint); err == nil {
+			for i := range candidates {
+				if revocationhealth.LDAPDNWithin(dn, candidates[i].binding.ConfigurationDN) {
+					candidates[i].targets = append(candidates[i].targets, target)
+					matched = true
+					break
+				}
+			}
+		}
+		if !matched {
+			plain = append(plain, target)
+		}
+	}
+	revocationhealth.SortTargets(plain)
+	var groups []ldapRevocationGroup
+	for _, candidate := range candidates {
+		if len(candidate.targets) > 0 {
+			revocationhealth.SortTargets(candidate.targets)
+			groups = append(groups, candidate)
+		}
+	}
+	return plain, groups, nil
 }
 
 func (s *Server) revocationTargets(ctx context.Context, tenantID string) ([]revocationhealth.Target, error) {

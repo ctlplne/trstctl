@@ -37,6 +37,9 @@ type Intent struct {
 	StaleWithinSeconds int      `json:"stale_within_seconds"`
 	RequiredAgentRole  string   `json:"required_agent_role"`
 	RequiredAgentID    string   `json:"required_agent_id,omitempty"`
+	// LDAPBinding is set on a batch of LDAP distribution points (A107): the
+	// directory the relay binds to before it reads them.
+	LDAPBinding *LDAPBinding `json:"ldap_binding,omitempty"`
 
 	// Endpoints/IssuerDER are decode-only compatibility fields for pre-R1 unit
 	// fixtures. Production producers always emit Targets with exact context.
@@ -101,6 +104,79 @@ type Observed struct {
 	Findings       []Finding `json:"findings"`
 }
 
+// LDAPBinding names the directory an AD CS LDAP CRL distribution point is
+// read from (A107): the tenant's AD CS discovery source whose configuration DN
+// covers the distribution point's DN. The relay connects to URL, never to a
+// host named in a certificate, binds as BindDN with the credential PasswordRef
+// names (a secret:// reference it redeems for one attempt), and reads only
+// DNs under ConfigurationDN.
+type LDAPBinding struct {
+	SourceID           string `json:"source_id"`
+	URL                string `json:"url"`
+	ConfigurationDN    string `json:"configuration_dn"`
+	BindDN             string `json:"bind_dn"`
+	PasswordRef        string `json:"password_ref"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
+}
+
+// IsLDAPEndpoint reports whether a distribution point is an LDAP URL.
+func IsLDAPEndpoint(endpoint string) bool {
+	parsed, err := url.Parse(endpoint)
+	return err == nil && (parsed.Scheme == "ldap" || parsed.Scheme == "ldaps")
+}
+
+// LDAPEndpointDN is the entry an LDAP distribution point names: its URL path
+// without the leading slash, unescaped. AD CS writes
+// ldap:///CN=<CA>,CN=<host>,CN=CDP,CN=Public Key Services,CN=Services,
+// CN=Configuration,DC=...?certificateRevocationList?base?objectClass=...
+func LDAPEndpointDN(endpoint string) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || (parsed.Scheme != "ldap" && parsed.Scheme != "ldaps") {
+		return "", errors.New("not an LDAP distribution point")
+	}
+	dn := strings.TrimSpace(strings.TrimPrefix(parsed.Path, "/"))
+	if dn == "" || len(dn) > MaxEndpointBytes {
+		return "", errors.New("LDAP distribution point names no entry")
+	}
+	return dn, nil
+}
+
+// LDAPDNWithin reports whether dn lies under base: the last components of dn
+// equal base, compared without case or the spaces around separators.
+func LDAPDNWithin(dn, base string) bool {
+	norm := func(v string) string {
+		parts := strings.Split(v, ",")
+		for i, part := range parts {
+			parts[i] = strings.ToLower(strings.TrimSpace(part))
+		}
+		return strings.Join(parts, ",")
+	}
+	d, b := norm(dn), norm(base)
+	return b != "" && (d == b || strings.HasSuffix(d, ","+b))
+}
+
+func validateLDAPBinding(binding LDAPBinding) error {
+	if _, err := uuid.Parse(binding.SourceID); err != nil {
+		return errors.New("LDAP binding source_id must be a UUID")
+	}
+	parsed, err := url.Parse(strings.TrimSpace(binding.URL))
+	if err != nil || parsed.Hostname() == "" || (parsed.Scheme != "ldap" && parsed.Scheme != "ldaps") || parsed.User != nil ||
+		(parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("LDAP binding url must be an ldap:// or ldaps:// directory authority")
+	}
+	for _, field := range []struct{ name, value string }{
+		{"configuration_dn", binding.ConfigurationDN}, {"bind_dn", binding.BindDN}, {"password_ref", binding.PasswordRef},
+	} {
+		if strings.TrimSpace(field.value) == "" || len(field.value) > MaxEndpointBytes {
+			return fmt.Errorf("LDAP binding %s is required and bounded", field.name)
+		}
+	}
+	if !strings.HasPrefix(binding.PasswordRef, "secret://") {
+		return errors.New("LDAP binding password_ref must be a secret:// credential reference")
+	}
+	return nil
+}
+
 func ValidateIntent(intent Intent) error {
 	if _, err := uuid.Parse(intent.ID); err != nil {
 		return errors.New("revocation health: id must be a UUID")
@@ -124,6 +200,18 @@ func ValidateIntent(intent Intent) error {
 	}
 	if len(intent.Targets) == 0 || len(intent.Targets) > MaxTargets {
 		return fmt.Errorf("revocation health: targets must contain 1..%d entries", MaxTargets)
+	}
+	if intent.LDAPBinding != nil {
+		if err := validateLDAPBinding(*intent.LDAPBinding); err != nil {
+			return fmt.Errorf("revocation health: %w", err)
+		}
+		// A bound batch reads only the directory it names.
+		for i, target := range intent.Targets {
+			dn, err := LDAPEndpointDN(target.Endpoint)
+			if err != nil || target.Protocol != ProtocolCRL || !LDAPDNWithin(dn, intent.LDAPBinding.ConfigurationDN) {
+				return fmt.Errorf("revocation health: target %d is not an LDAP CRL under the binding's configuration DN", i)
+			}
+		}
 	}
 	previous := ""
 	totalDER := 0
@@ -159,7 +247,16 @@ func ValidateTarget(target Target) error {
 		return errors.New("endpoint is empty or too large")
 	}
 	parsed, err := url.Parse(target.Endpoint)
-	if err != nil || parsed.Host == "" || parsed.Scheme == "" || parsed.User != nil {
+	if err != nil || parsed.Scheme == "" || parsed.User != nil {
+		return errors.New("endpoint must be an absolute URL without userinfo")
+	}
+	// AD CS publishes CRLs at ldap:///<DN>: no host, the client's default
+	// directory. Every other endpoint names its host.
+	if parsed.Scheme == "ldap" || parsed.Scheme == "ldaps" {
+		if _, err := LDAPEndpointDN(target.Endpoint); err != nil {
+			return err
+		}
+	} else if parsed.Host == "" {
 		return errors.New("endpoint must be an absolute URL without userinfo")
 	}
 	if target.Protocol == ProtocolOCSP && parsed.Scheme != "http" && parsed.Scheme != "https" {
@@ -254,7 +351,10 @@ func knownDetailCode(code string) bool {
 		"request_build_failed", "transport_failed", "http_status", "body_read_failed", "body_too_large",
 		"invalid_crl", "certificate_unavailable", "request_invalid", "invalid_content_type", "invalid_ocsp",
 		"serial_mismatch", "this_update_future", "ocsp_unknown", "next_update_missing", "next_update_passed",
-		"next_update_near", "fresh":
+		"next_update_near", "fresh",
+		// A107: LDAP distribution points read through an AD CS binding.
+		"ldap_binding_missing", "ldap_host_not_bound", "ldap_dn_outside_binding", "ldap_bind_failed",
+		"ldap_entry_missing", "ldap_crl_missing", "ldap_search_failed":
 		return true
 	default:
 		return false

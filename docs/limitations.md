@@ -2096,9 +2096,15 @@ Five outcomes, kept distinct because they need different people. **fresh** and
 on: after `nextUpdate` passes, relying parties are already failing. **stale**
 means that has happened. **unreachable** is deliberately not the same as stale.
 And **unparseable** catches the case that fools status-code checks: a proxy or
-captive portal answering 200 with HTML. An LDAP CDP reports unparseable with its
-scheme named, rather than unreachable, because sending someone to check a
-network path that was never the problem wastes the hour that mattered. Whether
+captive portal answering 200 with HTML. An AD CS LDAP CDP
+(`ldap:///CN=<CA>,...,CN=Configuration,DC=...`) is read through the tenant's AD
+CS discovery binding whose configuration DN covers it (A107): the batch is
+pinned to that source's relay, which redeems the bind credential for one
+attempt, connects only to the binding's directory under TLS, reads the entry's
+`certificateRevocationList`, and judges it like an HTTP CRL. An LDAP CDP no AD
+CS source covers reports unparseable as needing a binding, rather than
+unreachable, because sending someone to check a network path that was never
+the problem wastes the hour that mattered. Whether
 the signature was checked is reported explicitly — "we did not check" and "it
 verified" must never read the same. The signed terminal receipt is accepted only
 for the live lease and exact command. It emits immutable queue and observation
@@ -2120,9 +2126,9 @@ PostgreSQL/JetStream/signer stack, an enrolled network relay, and controlled
 cryptographically valid CRL and OCSP responders. It does **not** claim a run
 against a domain-joined Windows AD CS CDP/OCSP estate. That externally served AD
 CS lab remains infrastructure evidence to collect when the Windows lab described
-under F4 is available. LDAP CDP fetching is also not implemented; such an
-endpoint is reported as an unsupported scheme instead of as fresh or merely
-unreachable.
+under F4 is available. LDAP CDP reading (A107) is exercised against a stand-in
+directory in the repository tests; a run against a production AD CS forest is
+not claimed.
 
 ### Just-in-time credential leases: the brain ships references, not secrets
 

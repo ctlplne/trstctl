@@ -19,6 +19,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -86,6 +87,11 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// F1: an AD CS inventory redeems a directory bind credential. Its
 		// payload is not a sealed connector deploy, so it resolves the
 		// secret:// references named in the job payload directly.
+		return r.resolveJobReferences(ctx, tenantID, job)
+	case revocationhealth.JobKind:
+		// A107: a batch of LDAP distribution points redeems the bind
+		// credential its AD CS binding names; an HTTP batch names no
+		// reference and its relay never asks.
 		return r.resolveJobReferences(ctx, tenantID, job)
 	case "cmdb.sync":
 		// I2: a CMDB read redeems the ServiceNow token the schedule names as a

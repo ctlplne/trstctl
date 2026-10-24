@@ -838,6 +838,11 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/batch_index", opaque), privacyRule("/batch_count", opaque),
 		privacyRule("/stale_within_seconds", opaque), privacyRule("/required_agent_role", opaque),
 		privacyRule("/required_agent_id", opaque), privacyRule("/endpoints/*", opaque),
+		// A107: the AD CS directory binding of an LDAP batch; password_ref
+		// is a reference name, never credential material.
+		privacyRule("/ldap_binding/source_id", opaque), privacyRule("/ldap_binding/url", opaque),
+		privacyRule("/ldap_binding/configuration_dn", opaque), privacyRule("/ldap_binding/bind_dn", token),
+		privacyRule("/ldap_binding/password_ref", opaque), privacyRule("/ldap_binding/insecure_skip_verify", opaque),
 		privacyRule("/issuer_der", opaque),
 	)
 	revocationProbe.Rules = append(revocationProbe.Rules, revocationTargets...)

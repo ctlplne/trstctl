@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1684 annotated sites across 26 rules. Each row is
+1689 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (365 sites)
+### G101 — CWE-798 Use of hardcoded credentials (370 sites)
 
 | Location | Reason |
 |---|---|
@@ -115,6 +115,8 @@ not this file.
 | `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:344` | reference NAME, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:402` | reference NAME (CWE-798) |
+| `internal/agent/relay/revocation_ldap_test.go:77` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
+| `internal/agent/relay/revocation_ldap_test.go:146` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
@@ -287,6 +289,7 @@ not this file.
 | `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
 | `internal/protocols/acme/eab_rotation_test.go:34` | fabricated fixture reference, not secret material (CWE-798) |
+| `internal/revocationhealth/contract_test.go:91` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/risk/contextual_test.go:192` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/risk/contextual_test.go:214` | fabricated identifier, not credential material (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
@@ -388,6 +391,8 @@ not this file.
 | `internal/server/response_integrations_served_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:52` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/response_integrations_served_test.go:54` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/revocation_ldap_served_test.go:37` | a logical fixture name, not secret material (CWE-798). |
+| `internal/server/revocation_ldap_served_test.go:38` | a non-secret reference, not secret material (CWE-798). |
 | `internal/server/right_size_relay_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/right_size_relay_served_test.go:35` | a secret-store NAME the binding references, not a credential value (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
