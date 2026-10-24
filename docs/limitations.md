@@ -5564,8 +5564,9 @@ it still works for one release train and records an
 `issuance.server_side_keygen` event every time it runs, so you can find which
 of your flows still rely on it. An identity issued from your own CSR cannot
 be deployed by a control-plane connector — the key that deployment needs is
-on your side, which is the correct consequence and the reason host-executed
-renewal is the next piece of work.
+on your side, which is the correct consequence. Its renewal honors the same
+CSR, and an endpoint whose target is agent-executed renews on its host
+(A118, below).
 
 **And stated per credential, not only per kind.** The table above is the right
 level for a design review and the wrong level for an audit, because an auditor
@@ -5589,14 +5590,22 @@ device-bound custody claim you can verify cryptographically is a different and
 larger piece of work.
 
 Recording it per certificate also made a fourth control-plane keygen path
-visible that the kind-level table had not named: automated renewal builds the
-successor's CSR itself, so every certificate produced by the scheduled
-renew-before-expiry pass or by rotate reads `control_plane`. Worse than the
-custody label, the key is destroyed once the successor is recorded — so an
-automated renewal produces a correct inventory row and a certificate no endpoint
-can serve with. [Key custody](custody.md) states this in full. Host-executed
-renewal is what fixes it, and until it lands the count of successors reading
-`control_plane` is the honest measure of the gap.
+visible that the kind-level table had not named: automated renewal of an
+identity with no CSR, on a target the control plane deploys to, builds the
+successor's CSR itself, so that successor reads `control_plane`. The key is not
+lost (A119): it is retained in a tenant-bound sealed recovery record
+(`key_storage` `sealed_store`) and travels sealed in the connector's deploy
+intent, so the endpoint serves the renewed certificate; an identity with no
+deployment target has no endpoint to serve it, and its key stays sealed.
+Host-executed renewal (A118, B2) removes the control-plane key for an
+agent-executed target: the renew-before-expiry pass and rotate queue
+`endpoint.renew` before anything is minted, the host agent generates the key,
+sends only a CSR, installs the pair, verifies the endpoint, and signs the
+custody receipt (`key_origin` `host_agent`, the agent named as generator). The
+batch-12 lab replay ran five such renewals on its host agent, each recorded as
+`host_agent`/`file`/`lab-host-1`. [Key custody](custody.md) states this in full;
+the count of successors reading `control_plane` measures what still relies on
+the deprecated fallback.
 
 ## Served TLS floor and stock enrollment clients
 
