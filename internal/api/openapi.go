@@ -4122,7 +4122,21 @@ func componentSchemas() map[string]*Schema {
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
 		"recipient_ref":    str(),
+		"dispatch":         ref("ComplianceReportDispatch"),
 	}, "framework", "name", "report_type", "interval_seconds")
+	complianceReportTicket := object(map[string]*Schema{
+		"provider": {Type: "string", Enum: []string{"servicenow"}}, "instance_url": str(),
+		"table":     {Type: "string", Enum: []string{"incident", "change_request", "sc_task"}},
+		"token_ref": str(),
+	}, "provider", "instance_url", "token_ref")
+	complianceReportDispatch := object(map[string]*Schema{
+		"channels": {Type: "array", Items: str(), MaxItems: 8},
+		"ticket":   ref("ComplianceReportTicket"),
+	})
+	complianceReportRunDispatch := object(map[string]*Schema{
+		"schedule_name": str(), "channels": {Type: "array", Items: str()},
+		"ticket": ref("ComplianceReportTicket"), "ticket_skipped": str(),
+	}, "schedule_name")
 	complianceReportSchedulePreview := object(map[string]*Schema{
 		"capability":               str(),
 		"operation":                str(),
@@ -4151,6 +4165,7 @@ func componentSchemas() map[string]*Schema {
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
 		"recipient_ref":    str(),
+		"dispatch":         ref("ComplianceReportDispatch"),
 		"next_run_at":      timestamp(),
 		"created_at":       timestamp(),
 		"updated_at":       timestamp(),
@@ -4162,6 +4177,7 @@ func componentSchemas() map[string]*Schema {
 		"retry_generation": {Type: "integer"}, "attempt": {Type: "integer"},
 		"next_attempt_at": timestamp(), "error_code": str(),
 		"artifact_ref": str(), "artifact_digest": str(), "completed_at": timestamp(),
+		"dispatch":       ref("ComplianceReportRunDispatch"),
 		"event_sequence": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "schedule_id", "due_at", "framework", "report_type", "status", "retry_generation", "attempt", "event_sequence", "created_at", "updated_at")
 	scheduledComplianceArtifact := object(map[string]*Schema{
@@ -7191,6 +7207,9 @@ func componentSchemas() map[string]*Schema {
 		"ComplianceReportSchedule":                 complianceReportSchedule,
 		"ComplianceReportScheduleList":             list("ComplianceReportSchedule"),
 		"ComplianceReportRun":                      complianceReportRun,
+		"ComplianceReportDispatch":                 complianceReportDispatch,
+		"ComplianceReportTicket":                   complianceReportTicket,
+		"ComplianceReportRunDispatch":              complianceReportRunDispatch,
 		"ComplianceReportRunList":                  list("ComplianceReportRun"),
 		"ScheduledComplianceArtifact":              scheduledComplianceArtifact,
 		"ComplianceInventorySummary":               complianceInventorySummary,

@@ -4,6 +4,8 @@ package store
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -22,9 +24,65 @@ type ComplianceReportSchedule struct {
 	Enabled         bool
 	Delivery        string
 	RecipientRef    string
-	NextRunAt       time.Time
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// Dispatch announces each completed run beyond the archive (A103); nil
+	// means archive only.
+	Dispatch  *ComplianceReportDispatch
+	NextRunAt time.Time
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+// ComplianceReportDispatch says where a completed scheduled report is
+// announced (A103): notification channels by ID and at most one ServiceNow
+// ticket. It never carries the report body or a credential value; the ticket
+// names a credential reference the outbox worker resolves at egress.
+type ComplianceReportDispatch struct {
+	Channels []string                `json:"channels,omitempty"`
+	Ticket   *ComplianceReportTicket `json:"ticket,omitempty"`
+}
+
+// ComplianceReportTicket is the ServiceNow ticket a completed run opens.
+type ComplianceReportTicket struct {
+	Provider    string `json:"provider"`
+	InstanceURL string `json:"instance_url"`
+	Table       string `json:"table"`
+	TokenRef    string `json:"token_ref"`
+}
+
+// Empty reports whether the dispatch announces nothing.
+func (d *ComplianceReportDispatch) Empty() bool {
+	return d == nil || (len(d.Channels) == 0 && d.Ticket == nil)
+}
+
+// ComplianceReportRunDispatch is the immutable announcement decision a
+// completed run carries: the schedule's name and dispatch at completion, so a
+// later schedule edit cannot change what a past run announced.
+type ComplianceReportRunDispatch struct {
+	ScheduleName string                  `json:"schedule_name"`
+	Channels     []string                `json:"channels,omitempty"`
+	Ticket       *ComplianceReportTicket `json:"ticket,omitempty"`
+	// TicketSkipped says why the schedule's ticket was not opened, such as an
+	// operator having withdrawn its ServiceNow binding since the schedule was
+	// created.
+	TicketSkipped string `json:"ticket_skipped,omitempty"`
+}
+
+func dispatchJSON(v any) (any, error) {
+	switch d := v.(type) {
+	case *ComplianceReportDispatch:
+		if d.Empty() {
+			return nil, nil
+		}
+	case *ComplianceReportRunDispatch:
+		if d == nil {
+			return nil, nil
+		}
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return string(raw), nil
 }
 
 // ComplianceInventoryCounts is the tenant-scoped inventory summarized by the
@@ -44,11 +102,15 @@ func (s *Store) ApplyComplianceReportScheduleUpsertedTx(ctx context.Context, tx 
 	if err := lockUpsertArbiterTx(ctx, tx, "compliance_report_schedules", sched.TenantID, sched.ID); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx,
+	dispatch, err := dispatchJSON(sched.Dispatch)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx,
 		`INSERT INTO compliance_report_schedules
 		        (id, tenant_id, framework, name, report_type, interval_seconds, enabled,
-		         delivery, recipient_ref, next_run_at, created_at, updated_at)
-		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		         delivery, recipient_ref, next_run_at, created_at, updated_at, dispatch)
+		      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		      SET framework = EXCLUDED.framework,
 		          name = EXCLUDED.name,
@@ -58,10 +120,11 @@ func (s *Store) ApplyComplianceReportScheduleUpsertedTx(ctx context.Context, tx 
 		          delivery = EXCLUDED.delivery,
 		          recipient_ref = EXCLUDED.recipient_ref,
 		          next_run_at = EXCLUDED.next_run_at,
-		          updated_at = EXCLUDED.updated_at`,
+		          updated_at = EXCLUDED.updated_at,
+		          dispatch = EXCLUDED.dispatch`,
 		sched.ID, sched.TenantID, sched.Framework, sched.Name, sched.ReportType,
 		sched.IntervalSeconds, sched.Enabled, sched.Delivery, sched.RecipientRef,
-		sched.NextRunAt, sched.CreatedAt, sched.UpdatedAt)
+		sched.NextRunAt, sched.CreatedAt, sched.UpdatedAt, dispatch)
 	return err
 }
 
@@ -71,7 +134,7 @@ func (s *Store) ListComplianceReportSchedulesPage(ctx context.Context, tenantID,
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, framework, name, report_type, interval_seconds,
-			        enabled, delivery, recipient_ref, next_run_at, created_at, updated_at
+			        enabled, delivery, recipient_ref, next_run_at, created_at, updated_at, dispatch
 			   FROM compliance_report_schedules
 			  WHERE tenant_id = $1 AND id > $2
 			  ORDER BY id LIMIT $3`, tenantID, afterID, limit)
@@ -97,7 +160,7 @@ func (s *Store) GetComplianceReportSchedule(ctx context.Context, tenantID, id st
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanComplianceReportSchedule(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, framework, name, report_type, interval_seconds,
-			        enabled, delivery, recipient_ref, next_run_at, created_at, updated_at
+			        enabled, delivery, recipient_ref, next_run_at, created_at, updated_at, dispatch
 			   FROM compliance_report_schedules
 			  WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
@@ -138,7 +201,7 @@ func (s *Store) ComplianceReportSchedulesDue(ctx context.Context, tenantID strin
 		rows, err := tx.Query(ctx,
 			`SELECT s.id::text, s.tenant_id::text, s.framework, s.name, s.report_type,
 			        s.interval_seconds, s.enabled, s.delivery, s.recipient_ref,
-			        s.next_run_at, s.created_at, s.updated_at
+			        s.next_run_at, s.created_at, s.updated_at, s.dispatch
 			   FROM compliance_report_schedules s
 			   LEFT JOIN compliance_report_runs r
 			     ON r.tenant_id = s.tenant_id AND r.schedule_id = s.id
@@ -184,7 +247,19 @@ func (s *Store) ComplianceInventoryCounts(ctx context.Context, tenantID string) 
 }
 
 func scanComplianceReportSchedule(row rowScanner, sched *ComplianceReportSchedule) error {
-	return row.Scan(&sched.ID, &sched.TenantID, &sched.Framework, &sched.Name, &sched.ReportType,
+	var dispatch []byte
+	if err := row.Scan(&sched.ID, &sched.TenantID, &sched.Framework, &sched.Name, &sched.ReportType,
 		&sched.IntervalSeconds, &sched.Enabled, &sched.Delivery, &sched.RecipientRef,
-		&sched.NextRunAt, &sched.CreatedAt, &sched.UpdatedAt)
+		&sched.NextRunAt, &sched.CreatedAt, &sched.UpdatedAt, &dispatch); err != nil {
+		return err
+	}
+	sched.Dispatch = nil
+	if len(dispatch) > 0 {
+		var d ComplianceReportDispatch
+		if err := json.Unmarshal(dispatch, &d); err != nil {
+			return fmt.Errorf("store: decode report schedule dispatch: %w", err)
+		}
+		sched.Dispatch = &d
+	}
+	return nil
 }

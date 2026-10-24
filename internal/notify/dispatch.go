@@ -487,7 +487,9 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 	if len(d.channels) == 0 && d.channelSource == nil {
 		return nil, route, nil
 	}
-	if alert.Kind == KindNotificationChannelTest && strings.TrimSpace(alert.TargetChannel) != "" {
+	// A channel test and a scheduled report notice (A103) each name exactly
+	// one channel; routing policy does not widen or redirect them.
+	if (alert.Kind == KindNotificationChannelTest || alert.Kind == KindComplianceReportReady) && strings.TrimSpace(alert.TargetChannel) != "" {
 		requested := []string{alert.TargetChannel}
 		channels := d.channelsByNameStrict(requested)
 		if len(channels) == 0 && d.channelSource != nil {
@@ -499,6 +501,9 @@ func (d *Dispatcher) effectiveChannels(ctx context.Context, alert Alert) ([]Noti
 		}
 		if len(missingChannelNames(requested, channels)) != 0 {
 			return nil, route, fmt.Errorf("notify: channel %q is not configured", alert.TargetChannel)
+		}
+		if alert.Kind == KindComplianceReportReady {
+			return channels, routingEvidence{source: "report_schedule"}, nil
 		}
 		return channels, routingEvidence{source: "channel_test"}, nil
 	}
@@ -711,6 +716,8 @@ func FormatMessage(a Alert) string {
 		b.WriteString("CA hierarchy expiry horizon")
 	case KindCAValidityCompression:
 		b.WriteString("CA horizon is compressing leaf validity")
+	case KindComplianceReportReady:
+		b.WriteString("Scheduled report signed and archived")
 	default:
 		b.WriteString("trstctl alert")
 		if a.Kind != "" {

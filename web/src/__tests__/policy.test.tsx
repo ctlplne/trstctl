@@ -1147,6 +1147,72 @@ describe("policy governance surface", () => {
     expect(apiMock.downloadScheduledReport).toHaveBeenCalledWith(failed.id);
   });
 
+  // A103: a schedule can announce each completed run on named channels and in
+  // one ServiceNow ticket; the review lists those announcements and the run
+  // list says where a run was announced or why its ticket was skipped.
+  it("schedules report announcements and shows where each run went", async () => {
+    const user = userEvent.setup();
+    apiMock.previewComplianceReportSchedule.mockResolvedValue({
+      ...complianceSchedulePreview(),
+      execute_external_effects: ["After each completed run, queue one compliance.report_ready notice on notification channel webhook."],
+    });
+    const announced = {
+      ...complianceSchedule(),
+      dispatch: {
+        channels: ["webhook"],
+        ticket: { provider: "servicenow", instance_url: "https://grc.service-now.com", table: "sc_task", token_ref: "secret://itsm/grc" },
+      },
+    };
+    apiMock.complianceReportSchedules.mockResolvedValue({ items: [announced] });
+    apiMock.complianceReportRuns.mockResolvedValue({
+      items: [
+        {
+          id: "55555555-5555-4555-8555-555555555555",
+          tenant_id: "tenant-1",
+          schedule_id: announced.id,
+          due_at: "2026-06-27T12:00:00Z",
+          framework: "soc2",
+          report_type: "inventory_snapshot",
+          status: "completed",
+          retry_generation: 0,
+          attempt: 1,
+          artifact_digest: "b".repeat(64),
+          dispatch: {
+            schedule_name: announced.name,
+            channels: ["webhook"],
+            ticket_skipped: "the ServiceNow binding is no longer approved in the server configuration",
+          },
+          event_sequence: 71,
+          created_at: "2026-06-27T12:00:00Z",
+          updated_at: "2026-06-27T12:05:00Z",
+        },
+      ],
+    });
+    renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
+    await screen.findByRole("heading", { name: "Compliance inventory report" });
+    expect(screen.getByText("Announced on: webhook, ServiceNow sc_task")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Announce on notification channels (optional)"), "webhook, email");
+    await user.click(screen.getByLabelText("Open a ServiceNow ticket for each completed run"));
+    await user.type(screen.getByLabelText("ServiceNow instance URL"), "https://grc.service-now.com");
+    await user.type(screen.getByLabelText("ServiceNow token reference"), "secret://itsm/grc");
+    await user.selectOptions(screen.getByLabelText("ServiceNow table"), "sc_task");
+    await user.click(screen.getByRole("button", { name: "Review exact schedule" }));
+    const dispatch = {
+      channels: ["webhook", "email"],
+      ticket: { provider: "servicenow", instance_url: "https://grc.service-now.com", table: "sc_task", token_ref: "secret://itsm/grc" },
+    };
+    await waitFor(() => expect(apiMock.previewComplianceReportSchedule).toHaveBeenCalledWith(expect.objectContaining({ dispatch })));
+    expect(await screen.findByText("After each completed run")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() => expect(apiMock.createComplianceReportSchedule).toHaveBeenCalledWith(expect.objectContaining({ dispatch })));
+
+    await user.click(screen.getByRole("button", { name: "Signed runs" }));
+    expect(await screen.findByText("Announced on: webhook")).toBeInTheDocument();
+    expect(screen.getByText("Ticket not opened: the ServiceNow binding is no longer approved in the server configuration")).toBeInTheDocument();
+  });
+
   it("explains signer and archive setup blockers before schedule creation", async () => {
     const user = userEvent.setup();
     apiMock.previewComplianceReportSchedule.mockResolvedValue({

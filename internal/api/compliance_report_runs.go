@@ -32,9 +32,11 @@ type complianceReportRunResponse struct {
 	ArtifactRef     string     `json:"artifact_ref,omitempty"`
 	ArtifactDigest  string     `json:"artifact_digest,omitempty"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	EventSequence   uint64     `json:"event_sequence"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	// Dispatch is what a completed run announced beyond the archive (A103).
+	Dispatch      *store.ComplianceReportRunDispatch `json:"dispatch,omitempty"`
+	EventSequence uint64                             `json:"event_sequence"`
+	CreatedAt     time.Time                          `json:"created_at"`
+	UpdatedAt     time.Time                          `json:"updated_at"`
 }
 
 func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceReportRunResponse {
@@ -43,7 +45,7 @@ func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceRepo
 		DueAt: run.DueAt, Framework: run.Framework, ReportType: run.ReportType,
 		Status: run.Status, RetryGeneration: run.RetryGeneration, Attempt: run.Attempt,
 		ErrorCode: run.ErrorCode, ArtifactRef: run.ArtifactRef, ArtifactDigest: run.ArtifactDigest,
-		EventSequence: run.EventSequence, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
+		Dispatch: run.Dispatch, EventSequence: run.EventSequence, CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
 	}
 	if !run.NextAttemptAt.IsZero() {
 		next := run.NextAttemptAt

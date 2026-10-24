@@ -529,7 +529,12 @@ schedules. With the licensed governance signer and a private mounted
 `audit.archive_dir`, the leader now generates one signed local artifact per due
 edge and exposes event-backed run receipts, exact downloads, bounded retry,
 dead-letter and requeue through `/api/v1/compliance/report-runs`. `audit_export`
-means local archive, not email, webhook, or ticket delivery. `POST /api/v1/compliance/report-schedules/preview` validates and
+means the local archive stays the record. A schedule's optional `dispatch` announces
+each completed run: a `compliance.report_ready` notice on each named notification
+channel (up to 8, each configured for the tenant) and one ServiceNow ticket on an
+operator-approved public binding, queued with the completion and named on the run
+receipt. A notice carries the run, its SHA-256 and its download route, never the report
+body. `POST /api/v1/compliance/report-schedules/preview` validates and
 fingerprints the exact unsaved definition without appending an event, projecting a row,
 generating a report, or calling a destination. The console invalidates that review after
 any edit and keeps **Create schedule** disabled until the exact draft is ready. Saved
@@ -660,9 +665,14 @@ trstctl-cli policy dry-run --body policy-dry-run.json
 trstctl-cli --idempotency-key policy-author-42 policy versions create -f lifecycle-policy-version.json
 printf '{"reason":"CAB approved"}' | trstctl-cli --idempotency-key policy-activate-42 policy versions activate <version-id> -f -
 
-# record a report-schedule definition
+# record a report-schedule definition; dispatch is optional and announces each
+# completed run on the named channels and in one ServiceNow ticket
 cat > soc2-schedule.json <<'JSON'
-{"framework":"soc2","name":"weekly-soc2-pack","interval_seconds":604800,"delivery":"audit_export"}
+{"framework":"soc2","name":"weekly-soc2-pack","report_type":"framework_evidence_pack",
+ "interval_seconds":604800,"delivery":"audit_export",
+ "dispatch":{"channels":["email","webhook"],
+             "ticket":{"provider":"servicenow","instance_url":"https://example.service-now.com",
+                       "table":"sc_task","token_ref":"secret://itsm/servicenow"}}}
 JSON
 trstctl-cli compliance report-schedules preview -f soc2-schedule.json
 trstctl-cli --idempotency-key weekly-soc2 compliance report-schedules create -f soc2-schedule.json
@@ -752,8 +762,9 @@ auth:
 - **Compliance reporting (served):** `GET /api/v1/compliance/evidence-packs/{framework}`,
   `GET /api/v1/compliance/inventory-report`, `GET /api/v1/compliance/nhi-report`,
   `POST|GET /api/v1/compliance/report-schedules`, schedule run receipts and exact
-  signed artifacts under `/api/v1/compliance/report-runs`; report delivery is
-  local `audit_export` only.
+  signed artifacts under `/api/v1/compliance/report-runs`; the local `audit_export`
+  archive is the record, and a schedule's `dispatch` announces each completed run on
+  named notification channels and in one ServiceNow ticket.
 - **Access-change approvals (served):** `POST|GET /api/v1/access/requests[/{id}]`, and
   `POST /api/v1/access/requests/{id}/decisions`; CLI: `access requests create|list|get|decide`.
 - **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook

@@ -2529,12 +2529,18 @@ export interface ComplianceInventorySummary {
   report_types_supported: number;
 }
 
+export interface ComplianceReportDispatch {
+  channels?: string[];
+  ticket?: ComplianceReportTicket;
+}
+
 export interface ComplianceReportRun {
   artifact_digest?: string;
   artifact_ref?: string;
   attempt: number;
   completed_at?: string;
   created_at: string;
+  dispatch?: ComplianceReportRunDispatch;
   due_at: string;
   error_code?: string;
   event_sequence: number;
@@ -2549,6 +2555,13 @@ export interface ComplianceReportRun {
   updated_at: string;
 }
 
+export interface ComplianceReportRunDispatch {
+  channels?: string[];
+  schedule_name: string;
+  ticket?: ComplianceReportTicket;
+  ticket_skipped?: string;
+}
+
 export interface ComplianceReportRunList {
   items: ComplianceReportRun[];
   next_cursor?: string;
@@ -2557,6 +2570,7 @@ export interface ComplianceReportRunList {
 export interface ComplianceReportSchedule {
   created_at: string;
   delivery: "audit_export";
+  dispatch?: ComplianceReportDispatch;
   enabled: boolean;
   framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
   id: string;
@@ -2595,12 +2609,20 @@ export interface ComplianceReportSchedulePreview {
 
 export interface ComplianceReportScheduleRequest {
   delivery?: "audit_export";
+  dispatch?: ComplianceReportDispatch;
   enabled?: boolean;
   framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
   interval_seconds: number;
   name: string;
   recipient_ref?: string;
   report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
+}
+
+export interface ComplianceReportTicket {
+  instance_url: string;
+  provider: "servicenow";
+  table?: "incident" | "change_request" | "sc_task";
+  token_ref: string;
 }
 
 export interface ConnectorCatalog {

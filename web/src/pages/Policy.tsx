@@ -11,6 +11,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { ComplianceInventoryReportPanel, NHIComplianceReportPanel } from "@/pages/policy/ComplianceReportingPanels";
@@ -36,6 +40,8 @@ import {
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
 type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
+// ServiceNow tables a report ticket can open in (A103); API identifiers, not copy.
+const serviceNowTables = ["incident", "change_request", "sc_task"] as const;
 type PolicyDryRunKind = "lifecycle" | "abac";
 type SafeHref = { href: string; external: boolean };
 
@@ -234,6 +240,11 @@ function PolicyContent() {
     reportType: "inventory_snapshot" as ComplianceReportType,
     intervalDays: "90",
     recipientRef: "",
+    dispatchChannels: "",
+    ticketEnabled: false,
+    ticketInstanceURL: "",
+    ticketTokenRef: "",
+    ticketTable: "incident" as "incident" | "change_request" | "sc_task",
   });
   const [dryRunKind, setDryRunKind] = useState<PolicyDryRunKind>("lifecycle");
   const [dryRunModule, setDryRunModule] = useState(lifecycleDryRunModule);
@@ -405,6 +416,28 @@ function PolicyContent() {
       setReportError(t("policy.reporting.intervalError"));
       return null;
     }
+    // A103: completed runs can also be announced on notification channels
+    // and in one ServiceNow ticket; the archive stays the record.
+    const channels = scheduleForm.dispatchChannels
+      .split(",")
+      .map((channel) => channel.trim())
+      .filter(Boolean);
+    const dispatch =
+      channels.length > 0 || scheduleForm.ticketEnabled
+        ? {
+            ...(channels.length > 0 ? { channels } : {}),
+            ...(scheduleForm.ticketEnabled
+              ? {
+                  ticket: {
+                    provider: "servicenow" as const,
+                    instance_url: scheduleForm.ticketInstanceURL.trim(),
+                    table: scheduleForm.ticketTable,
+                    token_ref: scheduleForm.ticketTokenRef.trim(),
+                  },
+                }
+              : {}),
+          }
+        : undefined;
     return {
       name: scheduleForm.name.trim(),
       framework: scheduleForm.framework,
@@ -413,6 +446,7 @@ function PolicyContent() {
       enabled: true,
       delivery: "audit_export",
       recipient_ref: optionalText(scheduleForm.recipientRef),
+      ...(dispatch ? { dispatch } : {}),
     };
   }
 
@@ -1089,6 +1123,76 @@ function PolicyContent() {
                   }}
                 />
               </label>
+              <Field className="lg:col-span-3" label={t("policy.reporting.dispatchChannels")} description={t("policy.reporting.dispatchChannelsHint")}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    value={scheduleForm.dispatchChannels}
+                    placeholder={t("policy.reporting.dispatchChannelsPlaceholder")}
+                    onChange={(event) => {
+                      setSchedulePreview(null);
+                      setScheduleForm((current) => ({ ...current, dispatchChannels: event.target.value }));
+                    }}
+                  />
+                )}
+              </Field>
+              <label className="flex items-center gap-2 self-end text-body font-medium lg:col-span-3">
+                <Checkbox
+                  checked={scheduleForm.ticketEnabled}
+                  onChange={(event) => {
+                    setSchedulePreview(null);
+                    setScheduleForm((current) => ({ ...current, ticketEnabled: event.target.checked }));
+                  }}
+                />
+                {t("policy.reporting.ticketEnabled")}
+              </label>
+              {scheduleForm.ticketEnabled && (
+                <>
+                  <Field className="lg:col-span-2" label={t("policy.reporting.ticketInstanceURL")}>
+                    {(control) => (
+                      <Input
+                        {...control}
+                        value={scheduleForm.ticketInstanceURL}
+                        placeholder={t("policy.reporting.ticketInstanceURLPlaceholder")}
+                        onChange={(event) => {
+                          setSchedulePreview(null);
+                          setScheduleForm((current) => ({ ...current, ticketInstanceURL: event.target.value }));
+                        }}
+                      />
+                    )}
+                  </Field>
+                  <Field className="lg:col-span-2" label={t("policy.reporting.ticketTokenRef")}>
+                    {(control) => (
+                      <Input
+                        {...control}
+                        value={scheduleForm.ticketTokenRef}
+                        onChange={(event) => {
+                          setSchedulePreview(null);
+                          setScheduleForm((current) => ({ ...current, ticketTokenRef: event.target.value }));
+                        }}
+                      />
+                    )}
+                  </Field>
+                  <Field className="lg:col-span-2" label={t("policy.reporting.ticketTable")}>
+                    {(control) => (
+                      <Select
+                        {...control}
+                        value={scheduleForm.ticketTable}
+                        onChange={(event) => {
+                          setSchedulePreview(null);
+                          setScheduleForm((current) => ({ ...current, ticketTable: event.target.value as (typeof serviceNowTables)[number] }));
+                        }}
+                      >
+                        {serviceNowTables.map((table) => (
+                          <option key={table} value={table}>
+                            {table}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                </>
+              )}
               <div className="flex flex-wrap items-end gap-2 lg:col-span-6">
                 <Button type="button" variant="outline" onClick={() => void previewReportSchedule()} disabled={scheduleAction !== null}>
                   {scheduleAction === "preview" ? t("policy.reporting.reviewing") : t("policy.reporting.review")}
@@ -1123,6 +1227,9 @@ function PolicyContent() {
                 </dl>
                 {schedulePreview.blockers.length > 0 && <EvidenceList title={t("policy.reporting.blockers")} items={schedulePreview.blockers} />}
                 {schedulePreview.warnings.length > 0 && <EvidenceList title={t("policy.reporting.warnings")} items={schedulePreview.warnings} />}
+                {schedulePreview.execute_external_effects.length > 0 && (
+                  <EvidenceList title={t("policy.reporting.afterEachRun")} items={schedulePreview.execute_external_effects} />
+                )}
                 <div className="mt-3 grid gap-3 lg:grid-cols-3">
                   <EvidenceList title={t("policy.reporting.executeWrites")} items={schedulePreview.execute_writes} />
                   <EvidenceList title={t("policy.reporting.recovery")} items={schedulePreview.recovery_steps} />

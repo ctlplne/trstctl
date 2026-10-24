@@ -558,7 +558,11 @@ includes PCI-DSS, HIPAA, SOC 2, FedRAMP, FIPS 140, CA/B Forum BR, and more, with
 signed tenant/window, exact event/object references, and missing prerequisites. It
 also shows signed certificate-custody totals and the exact fingerprint/fields for
 every incomplete custody row, the CAP-OBS-02 inventory report, report schedules, and
-the dry-run workbench.
+the dry-run workbench. A new report schedule can name notification channels and a
+ServiceNow ticket that announce each completed run; the review lists those
+announcements under **After each completed run**, the schedule list shows
+**Announced on**, and each signed run says where it was announced or why its ticket
+was skipped.
 
 **Change history** opens with the newest 50 matching tenant events and answers who
 changed what, when, and whether the last event shown records a result. It does not

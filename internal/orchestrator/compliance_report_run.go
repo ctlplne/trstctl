@@ -58,7 +58,7 @@ func (o *Orchestrator) RecordComplianceReportRun(ctx context.Context, run store.
 		Status: run.Status, RetryGeneration: run.RetryGeneration, Attempt: run.Attempt,
 		NextAttemptAt: run.NextAttemptAt, ErrorCode: run.ErrorCode,
 		ArtifactRef: run.ArtifactRef, ArtifactDigest: run.ArtifactDigest,
-		CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt,
+		CompletedAt: run.CompletedAt, CreatedAt: run.CreatedAt, Dispatch: run.Dispatch,
 	})
 	if err != nil {
 		return store.ComplianceReportRun{}, err
@@ -81,6 +81,8 @@ func (o *Orchestrator) RecordComplianceReportRun(ctx context.Context, run store.
 			!reportEventTimestampEqual(previous.CompletedAt, run.CompletedAt) || !reportEventTimestampEqual(previous.CreatedAt, run.CreatedAt) {
 			return store.ComplianceReportRun{}, errors.New("orchestrator: retained report event identity conflicts with requested transition")
 		}
+		// Dispatch is deliberately not compared: the retained completion's
+		// announcement decision wins over a schedule edited since (A103).
 		current, readErr := o.store.GetComplianceReportRun(ctx, run.TenantID, run.ID)
 		if readErr == nil && current.EventSequence >= retained.Sequence {
 			return current, nil
@@ -89,7 +91,30 @@ func (o *Orchestrator) RecordComplianceReportRun(ctx context.Context, run store.
 			return store.ComplianceReportRun{}, readErr
 		}
 		err = o.withTenantCommand(ctx, run.TenantID, func(ctx context.Context, tx pgx.Tx) error {
-			return o.proj.ApplyTx(ctx, tx, retained)
+			if err := o.proj.ApplyTx(ctx, tx, retained); err != nil {
+				return err
+			}
+			return o.enqueueComplianceReportDispatchTx(ctx, tx, run.TenantID, previous)
+		})
+	} else if run.Status == "completed" && run.Dispatch != nil {
+		// The completion and its announcements commit together (A103).
+		err = o.withTenantCommand(ctx, run.TenantID, func(ctx context.Context, tx pgx.Tx) error {
+			ev, err := o.log.Append(ctx, events.Event{
+				ID: eventID, Type: projections.EventComplianceReportRunRecorded,
+				TenantID: run.TenantID, SchemaVersion: 1, Data: payload,
+			})
+			if err != nil {
+				return err
+			}
+			var appended projections.ComplianceReportRunRecorded
+			if ev.ID != eventID || ev.Type != projections.EventComplianceReportRunRecorded || ev.TenantID != run.TenantID ||
+				json.Unmarshal(ev.Data, &appended) != nil || appended.ID != run.ID || appended.Status != run.Status {
+				return errors.New("orchestrator: report completion event identity conflicts with requested transition")
+			}
+			if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
+				return err
+			}
+			return o.enqueueComplianceReportDispatchTx(ctx, tx, run.TenantID, appended)
 		})
 	} else {
 		_, err = o.emitPrepared(ctx, events.Event{
@@ -149,7 +174,10 @@ func (o *Orchestrator) RecoverComplianceReportNextTransition(ctx context.Context
 		return store.ComplianceReportRun{}, false, errors.New("orchestrator: retained report outcome conflicts with due-edge identity")
 	}
 	if err := o.withTenantCommand(ctx, current.TenantID, func(ctx context.Context, tx pgx.Tx) error {
-		return o.proj.ApplyTx(ctx, tx, retained)
+		if err := o.proj.ApplyTx(ctx, tx, retained); err != nil {
+			return err
+		}
+		return o.enqueueComplianceReportDispatchTx(ctx, tx, current.TenantID, payload)
 	}); err != nil {
 		return store.ComplianceReportRun{}, false, err
 	}

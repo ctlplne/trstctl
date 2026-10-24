@@ -1391,9 +1391,19 @@ never live in the API process. What you can do end to end against the running bi
   `trstctl-cli compliance report-schedules list` read them back. The licensed
   governance signer and a private mounted `audit.archive_dir` are prerequisites
   to enable them. The local scheduler creates signed artifacts and event-backed
-  run receipts with bounded retry and requeue. `audit_export` means local archive;
-  email/webhook/ticket dispatch is not served or implied. Report files can
-  contain tenant metadata and remain under the operator's backup, retention,
+  run receipts with bounded retry and requeue. The archive stays the record of
+  each report. A schedule's `dispatch` also announces every completed run: one
+  `compliance.report_ready` notice on each named notification channel (email,
+  webhook, Slack, Teams, PagerDuty, Opsgenie, SIEM; up to 8; each must be
+  configured for the tenant) and one ServiceNow ticket on an operator-approved
+  public binding. The notices and ticket are queued in the transaction that
+  records the completion, restored by outbox reconciliation, and never sent
+  twice; the run receipt names them. They carry the run, its SHA-256 and its
+  download route, never the report body, so a receiver downloads the signed
+  bytes with its own `audit:read` credential. A binding the operator withdraws
+  later skips the ticket on later runs and the receipt says why. A Jira ticket
+  and attaching the report itself to a notice are what comes next. Report files
+  can contain tenant metadata and remain under the operator's backup, retention,
   access-control, and erasure policy; a log-only restore cannot recover them.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record

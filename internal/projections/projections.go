@@ -2688,6 +2688,9 @@ type ComplianceReportScheduleUpserted struct {
 	Enabled         bool   `json:"enabled"`
 	Delivery        string `json:"delivery"`
 	RecipientRef    string `json:"recipient_ref,omitempty"`
+	// Dispatch names the channels and ticket a completed run is announced to
+	// (A103); absent means archive only.
+	Dispatch *store.ComplianceReportDispatch `json:"dispatch,omitempty"`
 }
 
 // ComplianceReportRunRecorded is one durable state transition for an exact
@@ -2708,6 +2711,10 @@ type ComplianceReportRunRecorded struct {
 	ArtifactDigest  string    `json:"artifact_digest,omitempty"`
 	CompletedAt     time.Time `json:"completed_at,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
+	// Dispatch is set only on a completed transition whose schedule announces
+	// runs (A103). The notices and ticket are enqueued in the transaction that
+	// projects this event, and outbox reconciliation restores them from it.
+	Dispatch *store.ComplianceReportRunDispatch `json:"dispatch,omitempty"`
 }
 
 // SecretRotationScheduleUpserted is the payload of
@@ -6457,7 +6464,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyComplianceReportScheduleUpsertedTx(ctx, tx, store.ComplianceReportSchedule{
 			ID: pl.ID, TenantID: e.TenantID, Framework: pl.Framework, Name: pl.Name,
 			ReportType: pl.ReportType, IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
-			Delivery: delivery, RecipientRef: pl.RecipientRef,
+			Delivery: delivery, RecipientRef: pl.RecipientRef, Dispatch: pl.Dispatch,
 			NextRunAt: e.Time.Add(time.Duration(pl.IntervalSeconds) * time.Second),
 			CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
@@ -6472,7 +6479,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Status: pl.Status, RetryGeneration: pl.RetryGeneration,
 			Attempt: pl.Attempt, NextAttemptAt: pl.NextAttemptAt,
 			ErrorCode: pl.ErrorCode, ArtifactRef: pl.ArtifactRef, ArtifactDigest: pl.ArtifactDigest,
-			CompletedAt: pl.CompletedAt, EventSequence: e.Sequence,
+			CompletedAt: pl.CompletedAt, Dispatch: pl.Dispatch, EventSequence: e.Sequence,
 			CreatedAt: pl.CreatedAt, UpdatedAt: e.Time,
 		})
 	case EventSecretStaticRotationQueued:

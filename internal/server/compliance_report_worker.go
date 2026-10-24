@@ -174,6 +174,13 @@ func (s *Server) produceComplianceReportRun(ctx context.Context, schedule store.
 	completed.ArtifactRef = ref
 	completed.ArtifactDigest = digest
 	completed.CompletedAt = time.Now().UTC()
+	// The schedule's channels and ticket at completion announce this run
+	// (A103); the completion event carries that decision.
+	completed.Dispatch = orchestrator.ComplianceReportRunDispatchFor(schedule)
+	if d := completed.Dispatch; d != nil && d.Ticket != nil && !s.api.ComplianceReportTicketApproved(*d.Ticket) {
+		d.Ticket = nil
+		d.TicketSkipped = "the ServiceNow binding is no longer approved in the server configuration"
+	}
 	_, err = s.orch.RecordComplianceReportRun(ctx, completed)
 	return err
 }

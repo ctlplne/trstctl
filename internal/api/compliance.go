@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -207,21 +209,26 @@ type complianceReportScheduleRequest struct {
 	Enabled         *bool  `json:"enabled"`
 	Delivery        string `json:"delivery"`
 	RecipientRef    string `json:"recipient_ref"`
+	// Dispatch announces each completed run on named notification channels
+	// and in one ServiceNow ticket (A103); the archive stays the record.
+	Dispatch *store.ComplianceReportDispatch `json:"dispatch,omitempty"`
 }
 
 type complianceReportScheduleResponse struct {
-	ID              string    `json:"id"`
-	TenantID        string    `json:"tenant_id"`
-	Framework       string    `json:"framework"`
-	Name            string    `json:"name"`
-	ReportType      string    `json:"report_type"`
-	IntervalSeconds int       `json:"interval_seconds"`
-	Enabled         bool      `json:"enabled"`
-	Delivery        string    `json:"delivery"`
-	RecipientRef    string    `json:"recipient_ref"`
-	NextRunAt       time.Time `json:"next_run_at"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              string `json:"id"`
+	TenantID        string `json:"tenant_id"`
+	Framework       string `json:"framework"`
+	Name            string `json:"name"`
+	ReportType      string `json:"report_type"`
+	IntervalSeconds int    `json:"interval_seconds"`
+	Enabled         bool   `json:"enabled"`
+	Delivery        string `json:"delivery"`
+	RecipientRef    string `json:"recipient_ref"`
+	// Dispatch is absent for an archive-only schedule.
+	Dispatch  *store.ComplianceReportDispatch `json:"dispatch,omitempty"`
+	NextRunAt time.Time                       `json:"next_run_at"`
+	CreatedAt time.Time                       `json:"created_at"`
+	UpdatedAt time.Time                       `json:"updated_at"`
 }
 
 type complianceReportSchedulePreviewResponse struct {
@@ -320,7 +327,8 @@ func (a *API) previewComplianceReportSchedule(w http.ResponseWriter, r *http.Req
 		return
 	}
 	warnings := []string{}
-	blockers := a.complianceReportBlockers()
+	blockers := append(a.complianceReportBlockers(), a.complianceReportDispatchBlockers(r.Context(), tenantID, normalized.Dispatch)...)
+	executeEffects := complianceReportDispatchEffects(normalized.Dispatch)
 	if normalized.Enabled != nil && !*normalized.Enabled {
 		warnings = append(warnings, "This definition will be saved paused, so no run becomes due until an operator resumes it.")
 	}
@@ -333,7 +341,7 @@ func (a *API) previewComplianceReportSchedule(w http.ResponseWriter, r *http.Req
 			"Append one tenant-scoped compliance.report_schedule.upserted event.",
 			"Project one report definition with its cadence, enabled state, destination reference, and next due time.",
 		},
-		ExecuteExternalEffects: []string{},
+		ExecuteExternalEffects: executeEffects,
 		RecoverySteps: []string{
 			"Pause the schedule before its next run; already retained evidence is not deleted.",
 			"Inspect failed run receipts, correct the signer or archive dependency, then requeue the exact due edge with an Idempotency-Key.",
@@ -344,7 +352,7 @@ func (a *API) previewComplianceReportSchedule(w http.ResponseWriter, r *http.Req
 			"Read GET /api/v1/compliance/inventory-report and confirm schedule and enabled-schedule totals.",
 			"After the due time, read the schedule's run receipts and download the exact signed artifact; compare its SHA-256 with the completed receipt.",
 		},
-		SecretDataHandling: "recipient_ref is an optional correlation label only; it does not route or change the archive destination. Preview neither resolves nor returns a credential, report body, private key, or secret value.",
+		SecretDataHandling: "recipient_ref is an optional correlation label only; it does not route or change the archive destination. Dispatch notices and the ticket carry the run, its digest and its download route, never the report body; the ticket's token_ref names an operator-approved credential reference resolved only at egress. Preview neither resolves nor returns a credential, report body, private key, or secret value.",
 	})
 }
 
@@ -363,10 +371,13 @@ func (a *API) createComplianceReportSchedule(w http.ResponseWriter, r *http.Requ
 		if blockers := a.complianceReportBlockers(); len(blockers) != 0 {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, strings.Join(blockers, " "))
 		}
+		if blockers := a.complianceReportDispatchBlockers(ctx, tenantID, normalized.Dispatch); len(blockers) != 0 {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, strings.Join(blockers, " "))
+		}
 		sched, err := a.orch.UpsertComplianceReportSchedule(ctx, tenantID, store.ComplianceReportSchedule{
 			Framework: normalized.Framework, Name: normalized.Name, ReportType: normalized.ReportType,
 			IntervalSeconds: normalized.IntervalSeconds, Enabled: *normalized.Enabled,
-			Delivery: normalized.Delivery, RecipientRef: normalized.RecipientRef,
+			Delivery: normalized.Delivery, RecipientRef: normalized.RecipientRef, Dispatch: normalized.Dispatch,
 		})
 		if err != nil {
 			return 0, nil, err
@@ -409,11 +420,118 @@ func normalizeComplianceReportScheduleRequest(req complianceReportScheduleReques
 	if req.Enabled != nil {
 		enabled = *req.Enabled
 	}
+	dispatch, err := normalizeComplianceReportDispatch(req.Dispatch)
+	if err != nil {
+		return complianceReportScheduleRequest{}, err
+	}
 	return complianceReportScheduleRequest{
 		Framework: string(fw), Name: name, ReportType: reportType,
 		IntervalSeconds: req.IntervalSeconds, Enabled: &enabled,
-		Delivery: delivery, RecipientRef: recipientRef,
+		Delivery: delivery, RecipientRef: recipientRef, Dispatch: dispatch,
 	}, nil
+}
+
+// maxComplianceReportDispatchChannels bounds one schedule's notices per run.
+const maxComplianceReportDispatchChannels = 8
+
+var complianceReportChannelID = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+
+// normalizeComplianceReportDispatch canonicalizes a schedule's dispatch (A103):
+// channel IDs as the notification API spells them, deduplicated, and one
+// ServiceNow ticket with a normalized instance URL and table. Whether a
+// channel is configured and the ticket's binding approved depends on tenant
+// and operator configuration, which complianceReportDispatchBlockers checks.
+func normalizeComplianceReportDispatch(in *store.ComplianceReportDispatch) (*store.ComplianceReportDispatch, error) {
+	if in == nil {
+		return nil, nil
+	}
+	out := &store.ComplianceReportDispatch{}
+	seen := map[string]bool{}
+	for _, raw := range in.Channels {
+		id := canonicalNotificationChannelID(raw)
+		if !complianceReportChannelID.MatchString(id) {
+			return nil, errStatus(http.StatusBadRequest, "dispatch.channels must name notification channel IDs")
+		}
+		if !seen[id] {
+			seen[id] = true
+			out.Channels = append(out.Channels, id)
+		}
+	}
+	if len(out.Channels) > maxComplianceReportDispatchChannels {
+		return nil, errStatus(http.StatusBadRequest, "dispatch.channels names at most 8 channels")
+	}
+	if t := in.Ticket; t != nil {
+		if provider := strings.ToLower(strings.TrimSpace(t.Provider)); provider != "servicenow" {
+			return nil, errStatus(http.StatusBadRequest, "dispatch.ticket.provider must be servicenow")
+		}
+		instanceURL, err := normalizeServiceNowInstanceURL(t.InstanceURL)
+		if err != nil {
+			return nil, errStatus(http.StatusBadRequest, "dispatch.ticket.instance_url must be an absolute HTTP(S) URL without credentials, query, or fragment")
+		}
+		table, ok := orchestrator.NormalizeServiceNowTable(t.Table)
+		if !ok {
+			return nil, errStatus(http.StatusBadRequest, "dispatch.ticket.table must be incident, change_request, or sc_task")
+		}
+		tokenRef := strings.TrimSpace(t.TokenRef)
+		if tokenRef == "" || len(tokenRef) > 256 {
+			return nil, errStatus(http.StatusBadRequest, "dispatch.ticket.token_ref must name a credential reference")
+		}
+		out.Ticket = &store.ComplianceReportTicket{Provider: "servicenow", InstanceURL: instanceURL, Table: table, TokenRef: tokenRef}
+	}
+	if out.Empty() {
+		return nil, nil
+	}
+	return out, nil
+}
+
+// complianceReportDispatchBlockers checks a dispatch against configuration:
+// each channel must be a configured channel of this tenant, and the ticket
+// must match an operator-approved ServiceNow binding, so a schedule cannot
+// send a credential to a destination the operator never approved.
+func (a *API) complianceReportDispatchBlockers(ctx context.Context, tenantID string, d *store.ComplianceReportDispatch) []string {
+	if d.Empty() {
+		return nil
+	}
+	var blockers []string
+	for _, channel := range d.Channels {
+		if _, err := a.notificationChannelForTest(ctx, tenantID, channel); err != nil {
+			detail := "it could not be checked"
+			var apiErr *apiError
+			if errors.As(err, &apiErr) {
+				detail = apiErr.detail
+			}
+			blockers = append(blockers, "Notification channel "+channel+" cannot receive report notices: "+detail+".")
+		}
+	}
+	if t := d.Ticket; t != nil && !a.ComplianceReportTicketApproved(*t) {
+		blockers = append(blockers, "The report ticket's instance_url and token_ref must match an operator-approved public ServiceNow binding.")
+	}
+	return blockers
+}
+
+// ComplianceReportTicketApproved reports whether a schedule's ticket still
+// matches an operator-approved public ServiceNow binding. The report worker
+// asks again at each completion, so withdrawing a binding stops new tickets.
+func (a *API) ComplianceReportTicketApproved(t store.ComplianceReportTicket) bool {
+	if a == nil {
+		return false
+	}
+	_, err := a.approvedServiceNowBinding(serviceNowTicketRequest{InstanceURL: t.InstanceURL, TokenRef: t.TokenRef}, false)
+	return err == nil
+}
+
+func complianceReportDispatchEffects(d *store.ComplianceReportDispatch) []string {
+	effects := []string{}
+	if d.Empty() {
+		return effects
+	}
+	for _, channel := range d.Channels {
+		effects = append(effects, "After each completed run, queue one compliance.report_ready notice on notification channel "+channel+" naming the run, its SHA-256 and its download route; never the report body.")
+	}
+	if d.Ticket != nil {
+		effects = append(effects, "After each completed run, queue one ServiceNow "+d.Ticket.Table+" ticket at "+d.Ticket.InstanceURL+" correlated to the run ID.")
+	}
+	return effects
 }
 
 //trstctl:mutation
@@ -589,7 +707,7 @@ func toComplianceReportScheduleResponse(s store.ComplianceReportSchedule) compli
 	return complianceReportScheduleResponse{
 		ID: s.ID, TenantID: s.TenantID, Framework: s.Framework, Name: s.Name,
 		ReportType: s.ReportType, IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled,
-		Delivery: s.Delivery, RecipientRef: s.RecipientRef, NextRunAt: s.NextRunAt,
+		Delivery: s.Delivery, RecipientRef: s.RecipientRef, Dispatch: s.Dispatch, NextRunAt: s.NextRunAt,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt,
 	}
 }

@@ -82,6 +82,11 @@ export function ComplianceInventoryReportPanel({
                       <td>
                         <p className="font-medium">{schedule.name}</p>
                         {schedule.recipient_ref && <p className="mt-1 font-mono text-xs text-muted-foreground">{schedule.recipient_ref}</p>}
+                        {schedule.dispatch && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t("policy.reporting.announcedOn", { targets: dispatchTargets(schedule.dispatch) })}
+                          </p>
+                        )}
                       </td>
                       <td>{schedule.framework}</td>
                       <td>{reportTypeLabel(schedule.report_type, t)}</td>
@@ -139,6 +144,13 @@ export function scheduleOverdueAtReportTime(schedule: ComplianceReportSchedule, 
   const due = Date.parse(schedule.next_run_at);
   const observed = Date.parse(reportGeneratedAt);
   return Number.isFinite(due) && Number.isFinite(observed) && due < observed;
+}
+
+// A103: where a schedule (or one of its completed runs) announces a report.
+export function dispatchTargets(dispatch: { channels?: string[]; ticket?: { table?: string } }): string {
+  const targets = [...(dispatch.channels ?? [])];
+  if (dispatch.ticket) targets.push(`ServiceNow ${dispatch.ticket.table ?? "incident"}`);
+  return targets.join(", ");
 }
 
 function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule }) {
@@ -205,6 +217,12 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
               <p className="break-all font-mono text-xs">
                 {t("policy.reporting.digest")}: {run.artifact_digest}
               </p>
+            )}
+            {run.dispatch && dispatchTargets(run.dispatch) !== "" && (
+              <p className="text-sm text-muted-foreground">{t("policy.reporting.runAnnounced", { targets: dispatchTargets(run.dispatch) })}</p>
+            )}
+            {run.dispatch?.ticket_skipped && (
+              <p className="text-sm text-destructive">{t("policy.reporting.ticketSkipped", { reason: run.dispatch.ticket_skipped })}</p>
             )}
           </div>
           <div className="flex gap-2">

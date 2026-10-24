@@ -10500,6 +10500,10 @@ export interface components {
             report_schedules: number;
             report_types_supported: number;
         };
+        ComplianceReportDispatch: {
+            channels?: string[];
+            ticket?: components["schemas"]["ComplianceReportTicket"];
+        };
         ComplianceReportRun: {
             artifact_digest?: string;
             artifact_ref?: string;
@@ -10508,6 +10512,7 @@ export interface components {
             completed_at?: string;
             /** Format: date-time */
             created_at: string;
+            dispatch?: components["schemas"]["ComplianceReportRunDispatch"];
             /** Format: date-time */
             due_at: string;
             error_code?: string;
@@ -10528,6 +10533,12 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        ComplianceReportRunDispatch: {
+            channels?: string[];
+            schedule_name: string;
+            ticket?: components["schemas"]["ComplianceReportTicket"];
+            ticket_skipped?: string;
+        };
         ComplianceReportRunList: {
             items: components["schemas"]["ComplianceReportRun"][];
             next_cursor?: string;
@@ -10537,6 +10548,7 @@ export interface components {
             created_at: string;
             /** @enum {string} */
             delivery: "audit_export";
+            dispatch?: components["schemas"]["ComplianceReportDispatch"];
             enabled: boolean;
             /** @enum {string} */
             framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
@@ -10579,6 +10591,7 @@ export interface components {
         ComplianceReportScheduleRequest: {
             /** @enum {string} */
             delivery?: "audit_export";
+            dispatch?: components["schemas"]["ComplianceReportDispatch"];
             enabled?: boolean;
             /** @enum {string} */
             framework: "pci-dss" | "hipaa" | "soc2" | "nist-800-53" | "nist-csf-2.0" | "fedramp" | "cmmc-2.0" | "cnsa-2.0" | "fips-140" | "common-criteria" | "cabf-br" | "webtrust" | "etsi" | "eidas" | "nis2";
@@ -10587,6 +10600,14 @@ export interface components {
             recipient_ref?: string;
             /** @enum {string} */
             report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
+        };
+        ComplianceReportTicket: {
+            instance_url: string;
+            /** @enum {string} */
+            provider: "servicenow";
+            /** @enum {string} */
+            table?: "incident" | "change_request" | "sc_task";
+            token_ref: string;
         };
         ConnectorCatalog: {
             items: components["schemas"]["ConnectorCatalogItem"][];

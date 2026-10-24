@@ -3511,6 +3511,15 @@ ComplianceInventorySummary = TypedDict(
     total=False,
 )
 
+ComplianceReportDispatch = TypedDict(
+    'ComplianceReportDispatch',
+    {
+        'channels': list[str],
+        'ticket': dict[str, Any],
+    },
+    total=False,
+)
+
 ComplianceReportRun = TypedDict(
     'ComplianceReportRun',
     {
@@ -3519,6 +3528,7 @@ ComplianceReportRun = TypedDict(
         'attempt': int,
         'completed_at': str,
         'created_at': str,
+        'dispatch': dict[str, Any],
         'due_at': str,
         'error_code': str,
         'event_sequence': int,
@@ -3531,6 +3541,17 @@ ComplianceReportRun = TypedDict(
         'status': str,
         'tenant_id': str,
         'updated_at': str,
+    },
+    total=False,
+)
+
+ComplianceReportRunDispatch = TypedDict(
+    'ComplianceReportRunDispatch',
+    {
+        'channels': list[str],
+        'schedule_name': str,
+        'ticket': dict[str, Any],
+        'ticket_skipped': str,
     },
     total=False,
 )
@@ -3549,6 +3570,7 @@ ComplianceReportSchedule = TypedDict(
     {
         'created_at': str,
         'delivery': str,
+        'dispatch': dict[str, Any],
         'enabled': bool,
         'framework': str,
         'id': str,
@@ -3599,12 +3621,24 @@ ComplianceReportScheduleRequest = TypedDict(
     'ComplianceReportScheduleRequest',
     {
         'delivery': str,
+        'dispatch': dict[str, Any],
         'enabled': bool,
         'framework': str,
         'interval_seconds': int,
         'name': str,
         'recipient_ref': str,
         'report_type': str,
+    },
+    total=False,
+)
+
+ComplianceReportTicket = TypedDict(
+    'ComplianceReportTicket',
+    {
+        'instance_url': str,
+        'provider': str,
+        'table': str,
+        'token_ref': str,
     },
     total=False,
 )

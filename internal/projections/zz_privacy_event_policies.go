@@ -729,6 +729,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/name", opaque), privacyRule("/report_type", opaque),
 		privacyRule("/interval_seconds", opaque), privacyRule("/enabled", opaque),
 		privacyRule("/delivery", opaque), privacyRule("/recipient_ref", exact),
+		privacyRule("/dispatch/channels/*", opaque), privacyRule("/dispatch/ticket/provider", opaque),
+		privacyRule("/dispatch/ticket/instance_url", opaque), privacyRule("/dispatch/ticket/table", opaque),
+		privacyRule("/dispatch/ticket/token_ref", opaque),
 	)
 	complianceRun := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/schedule_id", opaque),
@@ -739,6 +742,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/error_code", opaque), privacyRule("/artifact_ref", opaque),
 		privacyRule("/artifact_digest", opaque), privacyRule("/completed_at", opaque),
 		privacyRule("/created_at", opaque),
+		privacyRule("/dispatch/schedule_name", opaque), privacyRule("/dispatch/channels/*", opaque),
+		privacyRule("/dispatch/ticket/provider", opaque), privacyRule("/dispatch/ticket/instance_url", opaque),
+		privacyRule("/dispatch/ticket/table", opaque), privacyRule("/dispatch/ticket/token_ref", opaque),
+		privacyRule("/dispatch/ticket_skipped", opaque),
 	)
 	secretRotationRunV1 := privacyRules(
 		privacyRule("/schedule_id", opaque), privacyRule("/run_id", opaque),

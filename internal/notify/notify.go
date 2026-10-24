@@ -68,6 +68,10 @@ const (
 	// host stop could not be verified. It is separate from ordinary endpoint
 	// verification because a compromised leaf may still be serving.
 	DestinationContainment = "notification.containment"
+	// DestinationComplianceReport announces a signed scheduled report on the
+	// channels its schedule names (A103). The notice references the archived
+	// report; it never carries the report body.
+	DestinationComplianceReport = "notification.compliance_report"
 )
 
 // Alert kinds.
@@ -118,6 +122,7 @@ const (
 	KindRevocationHealth          = "revocation.health"
 	KindOwnershipReattestation    = "ownership.reattestation_requested"
 	KindOwnershipHandoff          = "ownership.handoff"
+	KindComplianceReportReady     = "compliance.report_ready"
 	KindRestoreDrillFailed        = "backup.restore_drill_failed"
 	KindRestoreDrillSkipped       = "backup.restore_drill_skipped"
 	KindRestoreDrillObjective     = "backup.restore_drill_objective_breached"
@@ -202,4 +207,22 @@ type Alert struct {
 	HorizonMonths         *int      `json:"horizon_months,omitempty"`
 	RenewBy               time.Time `json:"renew_by,omitempty"`
 	DependentCertificates *int      `json:"dependent_certificates,omitempty"`
+
+	// Report identifies the signed scheduled report a KindComplianceReportReady
+	// notice announces (A103).
+	Report *AlertReport `json:"report,omitempty"`
+}
+
+// AlertReport references one signed scheduled report. It never carries the
+// report body: a receiver downloads it at DownloadPath with its own
+// credentials and checks it against ArtifactSHA256.
+type AlertReport struct {
+	ScheduleID     string    `json:"schedule_id"`
+	ScheduleName   string    `json:"schedule_name"`
+	RunID          string    `json:"run_id"`
+	Framework      string    `json:"framework"`
+	ReportType     string    `json:"report_type"`
+	DueAt          time.Time `json:"due_at"`
+	ArtifactSHA256 string    `json:"artifact_sha256"`
+	DownloadPath   string    `json:"download_path"`
 }

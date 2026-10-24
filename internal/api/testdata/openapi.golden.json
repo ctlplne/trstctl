@@ -10336,6 +10336,21 @@
         ],
         "type": "object"
       },
+      "ComplianceReportDispatch": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "type": "array"
+          },
+          "ticket": {
+            "$ref": "#/components/schemas/ComplianceReportTicket"
+          }
+        },
+        "type": "object"
+      },
       "ComplianceReportRun": {
         "properties": {
           "artifact_digest": {
@@ -10354,6 +10369,9 @@
           "created_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "dispatch": {
+            "$ref": "#/components/schemas/ComplianceReportRunDispatch"
           },
           "due_at": {
             "format": "date-time",
@@ -10420,6 +10438,29 @@
         ],
         "type": "object"
       },
+      "ComplianceReportRunDispatch": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "schedule_name": {
+            "type": "string"
+          },
+          "ticket": {
+            "$ref": "#/components/schemas/ComplianceReportTicket"
+          },
+          "ticket_skipped": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schedule_name"
+        ],
+        "type": "object"
+      },
       "ComplianceReportRunList": {
         "properties": {
           "items": {
@@ -10448,6 +10489,9 @@
               "audit_export"
             ],
             "type": "string"
+          },
+          "dispatch": {
+            "$ref": "#/components/schemas/ComplianceReportDispatch"
           },
           "enabled": {
             "type": "boolean"
@@ -10643,6 +10687,9 @@
             ],
             "type": "string"
           },
+          "dispatch": {
+            "$ref": "#/components/schemas/ComplianceReportDispatch"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -10691,6 +10738,36 @@
           "name",
           "report_type",
           "interval_seconds"
+        ],
+        "type": "object"
+      },
+      "ComplianceReportTicket": {
+        "properties": {
+          "instance_url": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "servicenow"
+            ],
+            "type": "string"
+          },
+          "table": {
+            "enum": [
+              "incident",
+              "change_request",
+              "sc_task"
+            ],
+            "type": "string"
+          },
+          "token_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "instance_url",
+          "token_ref"
         ],
         "type": "object"
       },

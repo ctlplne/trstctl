@@ -505,3 +505,27 @@ func TestFormatMessage(t *testing.T) {
 		t.Errorf("critical containment page lacks actionable identity: %q", failed)
 	}
 }
+
+// A103: a scheduled report notice goes to exactly the channel its schedule
+// named, never fanned out to every channel, and a channel that is no longer
+// configured fails the delivery visibly instead of being skipped.
+func TestComplianceReportNoticeReachesOnlyItsNamedChannel(t *testing.T) {
+	webhook := &capturingNotifier{name: "webhook"}
+	slack := &capturingNotifier{name: "slack"}
+	d := notify.NewDispatcher(webhook, slack)
+	payload, _ := json.Marshal(notify.Alert{Kind: notify.KindComplianceReportReady, TenantID: "t1", TargetChannel: "webhook",
+		Subject: "monthly SOC 2 pack", Report: &notify.AlertReport{RunID: "run-1", ArtifactSHA256: "ab"}})
+	if err := d.Dispatch(context.Background(), payload); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	if len(webhook.got) != 1 || len(slack.got) != 0 || webhook.got[0].Report == nil || webhook.got[0].Report.RunID != "run-1" {
+		t.Fatalf("named channel calls=%d other=%d", len(webhook.got), len(slack.got))
+	}
+	gone, _ := json.Marshal(notify.Alert{Kind: notify.KindComplianceReportReady, TenantID: "t1", TargetChannel: "teams-removed"})
+	if err := d.Dispatch(context.Background(), gone); err == nil {
+		t.Fatal("a notice for an unconfigured channel was dropped silently")
+	}
+	if len(webhook.got) != 1 || len(slack.got) != 0 {
+		t.Fatalf("a notice for an unconfigured channel fanned out: webhook=%d slack=%d", len(webhook.got), len(slack.got))
+	}
+}

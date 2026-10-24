@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -34,9 +35,12 @@ type ComplianceReportRun struct {
 	ArtifactRef     string
 	ArtifactDigest  string
 	CompletedAt     time.Time
-	EventSequence   uint64
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// Dispatch is the announcement a completed run made beyond the archive
+	// (A103); nil for archive-only runs and every unfinished transition.
+	Dispatch      *ComplianceReportRunDispatch
+	EventSequence uint64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 var complianceReportErrorCode = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
@@ -85,8 +89,8 @@ func ValidateComplianceReportRun(run ComplianceReportRun) error {
 	default:
 		return errors.New("store: unsupported report run status")
 	}
-	if run.Status != "completed" && (run.ArtifactRef != "" || run.ArtifactDigest != "" || !run.CompletedAt.IsZero()) {
-		return errors.New("store: unfinished report run cannot carry an artifact")
+	if run.Status != "completed" && (run.ArtifactRef != "" || run.ArtifactDigest != "" || !run.CompletedAt.IsZero() || run.Dispatch != nil) {
+		return errors.New("store: unfinished report run cannot carry an artifact or dispatch")
 	}
 	return nil
 }
@@ -106,7 +110,7 @@ func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run C
 	err := scanComplianceReportRun(tx.QueryRow(ctx,
 		`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 		        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-		        artifact_digest, completed_at, event_sequence, created_at, updated_at
+		        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
 		   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
 		run.TenantID, run.ID), &old)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -151,22 +155,26 @@ func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run C
 	if !run.CompletedAt.IsZero() {
 		completed = run.CompletedAt
 	}
+	dispatch, err := dispatchJSON(run.Dispatch)
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO compliance_report_runs
 		        (tenant_id, id, schedule_id, due_at, framework, report_type, status,
 		         retry_generation, attempt, next_attempt_at, error_code, artifact_ref, artifact_digest,
-		         completed_at, event_sequence, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+		         completed_at, event_sequence, created_at, updated_at, dispatch)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::jsonb)
 		 ON CONFLICT (tenant_id, id) DO UPDATE SET
 		        status = EXCLUDED.status, retry_generation = EXCLUDED.retry_generation,
 		        attempt = EXCLUDED.attempt,
 		        next_attempt_at = EXCLUDED.next_attempt_at, error_code = EXCLUDED.error_code,
 		        artifact_ref = EXCLUDED.artifact_ref, artifact_digest = EXCLUDED.artifact_digest,
 		        completed_at = EXCLUDED.completed_at, event_sequence = EXCLUDED.event_sequence,
-		        updated_at = EXCLUDED.updated_at`,
+		        updated_at = EXCLUDED.updated_at, dispatch = EXCLUDED.dispatch`,
 		run.TenantID, run.ID, run.ScheduleID, run.DueAt, run.Framework, run.ReportType,
 		run.Status, run.RetryGeneration, run.Attempt, nextAttempt, run.ErrorCode, run.ArtifactRef,
-		run.ArtifactDigest, completed, run.EventSequence, run.CreatedAt, run.UpdatedAt)
+		run.ArtifactDigest, completed, run.EventSequence, run.CreatedAt, run.UpdatedAt, dispatch)
 	if err != nil {
 		return fmt.Errorf("store: project report run: %w", err)
 	}
@@ -199,7 +207,7 @@ func (s *Store) GetComplianceReportRun(ctx context.Context, tenantID, id string)
 		return scanComplianceReportRun(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-			        artifact_digest, completed_at, event_sequence, created_at, updated_at
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
 			   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
 	return out, err
@@ -214,7 +222,7 @@ func (s *Store) GetComplianceReportRunByDue(ctx context.Context, tenantID, sched
 		return scanComplianceReportRun(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-			        artifact_digest, completed_at, event_sequence, created_at, updated_at
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND schedule_id = $2 AND due_at = $3`,
 			tenantID, scheduleID, dueAt), &out)
@@ -238,7 +246,7 @@ func (s *Store) ListComplianceReportRunsPage(ctx context.Context, tenantID, sche
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-			        artifact_digest, completed_at, event_sequence, created_at, updated_at
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND schedule_id = $2
 			    AND ($3::timestamptz IS NULL OR due_at < $3)
@@ -262,11 +270,20 @@ func (s *Store) ListComplianceReportRunsPage(ctx context.Context, tenantID, sche
 func scanComplianceReportRun(row rowScanner, run *ComplianceReportRun) error {
 	var nextAttempt, completed *time.Time
 	var sequence int64
+	var dispatch []byte
 	if err := row.Scan(&run.ID, &run.TenantID, &run.ScheduleID, &run.DueAt,
 		&run.Framework, &run.ReportType, &run.Status, &run.RetryGeneration, &run.Attempt, &nextAttempt,
 		&run.ErrorCode, &run.ArtifactRef, &run.ArtifactDigest, &completed, &sequence,
-		&run.CreatedAt, &run.UpdatedAt); err != nil {
+		&run.CreatedAt, &run.UpdatedAt, &dispatch); err != nil {
 		return err
+	}
+	run.Dispatch = nil
+	if len(dispatch) > 0 {
+		var d ComplianceReportRunDispatch
+		if err := json.Unmarshal(dispatch, &d); err != nil {
+			return fmt.Errorf("store: decode report run dispatch: %w", err)
+		}
+		run.Dispatch = &d
 	}
 	if nextAttempt != nil {
 		run.NextAttemptAt = *nextAttempt

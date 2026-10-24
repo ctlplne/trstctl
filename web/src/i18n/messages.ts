@@ -13434,6 +13434,54 @@ export const messages = {
     defaultMessage: "Archive label (optional)",
     description: "Operator correlation label only; it does not route a signed report.",
   },
+  "policy.reporting.dispatchChannels": {
+    defaultMessage: "Announce on notification channels (optional)",
+    description: "Schedule form field: comma-separated notification channel IDs that receive a notice after each completed run.",
+  },
+  "policy.reporting.dispatchChannelsPlaceholder": {
+    defaultMessage: "webhook, email",
+    description: "Example notification channel IDs shown in the empty channels field.",
+  },
+  "policy.reporting.ticketInstanceURLPlaceholder": {
+    defaultMessage: "https://example.service-now.com",
+    description: "Example ServiceNow instance URL shown in the empty field.",
+  },
+  "policy.reporting.dispatchChannelsHint": {
+    defaultMessage: "Each notice names the run, its SHA-256 and where to download it; the report itself stays in the archive.",
+    description: "Hint under the channels field explaining what a report notice carries.",
+  },
+  "policy.reporting.ticketEnabled": {
+    defaultMessage: "Open a ServiceNow ticket for each completed run",
+    description: "Schedule form checkbox that adds a ServiceNow ticket to the run's announcements.",
+  },
+  "policy.reporting.ticketInstanceURL": {
+    defaultMessage: "ServiceNow instance URL",
+    description: "Schedule form field: the operator-approved ServiceNow instance.",
+  },
+  "policy.reporting.ticketTokenRef": {
+    defaultMessage: "ServiceNow token reference",
+    description: "Schedule form field: the operator-approved credential reference, never a token value.",
+  },
+  "policy.reporting.ticketTable": {
+    defaultMessage: "ServiceNow table",
+    description: "Schedule form field: the ServiceNow table the ticket is opened in.",
+  },
+  "policy.reporting.afterEachRun": {
+    defaultMessage: "After each completed run",
+    description: "Schedule review heading for the announcements each completed run makes.",
+  },
+  "policy.reporting.announcedOn": {
+    defaultMessage: "Announced on: {targets}",
+    description: "Schedule list: where each completed run is announced.",
+  },
+  "policy.reporting.runAnnounced": {
+    defaultMessage: "Announced on: {targets}",
+    description: "Run list: where this completed run was announced.",
+  },
+  "policy.reporting.ticketSkipped": {
+    defaultMessage: "Ticket not opened: {reason}",
+    description: "Run list: why this run's ServiceNow ticket was skipped.",
+  },
   "policy.reporting.scheduling": {
     defaultMessage: "Scheduling...",
     description: "Busy label while creating a compliance report schedule.",

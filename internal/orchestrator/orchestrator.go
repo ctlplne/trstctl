@@ -1549,6 +1549,22 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 		}
 		// Lifecycle transitions and queued discovery runs carry outbox side effects;
 		// skip everything else (domain CRUD events, tenant events, certificate events).
+		if ev.Type == projections.EventComplianceReportRunRecorded {
+			// A completed run's announcements (A103) are restored from the
+			// retained event; every other transition has no outbox command.
+			var pl projections.ComplianceReportRunRecorded
+			if err := json.Unmarshal(ev.Data, &pl); err != nil {
+				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
+			}
+			if pl.Status == "completed" && pl.Dispatch != nil {
+				if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+					return o.enqueueComplianceReportDispatchTx(ctx, tx, ev.TenantID, pl)
+				}); err != nil {
+					return err
+				}
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == EventITSMTicketRequested {
 			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
