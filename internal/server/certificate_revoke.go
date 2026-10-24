@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
@@ -63,19 +64,8 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 			return "", err
 		}
 		if found && event.Type == projections.EventCACertificateInventoryRecovered {
-			// A recovered historical leaf (A111, A113): its recovery event names
-			// the CA its original mint did. The issuing CA's leaves continue to
-			// the served revocation authority below; a managed CA's leaf is
-			// checked against that authority here.
-			var recovered projections.CACertificateInventoryRecovered
-			if json.Unmarshal(event.Data, &recovered) != nil || event.TenantID != certificate.TenantID ||
-				projections.RecoveredInventoryID(event.TenantID, recovered) != certificate.ID ||
-				recovered.Fingerprint != certificate.Fingerprint || recovered.Serial != certificate.Serial ||
-				!bytes.Equal(recovered.CertificateDER, certificate.CertificateDER) {
-				return "", orchestrator.ErrCertificateRevocationUnsupported
-			}
-			if recovered.CAID != IssuingCAID() {
-				return s.managedLeafRevocationAuthority(ctx, certificate.TenantID, recovered.CAID, recovered.CertificateDER, recovered.Serial)
+			if authority, resolved, err := s.recoveredLeafRevocationAuthority(ctx, certificate, event); resolved || err != nil {
+				return authority, err
 			}
 		}
 		managed, err := projections.LegacyManagedCALeafEvidence(event)
@@ -181,6 +171,25 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 		return "", orchestrator.ErrCertificateRevocationUnsupported
 	}
 	return s.revoc.caID, nil
+}
+
+// recoveredLeafRevocationAuthority resolves a recovered historical leaf
+// (A111, A113) by its recovery event, which names the CA its original mint
+// did. resolved is false for a leaf of the issuing CA: it continues to the
+// served revocation authority. A managed CA's leaf is checked against that CA.
+func (s *Server) recoveredLeafRevocationAuthority(ctx context.Context, certificate store.Certificate, event events.Event) (string, bool, error) {
+	var recovered projections.CACertificateInventoryRecovered
+	if json.Unmarshal(event.Data, &recovered) != nil || event.TenantID != certificate.TenantID ||
+		projections.RecoveredInventoryID(event.TenantID, recovered) != certificate.ID ||
+		recovered.Fingerprint != certificate.Fingerprint || recovered.Serial != certificate.Serial ||
+		!bytes.Equal(recovered.CertificateDER, certificate.CertificateDER) {
+		return "", true, orchestrator.ErrCertificateRevocationUnsupported
+	}
+	if recovered.CAID == IssuingCAID() {
+		return "", false, nil
+	}
+	authority, err := s.managedLeafRevocationAuthority(ctx, certificate.TenantID, recovered.CAID, recovered.CertificateDER, recovered.Serial)
+	return authority, true, err
 }
 
 // managedLeafRevocationAuthority returns the managed CA that signed der and
