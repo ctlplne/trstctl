@@ -14422,7 +14422,7 @@ export interface components {
              * @description Selection used by this successful channel. Absent on historical receipts that did not retain routing evidence.
              * @enum {string}
              */
-            routing_source?: "explicit_policy" | "inherited_policy" | "default_policy" | "all_channels" | "channel_test";
+            routing_source?: "explicit_policy" | "inherited_policy" | "default_policy" | "all_channels" | "channel_test" | "report_schedule";
         };
         NotificationDigestPreview: {
             interval_seconds: number;

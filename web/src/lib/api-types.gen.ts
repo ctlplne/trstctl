@@ -6142,7 +6142,7 @@ export interface NotificationDelivery {
   routing_policy_digest?: string;
   routing_policy_id?: string;
   routing_policy_scope?: string;
-  routing_source?: "explicit_policy" | "inherited_policy" | "default_policy" | "all_channels" | "channel_test";
+  routing_source?: "explicit_policy" | "inherited_policy" | "default_policy" | "all_channels" | "channel_test" | "report_schedule";
 }
 
 export interface NotificationDigestPreview {

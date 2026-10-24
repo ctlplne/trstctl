@@ -263,7 +263,9 @@ func (s *Store) ApplyNotificationDeliveryRecordedTx(ctx context.Context, tx pgx.
 
 func validateNotificationDeliveryRouting(rec NotificationDeliveryReceipt) error {
 	switch rec.RoutingSource {
-	case "", "all_channels", "channel_test":
+	// A channel test and a scheduled report notice (A103) each name their one
+	// channel themselves; no routing policy chose it.
+	case "", "all_channels", "channel_test", "report_schedule":
 		if rec.RoutingPolicyID == "" && rec.RoutingPolicyScope == "" && rec.RoutingPolicyDigest == "" {
 			return nil
 		}

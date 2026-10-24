@@ -3370,7 +3370,7 @@ func componentSchemas() map[string]*Schema {
 	}, "kind", "subject")
 	notificationDelivery := object(map[string]*Schema{
 		"id": str(), "channel": str(), "attempts": {Type: "integer"}, "delivered_at": timestamp(),
-		"routing_source":    {Type: "string", Enum: []string{"explicit_policy", "inherited_policy", "default_policy", "all_channels", "channel_test"}, Description: "Selection used by this successful channel. Absent on historical receipts that did not retain routing evidence."},
+		"routing_source":    {Type: "string", Enum: []string{"explicit_policy", "inherited_policy", "default_policy", "all_channels", "channel_test", "report_schedule"}, Description: "Selection used by this successful channel. Absent on historical receipts that did not retain routing evidence."},
 		"routing_policy_id": str(), "routing_policy_scope": str(), "routing_policy_digest": str(),
 	}, "id", "channel", "attempts", "delivered_at")
 	notification := object(map[string]*Schema{

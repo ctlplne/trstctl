@@ -5,7 +5,9 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -46,6 +48,24 @@ func TestServedScheduledReportDispatchAnnouncesCompletedRuns(t *testing.T) {
 		d.ServiceNowBindings = []api.ServiceNowBinding{{InstanceURL: instanceURL, TokenRef: tokenRef}}
 	})
 	ctx := t.Context()
+	// The tenant webhook's public URL stays the contract; only this injected
+	// client maps its host to an owned local sink, so delivery is real.
+	sink := newFamilySink(t)
+	if h.srv.notificationTenantChannels == nil {
+		t.Fatal("the served dispatcher has no tenant channel resolver")
+	}
+	h.srv.notificationTenantChannels.SetHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Hostname() != "grc.example.test" {
+			return nil, errors.New("unexpected notification host " + req.URL.Hostname())
+		}
+		localURL, err := url.Parse(sink.srv.URL + req.URL.Path)
+		if err != nil {
+			return nil, err
+		}
+		local := req.Clone(req.Context())
+		local.URL, local.Host = localURL, localURL.Host
+		return sink.srv.Client().Do(local)
+	})})
 	admin := seedScopedToken(t, h.store, h.tenant, "audit:write", "audit:read", "notifications:read", "notifications:write")
 	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/notification-channels", admin, "a103-channel", map[string]any{
 		"id": "webhook", "channel_type": "webhook", "label": "GRC intake", "endpoint_url": "https://grc.example.test/hooks/trstctl", "enabled": true,
@@ -182,6 +202,44 @@ func TestServedScheduledReportDispatchAnnouncesCompletedRuns(t *testing.T) {
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/compliance/report-runs/"+withdrawn.ID, admin, nil)
 	if status != http.StatusOK || !bytes.Contains(body, []byte(`"ticket_skipped"`)) || !bytes.Contains(body, []byte(`"webhook"`)) {
 		t.Fatalf("withdrawn-binding receipt = %d %s", status, body)
+	}
+
+	// Each run's notice reaches the webhook exactly once, and its delivery
+	// receipt names the schedule as the route (no routing policy chose it).
+	deliverNotices := func() {
+		t.Helper()
+		if err := h.srv.Drain(ctx); err != nil {
+			t.Fatalf("drain the notices: %v", err)
+		}
+	}
+	deliverNotices()
+	sink.mu.Lock()
+	bodies := append([][]byte(nil), sink.bodies["/hooks/trstctl"]...)
+	sink.mu.Unlock()
+	delivered := map[string]bool{}
+	for _, body := range bodies {
+		var got notify.Alert
+		if err := json.Unmarshal(body, &got); err != nil || got.Kind != notify.KindComplianceReportReady || got.Report == nil ||
+			bytes.Contains(body, []byte(`"signature"`)) || bytes.Contains(body, []byte(`"manifest"`)) {
+			t.Fatalf("webhook delivery = %s (err %v)", body, err)
+		}
+		delivered[got.Report.RunID] = true
+	}
+	if len(bodies) != 2 || !delivered[run.ID] || !delivered[withdrawn.ID] {
+		t.Fatalf("webhook deliveries = %d for runs %v; want one per completed run", len(bodies), delivered)
+	}
+	var receipts int
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM notification_delivery_receipts
+		WHERE tenant_id = $1 AND destination = $2 AND channel = 'webhook' AND routing_source = 'report_schedule'`,
+		h.tenant, notify.DestinationComplianceReport).Scan(&receipts); err != nil || receipts != 2 {
+		t.Fatalf("report notice delivery receipts = %d (err %v); want 2 routed by the schedule", receipts, err)
+	}
+	deliverNotices()
+	sink.mu.Lock()
+	again := len(sink.bodies["/hooks/trstctl"])
+	sink.mu.Unlock()
+	if again != 2 {
+		t.Fatalf("a second drain re-sent report notices: %d deliveries", again)
 	}
 
 	// Reconciliation and a repeated completion converge on the same rows.

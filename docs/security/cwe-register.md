@@ -310,7 +310,7 @@ not this file.
 | `internal/server/cmdb_served_test.go:32` | credential reference (env: pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:36` | credential reference (secret store pointer), no credential value present (CWE-798) |
 | `internal/server/cmdb_served_test.go:44` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/server/compliance_report_dispatch_served_test.go:42` | fabricated fixture reference; no value is real (CWE-798) |
+| `internal/server/compliance_report_dispatch_served_test.go:44` | fabricated fixture reference; no value is real (CWE-798) |
 | `internal/server/connector_rollback_control_plane_served_test.go:29` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:51` | env credential references and fixture endpoints; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_cloud_outcomes_served_test.go:52` | env credential reference, not a value (CWE-798) |
@@ -1099,7 +1099,7 @@ not this file.
 | `internal/crypto/secretfile/secretfile_test.go:67` | restores the fixture dir so t.TempDir cleanup can remove it (CWE-276) |
 | `internal/server/bundled_pg_start_test.go:30` | adversarial test anchor must be writable to prove the verifier rejects it (CWE-732) |
 | `internal/server/bundled_pg_start_test.go:33` | restore the private directory's required execute bit (CWE-732) |
-| `internal/server/compliance_report_dispatch_served_test.go:38` | owner execute is required to traverse this private test directory. |
+| `internal/server/compliance_report_dispatch_served_test.go:40` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:67` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:221` | owner execute is required to traverse this private test directory. |
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |

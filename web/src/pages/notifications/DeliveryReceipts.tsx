@@ -10,6 +10,7 @@ const routingLabels = {
   default_policy: "notifications.receipts.default_policy",
   all_channels: "notifications.receipts.all_channels",
   channel_test: "notifications.receipts.channel_test",
+  report_schedule: "notifications.receipts.report_schedule",
 } satisfies Record<string, MessageKey>;
 
 export function DeliveryReceipts({ deliveries }: { deliveries: Notification["deliveries"] }) {

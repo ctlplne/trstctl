@@ -25353,7 +25353,8 @@
               "inherited_policy",
               "default_policy",
               "all_channels",
-              "channel_test"
+              "channel_test",
+              "report_schedule"
             ],
             "type": "string"
           }

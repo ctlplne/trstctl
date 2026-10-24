@@ -132,3 +132,34 @@ func TestNotificationDeliveryReceiptProjectionIsTenantScopedAndImmutable(t *test
 		}
 	}
 }
+
+// A103: a scheduled report's notice goes to the channel its schedule named, so
+// its receipt records the report_schedule route with no policy evidence. A
+// receipt claiming that route together with a routing policy is refused.
+func TestNotificationDeliveryReceiptAcceptsTheReportScheduleRoute(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	outboxID := int64(92)
+	rec := store.NotificationDeliveryReceipt{
+		TenantID: tenantA, ID: "notification.delivery:report-notice",
+		Destination: "notification.compliance_report", NotificationKeyDigest: "report-key",
+		PayloadDigest: "report-payload", Channel: "webhook", OutboxID: &outboxID,
+		Attempts: 1, DeliveredAt: time.Date(2026, 10, 24, 5, 36, 0, 0, time.UTC), RoutingSource: "report_schedule",
+	}
+	apply := func(candidate store.NotificationDeliveryReceipt) error {
+		return s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.ApplyNotificationDeliveryRecordedTx(ctx, tx, candidate)
+		})
+	}
+	if err := apply(rec); err != nil {
+		t.Fatalf("report notice receipt: %v", err)
+	}
+	if got, err := s.GetNotificationDeliveryReceipt(ctx, tenantA, rec.ID); err != nil || got.RoutingSource != "report_schedule" {
+		t.Fatalf("projected report notice receipt = %+v, %v", got, err)
+	}
+	withPolicy := rec
+	withPolicy.ID, withPolicy.RoutingPolicyID = "notification.delivery:report-notice-policy", "policy-a"
+	if err := apply(withPolicy); err == nil {
+		t.Fatal("a report_schedule receipt carrying a routing policy was accepted")
+	}
+}

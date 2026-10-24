@@ -15577,6 +15577,10 @@ export const messages = {
   "notifications.receipts.default_policy": { defaultMessage: "Configured default routing", description: "Historical notification delivery evidence" },
   "notifications.receipts.all_channels": { defaultMessage: "All configured channels", description: "Historical notification delivery evidence" },
   "notifications.receipts.channel_test": { defaultMessage: "Direct channel test", description: "Historical notification delivery evidence" },
+  "notifications.receipts.report_schedule": {
+    defaultMessage: "Channel named by the report schedule",
+    description: "Historical notification delivery evidence: a scheduled report's notice went to a channel its schedule named.",
+  },
   "notifications.receipts.policy": { defaultMessage: "Policy at delivery", description: "Historical notification delivery evidence" },
   "notifications.receipts.scope": { defaultMessage: "Policy level", description: "Historical notification delivery evidence" },
   "notifications.receipts.proof": { defaultMessage: "Show receipt and policy digest", description: "Historical notification delivery evidence" },
