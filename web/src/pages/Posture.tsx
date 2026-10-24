@@ -1,6 +1,5 @@
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, CheckCircle2, FileWarning, Radar, SearchCheck, ShieldAlert, XCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, FileWarning, Radar, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
@@ -22,21 +21,20 @@ import {
   type CBOMScan,
   type CryptoReadiness,
   type CTMonitoring,
-  type DiscoveryFinding,
   type DriftRemediation,
-  type DriftRemediationDecisionRequest,
   type DriftRemediationFinding,
   type DiscoveryRun,
   type DiscoverySource,
 } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
-import { formatDateTime as formatDateTimePolicy } from "@/i18n/format";
 import { PQCCampaigns } from "@/pages/posture/PQCCampaigns";
 import { PQCPilots } from "@/pages/posture/PQCPilots";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 import { loadLatestDriftRuns } from "@/pages/posture/DriftLatestRuns";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
+import { CTFindingsDashboard, DriftFindingsDashboard, type DashboardTriage, type DriftDecision } from "@/pages/posture/PostureFindingDashboards";
+import { Metric, PreviewTable } from "@/pages/posture/PostureParts";
 
 const emptyCBOMProgress: CBOMMigrationProgress = {
   total_assets: 0,
@@ -50,15 +48,18 @@ export function Posture() {
   const { t } = useTranslation();
   const cryptoReadiness = useApiQuery(["crypto-readiness"], api.cryptoReadiness);
   const [discoverySources, setDiscoverySources] = useState<DiscoverySource[]>([]);
-  const [discoveryRuns, setDiscoveryRuns] = useState<DiscoveryRun[]>([]);
   const [driftLatestRuns, setDriftLatestRuns] = useState<Record<string, DiscoveryRun | null>>({});
-  const [discoveryFindings, setDiscoveryFindings] = useState<DiscoveryFinding[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(true);
   const [discoveryError, setDiscoveryError] = useState<string | null>(null);
   const [ctMonitoring, setCTMonitoring] = useState<CTMonitoring | null>(null);
+  const [ctLoading, setCTLoading] = useState(true);
   const [ctError, setCTError] = useState<string | null>(null);
+  const [ctFilter, setCTFilter] = useState<DashboardTriage>("");
+  const [ctLoadingMore, setCTLoadingMore] = useState(false);
   const [driftRemediation, setDriftRemediation] = useState<DriftRemediation | null>(null);
   const [driftLoading, setDriftLoading] = useState(true);
+  const [driftFilter, setDriftFilter] = useState<DashboardTriage>("");
+  const [driftLoadingMore, setDriftLoadingMore] = useState(false);
   const [driftBusy, setDriftBusy] = useState<string | null>(null);
   const [driftResult, setDriftResult] = useState<string | null>(null);
   const [driftError, setDriftError] = useState<string | null>(null);
@@ -77,22 +78,16 @@ export function Posture() {
     async function loadDiscoveryPosture() {
       setDiscoveryLoading(true);
       setDiscoveryError(null);
-      const [sourceResult, runResult, findingResult, monitoringResult] = await Promise.allSettled([
+      const [sourceResult, runResult, monitoringResult] = await Promise.allSettled([
         api.discoverySources({ limit: 50 }),
         api.discoveryRuns({ limit: 50 }),
-        api.discoveryFindings({ limit: 50 }),
         api.discoveryMonitoring(),
       ]);
       if (cancelled) return;
 
       if (sourceResult.status === "fulfilled") setDiscoverySources(sourceResult.value.items ?? []);
       else setDiscoverySources([]);
-      if (runResult.status === "fulfilled") setDiscoveryRuns(runResult.value.items ?? []);
-      else setDiscoveryRuns([]);
-      if (findingResult.status === "fulfilled") setDiscoveryFindings(findingResult.value.items ?? []);
-      else setDiscoveryFindings([]);
-
-      const rejected = [sourceResult, runResult, findingResult, monitoringResult].find((result) => result.status === "rejected");
+      const rejected = [sourceResult, runResult, monitoringResult].find((result) => result.status === "rejected");
       if (rejected?.status === "rejected") setDiscoveryError(rejected.reason instanceof Error ? rejected.reason.message : "Unable to load discovery findings");
       else if (sourceResult.status === "fulfilled" && runResult.status === "fulfilled" && monitoringResult.status === "fulfilled") {
         try {
@@ -118,13 +113,16 @@ export function Posture() {
     let cancelled = false;
 
     async function loadCTMonitoring() {
+      setCTLoading(true);
       setCTError(null);
       try {
-        const state = await api.ctMonitoring();
+        const state = await api.ctMonitoring({ triageStatus: ctFilter || undefined });
         if (cancelled) return;
         setCTMonitoring(state);
       } catch (error) {
         if (!cancelled) setCTError(error instanceof Error ? error.message : "Unable to load CT monitoring");
+      } finally {
+        if (!cancelled) setCTLoading(false);
       }
     }
 
@@ -132,7 +130,7 @@ export function Posture() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ctFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +139,7 @@ export function Posture() {
       setDriftLoading(true);
       setDriftError(null);
       try {
-        const state = await api.driftRemediation();
+        const state = await api.driftRemediation({ triageStatus: driftFilter || undefined });
         if (!cancelled) setDriftRemediation(state);
       } catch (error) {
         if (!cancelled) setDriftError(error instanceof Error ? error.message : "Unable to load drift remediation");
@@ -154,7 +152,7 @@ export function Posture() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [driftFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,10 +178,35 @@ export function Posture() {
 
   const cbomProgress = cbomInventory.migration_progress ?? lastCBOMScan?.migration_progress ?? emptyCBOMProgress;
   const upgradeAssets = cbomInventory.items.filter((asset) => asset.out_of_policy || asset.quantum_vulnerable);
-  const discoverySourceByID = useMemo(() => new Map(discoverySources.map((source) => [source.id, source])), [discoverySources]);
-  const discoveryRunByID = useMemo(() => new Map(discoveryRuns.map((run) => [run.id, run])), [discoveryRuns]);
-  const ctFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "ct_log");
-  const driftFindings = discoveryFindings.filter((finding) => findingSourceKind(finding, discoverySourceByID) === "drift");
+
+  // A105: "load more" appends the next server page to what the dashboard shows.
+  async function loadMoreCT() {
+    const cursor = ctMonitoring?.next_cursor;
+    if (!cursor) return;
+    setCTLoadingMore(true);
+    try {
+      const page = await api.ctMonitoring({ triageStatus: ctFilter || undefined, cursor });
+      setCTMonitoring((current) => (current ? { ...page, findings: [...current.findings, ...page.findings] } : page));
+    } catch (error) {
+      setCTError(error instanceof Error ? error.message : "Unable to load CT monitoring");
+    } finally {
+      setCTLoadingMore(false);
+    }
+  }
+
+  async function loadMoreDrift() {
+    const cursor = driftRemediation?.next_cursor;
+    if (!cursor) return;
+    setDriftLoadingMore(true);
+    try {
+      const page = await api.driftRemediation({ triageStatus: driftFilter || undefined, cursor });
+      setDriftRemediation((current) => (current ? { ...page, findings: [...current.findings, ...page.findings] } : page));
+    } catch (error) {
+      setDriftError(error instanceof Error ? error.message : "Unable to load drift remediation");
+    } finally {
+      setDriftLoadingMore(false);
+    }
+  }
 
   function focusUpgradePlanning() {
     const disclosure = planningDisclosureRef.current;
@@ -203,14 +226,19 @@ export function Posture() {
         decision,
         reason: driftDecisionReason(decision),
       });
-      setDriftRemediation((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          findings: current.findings.map((item) => (item.finding_id === response.finding.finding_id ? response.finding : item)),
-        };
-      });
       setDriftResult(`${driftDecisionLabel(decision)} recorded for ${finding.ref}`);
+      // The decision moves the finding between statuses: re-read the first
+      // page so the server's counts and the filtered list stay true. If that
+      // read fails, the decided row still shows its new status.
+      try {
+        setDriftRemediation(await api.driftRemediation({ triageStatus: driftFilter || undefined }));
+      } catch {
+        setDriftRemediation((current) =>
+          current
+            ? { ...current, findings: current.findings.map((item) => (item.finding_id === response.finding.finding_id ? response.finding : item)) }
+            : current,
+        );
+      }
     } catch (error) {
       setDriftError(error instanceof Error ? error.message : "Unable to record drift decision");
     } finally {
@@ -247,14 +275,11 @@ export function Posture() {
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.ct.monitoring.watches.public.logs.for.cert.3163770746")}</p>
               </div>
             </div>
-            <DiscoveryFindingTable
-              title={translateNow("source.certificate.transparency.findings.55891f79b6")}
-              findings={ctFindings}
-              sourceByID={discoverySourceByID}
-              runByID={discoveryRunByID}
-              loading={discoveryLoading}
-              error={discoveryError}
-              emptyTitle="No CT findings returned yet"
+            <CTFindingsDashboard
+              state={ctMonitoring}
+              loading={ctLoading}
+              error={ctError}
+              paging={{ filter: ctFilter, onFilter: setCTFilter, onLoadMore: () => void loadMoreCT(), loadingMore: ctLoadingMore }}
             />
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border bg-background p-comfortable">
               <div>
@@ -264,7 +289,6 @@ export function Posture() {
               <Link className="rounded-control border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted" to="/discovery">
                 {t("discovery.ct.openInDiscovery")}
               </Link>
-              {ctError ? <p className="w-full text-sm font-medium text-destructive">{ctError}</p> : null}
             </div>
             {ctMonitoring ? (
               <>
@@ -304,23 +328,15 @@ export function Posture() {
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.drift.detection.compares.what.trstctl.inte.95457304d6")}</p>
               </div>
             </div>
-            <DiscoveryFindingTable
-              title={translateNow("source.drift.findings.cd56c69007")}
-              findings={driftFindings}
-              sourceByID={discoverySourceByID}
-              runByID={discoveryRunByID}
-              loading={discoveryLoading}
-              error={discoveryError}
-              emptyTitle="No drift findings returned yet"
-            />
             <DriftRecoveryWorkflow sources={discoverySources} latestRuns={driftLatestRuns} loading={discoveryLoading} error={discoveryError} />
-            <DriftRemediationWorkflow
+            <DriftFindingsDashboard
               state={driftRemediation}
               loading={driftLoading}
               error={driftError}
               busy={driftBusy}
               result={driftResult}
               onDecision={recordDriftDecision}
+              paging={{ filter: driftFilter, onFilter: setDriftFilter, onLoadMore: () => void loadMoreDrift(), loadingMore: driftLoadingMore }}
             />
           </section>
 
@@ -522,195 +538,6 @@ function DecisionCount({ value, label, tone = "neutral" }: { value: number; labe
   );
 }
 
-type DriftDecision = DriftRemediationDecisionRequest["decision"];
-
-function DriftRemediationWorkflow({
-  state,
-  loading,
-  error,
-  busy,
-  result,
-  onDecision,
-}: {
-  state: DriftRemediation | null;
-  loading: boolean;
-  error: string | null;
-  busy: string | null;
-  result: string | null;
-  onDecision: (finding: DriftRemediationFinding, decision: DriftDecision) => void;
-}) {
-  if (loading) return <LoadingState>{translateNow("source.loading.drift.remediation.c1b6240bc3")}</LoadingState>;
-
-  const findings = state?.findings ?? [];
-  return (
-    <div className="grid gap-3 rounded-panel border border-border p-comfortable">
-      <dl className="grid gap-3 md:grid-cols-5">
-        <Metric label="Watched sources" value={String(state?.summary.source_count ?? 0)} />
-        <Metric label="Open drift" value={String(state?.summary.open_finding_count ?? 0)} />
-        <Metric label="Replaced" value={String(state?.summary.replaced_count ?? 0)} />
-        <Metric label="Permissions" value={String(state?.summary.permission_changed_count ?? 0)} />
-        <Metric label="Decisions" value={String(state?.summary.remediation_decision_count ?? 0)} />
-      </dl>
-      {error ? <ErrorState title={translateNow("source.drift.remediation.unavailable.2da12cc33d")}>{error}</ErrorState> : null}
-      {result ? <p className="text-sm font-medium text-status-success">{result}</p> : null}
-      {findings.length === 0 ? (
-        <EmptyState title={translateNow("source.no.drift.remediation.findings.returned.yet.5034b41d52")} />
-      ) : (
-        <PreviewTable
-          title={translateNow("source.drift.remediation.workflow.9456b591c4")}
-          headers={["Credential", "Drift", "Risk", "Triage", "Recommended action", "Decision"]}
-        >
-          {findings.map((finding) => (
-            <tr key={finding.finding_id} className="align-top">
-              <td className="font-medium">
-                <span className="block">{finding.ref}</span>
-                <span className="text-xs text-muted-foreground">{finding.source_name}</span>
-              </td>
-              <td>
-                <span className="block">{driftLabel(finding.drift_type)}</span>
-                <span className="text-xs text-muted-foreground">{finding.credential_class}</span>
-              </td>
-              <td>{finding.risk_score}</td>
-              <td>
-                <StatusBadge value={finding.triage_status} label={triageLabel(finding.triage_status)} tone={triageTone(finding.triage_status)} />
-              </td>
-              <td>{finding.recommended_action}</td>
-              <td>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    title={translateNow("source.investigate.e264109347")}
-                    aria-label={translateNow("source.investigate.value1.39e7603180", { value1: finding.ref })}
-                    disabled={!finding.available_decisions.includes("investigate") || busy === `${finding.finding_id}:investigate`}
-                    onClick={() => onDecision(finding, "investigate")}
-                  >
-                    <SearchCheck className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.investigate.e264109347")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    title={translateNow("source.mark.managed.61a3f9305a")}
-                    aria-label={translateNow("source.mark.managed.value1.ba545156d1", { value1: finding.ref })}
-                    disabled={!finding.available_decisions.includes("mark_managed") || busy === `${finding.finding_id}:mark_managed`}
-                    onClick={() => onDecision(finding, "mark_managed")}
-                  >
-                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.managed.8f2de600bf")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    title={translateNow("source.dismiss.48845bff33")}
-                    aria-label={translateNow("source.dismiss.value1.540d3af43e", { value1: finding.ref })}
-                    disabled={!finding.available_decisions.includes("dismiss") || busy === `${finding.finding_id}:dismiss`}
-                    onClick={() => onDecision(finding, "dismiss")}
-                  >
-                    <XCircle className="h-4 w-4" aria-hidden="true" />
-                    {translateNow("source.dismiss.48845bff33")}
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </PreviewTable>
-      )}
-    </div>
-  );
-}
-
-function DiscoveryFindingTable({
-  title,
-  findings,
-  sourceByID,
-  runByID,
-  loading,
-  error,
-  emptyTitle,
-}: {
-  title: string;
-  findings: DiscoveryFinding[];
-  sourceByID: ReadonlyMap<string, DiscoverySource>;
-  runByID: ReadonlyMap<string, DiscoveryRun>;
-  loading: boolean;
-  error: string | null;
-  emptyTitle: string;
-}) {
-  if (loading) return <LoadingState>{translateNow("source.loading.discovery.findings.6d4fa8ee4b")}</LoadingState>;
-
-  return (
-    <>
-      {error ? <ErrorState title={translateNow("source.discovery.findings.unavailable.8112281292")}>{error}</ErrorState> : null}
-      {findings.length === 0 ? (
-        <EmptyState title={emptyTitle} />
-      ) : (
-        <PreviewTable title={title} headers={["Reference", "Source", "Kind", "Risk", "Run state", "Alert state", "Discovered"]}>
-          {findings.map((finding) => {
-            const source = sourceByID.get(finding.source_id);
-            const run = runByID.get(finding.run_id);
-            const runStatus = run?.status ?? "not_reported";
-            return (
-              <tr key={finding.id} className="align-top">
-                <td className="font-medium">{finding.ref}</td>
-                <td>{source?.name ?? finding.source_id}</td>
-                <td>{finding.kind}</td>
-                <td>{finding.risk_score ?? 0}</td>
-                <td>
-                  <StatusBadge value={runStatus} label={runStatusLabel(runStatus)} tone={runStatusTone(runStatus)} />
-                </td>
-                <td>{safeFindingSummary(finding)}</td>
-                <td>{formatDateTimePolicy(finding.discovered_at)}</td>
-              </tr>
-            );
-          })}
-        </PreviewTable>
-      )}
-    </>
-  );
-}
-
-function driftLabel(value: DriftRemediationFinding["drift_type"]): string {
-  switch (value) {
-    case "deleted":
-      return "Deleted";
-    case "replaced":
-      return "Replaced";
-    case "relocated":
-      return "Relocated";
-    case "permission_changed":
-      return "Permission changed";
-    default:
-      return "Unknown";
-  }
-}
-
-function triageLabel(value: DriftRemediationFinding["triage_status"]): string {
-  switch (value) {
-    case "investigating":
-      return "Investigating";
-    case "managed":
-      return "Managed";
-    case "dismissed":
-      return "Dismissed";
-    default:
-      return "Unmanaged";
-  }
-}
-
-function triageTone(value: DriftRemediationFinding["triage_status"]) {
-  switch (value) {
-    case "managed":
-      return "success";
-    case "dismissed":
-      return "neutral";
-    case "investigating":
-      return "warning";
-    default:
-      return "critical";
-  }
-}
-
 function driftDecisionLabel(decision: DriftDecision): string {
   switch (decision) {
     case "mark_managed":
@@ -731,23 +558,6 @@ function driftDecisionReason(decision: DriftDecision): string {
     default:
       return "operator opened drift remediation investigation";
   }
-}
-
-function findingSourceKind(finding: DiscoveryFinding, sourceByID: ReadonlyMap<string, DiscoverySource>): DiscoverySource["kind"] | undefined {
-  const kind = sourceByID.get(finding.source_id)?.kind;
-  if (kind) return kind;
-  const provenance = finding.provenance.toLowerCase();
-  if (provenance.includes("ct_log") || provenance.includes("certificate transparency")) return "ct_log";
-  if (provenance.includes("drift")) return "drift";
-  return undefined;
-}
-
-function safeFindingSummary(finding: DiscoveryFinding): string {
-  for (const key of ["alert", "evidence", "signal", "reason", "status", "summary"]) {
-    const value = finding.metadata[key];
-    if (typeof value === "string" && value.trim()) return value;
-  }
-  return finding.provenance;
 }
 
 function CBOMReadinessTable({
@@ -929,18 +739,6 @@ function AlgorithmRollup({ assets, loading }: { assets: CBOMAsset[]; loading: bo
   );
 }
 
-function runStatusLabel(value: string): string {
-  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function runStatusTone(value: string) {
-  const normalized = value.toLowerCase();
-  if (normalized === "succeeded" || normalized === "success") return "success";
-  if (normalized === "failed") return "critical";
-  if (normalized === "queued" || normalized === "running") return "warning";
-  return "neutral";
-}
-
 function algorithmLabel(asset: CBOMAsset): string {
   if (!asset.algorithm && !asset.key_bits) return asset.library ?? "not reported";
   return `${asset.algorithm ?? "unknown"}${asset.key_bits ? `-${asset.key_bits}` : ""}`;
@@ -949,33 +747,4 @@ function algorithmLabel(asset: CBOMAsset): string {
 function transportLabel(asset: CBOMAsset): string {
   const parts = [asset.protocol, asset.cipher].filter(Boolean);
   return parts.length > 0 ? parts.join(" / ") : (asset.library ?? "not reported");
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-panel border border-border bg-muted/20 px-3 py-2">
-      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-title font-semibold">{value}</dd>
-    </div>
-  );
-}
-
-function PreviewTable({ title, headers, children }: { title: string; headers: string[]; children: ReactNode }) {
-  return (
-    <div className="overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[52rem]">
-        <caption className="sr-only">{title}</caption>
-        <thead>
-          <tr>
-            {headers.map((header) => (
-              <th key={header} scope="col">
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
-  );
 }

@@ -537,6 +537,16 @@ event-sourced. `triage_status` starts as `unmanaged`; the state model also inclu
 /api/v1/discovery/findings/{id}/dismiss` dismisses it with a reason. Both are
 tenant-scoped, idempotent mutations guarded by `discovery:write`.
 
+`GET /api/v1/discovery/findings` filters on the server by `run_id`,
+`source_kind` (the kind of the source a finding was recorded under, for
+example `ct_log` or `drift`), `kind`, and `triage_status` (`unmanaged`
+includes findings never triaged), and pages by `cursor`. The CT-log and drift
+dashboards (`GET /api/v1/discovery/ct-monitoring` and
+`GET /api/v1/discovery/drift-remediation`) take `triage_status`, `cursor`, and
+`limit` (1-100, default 50): their `findings` are one page of their own source
+kind with a `next_cursor`, and their `summary` counts every finding of that
+kind on the server.
+
 A finding produced without an explicit ID gets one deterministic ID from its exact
 tenant, run, kind, reference, and fingerprint. This matters when the outbox retries a
 partly completed scan: the retry records the same observation identity instead of a

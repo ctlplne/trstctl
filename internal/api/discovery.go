@@ -1284,7 +1284,12 @@ func (a *API) listDiscoveryFindings(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
 		return
 	}
-	rows, err := a.store.ListDiscoveryFindingsPage(r.Context(), tenantID, r.URL.Query().Get("run_id"), after, limit)
+	filter, err := discoveryFindingFilterFromQuery(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	rows, err := a.store.ListDiscoveryFindingsFiltered(r.Context(), tenantID, filter, after, limit)
 	if err != nil {
 		a.writeError(w, err)
 		return

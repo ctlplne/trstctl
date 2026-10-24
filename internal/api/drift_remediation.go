@@ -37,6 +37,7 @@ type driftRemediationResponse struct {
 	FindingsPath  string                    `json:"findings_path"`
 	Summary       driftRemediationSummary   `json:"summary"`
 	Findings      []driftRemediationFinding `json:"findings"`
+	NextCursor    string                    `json:"next_cursor,omitempty"`
 }
 
 type driftRemediationSummary struct {
@@ -102,7 +103,12 @@ func (a *API) getDriftRemediation(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	out, err := a.driftRemediationStatus(r.Context(), tenantID, nil)
+	page, err := discoveryDashboardPageFromQuery(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	out, err := a.driftRemediationStatus(r.Context(), tenantID, page)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -188,7 +194,7 @@ func driftDecisionMetadataPatch(req driftRemediationDecisionRequest) json.RawMes
 	return b
 }
 
-func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, selected *store.DiscoveryFinding) (driftRemediationResponse, error) {
+func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, page discoveryDashboardPage) (driftRemediationResponse, error) {
 	out := driftRemediationResponse{
 		Capability:    "F18",
 		DashboardPath: "/api/v1/discovery/drift-remediation",
@@ -198,44 +204,36 @@ func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, selec
 		Findings:      []driftRemediationFinding{},
 	}
 
-	sources, err := a.store.ListDiscoverySourcesPage(ctx, tenantID, store.ZeroUUID, 100)
+	sources, err := a.store.ListDiscoverySourcesOfKind(ctx, tenantID, "drift")
 	if err != nil {
 		return out, err
 	}
 	sourceByID := map[string]store.DiscoverySource{}
 	for _, src := range sources {
-		if src.Kind != "drift" {
-			continue
-		}
 		sourceByID[src.ID] = src
-		out.Summary.SourceCount++
 	}
+	out.Summary.SourceCount = len(sourceByID)
 
-	findings, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, 100)
+	// Counts cover every credential-drift finding of a drift source; the list
+	// is one page of them, optionally narrowed by triage status.
+	drift := store.DiscoveryFindingFilter{SourceKind: "drift", Kind: "credential_drift"}
+	tallies, err := a.store.TallyDiscoveryFindings(ctx, tenantID, drift)
+	if err != nil {
+		return out, err
+	}
+	for _, tally := range tallies {
+		out.Summary.add(tally)
+	}
+	findings, next, err := a.dashboardFindingsPage(ctx, tenantID, drift, page)
 	if err != nil {
 		return out, err
 	}
 	for _, f := range findings {
-		src, ok := sourceByID[f.SourceID]
-		if !ok || f.Kind != "credential_drift" {
-			continue
-		}
-		out.addFinding(a.toDriftRemediationFinding(f, src))
-	}
-	if selected != nil {
-		if src, ok := sourceByID[selected.SourceID]; ok && selected.Kind == "credential_drift" {
-			found := false
-			for _, item := range out.Findings {
-				if item.FindingID == selected.ID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				out.addFinding(a.toDriftRemediationFinding(*selected, src))
-			}
+		if src, ok := sourceByID[f.SourceID]; ok {
+			out.Findings = append(out.Findings, a.toDriftRemediationFinding(f, src))
 		}
 	}
+	out.NextCursor = next
 	sort.Slice(out.Findings, func(i, j int) bool {
 		if out.Findings[i].RiskScore == out.Findings[j].RiskScore {
 			return out.Findings[i].FindingID < out.Findings[j].FindingID
@@ -245,39 +243,41 @@ func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, selec
 	return out, nil
 }
 
-func (out *driftRemediationResponse) addFinding(item driftRemediationFinding) {
-	out.Findings = append(out.Findings, item)
-	out.Summary.FindingCount++
-	switch item.TriageStatus {
-	case "", string(discovery.TriageUnmanaged):
-		out.Summary.OpenFindingCount++
-	case string(discovery.TriageInvestigating):
-		out.Summary.InvestigatingCount++
-		out.Summary.RemediationDecisionCount++
-	case string(discovery.TriageManaged):
-		out.Summary.RemediatedCount++
-		out.Summary.RemediationDecisionCount++
-	case string(discovery.TriageDismissed):
-		out.Summary.DismissedCount++
-		out.Summary.RemediationDecisionCount++
+// add counts one tally group the way a drift row reads it: an absent type is
+// unknown and an absent class is a credential.
+func (s *driftRemediationSummary) add(tally store.DiscoveryFindingTally) {
+	n := tally.Count
+	s.FindingCount += n
+	switch discovery.TriageStatus(tally.TriageStatus) {
+	case discovery.TriageUnmanaged:
+		s.OpenFindingCount += n
+	case discovery.TriageInvestigating:
+		s.InvestigatingCount += n
+		s.RemediationDecisionCount += n
+	case discovery.TriageManaged:
+		s.RemediatedCount += n
+		s.RemediationDecisionCount += n
+	case discovery.TriageDismissed:
+		s.DismissedCount += n
+		s.RemediationDecisionCount += n
 	}
-	switch item.DriftType {
+	switch firstNonEmpty(tally.Type, "unknown") {
 	case "deleted":
-		out.Summary.DeletedCount++
+		s.DeletedCount += n
 	case "replaced":
-		out.Summary.ReplacedCount++
+		s.ReplacedCount += n
 	case "relocated":
-		out.Summary.RelocatedCount++
+		s.RelocatedCount += n
 	case "permission_changed":
-		out.Summary.PermissionChangedCount++
+		s.PermissionChangedCount += n
 	}
-	switch item.CredentialClass {
+	switch firstNonEmpty(tally.Class, "credential") {
 	case "certificate":
-		out.Summary.CertificateCount++
+		s.CertificateCount += n
 	case "ssh_key":
-		out.Summary.SSHKeyCount++
+		s.SSHKeyCount += n
 	case "secret":
-		out.Summary.SecretCount++
+		s.SecretCount += n
 	}
 }
 

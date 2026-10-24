@@ -1029,35 +1029,7 @@ func (s *Store) ListDiscoveryRunsRecentPage(ctx context.Context, tenantID, befor
 
 // ListDiscoveryFindingsPage lists tenant findings, optionally scoped to one run.
 func (s *Store) ListDiscoveryFindingsPage(ctx context.Context, tenantID, runID, afterID string, limit int) ([]DiscoveryFinding, error) {
-	var out []DiscoveryFinding
-	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
-		sql := `SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
-		              provenance, fingerprint, risk_score, metadata, discovered_at,
-		              triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
-		              first_seen_at, last_seen_at, seen_count
-		         FROM discovery_findings
-		        WHERE tenant_id = $1 AND id > $2`
-		args := []any{tenantID, afterID, limit}
-		if runID != "" {
-			sql += ` AND run_id = $4`
-			args = append(args, runID)
-		}
-		sql += ` ORDER BY id LIMIT $3`
-		rows, err := tx.Query(ctx, sql, args...)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var f DiscoveryFinding
-			if err := scanDiscoveryFinding(rows, &f); err != nil {
-				return err
-			}
-			out = append(out, f)
-		}
-		return rows.Err()
-	})
-	return out, err
+	return s.ListDiscoveryFindingsFiltered(ctx, tenantID, DiscoveryFindingFilter{RunID: runID}, afterID, limit)
 }
 
 // GetDiscoveryFinding loads one tenant-scoped discovery finding.

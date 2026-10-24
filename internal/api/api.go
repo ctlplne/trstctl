@@ -1097,6 +1097,14 @@ func (a *API) routes() []route {
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
 		{name: "run_id", typ: "string", format: "uuid", desc: "return only findings from this discovery run"},
+		{name: "source_kind", typ: "string", desc: "return only findings recorded under sources of this kind (for example ct_log or drift)"},
+		{name: "kind", typ: "string", desc: "return only findings of this kind"},
+		{name: "triage_status", typ: "string", desc: "return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed"},
+	}
+	discoveryDashboardQuery := []param{
+		{name: "limit", typ: "integer", desc: "maximum findings per page (1-100, default 50); the summary counts every finding"},
+		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+		{name: "triage_status", typ: "string", desc: "list only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed"},
 	}
 	identityScopedPage := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
@@ -1340,9 +1348,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/discovery/runs", opID: "listDiscoveryRuns", summary: "List discovery runs", handler: a.listDiscoveryRuns, query: []param{{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"}, {name: "cursor", typ: "string", desc: "opaque cursor from a prior page using the same order"}, {name: "order", typ: "string", desc: "id (default, legacy order) or recent (newest created run first)"}}, resSchema: "DiscoveryRunList", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "GET", path: "/api/v1/discovery/runs/{id}", opID: "getDiscoveryRun", summary: "Get a discovery run", handler: a.getDiscoveryRun, pathParams: idPath, resSchema: "DiscoveryRun", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "POST", path: "/api/v1/discovery/runs/{id}/retry", opID: "retryDiscoveryRun", summary: "Retry a terminal unsuccessful discovery run as a separate replacement", handler: a.retryDiscoveryRun, pathParams: idPath, resSchema: "DiscoveryRun", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},
-		{method: "GET", path: "/api/v1/discovery/ct-monitoring", opID: "getCTMonitoring", summary: "Get Certificate Transparency watchlist, checkpoint, alert, and finding status", handler: a.getCTMonitoring, resSchema: "CTMonitoring", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "GET", path: "/api/v1/discovery/ct-monitoring", opID: "getCTMonitoring", summary: "Get Certificate Transparency watchlist, checkpoint, alert, and finding status", handler: a.getCTMonitoring, query: discoveryDashboardQuery, resSchema: "CTMonitoring", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "PUT", path: "/api/v1/discovery/ct-monitoring", opID: "updateCTMonitoring", summary: "Create or replace the Certificate Transparency watchlist and optionally queue a poll", handler: a.updateCTMonitoring, reqSchema: "CTMonitoringRequest", resSchema: "CTMonitoring", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
-		{method: "GET", path: "/api/v1/discovery/drift-remediation", opID: "getDriftRemediation", summary: "Get drift findings, remediation actions, and operator decision evidence", handler: a.getDriftRemediation, resSchema: "DriftRemediation", successCode: "200", perm: authz.DiscoveryRead},
+		{method: "GET", path: "/api/v1/discovery/drift-remediation", opID: "getDriftRemediation", summary: "Get drift findings, remediation actions, and operator decision evidence", handler: a.getDriftRemediation, query: discoveryDashboardQuery, resSchema: "DriftRemediation", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "POST", path: "/api/v1/discovery/drift-remediation/{id}/decision", opID: "decideDriftRemediation", summary: "Record an operator decision for a drift finding", handler: a.decideDriftRemediation, pathParams: idPath, reqSchema: "DriftRemediationDecisionRequest", resSchema: "DriftRemediationDecision", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "GET", path: "/api/v1/discovery/monitoring", opID: "getDiscoveryMonitoring", summary: "Get continuous monitoring and centralized inventory posture", handler: a.listDiscoveryMonitoring, resSchema: "DiscoveryMonitoring", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "GET", path: "/api/v1/discovery/coverage", opID: "getDiscoveryCoverage", summary: "Get discovery coverage: observed, observable-unobserved, and structurally unobservable asset classes", handler: a.getDiscoveryCoverage, query: coverageQuery, resSchema: "DiscoveryCoverage", successCode: "200", perm: authz.DiscoveryRead},

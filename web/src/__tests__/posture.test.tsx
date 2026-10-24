@@ -51,11 +51,34 @@ async function renderPosture() {
     </MemoryRouter>,
   );
   await waitFor(() => expect(apiMock.listCBOMAssets).toHaveBeenCalled());
-  await waitFor(() => expect(apiMock.discoveryFindings).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalled());
   await waitFor(() => expect(apiMock.driftRemediation).toHaveBeenCalled());
   return result;
 }
+
+const ctFinding = {
+  id: "finding-ct",
+  tenant_id: "tenant-1",
+  run_id: "run-ct",
+  source_id: "source-ct",
+  kind: "ct_unexpected_issuance",
+  ref: "*.payments.example.com",
+  provenance: "ct:https://ct.googleapis.com/logs/argon2026/",
+  fingerprint: "abcdef1234567890abcdef1234567890",
+  risk_score: 88,
+  metadata: {
+    log_url: "https://ct.googleapis.com/logs/argon2026/",
+    index: 41,
+    issuer: "CN=Unexpected Issuing CA",
+    sans: ["*.payments.example.com", "payments.example.com"],
+    secret_value: "RAW-CT-LEAK",
+  },
+  triage_status: "unmanaged",
+  discovered_at: "2026-06-20T10:00:04Z",
+  first_seen_at: "2026-06-20T10:00:04Z",
+  last_seen_at: "2026-06-21T10:00:04Z",
+  seen_count: 2,
+};
 
 describe("posture collector disclosures", () => {
   beforeEach(() => {
@@ -178,9 +201,12 @@ describe("posture collector disclosures", () => {
         finding_count: 1,
         unexpected_issuance_count: 1,
         open_finding_count: 1,
+        investigating_count: 0,
+        managed_count: 0,
+        dismissed_count: 0,
         outbox_alert_channel_count: 1,
       },
-      findings: [],
+      findings: [ctFinding],
     });
     apiMock.updateCTMonitoring.mockReset().mockResolvedValue({
       capability: "F17",
@@ -519,10 +545,42 @@ describe("posture collector disclosures", () => {
     expect(screen.getByRole("link", { name: "Open CT monitoring in Discovery" })).toHaveAttribute("href", "/discovery");
     expect(apiMock.updateCTMonitoring).not.toHaveBeenCalled();
 
-    const row = await screen.findByRole("row", { name: /\*\.payments\.example\.com Public CT logs x509_certificate 88 succeeded/i });
-    expect(within(row).getByText("unexpected SAN outside approved issuer profile")).toBeInTheDocument();
+    const findings = screen.getByRole("table", { name: "Certificate Transparency findings" });
+    const row = within(findings).getByRole("row", { name: /\*\.payments\.example\.com and 1 more names CN=Unexpected Issuing CA/i });
+    expect(within(row).getByText("entry 41")).toBeInTheDocument();
+    expect(within(row).getByText("Unmanaged")).toBeInTheDocument();
     expect(screen.queryByText("RAW-CT-LEAK")).not.toBeInTheDocument();
+    // A105: the dashboard reads its own findings; the page takes no findings sample.
+    expect(apiMock.discoveryFindings).not.toHaveBeenCalled();
     expect(screen.queryByText("Dedicated CT dashboard coming soon")).not.toBeInTheDocument();
+  });
+
+  it("filters the CT dashboard by triage status and pages it on the server", async () => {
+    const first = await apiMock.ctMonitoring();
+    apiMock.ctMonitoring.mockClear();
+    apiMock.ctMonitoring.mockImplementation(async (options?: { triageStatus?: string; cursor?: string }) => {
+      if (options?.cursor === "page-2") {
+        return { ...first, findings: [{ ...ctFinding, id: "finding-ct-2", ref: "api.payments.example.com", metadata: { log_url: "https://ct.example/log" } }] };
+      }
+      if (options?.triageStatus === "dismissed") return { ...first, findings: [] };
+      return { ...first, summary: { ...first.summary, finding_count: 2, open_finding_count: 2 }, findings: [ctFinding], next_cursor: "page-2" };
+    });
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+
+    const findings = await screen.findByRole("table", { name: "Certificate Transparency findings" });
+    expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Load more findings" }));
+    await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledWith({ triageStatus: undefined, cursor: "page-2" }));
+    expect(await within(findings).findByText("api.payments.example.com")).toBeInTheDocument();
+    expect(within(findings).getByText("*.payments.example.com")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more findings" })).not.toBeInTheDocument();
+
+    const filters = screen.getAllByRole("combobox", { name: "Show" });
+    await user.selectOptions(filters[0], "dismissed");
+    await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledWith({ triageStatus: "dismissed" }));
+    expect(await screen.findByText("No CT findings in this status")).toBeInTheDocument();
   });
 
   it("renders a valid empty CT checkpoint list without crashing", async () => {
@@ -565,12 +623,22 @@ describe("posture collector disclosures", () => {
     await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
 
     expect(screen.getByRole("heading", { name: "Drift detection" })).toBeInTheDocument();
-    const row = await screen.findByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch credential_drift 91 failed/i });
-    expect(within(row).getByText("fingerprint mismatch on deployed certificate")).toBeInTheDocument();
     const workflow = screen.getByRole("table", { name: "Drift remediation workflow" });
     expect(
-      within(workflow).getByRole("row", { name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch Replaced certificate 91 Unmanaged rotate and redeploy/i }),
+      within(workflow).getByRole("row", {
+        name: /agent-7:\/etc\/tls\/current\.pem Agent drift watch Replaced certificate .* 91 Unmanaged rotate and redeploy/i,
+      }),
     ).toBeInTheDocument();
+    // After the decision the dashboard re-reads its first page, so counts and status come from the server.
+    const decided = await apiMock.decideDriftRemediation();
+    apiMock.decideDriftRemediation.mockClear();
+    const before = await apiMock.driftRemediation();
+    apiMock.driftRemediation.mockClear();
+    apiMock.driftRemediation.mockResolvedValue({
+      ...before,
+      summary: { ...before.summary, open_finding_count: 0, investigating_count: 1, remediation_decision_count: 1 },
+      findings: [decided.finding],
+    });
 
     await user.click(within(workflow).getByRole("button", { name: "Investigate agent-7:/etc/tls/current.pem" }));
     await waitFor(() =>
@@ -580,7 +648,9 @@ describe("posture collector disclosures", () => {
       }),
     );
     expect(await screen.findByText("Investigation decision recorded for agent-7:/etc/tls/current.pem")).toBeInTheDocument();
-    expect(within(workflow).getByText("Investigating")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.driftRemediation).toHaveBeenCalledWith({ triageStatus: undefined }));
+    expect(await within(screen.getByRole("table", { name: "Drift remediation workflow" })).findByText("Investigating")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Investigating (1)" })).toBeInTheDocument();
     expect(screen.queryByText("RAW-DRIFT-LEAK")).not.toBeInTheDocument();
   });
 

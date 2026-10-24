@@ -4258,6 +4258,75 @@ export const messages = {
     defaultMessage: "{count} open",
     description: "C5: open unexpected-issuance findings awaiting triage.",
   },
+  "posture.dashboards.triageFilter": { defaultMessage: "Show", description: "A105: label of the triage-status filter on the CT-log and drift dashboards." },
+  "posture.dashboards.triageAll": {
+    defaultMessage: "All findings ({count})",
+    description: "A105: filter option listing every finding of the dashboard's kind, with the server's count.",
+  },
+  "posture.dashboards.triage.unmanaged": {
+    defaultMessage: "Open ({count})",
+    description: "A105: filter option for findings no one has triaged yet, with the server's count.",
+  },
+  "posture.dashboards.triage.investigating": {
+    defaultMessage: "Investigating ({count})",
+    description: "A105: filter option for findings under investigation, with the server's count.",
+  },
+  "posture.dashboards.triage.managed": {
+    defaultMessage: "Managed ({count})",
+    description: "A105: filter option for findings marked managed, with the server's count.",
+  },
+  "posture.dashboards.triage.dismissed": {
+    defaultMessage: "Dismissed ({count})",
+    description: "A105: filter option for dismissed findings, with the server's count.",
+  },
+  "posture.dashboards.showing": {
+    defaultMessage: "Showing {shown} of {total}",
+    description: "A105: how many of the filtered findings the dashboard has loaded so far.",
+  },
+  "posture.dashboards.loadMore": { defaultMessage: "Load more findings", description: "A105: button that loads the next page of a dashboard's findings." },
+  "posture.dashboards.loadingMore": { defaultMessage: "Loading more findings...", description: "A105: button state while the next page of findings loads." },
+  "posture.dashboards.notReported": { defaultMessage: "not reported", description: "A105: a finding field the source did not report." },
+  "posture.dashboards.colFirstSeen": { defaultMessage: "First seen", description: "A105: dashboard column for when a finding was first observed." },
+  "posture.dashboards.colLastSeen": { defaultMessage: "Last seen", description: "A105: dashboard column for when a finding was last observed." },
+  "posture.dashboards.colStatus": { defaultMessage: "Status", description: "A105: dashboard column for a finding's triage status." },
+  "posture.dashboards.ct.title": { defaultMessage: "Certificate Transparency findings", description: "A105: accessible caption of the CT findings table." },
+  "posture.dashboards.ct.loading": { defaultMessage: "Loading CT findings...", description: "A105: CT dashboard loading state." },
+  "posture.dashboards.ct.unavailable": { defaultMessage: "CT findings unavailable", description: "A105: CT dashboard error title." },
+  "posture.dashboards.ct.none": { defaultMessage: "No CT findings recorded yet", description: "A105: CT dashboard empty state." },
+  "posture.dashboards.ct.noneInFilter": {
+    defaultMessage: "No CT findings in this status",
+    description: "A105: CT dashboard empty state under a triage filter.",
+  },
+  "posture.dashboards.ct.colNames": { defaultMessage: "Names", description: "A105: CT column for the logged certificate's names." },
+  "posture.dashboards.ct.colIssuer": { defaultMessage: "Issuer", description: "A105: CT column for the logged certificate's issuer." },
+  "posture.dashboards.ct.colLog": { defaultMessage: "Log", description: "A105: CT column for the log and entry index that published the certificate." },
+  "posture.dashboards.ct.colFingerprint": { defaultMessage: "Fingerprint", description: "A105: CT column for the logged certificate's SHA-256 fingerprint." },
+  "posture.dashboards.ct.fingerprintPrefix": {
+    defaultMessage: "{prefix}…",
+    description: "A105: the first characters of a logged certificate's SHA-256 fingerprint; the full value is in the cell's tooltip.",
+  },
+  "posture.dashboards.ct.moreNames": {
+    defaultMessage: "and {count} more names",
+    description: "A105: the logged certificate carries further names beyond the first.",
+  },
+  "posture.dashboards.ct.logIndex": { defaultMessage: "entry {index}", description: "A105: the CT log entry index of a finding." },
+  "posture.dashboards.drift.noneInFilter": {
+    defaultMessage: "No drift findings in this status",
+    description: "A105: drift dashboard empty state under a triage filter.",
+  },
+  "posture.dashboards.drift.colCredential": { defaultMessage: "Credential", description: "A105: drift column for the watched credential and its source." },
+  "posture.dashboards.drift.colDrift": { defaultMessage: "Drift", description: "A105: drift column for the drift type and credential class." },
+  "posture.dashboards.drift.colExpectedObserved": {
+    defaultMessage: "Expected / observed",
+    description: "A105: drift column comparing what was expected with what was observed.",
+  },
+  "posture.dashboards.drift.colRisk": { defaultMessage: "Risk", description: "A105: drift column for the finding's risk score." },
+  "posture.dashboards.drift.colAction": { defaultMessage: "Recommended action", description: "A105: drift column for the recommended remediation." },
+  "posture.dashboards.drift.colDecision": { defaultMessage: "Decision", description: "A105: drift column for the operator's remaining decisions." },
+  "posture.dashboards.drift.expectedObserved": {
+    defaultMessage: "{expected} → {observed}",
+    description: "A105: expected value, then the observed one, for a drift finding.",
+  },
   "discovery.ct.postureReadOnly": {
     defaultMessage: "This is the read-only posture view.",
     description: "F17: explains why CT watchlist changes are kept out of the supporting Posture disclosure.",
@@ -24838,10 +24907,6 @@ export const messages = {
     defaultMessage: "Certificate PEM",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Certificates.tsx.",
   },
-  "source.certificate.transparency.findings.55891f79b6": {
-    defaultMessage: "Certificate Transparency findings",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.certificate.transparency.monitoring.a0ad3241c4": {
     defaultMessage: "Certificate Transparency monitoring",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
@@ -25294,10 +25359,6 @@ export const messages = {
     defaultMessage: "Discover",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Dashboard.tsx.",
   },
-  "source.discovery.findings.unavailable.8112281292": {
-    defaultMessage: "Discovery findings unavailable",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
   "source.discovery.run.f6dd5be06b": {
     defaultMessage: "Discovery run",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/SSHTrust.tsx.",
@@ -25342,10 +25403,6 @@ export const messages = {
   "source.drift.detection.compares.what.trstctl.inte.95457304d6": {
     defaultMessage:
       "Drift detection compares what trstctl intended to deploy with what the worker can verify from a configured watched credential path. Deleted, replaced, relocated, and permission-changed credentials become tenant-scoped Discovery findings.",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
-  },
-  "source.drift.findings.cd56c69007": {
-    defaultMessage: "Drift findings",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.drift.remediation.unavailable.2da12cc33d": {
@@ -26033,10 +26090,6 @@ export const messages = {
   "source.loading.delivery.evidence.7f2cdadedd": {
     defaultMessage: "Loading delivery evidence...",
     description: "DA-14 sweep: migrated hardcoded copy from src/pages/Identities.tsx.",
-  },
-  "source.loading.discovery.findings.6d4fa8ee4b": {
-    defaultMessage: "Loading discovery findings...",
-    description: "DA-14 sweep: migrated hardcoded copy from src/pages/Posture.tsx.",
   },
   "source.loading.discovery.records.da1c8fab87": {
     defaultMessage: "Loading discovery records...",

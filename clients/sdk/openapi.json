@@ -8691,6 +8691,9 @@
             },
             "type": "array"
           },
+          "next_cursor": {
+            "type": "string"
+          },
           "notification_destination": {
             "type": "string"
           },
@@ -8827,13 +8830,22 @@
       },
       "CTMonitoringSummary": {
         "properties": {
+          "dismissed_count": {
+            "type": "integer"
+          },
           "failed_log_count": {
             "type": "integer"
           },
           "finding_count": {
             "type": "integer"
           },
+          "investigating_count": {
+            "type": "integer"
+          },
           "log_count": {
+            "type": "integer"
+          },
+          "managed_count": {
             "type": "integer"
           },
           "open_finding_count": {
@@ -8864,6 +8876,9 @@
           "finding_count",
           "unexpected_issuance_count",
           "open_finding_count",
+          "investigating_count",
+          "managed_count",
+          "dismissed_count",
           "outbox_alert_channel_count"
         ],
         "type": "object"
@@ -13346,6 +13361,9 @@
             "type": "array"
           },
           "findings_path": {
+            "type": "string"
+          },
+          "next_cursor": {
             "type": "string"
           },
           "runs_path": {
@@ -47901,6 +47919,32 @@
     "/api/v1/discovery/ct-monitoring": {
       "get": {
         "operationId": "getCTMonitoring",
+        "parameters": [
+          {
+            "description": "maximum findings per page (1-100, default 50); the summary counts every finding",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "list only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed",
+            "in": "query",
+            "name": "triage_status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -48014,6 +48058,32 @@
     "/api/v1/discovery/drift-remediation": {
       "get": {
         "operationId": "getDriftRemediation",
+        "parameters": [
+          {
+            "description": "maximum findings per page (1-100, default 50); the summary counts every finding",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "list only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed",
+            "in": "query",
+            "name": "triage_status",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -48161,6 +48231,30 @@
             "name": "run_id",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only findings recorded under sources of this kind (for example ct_log or drift)",
+            "in": "query",
+            "name": "source_kind",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only findings of this kind",
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed",
+            "in": "query",
+            "name": "triage_status",
+            "schema": {
               "type": "string"
             }
           }

@@ -3001,6 +3001,7 @@ CTMonitoring = TypedDict(
         'findings': list[dict[str, Any]],
         'findings_path': str,
         'logs': list[dict[str, Any]],
+        'next_cursor': str,
         'notification_destination': str,
         'outbox_backed_alerts': bool,
         'retired_logs': list[dict[str, Any]],
@@ -3047,9 +3048,12 @@ CTMonitoringRequest = TypedDict(
 CTMonitoringSummary = TypedDict(
     'CTMonitoringSummary',
     {
+        'dismissed_count': int,
         'failed_log_count': int,
         'finding_count': int,
+        'investigating_count': int,
         'log_count': int,
+        'managed_count': int,
         'open_finding_count': int,
         'outbox_alert_channel_count': int,
         'retired_log_count': int,
@@ -4488,6 +4492,7 @@ DriftRemediation = TypedDict(
         'dashboard_path': str,
         'findings': list[dict[str, Any]],
         'findings_path': str,
+        'next_cursor': str,
         'runs_path': str,
         'sources_path': str,
         'summary': dict[str, Any],

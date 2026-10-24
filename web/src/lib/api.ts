@@ -662,6 +662,26 @@ export interface UsageEvidence {
 }
 
 export type { CTMonitoring, CTMonitoringRequest };
+
+/** A105: a discovery triage status a findings filter accepts; "unmanaged" includes findings never triaged. */
+export type DiscoveryTriageFilter = "unmanaged" | "investigating" | "managed" | "dismissed";
+
+/** A105: one page of a Posture dashboard's findings; its summary counts every finding. */
+export interface DiscoveryDashboardPageOptions {
+  limit?: number;
+  cursor?: string;
+  triageStatus?: DiscoveryTriageFilter;
+}
+
+/** A105: server-side filters on the discovery findings list. */
+export interface DiscoveryFindingListOptions {
+  limit?: number;
+  cursor?: string;
+  runId?: string;
+  sourceKind?: string;
+  kind?: string;
+  triageStatus?: DiscoveryTriageFilter;
+}
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
@@ -1809,7 +1829,7 @@ export interface Api {
   rogueCertificates(): Promise<RogueCertificatePosture>;
   takedownRogueCertificate(input: RogueCertificateTakedownRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
-  ctMonitoring(): Promise<CTMonitoring>;
+  ctMonitoring(options?: DiscoveryDashboardPageOptions): Promise<CTMonitoring>;
   /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
   authorityAgreement(): Promise<AuthorityAgreementReport>;
   usageEvidence(periodStart: string, periodEnd: string): Promise<UsageEvidence>;
@@ -1981,9 +2001,9 @@ export interface Api {
   /** F4: per-CA certificate-database lifecycle visibility. */
   adcsDatabases(): Promise<ADCSDatabaseList>;
   discoveryCoverage(options?: { class?: string; sourceKind?: string }): Promise<DiscoveryCoverage>;
-  driftRemediation(): Promise<DriftRemediation>;
+  driftRemediation(options?: DiscoveryDashboardPageOptions): Promise<DriftRemediation>;
   decideDriftRemediation(id: string, input: DriftRemediationDecisionRequest): Promise<DriftRemediationDecision>;
-  discoveryFindings(options?: { limit?: number; cursor?: string; runId?: string }): Promise<DiscoveryFindingList>;
+  discoveryFindings(options?: DiscoveryFindingListOptions): Promise<DiscoveryFindingList>;
   claimDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   dismissDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   removeDistrustedRoot(id: string, input: DistrustedRootRemovalRequest): Promise<ConnectorDelivery>;
@@ -2544,7 +2564,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   takedownRogueCertificate: (input, key) => mutate<ConnectorDelivery>("POST", "/api/v1/revocation/rogue-certificates/takedown", input, key),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
-  ctMonitoring: () => req<CTMonitoring>("/api/v1/discovery/ct-monitoring"),
+  ctMonitoring: (options) => req<CTMonitoring>(`/api/v1/discovery/ct-monitoring${discoveryDashboardQuery(options)}`),
   updateCTMonitoring: (input) => mutate<CTMonitoring>("PUT", "/api/v1/discovery/ct-monitoring", input),
   acmeARIPosture: (options) => {
     const qs = new URLSearchParams();
@@ -2721,7 +2741,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     const suffix = qs.toString();
     return req<DiscoveryCoverage>(`/api/v1/discovery/coverage${suffix ? `?${suffix}` : ""}`);
   },
-  driftRemediation: () => req<DriftRemediation>("/api/v1/discovery/drift-remediation"),
+  driftRemediation: (options) => req<DriftRemediation>(`/api/v1/discovery/drift-remediation${discoveryDashboardQuery(options)}`),
   decideDriftRemediation: (id, input) =>
     mutate<DriftRemediationDecision>("POST", `/api/v1/discovery/drift-remediation/${encodeURIComponent(id)}/decision`, input),
   discoveryFindings: (options) => {
@@ -2729,6 +2749,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     if (options?.limit != null) qs.set("limit", String(options.limit));
     if (options?.cursor) qs.set("cursor", options.cursor);
     if (options?.runId) qs.set("run_id", options.runId);
+    if (options?.sourceKind) qs.set("source_kind", options.sourceKind);
+    if (options?.kind) qs.set("kind", options.kind);
+    if (options?.triageStatus) qs.set("triage_status", options.triageStatus);
     const suffix = qs.toString();
     return req<DiscoveryFindingList>(`/api/v1/discovery/findings${suffix ? `?${suffix}` : ""}`);
   },
@@ -3235,6 +3258,15 @@ function brokerHistoryQueryString(options?: BrokerHistoryQuery): string {
     if (options?.[key]) query.set(key, options[key]);
   }
   return query.size ? `?${query}` : "";
+}
+
+function discoveryDashboardQuery(options?: DiscoveryDashboardPageOptions): string {
+  const qs = new URLSearchParams();
+  if (options?.limit != null) qs.set("limit", String(options.limit));
+  if (options?.cursor) qs.set("cursor", options.cursor);
+  if (options?.triageStatus) qs.set("triage_status", options.triageStatus);
+  const suffix = qs.toString();
+  return suffix ? `?${suffix}` : "";
 }
 
 function pageQueryString(

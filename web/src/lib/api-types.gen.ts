@@ -2149,6 +2149,7 @@ export interface CTMonitoring {
   findings: DiscoveryFinding[];
   findings_path: string;
   logs: CTMonitoringLog[];
+  next_cursor?: string;
   notification_destination: string;
   outbox_backed_alerts: boolean;
   retired_logs: CTMonitoringLog[];
@@ -2183,9 +2184,12 @@ export interface CTMonitoringRequest {
 }
 
 export interface CTMonitoringSummary {
+  dismissed_count: number;
   failed_log_count: number;
   finding_count: number;
+  investigating_count: number;
   log_count: number;
+  managed_count: number;
   open_finding_count: number;
   outbox_alert_channel_count: number;
   retired_log_count: number;
@@ -3240,6 +3244,7 @@ export interface DriftRemediation {
   dashboard_path: string;
   findings: DriftRemediationFinding[];
   findings_path: string;
+  next_cursor?: string;
   runs_path: string;
   sources_path: string;
   summary: DriftRemediationSummary;

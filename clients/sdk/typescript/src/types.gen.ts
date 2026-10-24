@@ -10098,6 +10098,7 @@ export interface components {
             findings: components["schemas"]["DiscoveryFinding"][];
             findings_path: string;
             logs: components["schemas"]["CTMonitoringLog"][];
+            next_cursor?: string;
             notification_destination: string;
             outbox_backed_alerts: boolean;
             retired_logs: components["schemas"]["CTMonitoringLog"][];
@@ -10133,9 +10134,12 @@ export interface components {
             watched_domains: string[];
         };
         CTMonitoringSummary: {
+            dismissed_count: number;
             failed_log_count: number;
             finding_count: number;
+            investigating_count: number;
             log_count: number;
+            managed_count: number;
             open_finding_count: number;
             outbox_alert_channel_count: number;
             retired_log_count: number;
@@ -11278,6 +11282,7 @@ export interface components {
             dashboard_path: string;
             findings: components["schemas"]["DriftRemediationFinding"][];
             findings_path: string;
+            next_cursor?: string;
             runs_path: string;
             sources_path: string;
             summary: components["schemas"]["DriftRemediationSummary"];
@@ -24596,7 +24601,14 @@ export interface operations {
     };
     getCTMonitoring: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description maximum findings per page (1-100, default 50); the summary counts every finding */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+                /** @description list only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed */
+                triage_status?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -24679,7 +24691,14 @@ export interface operations {
     };
     getDriftRemediation: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description maximum findings per page (1-100, default 50); the summary counts every finding */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+                /** @description list only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed */
+                triage_status?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -24771,6 +24790,12 @@ export interface operations {
                 cursor?: string;
                 /** @description return only findings from this discovery run */
                 run_id?: string;
+                /** @description return only findings recorded under sources of this kind (for example ct_log or drift) */
+                source_kind?: string;
+                /** @description return only findings of this kind */
+                kind?: string;
+                /** @description return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed */
+                triage_status?: string;
             };
             header?: never;
             path?: never;

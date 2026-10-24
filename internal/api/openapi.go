@@ -2324,8 +2324,11 @@ func componentSchemas() map[string]*Schema {
 		"finding_count":              {Type: "integer"},
 		"unexpected_issuance_count":  {Type: "integer"},
 		"open_finding_count":         {Type: "integer"},
+		"investigating_count":        {Type: "integer"},
+		"managed_count":              {Type: "integer"},
+		"dismissed_count":            {Type: "integer"},
 		"outbox_alert_channel_count": {Type: "integer"},
-	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "outbox_alert_channel_count")
+	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "investigating_count", "managed_count", "dismissed_count", "outbox_alert_channel_count")
 	ctMonitoring := object(map[string]*Schema{
 		"capability":               str(),
 		"watchlist_path":           str(),
@@ -2341,6 +2344,7 @@ func componentSchemas() map[string]*Schema {
 		"source":                   ref("DiscoverySource"),
 		"run":                      ref("DiscoveryRun"),
 		"findings":                 {Type: "array", Items: ref("DiscoveryFinding")},
+		"next_cursor":              str(),
 	}, "capability", "watchlist_path", "sources_path", "runs_path", "findings_path", "notification_destination", "outbox_backed_alerts", "watched_domains", "logs", "retired_logs", "summary", "findings")
 	driftRemediationDecisionReq := object(map[string]*Schema{
 		"decision":            {Type: "string", Enum: []string{"investigate", "mark_managed", "dismiss"}},
@@ -2396,6 +2400,7 @@ func componentSchemas() map[string]*Schema {
 		"findings_path":  str(),
 		"summary":        ref("DriftRemediationSummary"),
 		"findings":       {Type: "array", Items: ref("DriftRemediationFinding")},
+		"next_cursor":    str(),
 	}, "capability", "dashboard_path", "sources_path", "runs_path", "findings_path", "summary", "findings")
 	driftRemediationDecision := object(map[string]*Schema{
 		"decision":      str(),

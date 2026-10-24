@@ -2807,8 +2807,12 @@ than sending an operator looking for a credential that was never there.
 - Posture collectors and agents: CT-log monitoring and path-based credential
   drift detection now run through the served discovery worker when operators
   create `ct_log` or `drift` sources; findings are tenant-scoped and alert
-  intents are outbox-backed. Dedicated Posture dashboards, resolution
-  workflows remain future UI/workflow work; automatic remediation exists for
+  intents are outbox-backed. The Posture page has dedicated CT-log and drift
+  dashboards (A105): each lists its own source kind's findings a page at a
+  time, filters them by triage status, and shows counts the server takes over
+  every finding of that kind, not a first-page sample. Resolution workflows
+  (assignment, due dates, remediation evidence, time-boxed accepted risk)
+  remain future work; automatic remediation exists for
   certificate posture findings whose tenant rule asks for `"remediation":
   "renew"` (the lifecycle scheduler renews the deployed identity), not for
   SSH-trust or drift findings. Generic

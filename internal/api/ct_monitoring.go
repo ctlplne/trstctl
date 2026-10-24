@@ -54,6 +54,7 @@ type ctMonitoringResponse struct {
 	Source                  *discoverySourceResponse   `json:"source,omitempty"`
 	Run                     *discoveryRunResponse      `json:"run,omitempty"`
 	Findings                []discoveryFindingResponse `json:"findings"`
+	NextCursor              string                     `json:"next_cursor,omitempty"`
 }
 
 type ctMonitoringLogResponse struct {
@@ -74,6 +75,9 @@ type ctMonitoringSummary struct {
 	FindingCount            int `json:"finding_count"`
 	UnexpectedIssuanceCount int `json:"unexpected_issuance_count"`
 	OpenFindingCount        int `json:"open_finding_count"`
+	InvestigatingCount      int `json:"investigating_count"`
+	ManagedCount            int `json:"managed_count"`
+	DismissedCount          int `json:"dismissed_count"`
 	OutboxAlertChannelCount int `json:"outbox_alert_channel_count"`
 }
 
@@ -83,7 +87,12 @@ func (a *API) getCTMonitoring(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	out, err := a.ctMonitoringStatus(r.Context(), tenantID, nil, nil)
+	page, err := discoveryDashboardPageFromQuery(r)
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
+		return
+	}
+	out, err := a.ctMonitoringStatus(r.Context(), tenantID, nil, nil, page)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -152,7 +161,7 @@ func (a *API) updateCTMonitoring(w http.ResponseWriter, r *http.Request) {
 			}
 			run = &queued
 		}
-		out, err := a.ctMonitoringStatus(ctx, tenantID, &source, run)
+		out, err := a.ctMonitoringStatus(ctx, tenantID, &source, run, firstDiscoveryDashboardPage)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -295,7 +304,7 @@ func (a *API) ctMonitoringSourceID(ctx context.Context, tenantID, requestedID, n
 	return "", nil
 }
 
-func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *store.DiscoverySource, queued *store.DiscoveryRun) (ctMonitoringResponse, error) {
+func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *store.DiscoverySource, queued *store.DiscoveryRun, page discoveryDashboardPage) (ctMonitoringResponse, error) {
 	out := ctMonitoringResponse{
 		Capability:              "F17",
 		WatchlistPath:           "/api/v1/discovery/ct-monitoring",
@@ -307,17 +316,15 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 		Summary: ctMonitoringSummary{
 			OutboxAlertChannelCount: len(a.notificationChannels),
 		},
+		Findings: []discoveryFindingResponse{},
 	}
 
-	sources, err := a.store.ListDiscoverySourcesPage(ctx, tenantID, store.ZeroUUID, 100)
+	sources, err := a.store.ListDiscoverySourcesOfKind(ctx, tenantID, "ct_log")
 	if err != nil {
 		return out, err
 	}
 	sourceByID := map[string]store.DiscoverySource{}
 	for _, src := range sources {
-		if src.Kind != "ct_log" {
-			continue
-		}
 		sourceByID[src.ID] = src
 		out.Summary.SourceCount++
 		if out.Source == nil {
@@ -381,24 +388,37 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 		return out, err
 	}
 
-	findings, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, 100)
+	// Counts cover every finding recorded under a CT-log source; the list is
+	// one page of them, optionally narrowed by triage status.
+	ctFindings := store.DiscoveryFindingFilter{SourceKind: "ct_log"}
+	tallies, err := a.store.TallyDiscoveryFindings(ctx, tenantID, ctFindings)
+	if err != nil {
+		return out, err
+	}
+	for _, tally := range tallies {
+		out.Summary.FindingCount += tally.Count
+		if tally.Kind == "ct_unexpected_issuance" {
+			out.Summary.UnexpectedIssuanceCount += tally.Count
+		}
+		switch discovery.TriageStatus(tally.TriageStatus) {
+		case discovery.TriageUnmanaged:
+			out.Summary.OpenFindingCount += tally.Count
+		case discovery.TriageInvestigating:
+			out.Summary.InvestigatingCount += tally.Count
+		case discovery.TriageManaged:
+			out.Summary.ManagedCount += tally.Count
+		case discovery.TriageDismissed:
+			out.Summary.DismissedCount += tally.Count
+		}
+	}
+	findings, next, err := a.dashboardFindingsPage(ctx, tenantID, ctFindings, page)
 	if err != nil {
 		return out, err
 	}
 	for _, f := range findings {
-		if _, ok := sourceByID[f.SourceID]; !ok && !strings.Contains(strings.ToLower(f.Provenance), "ct") {
-			continue
-		}
-		resp := toDiscoveryFindingResponse(f)
-		out.Findings = append(out.Findings, resp)
-		out.Summary.FindingCount++
-		if f.Kind == "ct_unexpected_issuance" {
-			out.Summary.UnexpectedIssuanceCount++
-		}
-		if f.TriageStatus == "" || f.TriageStatus == string(discovery.TriageUnmanaged) {
-			out.Summary.OpenFindingCount++
-		}
+		out.Findings = append(out.Findings, toDiscoveryFindingResponse(f))
 	}
+	out.NextCursor = next
 	sort.Strings(out.WatchedDomains)
 	sort.Slice(out.Logs, func(i, j int) bool { return out.Logs[i].URL < out.Logs[j].URL })
 	sort.Slice(out.RetiredLogs, func(i, j int) bool { return out.RetiredLogs[i].URL < out.RetiredLogs[j].URL })
