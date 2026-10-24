@@ -3790,66 +3790,11 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 				return 0, err
 			}
 			for _, tenant := range tenants {
-				candidates, err := s.store.ListRenewalIdentityCandidates(ctx, tenant, cutoff, now)
+				n, err := s.queueTenantLifecycleRenewals(ctx, tenant, cutoff, now)
+				queued += n
 				if err != nil {
 					s.observeLifecycleSweep(queued, 0, err)
 					return queued, err
-				}
-				seen := make(map[string]struct{}, len(candidates))
-				for _, candidate := range candidates {
-					ident := candidate.Identity
-					if _, ok := seen[ident.ID]; ok {
-						continue
-					}
-					seen[ident.ID] = struct{}{}
-					// Resolve the certificate actually served by this identity before
-					// applying ARI or the fixed renewal window.
-					servedCertificate, eligible, resolveErr := s.lifecycleServedRenewalCertificate(ctx, tenant, candidate)
-					if resolveErr != nil {
-						s.observeLifecycleSweep(queued, 0, resolveErr)
-						return queued, resolveErr
-					}
-					if !eligible {
-						continue
-					}
-					// B4-8: an operator rollback holds automatic renewal on that target until
-					// an operator resumes it; alerts still fire, nothing redeploys on its own.
-					if pausedTarget, paused := orchestrator.RenewalPausedTarget(ident); paused {
-						s.logger.Info("lifecycle renewal held: paused by an operator rollback", slog.String("tenant_id", tenant), slog.String("identity_id", ident.ID), slog.String("target_id", pausedTarget))
-						continue
-					}
-					candidate.Certificate = servedCertificate
-					reason, due, decisionErr := s.lifecycleRenewalReasonForCertificate(ctx, tenant, candidate.Certificate, now, cutoff)
-					if decisionErr != nil {
-						s.observeLifecycleSweep(queued, 0, decisionErr)
-						return queued, decisionErr
-					}
-					if !due {
-						continue
-					}
-					payload, err := json.Marshal(transitionTrigger{
-						IdentityID:             ident.ID,
-						To:                     string(orchestrator.StateRenewing),
-						Reason:                 reason,
-						Origin:                 lifecycleTransitionOriginScheduler,
-						PredecessorFingerprint: candidate.Certificate.Fingerprint,
-					})
-					if err != nil {
-						s.observeLifecycleSweep(queued, 0, err)
-						return queued, err
-					}
-					if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
-						if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
-							s.logger.Warn("lifecycle renewal held by destination binding conflict", slog.String("tenant_id", tenant), slog.String("identity_id", ident.ID), slog.String("reason", err.Error()))
-							continue
-						}
-						if errors.Is(err, orchestrator.ErrInvalidTransition) || errors.Is(err, orchestrator.ErrRenewalWorkPending) {
-							continue
-						}
-						s.observeLifecycleSweep(queued, 0, err)
-						return queued, err
-					}
-					queued++
 				}
 			}
 			// A47: tenant posture rules that ask for remediation queue a
@@ -3891,6 +3836,71 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	}
 	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, ariDiscoveryErr)
 	return queued, ariDiscoveryErr
+}
+
+// queueTenantLifecycleRenewals is the expiry stage of the lifecycle sweep for one
+// tenant: it queues a renewal for each managed identity whose served certificate
+// is due before cutoff (fixed window or ARI), and returns how many it queued. The
+// caller records the sweep metric, including on error.
+func (s *Server) queueTenantLifecycleRenewals(ctx context.Context, tenant string, cutoff, now time.Time) (int, error) {
+	candidates, err := s.store.ListRenewalIdentityCandidates(ctx, tenant, cutoff, now)
+	if err != nil {
+		return 0, err
+	}
+	queued := 0
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		ident := candidate.Identity
+		if _, ok := seen[ident.ID]; ok {
+			continue
+		}
+		seen[ident.ID] = struct{}{}
+		// Resolve the certificate actually served by this identity before
+		// applying ARI or the fixed renewal window.
+		servedCertificate, eligible, resolveErr := s.lifecycleServedRenewalCertificate(ctx, tenant, candidate)
+		if resolveErr != nil {
+			return queued, resolveErr
+		}
+		if !eligible {
+			continue
+		}
+		// B4-8: an operator rollback holds automatic renewal on that target until
+		// an operator resumes it; alerts still fire, nothing redeploys on its own.
+		if pausedTarget, paused := orchestrator.RenewalPausedTarget(ident); paused {
+			s.logger.Info("lifecycle renewal held: paused by an operator rollback", slog.String("tenant_id", tenant), slog.String("identity_id", ident.ID), slog.String("target_id", pausedTarget))
+			continue
+		}
+		candidate.Certificate = servedCertificate
+		reason, due, decisionErr := s.lifecycleRenewalReasonForCertificate(ctx, tenant, candidate.Certificate, now, cutoff)
+		if decisionErr != nil {
+			return queued, decisionErr
+		}
+		if !due {
+			continue
+		}
+		payload, err := json.Marshal(transitionTrigger{
+			IdentityID:             ident.ID,
+			To:                     string(orchestrator.StateRenewing),
+			Reason:                 reason,
+			Origin:                 lifecycleTransitionOriginScheduler,
+			PredecessorFingerprint: candidate.Certificate.Fingerprint,
+		})
+		if err != nil {
+			return queued, err
+		}
+		if err := s.orch.TransitionWithSideEffectPayload(ctx, tenant, ident.ID, orchestrator.StateRenewing, reason, payload); err != nil {
+			if errors.Is(err, store.ErrIdentityEnrollmentConflict) {
+				s.logger.Warn("lifecycle renewal held by destination binding conflict", slog.String("tenant_id", tenant), slog.String("identity_id", ident.ID), slog.String("reason", err.Error()))
+				continue
+			}
+			if errors.Is(err, orchestrator.ErrInvalidTransition) || errors.Is(err, orchestrator.ErrRenewalWorkPending) {
+				continue
+			}
+			return queued, err
+		}
+		queued++
+	}
+	return queued, nil
 }
 
 // lifecycleServedRenewalCertificate uses the signed connector timeline when

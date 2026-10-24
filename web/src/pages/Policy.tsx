@@ -11,13 +11,15 @@ import { PageHeader } from "@/components/PageHeader";
 import { ScrollableTableRegion } from "@/components/ScrollableTableRegion";
 import { ErrorState, LoadingState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
-import { ComplianceInventoryReportPanel, NHIComplianceReportPanel } from "@/pages/policy/ComplianceReportingPanels";
+import { ComplianceInventoryReportPanel, EvidenceList, NHIComplianceReportPanel } from "@/pages/policy/ComplianceReportingPanels";
+import {
+  ComplianceDispatchFields,
+  ComplianceScheduleReview,
+  complianceDispatchRequest,
+  emptyComplianceDispatchForm,
+} from "@/pages/policy/ComplianceScheduleParts";
 import {
   api,
   ApiError,
@@ -40,8 +42,6 @@ import {
 
 type ComplianceFramework = ComplianceEvidencePack["framework"];
 type ComplianceReportType = ComplianceReportScheduleRequest["report_type"];
-// ServiceNow tables a report ticket can open in (A103); API identifiers, not copy.
-const serviceNowTables = ["incident", "change_request", "sc_task"] as const;
 type PolicyDryRunKind = "lifecycle" | "abac";
 type SafeHref = { href: string; external: boolean };
 
@@ -240,11 +240,7 @@ function PolicyContent() {
     reportType: "inventory_snapshot" as ComplianceReportType,
     intervalDays: "90",
     recipientRef: "",
-    dispatchChannels: "",
-    ticketEnabled: false,
-    ticketInstanceURL: "",
-    ticketTokenRef: "",
-    ticketTable: "incident" as "incident" | "change_request" | "sc_task",
+    ...emptyComplianceDispatchForm,
   });
   const [dryRunKind, setDryRunKind] = useState<PolicyDryRunKind>("lifecycle");
   const [dryRunModule, setDryRunModule] = useState(lifecycleDryRunModule);
@@ -416,28 +412,7 @@ function PolicyContent() {
       setReportError(t("policy.reporting.intervalError"));
       return null;
     }
-    // A103: completed runs can also be announced on notification channels
-    // and in one ServiceNow ticket; the archive stays the record.
-    const channels = scheduleForm.dispatchChannels
-      .split(",")
-      .map((channel) => channel.trim())
-      .filter(Boolean);
-    const dispatch =
-      channels.length > 0 || scheduleForm.ticketEnabled
-        ? {
-            ...(channels.length > 0 ? { channels } : {}),
-            ...(scheduleForm.ticketEnabled
-              ? {
-                  ticket: {
-                    provider: "servicenow" as const,
-                    instance_url: scheduleForm.ticketInstanceURL.trim(),
-                    table: scheduleForm.ticketTable,
-                    token_ref: scheduleForm.ticketTokenRef.trim(),
-                  },
-                }
-              : {}),
-          }
-        : undefined;
+    const dispatch = complianceDispatchRequest(scheduleForm);
     return {
       name: scheduleForm.name.trim(),
       framework: scheduleForm.framework,
@@ -1123,76 +1098,13 @@ function PolicyContent() {
                   }}
                 />
               </label>
-              <Field className="lg:col-span-3" label={t("policy.reporting.dispatchChannels")} description={t("policy.reporting.dispatchChannelsHint")}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    value={scheduleForm.dispatchChannels}
-                    placeholder={t("policy.reporting.dispatchChannelsPlaceholder")}
-                    onChange={(event) => {
-                      setSchedulePreview(null);
-                      setScheduleForm((current) => ({ ...current, dispatchChannels: event.target.value }));
-                    }}
-                  />
-                )}
-              </Field>
-              <label className="flex items-center gap-2 self-end text-body font-medium lg:col-span-3">
-                <Checkbox
-                  checked={scheduleForm.ticketEnabled}
-                  onChange={(event) => {
-                    setSchedulePreview(null);
-                    setScheduleForm((current) => ({ ...current, ticketEnabled: event.target.checked }));
-                  }}
-                />
-                {t("policy.reporting.ticketEnabled")}
-              </label>
-              {scheduleForm.ticketEnabled && (
-                <>
-                  <Field className="lg:col-span-2" label={t("policy.reporting.ticketInstanceURL")}>
-                    {(control) => (
-                      <Input
-                        {...control}
-                        value={scheduleForm.ticketInstanceURL}
-                        placeholder={t("policy.reporting.ticketInstanceURLPlaceholder")}
-                        onChange={(event) => {
-                          setSchedulePreview(null);
-                          setScheduleForm((current) => ({ ...current, ticketInstanceURL: event.target.value }));
-                        }}
-                      />
-                    )}
-                  </Field>
-                  <Field className="lg:col-span-2" label={t("policy.reporting.ticketTokenRef")}>
-                    {(control) => (
-                      <Input
-                        {...control}
-                        value={scheduleForm.ticketTokenRef}
-                        onChange={(event) => {
-                          setSchedulePreview(null);
-                          setScheduleForm((current) => ({ ...current, ticketTokenRef: event.target.value }));
-                        }}
-                      />
-                    )}
-                  </Field>
-                  <Field className="lg:col-span-2" label={t("policy.reporting.ticketTable")}>
-                    {(control) => (
-                      <Select
-                        {...control}
-                        value={scheduleForm.ticketTable}
-                        onChange={(event) => {
-                          setSchedulePreview(null);
-                          setScheduleForm((current) => ({ ...current, ticketTable: event.target.value as (typeof serviceNowTables)[number] }));
-                        }}
-                      >
-                        {serviceNowTables.map((table) => (
-                          <option key={table} value={table}>
-                            {table}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
-                </>
-              )}
+              <ComplianceDispatchFields
+                form={scheduleForm}
+                onChange={(patch) => {
+                  setSchedulePreview(null);
+                  setScheduleForm((current) => ({ ...current, ...patch }));
+                }}
+              />
               <div className="flex flex-wrap items-end gap-2 lg:col-span-6">
                 <Button type="button" variant="outline" onClick={() => void previewReportSchedule()} disabled={scheduleAction !== null}>
                   {scheduleAction === "preview" ? t("policy.reporting.reviewing") : t("policy.reporting.review")}
@@ -1202,42 +1114,7 @@ function PolicyContent() {
                 </Button>
               </div>
             </form>
-            {schedulePreview && (
-              <section className="rounded-md border border-border bg-muted/40 p-4 text-sm" aria-labelledby="compliance-schedule-review-heading">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 id="compliance-schedule-review-heading" className="font-semibold">
-                      {t("policy.reporting.reviewHeading")}
-                    </h3>
-                    <p className="mt-1 text-muted-foreground">{t("policy.reporting.noStateChanged")}</p>
-                  </div>
-                  <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium">
-                    {schedulePreview.ready ? t("policy.reporting.ready") : t("policy.reporting.setupNeeded")}
-                  </span>
-                </div>
-                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.fingerprint")}</dt>
-                    <dd className="mt-1 break-all font-mono text-xs">{schedulePreview.request_fingerprint}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium text-muted-foreground">{t("policy.reporting.permission")}</dt>
-                    <dd className="mt-1 font-mono text-xs">{schedulePreview.required_permission}</dd>
-                  </div>
-                </dl>
-                {schedulePreview.blockers.length > 0 && <EvidenceList title={t("policy.reporting.blockers")} items={schedulePreview.blockers} />}
-                {schedulePreview.warnings.length > 0 && <EvidenceList title={t("policy.reporting.warnings")} items={schedulePreview.warnings} />}
-                {schedulePreview.execute_external_effects.length > 0 && (
-                  <EvidenceList title={t("policy.reporting.afterEachRun")} items={schedulePreview.execute_external_effects} />
-                )}
-                <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                  <EvidenceList title={t("policy.reporting.executeWrites")} items={schedulePreview.execute_writes} />
-                  <EvidenceList title={t("policy.reporting.recovery")} items={schedulePreview.recovery_steps} />
-                  <EvidenceList title={t("policy.reporting.verify")} items={schedulePreview.verification_steps} />
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">{schedulePreview.secret_data_handling}</p>
-              </section>
-            )}
+            {schedulePreview && <ComplianceScheduleReview preview={schedulePreview} />}
             {reportNotice && (
               <p className="rounded-md border border-border bg-muted p-3 text-sm" role="status">
                 {reportNotice}
@@ -2043,23 +1920,6 @@ function Metric({ label, mono = false, value }: { label: string; mono?: boolean;
     <div>
       <dt className="font-medium text-muted-foreground">{label}</dt>
       <dd className={mono ? "break-all font-mono text-xs" : "text-base font-semibold"}>{value}</dd>
-    </div>
-  );
-}
-
-function EvidenceList({ items, title }: { items: string[]; title: string }) {
-  return (
-    <div role="group" aria-label={title} className="rounded-md border border-border p-3">
-      <p className="font-medium">{title}</p>
-      {items.length > 0 ? (
-        <ul className="mt-2 grid gap-1 text-muted-foreground">
-          {items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-muted-foreground">{translateNow("source.no.labels.in.this.pack.afb9ef5039")}</p>
-      )}
     </div>
   );
 }

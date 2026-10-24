@@ -347,7 +347,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function EvidenceList({ items, title }: { items: string[]; title: string }) {
+export function EvidenceList({ items, title }: { items: string[]; title: string }) {
   return (
     <div role="group" aria-label={title} className="rounded-md border border-border p-3">
       <p className="font-medium">{title}</p>
