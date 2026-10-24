@@ -41,14 +41,24 @@ var ecCurves = []*ecCurve{
 	{name: "P-521", params: elliptic.P521().Params()},
 }
 
+// warmOrder is the order WarmECTables builds the tables in: the curves keys use
+// most, first. A process that warms at startup and then checks a P-256 key (a
+// signer's first GenerateKeyHandle, the first issuance) waits for the one table
+// already under way instead of building its own beside P-224's.
+var warmOrder = []string{"P-256", "P-384", "P-521", "P-224"}
+
 // WarmECTables builds every curve's baby-step table now. The small-scalar check
 // builds a curve's table on first use, and that costs a few hundred
 // milliseconds per curve (seconds under the race detector); a process that
 // certifies keys calls this at startup so the first issuance does not pay for
 // it. It is safe to call concurrently and more than once.
 func WarmECTables() {
-	for _, c := range ecCurves {
-		c.table()
+	for _, name := range warmOrder {
+		for _, c := range ecCurves {
+			if c.name == name {
+				c.table()
+			}
+		}
 	}
 }
 

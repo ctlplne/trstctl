@@ -477,3 +477,27 @@ func TestWarmECTablesBuildsEveryCurveTable(t *testing.T) {
 		t.Fatalf("small scalar from the warmed P-256 table = %d, want 77", s)
 	}
 }
+
+// Batch-13 close repair: the startup warm-up built P-224's table first, so the
+// first P-256 check after a signer started (the curve nearly every key uses)
+// built its own table beside it; under the gate's load the signer's
+// GenerateKeyHandle waited past its deadline. The warm-up builds the most-used
+// curves first, so that check waits for one table already under way, and it
+// still builds every curve exactly once.
+func TestWarmECTablesBuildsTheMostUsedCurvesFirst(t *testing.T) {
+	if len(warmOrder) != len(ecCurves) || warmOrder[0] != "P-256" || warmOrder[1] != "P-384" {
+		t.Fatalf("warm order %v: want P-256, then P-384, then the rest", warmOrder)
+	}
+	seen := map[string]bool{}
+	for _, name := range warmOrder {
+		if seen[name] {
+			t.Fatalf("warm order %v names %s twice", warmOrder, name)
+		}
+		seen[name] = true
+	}
+	for _, c := range ecCurves {
+		if !seen[c.name] {
+			t.Fatalf("warm order %v leaves out %s", warmOrder, c.name)
+		}
+	}
+}

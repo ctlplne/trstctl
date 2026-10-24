@@ -511,7 +511,7 @@ not this file.
 | `internal/crypto/sshkeys/property_test.go:114` | generator bounds the value to one byte (CWE-190) |
 | `internal/crypto/sshkeys/property_test.go:117` | generator bounds the value to 0..2 (CWE-190) |
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
-| `internal/crypto/weakkey/ec.go:198` | the baby-step index is below 2^16, so it fits a uint32 (CWE-190) |
+| `internal/crypto/weakkey/ec.go:208` | the baby-step index is below 2^16, so it fits a uint32 (CWE-190) |
 | `internal/crypto/weakkey/weakkey.go:398` | the sieve index is below 2^16, so it fits a uint64 (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
 | `internal/decommission/store/projection.go:180` | rejected values above MaxInt64 immediately above. |
