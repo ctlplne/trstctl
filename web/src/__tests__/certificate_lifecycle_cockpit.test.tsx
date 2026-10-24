@@ -827,6 +827,44 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(detail.querySelector('time[datetime="2026-08-24T12:45:00Z"]')).not.toBeNull();
   });
 
+  it("lists where a matching key was seen without turning it into custody (A121)", async () => {
+    const certificate = {
+      id: "imported-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=seen.a121.example",
+      sans: ["seen.a121.example"],
+      issuer: "CN=Outside CA",
+      status: "active",
+      fingerprint: "fp-imported",
+      source: "import",
+      not_before: "2026-10-24T00:00:00Z",
+      not_after: "2027-10-24T00:00:00Z",
+      custody_summary: "Key custody was not recorded for this credential.",
+      key_observations: [
+        {
+          agent: "web-1",
+          path: "/etc/ssl/private/seen.key",
+          file_mode: "0600",
+          encrypted: false,
+          key_format: "PKCS8",
+          first_observed: "2026-10-24T10:00:00Z",
+          last_observed: "2026-10-24T12:00:00Z",
+        },
+      ],
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /seen\.a121\.example/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText("Matching key seen on hosts")).toBeInTheDocument();
+    expect(within(detail).getByText(/web-1: \/etc\/ssl\/private\/seen\.key \(mode 0600, not encrypted, PKCS8\), last reported/)).toBeInTheDocument();
+    expect(within(detail).getByText(/not how the key was made/)).toBeInTheDocument();
+    expect(within(detail).getByText("Key custody was not recorded for this credential.")).toBeInTheDocument();
+  });
+
   it("updates a short-lived deadline when expiry passes while the page stays open", async () => {
     // This test owns the clock: coverage/instrumentation latency must not
     // advance a 500 ms lifetime before the initial assertion observes it.

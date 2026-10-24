@@ -1488,6 +1488,27 @@ function CertificateWorkspace() {
                   <dd className="mt-1 text-xs text-muted-foreground">{translateNow("source.custody.unrecorded.b5cust0002")}</dd>
                 ) : null}
               </div>
+              {detail.key_observations && detail.key_observations.length > 0 ? (
+                // A121: where a matching key file was seen, from host agents' key
+                // inventory. An observation beside the custody answer, never a
+                // custody claim.
+                <div className="md:col-span-2">
+                  <dt className="font-medium text-muted-foreground">{t("certificateCockpit.detail.keyObservations")}</dt>
+                  {detail.key_observations.map((observation) => (
+                    <dd key={`${observation.agent}:${observation.path}`} className="break-all text-sm">
+                      {t("certificateCockpit.detail.keyObservation", {
+                        agent: observation.agent,
+                        path: observation.path,
+                        mode: observation.file_mode || "-",
+                        protection: t(observation.encrypted ? "certificateCockpit.detail.keyEncrypted" : "certificateCockpit.detail.keyNotEncrypted"),
+                        format: observation.key_format || "-",
+                        seen: formatDate(observation.last_observed),
+                      })}
+                    </dd>
+                  ))}
+                  <dd className="mt-1 text-xs text-muted-foreground">{t("certificateCockpit.detail.keyObservationsNote")}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
                 <dd>{detail.source || "-"}</dd>

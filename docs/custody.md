@@ -45,6 +45,15 @@ connector-inconsistent, wrong-attempt, or altered custody is refused; the job is
 not completed. The verified receipt appends `certificate.custody.attested`, and
 that event projects the final four fields so replay reconstructs the same inventory.
 
+Where a host agent's private-key inventory reports a key file whose public key
+matches a certificate, the certificate detail lists it as **Matching key seen on
+hosts** (`key_observations`: the agent, the path, the file mode, whether the file
+is encrypted, its format, and when it was last reported). That is an observation
+of where a matching key sits, taken from the agent's metadata-only report and named
+by the agent's own certificate; it is never a custody record, so it does not
+change the custody fields or their summary. Only a certificate whose bytes trstctl
+holds (issued, adopted from a host, or imported) has a public key to compare.
+
 Empty means **unrecorded**, and that is a third answer rather than a default. A
 certificate a network scan found has an origin nobody observed, and the console
 says so in words — "unrecorded is not the same as safe" — rather than letting a

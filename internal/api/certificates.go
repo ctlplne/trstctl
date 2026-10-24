@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -69,6 +70,22 @@ type certificateResponse struct {
 	KeyExportable  string `json:"key_exportable,omitempty"`
 	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
 	CustodySummary string `json:"custody_summary"`
+	// KeyObservations (A121) are private-key files host agents reported whose
+	// public key matches this certificate: where a matching key was seen, not
+	// a custody record. Detail reads only; absent when none was reported or
+	// trstctl does not hold the certificate's bytes.
+	KeyObservations []certificateKeyObservation `json:"key_observations,omitempty"`
+}
+
+// certificateKeyObservation is one agent-reported key file (metadata only).
+type certificateKeyObservation struct {
+	Agent         string    `json:"agent"`
+	Path          string    `json:"path"`
+	FileMode      string    `json:"file_mode,omitempty"`
+	Encrypted     bool      `json:"encrypted"`
+	KeyFormat     string    `json:"key_format,omitempty"`
+	FirstObserved time.Time `json:"first_observed"`
+	LastObserved  time.Time `json:"last_observed"`
 }
 
 type certificateHealthDashboard struct {
@@ -328,6 +345,12 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 	response.RevocationPending = pending[c.Fingerprint]
 	response.IdentityIDs = bindings[c.ID]
+	observations, err := a.certificateKeyObservations(r.Context(), tenantID, c)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	response.KeyObservations = observations
 	if c.IssuanceEventID != "" {
 		provenance, err := a.store.ListKubernetesCertificateProvenance(r.Context(), tenantID, []string{c.Fingerprint})
 		if err != nil {
@@ -488,4 +511,32 @@ func decodeCertCursor(c string, expiring bool) (*time.Time, string, error) {
 		return nil, "", errors.New("cursor not_after is not a valid timestamp")
 	}
 	return &ts, id, nil
+}
+
+// certificateKeyObservations joins the certificate's public key with the
+// private-key files host agents reported (A121). Only a certificate whose bytes
+// trstctl holds has a key to compare; the agent's own metadata is passed through
+// as reported, never upgraded into custody.
+func (a *API) certificateKeyObservations(ctx context.Context, tenantID string, c store.Certificate) ([]certificateKeyObservation, error) {
+	if len(c.CertificateDER) == 0 {
+		return nil, nil
+	}
+	info, err := certinfo.Inspect(c.CertificateDER)
+	if err != nil || info.SPKISHA256 == "" {
+		return nil, nil
+	}
+	rows, err := a.store.ListCertificateKeyObservations(ctx, tenantID, info.SPKISHA256)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]certificateKeyObservation, 0, len(rows))
+	for _, row := range rows {
+		var meta map[string]string
+		_ = json.Unmarshal(row.Metadata, &meta)
+		out = append(out, certificateKeyObservation{
+			Agent: row.Agent, Path: row.Path, FileMode: meta["file_mode"], Encrypted: meta["encrypted"] == "true",
+			KeyFormat: meta["key_format"], FirstObserved: row.FirstSeenAt.UTC(), LastObserved: row.LastSeenAt.UTC(),
+		})
+	}
+	return out, nil
 }

@@ -8991,6 +8991,20 @@ export const messages = {
   "certificateCockpit.owner.unresolved": { defaultMessage: "Owner reference is unresolved", description: "Certificate owner reference is not in the roster." },
   "certificateCockpit.owner.unchecked": { defaultMessage: "Owner contact not checked", description: "Certificate owner roster was unavailable." },
   "certificateCockpit.detail.effectiveOwnership": { defaultMessage: "Effective ownership", description: "Certificate detail effective ownership label." },
+  "certificateCockpit.detail.keyObservations": {
+    defaultMessage: "Matching key seen on hosts",
+    description: "Certificate detail label for private-key files host agents reported (A121).",
+  },
+  "certificateCockpit.detail.keyObservation": {
+    defaultMessage: "{agent}: {path} (mode {mode}, {protection}, {format}), last reported {seen}",
+    description: "One host agent's report of a key file matching the certificate.",
+  },
+  "certificateCockpit.detail.keyEncrypted": { defaultMessage: "encrypted", description: "A reported key file is encrypted." },
+  "certificateCockpit.detail.keyNotEncrypted": { defaultMessage: "not encrypted", description: "A reported key file is not encrypted." },
+  "certificateCockpit.detail.keyObservationsNote": {
+    defaultMessage: "Reported by host agents' key inventory: where a matching key file sits, not how the key was made.",
+    description: "Explains that key observations are not custody records.",
+  },
   "certificateCockpit.detail.current": { defaultMessage: "Current ownership", description: "Current and attested certificate ownership state." },
   "certificateCockpit.detail.incomplete": { defaultMessage: "Ownership is incomplete", description: "Incomplete certificate ownership state." },
   "certificateCockpit.detail.notCurrent": { defaultMessage: "Ownership needs review", description: "Stale certificate ownership state." },

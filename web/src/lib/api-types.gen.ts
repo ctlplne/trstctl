@@ -2273,6 +2273,7 @@ export interface Certificate {
   key_algorithm?: string;
   key_exportable?: "" | "exportable" | "non_exportable";
   key_generated_by?: string;
+  key_observations?: CertificateKeyObservation[];
   key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
   key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
   kubernetes_provenance?: KubernetesCertificateProvenance[];
@@ -2353,6 +2354,16 @@ export interface CertificateIngest {
   owner_id?: string;
   pem: string;
   source?: string;
+}
+
+export interface CertificateKeyObservation {
+  agent: string;
+  encrypted: boolean;
+  file_mode?: string;
+  first_observed: string;
+  key_format?: string;
+  last_observed: string;
+  path: string;
 }
 
 export interface CertificateList {

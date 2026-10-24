@@ -9257,6 +9257,13 @@
           "key_generated_by": {
             "type": "string"
           },
+          "key_observations": {
+            "description": "A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held.",
+            "items": {
+              "$ref": "#/components/schemas/CertificateKeyObservation"
+            },
+            "type": "array"
+          },
           "key_origin": {
             "enum": [
               "",
@@ -9605,6 +9612,41 @@
         },
         "required": [
           "pem"
+        ],
+        "type": "object"
+      },
+      "CertificateKeyObservation": {
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "encrypted": {
+            "type": "boolean"
+          },
+          "file_mode": {
+            "type": "string"
+          },
+          "first_observed": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "key_format": {
+            "type": "string"
+          },
+          "last_observed": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent",
+          "path",
+          "encrypted",
+          "first_observed",
+          "last_observed"
         ],
         "type": "object"
       },

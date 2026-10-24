@@ -1772,7 +1772,12 @@ func componentSchemas() map[string]*Schema {
 		"key_exportable":   {Type: "string", Enum: []string{"", "exportable", "non_exportable"}},
 		"key_generated_by": str(),
 		"custody_summary":  str(),
+		"key_observations": {Type: "array", Items: ref("CertificateKeyObservation"), Description: "A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held."},
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
+	certificateKeyObservation := object(map[string]*Schema{
+		"agent": str(), "path": str(), "file_mode": str(), "encrypted": {Type: "boolean"}, "key_format": str(),
+		"first_observed": timestamp(), "last_observed": timestamp(),
+	}, "agent", "path", "encrypted", "first_observed", "last_observed")
 	identityIssuanceResult := object(map[string]*Schema{
 		"identity_id": uuid(), "request_key": str(),
 		"state":       {Type: "string", Enum: []string{"pending", "issued", "failed", "unavailable", "cancelled"}},
@@ -7020,6 +7025,7 @@ func componentSchemas() map[string]*Schema {
 		"FirstIssuanceRetry":                       firstIssuanceRetry,
 		"IdentityDeploymentEvidence":               identityDeploymentEvidence,
 		"Certificate":                              certificate,
+		"CertificateKeyObservation":                certificateKeyObservation,
 		"KubernetesCertificateProvenance":          kubernetesCertificateProvenance,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),
