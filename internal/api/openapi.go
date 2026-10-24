@@ -2052,14 +2052,24 @@ func componentSchemas() map[string]*Schema {
 		"id": uuid(), "tenant_id": uuid(), "run_id": uuid(), "source_id": uuid(),
 		"kind": str(), "ref": str(), "provenance": str(), "fingerprint": str(),
 		"risk_score": {Type: "integer"}, "metadata": {Type: "object"}, "discovered_at": timestamp(),
-		"triage_status":       {Type: "string", Enum: []string{"unmanaged", "investigating", "managed", "dismissed"}},
+		"triage_status":       {Type: "string", Enum: discoveryTriageStatusEnum},
 		"managed_identity_id": uuid(), "triage_actor": str(), "triage_reason": str(), "triaged_at": timestamp(),
 		"first_seen_at": timestamp(), "last_seen_at": timestamp(), "seen_count": {Type: "integer"},
+		"triage_assignee": str(), "triage_due_at": timestamp(), "triage_evidence_ref": str(), "risk_accepted_until": timestamp(),
+		"overdue": {Type: "boolean"}, "regressed": {Type: "boolean"},
 	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at", "first_seen_at", "last_seen_at", "seen_count")
 	discoveryFindingTriageReq := object(map[string]*Schema{
 		"managed_identity_id": uuid(), "reason": str(), "owner": str(), "team": str(),
 		"tags": {Type: "array", Items: str()},
 	})
+	discoveryFindingResolutionReq := object(map[string]*Schema{
+		"action":       {Type: "string", Enum: []string{"investigate", "remediated", "accept_risk", "reopen"}},
+		"reason":       str(),
+		"assignee":     str(),
+		"due_at":       timestamp(),
+		"evidence_ref": str(),
+		"expires_at":   timestamp(),
+	}, "action", "reason")
 	discoveryMonitoringSummary := object(map[string]*Schema{
 		"source_count":                {Type: "integer"},
 		"scheduled_source_count":      {Type: "integer"},
@@ -2327,8 +2337,12 @@ func componentSchemas() map[string]*Schema {
 		"investigating_count":        {Type: "integer"},
 		"managed_count":              {Type: "integer"},
 		"dismissed_count":            {Type: "integer"},
+		"remediated_count":           {Type: "integer"},
+		"accepted_risk_count":        {Type: "integer"},
+		"overdue_count":              {Type: "integer"},
+		"regressed_count":            {Type: "integer"},
 		"outbox_alert_channel_count": {Type: "integer"},
-	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "investigating_count", "managed_count", "dismissed_count", "outbox_alert_channel_count")
+	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "investigating_count", "managed_count", "dismissed_count", "remediated_count", "accepted_risk_count", "overdue_count", "regressed_count", "outbox_alert_channel_count")
 	ctMonitoring := object(map[string]*Schema{
 		"capability":               str(),
 		"watchlist_path":           str(),
@@ -2369,7 +2383,10 @@ func componentSchemas() map[string]*Schema {
 		"certificate_count":          {Type: "integer"},
 		"ssh_key_count":              {Type: "integer"},
 		"secret_count":               {Type: "integer"},
-	}, "source_count", "finding_count", "open_finding_count", "investigating_count", "remediated_count", "dismissed_count", "remediation_decision_count", "deleted_count", "replaced_count", "relocated_count", "permission_changed_count", "certificate_count", "ssh_key_count", "secret_count")
+		"accepted_risk_count":        {Type: "integer"},
+		"overdue_count":              {Type: "integer"},
+		"regressed_count":            {Type: "integer"},
+	}, "source_count", "finding_count", "open_finding_count", "investigating_count", "remediated_count", "dismissed_count", "remediation_decision_count", "deleted_count", "replaced_count", "relocated_count", "permission_changed_count", "certificate_count", "ssh_key_count", "secret_count", "accepted_risk_count", "overdue_count", "regressed_count")
 	driftRemediationFinding := object(map[string]*Schema{
 		"finding_id":          uuid(),
 		"run_id":              uuid(),
@@ -2383,7 +2400,7 @@ func componentSchemas() map[string]*Schema {
 		"credential_class":    str(),
 		"expected_mode":       str(),
 		"actual_mode":         str(),
-		"triage_status":       {Type: "string", Enum: []string{"unmanaged", "investigating", "managed", "dismissed"}},
+		"triage_status":       {Type: "string", Enum: discoveryTriageStatusEnum},
 		"triage_actor":        str(),
 		"triage_reason":       str(),
 		"triaged_at":          timestamp(),
@@ -2446,6 +2463,8 @@ func componentSchemas() map[string]*Schema {
 		"findings":       {Type: "integer"},
 		"unmanaged":      {Type: "integer"},
 		"investigating":  {Type: "integer"},
+		"remediated":     {Type: "integer"},
+		"accepted_risk":  {Type: "integer"},
 		"unregistered":   {Type: "integer"},
 		"ownerless":      {Type: "integer"},
 		"critical":       {Type: "integer"},
@@ -2454,7 +2473,7 @@ func componentSchemas() map[string]*Schema {
 		"low":            {Type: "integer"},
 		"kind_counts":    {Type: "object"},
 		"surface_counts": {Type: "object"},
-	}, "total_analyzed", "findings", "unmanaged", "investigating", "unregistered", "ownerless", "critical", "high", "medium", "low", "kind_counts", "surface_counts")
+	}, "total_analyzed", "findings", "unmanaged", "investigating", "remediated", "accepted_risk", "unregistered", "ownerless", "critical", "high", "medium", "low", "kind_counts", "surface_counts")
 	nhiShadowFinding := object(map[string]*Schema{
 		"finding_id":          uuid(),
 		"source_id":           uuid(),
@@ -2589,7 +2608,8 @@ func componentSchemas() map[string]*Schema {
 		"medium":          {Type: "integer"},
 		"low":             {Type: "integer"},
 		"recommendations": {Type: "integer"},
-	}, "total_analyzed", "findings", "stale", "dormant", "unused", "orphaned", "critical", "high", "medium", "low", "recommendations")
+		"resolved":        {Type: "integer"},
+	}, "total_analyzed", "findings", "stale", "dormant", "unused", "orphaned", "critical", "high", "medium", "low", "recommendations", "resolved")
 	nhiStaleFinding := object(map[string]*Schema{
 		"inventory_id":      str(),
 		"ref":               str(),
@@ -6939,6 +6959,7 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryRunList":                         list("DiscoveryRun"),
 		"DiscoveryFinding":                         discoveryFinding,
 		"DiscoveryFindingTriageRequest":            discoveryFindingTriageReq,
+		"DiscoveryFindingResolutionRequest":        discoveryFindingResolutionReq,
 		"DiscoveryFindingList":                     list("DiscoveryFinding"),
 		"DiscoveryMonitoringSummary":               discoveryMonitoringSummary,
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
@@ -7717,3 +7738,7 @@ func (a *API) openapiHandler(w http.ResponseWriter, _ *http.Request) {
 // test (SCHEMA-004) can diff the served spec against a checked-in baseline and the
 // breaking-change assertions can inspect it without going over HTTP.
 func (a *API) Spec() *Document { return a.spec }
+
+// discoveryTriageStatusEnum is every triage status a finding reports (A106
+// adds remediated and accepted_risk).
+var discoveryTriageStatusEnum = []string{"unmanaged", "investigating", "managed", "dismissed", "remediated", "accepted_risk"}

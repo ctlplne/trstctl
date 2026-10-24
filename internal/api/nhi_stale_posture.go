@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"trstctl.com/trstctl/internal/discovery"
 )
 
 const (
@@ -83,6 +85,9 @@ type nhiStalePostureSummary struct {
 	Medium          int `json:"medium"`
 	Low             int `json:"low"`
 	Recommendations int `json:"recommendations"`
+	// Resolved counts the NHIs a remediation that held or an unexpired risk
+	// acceptance keeps out of the stale posture (A106).
+	Resolved int `json:"resolved"`
 }
 
 type nhiStalePostureFinding struct {
@@ -139,6 +144,11 @@ func (a *API) nhiStalePosture(ctx context.Context, tenantID string) (nhiStalePos
 		Findings: []nhiStalePostureFinding{},
 	}
 	for _, item := range inventory.Items {
+		switch discovery.TriageStatus(strings.ToLower(strings.TrimSpace(item.Status))) {
+		case discovery.TriageRemediated, discovery.TriageAcceptedRisk:
+			out.Summary.Resolved++
+			continue
+		}
 		if !nhiStaleAnalyzable(item) {
 			continue
 		}

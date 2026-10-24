@@ -613,6 +613,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/status", opaque),
 		privacyRule("/managed_identity_id", opaque), privacyRule("/actor", exact),
 		privacyRule("/reason", clear), privacyRule("/metadata_patch", jsonID),
+		privacyRule("/assignee", exact), privacyRule("/due_at", opaque),
+		privacyRule("/evidence_ref", clear), privacyRule("/risk_accepted_until", opaque),
 	)
 	apiTokenCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/token_hash", opaque),

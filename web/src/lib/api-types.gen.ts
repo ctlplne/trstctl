@@ -2184,6 +2184,7 @@ export interface CTMonitoringRequest {
 }
 
 export interface CTMonitoringSummary {
+  accepted_risk_count: number;
   dismissed_count: number;
   failed_log_count: number;
   finding_count: number;
@@ -2192,6 +2193,9 @@ export interface CTMonitoringSummary {
   managed_count: number;
   open_finding_count: number;
   outbox_alert_channel_count: number;
+  overdue_count: number;
+  regressed_count: number;
+  remediated_count: number;
   retired_log_count: number;
   source_count: number;
   unexpected_issuance_count: number;
@@ -3008,22 +3012,37 @@ export interface DiscoveryFinding {
   last_seen_at: string;
   managed_identity_id?: string;
   metadata: Record<string, unknown>;
+  overdue?: boolean;
   provenance: string;
   ref: string;
+  regressed?: boolean;
+  risk_accepted_until?: string;
   risk_score?: number;
   run_id: string;
   seen_count: number;
   source_id: string;
   tenant_id: string;
   triage_actor?: string;
+  triage_assignee?: string;
+  triage_due_at?: string;
+  triage_evidence_ref?: string;
   triage_reason?: string;
-  triage_status?: "unmanaged" | "investigating" | "managed" | "dismissed";
+  triage_status?: "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
   triaged_at?: string;
 }
 
 export interface DiscoveryFindingList {
   items: DiscoveryFinding[];
   next_cursor?: string;
+}
+
+export interface DiscoveryFindingResolutionRequest {
+  action: "investigate" | "remediated" | "accept_risk" | "reopen";
+  assignee?: string;
+  due_at?: string;
+  evidence_ref?: string;
+  expires_at?: string;
+  reason: string;
 }
 
 export interface DiscoveryFindingTriageRequest {
@@ -3284,18 +3303,21 @@ export interface DriftRemediationFinding {
   source_name: string;
   triage_actor?: string;
   triage_reason?: string;
-  triage_status: "unmanaged" | "investigating" | "managed" | "dismissed";
+  triage_status: "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
   triaged_at?: string;
 }
 
 export interface DriftRemediationSummary {
+  accepted_risk_count: number;
   certificate_count: number;
   deleted_count: number;
   dismissed_count: number;
   finding_count: number;
   investigating_count: number;
   open_finding_count: number;
+  overdue_count: number;
   permission_changed_count: number;
+  regressed_count: number;
   relocated_count: number;
   remediated_count: number;
   remediation_decision_count: number;
@@ -5916,6 +5938,7 @@ export interface NHIShadowPosture {
 }
 
 export interface NHIShadowSummary {
+  accepted_risk: number;
   critical: number;
   findings: number;
   high: number;
@@ -5924,6 +5947,7 @@ export interface NHIShadowSummary {
   low: number;
   medium: number;
   ownerless: number;
+  remediated: number;
   surface_counts: Record<string, unknown>;
   total_analyzed: number;
   unmanaged: number;
@@ -5993,6 +6017,7 @@ export interface NHIStaleSummary {
   medium: number;
   orphaned: number;
   recommendations: number;
+  resolved: number;
   stale: number;
   total_analyzed: number;
   unused: number;

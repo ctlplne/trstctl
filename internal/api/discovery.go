@@ -459,6 +459,14 @@ type discoveryFindingResponse struct {
 	FirstSeenAt       time.Time       `json:"first_seen_at"`
 	LastSeenAt        time.Time       `json:"last_seen_at"`
 	SeenCount         int             `json:"seen_count"`
+	// A106 resolution, and what it means now: an investigation past its due
+	// date is overdue; a remediation seen again after its fix regressed.
+	TriageAssignee    string     `json:"triage_assignee,omitempty"`
+	TriageDueAt       *time.Time `json:"triage_due_at,omitempty"`
+	TriageEvidenceRef string     `json:"triage_evidence_ref,omitempty"`
+	RiskAcceptedUntil *time.Time `json:"risk_accepted_until,omitempty"`
+	Overdue           bool       `json:"overdue,omitempty"`
+	Regressed         bool       `json:"regressed,omitempty"`
 }
 
 type discoveryFindingTriageRequest struct {
@@ -1700,6 +1708,8 @@ func toDiscoveryFindingResponse(f store.DiscoveryFinding) discoveryFindingRespon
 		TriageStatus: f.TriageStatus, ManagedIdentityID: f.ManagedIdentityID,
 		TriageActor: f.TriageActor, TriageReason: f.TriageReason, TriagedAt: f.TriagedAt,
 		FirstSeenAt: firstSeen, LastSeenAt: lastSeen, SeenCount: seen,
+		TriageAssignee: f.TriageAssignee, TriageDueAt: f.TriageDueAt, TriageEvidenceRef: f.TriageEvidenceRef,
+		RiskAcceptedUntil: f.RiskAcceptedUntil, Overdue: findingOverdue(f, time.Now()), Regressed: findingRegressed(f),
 	}
 }
 

@@ -10593,6 +10593,14 @@ export const messages = {
     defaultMessage: "Dismissed",
     description: "Triage status label for a dismissed discovery finding.",
   },
+  "discovery.findings.statusRemediated": {
+    defaultMessage: "Remediated",
+    description: "A106: triage status label for a discovery finding recorded as fixed, with evidence.",
+  },
+  "discovery.findings.statusAcceptedRisk": {
+    defaultMessage: "Risk accepted",
+    description: "A106: triage status label for a discovery finding whose risk is accepted until a time.",
+  },
   "caHierarchy.offlineRekey.heading": { defaultMessage: "Re-key an offline root", description: "Offline CA succession panel heading." },
   "caHierarchy.offlineRekey.description": {
     defaultMessage: "Import a public successor and both cross-certificates after two distinct custodian approvals. The private keys stay offline.",

@@ -3048,6 +3048,7 @@ CTMonitoringRequest = TypedDict(
 CTMonitoringSummary = TypedDict(
     'CTMonitoringSummary',
     {
+        'accepted_risk_count': int,
         'dismissed_count': int,
         'failed_log_count': int,
         'finding_count': int,
@@ -3056,6 +3057,9 @@ CTMonitoringSummary = TypedDict(
         'managed_count': int,
         'open_finding_count': int,
         'outbox_alert_channel_count': int,
+        'overdue_count': int,
+        'regressed_count': int,
+        'remediated_count': int,
         'retired_log_count': int,
         'source_count': int,
         'unexpected_issuance_count': int,
@@ -4168,14 +4172,20 @@ DiscoveryFinding = TypedDict(
         'last_seen_at': str,
         'managed_identity_id': str,
         'metadata': dict[str, Any],
+        'overdue': bool,
         'provenance': str,
         'ref': str,
+        'regressed': bool,
+        'risk_accepted_until': str,
         'risk_score': int,
         'run_id': str,
         'seen_count': int,
         'source_id': str,
         'tenant_id': str,
         'triage_actor': str,
+        'triage_assignee': str,
+        'triage_due_at': str,
+        'triage_evidence_ref': str,
         'triage_reason': str,
         'triage_status': str,
         'triaged_at': str,
@@ -4188,6 +4198,19 @@ DiscoveryFindingList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+DiscoveryFindingResolutionRequest = TypedDict(
+    'DiscoveryFindingResolutionRequest',
+    {
+        'action': str,
+        'assignee': str,
+        'due_at': str,
+        'evidence_ref': str,
+        'expires_at': str,
+        'reason': str,
     },
     total=False,
 )
@@ -4553,13 +4576,16 @@ DriftRemediationFinding = TypedDict(
 DriftRemediationSummary = TypedDict(
     'DriftRemediationSummary',
     {
+        'accepted_risk_count': int,
         'certificate_count': int,
         'deleted_count': int,
         'dismissed_count': int,
         'finding_count': int,
         'investigating_count': int,
         'open_finding_count': int,
+        'overdue_count': int,
         'permission_changed_count': int,
+        'regressed_count': int,
         'relocated_count': int,
         'remediated_count': int,
         'remediation_decision_count': int,
@@ -8160,6 +8186,7 @@ NHIShadowPosture = TypedDict(
 NHIShadowSummary = TypedDict(
     'NHIShadowSummary',
     {
+        'accepted_risk': int,
         'critical': int,
         'findings': int,
         'high': int,
@@ -8168,6 +8195,7 @@ NHIShadowSummary = TypedDict(
         'low': int,
         'medium': int,
         'ownerless': int,
+        'remediated': int,
         'surface_counts': dict[str, Any],
         'total_analyzed': int,
         'unmanaged': int,
@@ -8261,6 +8289,7 @@ NHIStaleSummary = TypedDict(
         'medium': int,
         'orphaned': int,
         'recommendations': int,
+        'resolved': int,
         'stale': int,
         'total_analyzed': int,
         'unused': int,

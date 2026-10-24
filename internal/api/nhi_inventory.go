@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -238,7 +239,7 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 			Kind:         discoveryFindingToNHIKind(finding.Kind, meta),
 			Source:       "discovery_finding",
 			DisplayName:  firstNonEmpty(metadataString(meta, "display_name"), metadataString(meta, "principal"), finding.Ref),
-			Status:       finding.TriageStatus,
+			Status:       nhiFindingStatus(finding, out.GeneratedAt),
 			Ref:          finding.Ref,
 			Provenance:   finding.Provenance,
 			Fingerprint:  finding.Fingerprint,
@@ -405,4 +406,17 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// nhiFindingStatus is a finding's triage status as the posture reads it now
+// (A106): an acceptance past its expiry, and a remediation seen again after
+// its fix, are open again before the sweep or an operator records it.
+func nhiFindingStatus(f store.DiscoveryFinding, now time.Time) string {
+	switch discovery.TriageStatus(f.TriageStatus) {
+	case discovery.TriageRemediated, discovery.TriageAcceptedRisk:
+		if findingResolution(f, now) == "" {
+			return string(discovery.TriageUnmanaged)
+		}
+	}
+	return f.TriageStatus
 }

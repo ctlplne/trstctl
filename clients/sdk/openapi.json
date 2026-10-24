@@ -8830,6 +8830,9 @@
       },
       "CTMonitoringSummary": {
         "properties": {
+          "accepted_risk_count": {
+            "type": "integer"
+          },
           "dismissed_count": {
             "type": "integer"
           },
@@ -8852,6 +8855,15 @@
             "type": "integer"
           },
           "outbox_alert_channel_count": {
+            "type": "integer"
+          },
+          "overdue_count": {
+            "type": "integer"
+          },
+          "regressed_count": {
+            "type": "integer"
+          },
+          "remediated_count": {
             "type": "integer"
           },
           "retired_log_count": {
@@ -8879,6 +8891,10 @@
           "investigating_count",
           "managed_count",
           "dismissed_count",
+          "remediated_count",
+          "accepted_risk_count",
+          "overdue_count",
+          "regressed_count",
           "outbox_alert_channel_count"
         ],
         "type": "object"
@@ -12361,10 +12377,20 @@
           "metadata": {
             "type": "object"
           },
+          "overdue": {
+            "type": "boolean"
+          },
           "provenance": {
             "type": "string"
           },
           "ref": {
+            "type": "string"
+          },
+          "regressed": {
+            "type": "boolean"
+          },
+          "risk_accepted_until": {
+            "format": "date-time",
             "type": "string"
           },
           "risk_score": {
@@ -12388,6 +12414,16 @@
           "triage_actor": {
             "type": "string"
           },
+          "triage_assignee": {
+            "type": "string"
+          },
+          "triage_due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "triage_evidence_ref": {
+            "type": "string"
+          },
           "triage_reason": {
             "type": "string"
           },
@@ -12396,7 +12432,9 @@
               "unmanaged",
               "investigating",
               "managed",
-              "dismissed"
+              "dismissed",
+              "remediated",
+              "accepted_risk"
             ],
             "type": "string"
           },
@@ -12436,6 +12474,41 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "DiscoveryFindingResolutionRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "investigate",
+              "remediated",
+              "accept_risk",
+              "reopen"
+            ],
+            "type": "string"
+          },
+          "assignee": {
+            "type": "string"
+          },
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evidence_ref": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "reason"
         ],
         "type": "object"
       },
@@ -13521,7 +13594,9 @@
               "unmanaged",
               "investigating",
               "managed",
-              "dismissed"
+              "dismissed",
+              "remediated",
+              "accepted_risk"
             ],
             "type": "string"
           },
@@ -13551,6 +13626,9 @@
       },
       "DriftRemediationSummary": {
         "properties": {
+          "accepted_risk_count": {
+            "type": "integer"
+          },
           "certificate_count": {
             "type": "integer"
           },
@@ -13569,7 +13647,13 @@
           "open_finding_count": {
             "type": "integer"
           },
+          "overdue_count": {
+            "type": "integer"
+          },
           "permission_changed_count": {
+            "type": "integer"
+          },
+          "regressed_count": {
             "type": "integer"
           },
           "relocated_count": {
@@ -13608,7 +13692,10 @@
           "permission_changed_count",
           "certificate_count",
           "ssh_key_count",
-          "secret_count"
+          "secret_count",
+          "accepted_risk_count",
+          "overdue_count",
+          "regressed_count"
         ],
         "type": "object"
       },
@@ -24481,6 +24568,9 @@
       },
       "NHIShadowSummary": {
         "properties": {
+          "accepted_risk": {
+            "type": "integer"
+          },
           "critical": {
             "type": "integer"
           },
@@ -24505,6 +24595,9 @@
           "ownerless": {
             "type": "integer"
           },
+          "remediated": {
+            "type": "integer"
+          },
           "surface_counts": {
             "type": "object"
           },
@@ -24523,6 +24616,8 @@
           "findings",
           "unmanaged",
           "investigating",
+          "remediated",
+          "accepted_risk",
           "unregistered",
           "ownerless",
           "critical",
@@ -24786,6 +24881,9 @@
           "recommendations": {
             "type": "integer"
           },
+          "resolved": {
+            "type": "integer"
+          },
           "stale": {
             "type": "integer"
           },
@@ -24807,7 +24905,8 @@
           "high",
           "medium",
           "low",
-          "recommendations"
+          "recommendations",
+          "resolved"
         ],
         "type": "object"
       },
@@ -48532,6 +48631,83 @@
         ],
         "summary": "Queue removal of a distrusted root from the host trust store an agent found it in, through the host's trust-distribution executor",
         "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/resolution": {
+      "post": {
+        "operationId": "resolveDiscoveryFinding",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryFindingResolutionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryFinding"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Investigate, record remediated, accept the risk until a time, or reopen a discovery finding",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/discovery/monitoring": {

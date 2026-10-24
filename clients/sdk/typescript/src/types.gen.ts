@@ -2605,6 +2605,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/resolution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Investigate, record remediated, accept the risk until a time, or reopen a discovery finding */
+        post: operations["resolveDiscoveryFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/monitoring": {
         parameters: {
             query?: never;
@@ -10134,6 +10151,7 @@ export interface components {
             watched_domains: string[];
         };
         CTMonitoringSummary: {
+            accepted_risk_count: number;
             dismissed_count: number;
             failed_log_count: number;
             finding_count: number;
@@ -10142,6 +10160,9 @@ export interface components {
             managed_count: number;
             open_finding_count: number;
             outbox_alert_channel_count: number;
+            overdue_count: number;
+            regressed_count: number;
+            remediated_count: number;
             retired_log_count: number;
             source_count: number;
             unexpected_issuance_count: number;
@@ -11014,8 +11035,12 @@ export interface components {
             /** Format: uuid */
             managed_identity_id?: string;
             metadata: Record<string, never>;
+            overdue?: boolean;
             provenance: string;
             ref: string;
+            regressed?: boolean;
+            /** Format: date-time */
+            risk_accepted_until?: string;
             risk_score?: number;
             /** Format: uuid */
             run_id: string;
@@ -11025,15 +11050,30 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
             triage_actor?: string;
+            triage_assignee?: string;
+            /** Format: date-time */
+            triage_due_at?: string;
+            triage_evidence_ref?: string;
             triage_reason?: string;
             /** @enum {string} */
-            triage_status?: "unmanaged" | "investigating" | "managed" | "dismissed";
+            triage_status?: "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
             /** Format: date-time */
             triaged_at?: string;
         };
         DiscoveryFindingList: {
             items: components["schemas"]["DiscoveryFinding"][];
             next_cursor?: string;
+        };
+        DiscoveryFindingResolutionRequest: {
+            /** @enum {string} */
+            action: "investigate" | "remediated" | "accept_risk" | "reopen";
+            assignee?: string;
+            /** Format: date-time */
+            due_at?: string;
+            evidence_ref?: string;
+            /** Format: date-time */
+            expires_at?: string;
+            reason: string;
         };
         DiscoveryFindingTriageRequest: {
             /** Format: uuid */
@@ -11326,18 +11366,21 @@ export interface components {
             triage_actor?: string;
             triage_reason?: string;
             /** @enum {string} */
-            triage_status: "unmanaged" | "investigating" | "managed" | "dismissed";
+            triage_status: "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
             /** Format: date-time */
             triaged_at?: string;
         };
         DriftRemediationSummary: {
+            accepted_risk_count: number;
             certificate_count: number;
             deleted_count: number;
             dismissed_count: number;
             finding_count: number;
             investigating_count: number;
             open_finding_count: number;
+            overdue_count: number;
             permission_changed_count: number;
+            regressed_count: number;
             relocated_count: number;
             remediated_count: number;
             remediation_decision_count: number;
@@ -14169,6 +14212,7 @@ export interface components {
             summary: components["schemas"]["NHIShadowSummary"];
         };
         NHIShadowSummary: {
+            accepted_risk: number;
             critical: number;
             findings: number;
             high: number;
@@ -14177,6 +14221,7 @@ export interface components {
             low: number;
             medium: number;
             ownerless: number;
+            remediated: number;
             surface_counts: Record<string, never>;
             total_analyzed: number;
             unmanaged: number;
@@ -14251,6 +14296,7 @@ export interface components {
             medium: number;
             orphaned: number;
             recommendations: number;
+            resolved: number;
             stale: number;
             total_analyzed: number;
             unused: number;
@@ -24951,6 +24997,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectorDelivery"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resolveDiscoveryFinding: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryFindingResolutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryFinding"];
                 };
             };
             /** @description client error */

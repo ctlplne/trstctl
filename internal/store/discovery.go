@@ -115,6 +115,12 @@ type DiscoveryFinding struct {
 	TriageActor       string
 	TriageReason      string
 	TriagedAt         *time.Time
+	// The A106 resolution: an investigation's assignee and due date, a
+	// remediation's evidence, and when an accepted risk's acceptance expires.
+	TriageAssignee    string
+	TriageDueAt       *time.Time
+	TriageEvidenceRef string
+	RiskAcceptedUntil *time.Time
 	// FirstSeenAt, LastSeenAt and SeenCount describe repeat observations of the
 	// same credential by later runs of the same source (one row per observation
 	// identity); RunID always names the latest run that observed it.
@@ -150,6 +156,12 @@ type DiscoveryFindingTriageChange struct {
 	Reason            string
 	ChangedAt         time.Time
 	MetadataPatch     json.RawMessage
+	// Resolution fields (A106). Each change carries the whole resolution, so
+	// a change without them clears what an earlier one recorded.
+	Assignee          string
+	DueAt             *time.Time
+	EvidenceRef       string
+	RiskAcceptedUntil *time.Time
 }
 
 // DiscoveryMonitoringSource is a read-side rollup for one tenant discovery
@@ -695,9 +707,14 @@ func (s *Store) ApplyDiscoveryFindingTriageChangedTx(ctx context.Context, tx pgx
 		        metadata = CASE
 		            WHEN $8::jsonb IS NULL THEN metadata
 		            ELSE metadata || $8::jsonb
-		        END
+		        END,
+		        triage_assignee = $9,
+		        triage_due_at = $10,
+		        triage_evidence_ref = $11,
+		        risk_accepted_until = $12
 		  WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))`,
-		ch.TenantID, ch.FindingID, ch.Status, ch.ManagedIdentityID, ch.Actor, ch.Reason, ch.ChangedAt, ch.MetadataPatch)
+		ch.TenantID, ch.FindingID, ch.Status, ch.ManagedIdentityID, ch.Actor, ch.Reason, ch.ChangedAt, ch.MetadataPatch,
+		ch.Assignee, ch.DueAt, ch.EvidenceRef, ch.RiskAcceptedUntil)
 	if err != nil {
 		return err
 	}
@@ -1040,7 +1057,8 @@ func (s *Store) GetDiscoveryFinding(ctx context.Context, tenantID, id string) (D
 			`SELECT id::text, tenant_id::text, run_id::text, source_id::text, kind, ref,
 			        provenance, fingerprint, risk_score, metadata, discovered_at,
 			        triage_status, managed_identity_id::text, triage_actor, triage_reason, triaged_at,
-			        first_seen_at, last_seen_at, seen_count
+			        first_seen_at, last_seen_at, seen_count,
+			        triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until
 			   FROM discovery_findings
 			  WHERE tenant_id = $1 AND (id = $2 OR $2::uuid = ANY(recorded_ids))`, tenantID, id), &out)
 	})
@@ -1167,7 +1185,8 @@ func scanDiscoveryFinding(row rowScanner, f *DiscoveryFinding) error {
 	if err := row.Scan(&f.ID, &f.TenantID, &f.RunID, &f.SourceID, &f.Kind, &f.Ref,
 		&f.Provenance, &f.Fingerprint, &f.RiskScore, &meta, &f.DiscoveredAt,
 		&f.TriageStatus, &f.ManagedIdentityID, &f.TriageActor, &f.TriageReason, &f.TriagedAt,
-		&f.FirstSeenAt, &f.LastSeenAt, &f.SeenCount); err != nil {
+		&f.FirstSeenAt, &f.LastSeenAt, &f.SeenCount,
+		&f.TriageAssignee, &f.TriageDueAt, &f.TriageEvidenceRef, &f.RiskAcceptedUntil); err != nil {
 		return err
 	}
 	f.Metadata = json.RawMessage(meta)

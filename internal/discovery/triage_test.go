@@ -16,6 +16,15 @@ func TestValidateTriageTransition(t *testing.T) {
 		{TriageInvestigating, TriageDismissed},
 		{TriageManaged, TriageManaged},
 		{TriageDismissed, TriageDismissed},
+		// A106 resolutions.
+		{TriageUnmanaged, TriageRemediated},
+		{TriageUnmanaged, TriageAcceptedRisk},
+		{TriageInvestigating, TriageRemediated},
+		{TriageInvestigating, TriageAcceptedRisk},
+		{TriageRemediated, TriageUnmanaged},
+		{TriageAcceptedRisk, TriageUnmanaged},
+		{TriageAcceptedRisk, TriageInvestigating},
+		{TriageAcceptedRisk, TriageRemediated},
 	}
 	for _, tc := range allowed {
 		if err := ValidateTriageTransition(tc.from, tc.to); err != nil {
@@ -31,6 +40,11 @@ func TestValidateTriageTransition(t *testing.T) {
 		{TriageDismissed, TriageManaged},
 		{TriageDismissed, TriageInvestigating},
 		{TriageUnmanaged, "unknown"},
+		{TriageManaged, TriageRemediated},
+		{TriageDismissed, TriageAcceptedRisk},
+		{TriageRemediated, TriageAcceptedRisk},
+		{TriageRemediated, TriageInvestigating},
+		{TriageInvestigating, TriageUnmanaged},
 	}
 	for _, tc := range rejected {
 		if err := ValidateTriageTransition(tc.from, tc.to); err == nil {

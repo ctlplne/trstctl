@@ -288,8 +288,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A100's NHI posture automation plan raised it to 521, mapped onto the credential-risk row.
 	// A101's stale NHI handoff raised it to 522, mapped onto the same row.
 	// A102's exposure reachability probe raised it to 523, mapped onto the same row.
-	if len(out) != 523 {
-		t.Fatalf("OpenAPI operationIds = %d, want 523", len(out))
+	// A106's finding resolution raised it to 524, mapped onto the discovery row.
+	if len(out) != 524 {
+		t.Fatalf("OpenAPI operationIds = %d, want 524", len(out))
 	}
 	return out
 }

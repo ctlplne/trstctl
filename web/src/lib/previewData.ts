@@ -630,6 +630,10 @@ const previewReaders: Record<string, () => unknown> = {
       investigating_count: 0,
       managed_count: 0,
       dismissed_count: 0,
+      remediated_count: 0,
+      accepted_risk_count: 0,
+      overdue_count: 0,
+      regressed_count: 0,
       unexpected_issuance_count: 0,
       outbox_alert_channel_count: 1,
     },
@@ -656,6 +660,9 @@ const previewReaders: Record<string, () => unknown> = {
       replaced_count: 1,
       relocated_count: 0,
       permission_changed_count: 0,
+      accepted_risk_count: 0,
+      overdue_count: 0,
+      regressed_count: 0,
     },
     findings: [
       {

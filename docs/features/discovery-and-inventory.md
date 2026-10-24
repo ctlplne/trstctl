@@ -532,10 +532,25 @@ into compliance posture.
 
 Findings are immutable evidence, but their operator triage state is mutable and
 event-sourced. `triage_status` starts as `unmanaged`; the state model also includes
-`investigating`, `managed`, and `dismissed`. `POST
+`investigating`, `managed`, `dismissed`, and (A106) `remediated` and
+`accepted_risk`. `POST
 /api/v1/discovery/findings/{id}/claim` marks a finding managed, and `POST
 /api/v1/discovery/findings/{id}/dismiss` dismisses it with a reason. Both are
 tenant-scoped, idempotent mutations guarded by `discovery:write`.
+
+`POST /api/v1/discovery/findings/{id}/resolution` (A106, `discovery:write`)
+records a resolution with a `reason` and an `action`: `investigate` (an
+`assignee` and an optional future `due_at`; repeating it reassigns),
+`remediated` (an `evidence_ref` for the fix), `accept_risk` (an `expires_at`
+within one year; the leader's lifecycle sweep reopens the finding when the
+acceptance expires, as `system:risk-acceptance-expiry`), or `reopen` (from
+remediated or accepted risk). Each action refuses the other actions' fields.
+A finding reports `overdue` when its investigation is past due and `regressed`
+when it was seen again after its fix was recorded. The NHI shadow and stale
+posture leave a fix that held and an unexpired acceptance out of the open
+posture and count them (`remediated`, `accepted_risk`, `resolved`); the CT and
+drift dashboard summaries count every status, plus overdue and regressed
+findings.
 
 `GET /api/v1/discovery/findings` filters on the server by `run_id`,
 `source_kind` (the kind of the source a finding was recorded under, for

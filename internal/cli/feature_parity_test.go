@@ -325,8 +325,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A100's `nhi posture automation` raised it to 575, mapped onto the credential-risk row.
 	// A101's `nhi posture stale handoff` raised it to 576, mapped onto the same row.
 	// A102's `nhi posture exposure probe` raised it to 577, mapped onto the same row.
-	if len(out) != 577 {
-		t.Fatalf("CLI commands = %d, want 577", len(out))
+	// A106's `discovery findings resolve` raised it to 578, mapped onto the discovery row.
+	if len(out) != 578 {
+		t.Fatalf("CLI commands = %d, want 578", len(out))
 	}
 	return out
 }

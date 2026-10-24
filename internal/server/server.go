@@ -3834,6 +3834,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 		s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, err)
 		return queued, err
 	}
+	s.runRiskAcceptanceExpiryOnce(ctx, now)
 	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, ariDiscoveryErr)
 	return queued, ariDiscoveryErr
 }

@@ -132,6 +132,8 @@ vi.mock("@/lib/api", async (orig) => {
       findings: 0,
       unmanaged: 0,
       investigating: 0,
+      remediated: 0,
+      accepted_risk: 0,
       unregistered: 0,
       ownerless: 0,
       critical: 0,

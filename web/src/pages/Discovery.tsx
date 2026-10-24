@@ -555,12 +555,16 @@ const triageFilterOptions = [
   { value: "investigating", labelKey: "discovery.findings.statusInvestigating" },
   { value: "managed", labelKey: "discovery.findings.statusManaged" },
   { value: "dismissed", labelKey: "discovery.findings.statusDismissed" },
+  { value: "remediated", labelKey: "discovery.findings.statusRemediated" },
+  { value: "accepted_risk", labelKey: "discovery.findings.statusAcceptedRisk" },
 ] as const;
 const triageStatusLabelKeys: Record<FindingTriageStatus, MessageKey> = {
   unmanaged: "discovery.findings.statusUnmanaged",
   investigating: "discovery.findings.statusInvestigating",
   managed: "discovery.findings.statusManaged",
   dismissed: "discovery.findings.statusDismissed",
+  remediated: "discovery.findings.statusRemediated",
+  accepted_risk: "discovery.findings.statusAcceptedRisk",
 };
 
 function gridControlsToolbar({ columnChooser, savedViews }: DataGridToolbarControls) {

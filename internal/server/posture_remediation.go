@@ -166,3 +166,32 @@ func postureRenewalRule(violations []policy.PostureViolation) string {
 	}
 	return ""
 }
+
+// runRiskAcceptanceExpiryOnce reopens every tenant's accepted risks whose
+// acceptance has expired (A106), whatever the automation switch says: expiry
+// is the acceptance's own term, not an automatic remediation. One tenant's
+// failure is logged and does not stall the others.
+func (s *Server) runRiskAcceptanceExpiryOnce(ctx context.Context, now time.Time) int {
+	if s.orch == nil || s.store == nil {
+		return 0
+	}
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("risk acceptance expiry sweep could not list tenants", slog.String("error", err.Error()))
+		}
+		return 0
+	}
+	total := 0
+	for _, tenant := range tenants {
+		n, err := s.orch.ExpireRiskAcceptances(ctx, tenant.TenantID, now)
+		total += n
+		if err != nil && s.logger != nil {
+			s.logger.Warn("risk acceptance expiry failed for a tenant", slog.String("tenant_id", tenant.TenantID), slog.String("error", err.Error()))
+		}
+		if n > 0 && s.logger != nil {
+			s.logger.Info("risk acceptances expired; findings reopened", slog.String("tenant_id", tenant.TenantID), slog.Int("reopened", n))
+		}
+	}
+	return total
+}

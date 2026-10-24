@@ -2811,8 +2811,14 @@ than sending an operator looking for a credential that was never there.
   dashboards (A105): each lists its own source kind's findings a page at a
   time, filters them by triage status, and shows counts the server takes over
   every finding of that kind, not a first-page sample. Resolution workflows
-  (assignment, due dates, remediation evidence, time-boxed accepted risk)
-  remain future work; automatic remediation exists for
+  (A106) run through `POST /api/v1/discovery/findings/{id}/resolution` and
+  `discovery findings resolve`: investigate with an assignee and a due date,
+  record a fix with its evidence, accept the risk until a time within a year
+  (the leader's sweep reopens it at expiry), or reopen. Posture reads leave a
+  fix that held and an unexpired acceptance out of the open posture and
+  count them; a fix seen again after it was recorded counts as open. The
+  console's Posture dashboards do not yet offer these actions. Automatic
+  remediation exists for
   certificate posture findings whose tenant rule asks for `"remediation":
   "renew"` (the lifecycle scheduler renews the deployed identity), not for
   SSH-trust or drift findings. Generic

@@ -78,6 +78,10 @@ type ctMonitoringSummary struct {
 	InvestigatingCount      int `json:"investigating_count"`
 	ManagedCount            int `json:"managed_count"`
 	DismissedCount          int `json:"dismissed_count"`
+	RemediatedCount         int `json:"remediated_count"`
+	AcceptedRiskCount       int `json:"accepted_risk_count"`
+	OverdueCount            int `json:"overdue_count"`
+	RegressedCount          int `json:"regressed_count"`
 	OutboxAlertChannelCount int `json:"outbox_alert_channel_count"`
 }
 
@@ -391,12 +395,14 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 	// Counts cover every finding recorded under a CT-log source; the list is
 	// one page of them, optionally narrowed by triage status.
 	ctFindings := store.DiscoveryFindingFilter{SourceKind: "ct_log"}
-	tallies, err := a.store.TallyDiscoveryFindings(ctx, tenantID, ctFindings)
+	tallies, err := a.store.TallyDiscoveryFindings(ctx, tenantID, ctFindings, time.Now())
 	if err != nil {
 		return out, err
 	}
 	for _, tally := range tallies {
 		out.Summary.FindingCount += tally.Count
+		out.Summary.OverdueCount += tally.Overdue
+		out.Summary.RegressedCount += tally.Regressed
 		if tally.Kind == "ct_unexpected_issuance" {
 			out.Summary.UnexpectedIssuanceCount += tally.Count
 		}
@@ -409,6 +415,10 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 			out.Summary.ManagedCount += tally.Count
 		case discovery.TriageDismissed:
 			out.Summary.DismissedCount += tally.Count
+		case discovery.TriageRemediated:
+			out.Summary.RemediatedCount += tally.Count
+		case discovery.TriageAcceptedRisk:
+			out.Summary.AcceptedRiskCount += tally.Count
 		}
 	}
 	findings, next, err := a.dashboardFindingsPage(ctx, tenantID, ctFindings, page)

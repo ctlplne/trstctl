@@ -26,6 +26,7 @@ import (
 var discoveryTriageStatuses = map[string]bool{
 	string(discovery.TriageUnmanaged): true, string(discovery.TriageInvestigating): true,
 	string(discovery.TriageManaged): true, string(discovery.TriageDismissed): true,
+	string(discovery.TriageRemediated): true, string(discovery.TriageAcceptedRisk): true,
 }
 
 var discoveryFilterKind = regexp.MustCompile(`^[a-z0-9][a-z0-9_.:-]{0,127}$`)
@@ -33,7 +34,7 @@ var discoveryFilterKind = regexp.MustCompile(`^[a-z0-9][a-z0-9_.:-]{0,127}$`)
 func discoveryTriageFilter(raw string) (string, error) {
 	status := strings.TrimSpace(raw)
 	if status != "" && !discoveryTriageStatuses[status] {
-		return "", errors.New("triage_status must be unmanaged, investigating, managed or dismissed")
+		return "", errors.New("triage_status must be unmanaged, investigating, managed, dismissed, remediated or accepted_risk")
 	}
 	return status, nil
 }

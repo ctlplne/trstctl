@@ -304,6 +304,7 @@ public final class OpenApiSchemas {
       "DiscoveryCoverageClass",
       "DiscoveryFinding",
       "DiscoveryFindingList",
+      "DiscoveryFindingResolutionRequest",
       "DiscoveryFindingTriageRequest",
       "DiscoveryMonitoring",
       "DiscoveryMonitoringSource",

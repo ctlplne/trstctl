@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/discovery"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -33,10 +34,14 @@ type nhiShadowPostureResponse struct {
 }
 
 type nhiShadowPostureSummary struct {
-	TotalAnalyzed int            `json:"total_analyzed"`
-	Findings      int            `json:"findings"`
-	Unmanaged     int            `json:"unmanaged"`
-	Investigating int            `json:"investigating"`
+	TotalAnalyzed int `json:"total_analyzed"`
+	Findings      int `json:"findings"`
+	Unmanaged     int `json:"unmanaged"`
+	Investigating int `json:"investigating"`
+	// Remediated and AcceptedRisk count the findings a resolution keeps out
+	// of the open posture (A106): a fix that held, an unexpired acceptance.
+	Remediated    int            `json:"remediated"`
+	AcceptedRisk  int            `json:"accepted_risk"`
 	Unregistered  int            `json:"unregistered"`
 	Ownerless     int            `json:"ownerless"`
 	Critical      int            `json:"critical"`
@@ -111,6 +116,16 @@ func (a *API) nhiShadowPosture(ctx context.Context, tenantID string) (nhiShadowP
 		}
 		for _, row := range rows {
 			out.Summary.TotalAnalyzed++
+			switch findingResolution(row, out.GeneratedAt) {
+			case discovery.TriageRemediated:
+				out.Summary.Remediated++
+				continue
+			case discovery.TriageAcceptedRisk:
+				out.Summary.AcceptedRisk++
+				continue
+			}
+			// A regressed fix or a lapsed acceptance is open again.
+			row.TriageStatus = nhiFindingStatus(row, out.GeneratedAt)
 			finding, ok := nhiShadowFindingForRow(row)
 			if !ok {
 				continue

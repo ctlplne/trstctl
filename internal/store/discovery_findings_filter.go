@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -72,7 +73,8 @@ func (s *Store) ListDiscoveryFindingsFiltered(ctx context.Context, tenantID stri
 		rows, err := tx.Query(ctx, `SELECT f.id::text, f.tenant_id::text, f.run_id::text, f.source_id::text, f.kind, f.ref,
 		              f.provenance, f.fingerprint, f.risk_score, f.metadata, f.discovered_at,
 		              f.triage_status, f.managed_identity_id::text, f.triage_actor, f.triage_reason, f.triaged_at,
-		              f.first_seen_at, f.last_seen_at, f.seen_count
+		              f.first_seen_at, f.last_seen_at, f.seen_count,
+		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until
 		         FROM discovery_findings f
 		        WHERE f.tenant_id = $1 AND f.id > $2`+where+`
 		        ORDER BY f.id LIMIT $3`, args...)
@@ -94,23 +96,30 @@ func (s *Store) ListDiscoveryFindingsFiltered(ctx context.Context, tenantID stri
 
 // DiscoveryFindingTally is one group of a filtered count: the triage status
 // (never-triaged folded into unmanaged), the finding kind, and the metadata
-// type and class a drift finding carries ("" when absent).
+// type and class a drift finding carries ("" when absent). Overdue counts the
+// group's investigations past their due date at the tally's time; Regressed
+// its remediations seen again after the fix was recorded (A106).
 type DiscoveryFindingTally struct {
 	TriageStatus string
 	Kind         string
 	Type         string
 	Class        string
 	Count        int
+	Overdue      int
+	Regressed    int
 }
 
-// TallyDiscoveryFindings counts every finding a filter matches, grouped, so a
-// dashboard's totals come from the server rather than from a page.
-func (s *Store) TallyDiscoveryFindings(ctx context.Context, tenantID string, filter DiscoveryFindingFilter) ([]DiscoveryFindingTally, error) {
+// TallyDiscoveryFindings counts every finding a filter matches at now,
+// grouped, so a dashboard's totals come from the server rather than a page.
+func (s *Store) TallyDiscoveryFindings(ctx context.Context, tenantID string, filter DiscoveryFindingFilter, now time.Time) ([]DiscoveryFindingTally, error) {
 	var out []DiscoveryFindingTally
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		where, args := filter.where([]any{tenantID, MaxDiscoveryFindingTallyGroups + 1})
+		args = append(args, now)
 		rows, err := tx.Query(ctx, `SELECT CASE WHEN f.triage_status = '' THEN 'unmanaged' ELSE f.triage_status END,
-		              f.kind, COALESCE(f.metadata->>'type', ''), COALESCE(f.metadata->>'class', ''), count(*)
+		              f.kind, COALESCE(f.metadata->>'type', ''), COALESCE(f.metadata->>'class', ''), count(*),
+		              count(*) FILTER (WHERE f.triage_status = 'investigating' AND f.triage_due_at < $`+fmt.Sprint(len(args))+`),
+		              count(*) FILTER (WHERE f.triage_status = 'remediated' AND f.last_seen_at > f.triaged_at)
 		         FROM discovery_findings f
 		        WHERE f.tenant_id = $1`+where+`
 		        GROUP BY 1, 2, 3, 4
@@ -121,7 +130,7 @@ func (s *Store) TallyDiscoveryFindings(ctx context.Context, tenantID string, fil
 		defer rows.Close()
 		for rows.Next() {
 			var t DiscoveryFindingTally
-			if err := rows.Scan(&t.TriageStatus, &t.Kind, &t.Type, &t.Class, &t.Count); err != nil {
+			if err := rows.Scan(&t.TriageStatus, &t.Kind, &t.Type, &t.Class, &t.Count, &t.Overdue, &t.Regressed); err != nil {
 				return err
 			}
 			out = append(out, t)
@@ -153,6 +162,43 @@ func (s *Store) ListDiscoverySourcesOfKind(ctx context.Context, tenantID, kind s
 				return err
 			}
 			out = append(out, src)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// MaxRiskAcceptanceExpiriesPerSweep bounds one tenant's expiry pass (AN-7):
+// the next sweep takes the rest.
+const MaxRiskAcceptanceExpiriesPerSweep = 200
+
+// ExpiredRiskAcceptances lists a tenant's accepted-risk findings whose
+// acceptance expired at or before now, oldest expiry first (A106).
+func (s *Store) ExpiredRiskAcceptances(ctx context.Context, tenantID string, now time.Time, limit int) ([]DiscoveryFinding, error) {
+	if limit <= 0 || limit > MaxRiskAcceptanceExpiriesPerSweep {
+		limit = MaxRiskAcceptanceExpiriesPerSweep
+	}
+	var out []DiscoveryFinding
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT f.id::text, f.tenant_id::text, f.run_id::text, f.source_id::text, f.kind, f.ref,
+		              f.provenance, f.fingerprint, f.risk_score, f.metadata, f.discovered_at,
+		              f.triage_status, f.managed_identity_id::text, f.triage_actor, f.triage_reason, f.triaged_at,
+		              f.first_seen_at, f.last_seen_at, f.seen_count,
+		              f.triage_assignee, f.triage_due_at, f.triage_evidence_ref, f.risk_accepted_until
+		         FROM discovery_findings f
+		        WHERE f.tenant_id = $1 AND f.triage_status = 'accepted_risk'
+		          AND f.risk_accepted_until IS NOT NULL AND f.risk_accepted_until <= $2
+		        ORDER BY f.risk_accepted_until, f.id LIMIT $3`, tenantID, now, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var f DiscoveryFinding
+			if err := scanDiscoveryFinding(rows, &f); err != nil {
+				return err
+			}
+			out = append(out, f)
 		}
 		return rows.Err()
 	})

@@ -86,7 +86,7 @@ func TestDiscoveryFindingFilterPagesAndCountsOneSourceKind(t *testing.T) {
 		t.Fatalf("drift findings by kind = %d (%v)", len(drift), err)
 	}
 
-	tallies, err := s.TallyDiscoveryFindings(ctx, tenantA, ct)
+	tallies, err := s.TallyDiscoveryFindings(ctx, tenantA, ct, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestDiscoveryFindingFilterPagesAndCountsOneSourceKind(t *testing.T) {
 	if byTriage["unmanaged"] != 2 || byTriage["dismissed"] != 1 || len(byTriage) != 2 {
 		t.Fatalf("CT tally by triage = %v", byTriage)
 	}
-	tallies, err = s.TallyDiscoveryFindings(ctx, tenantA, store.DiscoveryFindingFilter{SourceKind: "drift"})
+	tallies, err = s.TallyDiscoveryFindings(ctx, tenantA, store.DiscoveryFindingFilter{SourceKind: "drift"}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestDiscoveryFindingFilterPagesAndCountsOneSourceKind(t *testing.T) {
 	if rows, err := s.ListDiscoveryFindingsFiltered(ctx, tenantB, ct, store.ZeroUUID, 100); err != nil || len(rows) != 0 {
 		t.Fatalf("tenant B read tenant A's CT findings: %d (%v)", len(rows), err)
 	}
-	if tallies, err := s.TallyDiscoveryFindings(ctx, tenantB, ct); err != nil || len(tallies) != 0 {
+	if tallies, err := s.TallyDiscoveryFindings(ctx, tenantB, ct, now); err != nil || len(tallies) != 0 {
 		t.Fatalf("tenant B counted tenant A's CT findings: %+v (%v)", tallies, err)
 	}
 }

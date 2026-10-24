@@ -147,7 +147,7 @@ not this file.
 | `internal/api/itsm_test.go:28` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/itsm_test.go:57` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/api/managedkeys_test.go:225` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/nhi_inventory.go:199` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/nhi_inventory.go:200` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:892` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1261` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -554,10 +554,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5862` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5879` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5892` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5920` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5868` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5885` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5898` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5926` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -630,8 +630,8 @@ not this file.
 | `internal/store/connector_lifecycle.go:522` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/connector_lifecycle.go:525` | constrained positive PostgreSQL bigint (CWE-190) |
 | `internal/store/cryptoasset_migration_test.go:73` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/store/discovery.go:193` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
-| `internal/store/discovery.go:243` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/discovery.go:205` | JetStream event sequences are stored in PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/store/discovery.go:255` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_coverage.go:37` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:57` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/discovery_coverage.go:81` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -820,7 +820,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4061` | closed test table list above |
+| `internal/store/migration_content_test.go:4112` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

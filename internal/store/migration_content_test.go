@@ -1090,6 +1090,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	253: true, // TestHistoricalOnlineMigrationRecoversInterruptedBuilds/253 proves populated N-1 -> N content and index recovery
 	250: true, // TestMigrationDataContentBackfills/0250_managed_key_custody_starts_unproven
 	296: true, // TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus
+	307: true, // TestMigration0307LeavesExistingFindingsUnresolved
 	297: true, // TestMigration0297GivesExistingCampaignsNoSoak
 	298: true, // TestMigration0298LeavesExistingTrustSourcesTokenBound
 	300: true, // TestMigration0300CapturesExistingAgentsAsLifecycleReceipts
@@ -1684,6 +1685,56 @@ func TestMigration0296LeavesExistingAgentsWithoutAnInventedExecutorCensus(t *tes
 		UPDATE agents SET executors='{"version":"2.0","kinds":[]}'::jsonb, executors_reported_at=now()
 		 WHERE tenant_id=$1 AND id=$2`, tenantA, agentID); err != nil {
 		t.Fatalf("0296 refused a reported census: %v", err)
+	}
+}
+
+// A106: a finding recorded before resolutions exist keeps its triage and
+// gains no assignee, due date, evidence or acceptance: an empty resolution,
+// not an invented one.
+func TestMigration0307LeavesExistingFindingsUnresolved(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 307)
+	if target.noTx || target.name != "0307_discovery_finding_resolution.sql" {
+		t.Fatalf("migration 0307 classification = name:%q no_tx:%t", target.name, target.noTx)
+	}
+	dsn := createFreshMigrationDatabase(t)
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+
+	sourceID, runID, findingID := uuid(tenantA, 30701), uuid(tenantA, 30702), uuid(tenantA, 30703)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO discovery_sources (id, tenant_id, kind, name, created_at, updated_at)
+		VALUES ($1, $2, 'ct_log', 'ct-before-0307', now(), now())`, sourceID, tenantA); err != nil {
+		t.Fatalf("seed pre-0307 source: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO discovery_runs (id, tenant_id, source_id, status, created_at)
+		VALUES ($1, $2, $3, 'succeeded', now())`, runID, tenantA, sourceID); err != nil {
+		t.Fatalf("seed pre-0307 run: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO discovery_findings (id, tenant_id, run_id, source_id, kind, ref, provenance, discovered_at, triage_status, triage_reason)
+		VALUES ($1, $2, $3, $4, 'ct_unexpected_issuance', 'edge.example.test', 'ct:log', now(), 'dismissed', 'expected issuer')`,
+		findingID, tenantA, runID, sourceID); err != nil {
+		t.Fatalf("seed pre-0307 finding: %v", err)
+	}
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+
+	var status, reason, assignee, evidence string
+	var due, accepted sql.NullTime
+	if err := pool.QueryRow(ctx, `
+		SELECT triage_status, triage_reason, triage_assignee, triage_due_at, triage_evidence_ref, risk_accepted_until
+		  FROM discovery_findings WHERE tenant_id=$1 AND id=$2`, tenantA, findingID).
+		Scan(&status, &reason, &assignee, &due, &evidence, &accepted); err != nil {
+		t.Fatal(err)
+	}
+	if status != "dismissed" || reason != "expected issuer" || assignee != "" || due.Valid || evidence != "" || accepted.Valid {
+		t.Fatalf("legacy finding after 0307 = status=%q reason=%q assignee=%q due=%v evidence=%q accepted=%v",
+			status, reason, assignee, due, evidence, accepted)
 	}
 }
 

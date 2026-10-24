@@ -55,6 +55,9 @@ type driftRemediationSummary struct {
 	CertificateCount         int `json:"certificate_count"`
 	SSHKeyCount              int `json:"ssh_key_count"`
 	SecretCount              int `json:"secret_count"`
+	AcceptedRiskCount        int `json:"accepted_risk_count"`
+	OverdueCount             int `json:"overdue_count"`
+	RegressedCount           int `json:"regressed_count"`
 }
 
 type driftRemediationFinding struct {
@@ -217,7 +220,7 @@ func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, page 
 	// Counts cover every credential-drift finding of a drift source; the list
 	// is one page of them, optionally narrowed by triage status.
 	drift := store.DiscoveryFindingFilter{SourceKind: "drift", Kind: "credential_drift"}
-	tallies, err := a.store.TallyDiscoveryFindings(ctx, tenantID, drift)
+	tallies, err := a.store.TallyDiscoveryFindings(ctx, tenantID, drift, time.Now())
 	if err != nil {
 		return out, err
 	}
@@ -248,14 +251,19 @@ func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, page 
 func (s *driftRemediationSummary) add(tally store.DiscoveryFindingTally) {
 	n := tally.Count
 	s.FindingCount += n
+	s.OverdueCount += tally.Overdue
+	s.RegressedCount += tally.Regressed
 	switch discovery.TriageStatus(tally.TriageStatus) {
 	case discovery.TriageUnmanaged:
 		s.OpenFindingCount += n
 	case discovery.TriageInvestigating:
 		s.InvestigatingCount += n
 		s.RemediationDecisionCount += n
-	case discovery.TriageManaged:
+	case discovery.TriageManaged, discovery.TriageRemediated:
 		s.RemediatedCount += n
+		s.RemediationDecisionCount += n
+	case discovery.TriageAcceptedRisk:
+		s.AcceptedRiskCount += n
 		s.RemediationDecisionCount += n
 	case discovery.TriageDismissed:
 		s.DismissedCount += n

@@ -2467,6 +2467,12 @@ type DiscoveryFindingTriageChanged struct {
 	Actor             string          `json:"actor,omitempty"`
 	Reason            string          `json:"reason,omitempty"`
 	MetadataPatch     json.RawMessage `json:"metadata_patch,omitempty"`
+	// A106 resolution: who investigates and by when, the evidence of a fix,
+	// and when an accepted risk's acceptance expires.
+	Assignee          string     `json:"assignee,omitempty"`
+	DueAt             *time.Time `json:"due_at,omitempty"`
+	EvidenceRef       string     `json:"evidence_ref,omitempty"`
+	RiskAcceptedUntil *time.Time `json:"risk_accepted_until,omitempty"`
 }
 
 // DiscoveryRunCompleted is the payload of discovery.run.completed.
@@ -5961,6 +5967,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, FindingID: pl.ID, Status: pl.Status,
 			ManagedIdentityID: pl.ManagedIdentityID, Actor: pl.Actor, Reason: pl.Reason,
 			ChangedAt: e.Time, MetadataPatch: pl.MetadataPatch,
+			Assignee: pl.Assignee, DueAt: pl.DueAt, EvidenceRef: pl.EvidenceRef, RiskAcceptedUntil: pl.RiskAcceptedUntil,
 		})
 	case EventDiscoveryRunCompleted:
 		var pl DiscoveryRunCompleted
