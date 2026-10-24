@@ -256,6 +256,91 @@ describe("SSH trust served workflow surface", () => {
     expect(within(panel).getByText(/adopt the list the host holds with trstctl ssh krl adopt/)).toBeInTheDocument();
   });
 
+  it("judges each host's sshd trust against this tenant's CA (A115)", async () => {
+    apiMock.sshFleet.mockResolvedValue({
+      hosts: [],
+      host_count: 0,
+      key_count: 0,
+      standing_key_count: 0,
+      orphaned_key_count: 0,
+      host_trust: {
+        summary: {
+          hosts: 2,
+          tenant_ca_configured: true,
+          tenant_ca_fingerprint: "SHA256:tenant",
+          served_krl_sha256: "a".repeat(64),
+          trusts_tenant_ca: 1,
+          trusts_other_ca_only: 1,
+          no_user_ca: 0,
+          tenant_host_certificate: 1,
+          enforces_served_krl: 1,
+          standing_keys_on: 1,
+        },
+        hosts: [
+          {
+            agent_id: "id-edge-1",
+            agent: "edge-1",
+            sshd_config: "/etc/ssh/sshd_config",
+            config_read: "read",
+            user_ca: "tenant_ca",
+            trusted_ca_fingerprints: ["SHA256:tenant"],
+            host_certificate: "tenant_ca",
+            host_certificates: [
+              {
+                path: "/etc/ssh/ssh_host_ed25519_key-cert.pub",
+                judgment: "tenant_ca",
+                ca_fingerprint: "SHA256:tenant",
+                signature_verified: true,
+                key_id: "edge-1 host",
+                principals: ["edge-1.example.test"],
+                valid_after: "2026-10-24T00:00:00Z",
+                valid_before: "2026-12-24T00:00:00Z",
+              },
+            ],
+            revocation_list: "served",
+            krl_version: 9001,
+            standing_keys: "off",
+            authorized_keys_file: ["none"],
+            match_blocks: 0,
+            first_observed: "2026-10-24T10:00:00Z",
+            last_observed: "2026-10-24T10:00:00Z",
+          },
+          {
+            agent_id: "id-edge-2",
+            agent: "edge-2",
+            sshd_config: "/etc/ssh/sshd_config",
+            config_read: "read",
+            user_ca: "other_ca",
+            trusted_ca_fingerprints: ["SHA256:legacy"],
+            host_certificate: "none",
+            host_certificates: [],
+            revocation_list: "missing",
+            standing_keys: "on",
+            authorized_keys_file: [".ssh/authorized_keys"],
+            match_blocks: 1,
+            first_observed: "2026-10-24T10:00:00Z",
+            last_observed: "2026-10-24T10:00:00Z",
+          },
+        ],
+      },
+    });
+    renderSSHTrust();
+    const panel = await screen.findByRole("region", { name: "Hosts under this SSH CA" });
+    expect(within(panel).getByText(/Hosts: 2 · Trust this CA: 1 · Trust only another CA: 1 · Trust no CA: 0/)).toBeInTheDocument();
+    const table = within(panel).getByRole("table", { name: "Hosts and the SSH trust their sshd configuration declares" });
+    const first = within(table).getByText("edge-1").closest("tr") as HTMLElement;
+    expect(within(first).getByText("This CA only")).toBeInTheDocument();
+    expect(within(first).getByText("This CA")).toBeInTheDocument();
+    expect(within(first).getByText("Current list")).toBeInTheDocument();
+    expect(within(first).getByText("v9001")).toBeInTheDocument();
+    expect(within(first).getByText(/edge-1 host · edge-1\.example\.test · until/)).toBeInTheDocument();
+    const second = within(table).getByText("edge-2").closest("tr") as HTMLElement;
+    expect(within(second).getByText("Another CA")).toBeInTheDocument();
+    expect(within(second).getByText("File missing: sshd refuses every key")).toBeInTheDocument();
+    expect(within(second).getByText("On")).toBeInTheDocument();
+    expect(within(second).getByText(/Match blocks: 1/)).toBeInTheDocument();
+  });
+
   it("renders the honest empty state for a pre-inventory rolling-upgrade payload", async () => {
     apiMock.sshFleet.mockResolvedValue({
       host_count: 0,

@@ -2758,10 +2758,23 @@ than sending an operator looking for a credential that was never there.
   `trstctl-cli ssh fleet`) rolls the tenant's discovered SSH key locations up
   with standing-access and orphaned counts, key types, and the observation
   window, worst location first. A raw public key can also be the key inside a
-  CA-signed host certificate. This inventory does not inspect a host's sshd
-  trust configuration or served certificate, so it does not assert whether a
-  host is under the SSH CA. It reports metadata only (fingerprints, key types,
-  locations); no private key material is read or stored by discovery.
+  CA-signed host certificate. The same view now answers whether a host is
+  under the SSH CA (A115): each host agent run with
+  `--inventory-ssh-sshd-configs` reports its sshd configuration's trust
+  posture, and `host_trust` judges it against this tenant's SSH CA and served
+  KRL: which CAs sshd trusts for user certificates (this CA only, this CA and
+  others, another CA, none), the host certificate it presents (signed by this
+  CA and valid, renew soon, expired, another CA, a signature that does not
+  verify, none), whether its `RevokedKeys` file is the current list (by
+  digest), another list, a plain key list, missing (sshd then refuses every
+  key) or absent, and whether `authorized_keys` still logs in. The control
+  plane names each host from the agent's certificate. Limits: the agent reads
+  the configuration file's global section the way sshd resolves it (first
+  value wins, `HostCertificate` accumulates, `Include` in place) rather than
+  running `sshd -T`, so `Match` blocks are counted, not applied; the posture
+  is reported when the agent connects, so a changed configuration shows after
+  the agent restarts. It reports metadata only (fingerprints, key types,
+  paths, digests); no private key material is read or stored by discovery.
 - The connector catalog reports sandbox truth, not description: each row in
   `GET /api/v1/connectors/catalog` carries `native` (this build has a native
   implementation), `capabilities` (the declared sandbox grant — `fs.read`,

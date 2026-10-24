@@ -7911,10 +7911,24 @@ export interface SSHFleetHost {
 
 export interface SSHFleetInventory {
   host_count: number;
+  host_trust: SSHHostTrustView;
   hosts: SSHFleetHost[];
   key_count: number;
   orphaned_key_count: number;
   standing_key_count: number;
+}
+
+export interface SSHHostCertificate {
+  ca_fingerprint?: string;
+  judgment: "tenant_ca" | "expiring" | "expired" | "not_yet_valid" | "other_ca" | "unverified" | "not_host" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+  key_fingerprint?: string;
+  key_id?: string;
+  path: string;
+  principals: string[];
+  serial?: number;
+  signature_verified: boolean;
+  valid_after?: string;
+  valid_before?: string;
 }
 
 export interface SSHHostRetireRequest {
@@ -7935,6 +7949,43 @@ export interface SSHHostRetirement {
   source_id?: string;
   status: "retired";
   tenant_id: string;
+}
+
+export interface SSHHostTrust {
+  agent: string;
+  agent_id: string;
+  authorized_keys_file: string[];
+  config_read: "read" | "missing" | "unreadable";
+  first_observed: string;
+  host_certificate: "tenant_ca" | "expiring" | "expired" | "not_yet_valid" | "other_ca" | "unverified" | "not_host" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+  host_certificates: SSHHostCertificate[];
+  krl_version?: number;
+  last_observed: string;
+  match_blocks: number;
+  revocation_list: "served" | "not_served" | "key_list" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+  revoked_keys_sha256?: string;
+  sshd_config: string;
+  standing_keys: "off" | "on" | "missing" | "unreadable" | "relative_path" | "invalid";
+  trusted_ca_fingerprints: string[];
+  user_ca: "tenant_ca" | "tenant_ca_and_other" | "other_ca" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+}
+
+export interface SSHHostTrustSummary {
+  enforces_served_krl: number;
+  hosts: number;
+  no_user_ca: number;
+  served_krl_sha256?: string;
+  standing_keys_on: number;
+  tenant_ca_configured: boolean;
+  tenant_ca_fingerprint?: string;
+  tenant_host_certificate: number;
+  trusts_other_ca_only: number;
+  trusts_tenant_ca: number;
+}
+
+export interface SSHHostTrustView {
+  hosts: SSHHostTrust[];
+  summary: SSHHostTrustSummary;
 }
 
 export interface SSHKRLAdoption {

@@ -121,6 +121,35 @@ acknowledgment; `POST /api/v1/ssh/hosts/retire` records retirement evidence once
 migration completes. The browser and CLI record/request the workflow, but host file
 edits happen only inside the operator-confirmed agent path.
 
+### Hosts under this SSH CA (A115)
+
+Key inventory alone cannot say whether a host is under the CA: a raw public key can
+be the key inside a CA-signed host certificate. The host's sshd configuration can.
+Run the enrolled host agent with `--inventory-ssh-sshd-configs /etc/ssh/sshd_config`
+and it reports, for each configuration, the fingerprints of the CAs in its
+`TrustedUserCAKeys` file, its `RevokedKeys` list (KRL version and digest, a plain key
+list, or a missing file), each `HostCertificate` it presents with the signing CA, key
+ID, principals and validity (the CA signature is verified on the host), and
+`AuthorizedKeysFile`. `GET /api/v1/ssh/fleet` (`trstctl ssh fleet`) judges every
+reporting host under `host_trust`, and **SSH access** shows it as **Hosts under this
+SSH CA**:
+
+- **User certificates:** this CA only, this CA and others, another CA, or none.
+- **Host certificate:** this CA (valid), renew soon (under a third of its validity
+  left), expired, not yet valid, another CA, a signature that does not verify, a user
+  certificate configured as a host certificate, or none.
+- **Revocation list:** the current list (its digest matches what `/ssh/krl` serves),
+  another list, a plain key list, a configured file that is missing (sshd then
+  refuses every key), or not enforced.
+- **authorized_keys:** off when `AuthorizedKeysFile none` leaves certificates as the
+  only way in; on otherwise.
+
+The agent reads the global section the way sshd resolves it (first value wins,
+`HostCertificate` accumulates, `Include` files in place) rather than running
+`sshd -T`, so `Match` blocks are counted and flagged, not applied. The posture is
+reported when the agent connects: restart it after changing `sshd_config`. The
+control plane names each host from the agent's certificate, never from the report.
+
 ### Attestation-gated short-lived user certificates (F45)
 
 The most powerful pattern: issue an SSH user certificate only to a caller who proves

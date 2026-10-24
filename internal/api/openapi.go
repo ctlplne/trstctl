@@ -3641,11 +3641,53 @@ func componentSchemas() map[string]*Schema {
 		"key_types": {Type: "array", Items: str()}, "sources": {Type: "array", Items: str()},
 		"first_observed": timestamp(), "last_observed": timestamp(),
 	}, "location", "keys", "standing_keys", "orphaned_keys", "key_types", "sources", "first_observed", "last_observed")
+	// A115: each reporting host's sshd posture judged against the tenant's SSH
+	// CA and served KRL. A judgment also takes a file's read failure as its value.
+	readFailures := []string{"missing", "unreadable", "relative_path", "invalid"}
+	judgment := func(values ...string) *Schema {
+		return &Schema{Type: "string", Enum: append(append([]string{}, values...), readFailures...)}
+	}
+	sshHostCertificateJudgment := judgment("tenant_ca", "expiring", "expired", "not_yet_valid", "other_ca", "unverified", "not_host", "none")
+	sshHostCertificate := object(map[string]*Schema{
+		"path": str(), "judgment": sshHostCertificateJudgment, "ca_fingerprint": str(),
+		"signature_verified": {Type: "boolean"}, "key_fingerprint": str(), "key_id": str(),
+		"serial":      {Type: "integer", Format: "int64"},
+		"principals":  {Type: "array", Items: str()},
+		"valid_after": str(), "valid_before": {Type: "string", Description: "RFC 3339, or \"forever\""},
+	}, "path", "judgment", "signature_verified", "principals")
+	sshHostTrust := object(map[string]*Schema{
+		"agent_id": str(), "agent": str(), "sshd_config": str(),
+		"config_read":             {Type: "string", Enum: []string{"read", "missing", "unreadable"}},
+		"user_ca":                 judgment("tenant_ca", "tenant_ca_and_other", "other_ca", "none"),
+		"trusted_ca_fingerprints": {Type: "array", Items: str()},
+		"host_certificate":        sshHostCertificateJudgment,
+		"host_certificates":       {Type: "array", Items: ref("SSHHostCertificate")},
+		"revocation_list":         judgment("served", "not_served", "key_list", "none"),
+		"krl_version":             {Type: "integer", Format: "int64"},
+		"revoked_keys_sha256":     str(),
+		"standing_keys":           judgment("off", "on"),
+		"authorized_keys_file":    {Type: "array", Items: str()},
+		"match_blocks":            {Type: "integer"},
+		"first_observed":          timestamp(), "last_observed": timestamp(),
+	}, "agent_id", "agent", "sshd_config", "config_read", "user_ca", "trusted_ca_fingerprints", "host_certificate",
+		"host_certificates", "revocation_list", "standing_keys", "authorized_keys_file", "match_blocks", "first_observed", "last_observed")
+	sshHostTrustSummary := object(map[string]*Schema{
+		"hosts": {Type: "integer"}, "tenant_ca_configured": {Type: "boolean"},
+		"tenant_ca_fingerprint": str(), "served_krl_sha256": str(),
+		"trusts_tenant_ca": {Type: "integer"}, "trusts_other_ca_only": {Type: "integer"}, "no_user_ca": {Type: "integer"},
+		"tenant_host_certificate": {Type: "integer"}, "enforces_served_krl": {Type: "integer"}, "standing_keys_on": {Type: "integer"},
+	}, "hosts", "tenant_ca_configured", "trusts_tenant_ca", "trusts_other_ca_only", "no_user_ca", "tenant_host_certificate",
+		"enforces_served_krl", "standing_keys_on")
+	sshHostTrustView := object(map[string]*Schema{
+		"hosts":   {Type: "array", Items: ref("SSHHostTrust")},
+		"summary": ref("SSHHostTrustSummary"),
+	}, "hosts", "summary")
 	sshFleetInventory := object(map[string]*Schema{
 		"hosts":      {Type: "array", Items: ref("SSHFleetHost")},
 		"host_count": {Type: "integer"}, "key_count": {Type: "integer"},
 		"standing_key_count": {Type: "integer"}, "orphaned_key_count": {Type: "integer"},
-	}, "hosts", "host_count", "key_count", "standing_key_count", "orphaned_key_count")
+		"host_trust": ref("SSHHostTrustView"),
+	}, "hosts", "host_count", "key_count", "standing_key_count", "orphaned_key_count", "host_trust")
 	// B-5: running build, uptime, signer topology, and spine reachability.
 	systemDependency := object(map[string]*Schema{
 		"name": str(), "ready": {Type: "boolean"}, "error": str(),
@@ -7192,6 +7234,10 @@ func componentSchemas() map[string]*Schema {
 		"CodeSigningIdentityList":                  codeSigningIdentityList,
 		"SSHFleetHost":                             sshFleetHost,
 		"SSHFleetInventory":                        sshFleetInventory,
+		"SSHHostCertificate":                       sshHostCertificate,
+		"SSHHostTrust":                             sshHostTrust,
+		"SSHHostTrustSummary":                      sshHostTrustSummary,
+		"SSHHostTrustView":                         sshHostTrustView,
 		"SystemDependency":                         systemDependency,
 		"IdempotencyResultProtectionReadout":       idempotencyResultProtection,
 		"TenantKeyDomainMigrateRequest":            tenantKeyDomainMigrateRequest,

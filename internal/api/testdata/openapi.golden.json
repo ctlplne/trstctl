@@ -32571,6 +32571,9 @@
           "host_count": {
             "type": "integer"
           },
+          "host_trust": {
+            "$ref": "#/components/schemas/SSHHostTrustView"
+          },
           "hosts": {
             "items": {
               "$ref": "#/components/schemas/SSHFleetHost"
@@ -32592,7 +32595,68 @@
           "host_count",
           "key_count",
           "standing_key_count",
-          "orphaned_key_count"
+          "orphaned_key_count",
+          "host_trust"
+        ],
+        "type": "object"
+      },
+      "SSHHostCertificate": {
+        "properties": {
+          "ca_fingerprint": {
+            "type": "string"
+          },
+          "judgment": {
+            "enum": [
+              "tenant_ca",
+              "expiring",
+              "expired",
+              "not_yet_valid",
+              "other_ca",
+              "unverified",
+              "not_host",
+              "none",
+              "missing",
+              "unreadable",
+              "relative_path",
+              "invalid"
+            ],
+            "type": "string"
+          },
+          "key_fingerprint": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "signature_verified": {
+            "type": "boolean"
+          },
+          "valid_after": {
+            "type": "string"
+          },
+          "valid_before": {
+            "description": "RFC 3339, or \"forever\"",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "judgment",
+          "signature_verified",
+          "principals"
         ],
         "type": "object"
       },
@@ -32666,6 +32730,197 @@
           "host",
           "status",
           "recorded_at"
+        ],
+        "type": "object"
+      },
+      "SSHHostTrust": {
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "authorized_keys_file": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "config_read": {
+            "enum": [
+              "read",
+              "missing",
+              "unreadable"
+            ],
+            "type": "string"
+          },
+          "first_observed": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "host_certificate": {
+            "enum": [
+              "tenant_ca",
+              "expiring",
+              "expired",
+              "not_yet_valid",
+              "other_ca",
+              "unverified",
+              "not_host",
+              "none",
+              "missing",
+              "unreadable",
+              "relative_path",
+              "invalid"
+            ],
+            "type": "string"
+          },
+          "host_certificates": {
+            "items": {
+              "$ref": "#/components/schemas/SSHHostCertificate"
+            },
+            "type": "array"
+          },
+          "krl_version": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "last_observed": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "match_blocks": {
+            "type": "integer"
+          },
+          "revocation_list": {
+            "enum": [
+              "served",
+              "not_served",
+              "key_list",
+              "none",
+              "missing",
+              "unreadable",
+              "relative_path",
+              "invalid"
+            ],
+            "type": "string"
+          },
+          "revoked_keys_sha256": {
+            "type": "string"
+          },
+          "sshd_config": {
+            "type": "string"
+          },
+          "standing_keys": {
+            "enum": [
+              "off",
+              "on",
+              "missing",
+              "unreadable",
+              "relative_path",
+              "invalid"
+            ],
+            "type": "string"
+          },
+          "trusted_ca_fingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "user_ca": {
+            "enum": [
+              "tenant_ca",
+              "tenant_ca_and_other",
+              "other_ca",
+              "none",
+              "missing",
+              "unreadable",
+              "relative_path",
+              "invalid"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent",
+          "sshd_config",
+          "config_read",
+          "user_ca",
+          "trusted_ca_fingerprints",
+          "host_certificate",
+          "host_certificates",
+          "revocation_list",
+          "standing_keys",
+          "authorized_keys_file",
+          "match_blocks",
+          "first_observed",
+          "last_observed"
+        ],
+        "type": "object"
+      },
+      "SSHHostTrustSummary": {
+        "properties": {
+          "enforces_served_krl": {
+            "type": "integer"
+          },
+          "hosts": {
+            "type": "integer"
+          },
+          "no_user_ca": {
+            "type": "integer"
+          },
+          "served_krl_sha256": {
+            "type": "string"
+          },
+          "standing_keys_on": {
+            "type": "integer"
+          },
+          "tenant_ca_configured": {
+            "type": "boolean"
+          },
+          "tenant_ca_fingerprint": {
+            "type": "string"
+          },
+          "tenant_host_certificate": {
+            "type": "integer"
+          },
+          "trusts_other_ca_only": {
+            "type": "integer"
+          },
+          "trusts_tenant_ca": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hosts",
+          "tenant_ca_configured",
+          "trusts_tenant_ca",
+          "trusts_other_ca_only",
+          "no_user_ca",
+          "tenant_host_certificate",
+          "enforces_served_krl",
+          "standing_keys_on"
+        ],
+        "type": "object"
+      },
+      "SSHHostTrustView": {
+        "properties": {
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/SSHHostTrust"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SSHHostTrustSummary"
+          }
+        },
+        "required": [
+          "hosts",
+          "summary"
         ],
         "type": "object"
       },

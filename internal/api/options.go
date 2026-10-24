@@ -229,6 +229,12 @@ func WithSSHFleet(fn SSHFleetProvider) Option {
 	return func(c *config) { c.sshFleet = fn }
 }
 
+// WithSSHHostTrust wires the judged sshd trust posture of each reporting host
+// (A115) into the SSH fleet view.
+func WithSSHHostTrust(fn SSHHostTrustProvider) Option {
+	return func(c *config) { c.sshHostTrust = fn }
+}
+
 // WithCodeSigningIdentities wires the signing-operation + transparency-state
 // view (B-4).
 func WithCodeSigningIdentities(fn CodeSigningIdentityProvider) Option {

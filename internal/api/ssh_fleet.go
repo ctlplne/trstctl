@@ -41,6 +41,9 @@ type SSHFleetInventory struct {
 	KeyCount         int `json:"key_count"`
 	StandingKeyCount int `json:"standing_key_count"`
 	OrphanedKeyCount int `json:"orphaned_key_count"`
+	// HostTrust (A115) judges each reporting host's sshd configuration against
+	// this tenant's SSH CA and served revocation list.
+	HostTrust SSHHostTrustView `json:"host_trust"`
 }
 
 // SSHFleetProvider is the server-side seam over the store aggregate.
@@ -52,8 +55,16 @@ func (a *API) getSSHFleet(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
+	trust := SSHHostTrustView{Hosts: []SSHHostTrust{}}
+	if a.sshHostTrust != nil {
+		var err error
+		if trust, err = a.sshHostTrust(r.Context(), tenantID); err != nil {
+			a.writeError(w, err)
+			return
+		}
+	}
 	if a.sshFleet == nil {
-		a.writeJSON(w, http.StatusOK, SSHFleetInventory{Hosts: []SSHFleetHost{}})
+		a.writeJSON(w, http.StatusOK, SSHFleetInventory{Hosts: []SSHFleetHost{}, HostTrust: trust})
 		return
 	}
 	hosts, err := a.sshFleet(r.Context(), tenantID)
@@ -61,7 +72,7 @@ func (a *API) getSSHFleet(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	inventory := SSHFleetInventory{Hosts: []SSHFleetHost{}}
+	inventory := SSHFleetInventory{Hosts: []SSHFleetHost{}, HostTrust: trust}
 	for _, host := range hosts {
 		if host.KeyTypes == nil {
 			host.KeyTypes = []string{}

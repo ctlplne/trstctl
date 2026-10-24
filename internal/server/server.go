@@ -1736,7 +1736,7 @@ func (s *Server) appendOperationalReadModels(d Deps, defaults *[]api.Option) {
 	}
 	// B-2: the SSH fleet view over discovered standing keys.
 	if d.Store != nil {
-		*defaults = append(*defaults, api.WithSSHFleet(s.SSHFleetInventory))
+		*defaults = append(*defaults, api.WithSSHFleet(s.SSHFleetInventory), api.WithSSHHostTrust(s.SSHHostTrust))
 	}
 	// B-6: the connector catalog reports each connector's live sandbox grant
 	// and replay contract from the registry, not from a description beside it.

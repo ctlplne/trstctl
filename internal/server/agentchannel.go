@@ -1060,9 +1060,10 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			return nil, status.Errorf(codes.InvalidArgument, "service dependency inventory finding %q: %v", f.Ref, err)
 		}
 		findingMetadata := f.Metadata
-		if kind == agentTrustStoreFindingKind || kind == agentServiceDependencyFindingKind {
+		if kind == agentTrustStoreFindingKind || kind == agentServiceDependencyFindingKind || kind == store.SSHTrustFindingKind {
 			// The peer certificate, not client-provided metadata or a certificate
-			// path, names the observing machine. Clone before stamping so request
+			// path, names the observing machine (A115: the SSH fleet view names a
+			// host's sshd posture by it). Clone before stamping so request
 			// objects remain immutable to interceptors and tests.
 			findingMetadata = make(map[string]string, len(f.Metadata)+2)
 			for key, value := range f.Metadata {

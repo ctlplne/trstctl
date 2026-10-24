@@ -173,6 +173,7 @@ type API struct {
 	connectorGrantCensus               func(name string) []string
 	caLeafValidity                     time.Duration
 	sshFleet                           SSHFleetProvider
+	sshHostTrust                       SSHHostTrustProvider
 	codeSigningIdentities              CodeSigningIdentityProvider
 	serviceNowBindings                 []ServiceNowBinding
 	outboundEnvCredentialRefs          map[string]struct{}
@@ -307,6 +308,7 @@ type config struct {
 	connectorGrantCensus        func(name string) []string
 	caLeafValidity              time.Duration
 	sshFleet                    SSHFleetProvider
+	sshHostTrust                SSHHostTrustProvider
 	codeSigningIdentities       CodeSigningIdentityProvider
 	serviceNowBindings          []ServiceNowBinding
 	outboundEnvCredentialRefs   map[string]struct{}
@@ -631,6 +633,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		connectorGrantCensus:        cfg.connectorGrantCensus,
 		caLeafValidity:              cfg.caLeafValidity,
 		sshFleet:                    cfg.sshFleet,
+		sshHostTrust:                cfg.sshHostTrust,
 		codeSigningIdentities:       cfg.codeSigningIdentities,
 		serviceNowBindings:          append([]ServiceNowBinding(nil), cfg.serviceNowBindings...),
 		outboundEnvCredentialRefs:   copyStringSet(cfg.outboundEnvCredentialRefs),

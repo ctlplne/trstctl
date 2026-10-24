@@ -21,6 +21,7 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SSHCertificateWorkflow } from "@/pages/ssh/SSHCertificateWorkflow";
+import { SSHHostTrustPanel } from "@/pages/ssh/SSHHostTrustPanel";
 import { SSHKRLFleetPanel } from "@/pages/ssh/SSHKRLFleetPanel";
 import { SSHRevocationWorkflow, type SSHRevocationSeed } from "@/pages/ssh/SSHRevocationWorkflow";
 
@@ -359,6 +360,8 @@ export function SSHTrust() {
           </details>
         </section>
       )}
+
+      {fleet?.host_trust && <SSHHostTrustPanel view={fleet.host_trust} />}
 
       {krlFleet && <SSHKRLFleetPanel fleet={krlFleet} />}
 
