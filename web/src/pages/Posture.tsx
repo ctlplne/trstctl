@@ -33,7 +33,13 @@ import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 import { loadLatestDriftRuns } from "@/pages/posture/DriftLatestRuns";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
-import { CTFindingsDashboard, DriftFindingsDashboard, type DashboardTriage, type DriftDecision } from "@/pages/posture/PostureFindingDashboards";
+import {
+  CTFindingsDashboard,
+  DriftFindingsDashboard,
+  type DashboardTriage,
+  type DriftDecision,
+  type ResolutionFacts,
+} from "@/pages/posture/PostureFindingDashboards";
 import { Metric, PreviewTable } from "@/pages/posture/PostureParts";
 
 const emptyCBOMProgress: CBOMMigrationProgress = {
@@ -60,6 +66,10 @@ export function Posture() {
   const [driftLoading, setDriftLoading] = useState(true);
   const [driftFilter, setDriftFilter] = useState<DashboardTriage>("");
   const [driftLoadingMore, setDriftLoadingMore] = useState(false);
+  const [ctResolving, setCTResolving] = useState<ResolutionFacts | null>(null);
+  const [ctResolved, setCTResolved] = useState<string | null>(null);
+  const [driftResolving, setDriftResolving] = useState<ResolutionFacts | null>(null);
+  const [driftResolved, setDriftResolved] = useState<string | null>(null);
   const [driftBusy, setDriftBusy] = useState<string | null>(null);
   const [driftResult, setDriftResult] = useState<string | null>(null);
   const [driftError, setDriftError] = useState<string | null>(null);
@@ -180,6 +190,28 @@ export function Posture() {
   const upgradeAssets = cbomInventory.items.filter((asset) => asset.out_of_policy || asset.quantum_vulnerable);
 
   // A105: "load more" appends the next server page to what the dashboard shows.
+  // A106: a resolution moves a finding between statuses; re-read the first
+  // page so the server's counts and the filtered list stay true.
+  async function ctResolutionRecorded(message: string) {
+    setCTResolving(null);
+    setCTResolved(message);
+    try {
+      setCTMonitoring(await api.ctMonitoring({ triageStatus: ctFilter || undefined }));
+    } catch (error) {
+      setCTError(error instanceof Error ? error.message : "Unable to load CT monitoring");
+    }
+  }
+
+  async function driftResolutionRecorded(message: string) {
+    setDriftResolving(null);
+    setDriftResolved(message);
+    try {
+      setDriftRemediation(await api.driftRemediation({ triageStatus: driftFilter || undefined }));
+    } catch (error) {
+      setDriftError(error instanceof Error ? error.message : "Unable to load drift remediation");
+    }
+  }
+
   async function loadMoreCT() {
     const cursor = ctMonitoring?.next_cursor;
     if (!cursor) return;
@@ -280,6 +312,16 @@ export function Posture() {
               loading={ctLoading}
               error={ctError}
               paging={{ filter: ctFilter, onFilter: setCTFilter, onLoadMore: () => void loadMoreCT(), loadingMore: ctLoadingMore }}
+              resolving={{
+                target: ctResolving,
+                result: ctResolved,
+                onResolve: (facts) => {
+                  setCTResolved(null);
+                  setCTResolving(facts);
+                },
+                onCancel: () => setCTResolving(null),
+                onResolved: (message) => void ctResolutionRecorded(message),
+              }}
             />
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-border bg-background p-comfortable">
               <div>
@@ -337,6 +379,16 @@ export function Posture() {
               result={driftResult}
               onDecision={recordDriftDecision}
               paging={{ filter: driftFilter, onFilter: setDriftFilter, onLoadMore: () => void loadMoreDrift(), loadingMore: driftLoadingMore }}
+              resolving={{
+                target: driftResolving,
+                result: driftResolved,
+                onResolve: (facts) => {
+                  setDriftResolved(null);
+                  setDriftResolving(facts);
+                },
+                onCancel: () => setDriftResolving(null),
+                onResolved: (message) => void driftResolutionRecorded(message),
+              }}
             />
           </section>
 

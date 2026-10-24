@@ -2198,6 +2198,7 @@ export interface CTMonitoringSummary {
   remediated_count: number;
   retired_log_count: number;
   source_count: number;
+  triage_counts: Record<string, unknown>;
   unexpected_issuance_count: number;
   watched_domain_count: number;
 }
@@ -3294,14 +3295,20 @@ export interface DriftRemediationFinding {
   finding_id: string;
   fingerprint: string;
   metadata: Record<string, unknown>;
+  overdue?: boolean;
   provenance: string;
   recommended_action: string;
   ref: string;
+  regressed?: boolean;
+  risk_accepted_until?: string;
   risk_score: number;
   run_id: string;
   source_id: string;
   source_name: string;
   triage_actor?: string;
+  triage_assignee?: string;
+  triage_due_at?: string;
+  triage_evidence_ref?: string;
   triage_reason?: string;
   triage_status: "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
   triaged_at?: string;
@@ -3325,6 +3332,7 @@ export interface DriftRemediationSummary {
   secret_count: number;
   source_count: number;
   ssh_key_count: number;
+  triage_counts: Record<string, unknown>;
 }
 
 export interface DynamicLease {

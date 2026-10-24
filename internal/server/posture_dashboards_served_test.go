@@ -80,10 +80,11 @@ func TestServedPostureDashboardsPageAndCountTheirOwnFindings(t *testing.T) {
 
 	type ctPage struct {
 		Summary struct {
-			FindingCount            int `json:"finding_count"`
-			UnexpectedIssuanceCount int `json:"unexpected_issuance_count"`
-			OpenFindingCount        int `json:"open_finding_count"`
-			DismissedCount          int `json:"dismissed_count"`
+			FindingCount            int            `json:"finding_count"`
+			UnexpectedIssuanceCount int            `json:"unexpected_issuance_count"`
+			OpenFindingCount        int            `json:"open_finding_count"`
+			DismissedCount          int            `json:"dismissed_count"`
+			TriageCounts            map[string]int `json:"triage_counts"`
 		} `json:"summary"`
 		Findings []struct {
 			ID string `json:"id"`
@@ -93,7 +94,8 @@ func TestServedPostureDashboardsPageAndCountTheirOwnFindings(t *testing.T) {
 	var first ctPage
 	if status := get("/api/v1/discovery/ct-monitoring?limit=2", &first); status != http.StatusOK || len(first.Findings) != 2 ||
 		first.Findings[0].ID != postureDashboardID(5000) || first.NextCursor == "" || first.Summary.FindingCount != 3 ||
-		first.Summary.UnexpectedIssuanceCount != 3 || first.Summary.OpenFindingCount != 2 || first.Summary.DismissedCount != 1 {
+		first.Summary.UnexpectedIssuanceCount != 3 || first.Summary.OpenFindingCount != 2 || first.Summary.DismissedCount != 1 ||
+		first.Summary.TriageCounts["unmanaged"] != 2 || first.Summary.TriageCounts["dismissed"] != 1 || len(first.Summary.TriageCounts) != 2 {
 		t.Fatalf("CT dashboard first page = %d %+v", status, first)
 	}
 	var second ctPage

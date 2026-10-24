@@ -4258,6 +4258,63 @@ export const messages = {
     defaultMessage: "{count} open",
     description: "C5: open unexpected-issuance findings awaiting triage.",
   },
+  "posture.dashboards.triage.remediated": {
+    defaultMessage: "Remediated ({count})",
+    description: "A106: filter option for findings recorded as fixed, with the server's count.",
+  },
+  "posture.dashboards.triage.accepted_risk": {
+    defaultMessage: "Risk accepted ({count})",
+    description: "A106: filter option for findings whose risk is accepted until a time, with the server's count.",
+  },
+  "posture.dashboards.colResolve": { defaultMessage: "Resolve", description: "A106: dashboard column holding a finding's resolve action." },
+  "posture.dashboards.resolve": { defaultMessage: "Resolve", description: "A106: button that opens the resolution form for a finding." },
+  "posture.dashboards.resolveFinding": { defaultMessage: "Resolve {ref}", description: "A106: accessible name of the resolve button for one finding." },
+  "posture.dashboards.resolution.title": { defaultMessage: "Resolve {ref}", description: "A106: heading of the resolution form for one finding." },
+  "posture.dashboards.resolution.action": { defaultMessage: "Resolution", description: "A106: label of the resolution action select." },
+  "posture.dashboards.resolution.investigate": {
+    defaultMessage: "Investigate (assign it)",
+    description: "A106: resolution action that opens or reassigns an investigation.",
+  },
+  "posture.dashboards.resolution.remediated": {
+    defaultMessage: "Record it remediated",
+    description: "A106: resolution action that records the finding fixed, with evidence.",
+  },
+  "posture.dashboards.resolution.acceptRisk": {
+    defaultMessage: "Accept the risk until a time",
+    description: "A106: resolution action that accepts the finding's risk until an expiry.",
+  },
+  "posture.dashboards.resolution.reopen": { defaultMessage: "Reopen", description: "A106: resolution action that reopens a remediated or accepted finding." },
+  "posture.dashboards.resolution.reason": { defaultMessage: "Reason", description: "A106: label of the resolution reason field." },
+  "posture.dashboards.resolution.assignee": { defaultMessage: "Assignee", description: "A106: label of the investigation assignee field." },
+  "posture.dashboards.resolution.dueAt": { defaultMessage: "Due", description: "A106: label of the investigation due date field (optional)." },
+  "posture.dashboards.resolution.evidenceRef": {
+    defaultMessage: "Evidence of the fix (change or ticket)",
+    description: "A106: label of the remediation evidence field.",
+  },
+  "posture.dashboards.resolution.expiresAt": {
+    defaultMessage: "Accepted until",
+    description: "A106: label of the risk acceptance expiry field (within a year).",
+  },
+  "posture.dashboards.resolution.submit": { defaultMessage: "Record resolution", description: "A106: button that records the resolution." },
+  "posture.dashboards.resolution.submitting": { defaultMessage: "Recording...", description: "A106: resolution button state while the request runs." },
+  "posture.dashboards.resolution.cancel": { defaultMessage: "Cancel", description: "A106: button that closes the resolution form." },
+  "posture.dashboards.resolution.recorded": {
+    defaultMessage: "Resolution recorded for {ref}",
+    description: "A106: confirmation after a resolution is recorded.",
+  },
+  "posture.dashboards.resolution.failed": { defaultMessage: "Resolution not recorded", description: "A106: error title when a resolution is refused." },
+  "posture.dashboards.resolution.assignedTo": { defaultMessage: "Assigned to {assignee}", description: "A106: who investigates a finding." },
+  "posture.dashboards.resolution.due": { defaultMessage: "Due {date}", description: "A106: when an investigation is due." },
+  "posture.dashboards.resolution.overdue": { defaultMessage: "Overdue", description: "A106: the investigation is past its due date." },
+  "posture.dashboards.resolution.acceptedUntil": {
+    defaultMessage: "Accepted until {date}",
+    description: "A106: when the finding's risk acceptance expires and it reopens.",
+  },
+  "posture.dashboards.resolution.evidence": { defaultMessage: "Fix: {ref}", description: "A106: the evidence recorded for a remediation." },
+  "posture.dashboards.resolution.regressed": {
+    defaultMessage: "Seen again after the fix",
+    description: "A106: the finding was observed again after its remediation was recorded.",
+  },
   "posture.dashboards.triageFilter": { defaultMessage: "Show", description: "A105: label of the triage-status filter on the CT-log and drift dashboards." },
   "posture.dashboards.triageAll": {
     defaultMessage: "All findings ({count})",

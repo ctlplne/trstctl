@@ -16,6 +16,7 @@ const { apiMock } = vi.hoisted(() => ({
     updateCTMonitoring: vi.fn(),
     driftRemediation: vi.fn(),
     decideDriftRemediation: vi.fn(),
+    resolveDiscoveryFinding: vi.fn(),
     preflightDiscoverySource: vi.fn(),
     retryDiscoveryRun: vi.fn(),
     listCBOMAssets: vi.fn(),
@@ -583,6 +584,41 @@ describe("posture collector disclosures", () => {
     expect(await screen.findByText("No CT findings in this status")).toBeInTheDocument();
   });
 
+  it("resolves a CT finding by accepting its risk until a time, then re-reads the server's counts", async () => {
+    const first = await apiMock.ctMonitoring();
+    apiMock.ctMonitoring.mockClear();
+    apiMock.resolveDiscoveryFinding.mockReset().mockResolvedValue({ ...ctFinding, triage_status: "accepted_risk" });
+    const user = userEvent.setup();
+    await renderPosture();
+    await user.click(screen.getByText("Certificate, AD CS, authority, and drift evidence", { exact: true }));
+    apiMock.ctMonitoring.mockResolvedValue({
+      ...first,
+      summary: { ...first.summary, open_finding_count: 0, accepted_risk_count: 1, triage_counts: { accepted_risk: 1 } },
+      findings: [{ ...ctFinding, triage_status: "accepted_risk", risk_accepted_until: "2026-12-01T00:00:00Z" }],
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Resolve *.payments.example.com" }));
+    const panel = screen.getByRole("region", { name: "Resolve *.payments.example.com" });
+    await user.selectOptions(within(panel).getByRole("combobox", { name: "Resolution" }), "accept_risk");
+    await user.type(within(panel).getByRole("textbox", { name: "Reason" }), "partner CA under contract");
+    await user.type(within(panel).getByLabelText("Accepted until"), "2026-12-01T00:00");
+    await user.click(within(panel).getByRole("button", { name: "Record resolution" }));
+
+    await waitFor(() =>
+      expect(apiMock.resolveDiscoveryFinding).toHaveBeenCalledWith("finding-ct", {
+        action: "accept_risk",
+        reason: "partner CA under contract",
+        expires_at: new Date("2026-12-01T00:00").toISOString(),
+      }),
+    );
+    expect(await screen.findByText("Resolution recorded for *.payments.example.com")).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledWith({ triageStatus: undefined }));
+    const findings = await screen.findByRole("table", { name: "Certificate Transparency findings" });
+    expect(await within(findings).findByText("Risk accepted")).toBeInTheDocument();
+    expect(screen.getAllByRole("option", { name: "Risk accepted (1)" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("region", { name: "Resolve *.payments.example.com" })).not.toBeInTheDocument();
+  });
+
   it("renders a valid empty CT checkpoint list without crashing", async () => {
     apiMock.ctMonitoring.mockResolvedValue({
       capability: "F17",
@@ -636,7 +672,7 @@ describe("posture collector disclosures", () => {
     apiMock.driftRemediation.mockClear();
     apiMock.driftRemediation.mockResolvedValue({
       ...before,
-      summary: { ...before.summary, open_finding_count: 0, investigating_count: 1, remediation_decision_count: 1 },
+      summary: { ...before.summary, open_finding_count: 0, investigating_count: 1, remediation_decision_count: 1, triage_counts: { investigating: 1 } },
       findings: [decided.finding],
     });
 

@@ -58,6 +58,9 @@ type driftRemediationSummary struct {
 	AcceptedRiskCount        int `json:"accepted_risk_count"`
 	OverdueCount             int `json:"overdue_count"`
 	RegressedCount           int `json:"regressed_count"`
+	// TriageCounts counts every finding by triage status (never-triaged as
+	// unmanaged), for the dashboard's status filter.
+	TriageCounts map[string]int `json:"triage_counts"`
 }
 
 type driftRemediationFinding struct {
@@ -81,6 +84,13 @@ type driftRemediationFinding struct {
 	RecommendedAction  string          `json:"recommended_action"`
 	AvailableDecisions []string        `json:"available_decisions"`
 	EvidenceRefs       []string        `json:"evidence_refs"`
+	// The A106 resolution, as on every discovery finding.
+	TriageAssignee    string     `json:"triage_assignee,omitempty"`
+	TriageDueAt       *time.Time `json:"triage_due_at,omitempty"`
+	TriageEvidenceRef string     `json:"triage_evidence_ref,omitempty"`
+	RiskAcceptedUntil *time.Time `json:"risk_accepted_until,omitempty"`
+	Overdue           bool       `json:"overdue,omitempty"`
+	Regressed         bool       `json:"regressed,omitempty"`
 }
 
 type driftRemediationDecisionResponse struct {
@@ -216,6 +226,7 @@ func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, page 
 		sourceByID[src.ID] = src
 	}
 	out.Summary.SourceCount = len(sourceByID)
+	out.Summary.TriageCounts = map[string]int{}
 
 	// Counts cover every credential-drift finding of a drift source; the list
 	// is one page of them, optionally narrowed by triage status.
@@ -251,6 +262,10 @@ func (a *API) driftRemediationStatus(ctx context.Context, tenantID string, page 
 func (s *driftRemediationSummary) add(tally store.DiscoveryFindingTally) {
 	n := tally.Count
 	s.FindingCount += n
+	if s.TriageCounts == nil {
+		s.TriageCounts = map[string]int{}
+	}
+	s.TriageCounts[tally.TriageStatus] += n
 	s.OverdueCount += tally.Overdue
 	s.RegressedCount += tally.Regressed
 	switch discovery.TriageStatus(tally.TriageStatus) {
@@ -316,6 +331,8 @@ func (a *API) toDriftRemediationFinding(f store.DiscoveryFinding, src store.Disc
 		RecommendedAction:  driftRecommendedAction(meta.Type, meta.Class),
 		AvailableDecisions: driftAvailableDecisions(status),
 		EvidenceRefs:       []string{"discovery.finding:" + f.ID, "discovery.run:" + f.RunID, "discovery.source:" + f.SourceID},
+		TriageAssignee:     f.TriageAssignee, TriageDueAt: f.TriageDueAt, TriageEvidenceRef: f.TriageEvidenceRef,
+		RiskAcceptedUntil: f.RiskAcceptedUntil, Overdue: findingOverdue(f, time.Now()), Regressed: findingRegressed(f),
 	}
 	if f.TriagedAt != nil {
 		item.EvidenceRefs = append(item.EvidenceRefs, "event:discovery.finding.triage_changed")

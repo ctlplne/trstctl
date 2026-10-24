@@ -8872,6 +8872,12 @@
           "source_count": {
             "type": "integer"
           },
+          "triage_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
           "unexpected_issuance_count": {
             "type": "integer"
           },
@@ -8895,7 +8901,8 @@
           "accepted_risk_count",
           "overdue_count",
           "regressed_count",
-          "outbox_alert_channel_count"
+          "outbox_alert_channel_count",
+          "triage_counts"
         ],
         "type": "object"
       },
@@ -13560,6 +13567,9 @@
           "metadata": {
             "type": "object"
           },
+          "overdue": {
+            "type": "boolean"
+          },
           "provenance": {
             "type": "string"
           },
@@ -13567,6 +13577,13 @@
             "type": "string"
           },
           "ref": {
+            "type": "string"
+          },
+          "regressed": {
+            "type": "boolean"
+          },
+          "risk_accepted_until": {
+            "format": "date-time",
             "type": "string"
           },
           "risk_score": {
@@ -13584,6 +13601,16 @@
             "type": "string"
           },
           "triage_actor": {
+            "type": "string"
+          },
+          "triage_assignee": {
+            "type": "string"
+          },
+          "triage_due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "triage_evidence_ref": {
             "type": "string"
           },
           "triage_reason": {
@@ -13676,6 +13703,12 @@
           },
           "ssh_key_count": {
             "type": "integer"
+          },
+          "triage_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
           }
         },
         "required": [
@@ -13695,7 +13728,8 @@
           "secret_count",
           "accepted_risk_count",
           "overdue_count",
-          "regressed_count"
+          "regressed_count",
+          "triage_counts"
         ],
         "type": "object"
       },

@@ -83,6 +83,9 @@ type ctMonitoringSummary struct {
 	OverdueCount            int `json:"overdue_count"`
 	RegressedCount          int `json:"regressed_count"`
 	OutboxAlertChannelCount int `json:"outbox_alert_channel_count"`
+	// TriageCounts counts every CT finding by triage status (never-triaged
+	// as unmanaged), for the dashboard's status filter.
+	TriageCounts map[string]int `json:"triage_counts"`
 }
 
 func (a *API) getCTMonitoring(w http.ResponseWriter, r *http.Request) {
@@ -319,6 +322,7 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 		OutboxBackedAlerts:      true,
 		Summary: ctMonitoringSummary{
 			OutboxAlertChannelCount: len(a.notificationChannels),
+			TriageCounts:            map[string]int{},
 		},
 		Findings: []discoveryFindingResponse{},
 	}
@@ -401,6 +405,7 @@ func (a *API) ctMonitoringStatus(ctx context.Context, tenantID string, primary *
 	}
 	for _, tally := range tallies {
 		out.Summary.FindingCount += tally.Count
+		out.Summary.TriageCounts[tally.TriageStatus] += tally.Count
 		out.Summary.OverdueCount += tally.Overdue
 		out.Summary.RegressedCount += tally.Regressed
 		if tally.Kind == "ct_unexpected_issuance" {

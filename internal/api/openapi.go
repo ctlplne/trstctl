@@ -2342,7 +2342,8 @@ func componentSchemas() map[string]*Schema {
 		"overdue_count":              {Type: "integer"},
 		"regressed_count":            {Type: "integer"},
 		"outbox_alert_channel_count": {Type: "integer"},
-	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "investigating_count", "managed_count", "dismissed_count", "remediated_count", "accepted_risk_count", "overdue_count", "regressed_count", "outbox_alert_channel_count")
+		"triage_counts":              {Type: "object", AdditionalProperties: &Schema{Type: "integer"}},
+	}, "source_count", "watched_domain_count", "log_count", "retired_log_count", "failed_log_count", "finding_count", "unexpected_issuance_count", "open_finding_count", "investigating_count", "managed_count", "dismissed_count", "remediated_count", "accepted_risk_count", "overdue_count", "regressed_count", "outbox_alert_channel_count", "triage_counts")
 	ctMonitoring := object(map[string]*Schema{
 		"capability":               str(),
 		"watchlist_path":           str(),
@@ -2386,7 +2387,8 @@ func componentSchemas() map[string]*Schema {
 		"accepted_risk_count":        {Type: "integer"},
 		"overdue_count":              {Type: "integer"},
 		"regressed_count":            {Type: "integer"},
-	}, "source_count", "finding_count", "open_finding_count", "investigating_count", "remediated_count", "dismissed_count", "remediation_decision_count", "deleted_count", "replaced_count", "relocated_count", "permission_changed_count", "certificate_count", "ssh_key_count", "secret_count", "accepted_risk_count", "overdue_count", "regressed_count")
+		"triage_counts":              {Type: "object", AdditionalProperties: &Schema{Type: "integer"}},
+	}, "source_count", "finding_count", "open_finding_count", "investigating_count", "remediated_count", "dismissed_count", "remediation_decision_count", "deleted_count", "replaced_count", "relocated_count", "permission_changed_count", "certificate_count", "ssh_key_count", "secret_count", "accepted_risk_count", "overdue_count", "regressed_count", "triage_counts")
 	driftRemediationFinding := object(map[string]*Schema{
 		"finding_id":          uuid(),
 		"run_id":              uuid(),
@@ -2408,6 +2410,12 @@ func componentSchemas() map[string]*Schema {
 		"recommended_action":  str(),
 		"available_decisions": {Type: "array", Items: str()},
 		"evidence_refs":       {Type: "array", Items: str()},
+		"triage_assignee":     str(),
+		"triage_due_at":       timestamp(),
+		"triage_evidence_ref": str(),
+		"risk_accepted_until": timestamp(),
+		"overdue":             {Type: "boolean"},
+		"regressed":           {Type: "boolean"},
 	}, "finding_id", "run_id", "source_id", "source_name", "ref", "provenance", "fingerprint", "risk_score", "drift_type", "credential_class", "triage_status", "metadata", "recommended_action", "available_decisions", "evidence_refs")
 	driftRemediation := object(map[string]*Schema{
 		"capability":     str(),

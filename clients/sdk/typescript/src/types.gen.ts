@@ -10165,6 +10165,9 @@ export interface components {
             remediated_count: number;
             retired_log_count: number;
             source_count: number;
+            triage_counts: {
+                [key: string]: number;
+            };
             unexpected_issuance_count: number;
             watched_domain_count: number;
         };
@@ -11354,9 +11357,13 @@ export interface components {
             finding_id: string;
             fingerprint: string;
             metadata: Record<string, never>;
+            overdue?: boolean;
             provenance: string;
             recommended_action: string;
             ref: string;
+            regressed?: boolean;
+            /** Format: date-time */
+            risk_accepted_until?: string;
             risk_score: number;
             /** Format: uuid */
             run_id: string;
@@ -11364,6 +11371,10 @@ export interface components {
             source_id: string;
             source_name: string;
             triage_actor?: string;
+            triage_assignee?: string;
+            /** Format: date-time */
+            triage_due_at?: string;
+            triage_evidence_ref?: string;
             triage_reason?: string;
             /** @enum {string} */
             triage_status: "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
@@ -11388,6 +11399,9 @@ export interface components {
             secret_count: number;
             source_count: number;
             ssh_key_count: number;
+            triage_counts: {
+                [key: string]: number;
+            };
         };
         DynamicLease: {
             /** @description Reveal-once provider credential on issue. A Kubernetes renewal returns a replacement bound token with a new lease ID after predecessor revocation completes. Metadata reads omit this field. */

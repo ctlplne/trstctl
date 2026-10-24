@@ -549,8 +549,9 @@ A finding reports `overdue` when its investigation is past due and `regressed`
 when it was seen again after its fix was recorded. The NHI shadow and stale
 posture leave a fix that held and an unexpired acceptance out of the open
 posture and count them (`remediated`, `accepted_risk`, `resolved`); the CT and
-drift dashboard summaries count every status, plus overdue and regressed
-findings.
+drift dashboard summaries count every status (`triage_counts`), plus overdue
+and regressed findings. On the Posture page each CT-log and drift row has a
+Resolve action with these choices, limited to the moves its status allows.
 
 `GET /api/v1/discovery/findings` filters on the server by `run_id`,
 `source_kind` (the kind of the source a finding was recorded under, for

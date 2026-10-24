@@ -2817,8 +2817,10 @@ than sending an operator looking for a credential that was never there.
   (the leader's sweep reopens it at expiry), or reopen. Posture reads leave a
   fix that held and an unexpired acceptance out of the open posture and
   count them; a fix seen again after it was recorded counts as open. The
-  console's Posture dashboards do not yet offer these actions. Automatic
-  remediation exists for
+  console's CT-log and drift dashboards offer the same actions on each row,
+  show assignee, due date, overdue, acceptance expiry, fix evidence and
+  regression, and filter by every status with the server's counts.
+  Automatic remediation exists for
   certificate posture findings whose tenant rule asks for `"remediation":
   "renew"` (the lifecycle scheduler renews the deployed identity), not for
   SSH-trust or drift findings. Generic

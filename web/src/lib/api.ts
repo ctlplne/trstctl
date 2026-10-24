@@ -239,6 +239,7 @@ import type {
   DiscoveryCoverage,
   DiscoveryFinding,
   DiscoveryFindingList,
+  DiscoveryFindingResolutionRequest,
   DiscoveryFindingTriageRequest,
   DistrustedRootRemovalRequest,
   DiscoveryMonitoring,
@@ -664,7 +665,7 @@ export interface UsageEvidence {
 export type { CTMonitoring, CTMonitoringRequest };
 
 /** A105: a discovery triage status a findings filter accepts; "unmanaged" includes findings never triaged. */
-export type DiscoveryTriageFilter = "unmanaged" | "investigating" | "managed" | "dismissed";
+export type DiscoveryTriageFilter = "unmanaged" | "investigating" | "managed" | "dismissed" | "remediated" | "accepted_risk";
 
 /** A105: one page of a Posture dashboard's findings; its summary counts every finding. */
 export interface DiscoveryDashboardPageOptions {
@@ -1102,6 +1103,7 @@ export type {
   DiscoveryCoverage,
   DiscoveryFinding,
   DiscoveryFindingList,
+  DiscoveryFindingResolutionRequest,
   DiscoveryFindingTriageRequest,
   DistrustedRootRemovalRequest,
   DiscoveryMonitoring,
@@ -2006,6 +2008,8 @@ export interface Api {
   discoveryFindings(options?: DiscoveryFindingListOptions): Promise<DiscoveryFindingList>;
   claimDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
   dismissDiscoveryFinding(id: string, input: DiscoveryFindingTriageRequest): Promise<DiscoveryFinding>;
+  /** A106: investigate, record remediated, accept the risk until a time, or reopen. */
+  resolveDiscoveryFinding(id: string, input: DiscoveryFindingResolutionRequest): Promise<DiscoveryFinding>;
   removeDistrustedRoot(id: string, input: DistrustedRootRemovalRequest): Promise<ConnectorDelivery>;
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
@@ -2757,6 +2761,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   },
   claimDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/claim`, input),
   dismissDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/dismiss`, input),
+  resolveDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/resolution`, input),
   removeDistrustedRoot: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/remove-distrusted-root`, input),
   connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
