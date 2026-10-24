@@ -44,6 +44,7 @@ import (
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/risk"
 	"trstctl.com/trstctl/internal/rotationcommand"
+	"trstctl.com/trstctl/internal/sshkrlreceipt"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/ticketintake"
 )
@@ -2061,6 +2062,57 @@ type AgentHeartbeat struct {
 	// Executors is present only on v4 events: the enrolled binary's own
 	// executor census (A62), bounded by the server before it is recorded.
 	Executors *AgentExecutorCensus `json:"executors,omitempty"`
+	// SSHKRL is present only on v5 events: the host's signed receipt for the
+	// OpenSSH KRL its sshd enforces (A109), verified against the exact mTLS
+	// peer certificate and freshness window before it is recorded.
+	SSHKRL *AgentSSHKRLReceipt `json:"ssh_krl,omitempty"`
+}
+
+// AgentSSHKRLReceipt preserves a host's KRL receipt with the evidence needed
+// to audit it later: the signed statement, its signature, and the signer.
+type AgentSSHKRLReceipt struct {
+	Receipt           sshkrlreceipt.Receipt `json:"receipt"`
+	IssuedAtUnix      int64                 `json:"issued_at_unix"`
+	Signature         []byte                `json:"signature"`
+	Statement         string                `json:"statement"`
+	SignerFingerprint string                `json:"signer_fingerprint"`
+}
+
+// AgentHeartbeatSSHKRLSchemaVersion adds a host's signed KRL receipt (A109).
+// The executor census, plugin census, and cache posture stay independently
+// optional on v5.
+const AgentHeartbeatSSHKRLSchemaVersion = 5
+
+func validateAgentHeartbeatSSHKRL(schemaVersion int, tenantID string, heartbeat AgentHeartbeat) error {
+	report := heartbeat.SSHKRL
+	switch schemaVersion {
+	case events.DefaultSchemaVersion, AgentHeartbeatPluginCensusSchemaVersion, AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion:
+		if report != nil {
+			return fmt.Errorf("projections: agent.heartbeat v%d cannot carry an SSH KRL receipt", schemaVersion)
+		}
+		return nil
+	case AgentHeartbeatSSHKRLSchemaVersion:
+		if report == nil {
+			return errors.New("projections: agent.heartbeat v5 requires an SSH KRL receipt")
+		}
+	default:
+		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
+	}
+	canonical, err := (sshkrlreceipt.Statement{
+		TenantID: tenantID, AgentCommonName: heartbeat.Agent,
+		Receipt: report.Receipt, IssuedAtUnix: report.IssuedAtUnix,
+	}).Canonical()
+	if err != nil {
+		return fmt.Errorf("projections: SSH KRL receipt metadata: %w", err)
+	}
+	if report.Statement != string(canonical) || len(report.Signature) == 0 {
+		return errors.New("projections: SSH KRL receipt evidence is incomplete or does not match metadata")
+	}
+	fingerprint, err := hex.DecodeString(report.SignerFingerprint)
+	if err != nil || len(fingerprint) != 32 || report.SignerFingerprint != strings.ToLower(report.SignerFingerprint) {
+		return errors.New("projections: SSH KRL receipt signer fingerprint is invalid")
+	}
+	return nil
 }
 
 // AgentExecutorCensus is what one agent process says it ships and has enabled.
@@ -2121,6 +2173,12 @@ func validateAgentHeartbeatExecutors(schemaVersion int, heartbeat AgentHeartbeat
 	case AgentHeartbeatExecutorCensusSchemaVersion:
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v4 requires an executor census")
+		}
+	case AgentHeartbeatSSHKRLSchemaVersion:
+		// A v5 heartbeat is introduced by an SSH KRL receipt; the executor
+		// census stays independently optional.
+		if report == nil {
+			return nil
 		}
 	default:
 		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
@@ -2186,11 +2244,11 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
 		}
-	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion:
-		// A v3 heartbeat is introduced by revocation-cache posture and a v4 by
-		// the executor census. Plugin census remains independently optional so
-		// a compatible relay need not invent a plugin report merely to publish
-		// other state.
+	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion:
+		// A v3 heartbeat is introduced by revocation-cache posture, a v4 by
+		// the executor census, and a v5 by an SSH KRL receipt. Plugin census
+		// remains independently optional so a compatible relay need not
+		// invent a plugin report merely to publish other state.
 		if report == nil {
 			return nil
 		}
@@ -2226,9 +2284,9 @@ func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, 
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v3 requires revocation cache posture")
 		}
-	case AgentHeartbeatExecutorCensusSchemaVersion:
-		// A v4 heartbeat is introduced by the executor census; cache posture
-		// stays independently optional.
+	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion:
+		// A v4 heartbeat is introduced by the executor census and a v5 by an
+		// SSH KRL receipt; cache posture stays independently optional.
 		if report == nil {
 			return nil
 		}
@@ -4307,7 +4365,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true},
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
@@ -5650,6 +5708,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := validateAgentHeartbeatExecutors(schemaVersionOf(e), pl); err != nil {
 			return err
 		}
+		if err := validateAgentHeartbeatSSHKRL(schemaVersionOf(e), e.TenantID, pl); err != nil {
+			return err
+		}
 		lastSeen := e.Time
 		row := store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
@@ -5697,6 +5758,18 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			row.Executors = encoded
 			reported := e.Time
 			row.ExecutorsReportedAt = &reported
+		}
+		if report := pl.SSHKRL; report != nil {
+			encoded, err := json.Marshal(report.Receipt)
+			if err != nil {
+				return err
+			}
+			row.SSHKRL = encoded
+			row.SSHKRLStatement = report.Statement
+			row.SSHKRLSignature = append([]byte(nil), report.Signature...)
+			row.SSHKRLSignerFingerprint = report.SignerFingerprint
+			reported := time.Unix(report.IssuedAtUnix, 0).UTC()
+			row.SSHKRLReportedAt = &reported
 		}
 		if report := pl.RevocationCaches; report != nil {
 			row.RevocationCaches = report.Entries

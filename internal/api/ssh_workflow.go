@@ -36,6 +36,7 @@ type SSHWorkflowService interface {
 	RevokeSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req SSHRevokeCertificateRequest) (SSHStatus, error)
 	RetireSSHHost(ctx context.Context, tenantID, idempotencyKey string, req SSHHostRetireRequest) (SSHHostRetirement, error)
 	AdoptSSHKRL(ctx context.Context, tenantID, idempotencyKey string, krl []byte) (SSHKRLAdoption, error)
+	SSHKRLFleet(ctx context.Context, tenantID string) (SSHKRLFleet, error)
 }
 
 // WithSSHWorkflow wires the served SSH-at-scale workflow API. Without it, routes
@@ -261,6 +262,73 @@ type SSHKRLAdoptionCarried struct {
 	BroadenedToAnyCA int `json:"broadened_to_any_ca"`
 }
 
+// SSHKRLFleet is the served KRL beside what each reporting host's sshd
+// enforces (A109), from the signed receipts enrolled host agents put on their
+// heartbeats.
+type SSHKRLFleet struct {
+	TenantID          string             `json:"tenant_id"`
+	Served            SSHKRLServed       `json:"served"`
+	Summary           SSHKRLFleetSummary `json:"summary"`
+	Hosts             []SSHKRLHost       `json:"hosts"`
+	StaleAfterSeconds int64              `json:"stale_after_seconds"`
+}
+
+// SSHKRLServed is the list this control plane serves at /ssh/krl now.
+type SSHKRLServed struct {
+	KRLVersion   uint64 `json:"krl_version"`
+	SHA256       string `json:"sha256"`
+	RevokedCount int    `json:"revoked_count"`
+}
+
+// SSHKRLFleetSummary counts reporting hosts by state.
+type SSHKRLFleetSummary struct {
+	Hosts    int `json:"hosts"`
+	Current  int `json:"current"`
+	Behind   int `json:"behind"`
+	Refusing int `json:"refusing"`
+	Failing  int `json:"failing"`
+	Stale    int `json:"stale"`
+}
+
+// SSH KRL host states: current enforces the served list; behind enforces an
+// older list it has not replaced yet; refusing keeps its list because the
+// served one is not newer or would drop revocations; failing could not fetch
+// or apply; stale has not reported or checked within the expected window.
+const (
+	SSHKRLHostCurrent  = "current"
+	SSHKRLHostBehind   = "behind"
+	SSHKRLHostRefusing = "refusing"
+	SSHKRLHostFailing  = "failing"
+	SSHKRLHostStale    = "stale"
+)
+
+// SSHKRLHost is one host agent's newest receipt and its state against the
+// served list. Installed* were read back from the host's RevokedKeys file.
+type SSHKRLHost struct {
+	AgentID           string         `json:"agent_id"`
+	Agent             string         `json:"agent"`
+	State             string         `json:"state"`
+	Outcome           string         `json:"outcome"`
+	InstalledVersion  uint64         `json:"installed_version"`
+	InstalledSHA256   string         `json:"installed_sha256"`
+	FetchedVersion    uint64         `json:"fetched_version,omitempty"`
+	FetchedSHA256     string         `json:"fetched_sha256,omitempty"`
+	Dropped           *SSHKRLDropped `json:"dropped,omitempty"`
+	CheckedAt         time.Time      `json:"checked_at"`
+	InstalledAt       *time.Time     `json:"installed_at,omitempty"`
+	PollEverySeconds  int64          `json:"poll_every_seconds"`
+	ReportedAt        time.Time      `json:"reported_at"`
+	SignerFingerprint string         `json:"signer_fingerprint"`
+}
+
+// SSHKRLDropped counts what a refused served list would stop revoking.
+type SSHKRLDropped struct {
+	Serials   uint64 `json:"serials"`
+	KeyIDs    int    `json:"key_ids"`
+	Keys      int    `json:"keys"`
+	KeyHashes int    `json:"key_hashes"`
+}
+
 type SSHHostRetireRequest struct {
 	Host       string `json:"host"`
 	SourceID   string `json:"source_id,omitempty"`
@@ -433,6 +501,28 @@ func (a *API) revokeSSHCertificate(w http.ResponseWriter, r *http.Request) {
 		out, err := a.sshWorkflow.RevokeSSHCertificate(ctx, tenantID, idempotencyKey, req)
 		return http.StatusOK, out, err
 	})
+}
+
+// getSSHKRLFleet compares the served KRL with each reporting host's receipt.
+func (a *API) getSSHKRLFleet(w http.ResponseWriter, r *http.Request) {
+	if a.sshWorkflow == nil {
+		a.writeProblem(w, problem.New(http.StatusServiceUnavailable, "ssh workflow is not enabled"))
+		return
+	}
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problem.New(http.StatusUnauthorized, "missing or invalid tenant"))
+		return
+	}
+	fleet, err := a.sshWorkflow.SSHKRLFleet(r.Context(), tenantID)
+	if err != nil {
+		if a.writeSSHWorkflowError(w, err) {
+			return
+		}
+		a.writeProblem(w, problem.New(http.StatusInternalServerError, err.Error()))
+		return
+	}
+	a.writeJSON(w, http.StatusOK, fleet)
 }
 
 // adoptSSHKRL carries a predecessor control plane's binary KRL, sent as the

@@ -7498,6 +7498,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/krl/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare the served KRL with the signed KRL receipt each enrolled host agent reports */
+        get: operations["getSSHKRLFleet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/status": {
         parameters: {
             query?: never;
@@ -16417,6 +16434,55 @@ export interface components {
          * @description a predecessor control plane's OpenSSH binary KRL, as its /ssh/krl served it or a host installed it; at most 4 MiB
          */
         SSHKRLBinary: string;
+        SSHKRLFleet: {
+            hosts: components["schemas"]["SSHKRLHost"][];
+            served: {
+                krl_version: number;
+                revoked_count: number;
+                sha256: string;
+            };
+            stale_after_seconds: number;
+            summary: {
+                behind: number;
+                current: number;
+                failing: number;
+                hosts: number;
+                refusing: number;
+                stale: number;
+            };
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        SSHKRLHost: {
+            agent: string;
+            agent_id: string;
+            /** Format: date-time */
+            checked_at: string;
+            dropped?: {
+                key_hashes: number;
+                key_ids: number;
+                keys: number;
+                serials: number;
+            };
+            fetched_sha256?: string;
+            fetched_version?: number;
+            /** Format: date-time */
+            installed_at?: string;
+            installed_sha256: string;
+            /** @description read back from the host's RevokedKeys file */
+            installed_version: number;
+            /**
+             * @description how the host's latest watcher attempt ended, as its signed receipt says
+             * @enum {string}
+             */
+            outcome: "current" | "installed" | "refused_not_newer" | "refused_drops_revocations" | "fetch_failed" | "apply_failed";
+            poll_every_seconds: number;
+            /** Format: date-time */
+            reported_at: string;
+            signer_fingerprint: string;
+            /** @enum {string} */
+            state: "current" | "behind" | "refusing" | "failing" | "stale";
+        };
         SSHRevokeCertificateRequest: {
             key_id?: string;
             reason?: string;
@@ -39295,6 +39361,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSHKRLAdoption"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSSHKRLFleet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHKRLFleet"];
                 };
             };
             /** @description client error */

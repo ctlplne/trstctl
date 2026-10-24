@@ -282,6 +282,27 @@ mutation stays in the operator-confirmed agent path.
    host whose `RevokedKeys` file already holds the operator's own revocations
    therefore keeps them until the served list carries them too.
 
+   Configure the watcher on every relying host; there is no control-plane
+   push. To see which hosts enforce the current list, run the watcher beside
+   an enrolled host agent instead of standalone: add the same watcher flags to
+   the agent's own command line (`--server` and its enrollment settings). The
+   agent's certificate must carry the `host` role and `--ssh-krl-tenant` must
+   be the agent's own tenant. On every heartbeat the agent then signs a
+   receipt with the digest and version it reads back from the `RevokedKeys`
+   file and how its latest attempt ended, and the control plane verifies it
+   against the agent's certificate before recording it:
+
+   ```sh
+   trstctl ssh krl receipts
+   ```
+
+   Each reporting host is `current` (it enforces the served list), `behind`
+   (it has not taken the newest list yet), `refusing` (the served list does
+   not advance its version, or would drop revocations it holds; the counts say
+   how many), `failing` (it could not fetch or apply the list), or `stale` (no
+   receipt within ten minutes, or no check within two polls and ten minutes).
+   A standalone watcher reports nothing.
+
    When a control plane is restored from a backup or replaced, its KRL counts
    its own versions and lacks revocations recorded only by its predecessor, so
    hosts keep their installed list and refuse the new one. Carry the list the
@@ -297,9 +318,8 @@ mutation stays in the operator-confirmed agent path.
    The response counts what was carried (and which revocations the predecessor
    scoped to one CA are now revoked for any CA) and shows the new KRL version,
    which is past the predecessor's. Adopt the newest list any host holds; a
-   list already carried at a newer version records nothing.
-   Configure it on every relying host: there is not yet a control-plane fleet
-   push or a central per-host receipt.
+   list already carried at a newer version records nothing. Hosts that
+   reported `refusing` take the adopted list on their next poll.
 
    Install the current list on SSH clients (`RevokedHostKeys`) separately. Before
    expiry, verify the original public

@@ -47,6 +47,7 @@ import (
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/revcacheposture"
+	"trstctl.com/trstctl/internal/sshkrlreceipt"
 )
 
 func main() {
@@ -312,26 +313,39 @@ func main() {
 		return
 	}
 	krlStop()
+	var krlAgentWatch *sshKRLAgentWatch
 	if *sshKRLWatch {
 		privateCIDRs, err := parseKRLPrivateCIDRs(*sshKRLAllowPrivateCIDRs)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(2)
 		}
-		watchCtx, watchStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		_, err = runSSHKRLWatch(watchCtx, sshKRLWatchOptions{
+		watch := sshKRLWatchOptions{
 			Enabled: true, Confirm: *sshKRLConfirm, URL: *sshKRLURL, CAFile: *caBundle,
 			ServerName: *sshKRLServerName, TenantID: *sshKRLTenant,
 			AllowPrivateCIDRs: privateCIDRs, PollEvery: *sshKRLWatchEvery,
 			TargetPath: *sshKRLTarget, SSHDConfigPath: *sshKRLConfig,
 			RollbackDir: *sshKRLRollbackDir, ReloadCmd: *sshKRLReloadCmd, HealthCmd: *sshKRLHealthCmd,
-		}, sshdKRLChecks{reloadCmd: *sshKRLReloadCmd, healthCmd: *sshKRLHealthCmd})
-		watchStop()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
-			os.Exit(1)
 		}
-		return
+		checks := sshdKRLChecks{reloadCmd: *sshKRLReloadCmd, healthCmd: *sshKRLHealthCmd}
+		if *serverAddr != "" {
+			// A109: beside an enrolled host agent, the watcher's receipts are
+			// signed onto the heartbeat. Check everything before enrolling.
+			krlAgentWatch, err = newSSHKRLAgentWatch(watch, checks)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+				os.Exit(2)
+			}
+		} else {
+			watchCtx, watchStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+			_, err = runSSHKRLWatch(watchCtx, watch, checks)
+			watchStop()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+				os.Exit(1)
+			}
+			return
+		}
 	}
 
 	if *secretInject {
@@ -422,6 +436,7 @@ func main() {
 		relayPollEvery:                    *relayPollEvery,
 		hostExecProfile:                   strings.TrimSpace(*hostExecProfile),
 		hostRollbackDir:                   strings.TrimSpace(*hostRollbackDir),
+		sshKRLWatch:                       krlAgentWatch,
 		inventorySSH: sshdiscovery.Config{
 			HostKeyGlobs:        splitList(*inventorySSHHostKeyGlobs),
 			UserKeyGlobs:        splitList(*inventorySSHUserKeyGlobs),
@@ -560,6 +575,9 @@ type agentOptions struct {
 	// hostRollbackDir holds the encrypted two-generation predecessor ledger on
 	// this host. Empty derives a stable directory beside keyPath.
 	hostRollbackDir string
+	// sshKRLWatch runs the KRL watcher beside this enrolled host agent and
+	// signs its receipts onto the heartbeat (A109). Nil runs none.
+	sshKRLWatch *sshKRLAgentWatch
 }
 
 func prepareIdentityDir(path string, uid, gid int) error {
@@ -660,6 +678,15 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if revocationCacheConfigured(o) && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		return fmt.Errorf("revocation caching requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
 	}
+	if w := o.sshKRLWatch; w != nil {
+		if !agentCarriesRole(a.Roles(), mtls.AgentRoleHost) {
+			return fmt.Errorf("--ssh-krl-watch beside an enrolled agent requires a certificate carrying the %q role; re-enroll this agent with a host-role bootstrap token", mtls.AgentRoleHost)
+		}
+		if id := a.Identity(); id == nil || id.TenantID() != w.options.TenantID {
+			return errors.New("--ssh-krl-tenant must be this agent's own tenant: its KRL receipts are reported on the agent's heartbeat")
+		}
+		w.start(ctx)
+	}
 	// E4: verify and load third-party connectors BEFORE the first heartbeat.
 	// That first beat is the boot record operators trust; reporting an empty
 	// runtime and correcting it one interval later would be a false outage.
@@ -699,6 +726,11 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		revocationCaches:   reportRevocationCaches,
 		revocationIssuedAt: &atomic.Int64{},
 		executors:          func() *transport.ExecutorReport { return executorCensus(o, relayCAStatus) },
+	}
+	if w := o.sshKRLWatch; w != nil {
+		ch.sshKRL = w.options.Receipts.Latest
+		ch.sshKRLIdentity = a.Identity()
+		ch.sshKRLIssuedAt = &w.issuedAt
 	}
 	if agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
 		ch.pluginIdentity = a.Identity()
@@ -1419,6 +1451,12 @@ type channelAdapter struct {
 	revocationIssuedAt *atomic.Int64
 	// executors reports this binary's own executor census (A62).
 	executors func() *transport.ExecutorReport
+	// sshKRL is the KRL watcher's newest receipt (A109), signed with this
+	// host agent's identity; sshKRLIssuedAt keeps signed receipts strictly
+	// newer across reconnects of one process.
+	sshKRL         func() *sshkrlreceipt.Receipt
+	sshKRLIdentity *mtls.AgentIdentity
+	sshKRLIssuedAt *atomic.Int64
 }
 
 // executorCensus is what THIS binary ships and which enabling flags this
@@ -1511,6 +1549,20 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 			return nil, fmt.Errorf("sign revocation cache posture: %w", err)
 		}
 		wire.RevocationCaches = report
+	}
+	if a.sshKRL != nil && a.sshKRLIdentity != nil {
+		if receipt := a.sshKRL(); receipt != nil {
+			issuedAt := nextMonotonicUnix(a.sshKRLIssuedAt, time.Now().UTC().Unix())
+			report, err := transport.SignedSSHKRLReceipt(a.sshKRLIdentity,
+				a.sshKRLIdentity.TenantID(), a.sshKRLIdentity.CommonName(), *receipt, issuedAt)
+			if err != nil {
+				// A receipt this process cannot sign is left off; failing the
+				// heartbeat would take the host offline over a report.
+				fmt.Fprintln(os.Stderr, "trstctl-agent: SSH KRL receipt not reported:", err)
+			} else {
+				wire.SSHKRL = report
+			}
+		}
 	}
 	resp, err := a.c.Heartbeat(ctx, wire)
 	if err != nil {

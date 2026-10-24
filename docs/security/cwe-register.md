@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1700 annotated sites across 26 rules. Each row is
+1701 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -120,8 +120,8 @@ not this file.
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
-| `internal/agent/transport/agentservice.go:817` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:824` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:822` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:829` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |
@@ -284,7 +284,7 @@ not this file.
 | `internal/perf/perf_test.go:242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/projections/projections.go:286` | an event type name, not a credential (CWE-798) |
+| `internal/projections/projections.go:287` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_integrations.go:226` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
@@ -467,7 +467,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:476` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:491` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:269` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -560,10 +560,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:5868` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5885` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:5898` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:5926` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:5941` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5958` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:5971` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:5999` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1092,7 +1092,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:582` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:600` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1133,7 +1133,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (479 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (480 sites)
 
 | Location | Reason |
 |---|---|
@@ -1157,8 +1157,8 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:335` | exact test tempdir sentinel |
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
-| `cmd/trstctl-agent/main.go:1097` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1723` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1129` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1775` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
@@ -1167,11 +1167,12 @@ not this file.
 | `cmd/trstctl-agent/sshkrl.go:51` | operator-selected public KRL input |
 | `cmd/trstctl-agent/sshkrl_test.go:24` | test fixture path created under t.TempDir |
 | `cmd/trstctl-agent/sshkrl_test.go:67` | test fixture target under t.TempDir |
-| `cmd/trstctl-agent/sshkrl_watch.go:107` | operator-selected CA bundle for this exact HTTPS origin |
-| `cmd/trstctl-agent/sshkrl_watch_test.go:33` | test-only path under t.TempDir |
-| `cmd/trstctl-agent/sshkrl_watch_test.go:84` | test-only target under t.TempDir |
-| `cmd/trstctl-agent/sshkrl_watch_test.go:112` | test-only target under t.TempDir |
-| `cmd/trstctl-agent/sshkrl_watch_test.go:150` | test-only target under t.TempDir |
+| `cmd/trstctl-agent/sshkrl_watch.go:186` | the operator's absolute RevokedKeys path, read back for the receipt |
+| `cmd/trstctl-agent/sshkrl_watch.go:237` | operator-selected CA bundle for this exact HTTPS origin |
+| `cmd/trstctl-agent/sshkrl_watch_test.go:35` | test-only path under t.TempDir |
+| `cmd/trstctl-agent/sshkrl_watch_test.go:86` | test-only target under t.TempDir |
+| `cmd/trstctl-agent/sshkrl_watch_test.go:114` | test-only target under t.TempDir |
+| `cmd/trstctl-agent/sshkrl_watch_test.go:152` | test-only target under t.TempDir |
 | `cmd/trstctl-agent/sshtrust.go:92` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-license/aud56_test.go:35` | licensePath is created inside this test's TempDir (CWE-22). |
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
@@ -1429,7 +1430,7 @@ not this file.
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
 | `internal/server/agent_roles_served_test.go:509` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
-| `internal/server/agentchannel.go:127` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/agentchannel.go:128` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:143` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:207` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:379` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -1769,7 +1770,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:714` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:746` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

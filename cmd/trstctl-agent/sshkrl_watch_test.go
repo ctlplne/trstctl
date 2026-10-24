@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/sshkrl"
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto"
 	sshprotocol "trstctl.com/trstctl/internal/protocols/ssh"
+	"trstctl.com/trstctl/internal/sshkrlreceipt"
 )
 
 type watchRoundTrip func(*http.Request) (*http.Response, error)
@@ -165,3 +167,87 @@ func TestKRLWatchRequiresHTTPSAndExplicitConfirmation(t *testing.T) {
 		t.Fatalf("watch with HTTP URL: handled=%v err=%v", handled, err)
 	}
 }
+
+// A109: every watcher attempt leaves a receipt whose installed digest and
+// version are read back from the RevokedKeys file, with how the attempt
+// ended: installed, current, refused (and what the served list would drop),
+// or a failed fetch that still reports what the host enforces.
+func TestKRLWatchReceiptsReadBackWhatTheHostEnforces(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "revoked_keys")
+	old := sshprotocol.NewKRL().DistributeKRL(4)
+	if err := os.WriteFile(target, old, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	newer := sshprotocol.NewKRL()
+	newer.RevokeSerial(101)
+	newer.RevokeKeyID("pam:a")
+	installedList := newer.DistributeKRL(5)
+	dropping := sshprotocol.NewKRL()
+	dropping.RevokeSerial(202)
+	droppingList := dropping.DistributeKRL(6)
+
+	var serve []byte
+	fail := false
+	client := &http.Client{Transport: watchRoundTrip(func(*http.Request) (*http.Response, error) {
+		if fail {
+			return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: http.Header{}, Body: io.NopCloser(bytes.NewReader(nil))}, nil
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{
+			"Content-Type":        []string{"application/octet-stream"},
+			"X-Trstctl-Tenant-Id": []string{"tenant-a"},
+		}, Body: io.NopCloser(bytes.NewReader(serve))}, nil
+	})}
+	receipts := &sshKRLReceipts{}
+	o := sshKRLWatchOptions{URL: "https://control.example/ssh/krl", TenantID: "tenant-a", TargetPath: target,
+		SSHDConfigPath: filepath.Join(dir, "sshd_config"), RollbackDir: filepath.Join(dir, "rollback"), Receipts: receipts,
+		PollEvery: 30 * time.Second}
+	checks := &watchChecks{target: target}
+	clock := time.Unix(1_800_000_000, 0)
+	attempt := func() *sshkrlreceipt.Receipt {
+		t.Helper()
+		clock = clock.Add(time.Minute)
+		_, receipt, _ := attemptSSHKRL(context.Background(), client, o, checks, func() time.Time { return clock })
+		receipts.record(receipt)
+		latest := receipts.Latest()
+		if latest == nil {
+			t.Fatal("attempt left no receipt")
+		}
+		if err := (sshkrlreceipt.Statement{TenantID: "tenant-a", AgentCommonName: "edge-1", Receipt: *latest, IssuedAtUnix: clock.Unix()}).Validate(); err != nil {
+			t.Fatalf("receipt %+v does not validate: %v", latest, err)
+		}
+		return latest
+	}
+
+	serve = installedList
+	if r := attempt(); r.Outcome != sshkrlreceipt.OutcomeInstalled || r.InstalledSHA256 != crypto.SHA256Hex(installedList) || r.InstalledVersion != 5 || r.InstalledAtUnix != clock.Unix() {
+		t.Fatalf("install receipt = %+v", r)
+	}
+	installedAt := clock.Unix()
+	if r := attempt(); r.Outcome != sshkrlreceipt.OutcomeCurrent || r.InstalledAtUnix != installedAt {
+		t.Fatalf("unchanged receipt = %+v", r)
+	}
+	serve = droppingList
+	if r := attempt(); r.Outcome != sshkrlreceipt.OutcomeRefusedDropsRevocations || r.DroppedSerials != 1 || r.DroppedKeyIDs != 1 ||
+		r.InstalledSHA256 != crypto.SHA256Hex(installedList) || r.FetchedSHA256 != crypto.SHA256Hex(droppingList) || r.FetchedVersion != 6 {
+		t.Fatalf("refusal receipt = %+v", r)
+	}
+	serve = old
+	if r := attempt(); r.Outcome != sshkrlreceipt.OutcomeRefusedNotNewer || r.FetchedVersion != 4 {
+		t.Fatalf("older list receipt = %+v", r)
+	}
+	fail = true
+	if r := attempt(); r.Outcome != sshkrlreceipt.OutcomeFetchFailed || r.InstalledSHA256 != crypto.SHA256Hex(installedList) || r.FetchedSHA256 != "" {
+		t.Fatalf("fetch failure receipt = %+v", r)
+	}
+	// The newest receipt canonicalizes for signing onto the heartbeat.
+	report, err := transport.SignedSSHKRLReceipt(recordingSigner{}, "tenant-a", "edge-1", *receipts.Latest(), clock.Unix())
+	if err != nil || !bytes.HasPrefix(report.Signature, []byte("trstctl-agent-ssh-krl-receipt/v1\n")) {
+		t.Fatalf("sign receipt: %+v %v", report, err)
+	}
+}
+
+// recordingSigner returns the statement it was asked to sign.
+type recordingSigner struct{}
+
+func (recordingSigner) SignStatement(statement []byte) ([]byte, error) { return statement, nil }

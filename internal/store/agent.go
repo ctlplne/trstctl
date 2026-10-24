@@ -76,10 +76,19 @@ type Agent struct {
 	// means the agent has never reported one (an older build).
 	Executors           []byte
 	ExecutorsReportedAt *time.Time
-	CreatedAt           time.Time
-	OffboardedAt        *time.Time
-	OffboardedBy        string
-	OffboardReason      string
+	// SSHKRL* is the newest signed KRL receipt from this host agent's
+	// watcher (A109): the receipt JSON and the evidence that signed it.
+	// Written by the heartbeat projection and read by ListAgentSSHKRLReceipts;
+	// the general agent reads leave them empty.
+	SSHKRL                  []byte
+	SSHKRLStatement         string
+	SSHKRLSignature         []byte
+	SSHKRLSignerFingerprint string
+	SSHKRLReportedAt        *time.Time
+	CreatedAt               time.Time
+	OffboardedAt            *time.Time
+	OffboardedBy            string
+	OffboardReason          string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -157,6 +166,12 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 	if len(executors) == 0 {
 		executors = []byte("{}")
 	}
+	// A beat without a KRL receipt writes NULL, which the update keeps as
+	// "this beat says nothing" rather than clearing the last receipt.
+	var sshKRL []byte
+	if a.SSHKRLReportedAt != nil {
+		sshKRL = a.SSHKRL
+	}
 	// The synchronous read-after-write projector and the durable event consumer
 	// can insert one event concurrently. The current schema makes (tenant_id, id)
 	// both the primary and foreign-key identity, so every matching unique index is
@@ -173,12 +188,15 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		                     relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 		                     revocation_caches, revocation_caches_statement, revocation_caches_signature,
 		                     revocation_caches_signer_fingerprint, revocation_caches_reported_at,
-		                     executors, executors_reported_at)
+		                     executors, executors_reported_at,
+		                     ssh_krl, ssh_krl_statement, ssh_krl_signature,
+		                     ssh_krl_signer_fingerprint, ssh_krl_reported_at)
 		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10,
 		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
 		         $23::jsonb, $24, $25, $26, $27,
 		         $28::jsonb, $29, $30, $31, $32,
-		         $33::jsonb, $34)
+		         $33::jsonb, $34,
+		         $35::jsonb, $36, $37, $38, $39)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
@@ -288,7 +306,27 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		        executors_reported_at = CASE
 		            WHEN EXCLUDED.executors_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.executors_reported_at
 		            WHEN agents.executors_reported_at IS NOT NULL AND EXCLUDED.executors_reported_at <= agents.executors_reported_at THEN agents.executors_reported_at
-		            ELSE EXCLUDED.executors_reported_at END
+		            ELSE EXCLUDED.executors_reported_at END,
+		        ssh_krl = CASE
+		            WHEN EXCLUDED.ssh_krl_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.ssh_krl
+		            WHEN agents.ssh_krl_reported_at IS NOT NULL AND EXCLUDED.ssh_krl_reported_at <= agents.ssh_krl_reported_at THEN agents.ssh_krl
+		            ELSE EXCLUDED.ssh_krl END,
+		        ssh_krl_statement = CASE
+		            WHEN EXCLUDED.ssh_krl_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.ssh_krl_statement
+		            WHEN agents.ssh_krl_reported_at IS NOT NULL AND EXCLUDED.ssh_krl_reported_at <= agents.ssh_krl_reported_at THEN agents.ssh_krl_statement
+		            ELSE EXCLUDED.ssh_krl_statement END,
+		        ssh_krl_signature = CASE
+		            WHEN EXCLUDED.ssh_krl_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.ssh_krl_signature
+		            WHEN agents.ssh_krl_reported_at IS NOT NULL AND EXCLUDED.ssh_krl_reported_at <= agents.ssh_krl_reported_at THEN agents.ssh_krl_signature
+		            ELSE EXCLUDED.ssh_krl_signature END,
+		        ssh_krl_signer_fingerprint = CASE
+		            WHEN EXCLUDED.ssh_krl_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.ssh_krl_signer_fingerprint
+		            WHEN agents.ssh_krl_reported_at IS NOT NULL AND EXCLUDED.ssh_krl_reported_at <= agents.ssh_krl_reported_at THEN agents.ssh_krl_signer_fingerprint
+		            ELSE EXCLUDED.ssh_krl_signer_fingerprint END,
+		        ssh_krl_reported_at = CASE
+		            WHEN EXCLUDED.ssh_krl_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.ssh_krl_reported_at
+		            WHEN agents.ssh_krl_reported_at IS NOT NULL AND EXCLUDED.ssh_krl_reported_at <= agents.ssh_krl_reported_at THEN agents.ssh_krl_reported_at
+		            ELSE EXCLUDED.ssh_krl_reported_at END
 		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
 		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
@@ -300,7 +338,9 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		a.RelayPluginsSignerFingerprint, a.RelayPluginsReportedAt,
 		revocationCaches, a.RevocationCachesStatement, cacheSignature,
 		a.RevocationCachesSignerFingerprint, a.RevocationCachesReportedAt,
-		executors, a.ExecutorsReportedAt)
+		executors, a.ExecutorsReportedAt,
+		sshKRL, a.SSHKRLStatement, a.SSHKRLSignature,
+		a.SSHKRLSignerFingerprint, a.SSHKRLReportedAt)
 	if err != nil {
 		return err
 	}
@@ -554,6 +594,62 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 		err = json.Unmarshal(revocationCaches, &a.RevocationCaches)
 	}
 	return a, err
+}
+
+// AgentSSHKRLReceipt is one host agent's newest signed KRL receipt (A109).
+// Receipt is the receipt JSON the agent signed; the signature itself stays in
+// the projection.
+type AgentSSHKRLReceipt struct {
+	AgentID           string
+	AgentName         string
+	AgentStatus       string
+	LastSeenAt        *time.Time
+	Receipt           []byte
+	SignerFingerprint string
+	ReportedAt        time.Time
+}
+
+// MaxAgentSSHKRLReceipts bounds one KRL fleet read.
+const MaxAgentSSHKRLReceipts = 5000
+
+// ListAgentSSHKRLReceipts returns the newest KRL receipt of each agent that
+// has reported one and is not offboarded, newest report first.
+func (s *Store) ListAgentSSHKRLReceipts(ctx context.Context, tenantID string, limit int) ([]AgentSSHKRLReceipt, error) {
+	if limit <= 0 || limit > MaxAgentSSHKRLReceipts {
+		limit = MaxAgentSSHKRLReceipts
+	}
+	var out []AgentSSHKRLReceipt
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, name, status, last_seen_at, ssh_krl, COALESCE(ssh_krl_signer_fingerprint, ''), ssh_krl_reported_at
+			   FROM agents
+			  WHERE tenant_id = $1 AND ssh_krl_reported_at IS NOT NULL AND ssh_krl IS NOT NULL AND status <> 'offboarded'
+			  ORDER BY ssh_krl_reported_at DESC, id
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var r AgentSSHKRLReceipt
+			if err := rows.Scan(&r.AgentID, &r.AgentName, &r.AgentStatus, &r.LastSeenAt, &r.Receipt, &r.SignerFingerprint, &r.ReportedAt); err != nil {
+				return err
+			}
+			out = append(out, r)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// AgentSSHKRLReportedAt is when the agent's newest accepted KRL receipt was
+// signed, or nil when it has none.
+func (s *Store) AgentSSHKRLReportedAt(ctx context.Context, tenantID, agentID string) (*time.Time, error) {
+	var reported *time.Time
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT ssh_krl_reported_at FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, agentID).Scan(&reported)
+	})
+	return reported, err
 }
 
 // ListAgentsPage returns up to limit agents after the (created_at, id) cursor.

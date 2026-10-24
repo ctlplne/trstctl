@@ -4723,6 +4723,39 @@ func componentSchemas() map[string]*Schema {
 		}, "serial_ranges", "key_ids", "keys", "key_hashes", "broadened_to_any_ca"),
 		"krl": ref("SSHStatus"),
 	}, "predecessor_sha256", "predecessor_version", "parts", "already_carried", "carried", "krl")
+	sshKRLHost := object(map[string]*Schema{
+		"agent_id": str(),
+		"agent":    str(),
+		"state":    {Type: "string", Enum: []string{"current", "behind", "refusing", "failing", "stale"}},
+		"outcome": {Type: "string", Enum: []string{"current", "installed", "refused_not_newer", "refused_drops_revocations", "fetch_failed", "apply_failed"},
+			Description: "how the host's latest watcher attempt ended, as its signed receipt says"},
+		"installed_version": {Type: "integer", Description: "read back from the host's RevokedKeys file"},
+		"installed_sha256":  str(),
+		"fetched_version":   {Type: "integer"},
+		"fetched_sha256":    str(),
+		"dropped": object(map[string]*Schema{
+			"serials": {Type: "integer"}, "key_ids": {Type: "integer"}, "keys": {Type: "integer"}, "key_hashes": {Type: "integer"},
+		}, "serials", "key_ids", "keys", "key_hashes"),
+		"checked_at":         timestamp(),
+		"installed_at":       timestamp(),
+		"poll_every_seconds": {Type: "integer"},
+		"reported_at":        timestamp(),
+		"signer_fingerprint": str(),
+	}, "agent_id", "agent", "state", "outcome", "installed_version", "installed_sha256", "checked_at", "poll_every_seconds", "reported_at", "signer_fingerprint")
+	sshKRLFleet := object(map[string]*Schema{
+		"tenant_id": uuid(),
+		"served": object(map[string]*Schema{
+			"krl_version":   {Type: "integer"},
+			"sha256":        str(),
+			"revoked_count": {Type: "integer"},
+		}, "krl_version", "sha256", "revoked_count"),
+		"summary": object(map[string]*Schema{
+			"hosts": {Type: "integer"}, "current": {Type: "integer"}, "behind": {Type: "integer"},
+			"refusing": {Type: "integer"}, "failing": {Type: "integer"}, "stale": {Type: "integer"},
+		}, "hosts", "current", "behind", "refusing", "failing", "stale"),
+		"hosts":               {Type: "array", Items: ref("SSHKRLHost")},
+		"stale_after_seconds": {Type: "integer"},
+	}, "tenant_id", "served", "summary", "hosts", "stale_after_seconds")
 	sshHostRetireReq := object(map[string]*Schema{
 		"host":        str(),
 		"source_id":   uuid(),
@@ -7308,6 +7341,8 @@ func componentSchemas() map[string]*Schema {
 		"SSHRevokeCertificateRequest":              sshRevokeCertReq,
 		"SSHKRLBinary":                             {Type: "string", Format: "binary", Description: "a predecessor control plane's OpenSSH binary KRL, as its /ssh/krl served it or a host installed it; at most 4 MiB"},
 		"SSHKRLAdoption":                           sshKRLAdoption,
+		"SSHKRLFleet":                              sshKRLFleet,
+		"SSHKRLHost":                               sshKRLHost,
 		"SSHHostRetireRequest":                     sshHostRetireReq,
 		"SSHHostRetirement":                        sshHostRetirement,
 		"BrokerAgentIdentityRequest":               brokerAgentIdentityReq,

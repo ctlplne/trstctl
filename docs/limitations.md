@@ -3152,8 +3152,16 @@ than sending an operator looking for a credential that was never there.
   CA and moves its version past the predecessor's, and a served test proves a
   host refuses the replacement list before adoption and takes it after,
   with stock `ssh-keygen` reading the result. One adoption reads at most
-  4 MiB and 100,000 entries. A lab proof with real hosts moving between two
-  control planes, and fleet receipts, remain unverified.
+  4 MiB and 100,000 entries. Per-host receipts exist for a watcher run beside
+  an enrolled host-role agent: each heartbeat carries a receipt, signed with
+  the agent's certificate key, of the digest and version read back from its
+  `RevokedKeys` file and how its latest attempt ended, and
+  `trstctl ssh krl receipts` places each host against the served list
+  (current, behind, refusing, failing, stale). A standalone watcher still
+  reports nothing, a receipt is the host's own account rather than a login
+  attempt against its sshd, and there is no control-plane push. A lab proof
+  with real hosts moving between two control planes, and receipts from a
+  multi-host lab fleet, remain to be shown.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The

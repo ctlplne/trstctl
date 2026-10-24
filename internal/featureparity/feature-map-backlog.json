@@ -10448,6 +10448,7 @@
                 "getSSHStatus",
                 "revokeSSHCertificate",
                 "adoptSSHKRL",
+                "getSSHKRLFleet",
                 "getProtocolProfile",
                 "activateProtocolProfile"
             ],
@@ -10458,6 +10459,7 @@
                 "ssh status",
                 "ssh revoke",
                 "ssh krl adopt",
+                "ssh krl receipts",
                 "setup protocols status",
                 "setup protocols activate"
             ],

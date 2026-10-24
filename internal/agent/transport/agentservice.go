@@ -43,6 +43,7 @@ import (
 	"trstctl.com/trstctl/internal/plugincensus"
 	"trstctl.com/trstctl/internal/protocol"
 	"trstctl.com/trstctl/internal/revcacheposture"
+	"trstctl.com/trstctl/internal/sshkrlreceipt"
 )
 
 // AgentCodecName is the content-subtype under which the agent steady-state RPCs are
@@ -111,6 +112,10 @@ type HeartbeatRequest struct {
 	// It exists so the console can show what the enrolled binary carries
 	// rather than what this server build would carry.
 	Executors *ExecutorReport `json:"executors,omitempty"`
+	// SSHKRL is this host's signed receipt for the OpenSSH KRL its sshd
+	// enforces (A109), read back from the RevokedKeys file after the KRL
+	// watcher's latest attempt. Nil when this agent runs no KRL watcher.
+	SSHKRL *sshkrlreceipt.Report `json:"ssh_krl,omitempty"`
 }
 
 // ExecutorReport is one agent process's executor census.

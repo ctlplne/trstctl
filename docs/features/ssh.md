@@ -271,8 +271,14 @@ Use a separate approval workflow if your policy requires two people.
   paths validate the KRL with OpenSSH, check sshd's effective path and config,
   retain the predecessor, and run a known-good login probe; a failed update
   restores the old file. The watcher skips reload on an unchanged list. Configure it on
-  every relying host. The control plane does not yet enqueue a fleet push or
-  collect central per-host delivery receipts. Existing SSH sessions are not
+  every relying host; the control plane does not push lists. A watcher run
+  beside an enrolled host-role agent signs a receipt onto each heartbeat: the
+  digest and version read back from its `RevokedKeys` file and how its latest
+  attempt ended, which the control plane checks against the agent's
+  certificate before recording. `GET /api/v1/ssh/krl/receipts`
+  (`trstctl ssh krl receipts`) places each reporting host against the served
+  list as current, behind, refusing (with what the served list would drop),
+  failing, or stale. Existing SSH sessions are not
   terminated by a KRL update. A host keeps its installed KRL if the control
   plane is unavailable or cannot finish a verified event catch-up; it retries
   the download. A restored or replacement control plane counts its own KRL
@@ -304,8 +310,8 @@ Use a separate approval workflow if your policy requires two people.
   `POST /api/v1/ssh/attested-user-certs/preview`,
   `POST /api/v1/ssh/attested-user-certs`,
   `POST /api/v1/ssh/certificates/revoke`, `POST /api/v1/ssh/krl/adoptions`,
-  `POST /api/v1/ssh/hosts/retire`;
-  `trstctl ssh preview|issue|status|trust-rollout|preview-attested-user|issue-attested-user|revoke|krl adopt|retire-host`.
+  `GET /api/v1/ssh/krl/receipts`, `POST /api/v1/ssh/hosts/retire`;
+  `trstctl ssh preview|issue|status|trust-rollout|preview-attested-user|issue-attested-user|revoke|krl adopt|krl receipts|retire-host`.
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
   `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method+payload → cert).

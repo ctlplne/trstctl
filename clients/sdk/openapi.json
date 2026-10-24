@@ -32692,6 +32692,180 @@
         "format": "binary",
         "type": "string"
       },
+      "SSHKRLFleet": {
+        "properties": {
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/SSHKRLHost"
+            },
+            "type": "array"
+          },
+          "served": {
+            "properties": {
+              "krl_version": {
+                "type": "integer"
+              },
+              "revoked_count": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "krl_version",
+              "sha256",
+              "revoked_count"
+            ],
+            "type": "object"
+          },
+          "stale_after_seconds": {
+            "type": "integer"
+          },
+          "summary": {
+            "properties": {
+              "behind": {
+                "type": "integer"
+              },
+              "current": {
+                "type": "integer"
+              },
+              "failing": {
+                "type": "integer"
+              },
+              "hosts": {
+                "type": "integer"
+              },
+              "refusing": {
+                "type": "integer"
+              },
+              "stale": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "hosts",
+              "current",
+              "behind",
+              "refusing",
+              "failing",
+              "stale"
+            ],
+            "type": "object"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "served",
+          "summary",
+          "hosts",
+          "stale_after_seconds"
+        ],
+        "type": "object"
+      },
+      "SSHKRLHost": {
+        "properties": {
+          "agent": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dropped": {
+            "properties": {
+              "key_hashes": {
+                "type": "integer"
+              },
+              "key_ids": {
+                "type": "integer"
+              },
+              "keys": {
+                "type": "integer"
+              },
+              "serials": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serials",
+              "key_ids",
+              "keys",
+              "key_hashes"
+            ],
+            "type": "object"
+          },
+          "fetched_sha256": {
+            "type": "string"
+          },
+          "fetched_version": {
+            "type": "integer"
+          },
+          "installed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "installed_sha256": {
+            "type": "string"
+          },
+          "installed_version": {
+            "description": "read back from the host's RevokedKeys file",
+            "type": "integer"
+          },
+          "outcome": {
+            "description": "how the host's latest watcher attempt ended, as its signed receipt says",
+            "enum": [
+              "current",
+              "installed",
+              "refused_not_newer",
+              "refused_drops_revocations",
+              "fetch_failed",
+              "apply_failed"
+            ],
+            "type": "string"
+          },
+          "poll_every_seconds": {
+            "type": "integer"
+          },
+          "reported_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "signer_fingerprint": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "current",
+              "behind",
+              "refusing",
+              "failing",
+              "stale"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "agent",
+          "state",
+          "outcome",
+          "installed_version",
+          "installed_sha256",
+          "checked_at",
+          "poll_every_seconds",
+          "reported_at",
+          "signer_fingerprint"
+        ],
+        "type": "object"
+      },
       "SSHRevokeCertificateRequest": {
         "properties": {
           "key_id": {
@@ -69319,6 +69493,53 @@
         ],
         "summary": "Carry a predecessor control plane's binary KRL into this one so hosts can move to its list",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/ssh/krl/receipts": {
+      "get": {
+        "operationId": "getSSHKRLFleet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHKRLFleet"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Compare the served KRL with the signed KRL receipt each enrolled host agent reports",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/ssh/status": {

@@ -66,6 +66,7 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/revcacheposture"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/sshkrlreceipt"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/usage"
@@ -708,6 +709,20 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		beatPayload.Executors = census
 		eventSchemaVersion = projections.AgentHeartbeatExecutorCensusSchemaVersion
 	}
+	if req.SSHKRL != nil {
+		// A109: the host's signed receipt for the OpenSSH KRL its sshd
+		// enforces. A report about this host, verified against the exact
+		// certificate behind this call; it authorizes nothing.
+		if !agentHasRole(info.Roles, mtls.AgentRoleHost) {
+			return nil, status.Error(codes.PermissionDenied, "only a certificate-bound host agent may report an SSH KRL receipt")
+		}
+		report, err := a.validatedSSHKRLReceipt(ctx, info, req.SSHKRL)
+		if err != nil {
+			return nil, err
+		}
+		beatPayload.SSHKRL = report
+		eventSchemaVersion = projections.AgentHeartbeatSSHKRLSchemaVersion
+	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
@@ -729,6 +744,41 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	return &transport.HeartbeatResponse{
 		TenantID:             info.TenantID,
 		NextHeartbeatSeconds: int64(beat / time.Second),
+	}, nil
+}
+
+func (a *agentService) validatedSSHKRLReceipt(ctx context.Context, info mtls.PeerCertInfo,
+	report *sshkrlreceipt.Report) (*projections.AgentSSHKRLReceipt, error) {
+	if report.IssuedAtUnix <= 0 {
+		return nil, status.Error(codes.PermissionDenied, "SSH KRL receipt has no issued-at")
+	}
+	issued := time.Unix(report.IssuedAtUnix, 0).UTC()
+	if delta := time.Now().UTC().Sub(issued); delta > receiptSkew || delta < -receiptSkew {
+		return nil, status.Error(codes.PermissionDenied, "SSH KRL receipt issued-at is outside the accepted window")
+	}
+	canonical, err := (sshkrlreceipt.Statement{
+		TenantID: info.TenantID, AgentCommonName: info.CommonName,
+		Receipt: report.Receipt, IssuedAtUnix: report.IssuedAtUnix,
+	}).Canonical()
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "SSH KRL receipt is invalid: %v", err)
+	}
+	if err := mtls.VerifyStatement(info.LeafDER, canonical, report.Signature); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "SSH KRL receipt signature does not verify against the presented certificate")
+	}
+	if a.store != nil {
+		prior, err := a.store.AgentSSHKRLReportedAt(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName))
+		switch {
+		case err == nil && prior != nil && !issued.After(*prior):
+			return nil, status.Error(codes.FailedPrecondition, "SSH KRL receipt is not newer than the accepted receipt")
+		case err != nil && !errors.Is(err, pgx.ErrNoRows):
+			return nil, status.Errorf(codes.Internal, "read prior SSH KRL receipt: %v", err)
+		}
+	}
+	return &projections.AgentSSHKRLReceipt{
+		Receipt: report.Receipt, IssuedAtUnix: report.IssuedAtUnix,
+		Signature: append([]byte(nil), report.Signature...), Statement: string(canonical),
+		SignerFingerprint: strings.ToLower(strings.TrimSpace(info.FingerprintSHA256)),
 	}, nil
 }
 

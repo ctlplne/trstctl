@@ -327,8 +327,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A102's `nhi posture exposure probe` raised it to 577, mapped onto the same row.
 	// A106's `discovery findings resolve` raised it to 578, mapped onto the discovery row.
 	// A110's `ssh krl adopt` raised it to 579, mapped onto the SSH CA row.
-	if len(out) != 579 {
-		t.Fatalf("CLI commands = %d, want 579", len(out))
+	// A109's `ssh krl receipts` raised it to 580, mapped onto the SSH CA row.
+	if len(out) != 580 {
+		t.Fatalf("CLI commands = %d, want 580", len(out))
 	}
 	return out
 }

@@ -7937,6 +7937,31 @@ export interface SSHKRLAdoption {
 
 export type SSHKRLBinary = string;
 
+export interface SSHKRLFleet {
+  hosts: SSHKRLHost[];
+  served: { krl_version: number; revoked_count: number; sha256: string };
+  stale_after_seconds: number;
+  summary: { behind: number; current: number; failing: number; hosts: number; refusing: number; stale: number };
+  tenant_id: string;
+}
+
+export interface SSHKRLHost {
+  agent: string;
+  agent_id: string;
+  checked_at: string;
+  dropped?: { key_hashes: number; key_ids: number; keys: number; serials: number };
+  fetched_sha256?: string;
+  fetched_version?: number;
+  installed_at?: string;
+  installed_sha256: string;
+  installed_version: number;
+  outcome: "current" | "installed" | "refused_not_newer" | "refused_drops_revocations" | "fetch_failed" | "apply_failed";
+  poll_every_seconds: number;
+  reported_at: string;
+  signer_fingerprint: string;
+  state: "current" | "behind" | "refusing" | "failing" | "stale";
+}
+
 export interface SSHRevokeCertificateRequest {
   key_id?: string;
   reason?: string;

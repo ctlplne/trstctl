@@ -264,6 +264,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ssh", "issue-attested-user"}, Method: "POST", Path: "/api/v1/ssh/attested-user-certs", Body: bodyFile, Summary: "Issue an attestation-gated SSH user certificate"},
 	{Name: []string{"ssh", "revoke"}, Method: "POST", Path: "/api/v1/ssh/certificates/revoke", Body: bodyFile, Summary: "Revoke an SSH certificate and publish KRL status"},
 	{Name: []string{"ssh", "krl", "adopt"}, Method: "POST", Path: "/api/v1/ssh/krl/adoptions", Body: bodyFile, ContentType: "application/octet-stream", ExampleFile: "predecessor.krl", Summary: "Carry a predecessor control plane's binary KRL into this one so hosts can move to its list"},
+	{Name: []string{"ssh", "krl", "receipts"}, Method: "GET", Path: "/api/v1/ssh/krl/receipts", Summary: "Compare the served KRL with the signed KRL receipt each enrolled host agent reports"},
 	{Name: []string{"ssh", "retire-host"}, Method: "POST", Path: "/api/v1/ssh/hosts/retire", Body: bodyFile, Summary: "Record SSH host retirement evidence"},
 	{Name: []string{"broker", "agent-identities", "preview"}, Method: "POST", Path: "/api/v1/broker/agent-identities/preview", Body: bodyFile, ReadOnly: true, Summary: "Review exact agent scopes and lifetime without verifying proof or issuing"},
 	{Name: []string{"broker", "agent-identities", "list"}, Method: "GET", Path: "/api/v1/broker/agent-identities", Query: []string{"limit", "cursor", "q", "method", "state"}, Summary: "Read durable broker certificate history with server-owned expiry and lifecycle states"},

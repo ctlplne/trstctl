@@ -240,6 +240,11 @@
           "go_type": "*transport.ExecutorReport",
           "name": "executors",
           "presence": "optional"
+        },
+        {
+          "go_type": "*sshkrlreceipt.Report",
+          "name": "ssh_krl",
+          "presence": "optional"
         }
       ]
     },

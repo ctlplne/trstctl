@@ -10919,6 +10919,39 @@ SSHKRLAdoption = TypedDict(
 
 SSHKRLBinary = str
 
+SSHKRLFleet = TypedDict(
+    'SSHKRLFleet',
+    {
+        'hosts': list[dict[str, Any]],
+        'served': dict[str, Any],
+        'stale_after_seconds': int,
+        'summary': dict[str, Any],
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+SSHKRLHost = TypedDict(
+    'SSHKRLHost',
+    {
+        'agent': str,
+        'agent_id': str,
+        'checked_at': str,
+        'dropped': dict[str, Any],
+        'fetched_sha256': str,
+        'fetched_version': int,
+        'installed_at': str,
+        'installed_sha256': str,
+        'installed_version': int,
+        'outcome': str,
+        'poll_every_seconds': int,
+        'reported_at': str,
+        'signer_fingerprint': str,
+        'state': str,
+    },
+    total=False,
+)
+
 SSHRevokeCertificateRequest = TypedDict(
     'SSHRevokeCertificateRequest',
     {
