@@ -503,7 +503,7 @@ not this file.
 | `internal/crypto/sshkeys/property_test.go:114` | generator bounds the value to one byte (CWE-190) |
 | `internal/crypto/sshkeys/property_test.go:117` | generator bounds the value to 0..2 (CWE-190) |
 | `internal/crypto/tenantwrap/tenantwrap.go:238` | fixed-format buffer: a wrapped domain KEK has a fixed sealed length; an impossible oversize panics the slice bounds rather than truncating (CWE-190) |
-| `internal/crypto/weakkey/ec.go:187` | the baby-step index is below 2^16, so it fits a uint32 (CWE-190) |
+| `internal/crypto/weakkey/ec.go:198` | the baby-step index is below 2^16, so it fits a uint32 (CWE-190) |
 | `internal/crypto/weakkey/weakkey.go:398` | the sieve index is below 2^16, so it fits a uint64 (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
 | `internal/decommission/store/projection.go:180` | rejected values above MaxInt64 immediately above. |
@@ -587,7 +587,7 @@ not this file.
 | `internal/server/protocol_mounts.go:982` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:436` | value reduced modulo the shard count before conversion (CWE-190) |
-| `internal/server/run.go:225` | bounded small ints from config (CWE-190) |
+| `internal/server/run.go:229` | bounded small ints from config (CWE-190) |
 | `internal/server/secret_integrations_outbox.go:1051` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:1055` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
@@ -1105,7 +1105,7 @@ not this file.
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/signing/serve.go:199` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `internal/signing/serve.go:203` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:59` | deliberately widened so enforceExactSocketDirMode has something to tighten (CWE-276) |
 | `internal/signing/socket_mode_unix_test.go:206` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
@@ -1475,10 +1475,10 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/rekor.go:46` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/response_buffer_guard_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/run.go:554` | operator-configured public recovery kit (CWE-22) |
-| `internal/server/run.go:1091` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1275` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1678` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:558` | operator-configured public recovery kit (CWE-22) |
+| `internal/server/run.go:1095` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1279` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1682` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
@@ -1869,7 +1869,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:769` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
-| `internal/server/run.go:1091` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1095` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:44` | test-owned temp path |
 | `internal/server/secret_third_party_scan_signature_served_test.go:50` | test-owned temp path |
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |

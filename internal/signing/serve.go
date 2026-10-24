@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	signerpb "trstctl.com/trstctl/internal/signing/proto"
 )
@@ -94,6 +95,9 @@ func ServeServerMTLS(ctx context.Context, addr string, svc *Server, tlsCfg mtls.
 // creds is non-nil (mTLS) the transport is mutually authenticated and pinned. The
 // AN-7 bulkhead and message bounds are identical on both paths.
 func serveGRPC(ctx context.Context, ln net.Listener, svc *Server, opts ServeOptions, creds grpc.ServerOption) error {
+	// The signer certifies keys too (leaf, agent and ceremony paths); warm the
+	// weak-key checks' one-time tables off the request path.
+	go crypto.WarmWeakKeyChecks()
 	// AN-7 backpressure: bound concurrent expensive RPCs and reject the excess
 	// fast with RESOURCE_EXHAUSTED, so a flood of Sign/GenerateKey calls cannot
 	// exhaust the signer (SIGNER-001). MaxConcurrentStreams caps HTTP/2 streams

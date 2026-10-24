@@ -80,6 +80,12 @@ func possessionAlgorithm(alg Algorithm) bool {
 // weak-key checks flag (internal/crypto/weakkey). A post-quantum key (ML-DSA,
 // SLH-DSA, the hybrid) has no classical structure to test and passes; a
 // classical or unlabeled key that does not parse is refused.
+// WarmWeakKeyChecks prepares the structural weak-key checks so the first key a
+// process certifies does not pay their one-time setup (the EC small-scalar
+// tables). The control plane and the signer call it at startup, in the
+// background; calling it again is free.
+func WarmWeakKeyChecks() { weakkey.WarmECTables() }
+
 func RefuseWeakKey(pub PublicKey) error {
 	if len(pub.DER) == 0 {
 		return errors.New("crypto: no public key to check")

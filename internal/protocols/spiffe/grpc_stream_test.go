@@ -10,6 +10,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
 )
 
@@ -36,6 +38,9 @@ func (s *x509StreamProbe) Send(resp *workloadpb.X509SVIDResponse) error {
 
 func newX509StreamProbe(t *testing.T, ttl time.Duration) (*WorkloadAPIServer, *x509StreamProbe, context.CancelFunc) {
 	t.Helper()
+	// As the control plane does at startup: the first SVID must not include the
+	// weak-key check's one-time table build in the delivery deadline below.
+	crypto.WarmWeakKeyChecks()
 	ctx, cancel := context.WithCancel(t.Context())
 	ctx = metadata.NewIncomingContext(ctx, metadata.Pairs(SecurityHeaderKey, SecurityHeaderValue))
 	wl, err := New(Config{

@@ -87,6 +87,10 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	// failure log, for one) lands in the same structured stream at the configured
 	// level instead of the text handler at INFO.
 	slog.SetDefault(logger)
+	// Every certifying path runs the structural weak-key checks; build their
+	// one-time tables now, off the request path, so the first issuance after a
+	// start is not seconds slower than the rest.
+	go crypto.WarmWeakKeyChecks()
 	lic, err := loadConfiguredLicense(cfg, license.TrustedKeys())
 	if err != nil {
 		return fmt.Errorf("license: %w", err)

@@ -458,3 +458,22 @@ func TestCheckerRemembersVerdictsPerKey(t *testing.T) {
 		t.Fatal("Default returns a fresh checker each call, so nothing is remembered")
 	}
 }
+
+// Batch-11 close repair: the small-scalar check built a curve's baby-step table
+// on first use, which put seconds (under the race detector) on the first SVID a
+// process issued. WarmECTables builds every curve's table up front, and the
+// check then finds a small scalar from the warmed table.
+func TestWarmECTablesBuildsEveryCurveTable(t *testing.T) {
+	WarmECTables()
+	for _, c := range ecCurves {
+		if len(c.baby) == 0 || c.mx == nil || c.my == nil {
+			t.Fatalf("%s: table not built by WarmECTables", c.name)
+		}
+	}
+	WarmECTables() // a second call is free and safe
+	p256 := curveFor(ecCurves[1].params)
+	x, y := pointFor(t, p256, big.NewInt(77))
+	if s := p256.smallScalar(x, y); s != 77 {
+		t.Fatalf("small scalar from the warmed P-256 table = %d, want 77", s)
+	}
+}

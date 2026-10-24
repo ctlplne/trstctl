@@ -41,6 +41,17 @@ var ecCurves = []*ecCurve{
 	{name: "P-521", params: elliptic.P521().Params()},
 }
 
+// WarmECTables builds every curve's baby-step table now. The small-scalar check
+// builds a curve's table on first use, and that costs a few hundred
+// milliseconds per curve (seconds under the race detector); a process that
+// certifies keys calls this at startup so the first issuance does not pay for
+// it. It is safe to call concurrently and more than once.
+func WarmECTables() {
+	for _, c := range ecCurves {
+		c.table()
+	}
+}
+
 func curveFor(params *elliptic.CurveParams) *ecCurve {
 	for _, c := range ecCurves {
 		if c.params.Name == params.Name {
