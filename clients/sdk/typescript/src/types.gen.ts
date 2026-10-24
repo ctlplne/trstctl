@@ -10304,6 +10304,8 @@ export interface components {
             /** @enum {string} */
             key_exportable?: "" | "exportable" | "non_exportable";
             key_generated_by?: string;
+            /** @description A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held. */
+            key_observations?: components["schemas"]["CertificateKeyObservation"][];
             /** @enum {string} */
             key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
             /** @enum {string} */
@@ -10395,6 +10397,17 @@ export interface components {
             owner_id?: string;
             pem: string;
             source?: string;
+        };
+        CertificateKeyObservation: {
+            agent: string;
+            encrypted: boolean;
+            file_mode?: string;
+            /** Format: date-time */
+            first_observed: string;
+            key_format?: string;
+            /** Format: date-time */
+            last_observed: string;
+            path: string;
         };
         CertificateList: {
             items: components["schemas"]["Certificate"][];
@@ -16409,10 +16422,26 @@ export interface components {
         };
         SSHFleetInventory: {
             host_count: number;
+            host_trust: components["schemas"]["SSHHostTrustView"];
             hosts: components["schemas"]["SSHFleetHost"][];
             key_count: number;
             orphaned_key_count: number;
             standing_key_count: number;
+        };
+        SSHHostCertificate: {
+            ca_fingerprint?: string;
+            /** @enum {string} */
+            judgment: "tenant_ca" | "expiring" | "expired" | "not_yet_valid" | "other_ca" | "unverified" | "not_host" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+            key_fingerprint?: string;
+            key_id?: string;
+            path: string;
+            principals: string[];
+            /** Format: int64 */
+            serial?: number;
+            signature_verified: boolean;
+            valid_after?: string;
+            /** @description RFC 3339, or "forever" */
+            valid_before?: string;
         };
         SSHHostRetireRequest: {
             host: string;
@@ -16440,6 +16469,48 @@ export interface components {
             status: "retired";
             /** Format: uuid */
             tenant_id: string;
+        };
+        SSHHostTrust: {
+            agent: string;
+            agent_id: string;
+            authorized_keys_file: string[];
+            /** @enum {string} */
+            config_read: "read" | "missing" | "unreadable";
+            /** Format: date-time */
+            first_observed: string;
+            /** @enum {string} */
+            host_certificate: "tenant_ca" | "expiring" | "expired" | "not_yet_valid" | "other_ca" | "unverified" | "not_host" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+            host_certificates: components["schemas"]["SSHHostCertificate"][];
+            /** Format: int64 */
+            krl_version?: number;
+            /** Format: date-time */
+            last_observed: string;
+            match_blocks: number;
+            /** @enum {string} */
+            revocation_list: "served" | "not_served" | "key_list" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+            revoked_keys_sha256?: string;
+            sshd_config: string;
+            /** @enum {string} */
+            standing_keys: "off" | "on" | "missing" | "unreadable" | "relative_path" | "invalid";
+            trusted_ca_fingerprints: string[];
+            /** @enum {string} */
+            user_ca: "tenant_ca" | "tenant_ca_and_other" | "other_ca" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
+        };
+        SSHHostTrustSummary: {
+            enforces_served_krl: number;
+            hosts: number;
+            no_user_ca: number;
+            served_krl_sha256?: string;
+            standing_keys_on: number;
+            tenant_ca_configured: boolean;
+            tenant_ca_fingerprint?: string;
+            tenant_host_certificate: number;
+            trusts_other_ca_only: number;
+            trusts_tenant_ca: number;
+        };
+        SSHHostTrustView: {
+            hosts: components["schemas"]["SSHHostTrust"][];
+            summary: components["schemas"]["SSHHostTrustSummary"];
         };
         SSHKRLAdoption: {
             already_carried: boolean;

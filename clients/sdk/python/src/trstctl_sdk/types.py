@@ -3169,6 +3169,7 @@ Certificate = TypedDict(
         'key_algorithm': str,
         'key_exportable': str,
         'key_generated_by': str,
+        'key_observations': list[dict[str, Any]],
         'key_origin': str,
         'key_storage': str,
         'kubernetes_provenance': list[dict[str, Any]],
@@ -3273,6 +3274,20 @@ CertificateIngest = TypedDict(
         'owner_id': str,
         'pem': str,
         'source': str,
+    },
+    total=False,
+)
+
+CertificateKeyObservation = TypedDict(
+    'CertificateKeyObservation',
+    {
+        'agent': str,
+        'encrypted': bool,
+        'file_mode': str,
+        'first_observed': str,
+        'key_format': str,
+        'last_observed': str,
+        'path': str,
     },
     total=False,
 )
@@ -10883,10 +10898,28 @@ SSHFleetInventory = TypedDict(
     'SSHFleetInventory',
     {
         'host_count': int,
+        'host_trust': dict[str, Any],
         'hosts': list[dict[str, Any]],
         'key_count': int,
         'orphaned_key_count': int,
         'standing_key_count': int,
+    },
+    total=False,
+)
+
+SSHHostCertificate = TypedDict(
+    'SSHHostCertificate',
+    {
+        'ca_fingerprint': str,
+        'judgment': str,
+        'key_fingerprint': str,
+        'key_id': str,
+        'path': str,
+        'principals': list[str],
+        'serial': int,
+        'signature_verified': bool,
+        'valid_after': str,
+        'valid_before': str,
     },
     total=False,
 )
@@ -10915,6 +10948,55 @@ SSHHostRetirement = TypedDict(
         'source_id': str,
         'status': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+SSHHostTrust = TypedDict(
+    'SSHHostTrust',
+    {
+        'agent': str,
+        'agent_id': str,
+        'authorized_keys_file': list[str],
+        'config_read': str,
+        'first_observed': str,
+        'host_certificate': str,
+        'host_certificates': list[dict[str, Any]],
+        'krl_version': int,
+        'last_observed': str,
+        'match_blocks': int,
+        'revocation_list': str,
+        'revoked_keys_sha256': str,
+        'sshd_config': str,
+        'standing_keys': str,
+        'trusted_ca_fingerprints': list[str],
+        'user_ca': str,
+    },
+    total=False,
+)
+
+SSHHostTrustSummary = TypedDict(
+    'SSHHostTrustSummary',
+    {
+        'enforces_served_krl': int,
+        'hosts': int,
+        'no_user_ca': int,
+        'served_krl_sha256': str,
+        'standing_keys_on': int,
+        'tenant_ca_configured': bool,
+        'tenant_ca_fingerprint': str,
+        'tenant_host_certificate': int,
+        'trusts_other_ca_only': int,
+        'trusts_tenant_ca': int,
+    },
+    total=False,
+)
+
+SSHHostTrustView = TypedDict(
+    'SSHHostTrustView',
+    {
+        'hosts': list[dict[str, Any]],
+        'summary': dict[str, Any],
     },
     total=False,
 )
