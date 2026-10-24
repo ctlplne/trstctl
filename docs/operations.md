@@ -274,3 +274,10 @@ cursor checks only newly projected events on later starts, including events
 written after a binary rollback. If startup reports a public leaf or issuer
 signature mismatch, inspect the retained event and CA authority; do not insert
 an inventory row directly or reissue merely to clear the error.
+
+Dynamic PKI secrets issued before `ca.certificate.issued` version 3 kept only a
+responder serial. On the first lifecycle sweep after an upgrade, the control
+plane recovers each version-2 leaf the issuing CA signed into inventory, once,
+through a `ca.certificate.inventory_recovered` event, and logs how many it
+recovered and how many it could not verify. An unverifiable leaf stays serial
+evidence: the issuing CA may have changed since it was minted.

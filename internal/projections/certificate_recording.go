@@ -108,6 +108,14 @@ func CertificateRecordingMaterial(e events.Event) (store.Certificate, bool, erro
 		}
 		return store.Certificate{Fingerprint: p.Fingerprint, Source: "issued",
 			CertificateDER: p.CertificateDER, CertificatePEM: p.CertificatePEM}, true, nil
+	case EventCACertificateInventoryRecovered:
+		var p CACertificateInventoryRecovered
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return store.Certificate{}, true, err
+		}
+		return store.Certificate{Fingerprint: p.Fingerprint, Source: "issued",
+			CertificateDER: p.CertificateDER,
+			CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: p.CertificateDER})}, true, nil
 	case EventCertificateRecorded:
 		var p CertificateRecorded
 		if err := json.Unmarshal(e.Data, &p); err != nil {
@@ -237,6 +245,7 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 	issued := material.Source == "issued" && len(material.CertificateDER) > 0 && len(material.CertificatePEM) > 0 &&
 		((e.Type == EventCertificateRecorded && strings.HasPrefix(material.IssuanceIdempotencyKey, "issue:transition:")) ||
 			(e.Type == EventCAIssuedCertificate && schemaVersionOf(e) == CASecretInventorySchemaVersion) ||
+			e.Type == EventCACertificateInventoryRecovered ||
 			(e.Type == EventCAEndEntityIssued && (schemaVersionOf(e) == CAIssuedCertificateEvidenceSchemaVersion ||
 				schemaVersionOf(e) == CAEndEntityInventorySchemaVersion)))
 	return p.store.ApplyCertificateRecordingHeadTx(ctx, tx, e.TenantID, material.Fingerprint, e.ID, e.Sequence, issued)
@@ -249,7 +258,8 @@ func (p *Projector) applyCertificateOrderedEventTx(ctx context.Context, tx pgx.T
 // prelock rows before ApplyTx (revocation and migration updates) must also take
 // this fence at command entry. Unrelated events keep their own domain ordering.
 var certificateMetadataEventTypes = [...]string{
-	EventCertificateRecorded, EventCAEndEntityIssued, EventCAIssuedCertificate, EventEdgeIssuanceReconciled,
+	EventCertificateRecorded, EventCAEndEntityIssued, EventCAIssuedCertificate, EventCACertificateInventoryRecovered,
+	EventEdgeIssuanceReconciled,
 	EventCertificateCustodyAttested, EventCertificateRevoked, EventCertificateSuperseded,
 	EventCertificateReprotectionCutover,
 	EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,

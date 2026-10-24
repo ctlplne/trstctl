@@ -4258,12 +4258,16 @@ when off, requiring a KEK when on):
   unless its `issuance.server_side_keygen` receipt is durable. Both modes use the
   issuing CA in the out-of-process signer. New issuance events project the exact
   public leaf, subject-key custody, and responder serial together, returning the
-  inventory `certificate_id` for normal exact revocation. Historical version-2
-  responder-only PKI-secret events retain serial and public leaf evidence, while
-  version-1 events retain only a serial. Neither acquires an inferred inventory
-  ID on replay. Upgrades therefore do not yet make those older leaves available
-  to the inventory revocation workflow. This compatibility gap remains open;
-  missing historical subject-key custody is never guessed.
+  inventory `certificate_id` for normal exact revocation. A historical
+  version-2 PKI-secret event projected only its responder serial but retained
+  the public leaf: after an upgrade, the first lifecycle sweep checks that leaf
+  against the issuing CA's certificate and its serial against the CA ledger,
+  then appends one `ca.certificate.inventory_recovered` event, which projects
+  the inventory row a version-3 mint would have had, with subject-key custody
+  recorded as unknown (it is never guessed). The leaf is then revoked through
+  the normal inventory workflow. A leaf the issuing CA did not sign, or one
+  already in inventory, is left as it is. Version-1 events retain only a
+  serial and remain serial evidence.
 - Secret sharing (F60) backs effect-free, value-free `POST
   /api/v1/secrets/shares/preview`, reviewed idempotent creation at
   `POST /api/v1/secrets/shares`, and atomic `.../redeem`. The server-keyed review

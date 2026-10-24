@@ -26,3 +26,22 @@ func (s *Store) RecordIssuedCertEventTx(ctx context.Context, tx pgx.Tx, e events
 		e.TenantID, caID, serial, issuedAt.UTC(), e.ID, e.Type)
 	return err
 }
+
+// IssuedCertMint is the event a CA ledger serial row records as its mint.
+// EventID is empty for a row an older writer recorded without it.
+type IssuedCertMint struct {
+	EventID   string
+	EventType string
+}
+
+// IssuedCertEventTx reads the mint a CA ledger row binds a serial to.
+func (s *Store) IssuedCertEventTx(ctx context.Context, tx pgx.Tx, tenantID, caID, serial string) (IssuedCertMint, bool, error) {
+	var mint IssuedCertMint
+	err := tx.QueryRow(ctx, `SELECT COALESCE(issuance_event_id,''),COALESCE(issuance_event_type,'')
+		FROM ca_issued_certs WHERE tenant_id=$1 AND ca_id=$2 AND serial=$3`, tenantID, caID, serial).
+		Scan(&mint.EventID, &mint.EventType)
+	if IsNotFound(err) {
+		return IssuedCertMint{}, false, nil
+	}
+	return mint, err == nil, err
+}

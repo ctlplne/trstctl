@@ -14,13 +14,17 @@ import (
 )
 
 const (
-	EventCAIssuedCertificate                 = "ca.certificate.issued"
-	EventCAAuthorityImported                 = "ca.authority.imported"
-	EventCAAuthorityRekeyed                  = "ca.authority.rekeyed"
-	EventCAIntermediateCreated               = "ca.intermediate.created"
-	EventCAIntermediateCSRIssued             = "ca.intermediate_csr.issued"
-	EventCAEndEntityIssued                   = "ca.endentity.issued"
-	EventCACrossSigned                       = "ca.cross_signed"
+	EventCAIssuedCertificate     = "ca.certificate.issued"
+	EventCAAuthorityImported     = "ca.authority.imported"
+	EventCAAuthorityRekeyed      = "ca.authority.rekeyed"
+	EventCAIntermediateCreated   = "ca.intermediate.created"
+	EventCAIntermediateCSRIssued = "ca.intermediate_csr.issued"
+	EventCAEndEntityIssued       = "ca.endentity.issued"
+	EventCACrossSigned           = "ca.cross_signed"
+	// EventCACertificateInventoryRecovered gives a historical PKI-secret leaf
+	// the inventory row its v1/v2 mint never projected (A111). It is not a
+	// mint: the original event stays the issuance authority.
+	EventCACertificateInventoryRecovered     = "ca.certificate.inventory_recovered"
 	CAAuthorityCreatedEventSchemaVersion     = 2
 	CAIssuedCertificateEvidenceSchemaVersion = 2
 	CASecretInventorySchemaVersion           = 3
@@ -78,4 +82,11 @@ func LegacyManagedCAInventoryID(e eventspec.Event) string {
 // SecretPKIInventoryID binds one PKI-secret leaf to its immutable mint event.
 func SecretPKIInventoryID(e eventspec.Event) string {
 	return crypto.UUIDv5OID([]byte("secret-pki-inventory\x00" + e.TenantID + "\x00" + e.ID))
+}
+
+// RecoveredSecretPKIInventoryID is the inventory identity of a historical
+// PKI-secret leaf recovered later (A111): the identity its original mint
+// event would have had, so recovery never invents a second one.
+func RecoveredSecretPKIInventoryID(tenantID, originalEventID string) string {
+	return SecretPKIInventoryID(eventspec.Event{TenantID: tenantID, ID: originalEventID})
 }

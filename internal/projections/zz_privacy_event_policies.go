@@ -1634,6 +1634,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventCertificateSuperseded, 1}:                                             privacyPayloadShape[CertificateSuperseded](),
 		{EventCertificateReprotectionCutover, 1}:                                    privacyPayloadShape[CertificateReprotectionCutover](),
 		{EventCAIssuedCertificate, 1}:                                               privacyPayloadShape[privacyCAIssuedSerialV1](),
+		{EventCACertificateInventoryRecovered, 1}:                                   privacyPayloadShape[CACertificateInventoryRecovered](),
 		{EventCACertificateRevoked, 1}:                                              privacyPayloadShape[CACertificateRevoked](),
 		{EventCARootCreated, 1}: events.PrivacyPayloadShapeOneOf(
 			privacyPayloadShape[privacyLegacyCARootCreated](),

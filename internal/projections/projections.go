@@ -176,6 +176,7 @@ const (
 	EventCertificateSuperseded               = "certificate.superseded"
 	EventCertificateReprotectionCutover      = "certificate.reprotection_cutover"
 	EventCAIssuedCertificate                 = caevent.EventCAIssuedCertificate
+	EventCACertificateInventoryRecovered     = caevent.EventCACertificateInventoryRecovered
 	EventCACertificateRevoked                = "ca.certificate.revoked"
 	EventCACeremonyStarted                   = "ca.ceremony.started"
 	EventCACeremonyApproved                  = "ca.ceremony.approved"
@@ -1802,6 +1803,39 @@ type CASecretCertificateInventoried struct {
 	CAIssuedCertificate
 	IssuerCertificateDER []byte `json:"issuer_certificate_der"`
 	KeyOrigin            string `json:"key_origin"`
+}
+
+// CACertificateInventoryRecovered gives a historical PKI-secret leaf, minted
+// by a v1 or v2 ca.certificate.issued event that projected only its responder
+// serial, the inventory row a v3 mint would have had (A111). The server
+// appends it only after checking the leaf against that mint's CA and serial;
+// the projector checks the same facts again. Subject-key custody is unknown
+// and stays unknown: it is never inferred.
+type CACertificateInventoryRecovered struct {
+	OriginalEventID      string    `json:"original_event_id"`
+	CAID                 string    `json:"ca_id"`
+	Serial               string    `json:"serial"`
+	Fingerprint          string    `json:"fingerprint"`
+	CertificateDER       []byte    `json:"certificate_der"`
+	IssuerCertificateDER []byte    `json:"issuer_certificate_der"`
+	Evidence             string    `json:"evidence"`
+	RecoveredAt          time.Time `json:"recovered_at"`
+}
+
+// Where a recovered leaf came from.
+const (
+	// RecoveredFromRetainedLeaf: the v2 mint event retained the public leaf.
+	RecoveredFromRetainedLeaf = "retained_v2_leaf"
+	// RecoveredFromOperatorLeaf: the v1 mint kept only a serial, and an
+	// operator supplied the public leaf, which the CA's signature and the
+	// serial ledger confirm.
+	RecoveredFromOperatorLeaf = "operator_public_leaf"
+)
+
+// RecoveredSecretPKIInventoryID is the inventory ID of a recovered leaf: the
+// one its original mint event would have had.
+func RecoveredSecretPKIInventoryID(tenantID, originalEventID string) string {
+	return caevent.RecoveredSecretPKIInventoryID(tenantID, originalEventID)
 }
 
 // CACertificateRevoked is a responder-only revocation event. Reason is kept for
@@ -4348,6 +4382,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateSuperseded:                    {1: true},
 	EventCertificateReprotectionCutover:           {1: true},
 	EventCAIssuedCertificate:                      {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CASecretInventorySchemaVersion: true},
+	EventCACertificateInventoryRecovered:          {1: true},
 	EventCACertificateRevoked:                     {1: true},
 	EventCACeremonyStarted:                        {1: true},
 	EventCACeremonyApproved:                       {1: true},
@@ -5309,6 +5344,40 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			issuedAt = e.Time
 		}
 		return p.store.RecordIssuedCertEventTx(ctx, tx, e, pl.CAID, pl.Serial, issuedAt)
+	case EventCACertificateInventoryRecovered:
+		var pl CACertificateInventoryRecovered
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		info, err := certinfo.Inspect(pl.CertificateDER)
+		if err != nil {
+			return fmt.Errorf("projections: recovered PKI secret leaf: %w", err)
+		}
+		if pl.OriginalEventID == "" || len(pl.OriginalEventID) > 128 || e.ID == "" || pl.CAID == "" || info.IsCA ||
+			pl.Serial != info.SerialNumber || pl.Fingerprint != info.SHA256Fingerprint ||
+			(pl.Evidence != RecoveredFromRetainedLeaf && pl.Evidence != RecoveredFromOperatorLeaf) ||
+			cryptoboundary.VerifyLeafSignedByCA(pl.CertificateDER, pl.IssuerCertificateDER) != nil {
+			return errors.New("projections: recovered PKI secret leaf differs from its exact issuer evidence")
+		}
+		// The original mint put this serial in the CA ledger; recovery adds
+		// no serial, and binds to that mint when the ledger recorded it.
+		mint, found, err := p.store.IssuedCertEventTx(ctx, tx, e.TenantID, pl.CAID, pl.Serial)
+		if err != nil {
+			return err
+		}
+		if !found || (mint.EventID != "" && mint.EventID != pl.OriginalEventID) {
+			return errors.New("projections: recovered PKI secret leaf has no matching mint in the CA ledger")
+		}
+		notBefore, notAfter := info.NotBefore, info.NotAfter
+		return p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
+			ID: RecoveredSecretPKIInventoryID(e.TenantID, pl.OriginalEventID), TenantID: e.TenantID, CAID: pl.CAID,
+			Subject: info.Subject, SANs: certificateInfoSANs(info), Issuer: info.Issuer,
+			Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: info.KeyAlgorithm,
+			NotBefore: &notBefore, NotAfter: &notAfter, Source: "issued",
+			CertificateDER: pl.CertificateDER,
+			CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pl.CertificateDER}),
+			CreatedAt:      e.Time,
+		})
 	case EventCAEndEntityIssued:
 		legacyManagedLeaf, err := LegacyManagedCALeafEvidence(e)
 		if err != nil {

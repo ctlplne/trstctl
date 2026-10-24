@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -727,10 +728,13 @@ type Server struct {
 	signerTopology string
 	caSigner       crypto.DigestSigner // a *signing.RemoteSigner — the CA key lives in the signer
 	caCertDER      []byte
-	caHierarchy    *caHierarchyService
-	ocspSigner     crypto.DigestSigner
-	signAuthz      signing.SignTokenProvider
-	signTO         time.Duration
+	// pkiSecretRecoveryDone is set once a sweep recovered every historical
+	// PKI-secret leaf it could verify (A111).
+	pkiSecretRecoveryDone atomic.Bool
+	caHierarchy           *caHierarchyService
+	ocspSigner            crypto.DigestSigner
+	signAuthz             signing.SignTokenProvider
+	signTO                time.Duration
 
 	// Served agent steady-state channel (WIRE-004 / OPS-005): the agent CA key lives
 	// in the signer (agentCASigner, AN-4) and is STABLE across restarts (a fixed
@@ -3835,6 +3839,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 		return queued, err
 	}
 	s.runRiskAcceptanceExpiryOnce(ctx, now)
+	s.runPKISecretInventoryRecoveryOnce(ctx)
 	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, ariDiscoveryErr)
 	return queued, ariDiscoveryErr
 }
