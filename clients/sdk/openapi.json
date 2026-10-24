@@ -24388,6 +24388,94 @@
         ],
         "type": "object"
       },
+      "NHIStaleHandoffItem": {
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "finding_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "from_owner_id": {
+            "type": "string"
+          },
+          "from_owner_status": {
+            "type": "string"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "display_name",
+          "kind",
+          "from_owner_status",
+          "finding_types"
+        ],
+        "type": "object"
+      },
+      "NHIStaleHandoffRequest": {
+        "properties": {
+          "inventory_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "inventory_ids",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "NHIStaleHandoffResult": {
+        "properties": {
+          "assigned_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "assigned_by": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NHIStaleHandoffItem"
+            },
+            "type": "array"
+          },
+          "notice_queued": {
+            "type": "boolean"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_id",
+          "items",
+          "assigned_by",
+          "assigned_at",
+          "notice_queued"
+        ],
+        "type": "object"
+      },
       "NHIStalePosture": {
         "properties": {
           "capability": {
@@ -57244,6 +57332,74 @@
         ],
         "summary": "List stale, unused, orphaned, and dormant NHI posture findings",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/stale/handoff": {
+      "post": {
+        "operationId": "handOffStaleNHIs",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIStaleHandoffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIStaleHandoffResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Hand stale NHIs to a new accountable owner and notify them",
+        "x-trstctl-permission": "owners:write"
       }
     },
     "/api/v1/nhi/posture/static-credentials": {

@@ -286,8 +286,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A95's five provider-access operations raised it to 519, mapped onto the access row.
 	// eMudhra Part 4's distrusted-root removal raised it to 520, mapped onto the discovery row.
 	// A100's NHI posture automation plan raised it to 521, mapped onto the credential-risk row.
-	if len(out) != 521 {
-		t.Fatalf("OpenAPI operationIds = %d, want 521", len(out))
+	// A101's stale NHI handoff raised it to 522, mapped onto the same row.
+	if len(out) != 522 {
+		t.Fatalf("OpenAPI operationIds = %d, want 522", len(out))
 	}
 	return out
 }

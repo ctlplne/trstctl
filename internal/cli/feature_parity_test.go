@@ -323,8 +323,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A95's five `provider-access` commands raised it to 573, mapped onto the access row.
 	// eMudhra Part 4's `discovery findings remove-distrusted-root` raised it to 574, mapped onto the discovery row.
 	// A100's `nhi posture automation` raised it to 575, mapped onto the credential-risk row.
-	if len(out) != 575 {
-		t.Fatalf("CLI commands = %d, want 575", len(out))
+	// A101's `nhi posture stale handoff` raised it to 576, mapped onto the same row.
+	if len(out) != 576 {
+		t.Fatalf("CLI commands = %d, want 576", len(out))
 	}
 	return out
 }

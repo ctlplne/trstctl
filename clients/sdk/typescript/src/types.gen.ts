@@ -4799,6 +4799,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/stale/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hand stale NHIs to a new accountable owner and notify them */
+        post: operations["handOffStaleNHIs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/static-credentials": {
         parameters: {
             query?: never;
@@ -14108,6 +14125,29 @@ export interface components {
             severity: "critical" | "high" | "medium" | "low";
             source: string;
             status: string;
+        };
+        NHIStaleHandoffItem: {
+            display_name: string;
+            finding_types: string[];
+            from_owner_id?: string;
+            from_owner_status: string;
+            inventory_id: string;
+            kind: string;
+        };
+        NHIStaleHandoffRequest: {
+            inventory_ids: string[];
+            /** Format: uuid */
+            owner_id: string;
+            reason: string;
+        };
+        NHIStaleHandoffResult: {
+            /** Format: date-time */
+            assigned_at: string;
+            assigned_by: string;
+            items: components["schemas"]["NHIStaleHandoffItem"][];
+            notice_queued: boolean;
+            /** Format: uuid */
+            owner_id: string;
         };
         NHIStalePosture: {
             capability: string;
@@ -31085,6 +31125,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIStalePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    handOffStaleNHIs: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIStaleHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIStaleHandoffResult"];
                 };
             };
             /** @description client error */

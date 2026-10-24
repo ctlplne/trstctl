@@ -249,6 +249,25 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 		})
 	}
 
+	// An ownership assignment (POST /api/v1/ownership/assignments, or a stale
+	// NHI handoff) names the accountable owner of a record whatever its source
+	// (A101). Identity and certificate rows already carry it through their own
+	// projection; a finding, API-token or agent row has no owner column, so
+	// without this it stayed orphaned after the handoff.
+	assignments, err := a.store.ListOwnershipAssignments(ctx, tenantID)
+	if err != nil {
+		return out, err
+	}
+	assigned := make(map[string]string, len(assignments))
+	for _, assignment := range assignments {
+		assigned[assignment.InventoryID] = assignment.OwnerID
+	}
+	for i := range out.Items {
+		if owner := assigned[out.Items[i].ID]; owner != "" {
+			out.Items[i].OwnerID = owner
+		}
+	}
+
 	sort.Slice(out.Items, func(i, j int) bool {
 		a, b := out.Items[i], out.Items[j]
 		if a.Kind != b.Kind {

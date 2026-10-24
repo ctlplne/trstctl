@@ -2704,6 +2704,17 @@ func componentSchemas() map[string]*Schema {
 		"summary":      ref("NHIExposureSummary"),
 		"findings":     {Type: "array", Items: ref("NHIExposureFinding")},
 	}, "capability", "generated_at", "coverage", "summary", "findings")
+	nhiStaleHandoffRequest := object(map[string]*Schema{
+		"owner_id": uuid(), "inventory_ids": {Type: "array", Items: str()}, "reason": str(),
+	}, "owner_id", "inventory_ids", "reason")
+	nhiStaleHandoffItem := object(map[string]*Schema{
+		"inventory_id": str(), "display_name": str(), "kind": str(), "from_owner_id": str(),
+		"from_owner_status": str(), "finding_types": {Type: "array", Items: str()},
+	}, "inventory_id", "display_name", "kind", "from_owner_status", "finding_types")
+	nhiStaleHandoffResult := object(map[string]*Schema{
+		"owner_id": uuid(), "items": {Type: "array", Items: ref("NHIStaleHandoffItem")},
+		"assigned_by": str(), "assigned_at": timestamp(), "notice_queued": {Type: "boolean"},
+	}, "owner_id", "items", "assigned_by", "assigned_at", "notice_queued")
 	nhiPostureAutomationSummary := object(map[string]*Schema{
 		"violations": {Type: "integer"}, "revoke": {Type: "integer"}, "right_size": {Type: "integer"},
 		"report_only": {Type: "integer"}, "not_applicable": {Type: "integer"},
@@ -6942,6 +6953,9 @@ func componentSchemas() map[string]*Schema {
 		"NHIExposureSummary":                       nhiExposureSummary,
 		"NHIExposureFinding":                       nhiExposureFinding,
 		"NHIExposurePosture":                       nhiExposurePosture,
+		"NHIStaleHandoffRequest":                   nhiStaleHandoffRequest,
+		"NHIStaleHandoffItem":                      nhiStaleHandoffItem,
+		"NHIStaleHandoffResult":                    nhiStaleHandoffResult,
 		"NHIPostureAutomationSummary":              nhiPostureAutomationSummary,
 		"NHIPostureAutomationRun":                  nhiPostureAutomationRun,
 		"NHIPostureAutomationItem":                 nhiPostureAutomationItem,

@@ -117,6 +117,7 @@ const (
 	// stale, nearing expiry, unreachable, or invalid.
 	KindRevocationHealth          = "revocation.health"
 	KindOwnershipReattestation    = "ownership.reattestation_requested"
+	KindOwnershipHandoff          = "ownership.handoff"
 	KindRestoreDrillFailed        = "backup.restore_drill_failed"
 	KindRestoreDrillSkipped       = "backup.restore_drill_skipped"
 	KindRestoreDrillObjective     = "backup.restore_drill_objective_breached"

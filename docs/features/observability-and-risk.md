@@ -83,6 +83,12 @@ exposure route is read-only and never echoes credential values. For example,
 `trstctl-cli nhi posture stale` reports each stale credential's activity age, owner
 status, severity, and remediation.
 
+A stale NHI can be handed to a new accountable owner with
+`POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):
+the ownership assignment, which the inventory honors for every source, so the row is no
+longer orphaned, the previous owner kept in the response, and an `ownership.handoff`
+notice to the new owner to reattest what is still in use and retire the rest.
+
 These routes report; they do not act. Acting is opt-in through the tenant's lifecycle
 policy module: an `nhi_posture` rule may ask the scheduler to revoke a managed identity
 or right-size its usage-backed unused grants (CAP-POST-06, see

@@ -1300,8 +1300,12 @@ never live in the API process. What you can do end to end against the running bi
     evidence are not classified as excessive scope.
   - Stale (`GET /api/v1/nhi/posture/stale`): stale/dormant activity, unused
     credentials, and orphaned records; finding-backed rows hand off to
-    revocation/decommission/remediation, but owner reassignment stays an
-    operator workflow.
+    revocation/decommission/remediation, and
+    `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale
+    handoff`) hands up to 100 rows to a new accountable owner in one step: the
+    ownership assignment, each row's previous owner and owner status in the
+    response, and an `ownership.handoff` notice to the new owner and their
+    escalation chain on the ownership notification channel.
   - Static credentials (`GET /api/v1/nhi/posture/static-credentials`):
     long-lived credentials, static lifecycle markers, no-expiry credentials,
     and overdue rotation age; managed rows can start the served
@@ -2832,6 +2836,9 @@ than sending an operator looking for a credential that was never there.
   native identities or certificates, the lifecycle `owner_id` in one transaction.
   A cold replay reconstructs both. An asset-specific decision wins over older native
   or imported owner hints; its event ID stays visible as exact attribution evidence.
+  The NHI inventory and every NHI posture route honor the assignment for every
+  source, so a reassigned discovery finding, API token or agent is no longer reported
+  orphaned.
 - Ownership provenance and CMDB reconcile (I2): owners record WHERE an ownership
   claim came from — `ownership_source` (unset / `manual` / `csv-import` / `cmdb`),
   `ownership_source_ref`, `ownership_source_observed_at`. All three are nullable

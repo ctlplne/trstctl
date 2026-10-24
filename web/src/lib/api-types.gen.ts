@@ -5886,6 +5886,29 @@ export interface NHIStaleFinding {
   status: string;
 }
 
+export interface NHIStaleHandoffItem {
+  display_name: string;
+  finding_types: string[];
+  from_owner_id?: string;
+  from_owner_status: string;
+  inventory_id: string;
+  kind: string;
+}
+
+export interface NHIStaleHandoffRequest {
+  inventory_ids: string[];
+  owner_id: string;
+  reason: string;
+}
+
+export interface NHIStaleHandoffResult {
+  assigned_at: string;
+  assigned_by: string;
+  items: NHIStaleHandoffItem[];
+  notice_queued: boolean;
+  owner_id: string;
+}
+
 export interface NHIStalePosture {
   capability: string;
   coverage: string[];

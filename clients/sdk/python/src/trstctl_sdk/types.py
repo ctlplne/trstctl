@@ -8104,6 +8104,41 @@ NHIStaleFinding = TypedDict(
     total=False,
 )
 
+NHIStaleHandoffItem = TypedDict(
+    'NHIStaleHandoffItem',
+    {
+        'display_name': str,
+        'finding_types': list[str],
+        'from_owner_id': str,
+        'from_owner_status': str,
+        'inventory_id': str,
+        'kind': str,
+    },
+    total=False,
+)
+
+NHIStaleHandoffRequest = TypedDict(
+    'NHIStaleHandoffRequest',
+    {
+        'inventory_ids': list[str],
+        'owner_id': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+NHIStaleHandoffResult = TypedDict(
+    'NHIStaleHandoffResult',
+    {
+        'assigned_at': str,
+        'assigned_by': str,
+        'items': list[dict[str, Any]],
+        'notice_queued': bool,
+        'owner_id': str,
+    },
+    total=False,
+)
+
 NHIStalePosture = TypedDict(
     'NHIStalePosture',
     {
