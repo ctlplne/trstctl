@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 var (
@@ -57,6 +58,11 @@ type ExternalCAIssueRequest struct {
 	TTLSeconds    int64
 	ProfileName   string
 	RequestedEKUs []string
+	// KeyOrigin is the custody origin of the CSR's key, stated by the caller
+	// that built this request: the served route sets requester (it takes only
+	// the caller's CSR); a control-plane caller records its own custody and
+	// leaves it empty. It is never decoded from a client (A121).
+	KeyOrigin string
 }
 
 type externalCAIssueJSON struct {
@@ -127,6 +133,7 @@ func (a *API) issueExternalCA(w http.ResponseWriter, r *http.Request) {
 	request := ExternalCAIssueRequest{
 		CSRDER: append([]byte(nil), block.Bytes...), DNSNames: dnsNames,
 		TTLSeconds: wire.TTLSeconds, ProfileName: strings.TrimSpace(wire.ProfileName), RequestedEKUs: requestedEKUs,
+		KeyOrigin: string(custody.OriginRequester),
 	}
 	defer secret.Wipe(request.CSRDER)
 	principal, err := requestPrincipalSubject(r.Context())

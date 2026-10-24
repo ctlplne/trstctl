@@ -146,6 +146,9 @@ type ExternalIssuePayload struct {
 	Protocol               string   `json:"protocol,omitempty"`
 	RequestedEKUs          []string `json:"requested_ekus,omitempty"`
 	RequestBinding         string   `json:"request_binding"`
+	// KeyOrigin travels with the queued intent so a crash-recovered issue
+	// records the custody its caller stated (A121); older intents carry none.
+	KeyOrigin string `json:"key_origin,omitempty"`
 }
 
 func externalIssueResultKey(idempotencyKey string) string {
@@ -177,6 +180,7 @@ func newExternalIssuePayload(authorityID string, req IssueRequest) ExternalIssue
 		Protocol:               req.Protocol,
 		RequestedEKUs:          append([]string(nil), req.RequestedEKUs...),
 		RequestBinding:         req.RequestBinding,
+		KeyOrigin:              req.KeyOrigin,
 	}
 }
 
@@ -191,6 +195,7 @@ func (p ExternalIssuePayload) IssueRequest() IssueRequest {
 		Protocol:               p.Protocol,
 		RequestedEKUs:          append([]string(nil), p.RequestedEKUs...),
 		RequestBinding:         p.RequestBinding,
+		KeyOrigin:              p.KeyOrigin,
 	}
 }
 
@@ -262,7 +267,7 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	}
 	// Cache the returned provider result before local recording. A projection
 	// failure can then replay this exact certificate without signing again.
-	if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, cert); err != nil {
+	if err := s.record(ctx, req.TenantID, idempotencyKey, req.RequestBinding, req.KeyOrigin, cert); err != nil {
 		return Certificate{}, err
 	}
 	if err := s.recordDependentOnce(ctx, req, idempotencyKey, cert); err != nil {
@@ -458,7 +463,7 @@ func (s *IssuanceService) DeliverExternalIssue(ctx context.Context, m orchestrat
 	// The upstream effect is complete once its exact response is durably
 	// cached. Recording can now retry locally without calling the CA again.
 	// No served response is successful until recording/notification commits.
-	if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, cert); err != nil {
+	if err := s.record(ctx, m.TenantID, m.IdempotencyKey, req.RequestBinding, req.KeyOrigin, cert); err != nil {
 		return safeExternalIssueError("external_ca_record_failed", "external CA certificate recording failed", err)
 	}
 	if err := s.recordDependentOnce(ctx, req, m.IdempotencyKey, cert); err != nil {
@@ -661,7 +666,7 @@ func (s *IssuanceService) auditDecision(ctx context.Context, req IssueRequest, v
 // record appends the public issued-certificate fact and projects inventory before
 // writing the downstream ca.issue notification. The event is the reconstructable
 // source of truth (AN-2); idempotency_keys is only a bounded response cache.
-func (s *IssuanceService) record(ctx context.Context, tenantID, key, requestBinding string, cert Certificate) error {
+func (s *IssuanceService) record(ctx context.Context, tenantID, key, requestBinding, keyOrigin string, cert Certificate) error {
 	if s.log != nil {
 		info, err := certinfo.Inspect(cert.CertificatePEM)
 		if err != nil {
@@ -694,6 +699,7 @@ func (s *IssuanceService) record(ctx context.Context, tenantID, key, requestBind
 			CertificatePEM:         append([]byte(nil), cert.CertificatePEM...),
 			IssuanceResponse:       issuanceResponse,
 			IssuanceIdempotencyKey: key, IssuanceRequestBinding: requestBinding,
+			KeyOrigin: keyOrigin,
 		})
 		if err != nil {
 			return err

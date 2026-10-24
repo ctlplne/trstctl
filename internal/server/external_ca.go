@@ -318,6 +318,9 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		Protocol:       "api",
 		RequestedEKUs:  req.RequestedEKUs,
 		RequestBinding: requestBinding,
+		// The caller states the CSR key's origin (the served route: requester);
+		// a control-plane caller leaves it empty and records its own (A121).
+		KeyOrigin: req.KeyOrigin,
 	}, idempotencyKey+":external-ca:"+id)
 	if err != nil {
 		if errors.Is(err, store.ErrIdempotencyConflict) || errors.Is(err, orchestrator.ErrIdempotencyConflict) {

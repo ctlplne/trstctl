@@ -42,6 +42,12 @@ type IssueRequest struct {
 	// it after response/outbox GC so a reused raw key cannot change authority,
 	// caller, CSR, names, profile, or lifetime.
 	RequestBinding string
+
+	// KeyOrigin is the custody origin (internal/custody vocabulary) of the
+	// CSR's key as the caller knows it, recorded on the issued certificate
+	// (A121). The service itself never generates a subject key; empty leaves
+	// custody unrecorded.
+	KeyOrigin string
 }
 
 // Certificate is an issued certificate (the leaf followed by its chain, PEM).

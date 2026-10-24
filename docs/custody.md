@@ -82,8 +82,10 @@ silently counted as a complete custody record.
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
 | Direct attested X.509-SVID | The requesting workload | Not established by the attestation request | No — only the public key travels up |
 
-ACME, EST simple enrollment, SCEP, CMP, and direct attested issuance record
-`key_origin=requester` through `certificate.recorded`. They leave storage,
+ACME, EST simple enrollment, SCEP, CMP, direct attested issuance, and a
+certificate ordered through an external CA (`POST /api/v1/external-cas/{id}/issue`
+takes only the caller's CSR; A121) record `key_origin=requester` through
+`certificate.recorded`. They leave storage,
 exportability, and the named key generator unrecorded: receiving a CSR or valid
 workload proof does not establish those facts. The detail describes this issuance;
 it does not attest the key's entire history. EST server key generation uses a
