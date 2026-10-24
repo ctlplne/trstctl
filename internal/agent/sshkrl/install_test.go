@@ -71,7 +71,7 @@ func installerWith(t *testing.T, installed []byte) Config {
 	t.Helper()
 	dir := t.TempDir()
 	target := filepath.Join(dir, "revoked_keys")
-	if err := os.WriteFile(target, installed, 0o644); err != nil { // #nosec G306 -- a public KRL fixture under t.TempDir; sshd lists are world-readable
+	if err := os.WriteFile(target, installed, 0o644); err != nil { // #nosec G306 G703 -- a public KRL fixture (committed testdata bytes) written under t.TempDir; sshd lists are world-readable
 		t.Fatal(err)
 	}
 	return Config{TargetPath: target, SSHDConfigPath: filepath.Join(dir, "sshd_config"), RollbackDir: filepath.Join(dir, "rollbacks"), Checks: &fakeChecks{activePath: target}}
@@ -95,6 +95,28 @@ func applyList(t *testing.T, cfg Config, next []byte) error {
 		t.Fatal("accepted list is not the installed one")
 	}
 	return err
+}
+
+// B12-R1: a host prepared with the empty list stock `ssh-keygen -k` writes
+// (version 0) takes the control plane's list while that plane has revoked
+// nothing (also version 0, other header bytes), so a new host reports current
+// before the first revocation. A same-version list over one that revokes
+// something is still refused.
+func TestApplyReplacesTheEmptyBootstrapListAtTheSameVersion(t *testing.T) {
+	stock, err := os.ReadFile(filepath.Join("testdata", "ssh-keygen-empty.krl")) // #nosec G304 -- committed test fixture
+	if err != nil {
+		t.Fatal(err)
+	}
+	served := krlFixture(0)
+	if version, err := Version(stock); err != nil || version != 0 || bytes.Equal(stock, served) {
+		t.Fatalf("fixture: version %d, err %v, same bytes %v", version, err, bytes.Equal(stock, served))
+	}
+	if err := applyList(t, installerWith(t, stock), served); err != nil {
+		t.Fatalf("the empty bootstrap list refused the control plane's empty list: %v", err)
+	}
+	if err := applyList(t, installerWith(t, krlFixture(0, 5)), served); !errors.Is(err, ErrNotNewer) {
+		t.Fatalf("a same-version list replaced one that revokes serial 5: %v", err)
+	}
 }
 
 // A110: a newer list that stops revoking something this host revokes is

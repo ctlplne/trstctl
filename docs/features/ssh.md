@@ -285,7 +285,10 @@ Use a separate approval workflow if your policy requires two people.
   the download. A restored or replacement control plane counts its own KRL
   versions, so the agent compares what the lists revoke as well as their
   versions: it refuses a list whose version does not advance the installed
-  one, and it refuses any list, however new, that would stop revoking a
+  one (except that a list revoking nothing, such as the empty one
+  `ssh-keygen -k` writes when a host is prepared, yields to a list of the
+  same version, so a new host reads current before the first revocation),
+  and it refuses any list, however new, that would stop revoking a
   serial, key ID, key, or key hash the installed list revokes (a revocation
   for any CA keeps one scoped to a single CA). The installed list stays in
   force and the refusal counts what the served list would drop. To move hosts

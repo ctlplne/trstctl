@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1701 annotated sites across 26 rules. Each row is
+1702 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1046,7 +1046,7 @@ not this file.
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:28` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:26` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/agent/sshkrl/install_test.go:228` | intentionally unsafe rollback-directory fixture must be rejected |
+| `internal/agent/sshkrl/install_test.go:250` | intentionally unsafe rollback-directory fixture must be rejected |
 | `internal/api/machine_sessions_served_test.go:57` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/api/openapi_golden_test.go:59` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/api/vault_compat_contract_test.go:246` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1133,7 +1133,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (480 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (481 sites)
 
 | Location | Reason |
 |---|---|
@@ -1300,10 +1300,11 @@ not this file.
 | `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:119` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:143` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
-| `internal/agent/sshkrl/install.go:293` | read only the derived predecessor in the checked private rollback directory |
-| `internal/agent/sshkrl/install.go:327` | syncs only the validated target or private rollback directory |
+| `internal/agent/sshkrl/install.go:304` | read only the derived predecessor in the checked private rollback directory |
+| `internal/agent/sshkrl/install.go:338` | syncs only the validated target or private rollback directory |
 | `internal/agent/sshkrl/install_test.go:29` | test fixture path created under t.TempDir |
-| `internal/agent/sshkrl/install_test.go:239` | test fixture path under t.TempDir |
+| `internal/agent/sshkrl/install_test.go:106` | committed test fixture |
+| `internal/agent/sshkrl/install_test.go:261` | test fixture path under t.TempDir |
 | `internal/agent/sshkrl/revocations_test.go:19` | committed test fixture |
 | `internal/agent/sshkrl/revocations_test.go:102` | test-created path under t.TempDir |
 | `internal/agent/sshtrust/sshd_live_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1653,7 +1654,7 @@ not this file.
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:29` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshkrl/install_test.go:62` | public KRL fixture checks that mode is preserved |
-| `internal/agent/sshkrl/install_test.go:74` | a public KRL fixture under t.TempDir; sshd lists are world-readable |
+| `internal/agent/sshkrl/install_test.go:74` | a public KRL fixture (committed testdata bytes) written under t.TempDir; sshd lists are world-readable |
 | `internal/agent/transport/regen_schema_test.go:43` | committed wire contract fixture, reviewed in the diff (CWE-276) |
 | `internal/api/openapi_golden_test.go:62` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/api/vault_compat_contract_test.go:249` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1829,7 +1830,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (90 sites)
+### G703 — CWE-22 Path traversal (taint) (91 sites)
 
 | Location | Reason |
 |---|---|
@@ -1847,11 +1848,12 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:223` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:254` | derived agent-owned state path |
 | `internal/agent/relay/hostrollback.go:939` | both paths are inside the validated agent-local state directory (CWE-22) |
-| `internal/agent/sshkrl/install.go:268` | staged path is created in the bound target directory by CreateTemp |
-| `internal/agent/sshkrl/install.go:269` | target is an absolute operator path bound to sshd's effective RevokedKeys path |
-| `internal/agent/sshkrl/install.go:288` | path is a derived predecessor name inside the checked private rollback directory |
-| `internal/agent/sshkrl/install.go:293` | read only the derived predecessor in the checked private rollback directory |
-| `internal/agent/sshkrl/install.go:317` | target is a derived predecessor name inside the checked private rollback directory |
+| `internal/agent/sshkrl/install.go:279` | staged path is created in the bound target directory by CreateTemp |
+| `internal/agent/sshkrl/install.go:280` | target is an absolute operator path bound to sshd's effective RevokedKeys path |
+| `internal/agent/sshkrl/install.go:299` | path is a derived predecessor name inside the checked private rollback directory |
+| `internal/agent/sshkrl/install.go:304` | read only the derived predecessor in the checked private rollback directory |
+| `internal/agent/sshkrl/install.go:328` | target is a derived predecessor name inside the checked private rollback directory |
+| `internal/agent/sshkrl/install_test.go:74` | a public KRL fixture (committed testdata bytes) written under t.TempDir; sshd lists are world-readable |
 | `internal/agent/sshtrust/sshd_live_test.go:115` | temp file beside the harness-owned sshd config in a test dir (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:131` | atomic replace of the harness-owned sshd config in a test dir (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |

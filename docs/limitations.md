@@ -3142,7 +3142,10 @@ than sending an operator looking for a credential that was never there.
   deadline, and an opted-in host retains its installed list and retries.
   Control-plane health alone does not prove KRL or audit-read readiness during
   startup. A host agent refuses a KRL whose version does not advance its
-  installed one, and refuses any KRL, whatever its version, that would stop
+  installed one (a list that revokes nothing, such as the empty one
+  `ssh-keygen -k` writes when a host is prepared, yields to a list of the same
+  version, so a new host reads current before the first revocation), and
+  refuses any KRL, whatever its version, that would stop
   revoking a serial, key ID, key, or key hash the installed list revokes, so a
   restored or replacement control plane, which counts its own versions, cannot
   silently un-revoke anything on a host; before this guard a newer list that

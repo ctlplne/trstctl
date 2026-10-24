@@ -402,6 +402,18 @@ func (r Revocations) Dropped(installed Revocations) DropError {
 // Empty reports whether nothing is dropped.
 func (e *DropError) Empty() bool { return *e == DropError{} }
 
+// RevokesNothing reports whether the list revokes no certificate serial, key
+// ID, key, or key hash for any CA: the empty list `ssh-keygen -k` writes when
+// a host is prepared, or a control plane's list before its first revocation.
+func (r Revocations) RevokesNothing() bool {
+	for _, scope := range r.certs {
+		if len(scope.serials) > 0 || len(scope.keyIDs) > 0 {
+			return false
+		}
+	}
+	return len(r.keys) == 0 && len(r.sha1) == 0 && len(r.sha256) == 0
+}
+
 func hasKey(scope *certRevocations, id string) bool {
 	if scope == nil {
 		return false

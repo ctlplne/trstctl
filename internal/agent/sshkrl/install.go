@@ -120,7 +120,7 @@ func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) 
 	if err := cfg.Checks.ValidateKRL(ctx, cfg.TargetPath); err != nil {
 		return Result{}, fmt.Errorf("sshkrl: predecessor failed OpenSSH validation: %w", err)
 	}
-	if nextVersion < previousVersion || (nextVersion == previousVersion && !bytes.Equal(previous, next)) {
+	if nextVersion < previousVersion || (nextVersion == previousVersion && !bytes.Equal(previous, next) && !revokesNothing(previous)) {
 		return Result{}, fmt.Errorf("%w: refusing KRL version %d over installed version %d", ErrNotNewer, nextVersion, previousVersion)
 	}
 	if !bytes.Equal(previous, next) {
@@ -167,6 +167,17 @@ func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) 
 	}
 	result.Changed = true
 	return result, nil
+}
+
+// revokesNothing reports whether the installed list revokes nothing at all
+// (B12-R1). A host is prepared with the empty list `ssh-keygen -k` writes, at
+// version 0, and a control plane that has revoked nothing serves version 0
+// too, with other bytes (its own header). Replacing a list that revokes
+// nothing cannot stop revoking anything, so it yields to a list of the same
+// version; a list that revokes something still needs a newer version.
+func revokesNothing(installed []byte) bool {
+	have, err := ParseRevocations(installed)
+	return err == nil && have.RevokesNothing()
 }
 
 // retainsRevocations refuses a candidate that stops revoking anything the
