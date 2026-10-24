@@ -136,6 +136,23 @@ type licensedPQCHostTLSRollbackRequested struct {
 	Intents []licensedPQCHostTLSRollbackIntent `json:"intents"`
 }
 
+// Schema v3 adds the pinned agent's role, so a remote Envoy's rollback returns
+// to the network relay that recorded its predecessor (A104). Keep the v2 shape
+// closed for retained host rollback events.
+type licensedPQCAgentTLSRollbackIntent struct {
+	TargetID          string          `json:"target_id"`
+	AssetIDs          []string        `json:"asset_ids"`
+	IdempotencyKey    string          `json:"idempotency_key"`
+	Payload           json.RawMessage `json:"payload"`
+	RequiredAgentID   string          `json:"required_agent_id,omitempty"`
+	RequiredAgentRole string          `json:"required_agent_role,omitempty"`
+}
+
+type licensedPQCAgentTLSRollbackRequested struct {
+	RunID   string                              `json:"run_id"`
+	Intents []licensedPQCAgentTLSRollbackIntent `json:"intents"`
+}
+
 type licensedAgentRevocationTerminal struct {
 	DirectiveID string                       `json:"directive_id"`
 	Aggregate   agidrevoke.AggregateEvidence `json:"aggregate"`
@@ -367,6 +384,10 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			)),
 		entry("licensed_crypto.migration.tls_posture.rollback_requested", 2,
 			rejectingTypedLicensedPrivacyPolicy[licensedPQCHostTLSRollbackRequested](
+				licensedPrivacyRule("/intents/*/payload", events.PrivacyFieldOpaqueExact),
+			)),
+		entry("licensed_crypto.migration.tls_posture.rollback_requested", 3,
+			rejectingTypedLicensedPrivacyPolicy[licensedPQCAgentTLSRollbackRequested](
 				licensedPrivacyRule("/intents/*/payload", events.PrivacyFieldOpaqueExact),
 			)),
 

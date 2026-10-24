@@ -40,3 +40,29 @@ func (s *Store) ValidateHostTargetAssignment(ctx context.Context, tenantID, fami
 	}
 	return id, nil
 }
+
+// ValidateRelayTargetAssignment is the network-relay counterpart for a target
+// that declares vantage network (A104). Work whose rollback restores a
+// predecessor kept on the executing agent, such as a remote Envoy's TLS
+// posture, pins to one relay: the target's required_agent_id must name an
+// enrolled network-role relay in this tenant that is not offboarded.
+func (s *Store) ValidateRelayTargetAssignment(ctx context.Context, tenantID, family string, config json.RawMessage) (string, error) {
+	if vantage, known := connector.EffectiveTargetVantage(family, config); !known || vantage != connector.VantageNetworkRelay {
+		return "", fmt.Errorf("destination does not declare a network relay as its executor")
+	}
+	id, err := connector.TargetHostAgentID(config)
+	if err != nil {
+		return "", err
+	}
+	if id == "" {
+		return "", fmt.Errorf("destination requires a network relay: save the relay's agent UUID as required_agent_id; no work was queued")
+	}
+	a, err := s.GetAgent(ctx, tenantID, id)
+	if err != nil {
+		return "", fmt.Errorf("destination network relay is unavailable in this tenant; select an enrolled network relay")
+	}
+	if a.OffboardedAt != nil || !slices.Contains(a.Roles, "network") {
+		return "", fmt.Errorf("destination relay must be enrolled with the network role and must not be offboarded")
+	}
+	return id, nil
+}

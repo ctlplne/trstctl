@@ -2356,8 +2356,11 @@ have no rollback. `connector.right_size` executes on a network relay when its
 the binding's token for one attempt, runs the same mutate-and-readback
 conversation as the control-plane worker, and its signed report becomes the
 operation's terminal receipt; the server verifies the report's shape and
-digest, not the endpoint, so the readback evidence is the relay's. The TLS
-posture path stays control-plane-only. No job kind is claimable by default:
+digest, not the endpoint, so the readback evidence is the relay's. Envoy TLS
+posture changes run on one pinned agent: a co-resident Envoy's on its assigned
+host agent, and a remote Envoy that declares `vantage: network` on the network
+relay its `required_agent_id` names (A104), which keeps the predecessor in its
+own encrypted store so the rollback returns to it. No job kind is claimable by default:
 `agent_channel.claimable_job_kinds` must name each kind before any of this
 moves, which is deliberate rather than unfinished. `connector.rollback` is named
 separately from `connector.deploy` on purpose — an operator should be able to
@@ -5414,12 +5417,17 @@ transaction that records the run. A changed selection or profile edit is a new
 request; a consumed, denied, expired or superseded one answers `409`.
 
 TLS posture rollout is a separate bound-target action.
-The Envoy PQC posture worker now queues an agent job through the outbox to the
-exact enrolled host assigned to the target. That host stores the observed
-predecessor encrypted before a native Envoy change, then signs a report that
-binds the active configuration, direct loopback TLS handshake, leaf fingerprint,
-and agent identity. Rollback requests return to that host and restore its exact
-predecessor. The local partner-lab Envoy xDS fixture is documented in
+The Envoy PQC posture worker queues an agent job through the outbox to one
+pinned agent: the exact enrolled host assigned to a co-resident Envoy, or, for
+a remote Envoy that declares `vantage: network`, the network relay its
+`required_agent_id` names (A104). That agent stores the observed predecessor
+encrypted before a native Envoy change, then signs a report that binds the
+active configuration, its own TLS handshake with the listener (loopback on a
+host, from the relay's segment for a remote Envoy), the leaf fingerprint, and
+its identity. A network target that names no relay, or names an agent without
+the network role, is refused before anything is queued. Rollback requests
+return to that agent and restore its exact predecessor; the relay must run with
+`--host-rollback-dir` in persistent storage. The local partner-lab Envoy xDS fixture is documented in
 `deploy/demo/lab/README.md`. Previously queued pre-agent intents still refuse
 in-process execution, and posture changed by an older build has no host-retained
 predecessor to restore. These local fixtures do not qualify an external

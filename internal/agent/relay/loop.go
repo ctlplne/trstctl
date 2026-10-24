@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strings"
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
 )
 
@@ -228,10 +230,9 @@ func RunOnceWithSelfUpgrade(
 	return RunOnceWithSelfUpgradeAndHostRollback(ctx, ch, client, hostProfile, plugins, selfUp, nil, limit, leaseSeconds)
 }
 
-// RunOnceWithSelfUpgradeAndHostRollback is the production host-agent runner.
+// RunOnceWithSelfUpgradeAndHostRollback is the host-agent runner.
 // hostRollback is the machine-local encrypted predecessor ledger; passing nil
-// preserves the library entry points used by network-only relays, while the
-// assembled trstctl-agent always supplies it when host execution is enabled.
+// preserves the library entry points used by network-only relays.
 func RunOnceWithSelfUpgradeAndHostRollback(
 	ctx context.Context,
 	ch Channel,
@@ -242,11 +243,31 @@ func RunOnceWithSelfUpgradeAndHostRollback(
 	hostRollback *HostRollbackStore,
 	limit, leaseSeconds int,
 ) (int, error) {
+	return RunOnceWithRoles(ctx, ch, client, hostProfile, plugins, selfUp, hostRollback, nil, limit, leaseSeconds)
+}
+
+// RunOnceWithRoles is the production runner: the assembled trstctl-agent
+// passes its enrolled roles and supplies hostRollback whenever it executes
+// host work or is a network relay. A host agent with no exec profile claims
+// only its co-resident Envoy posture work and its self-check; a network relay
+// keeps its whole claim set, since its store serves remote Envoy posture
+// (A104) beside appliance work no exec profile governs.
+func RunOnceWithRoles(
+	ctx context.Context,
+	ch Channel,
+	client *http.Client,
+	hostProfile connector.LocalOpsConfig,
+	plugins *PluginRuntime,
+	selfUp *SelfUpgrade,
+	hostRollback *HostRollbackStore,
+	roles []string,
+	limit, leaseSeconds int,
+) (int, error) {
 	if ch == nil {
 		return 0, errors.New("relay: no channel")
 	}
 	kinds := ClaimableKinds()
-	if len(hostProfile.AllowedRoots) == 0 && hostRollback != nil {
+	if len(hostProfile.AllowedRoots) == 0 && hostRollback != nil && !slices.Contains(roles, mtls.AgentRoleNetwork) {
 		// A host with no exec profile may still manage its co-resident Envoy
 		// posture. Do not claim file/exec work it cannot perform — but it
 		// still answers its post-upgrade self-check (A71).

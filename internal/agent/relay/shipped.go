@@ -132,16 +132,19 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// A104: a co-resident Envoy's posture runs on its host; a remote
+			// Envoy that declares vantage network runs on the relay the
+			// target names. Each row is pinned to that one agent.
 			Kind:       KindPQCPosture,
 			Connectors: []string{"envoy"},
 			Flags:      []string{"--relay-claim"},
-			Roles:      []string{mtls.AgentRoleHost},
+			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
 			Kind:       KindPQCPostureRollback,
 			Connectors: []string{"envoy"},
 			Flags:      []string{"--relay-claim"},
-			Roles:      []string{mtls.AgentRoleHost},
+			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
 			// A71: the post-upgrade functional check. Every agent answers it,

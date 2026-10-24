@@ -27,10 +27,14 @@ const (
 	KindPQCPostureRollback = "pqc.posture.rollback"
 )
 
-// PQCPostureIntent is the public, reference-only host job. The control plane
-// pins its outbox row to the enrolled host and an immutable target revision;
-// the agent opens only its co-resident Envoy management endpoint. TenantID is
-// deliberately absent: the authenticated agent and encrypted local store own it.
+// PQCPostureIntent is the public, reference-only posture job. The control plane
+// pins its outbox row to one enrolled agent and an immutable target revision.
+// With no Vantage that agent is the Envoy's host and opens only its
+// co-resident loopback management endpoint; with Vantage "network" it is the
+// network relay the target names, driving a remote Envoy that declares vantage
+// network (A104). Either way the predecessor stays in that agent's encrypted
+// local store, so rollback returns to the same agent. TenantID is deliberately
+// absent: the authenticated agent and encrypted local store own it.
 type PQCPostureIntent struct {
 	RunID             string               `json:"run_id"`
 	AssetID           string               `json:"asset_id"`
@@ -45,6 +49,7 @@ type PQCPostureIntent struct {
 	RollbackOnFailure bool                 `json:"rollback_on_failure"`
 	VerifyAddress     string               `json:"verify_address"`
 	VerifyServerName  string               `json:"verify_server_name"`
+	Vantage           string               `json:"vantage,omitempty"`
 }
 
 // PQCPostureReport is the agent's bounded public receiver readback. Its digest
@@ -114,16 +119,28 @@ func ValidatePQCPostureReport(intent PQCPostureIntent, report PQCPostureReport, 
 }
 
 // ValidatePQCPostureIntent is shared by API admission, claim projection, and
-// the host executor so all three reject a missing or off-host listener binding.
+// the agent executor so all three reject a missing or misplaced listener
+// binding: a host intent's listener and management endpoint are loopback on
+// that host; a network intent's target must declare vantage network.
 func ValidatePQCPostureIntent(intent PQCPostureIntent) error {
 	if intent.Connector != "envoy" || intent.RunID == "" || intent.AssetID == "" || intent.FindingKind == "" ||
 		intent.TargetID == "" || intent.TargetRevision == "" || intent.Target == "" || intent.RequiredAgentID == "" ||
 		len(intent.TargetConfig) == 0 || intent.VerifyAddress == "" {
-		return errors.New("relay: PQC posture intent lacks exact host Envoy target binding")
+		return errors.New("relay: PQC posture intent lacks exact Envoy target binding")
 	}
-	host, _, err := net.SplitHostPort(intent.VerifyAddress)
-	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
-		return errors.New("relay: PQC served-state probe requires a literal loopback listener")
+	network, err := pqcPostureNetworkVantage(intent.Vantage)
+	if err != nil {
+		return err
+	}
+	if network {
+		if err := validateNetworkPQCListener(intent.VerifyAddress, intent.VerifyServerName); err != nil {
+			return err
+		}
+	} else {
+		host, _, err := net.SplitHostPort(intent.VerifyAddress)
+		if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
+			return errors.New("relay: PQC served-state probe requires a literal loopback listener")
+		}
 	}
 	for _, value := range []string{intent.RunID, intent.AssetID, intent.FindingKind, intent.TargetID,
 		intent.TargetRevision, intent.Target, intent.RequiredAgentID, intent.VerifyAddress, intent.VerifyServerName} {
@@ -131,14 +148,77 @@ func ValidatePQCPostureIntent(intent PQCPostureIntent) error {
 			return errors.New("relay: PQC posture intent contains control characters")
 		}
 	}
-	var target HostTargetConfig
+	var target pqcEnvoyTarget
 	if err := json.Unmarshal(intent.TargetConfig, &target); err != nil || target.SecretName == "" {
 		return errors.New("relay: PQC Envoy target configuration is incomplete")
 	}
-	if err := validatePQCEnvoyEndpoint(target.Endpoint); err != nil {
+	declared := strings.EqualFold(strings.TrimSpace(target.Vantage), connector.VantageNetworkDeclaration)
+	if declared != network {
+		return errors.New("relay: PQC posture intent vantage differs from the target's declared executor")
+	}
+	if err := validatePQCPostureManagementEndpoint(network, target.Endpoint); err != nil {
 		return err
 	}
 	return connector.ValidateTLSPosture(intent.Desired)
+}
+
+// pqcEnvoyTarget is the part of an Envoy target's reference-only config a
+// posture job reads: the management origin, the SDS secret name, and the
+// executor the target declares (A61).
+type pqcEnvoyTarget struct {
+	Endpoint   string `json:"endpoint"`
+	SecretName string `json:"secret_name"`
+	Vantage    string `json:"vantage"`
+}
+
+func pqcPostureNetworkVantage(vantage string) (bool, error) {
+	switch vantage {
+	case "":
+		return false, nil
+	case connector.VantageNetworkDeclaration:
+		return true, nil
+	default:
+		return false, errors.New("relay: PQC posture intent names an unknown vantage")
+	}
+}
+
+func validatePQCPostureManagementEndpoint(network bool, raw string) error {
+	if network {
+		return validateNetworkPQCEnvoyEndpoint(raw)
+	}
+	return validatePQCEnvoyEndpoint(raw)
+}
+
+// A remote Envoy's management surface is reached from the relay's segment, so
+// it need not be loopback. It must still be one http(s) origin with a host and
+// an explicit port and nothing that can move the connector off the reviewed
+// resource (user info, path, query, fragment); redirects are refused by the
+// bounded client as on the host path.
+func validateNetworkPQCEnvoyEndpoint(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil ||
+		u.Opaque != "" || u.Path != "" || strings.ContainsAny(raw, "?#") {
+		return errors.New("relay: a network PQC Envoy management URL must be one http(s) origin")
+	}
+	port, err := strconv.Atoi(u.Port())
+	if strings.TrimSpace(u.Hostname()) == "" || err != nil || port < 1 || port > 65535 {
+		return errors.New("relay: a network PQC Envoy management URL needs a host and an explicit port")
+	}
+	return nil
+}
+
+// A relay's served-state probe connects to the target's listener from the
+// relay's segment: any host and port it can reach, named for SNI.
+func validateNetworkPQCListener(address, serverName string) error {
+	host, rawPort, err := net.SplitHostPort(address)
+	port, portErr := strconv.Atoi(rawPort)
+	if err != nil || strings.TrimSpace(host) == "" || portErr != nil || port < 1 || port > 65535 {
+		return errors.New("relay: a network PQC served-state probe needs a host:port listener")
+	}
+	if strings.TrimSpace(serverName) == "" {
+		return errors.New("relay: a network PQC served-state probe needs verify_server_name")
+	}
+	return nil
 }
 
 // A posture change is a privileged local management write. Require one exact
@@ -161,11 +241,15 @@ func validatePQCEnvoyEndpoint(raw string) error {
 }
 
 func hostPQCPostureRegistry(intent PQCPostureIntent, client *http.Client) (*connector.Registry, error) {
-	var target HostTargetConfig
+	var target pqcEnvoyTarget
 	if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {
 		return nil, errors.New("relay: PQC host target configuration is malformed")
 	}
-	if err := validatePQCEnvoyEndpoint(target.Endpoint); err != nil {
+	network, err := pqcPostureNetworkVantage(intent.Vantage)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePQCPostureManagementEndpoint(network, target.Endpoint); err != nil {
 		return nil, err
 	}
 	if target.SecretName == "" {
@@ -188,7 +272,7 @@ func hostPQCPostureRegistry(intent PQCPostureIntent, client *http.Client) (*conn
 
 func executeHostPQCPosture(ctx context.Context, intent PQCPostureIntent, kind string, store *HostRollbackStore, client *http.Client, nativeProbe string) (PQCPostureReport, error) {
 	if store == nil {
-		return PQCPostureReport{}, errors.New("relay: PQC posture requires the machine-local predecessor store")
+		return PQCPostureReport{}, errors.New("relay: PQC posture requires the machine-local predecessor store (--host-rollback-dir)")
 	}
 	if err := ValidatePQCPostureIntent(intent); err != nil {
 		return PQCPostureReport{}, err

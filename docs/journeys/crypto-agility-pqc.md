@@ -38,9 +38,10 @@ post-quantum target.
   secret material are protected is in [Secrets](../features/secrets.md).
 - The shipped Core path serves two concrete compatibility anchors: pure
   ML-DSA-65 leaf enrollment over EST with stock OpenSSL 3.5 and a two-entry classical +
-  ML-DSA-65 SPIFFE Workload API response. The Envoy host-agent TLS posture
-  path requires an enrolled, assigned host agent, a bound loopback management
-  endpoint and listener, and a signed served-state report. See [Current limitations](../limitations.md) for the tested client boundary;
+  ML-DSA-65 SPIFFE Workload API response. The Envoy TLS posture path requires
+  one pinned agent and a signed served-state report: an assigned host agent with
+  a loopback management endpoint and listener, or, for a remote Envoy that
+  declares `vantage: network`, the network relay its `required_agent_id` names. See [Current limitations](../limitations.md) for the tested client boundary;
   it is not a promise that every legacy client understands ML-DSA.
 
 ## Steps
@@ -179,11 +180,12 @@ post-quantum target.
    For CBOM TLS endpoint and host-config findings, use the normal host-agent
    connector lifecycle, independently read the listener's effective TLS policy,
    and rescan before recording remediation. An automatic Envoy TLS migration
-   queues an outbox job to the exact enrolled host assigned to the target. The
-   host stores the observed predecessor encrypted before changing Envoy, reads
-   Envoy's active posture, probes the served listener, and signs the result.
-   Rollback restores that predecessor on the same host and probes the listener
-   again. For an automatic TLS
+   queues an outbox job to the exact enrolled host assigned to the target, or,
+   for a remote Envoy target that declares `vantage: network`, to the network
+   relay its `required_agent_id` names. That agent stores the observed
+   predecessor encrypted before changing Envoy, reads Envoy's active posture,
+   probes the served listener, and signs the result. Rollback restores that
+   predecessor on the same agent and probes the listener again. For an automatic TLS
    preview, bind each selected TLS finding to the exact enabled deployment
    target with `tls_bindings`: an `asset_id`, `target_id`, and `desired` posture
    containing `minimum_version: "TLSv1.3"`, `cipher_suites: []`, and
@@ -191,15 +193,19 @@ post-quantum target.
    controls TLS 1.2 and earlier; the agent records the actual TLS 1.3 suite
    from the wire. The console asks for these bindings and sends the reviewed
    request unchanged at start. Missing bindings return HTTP 400. An absent or
-   mismatched assigned host, management endpoint, or loopback verification
-   address returns HTTP 409 before enqueue.
+   mismatched assigned host or relay, management endpoint, or verification
+   address (loopback for a host) returns HTTP 409 before enqueue.
 
    Name the Envoy target after the exact listener resource exposed by the
    co-resident management API. `secret_name` names its SDS certificate secret;
    it does not choose the listener whose TLS policy is changed. The target's
    `verify_address` is the listener address from the assigned agent's network
    namespace, so a container sidecar uses its container port rather than a
-   port published on the Docker host.
+   port published on the Docker host. For a remote Envoy, set
+   `vantage: network`, `required_agent_id` to the network relay's agent UUID,
+   an `endpoint` that is one http(s) origin with an explicit port, and a
+   `verify_address` and `verify_server_name` the relay can reach; run that
+   relay with `--relay-claim` and `--host-rollback-dir` in persistent storage.
 
 6. Verify the served leaf independently with a stock TLS client, then exercise
    rollback before broad rollout:

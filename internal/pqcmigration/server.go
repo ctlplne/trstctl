@@ -199,19 +199,25 @@ type pqcMigrationRollbackPayload struct {
 }
 
 type pqcMigrationTLSRollbackPayload struct {
-	RunID           string                       `json:"run_id"`
-	Reason          string                       `json:"reason"`
-	RequiredAgentID string                       `json:"required_agent_id,omitempty"`
-	Mutation        connector.TLSPostureMutation `json:"mutation"`
-	Restores        []TLSAssetRestore            `json:"restores"`
+	RunID             string                       `json:"run_id"`
+	Reason            string                       `json:"reason"`
+	RequiredAgentID   string                       `json:"required_agent_id,omitempty"`
+	RequiredAgentRole string                       `json:"required_agent_role,omitempty"`
+	Mutation          connector.TLSPostureMutation `json:"mutation"`
+	Restores          []TLSAssetRestore            `json:"restores"`
 }
 
+// sealedTLSRollbackIntent is one rollback command of the rollback-requested
+// event. Schema v2 added the pinned agent; v3 adds its role, so a remote
+// Envoy's rollback returns to the network relay that recorded its predecessor
+// (A104).
 type sealedTLSRollbackIntent struct {
-	TargetID        string          `json:"target_id"`
-	AssetIDs        []string        `json:"asset_ids"`
-	IdempotencyKey  string          `json:"idempotency_key"`
-	Payload         json.RawMessage `json:"payload"`
-	RequiredAgentID string          `json:"required_agent_id,omitempty"`
+	TargetID          string          `json:"target_id"`
+	AssetIDs          []string        `json:"asset_ids"`
+	IdempotencyKey    string          `json:"idempotency_key"`
+	Payload           json.RawMessage `json:"payload"`
+	RequiredAgentID   string          `json:"required_agent_id,omitempty"`
+	RequiredAgentRole string          `json:"required_agent_role,omitempty"`
 }
 
 type tlsRollbackRequested struct {
@@ -238,7 +244,7 @@ func newTLSRollbackRequestedEvent(tenantID, runID string, intents []sealedTLSRol
 		return events.Event{}, err
 	}
 	return events.Event{Type: eventTLSRollbackRequested,
-		SchemaVersion: 2, TenantID: tenantID, Data: data}, nil
+		SchemaVersion: 3, TenantID: tenantID, Data: data}, nil
 }
 
 // PlanPreview answers B-3: what WOULD this migration change. It runs the same
@@ -407,12 +413,9 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 		}
 		targetPostures[target.ID] = clonePosture(rollout.Desired)
 		asset := rollout.Asset
-		var requiredAgentID string
-		if hostPQCPostureTarget(target) {
-			requiredAgentID, err = s.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
-			if err != nil {
-				return Response{}, api.ErrWithStatus(http.StatusConflict, err)
-			}
+		requiredAgentID, requiredAgentRole, err := assignedPQCPostureAgent(ctx, s.store, tenantID, target)
+		if err != nil {
+			return Response{}, api.ErrWithStatus(http.StatusConflict, err)
 		}
 		payload := pqcMigrationTLSPosturePayload{
 			RunID: runID, AssetID: asset.ID, Kind: asset.Kind, FindingKind: rollout.FindingKind,
@@ -423,7 +426,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			TargetID: target.ID, TargetRevision: target.RevisionID, Connector: target.Type,
 			Target: target.Name, TargetConfig: append(json.RawMessage(nil), target.Config...),
 			Desired: clonePosture(rollout.Desired), RollbackOnFailure: rollout.RollbackOnFailure,
-			RequiredAgentID: requiredAgentID,
+			RequiredAgentID: requiredAgentID, RequiredAgentRole: requiredAgentRole,
 		}
 		if requiredAgentID != "" {
 			if _, err := hostPQCPostureIntent(payload, requiredAgentID); err != nil {
@@ -505,7 +508,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			destination := licensedCryptoMigrationTLSPostureDestination
 			role, agentID, lane := "", "", ""
 			if payload.RequiredAgentID != "" {
-				destination, role, agentID = relay.KindPQCPosture, mtls.AgentRoleHost, payload.RequiredAgentID
+				destination, role, agentID = relay.KindPQCPosture, pinnedPostureRole(payload.RequiredAgentRole), payload.RequiredAgentID
 				lane = "pqc-posture:target:" + payload.TargetID
 			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
@@ -542,19 +545,60 @@ func (s *pqcMigrationService) preflightTLSRolloutTargets(ctx context.Context, te
 		return nil, err
 	}
 	for _, target := range targets {
-		if !hostPQCPostureTarget(target) {
-			continue
-		}
-		if _, err := s.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config); err != nil {
+		if _, _, err := assignedPQCPostureAgent(ctx, s.store, tenantID, target); err != nil {
 			return nil, api.ErrWithStatus(http.StatusConflict, err)
 		}
 	}
 	return targets, nil
 }
 
-func hostPQCPostureTarget(target store.DeploymentTarget) bool {
-	vantage, known := connector.EffectiveTargetVantage(target.Type, target.Config)
-	return known && vantage == connector.VantageHostAgent && target.Type == "envoy"
+// agentPQCPostureTarget reports whether an Envoy target's posture runs on an
+// enrolled agent rather than in the control plane: the host agent of a
+// co-resident Envoy, or the network relay a target that declares vantage
+// network names (A104).
+func agentPQCPostureTarget(target store.DeploymentTarget) bool {
+	return pqcPostureAgentRole(target.Type, target.Config) != ""
+}
+
+// pqcPostureAgentRole is the role of the agent that executes an Envoy target's
+// posture work, or "" when that work is not agent work.
+func pqcPostureAgentRole(family string, config json.RawMessage) string {
+	if family != "envoy" {
+		return ""
+	}
+	vantage, known := connector.EffectiveTargetVantage(family, config)
+	switch {
+	case known && vantage == connector.VantageHostAgent:
+		return mtls.AgentRoleHost
+	case known && vantage == connector.VantageNetworkRelay:
+		return mtls.AgentRoleNetwork
+	}
+	return ""
+}
+
+// assignedPQCPostureAgent validates the one agent a target's posture work is
+// pinned to and returns it with its role: the target's host assignment, or
+// the relay a network target names. A target whose posture is not agent work
+// returns no agent and no error.
+func assignedPQCPostureAgent(ctx context.Context, st *store.Store, tenantID string, target store.DeploymentTarget) (string, string, error) {
+	switch role := pqcPostureAgentRole(target.Type, target.Config); role {
+	case mtls.AgentRoleHost:
+		id, err := st.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
+		return id, role, err
+	case mtls.AgentRoleNetwork:
+		id, err := st.ValidateRelayTargetAssignment(ctx, tenantID, target.Type, target.Config)
+		return id, role, err
+	}
+	return "", "", nil
+}
+
+// pinnedPostureRole is the claim role of a pinned posture row. Intents
+// recorded before A104 carry no role: they were always host work.
+func pinnedPostureRole(role string) string {
+	if role == "" {
+		return mtls.AgentRoleHost
+	}
+	return role
 }
 
 func hostPQCPostureIntent(payload pqcMigrationTLSPosturePayload, agentID string) (relay.PQCPostureIntent, error) {
@@ -573,6 +617,9 @@ func hostPQCPostureIntent(payload pqcMigrationTLSPosturePayload, agentID string)
 		RollbackOnFailure: payload.RollbackOnFailure,
 		VerifyAddress:     config.VerifyAddress, VerifyServerName: config.VerifyServerName,
 	}
+	if pqcPostureAgentRole(payload.Connector, payload.TargetConfig) == mtls.AgentRoleNetwork {
+		intent.Vantage = connector.VantageNetworkDeclaration
+	}
 	return intent, relay.ValidatePQCPostureIntent(intent)
 }
 
@@ -586,7 +633,7 @@ func preflightTLSRolloutTargets(plan Plan, deployer connector.TLSPostureDeployer
 		if err != nil {
 			return nil, err
 		}
-		if deployer == nil && !hostPQCPostureTarget(target) {
+		if deployer == nil && !agentPQCPostureTarget(target) {
 			return nil, api.ErrStatus(http.StatusServiceUnavailable, "pqcmigration: TLS posture deployer is not configured")
 		}
 		if err := validateTLSRolloutTarget(target, deployer); err != nil {
@@ -598,16 +645,22 @@ func preflightTLSRolloutTargets(plan Plan, deployer connector.TLSPostureDeployer
 }
 
 func validateTLSRolloutTarget(target store.DeploymentTarget, deployer connector.TLSPostureDeployer) error {
-	if deployer == nil && !hostPQCPostureTarget(target) {
+	if deployer == nil && !agentPQCPostureTarget(target) {
 		return errors.New("pqcmigration: TLS posture deployer is not configured")
 	}
 	if !target.Enabled || target.ID == "" || target.RevisionID == "" || target.Type == "" || target.Name == "" {
 		return fmt.Errorf("pqcmigration: deployment target %s is disabled or incomplete", target.ID)
 	}
-	if hostPQCPostureTarget(target) {
+	if agentPQCPostureTarget(target) {
 		agentID, err := connector.TargetHostAgentID(target.Config)
 		if err != nil {
 			return err
+		}
+		if agentID == "" {
+			if pqcPostureAgentRole(target.Type, target.Config) == mtls.AgentRoleNetwork {
+				return fmt.Errorf("pqcmigration: deployment target %s declares vantage network; save the network relay's agent UUID as required_agent_id", target.ID)
+			}
+			return fmt.Errorf("pqcmigration: deployment target %s changes its TLS posture through its host agent; save that agent's UUID as required_agent_id", target.ID)
 		}
 		_, err = hostPQCPostureIntent(pqcMigrationTLSPosturePayload{
 			RunID: "preflight", AssetID: "preflight", FindingKind: "preflight",
@@ -1007,12 +1060,13 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			if err != nil {
 				return RollbackResponse{}, err
 			}
-			assigned, err := s.store.ValidateHostTargetAssignment(ctx, tenantID, current.Type, current.Config)
+			assigned, role, err := assignedPQCPostureAgent(ctx, s.store, tenantID, current)
 			if err != nil {
 				return RollbackResponse{}, api.ErrWithStatus(http.StatusConflict, err)
 			}
-			if !current.Enabled || current.RevisionID != first.Intent.TargetRevision || assigned != first.Intent.RequiredAgentID {
-				return RollbackResponse{}, api.ErrStatus(http.StatusConflict, "PQC host rollback target revision or assigned agent changed")
+			if !current.Enabled || current.RevisionID != first.Intent.TargetRevision || assigned != first.Intent.RequiredAgentID ||
+				role != pinnedPostureRole(first.Intent.RequiredAgentRole) {
+				return RollbackResponse{}, api.ErrStatus(http.StatusConflict, "PQC posture rollback target revision or assigned agent changed")
 			}
 		}
 		if first.Intent.RequiredAgentID == "" {
@@ -1034,6 +1088,7 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 		}
 		payload := pqcMigrationTLSRollbackPayload{
 			RunID: runID, Reason: req.Reason, RequiredAgentID: first.Intent.RequiredAgentID,
+			RequiredAgentRole: first.Intent.RequiredAgentRole,
 			Mutation: connector.TLSPostureMutation{
 				RunID: runID, FindingID: "rollback:" + targetID, FindingKind: "rollback",
 				TargetID: first.Intent.TargetID, TargetRevision: first.Intent.TargetRevision,
@@ -1092,11 +1147,15 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 		for _, restore := range payload.Restores {
 			assetIDs = append(assetIDs, restore.AssetID)
 		}
-		sealedTLS = append(sealedTLS, sealedTLSRollbackIntent{
+		intent := sealedTLSRollbackIntent{
 			TargetID: payload.Mutation.TargetID, AssetIDs: assetIDs, IdempotencyKey: idempotencyKey,
 			Payload:         append(json.RawMessage(nil), body...),
 			RequiredAgentID: agentID,
-		})
+		}
+		if agentID != "" {
+			intent.RequiredAgentRole = pinnedPostureRole(payload.RequiredAgentRole)
+		}
+		sealedTLS = append(sealedTLS, intent)
 	}
 	var rollbackEvent *events.Event
 	var certRollbackEvent *events.Event
@@ -1169,7 +1228,7 @@ func (s *pqcMigrationService) rollback(ctx context.Context, tenantID, runID stri
 			destination := licensedCryptoMigrationTLSRollbackDestination
 			role, lane := "", ""
 			if intent.RequiredAgentID != "" {
-				destination, role = relay.KindPQCPostureRollback, mtls.AgentRoleHost
+				destination, role = relay.KindPQCPostureRollback, pinnedPostureRole(intent.RequiredAgentRole)
 				lane = "pqc-posture:target:" + intent.TargetID
 			}
 			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{

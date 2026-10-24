@@ -27771,8 +27771,8 @@ export const messages = {
   },
   "posture.pqcMigration.tlsBindingHelp": {
     defaultMessage:
-      "Choose the exact enabled Envoy target for each finding. Review the shared TLS 1.3 posture before previewing. The target must have a working host-agent execution path.",
-    description: "Explains that TLS migration needs explicit target binding and host execution.",
+      "Choose the exact enabled Envoy target for each finding. Review the shared TLS 1.3 posture before previewing. The target must name the agent that changes it: its host agent, or the network relay of a remote Envoy that declares vantage network.",
+    description: "Explains that TLS migration needs explicit target binding and an assigned host agent or network relay.",
   },
   "posture.pqcMigration.targetsLoading": { defaultMessage: "Loading deployment targets...", description: "Target list loading state." },
   "posture.pqcMigration.noTargets": { defaultMessage: "No enabled Envoy deployment targets are available.", description: "Missing TLS target state." },

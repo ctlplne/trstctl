@@ -3027,6 +3027,7 @@ type LicensedCryptoMigrationTLSPosture struct {
 	Target              string               `json:"target"`
 	TargetConfig        json.RawMessage      `json:"target_config,omitempty"`
 	RequiredAgentID     string               `json:"required_agent_id,omitempty"`
+	RequiredAgentRole   string               `json:"required_agent_role,omitempty"`
 	Desired             connector.TLSPosture `json:"desired"`
 	RollbackOnFailure   bool                 `json:"rollback_on_failure"`
 	SealedOutboxPayload json.RawMessage      `json:"sealed_outbox_payload,omitempty"`

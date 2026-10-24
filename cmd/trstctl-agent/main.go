@@ -83,7 +83,7 @@ func main() {
 	upgradePublisherKeyFile := flag.String("upgrade-publisher-key", "", "path to the upgrade publisher's Ed25519 public key (PEM) this agent pins (A68): with it set, a campaign artifact must carry that publisher's signature over its sha256 or the agent refuses to stage it; empty keeps the pinned sha256 as the only integrity control")
 	selfUpgrade := flag.Bool("self-upgrade", false, "claim this agent's own agent.upgrade jobs from staged rollout campaigns (epic A5): download the campaign's artifact for this platform, verify its sha256, swap the binary, and restart. Off by default because it replaces this executable — the control-plane operator starts the campaign, but replacing the binary on THIS machine is this machine's operator's decision. The previous binary is kept beside it as .old")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
-	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this host agent's encrypted, two-generation connector predecessor bundles (AUD32/G1). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for host rollback after restart")
+	hostRollbackDir := flag.String("host-rollback-dir", "", "directory for this agent's encrypted, two-generation connector predecessor bundles (AUD32/G1): a host agent's deploys and a host or network relay's Envoy TLS posture (A104). Empty stores them beside --key under host-rollbacks. The bundles never return to the control plane and are required for rollback after restart")
 	enrollProxyListen := flag.String("enroll-proxy-listen", "", "serve a LAN-local ACME/EST/SCEP proxy on this address for hosts and devices in this segment that have no route to the control plane (epic A4). The proxy is pass-through: it forwards protocol traffic unaltered, adds no credential of its own, and makes no trust decision — the control plane's validators and policy still decide. Empty disables it")
 	enrollProxyUpstream := flag.String("enroll-proxy-upstream", "", "comma-separated https control-plane endpoints the enrollment proxy forwards to. More than one gives automatic failover when an endpoint stops answering; a control-plane ERROR is passed back to the client rather than retried, because it is an answer")
 	enrollProxySegment := flag.String("enroll-proxy-segment", "", "stable operator name for the dark segment this relay serves; required with --enroll-proxy-listen and reported as tenant-scoped topology evidence")
@@ -791,7 +791,10 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		}
 	}
 	var hostRollback *relay.HostRollbackStore
-	if len(hostProfile.AllowedRoots) > 0 || (relayCh != nil && slices.Contains(a.Roles(), mtls.AgentRoleHost)) {
+	// A network relay keeps a store too: a remote Envoy's TLS posture (A104)
+	// restores the predecessor this relay recorded before it changed anything.
+	if len(hostProfile.AllowedRoots) > 0 || (relayCh != nil && (slices.Contains(a.Roles(), mtls.AgentRoleHost) ||
+		slices.Contains(a.Roles(), mtls.AgentRoleNetwork))) {
 		stateDir := strings.TrimSpace(o.hostRollbackDir)
 		if stateDir == "" {
 			stateDir = filepath.Join(filepath.Dir(o.keyPath), "host-rollbacks")
@@ -899,7 +902,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 				if !claimsEnabled {
 					result.err = relayCh.(relayChannel).recoverPendingReport(workCtx)
 				} else if o.relayClaim {
-					result.executed, result.err = relay.RunOnceWithSelfUpgradeAndHostRollback(workCtx, relayCh, relayClient, hostProfile, pluginRuntime, selfUp, hostRollback, relayClaimBatch, lease)
+					result.executed, result.err = relay.RunOnceWithRoles(workCtx, relayCh, relayClient, hostProfile, pluginRuntime, selfUp, hostRollback, a.Roles(), relayClaimBatch, lease)
 				} else {
 					result.executed, result.err = relay.RunOnceSelfUpgradeOnly(workCtx, relayCh, selfUp, relayClaimBatch, lease)
 				}

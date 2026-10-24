@@ -61,6 +61,7 @@ func TestPQCHostRollbackRequestedPrivacySchemaIsVersioned(t *testing.T) {
 	const eventType = "licensed_crypto.migration.tls_posture.rollback_requested"
 	legacy := []byte(`{"run_id":"run-a","intents":[{"target_id":"target-a","asset_ids":["asset-a"],"idempotency_key":"rollback-a","payload":{"sealed":"fixture"}}]}`)
 	host := []byte(`{"run_id":"run-b","intents":[{"target_id":"target-b","asset_ids":["asset-b"],"idempotency_key":"rollback-b","payload":{"sealed":"fixture"},"required_agent_id":"agent-b"}]}`)
+	relayRole := []byte(`{"run_id":"run-c","intents":[{"target_id":"target-c","asset_ids":["asset-c"],"idempotency_key":"rollback-c","payload":{"sealed":"fixture"},"required_agent_id":"agent-c","required_agent_role":"network"}]}`)
 	for _, test := range []struct {
 		name    string
 		version int
@@ -71,6 +72,9 @@ func TestPQCHostRollbackRequestedPrivacySchemaIsVersioned(t *testing.T) {
 		{"host field forbidden in v1", 1, host, false},
 		{"host field admitted in v2", 2, host, true},
 		{"unreviewed host field forbidden in v2", 2, []byte(`{"run_id":"run-b","intents":[{"target_id":"target-b","asset_ids":["asset-b"],"idempotency_key":"rollback-b","payload":{"sealed":"fixture"},"required_agent_id":"agent-b","unexpected":"unsafe"}]}`), false},
+		{"agent role forbidden in v2", 2, relayRole, false},
+		{"agent role admitted in v3", 3, relayRole, true},
+		{"host assignment admitted in v3", 3, host, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := log.Append(t.Context(), events.Event{TenantID: store.ZeroUUID,
@@ -120,6 +124,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: pqcmigration.EventCertificateRollbackRequested, SchemaVersion: 1},
 		{EventType: "licensed_crypto.migration.tls_posture.rollback_requested", SchemaVersion: 1},
 		{EventType: "licensed_crypto.migration.tls_posture.rollback_requested", SchemaVersion: 2},
+		{EventType: "licensed_crypto.migration.tls_posture.rollback_requested", SchemaVersion: 3},
 		{EventType: agidrevoke.TypeRevocationEffectRecorded, SchemaVersion: agidrevoke.RevocationEffectSchemaV1},
 		{EventType: agidrevoke.TypeRevocationIntervalExceeded, SchemaVersion: agidrevoke.RevocationIntervalExceededSchemaV1},
 		{EventType: agidrevoke.TypeRevocationTerminal, SchemaVersion: agidrevoke.RevocationTerminalSchemaV1},

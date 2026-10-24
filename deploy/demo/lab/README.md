@@ -58,6 +58,13 @@ leaf. Enable `pqc.posture` and
 actions use the normal target registration and agent enrollment APIs; a
 controller PUT by itself is only fixture setup, not product migration proof.
 
+The same fixture drives the network-relay variant (A104) when its ports are
+reachable from the relay: register the target with `vantage: network`,
+`required_agent_id` set to the enrolled network relay's agent UUID, and an
+`endpoint` and `verify_address` on an address the relay reaches, and start that
+relay with `--relay-claim` and `--host-rollback-dir`. A target that names no
+relay is refused before any job is queued.
+
 Independent checks can use `openssl s_client -connect 127.0.0.1:11444
 -servername pqc-edge.local.qa -tls1_2 -brief` before migration and
 `-tls1_3 -groups X25519MLKEM768 -brief` afterward. After rollback, repeat

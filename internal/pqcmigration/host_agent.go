@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -97,6 +98,9 @@ func (h HostAgentHooks) OpenJob(ctx context.Context, tenantID, destination, idem
 	return json.Marshal(intent)
 }
 
+// checkAssignedTarget re-reads the target at claim and report: it must still
+// be the revision the intent names, executed where the intent says (its host,
+// or the network relay it names, A104), by the agent the row is pinned to.
 func (h HostAgentHooks) checkAssignedTarget(ctx context.Context, tenantID string, intent relay.PQCPostureIntent) error {
 	if h.Store == nil {
 		return errors.New("pqcmigration: host posture store is unavailable")
@@ -105,13 +109,17 @@ func (h HostAgentHooks) checkAssignedTarget(ctx context.Context, tenantID string
 	if err != nil {
 		return err
 	}
-	assigned, err := h.Store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
+	assigned, role, err := assignedPQCPostureAgent(ctx, h.Store, tenantID, target)
 	if err != nil {
 		return err
 	}
+	wantRole := mtls.AgentRoleHost
+	if intent.Vantage == connector.VantageNetworkDeclaration {
+		wantRole = mtls.AgentRoleNetwork
+	}
 	if !target.Enabled || target.RevisionID != intent.TargetRevision || target.Type != intent.Connector ||
-		assigned != intent.RequiredAgentID {
-		return errors.New("pqcmigration: host posture target revision or assignment changed")
+		assigned != intent.RequiredAgentID || role != wantRole {
+		return errors.New("pqcmigration: posture target revision, executor or assignment changed")
 	}
 	return nil
 }
@@ -141,7 +149,7 @@ func (h HostAgentHooks) recordResult(ctx context.Context, tenantID, agentID stri
 		return err
 	}
 	if agentID != intent.RequiredAgentID {
-		return errors.New("pqcmigration: signed report came from a different enrolled host")
+		return errors.New("pqcmigration: signed report came from a different enrolled agent")
 	}
 	if err := h.checkAssignedTarget(ctx, tenantID, intent); err != nil {
 		return err
@@ -155,7 +163,7 @@ func (h HostAgentHooks) recordResult(ctx context.Context, tenantID, agentID stri
 		return handler.appendProjected(ctx, tenantID, EventTLSFindingFailed, TLSFindingFailure{
 			RunID: intent.RunID, AssetID: intent.AssetID, FindingKind: intent.FindingKind,
 			TargetID: intent.TargetID, Connector: intent.Connector,
-			Reason: "assigned host reported posture mutation or served-state verification failure", Status: status,
+			Reason: "assigned agent reported posture mutation or served-state verification failure", Status: status,
 		})
 	}
 	if req.Outcome != transport.JobOutcomeVerified {

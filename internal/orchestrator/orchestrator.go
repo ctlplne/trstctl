@@ -40,11 +40,21 @@ const (
 )
 
 type licensedCryptoMigrationTLSRollbackIntent struct {
-	TargetID        string          `json:"target_id"`
-	AssetIDs        []string        `json:"asset_ids"`
-	IdempotencyKey  string          `json:"idempotency_key"`
-	Payload         json.RawMessage `json:"payload"`
-	RequiredAgentID string          `json:"required_agent_id,omitempty"`
+	TargetID          string          `json:"target_id"`
+	AssetIDs          []string        `json:"asset_ids"`
+	IdempotencyKey    string          `json:"idempotency_key"`
+	Payload           json.RawMessage `json:"payload"`
+	RequiredAgentID   string          `json:"required_agent_id,omitempty"`
+	RequiredAgentRole string          `json:"required_agent_role,omitempty"`
+}
+
+// postureAgentRole is the claim role of a pinned PQC posture row. Events
+// written before A104 carry no role: their rows were always host work.
+func postureAgentRole(role string) string {
+	if role == "" {
+		return "host"
+	}
+	return role
 }
 
 type licensedCryptoMigrationTLSRollbackRequested struct {
@@ -1842,7 +1852,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 					}
 					destination, role, agentID, lane := licensedCryptoMigrationTLSRollbackDestination, "", "", ""
 					if intent.RequiredAgentID != "" {
-						destination, role, agentID = licensedCryptoHostPostureRollbackDestination, "host", intent.RequiredAgentID
+						destination, role, agentID = licensedCryptoHostPostureRollbackDestination, postureAgentRole(intent.RequiredAgentRole), intent.RequiredAgentID
 						lane = "pqc-posture:target:" + intent.TargetID
 					}
 					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
@@ -1956,7 +1966,7 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 					}
 					destination, role, agentID, lane := licensedCryptoMigrationTLSPostureDestination, "", "", ""
 					if posture.RequiredAgentID != "" {
-						destination, role, agentID = licensedCryptoHostPostureDestination, "host", posture.RequiredAgentID
+						destination, role, agentID = licensedCryptoHostPostureDestination, postureAgentRole(posture.RequiredAgentRole), posture.RequiredAgentID
 						lane = "pqc-posture:target:" + posture.TargetID
 					}
 					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
