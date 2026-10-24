@@ -3,9 +3,11 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,6 +38,12 @@ const ExposureProbeFindingKind = "nhi-exposure-probe"
 
 // MaxExposureProbeEndpoints bounds one probe to one relay sweep.
 const MaxExposureProbeEndpoints = 50
+
+// ExposureProbeJobKind marks a probe's discovery.run.queued event. Its relay
+// sweep is enqueued in the same transaction as the event, as a PQC pilot wave
+// is, so outbox reconciliation must not restore a discovery.run job for it:
+// no discovery executor owns this source.
+const ExposureProbeJobKind = "nhi_exposure_probe"
 
 var exposureProbeSourceNamespace = uuid.MustParse("69dc889c-b7b4-4efa-833b-3f23c961ff36")
 
@@ -100,14 +108,27 @@ func exposureProbeSourceID(tenantID string) string {
 }
 
 // QueueExposureProbe records a queued discovery run for the probe and queues
-// one public-only relay sweep of the endpoints. requestKey is the durable
-// request identity, so a retried request converges on the same run and job.
+// one public-only relay sweep of the endpoints in the same transaction.
+// requestKey is the durable request identity, so a retried request converges
+// on the same run and job. A probe nothing can claim is refused with
+// ErrDiscoveryRelayUnavailable rather than left queued.
 func (o *Orchestrator) QueueExposureProbe(ctx context.Context, tenantID, requestKey, requestedBy string, endpoints []ExposureProbeEndpoint) (string, error) {
 	if len(endpoints) == 0 || len(endpoints) > MaxExposureProbeEndpoints {
 		return "", errors.New("orchestrator: an exposure probe needs 1-50 endpoints")
 	}
 	if o.outbox == nil {
 		return "", errors.New("orchestrator: exposure probe outbox is unavailable")
+	}
+	runID := uuid.NewSHA1(exposureProbeSourceNamespace, []byte(tenantID+"\x00"+requestKey)).String()
+	// A retried request whose run already left the queue converges on it; it
+	// never queues a second sweep.
+	if existing, err := o.store.GetDiscoveryRun(ctx, tenantID, runID); err == nil && existing.Status != "queued" {
+		return runID, nil
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", err
+	}
+	if err := o.requireDiscoveryNetworkRelayForJob(ctx, tenantID, "", relay.KindEndpointVerify); err != nil {
+		return "", err
 	}
 	sourceID := exposureProbeSourceID(tenantID)
 	if _, err := o.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
@@ -116,13 +137,9 @@ func (o *Orchestrator) QueueExposureProbe(ctx context.Context, tenantID, request
 	}); err != nil {
 		return "", err
 	}
-	runID := uuid.NewSHA1(exposureProbeSourceNamespace, []byte(tenantID+"\x00"+requestKey)).String()
-	queued, err := json.Marshal(projections.DiscoveryRunQueued{ID: runID, SourceID: sourceID, RequestedBy: requestedBy})
+	queued, err := json.Marshal(projections.DiscoveryRunQueued{ID: runID, SourceID: sourceID, RequestedBy: requestedBy,
+		JobKind: ExposureProbeJobKind, Execution: "relay"})
 	if err != nil {
-		return "", err
-	}
-	if _, err := o.emitPreparedExact(ctx, events.Event{ID: DiscoveryRelayEventID(tenantID, requestKey, "exposure-probe-run-queued"),
-		Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: queued}); err != nil {
 		return "", err
 	}
 	intent := relay.EndpointVerifyIntent{
@@ -139,7 +156,18 @@ func (o *Orchestrator) QueueExposureProbe(ctx context.Context, tenantID, request
 		return "", err
 	}
 	err = o.withTenantCommand(ctx, tenantID, func(ctx context.Context, tx pgx.Tx) error {
-		_, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
+		ev, err := o.log.Append(ctx, events.Event{ID: DiscoveryRelayEventID(tenantID, requestKey, "exposure-probe-run-queued"),
+			Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: queued})
+		if err != nil {
+			return err
+		}
+		if ev.Type != projections.EventDiscoveryRunQueued || ev.TenantID != tenantID || !bytes.Equal(ev.Data, queued) {
+			return fmt.Errorf("%w: exposure probe run event differs", store.ErrIdempotencyConflict)
+		}
+		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
+			return err
+		}
+		_, err = o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 			TenantID: tenantID, Destination: relay.KindEndpointVerify,
 			IdempotencyKey: "exposure-probe:" + requestKey, Payload: payload,
 		})

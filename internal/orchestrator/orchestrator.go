@@ -1584,6 +1584,10 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				// job-kind discriminator and always used discovery.run.
 			case adcsdiscovery.JobKind:
 				destination = adcsdiscovery.JobKind
+			case ExposureProbeJobKind:
+				// The probe's relay sweep was enqueued in the event's own
+				// transaction; there is no discovery.run job to restore.
+				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 			default:
 				return fmt.Errorf("orchestrator: reconcile %s (seq %d): unsupported job_kind %q", ev.Type, ev.Sequence, pl.JobKind)
 			}

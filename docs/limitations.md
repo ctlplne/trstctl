@@ -1325,8 +1325,10 @@ never live in the API process. What you can do end to end against the running bi
     unparseable one, a listener that accepted the connection without TLS, a
     non-public address, or no answer. The exposure posture then shows each
     record's latest probe (`reachability`) and counts probed and answering
-    records. The control plane never dials the endpoints itself; with no network
-    relay enrolled, the probe run stays queued. Provider-native attack-path
+    records. The control plane never dials the endpoints itself. A probe no
+    network relay can claim (none with a fresh heartbeat, or `endpoint.verify`
+    missing from `agent_channel.claimable_job_kinds`) is refused with `409`
+    naming what to fix, rather than left queued. Provider-native attack-path
     validation (whether a cloud's routes and security groups allow the path) is
     what comes next.
 - Rogue and non-compliant certificate posture:

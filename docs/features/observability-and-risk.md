@@ -91,7 +91,8 @@ addresses, refusing a name that resolves to a private or loopback one, and repor
 what answered: a served TLS certificate, a listener without TLS, a non-public address or
 no answer. The probe is a discovery run; the posture then shows each record's latest
 result and the Risk page's exposure panel has a **Probe from a relay** button and a
-**Live reachability** column. The control plane never dials the endpoints itself.
+**Live reachability** column. The control plane never dials the endpoints itself, and a
+probe no network relay can claim is refused with `409` rather than left queued.
 
 A stale NHI can be handed to a new accountable owner with
 `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):

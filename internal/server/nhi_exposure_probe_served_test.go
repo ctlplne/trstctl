@@ -12,6 +12,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -76,6 +77,17 @@ func TestServedNHIExposureProbeRecordsRelayReachability(t *testing.T) {
 	}
 	if status != http.StatusAccepted || json.Unmarshal(body, &queued) != nil || queued.RunID == "" || queued.Vantage != "relay" || queued.Omitted != 0 || len(queued.Endpoints) != 3 {
 		t.Fatalf("probe = %d %s", status, body)
+	}
+	// Outbox reconciliation restores missing commands from retained events.
+	// The probe's queued run has its sweep already; no discovery executor
+	// owns this source, so no discovery.run job may appear for it.
+	if _, err := h.srv.orch.ReconcileOutbox(ctx, h.srv.log); err != nil {
+		t.Fatalf("reconcile outbox: %v", err)
+	}
+	var discoveryJobs int
+	if err := h.store.SystemPool().QueryRow(ctx, `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND destination='discovery.run'
+		AND convert_from(payload,'UTF8')::jsonb->>'id' = $2`, h.tenant, queued.RunID).Scan(&discoveryJobs); err != nil || discoveryJobs != 0 {
+		t.Fatalf("reconciliation queued %d discovery.run jobs for the probe run (err=%v)", discoveryJobs, err)
 	}
 	if status, replay := secretsReqKey(t, h.servedHarness, http.MethodPost, path, writer, "probe-1", map[string]any{"inventory_ids": []string{}}); status != http.StatusAccepted || !bytes.Equal(replay, body) {
 		t.Fatalf("replay = %d %s", status, replay)
@@ -184,5 +196,23 @@ func TestServedNHIExposureProbeRecordsRelayReachability(t *testing.T) {
 	}
 	if probeEvidence != 2 {
 		t.Fatalf("answered row evidence = %v; want its two probe findings", up.EvidenceRefs)
+	}
+}
+
+// A probe no network relay can claim is refused up front, naming what to fix,
+// rather than left as a queued run that never moves.
+func TestServedNHIExposureProbeNeedsAClaimingRelay(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	seedDiscoveryPostureFindingWithIDs(t, h.store, h.tenant, "22222222-2222-2222-2222-22222222e021", "22222222-2222-2222-2222-22222222e022",
+		"22222222-2222-2222-2222-22222222e023", time.Now().UTC(), map[string]any{"public_endpoint": "https://api.partner.example.com"})
+	writer := seedScopedToken(t, h.store, h.tenant, "discovery:write")
+	status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/nhi/posture/exposure/probe", writer, "probe-no-relay", map[string]any{})
+	if status != http.StatusConflict || !strings.Contains(string(body), "No network relay can claim this probe") || !strings.Contains(string(body), "network role") {
+		t.Fatalf("probe without a claiming relay = %d %s", status, body)
+	}
+	var runs int
+	if err := h.store.SystemPool().QueryRow(t.Context(), `SELECT count(*) FROM discovery_runs r JOIN discovery_sources s ON s.id = r.source_id
+		WHERE r.tenant_id=$1 AND s.kind='nhi_exposure_probe'`, h.tenant).Scan(&runs); err != nil || runs != 0 {
+		t.Fatalf("a refused probe left %d runs (err=%v)", runs, err)
 	}
 }

@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/netip"
@@ -112,6 +113,9 @@ func (a *API) probeNHIExposure(w http.ResponseWriter, r *http.Request) {
 		// The request key derives from the Idempotency-Key, so a retried
 		// request converges on one run and one relay sweep.
 		runID, err := a.orch.QueueExposureProbe(ctx, tenantID, crypto.SHA256Hex([]byte(tenantID+"\x00"+idempotencyKey)), principal.Subject, probes)
+		if errors.Is(err, orchestrator.ErrDiscoveryRelayUnavailable) {
+			return 0, nil, errStatus(http.StatusConflict, "No network relay can claim this probe. "+discoveryRelayUnavailableDetail(err, false))
+		}
 		if err != nil {
 			return 0, nil, err
 		}
