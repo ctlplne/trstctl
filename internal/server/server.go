@@ -1684,6 +1684,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithAttestationPrincipalResolver(s),
 		api.WithCMDBRunNow(s),
 		api.WithSSHWorkflow(s),
+		api.WithPKISecretLeafRecovery(s),
 		api.WithBroker(s),
 		api.WithCertificateRevocationAuthority(s.certificateRevocationAuthority),
 		api.WithEphemeralIssuer(s),

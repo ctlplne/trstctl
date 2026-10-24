@@ -6682,6 +6682,17 @@ export interface PKISecret {
   serial: string;
 }
 
+export type PKISecretLeafPEM = string;
+
+export interface PKISecretLeafRecovery {
+  already_recovered: boolean;
+  certificate_id: string;
+  evidence: "retained_v2_leaf" | "operator_public_leaf";
+  fingerprint: string;
+  original_event_id: string;
+  serial: string;
+}
+
 export interface PKISecretPrerequisite {
   detail: string;
   id: string;

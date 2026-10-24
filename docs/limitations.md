@@ -4267,7 +4267,12 @@ when off, requiring a KEK when on):
   recorded as unknown (it is never guessed). The leaf is then revoked through
   the normal inventory workflow. A leaf the issuing CA did not sign, or one
   already in inventory, is left as it is. Version-1 events retain only a
-  serial and remain serial evidence.
+  serial: an operator who still holds such a leaf's public certificate submits
+  it to `POST /api/v1/certificates/pki-secret-recoveries`
+  (`trstctl certificates recover-pki-secret -f leaf.pem`), which accepts it
+  only when the issuing CA signed it and a PKI-secret mint recorded its serial,
+  and then gives it the same recovered inventory row. A version-1 leaf whose
+  certificate nobody kept remains serial evidence.
 - Secret sharing (F60) backs effect-free, value-free `POST
   /api/v1/secrets/shares/preview`, reviewed idempotent creation at
   `POST /api/v1/secrets/shares`, and atomic `.../redeem`. The server-keyed review

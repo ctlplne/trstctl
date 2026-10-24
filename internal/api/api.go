@@ -122,6 +122,7 @@ type API struct {
 	attestationPrincipals    AttestationPrincipalResolver
 	cmdbRunNow               CMDBRunNow
 	sshWorkflow              SSHWorkflowService
+	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
 	// commandMAC produces server-keyed, domain-separated review evidence for
@@ -267,6 +268,7 @@ type config struct {
 	attestationPrincipals       AttestationPrincipalResolver
 	cmdbRunNow                  CMDBRunNow
 	sshWorkflow                 SSHWorkflowService
+	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
 	commandMAC                  func(domain, material []byte) ([]byte, error)
@@ -589,6 +591,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		attestationPrincipals:       cfg.attestationPrincipals,
 		cmdbRunNow:                  cfg.cmdbRunNow,
 		sshWorkflow:                 cfg.sshWorkflow,
+		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,
 		commandMAC:                  cfg.commandMAC,
@@ -1322,6 +1325,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/breakglass/reconcile", opID: "reconcileBreakglass", summary: "Verify break-glass bundles and reconcile them into audit", handler: a.reconcileBreakglass, reqSchema: "BreakglassReconcileRequest", resSchema: "BreakglassReconcileResponse", successCode: "200", mutation: true, perm: authz.CertsIssue},
 
 		{method: "POST", path: "/api/v1/certificates", opID: "ingestCertificate", summary: "Ingest a certificate into the inventory", handler: a.ingestCertificate, reqSchema: "CertificateIngest", resSchema: "Certificate", successCode: "201", mutation: true, perm: authz.CertsWrite},
+		{method: "POST", path: "/api/v1/certificates/pki-secret-recoveries", opID: "recoverPKISecretLeaf", summary: "Give a historical PKI-secret leaf its inventory row from its public certificate", handler: a.recoverPKISecretLeaf, reqSchema: "PKISecretLeafPEM", reqContentType: "application/x-pem-file", resSchema: "PKISecretLeafRecovery", successCode: "200", mutation: true, perm: authz.CertsWrite},
 		{method: "POST", path: "/api/v1/certificates/bulk-revoke", opID: "bulkRevokeCertificates", summary: "Revoke exact certificates or explicitly selected lifecycle identities", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/health", opID: "getCertificateHealth", summary: "Get estate-wide certificate expiry and source health", handler: a.getCertificateHealth, resSchema: "CertificateHealthDashboard", successCode: "200", perm: authz.CertsRead},

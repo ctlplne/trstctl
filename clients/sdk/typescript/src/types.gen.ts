@@ -1920,6 +1920,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/pki-secret-recoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give a historical PKI-secret leaf its inventory row from its public certificate */
+        post: operations["recoverPKISecretLeaf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{id}": {
         parameters: {
             query?: never;
@@ -15047,6 +15064,18 @@ export interface components {
             private_key?: string;
             serial: string;
         };
+        /** @description one PEM CERTIFICATE block: the public leaf of a historical PKI-secret mint; at most 64 KiB */
+        PKISecretLeafPEM: string;
+        PKISecretLeafRecovery: {
+            already_recovered: boolean;
+            /** Format: uuid */
+            certificate_id: string;
+            /** @enum {string} */
+            evidence: "retained_v2_leaf" | "operator_public_leaf";
+            fingerprint: string;
+            original_event_id: string;
+            serial: string;
+        };
         PKISecretPrerequisite: {
             detail: string;
             id: string;
@@ -23171,6 +23200,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CertificateHealthDashboard"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    recoverPKISecretLeaf: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-pem-file": components["schemas"]["PKISecretLeafPEM"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PKISecretLeafRecovery"];
                 };
             };
             /** @description client error */

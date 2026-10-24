@@ -17031,12 +17031,14 @@
             "notes": "TRACE-033 promoted the served dynamic PKI secret workflow into the GA denominator. AUD-24 adds requester-key custody. F67 convergence adds one server-owned effect-free preview shared by API, secrets pki preview CLI, and a dedicated StepShell console workflow; execution can bind to its server-keyed fingerprint and rejects stale review. Preview and execution share internal/pkisecret profile validation and safe TTL normalization. Served tests prove zero preview events/effects, both custody modes, stale-plan refusal, and exact execution. Existing native/Vault tests continue to prove requester-key matching, certificate-only responses, durable legacy evidence, idempotent replay, usable keypairs, and revocation tracking. Richer OCSP/CRL revocation-state UI remains a roadmap residual.",
             "api_surface": [
                 "previewPKISecret",
-                "issuePKISecret"
+                "issuePKISecret",
+                "recoverPKISecretLeaf"
             ],
             "api_na": "",
             "cli_surface": [
                 "secrets pki preview",
-                "secrets pki"
+                "secrets pki",
+                "certificates recover-pki-secret"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -3,6 +3,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
@@ -150,4 +152,101 @@ func (s *Server) runPKISecretInventoryRecoveryOnce(ctx context.Context) {
 			slog.Int("recovered", result.Recovered), slog.Int("already_recovered", result.AlreadyRecovered),
 			slog.Int("in_inventory", result.InInventory), slog.Int("unverifiable", result.Unverifiable))
 	}
+}
+
+// RecoverPKISecretLeaf gives a historical PKI-secret leaf its inventory row
+// from the public certificate an operator supplies (A111). A v1 mint kept
+// only the serial, so the certificate is accepted only when this control
+// plane's issuing CA signed it and a PKI-secret mint recorded its serial; a
+// v2 mint must have retained exactly these bytes. Retrying returns the same
+// row.
+func (s *Server) RecoverPKISecretLeaf(ctx context.Context, tenantID string, certificatePEM []byte) (api.PKISecretLeafRecovery, error) {
+	if s.log == nil || s.store == nil || len(s.caCertDER) == 0 {
+		return api.PKISecretLeafRecovery{}, errors.New("server: PKI secret leaf recovery requires the issuing CA and event log")
+	}
+	der, err := certinfo.LeafDER(certificatePEM)
+	if err != nil {
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: the body is not one PEM certificate: %v", api.ErrPKISecretLeafNotRecoverable, err)
+	}
+	info, err := certinfo.Inspect(der)
+	if err != nil || info.IsCA {
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: the certificate is not an end-entity leaf", api.ErrPKISecretLeafNotRecoverable)
+	}
+	if crypto.VerifyLeafSignedByCA(der, s.caCertDER) != nil {
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: this control plane's issuing CA did not sign the certificate", api.ErrPKISecretLeafNotRecoverable)
+	}
+	mint, issued, found, err := s.pkiSecretMintForSerial(ctx, tenantID, info.SerialNumber)
+	if err != nil {
+		return api.PKISecretLeafRecovery{}, err
+	}
+	if !found {
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: no PKI secret mint recorded serial %s", api.ErrPKISecretLeafNotRecoverable, info.SerialNumber)
+	}
+	evidence := projections.RecoveredFromOperatorLeaf
+	switch mint.SchemaVersion {
+	case projections.CASecretInventorySchemaVersion:
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: its mint already inventoried it as %s", api.ErrPKISecretLeafInInventory,
+			projections.SecretPKIInventoryID(mint))
+	case projections.CAIssuedCertificateEvidenceSchemaVersion:
+		if !bytes.Equal(issued.CertificateDER, der) {
+			return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: its mint retained a different certificate for serial %s", api.ErrPKISecretLeafNotRecoverable, info.SerialNumber)
+		}
+		evidence = projections.RecoveredFromRetainedLeaf
+	}
+	out := api.PKISecretLeafRecovery{
+		CertificateID: projections.RecoveredSecretPKIInventoryID(tenantID, mint.ID), Serial: info.SerialNumber,
+		Fingerprint: info.SHA256Fingerprint, OriginalEventID: mint.ID, Evidence: evidence,
+	}
+	recoveryID := pkiSecretRecoveryEventID(tenantID, mint.ID)
+	if prior, found, err := s.log.EventByID(ctx, recoveryID); err != nil {
+		return api.PKISecretLeafRecovery{}, err
+	} else if found {
+		var recovered projections.CACertificateInventoryRecovered
+		if json.Unmarshal(prior.Data, &recovered) == nil {
+			out.Evidence = recovered.Evidence
+		}
+		out.AlreadyRecovered = true
+		return out, nil
+	}
+	if existing, err := s.store.GetCertificateByFingerprint(ctx, tenantID, info.SHA256Fingerprint); err == nil {
+		return api.PKISecretLeafRecovery{}, fmt.Errorf("%w: as %s", api.ErrPKISecretLeafInInventory, existing.ID)
+	} else if !store.IsNotFound(err) {
+		return api.PKISecretLeafRecovery{}, err
+	}
+	if err := s.appendPKISecretRecovery(ctx, tenantID, mint.ID, recoveryID, IssuingCAID(), info.SerialNumber,
+		info.SHA256Fingerprint, der, evidence); err != nil {
+		return api.PKISecretLeafRecovery{}, err
+	}
+	return out, nil
+}
+
+// pkiSecretMintForSerial finds the PKI-secret mint of serial under the
+// issuing CA in the tenant's retained history.
+func (s *Server) pkiSecretMintForSerial(ctx context.Context, tenantID, serial string) (events.Event, projections.CAIssuedCertificate, bool, error) {
+	var (
+		mint   events.Event
+		issued projections.CAIssuedCertificate
+		found  bool
+	)
+	issuingCAID := IssuingCAID()
+	err := s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := s.log.LastSequence(readCtx)
+		if err != nil || head == 0 {
+			return err
+		}
+		return s.log.ReplayTenantTypesThrough(readCtx, tenantID, 1, head, []string{projections.EventCAIssuedCertificate}, func(e events.Event) error {
+			if found {
+				return nil
+			}
+			var fact projections.CAIssuedCertificate
+			if err := json.Unmarshal(e.Data, &fact); err != nil {
+				return fmt.Errorf("server: decode PKI secret mint %s: %w", e.ID, err)
+			}
+			if fact.Source == "pkisecret" && fact.CAID == issuingCAID && fact.Serial == serial {
+				mint, issued, found = e, fact, true
+			}
+			return nil
+		})
+	})
+	return mint, issued, found, err
 }

@@ -9204,6 +9204,21 @@ PKISecret = TypedDict(
     total=False,
 )
 
+PKISecretLeafPEM = str
+
+PKISecretLeafRecovery = TypedDict(
+    'PKISecretLeafRecovery',
+    {
+        'already_recovered': bool,
+        'certificate_id': str,
+        'evidence': str,
+        'fingerprint': str,
+        'original_event_id': str,
+        'serial': str,
+    },
+    total=False,
+)
+
 PKISecretPrerequisite = TypedDict(
     'PKISecretPrerequisite',
     {

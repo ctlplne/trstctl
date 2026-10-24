@@ -644,6 +644,8 @@ public final class OpenApiSchemas {
       "PAMTargetList",
       "PAMTargetRequest",
       "PKISecret",
+      "PKISecretLeafPEM",
+      "PKISecretLeafRecovery",
       "PKISecretPrerequisite",
       "PKISecretPreview",
       "PKISecretRequest",

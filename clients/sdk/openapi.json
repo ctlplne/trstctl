@@ -27447,6 +27447,46 @@
         ],
         "type": "object"
       },
+      "PKISecretLeafPEM": {
+        "description": "one PEM CERTIFICATE block: the public leaf of a historical PKI-secret mint; at most 64 KiB",
+        "type": "string"
+      },
+      "PKISecretLeafRecovery": {
+        "properties": {
+          "already_recovered": {
+            "type": "boolean"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "evidence": {
+            "enum": [
+              "retained_v2_leaf",
+              "operator_public_leaf"
+            ],
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "original_event_id": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "serial",
+          "fingerprint",
+          "original_event_id",
+          "evidence",
+          "already_recovered"
+        ],
+        "type": "object"
+      },
       "PKISecretPrerequisite": {
         "properties": {
           "detail": {
@@ -45962,6 +46002,74 @@
         ],
         "summary": "Get estate-wide certificate expiry and source health",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/certificates/pki-secret-recoveries": {
+      "post": {
+        "operationId": "recoverPKISecretLeaf",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-pem-file": {
+              "schema": {
+                "$ref": "#/components/schemas/PKISecretLeafPEM"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PKISecretLeafRecovery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Give a historical PKI-secret leaf its inventory row from its public certificate",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/certificates/{id}": {

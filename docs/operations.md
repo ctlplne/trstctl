@@ -280,4 +280,7 @@ responder serial. On the first lifecycle sweep after an upgrade, the control
 plane recovers each version-2 leaf the issuing CA signed into inventory, once,
 through a `ca.certificate.inventory_recovered` event, and logs how many it
 recovered and how many it could not verify. An unverifiable leaf stays serial
-evidence: the issuing CA may have changed since it was minted.
+evidence: the issuing CA may have changed since it was minted. A version-1 mint
+kept only the serial; submit the leaf's public certificate with
+`trstctl certificates recover-pki-secret -f leaf.pem` to give it the same
+inventory row once the issuing CA's signature and the recorded serial match.
