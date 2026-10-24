@@ -4709,6 +4709,20 @@ func componentSchemas() map[string]*Schema {
 		"key_id": str(),
 		"reason": str(),
 	})
+	sshKRLAdoption := object(map[string]*Schema{
+		"predecessor_sha256":  str(),
+		"predecessor_version": {Type: "integer", Description: "the adopted list's KRL version; this control plane's list now has a newer one"},
+		"parts":               {Type: "integer", Description: "events recorded; 0 when this list already carried the predecessor at a newer version"},
+		"already_carried":     {Type: "boolean"},
+		"carried": object(map[string]*Schema{
+			"serial_ranges":       {Type: "integer"},
+			"key_ids":             {Type: "integer"},
+			"keys":                {Type: "integer"},
+			"key_hashes":          {Type: "integer"},
+			"broadened_to_any_ca": {Type: "integer", Description: "revocations the predecessor scoped to one CA, now revoked for any CA"},
+		}, "serial_ranges", "key_ids", "keys", "key_hashes", "broadened_to_any_ca"),
+		"krl": ref("SSHStatus"),
+	}, "predecessor_sha256", "predecessor_version", "parts", "already_carried", "carried", "krl")
 	sshHostRetireReq := object(map[string]*Schema{
 		"host":        str(),
 		"source_id":   uuid(),
@@ -7292,6 +7306,8 @@ func componentSchemas() map[string]*Schema {
 		"SSHAttestedUserCertPreview":               sshAttestedUserCertPreview,
 		"SSHAttestedUserCert":                      sshAttestedUserCert,
 		"SSHRevokeCertificateRequest":              sshRevokeCertReq,
+		"SSHKRLBinary":                             {Type: "string", Format: "binary", Description: "a predecessor control plane's OpenSSH binary KRL, as its /ssh/krl served it or a host installed it; at most 4 MiB"},
+		"SSHKRLAdoption":                           sshKRLAdoption,
 		"SSHHostRetireRequest":                     sshHostRetireReq,
 		"SSHHostRetirement":                        sshHostRetirement,
 		"BrokerAgentIdentityRequest":               brokerAgentIdentityReq,

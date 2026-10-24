@@ -10904,6 +10904,21 @@ SSHHostRetirement = TypedDict(
     total=False,
 )
 
+SSHKRLAdoption = TypedDict(
+    'SSHKRLAdoption',
+    {
+        'already_carried': bool,
+        'carried': dict[str, Any],
+        'krl': dict[str, Any],
+        'parts': int,
+        'predecessor_sha256': str,
+        'predecessor_version': int,
+    },
+    total=False,
+)
+
+SSHKRLBinary = str
+
 SSHRevokeCertificateRequest = TypedDict(
     'SSHRevokeCertificateRequest',
     {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -34,6 +35,7 @@ type SSHWorkflowService interface {
 	IssueAttestedSSHUserCert(ctx context.Context, tenantID, idempotencyKey string, req SSHAttestedUserCertRequest) (SSHAttestedUserCert, error)
 	RevokeSSHCertificate(ctx context.Context, tenantID, idempotencyKey string, req SSHRevokeCertificateRequest) (SSHStatus, error)
 	RetireSSHHost(ctx context.Context, tenantID, idempotencyKey string, req SSHHostRetireRequest) (SSHHostRetirement, error)
+	AdoptSSHKRL(ctx context.Context, tenantID, idempotencyKey string, krl []byte) (SSHKRLAdoption, error)
 }
 
 // WithSSHWorkflow wires the served SSH-at-scale workflow API. Without it, routes
@@ -235,6 +237,30 @@ type SSHRevokeCertificateRequest struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// MaxSSHKRLAdoptionBytes bounds the predecessor KRL an adoption reads.
+const MaxSSHKRLAdoptionBytes = 4 << 20
+
+// SSHKRLAdoption reports a predecessor control plane's KRL carried into this
+// one (A110): what it revoked, now revoked here for any CA, and this list's
+// version, which has moved past the predecessor's.
+type SSHKRLAdoption struct {
+	PredecessorSHA256  string                `json:"predecessor_sha256"`
+	PredecessorVersion uint64                `json:"predecessor_version"`
+	Parts              int                   `json:"parts"`
+	AlreadyCarried     bool                  `json:"already_carried"`
+	Carried            SSHKRLAdoptionCarried `json:"carried"`
+	KRL                SSHStatus             `json:"krl"`
+}
+
+// SSHKRLAdoptionCarried counts what an adopted list revokes.
+type SSHKRLAdoptionCarried struct {
+	SerialRanges     int `json:"serial_ranges"`
+	KeyIDs           int `json:"key_ids"`
+	Keys             int `json:"keys"`
+	KeyHashes        int `json:"key_hashes"`
+	BroadenedToAnyCA int `json:"broadened_to_any_ca"`
+}
+
 type SSHHostRetireRequest struct {
 	Host       string `json:"host"`
 	SourceID   string `json:"source_id,omitempty"`
@@ -405,6 +431,31 @@ func (a *API) revokeSSHCertificate(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
 		out, err := a.sshWorkflow.RevokeSSHCertificate(ctx, tenantID, idempotencyKey, req)
+		return http.StatusOK, out, err
+	})
+}
+
+// adoptSSHKRL carries a predecessor control plane's binary KRL, sent as the
+// request body, into this one.
+//
+//trstctl:mutation
+func (a *API) adoptSSHKRL(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.sshWorkflow == nil {
+			return 0, nil, ErrSSHWorkflowUnavailable
+		}
+		krl, err := io.ReadAll(io.LimitReader(r.Body, MaxSSHKRLAdoptionBytes+1))
+		if err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "cannot read the predecessor KRL")
+		}
+		if len(krl) == 0 {
+			return 0, nil, errStatus(http.StatusBadRequest, "send the predecessor's binary KRL as the request body")
+		}
+		if len(krl) > MaxSSHKRLAdoptionBytes {
+			return 0, nil, errStatus(http.StatusRequestEntityTooLarge, "the predecessor KRL is larger than 4 MiB")
+		}
+		out, err := a.sshWorkflow.AdoptSSHKRL(ctx, tenantID, idempotencyKey, krl)
 		return http.StatusOK, out, err
 	})
 }

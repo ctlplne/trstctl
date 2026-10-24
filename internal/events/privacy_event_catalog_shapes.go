@@ -501,6 +501,11 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "ssh.host.retired":
 		return shape(`{"id":"","tenant_id":"","host":"","source_id":"","run_id":"","identity_id":"","reason":"","status":"","recorded_at":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/source_id", "/run_id", "/identity_id", "/reason"}}), true
+	case "ssh.krl.adopted":
+		// One part of a predecessor KRL adopted by a replacement control plane
+		// (A110); each list is present only when that part carries entries.
+		return shape(`{"adoption_id":"","predecessor_version":1,"part":1,"parts":1,"serial_ranges":[{"lo":1,"hi":1}],"key_ids":[""],"keys":[""],"key_sha1":[""],"key_sha256":[""]}`,
+			catalogPrivacyShapeOptions{Optional: []string{"/serial_ranges", "/key_ids", "/keys", "/key_sha1", "/key_sha256"}}), true
 	case "ssh.trust_rollout.recorded":
 		return shape(`{"id":"","tenant_id":"","source_id":"","target_hosts":[""],"candidate_ca_fingerprint":"","reload_command":"","health_command":"","rollback_plan":"","status":"","confirmed":true,"recorded_at":""}`), true
 	case "ssh.trust.added", "ssh.trust.removed", "ssh.trust.rollback_failed", "ssh.trust.rolled_back":

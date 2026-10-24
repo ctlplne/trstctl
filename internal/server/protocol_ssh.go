@@ -307,14 +307,7 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	// closed rather than publishing an incomplete KRL.
 	// Stage into a private copy. A decode error, timeout, or rewrite cannot
 	// advance the live cursor or publish a partial revocation list.
-	candidate := &sshProtocol{krl: ssh.NewKRL(), tenantID: p.tenantID, applied: p.applied}
-	current := p.krl.Distribute()
-	for _, serial := range current.Serials {
-		candidate.krl.RevokeSerial(serial)
-	}
-	for _, keyID := range current.KeyIDs {
-		candidate.krl.RevokeKeyID(keyID)
-	}
+	candidate := &sshProtocol{krl: p.krl.Clone(), tenantID: p.tenantID, applied: p.applied}
 	candidate.krlVersion.Store(p.krlVersion.Load())
 	through := before.LastSequence
 	if limit != 0 && through-p.applied > limit {
@@ -325,7 +318,7 @@ func (p *sshProtocol) syncRevocationsWithLimit(ctx context.Context, force bool, 
 	// use to change the KRL. Omitting a type makes a durable PAM revocation
 	// invisible even though the decoder below knows how to apply it.
 	if err := p.log.ReplayTenantTypesThrough(ctx, p.tenantID, p.applied+1, through,
-		[]string{eventSSHCertRevoked, projections.EventPAMSessionRevocationRequested, projections.EventPAMSSHSigningRecoveryRequested}, candidate.applyRevocationEvent); err != nil {
+		[]string{eventSSHCertRevoked, eventSSHKRLAdopted, projections.EventPAMSessionRevocationRequested, projections.EventPAMSSHSigningRecoveryRequested}, candidate.applyRevocationEvent); err != nil {
 		return fmt.Errorf("server: replay SSH revocations: %w", err)
 	}
 	after, err := p.log.Snapshot(ctx)
@@ -370,6 +363,11 @@ func (p *sshProtocol) applyRevocationEvent(event events.Event) error {
 		}
 		p.Revoke(req.Serial, req.KeyID)
 	}
+	if event.Type == eventSSHKRLAdopted && event.TenantID == p.tenantID {
+		if err := p.applySSHKRLAdoption(event); err != nil {
+			return err
+		}
+	}
 	if event.Type == projections.EventPAMSessionRevocationRequested && event.TenantID == p.tenantID {
 		var req struct {
 			ID     string `json:"id"`
@@ -404,8 +402,7 @@ func (p *sshProtocol) KRLVersion() uint64 { return p.krlVersion.Load() }
 func (p *sshProtocol) RevokedCount() int {
 	p.syncMu.Lock()
 	defer p.syncMu.Unlock()
-	snap := p.krl.Distribute()
-	return len(snap.Serials) + len(snap.KeyIDs)
+	return p.krl.Count()
 }
 
 // serveKRL emits the current KRL in the OpenSSH BINARY KRL format (PROTOCOL.krl) —

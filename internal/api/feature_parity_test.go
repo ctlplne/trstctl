@@ -289,8 +289,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A101's stale NHI handoff raised it to 522, mapped onto the same row.
 	// A102's exposure reachability probe raised it to 523, mapped onto the same row.
 	// A106's finding resolution raised it to 524, mapped onto the discovery row.
-	if len(out) != 524 {
-		t.Fatalf("OpenAPI operationIds = %d, want 524", len(out))
+	// A110's KRL adoption raised it to 525, mapped onto the SSH CA row.
+	if len(out) != 525 {
+		t.Fatalf("OpenAPI operationIds = %d, want 525", len(out))
 	}
 	return out
 }

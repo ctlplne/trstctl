@@ -7481,6 +7481,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/krl/adoptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Carry a predecessor control plane's binary KRL into this one so hosts can move to its list */
+        post: operations["adoptSSHKRL"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/status": {
         parameters: {
             query?: never;
@@ -16378,6 +16395,28 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
         };
+        SSHKRLAdoption: {
+            already_carried: boolean;
+            carried: {
+                /** @description revocations the predecessor scoped to one CA, now revoked for any CA */
+                broadened_to_any_ca: number;
+                key_hashes: number;
+                key_ids: number;
+                keys: number;
+                serial_ranges: number;
+            };
+            krl: components["schemas"]["SSHStatus"];
+            /** @description events recorded; 0 when this list already carried the predecessor at a newer version */
+            parts: number;
+            predecessor_sha256: string;
+            /** @description the adopted list's KRL version; this control plane's list now has a newer one */
+            predecessor_version: number;
+        };
+        /**
+         * Format: binary
+         * @description a predecessor control plane's OpenSSH binary KRL, as its /ssh/krl served it or a host installed it; at most 4 MiB
+         */
+        SSHKRLBinary: string;
         SSHRevokeCertificateRequest: {
             key_id?: string;
             reason?: string;
@@ -39211,6 +39250,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSHHostRetirement"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    adoptSSHKRL: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": components["schemas"]["SSHKRLBinary"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHKRLAdoption"];
                 };
             };
             /** @description client error */

@@ -65,6 +65,18 @@ func ParsePublicKey(data []byte) (KeyInfo, error) {
 	return infoOf(pub, comment), nil
 }
 
+// ParseWireKey parses one SSH public key in wire format (RFC 4253 section
+// 6.6), the form an OpenSSH KRL carries an explicitly revoked key in, and
+// returns its metadata. A KRL entry that is not a key would make every host's
+// ssh-keygen refuse the whole list.
+func ParseWireKey(blob []byte) (KeyInfo, error) {
+	pub, err := ssh.ParsePublicKey(blob)
+	if err != nil {
+		return KeyInfo{}, err
+	}
+	return infoOf(pub, ""), nil
+}
+
 // ParseAuthorizedKeys parses every entry in an authorized_keys file. Malformed
 // or comment/blank lines are skipped; a file with no valid keys yields an empty
 // slice.

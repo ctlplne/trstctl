@@ -281,6 +281,23 @@ mutation stays in the operator-confirmed agent path.
    key hash the installed list revokes; the installed list stays in force. A
    host whose `RevokedKeys` file already holds the operator's own revocations
    therefore keeps them until the served list carries them too.
+
+   When a control plane is restored from a backup or replaced, its KRL counts
+   its own versions and lacks revocations recorded only by its predecessor, so
+   hosts keep their installed list and refuse the new one. Carry the list the
+   hosts hold into the new control plane, then let the watchers poll:
+
+   ```sh
+   scp edge-1.internal:/etc/ssh/revoked_keys predecessor.krl
+   ssh-keygen -Q -l -f predecessor.krl
+   trstctl ssh krl adopt -f predecessor.krl
+   trstctl ssh status
+   ```
+
+   The response counts what was carried (and which revocations the predecessor
+   scoped to one CA are now revoked for any CA) and shows the new KRL version,
+   which is past the predecessor's. Adopt the newest list any host holds; a
+   list already carried at a newer version records nothing.
    Configure it on every relying host: there is not yet a control-plane fleet
    push or a central per-host receipt.
 

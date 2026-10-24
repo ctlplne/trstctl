@@ -3146,9 +3146,14 @@ than sending an operator looking for a credential that was never there.
   revoking a serial, key ID, key, or key hash the installed list revokes, so a
   restored or replacement control plane, which counts its own versions, cannot
   silently un-revoke anything on a host; before this guard a newer list that
-  omitted an installed serial replaced it. Carrying a predecessor's
-  revocations into a replacement control plane, and fleet receipts, remain
-  unverified.
+  omitted an installed serial replaced it. A restored or replacement control
+  plane takes over a lineage by adopting the list its hosts hold
+  (`trstctl ssh krl adopt`): it records every predecessor revocation for any
+  CA and moves its version past the predecessor's, and a served test proves a
+  host refuses the replacement list before adoption and takes it after,
+  with stock `ssh-keygen` reading the result. One adoption reads at most
+  4 MiB and 100,000 entries. A lab proof with real hosts moving between two
+  control planes, and fleet receipts, remain unverified.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The

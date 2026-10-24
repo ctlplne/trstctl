@@ -758,6 +758,8 @@ public final class OpenApiSchemas {
       "SSHFleetInventory",
       "SSHHostRetireRequest",
       "SSHHostRetirement",
+      "SSHKRLAdoption",
+      "SSHKRLBinary",
       "SSHRevokeCertificateRequest",
       "SSHStatus",
       "SSHTrustRollout",

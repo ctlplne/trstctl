@@ -3,6 +3,7 @@
 package sshkrl
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -220,6 +221,9 @@ func (r *Revocations) parseCertificates(body []byte, pending map[string][]serial
 				if err != nil {
 					return err
 				}
+				if bytes.IndexByte(id, 0) >= 0 {
+					return errors.New("sshkrl: KRL key ID holds a NUL byte")
+				}
 				if err := r.count(1); err != nil {
 					return err
 				}
@@ -298,6 +302,56 @@ func (r *Revocations) parseBlobs(body []byte, into map[string]struct{}, size int
 		into[string(blob)] = struct{}{}
 	}
 	return nil
+}
+
+// SerialRange is an inclusive range of certificate serials.
+type SerialRange struct{ Lo, Hi uint64 }
+
+// Carried is what a list revokes, in the form a list for any CA carries it:
+// what a replacement control plane adopts from its predecessor (A110).
+type Carried struct {
+	Serials   []SerialRange // merged across CA scopes
+	KeyIDs    []string      // sorted
+	Keys      [][]byte      // explicitly revoked public key blobs, sorted
+	SHA1      [][]byte      // revoked key SHA-1 hashes, sorted
+	SHA256    [][]byte      // revoked key SHA-256 hashes, sorted
+	Broadened int           // CA-scoped serial ranges and key IDs now carried for any CA
+}
+
+// Carried returns r's revocations for a list that revokes them for any CA. A
+// revocation scoped to one CA becomes one for every CA, which still revokes
+// what the list did, so a host comparing the two keeps nothing less.
+func (r Revocations) Carried() Carried {
+	var out Carried
+	var all []serialRange
+	ids := map[string]struct{}{}
+	for ca, scope := range r.certs {
+		all = append(all, scope.serials...)
+		for id := range scope.keyIDs {
+			ids[id] = struct{}{}
+		}
+		if ca != "" {
+			out.Broadened += len(scope.serials) + len(scope.keyIDs)
+		}
+	}
+	for _, s := range mergeSerialRanges(all) {
+		out.Serials = append(out.Serials, SerialRange{Lo: s.lo, Hi: s.hi})
+	}
+	for id := range ids {
+		out.KeyIDs = append(out.KeyIDs, id)
+	}
+	sort.Strings(out.KeyIDs)
+	out.Keys, out.SHA1, out.SHA256 = sortedBlobs(r.keys), sortedBlobs(r.sha1), sortedBlobs(r.sha256)
+	return out
+}
+
+func sortedBlobs(set map[string]struct{}) [][]byte {
+	out := make([][]byte, 0, len(set))
+	for blob := range set {
+		out = append(out, []byte(blob))
+	}
+	sort.Slice(out, func(i, j int) bool { return bytes.Compare(out[i], out[j]) < 0 })
+	return out
 }
 
 func mergeSerialRanges(ranges []serialRange) []serialRange {

@@ -7926,6 +7926,17 @@ export interface SSHHostRetirement {
   tenant_id: string;
 }
 
+export interface SSHKRLAdoption {
+  already_carried: boolean;
+  carried: { broadened_to_any_ca: number; key_hashes: number; key_ids: number; keys: number; serial_ranges: number };
+  krl: SSHStatus;
+  parts: number;
+  predecessor_sha256: string;
+  predecessor_version: number;
+}
+
+export type SSHKRLBinary = string;
+
 export interface SSHRevokeCertificateRequest {
   key_id?: string;
   reason?: string;

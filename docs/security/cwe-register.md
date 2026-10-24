@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1694 annotated sites across 26 rules. Each row is
+1700 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -579,8 +579,8 @@ not this file.
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/protocols/est/property_test.go:142` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/protocols/est/property_test.go:155` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/protocols/ssh/krl_binary_test.go:25` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/protocols/ssh/ssh.go:388` | SSH wire string length, far under the uint32 bound for certificate fields (CWE-190) |
+| `internal/protocols/ssh/krl_binary_test.go:29` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/protocols/ssh/ssh.go:519` | SSH wire string length, far under the uint32 bound for certificate fields (CWE-190) |
 | `internal/query/adversarial_test.go:51` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
@@ -835,7 +835,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (189 sites)
+### G204 — CWE-78 OS command injection (192 sites)
 
 | Location | Reason |
 |---|---|
@@ -948,7 +948,9 @@ not this file.
 | `internal/protocols/est/differential_test.go:196` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/scep/sscep_client_test.go:55` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/protocols/scep/sscep_client_test.go:74` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/protocols/ssh/krl_binary_test.go:193` | fixed reference tool and task-owned test files (CWE-78) |
+| `internal/protocols/ssh/krl_binary_test.go:197` | fixed reference tool and task-owned test files (CWE-78) |
+| `internal/protocols/ssh/krl_binary_test.go:289` | fixed reference tool and task-owned test files (CWE-78) |
+| `internal/protocols/ssh/krl_binary_test.go:293` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/ssh_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/rpverify/verifier_test.go:369` | fixed argv, no user input (CWE-78) |
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
@@ -993,6 +995,7 @@ not this file.
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
+| `internal/server/ssh_krl_adoption_served_test.go:31` | fixed ssh-keygen argv over a test-owned temp path |
 | `internal/server/vault_compat_served_test.go:147` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1130,7 +1133,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (477 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (479 sites)
 
 | Location | Reason |
 |---|---|
@@ -1412,6 +1415,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:200` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:233` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/protocols/ssh/krl_binary_test.go:315` | test-owned file under t.TempDir |
 | `internal/reconcile/vaultsource.go:411` | operator-configured token file from the reviewed config (CWE-22) |
 | `internal/reportarchive/archive.go:250` | fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components. |
 | `internal/reportarchive/archive.go:269` | directory is constructed under the operator archive root and checked as a private real directory. |
@@ -1497,6 +1501,7 @@ not this file.
 | `internal/server/server.go:1451` | operator-configured key file path (CWE-22) |
 | `internal/server/server.go:2616` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/server.go:2693` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
 | `internal/signing/ceremony_test.go:129` | the test's own temporary journal directory (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1823,7 +1828,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (89 sites)
+### G703 — CWE-22 Path traversal (taint) (90 sites)
 
 | Location | Reason |
 |---|---|
@@ -1884,6 +1889,7 @@ not this file.
 | `internal/server/secret_third_party_scan_signature_served_test.go:50` | test-owned temp path |
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
+| `internal/server/ssh_krl_adoption_served_test.go:52` | target is a fixed name under t.TempDir, not request-derived |
 | `internal/server/vault_compat_served_test.go:130` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/signing/keystore.go:306` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:317` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |

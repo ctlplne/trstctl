@@ -281,7 +281,18 @@ Use a separate approval workflow if your policy requires two people.
   one, and it refuses any list, however new, that would stop revoking a
   serial, key ID, key, or key hash the installed list revokes (a revocation
   for any CA keeps one scoped to a single CA). The installed list stays in
-  force and the refusal counts what the served list would drop.
+  force and the refusal counts what the served list would drop. To move hosts
+  to a restored or replacement control plane, adopt the list they hold there:
+  `POST /api/v1/ssh/krl/adoptions` (`trstctl ssh krl adopt -f old.krl`) takes
+  the predecessor's binary KRL as served or as a host installed it, records
+  every revocation it holds (serials and serial ranges, key IDs, revoked keys
+  and key hashes; revocations the predecessor scoped to one CA are carried for
+  any CA, and the response counts them), and moves this list's version past
+  the predecessor's. Hosts take the new list on their next poll. Adopting a
+  list already carried at a newer version records nothing. One adoption reads
+  at most 4 MiB and 100,000 entries, and refuses a list with signatures, a
+  revoked entry that is not an SSH key, or a key ID OpenSSH and JSON cannot
+  both carry exactly.
 
 ## Reference
 
@@ -292,15 +303,17 @@ Use a separate approval workflow if your policy requires two people.
   `POST /api/v1/ssh/trust-rollouts`,
   `POST /api/v1/ssh/attested-user-certs/preview`,
   `POST /api/v1/ssh/attested-user-certs`,
-  `POST /api/v1/ssh/certificates/revoke`, `POST /api/v1/ssh/hosts/retire`;
-  `trstctl ssh preview|issue|status|trust-rollout|preview-attested-user|issue-attested-user|revoke|retire-host`.
+  `POST /api/v1/ssh/certificates/revoke`, `POST /api/v1/ssh/krl/adoptions`,
+  `POST /api/v1/ssh/hosts/retire`;
+  `trstctl ssh preview|issue|status|trust-rollout|preview-attested-user|issue-attested-user|revoke|krl adopt|retire-host`.
 - **Agent config:** `SSHDConfigPath`, `TrustedUserCAKeysPath`,
   `AllowUnconfirmedRemoval` (default false).
 - **Attested issuance:** `AttestedUserCertIssuer.Issue` (method+payload → cert).
 - **Configuration:** `protocols.ssh.enabled`, `protocols.ssh.tenant_id`,
   `protocols.ssh_user_principals`.
 - **Events:** `ssh.cert.issued` (key ID, serial, principal names, validity window and
-  the calling actor), `ssh.cert.revoked`, `ssh.attested_cert.issued`, `ssh.trust.added`,
+  the calling actor), `ssh.cert.revoked`, `ssh.krl.adopted` (one part of an adopted
+  predecessor list), `ssh.attested_cert.issued`, `ssh.trust.added`,
   `ssh.trust.removed`, `ssh.trust.rolled_back`, `ssh.trust.rollback_failed`.
 - **Standard:** OpenSSH certificate format (`PROTOCOL.certkeys`).
 - **Design deep-dive:** [SSH trust-rewrite design](../design/ssh-trust-rewrite.md).

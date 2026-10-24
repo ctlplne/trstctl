@@ -10447,6 +10447,7 @@
                 "issueSSHCertificate",
                 "getSSHStatus",
                 "revokeSSHCertificate",
+                "adoptSSHKRL",
                 "getProtocolProfile",
                 "activateProtocolProfile"
             ],
@@ -10456,6 +10457,7 @@
                 "ssh issue",
                 "ssh status",
                 "ssh revoke",
+                "ssh krl adopt",
                 "setup protocols status",
                 "setup protocols activate"
             ],

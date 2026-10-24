@@ -32629,6 +32629,69 @@
         ],
         "type": "object"
       },
+      "SSHKRLAdoption": {
+        "properties": {
+          "already_carried": {
+            "type": "boolean"
+          },
+          "carried": {
+            "properties": {
+              "broadened_to_any_ca": {
+                "description": "revocations the predecessor scoped to one CA, now revoked for any CA",
+                "type": "integer"
+              },
+              "key_hashes": {
+                "type": "integer"
+              },
+              "key_ids": {
+                "type": "integer"
+              },
+              "keys": {
+                "type": "integer"
+              },
+              "serial_ranges": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "serial_ranges",
+              "key_ids",
+              "keys",
+              "key_hashes",
+              "broadened_to_any_ca"
+            ],
+            "type": "object"
+          },
+          "krl": {
+            "$ref": "#/components/schemas/SSHStatus"
+          },
+          "parts": {
+            "description": "events recorded; 0 when this list already carried the predecessor at a newer version",
+            "type": "integer"
+          },
+          "predecessor_sha256": {
+            "type": "string"
+          },
+          "predecessor_version": {
+            "description": "the adopted list's KRL version; this control plane's list now has a newer one",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "predecessor_sha256",
+          "predecessor_version",
+          "parts",
+          "already_carried",
+          "carried",
+          "krl"
+        ],
+        "type": "object"
+      },
+      "SSHKRLBinary": {
+        "description": "a predecessor control plane's OpenSSH binary KRL, as its /ssh/krl served it or a host installed it; at most 4 MiB",
+        "format": "binary",
+        "type": "string"
+      },
       "SSHRevokeCertificateRequest": {
         "properties": {
           "key_id": {
@@ -69188,6 +69251,74 @@
         ],
         "summary": "Record SSH host retirement evidence",
         "x-trstctl-permission": "identities:write"
+      }
+    },
+    "/api/v1/ssh/krl/adoptions": {
+      "post": {
+        "operationId": "adoptSSHKRL",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHKRLBinary"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHKRLAdoption"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Carry a predecessor control plane's binary KRL into this one so hosts can move to its list",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/ssh/status": {

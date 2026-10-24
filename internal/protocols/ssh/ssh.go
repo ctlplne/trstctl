@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -231,15 +232,104 @@ func (ca *CA) run(fn func() error) error {
 
 // KRL is an SSH key-revocation list: a distributable registry of revoked
 // certificate serials and key IDs that sshd consults to reject revoked certs.
+//
+// A list adopted from a predecessor control plane (A110) can also carry serial
+// ranges, explicitly revoked public keys, and revoked key hashes: a host keeps
+// a list only while its replacement still revokes everything it does, so the
+// replacement carries them exactly.
 type KRL struct {
 	mu      sync.Mutex
 	serials map[uint64]bool
 	keyIDs  map[string]bool
+	ranges  []serialRange // sorted, merged, disjoint
+	keys    map[string]bool
+	sha1    map[string]bool
+	sha256  map[string]bool
 }
+
+type serialRange struct{ lo, hi uint64 }
 
 // NewKRL constructs an empty KRL.
 func NewKRL() *KRL {
-	return &KRL{serials: map[uint64]bool{}, keyIDs: map[string]bool{}}
+	return &KRL{serials: map[uint64]bool{}, keyIDs: map[string]bool{},
+		keys: map[string]bool{}, sha1: map[string]bool{}, sha256: map[string]bool{}}
+}
+
+// Clone returns an independent copy.
+func (k *KRL) Clone() *KRL {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	out := NewKRL()
+	for serial := range k.serials {
+		out.serials[serial] = true
+	}
+	for id := range k.keyIDs {
+		out.keyIDs[id] = true
+	}
+	out.ranges = append([]serialRange(nil), k.ranges...)
+	for _, pair := range []struct{ from, to map[string]bool }{{k.keys, out.keys}, {k.sha1, out.sha1}, {k.sha256, out.sha256}} {
+		for blob := range pair.from {
+			pair.to[blob] = true
+		}
+	}
+	return out
+}
+
+// RevokeSerialRanges revokes every serial in each inclusive [lo, hi] pair.
+// Serial zero names no certificate, so a pair starting at zero or inverted is
+// ignored; callers validate before recording.
+func (k *KRL) RevokeSerialRanges(pairs [][2]uint64) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	for _, p := range pairs {
+		if p[0] != 0 && p[0] <= p[1] {
+			k.ranges = append(k.ranges, serialRange{p[0], p[1]})
+		}
+	}
+	sort.Slice(k.ranges, func(i, j int) bool { return k.ranges[i].lo < k.ranges[j].lo })
+	merged := k.ranges[:0]
+	for _, r := range k.ranges {
+		if n := len(merged); n > 0 && (r.lo <= merged[n-1].hi || (merged[n-1].hi != math.MaxUint64 && r.lo == merged[n-1].hi+1)) {
+			if r.hi > merged[n-1].hi {
+				merged[n-1].hi = r.hi
+			}
+			continue
+		}
+		merged = append(merged, r)
+	}
+	k.ranges = merged
+}
+
+// RevokeKey revokes a public key outright, by its SSH wire-format blob.
+func (k *KRL) RevokeKey(blob []byte) { k.revokeBlob(k.keys, blob) }
+
+// RevokeKeySHA1 revokes the key whose SHA-1 hash this is.
+func (k *KRL) RevokeKeySHA1(hash []byte) { k.revokeBlob(k.sha1, hash) }
+
+// RevokeKeySHA256 revokes the key whose SHA-256 hash this is.
+func (k *KRL) RevokeKeySHA256(hash []byte) { k.revokeBlob(k.sha256, hash) }
+
+func (k *KRL) revokeBlob(into map[string]bool, blob []byte) {
+	if len(blob) == 0 {
+		return
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	into[string(blob)] = true
+}
+
+// Count is the number of distinct revocation entries: serials, key IDs, serial
+// ranges, keys, and key hashes. It is not the number of affected certificates.
+func (k *KRL) Count() int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return len(k.serials) + len(k.keyIDs) + len(k.ranges) + len(k.keys) + len(k.sha1) + len(k.sha256)
+}
+
+// inRange reports whether serial is inside an adopted range. Caller holds mu.
+func (k *KRL) inRange(serial uint64) bool {
+	i := sort.Search(len(k.ranges), func(i int) bool { return k.ranges[i].hi >= serial })
+	return i < len(k.ranges) && k.ranges[i].lo <= serial
 }
 
 // RevokeSerial revokes a certificate by serial.
@@ -267,7 +357,7 @@ func (k *KRL) RevokeKeyID(keyID string) {
 func (k *KRL) IsRevoked(serial uint64, keyID string) bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	return k.serials[serial] || k.keyIDs[keyID]
+	return k.serials[serial] || k.keyIDs[keyID] || (serial != 0 && k.inRange(serial))
 }
 
 // Snapshot is the distributable form of a KRL.
@@ -298,10 +388,14 @@ const (
 	krlMagic         = "SSHKRL\n\x00" // 8-byte file magic
 	krlFormatVersion = 1
 
-	krlSectionCertificates = 1 // top-level section: revocations by issuing CA
+	krlSectionCertificates      = 1 // top-level section: revocations by issuing CA
+	krlSectionExplicitKey       = 2 // top-level section: revoked public key blobs
+	krlSectionFingerprintSHA1   = 3 // top-level section: revoked key SHA-1 hashes
+	krlSectionFingerprintSHA256 = 5 // top-level section: revoked key SHA-256 hashes
 
-	krlSectionCertSerialList = 0x20 // cert sub-section: explicit uint64 serial list
-	krlSectionCertKeyID      = 0x23 // cert sub-section: list of revoked key-id strings
+	krlSectionCertSerialList  = 0x20 // cert sub-section: explicit uint64 serial list
+	krlSectionCertSerialRange = 0x21 // cert sub-section: one inclusive serial range
+	krlSectionCertKeyID       = 0x23 // cert sub-section: list of revoked key-id strings
 )
 
 // DistributeKRL returns the KRL in the OpenSSH binary KRL format (PROTOCOL.krl), the
@@ -317,12 +411,17 @@ func (k *KRL) DistributeKRL(krlVersion uint64) []byte {
 	k.mu.Lock()
 	serials := make([]uint64, 0, len(k.serials))
 	for s := range k.serials {
-		serials = append(serials, s)
+		// A serial an adopted range already revokes is listed once, in the range.
+		if !k.inRange(s) {
+			serials = append(serials, s)
+		}
 	}
 	keyIDs := make([]string, 0, len(k.keyIDs))
 	for id := range k.keyIDs {
 		keyIDs = append(keyIDs, id)
 	}
+	ranges := append([]serialRange(nil), k.ranges...)
+	keys, sha1s, sha256s := sortedBlobs(k.keys), sortedBlobs(k.sha1), sortedBlobs(k.sha256)
 	k.mu.Unlock()
 	// Deterministic output (stable across runs) so the artifact is reproducible and
 	// testable.
@@ -342,6 +441,15 @@ func (k *KRL) DistributeKRL(krlVersion uint64) []byte {
 		}
 		cert.WriteByte(krlSectionCertSerialList)
 		sshWriteString(&cert, serialList.Bytes())
+	}
+	// Each adopted range is its own sub-section: OpenSSH reads exactly one
+	// range from each.
+	for _, r := range ranges {
+		var rangeBody bytes.Buffer
+		sshWriteUint64(&rangeBody, r.lo)
+		sshWriteUint64(&rangeBody, r.hi)
+		cert.WriteByte(krlSectionCertSerialRange)
+		sshWriteString(&cert, rangeBody.Bytes())
 	}
 	if len(keyIDs) > 0 {
 		var keyIDList bytes.Buffer
@@ -364,8 +472,31 @@ func (k *KRL) DistributeKRL(krlVersion uint64) []byte {
 
 	out.WriteByte(krlSectionCertificates)
 	sshWriteString(&out, cert.Bytes())
+	for _, section := range []struct {
+		kind  byte
+		blobs [][]byte
+	}{{krlSectionExplicitKey, keys}, {krlSectionFingerprintSHA1, sha1s}, {krlSectionFingerprintSHA256, sha256s}} {
+		if len(section.blobs) == 0 {
+			continue
+		}
+		var body bytes.Buffer
+		for _, blob := range section.blobs {
+			sshWriteString(&body, blob)
+		}
+		out.WriteByte(section.kind)
+		sshWriteString(&out, body.Bytes())
+	}
 
 	return out.Bytes()
+}
+
+func sortedBlobs(set map[string]bool) [][]byte {
+	out := make([][]byte, 0, len(set))
+	for blob := range set {
+		out = append(out, []byte(blob))
+	}
+	sort.Slice(out, func(i, j int) bool { return bytes.Compare(out[i], out[j]) < 0 })
+	return out
 }
 
 // SSH wire-format primitives (RFC 4251 §5): uint32/uint64 are big-endian; a string

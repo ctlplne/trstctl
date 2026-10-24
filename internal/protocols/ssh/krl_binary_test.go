@@ -5,7 +5,9 @@ package ssh
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -13,6 +15,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // readSSHString reads an SSH wire string (uint32 length + bytes) from b, returning
@@ -231,4 +235,86 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// A110: the entries a replacement control plane carries from an adopted
+// predecessor list (a serial range, an explicitly revoked key, and a revoked
+// key hash) are written so stock OpenSSH reads them and revokes exactly those
+// certificates.
+func TestAdoptedKRLEntriesLoadInOpenSSH(t *testing.T) {
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		if os.Getenv("TRSTCTL_REQUIRE_OPENSSH") != "" {
+			t.Fatal("TRSTCTL_REQUIRE_OPENSSH is set but ssh-keygen is unavailable")
+		}
+		t.Skip("ssh-keygen not available; OpenSSH KRL load checked on the CI backstop")
+	}
+	ca, _ := newCA(t, nil)
+	profile := Profile{Name: "user", MaxTTL: time.Hour, AllowUserCerts: true}
+	dir := t.TempDir()
+	paths := make([]string, 4)
+	serials := make([]uint64, 4)
+	blobs := make([][]byte, 4)
+	for i := range paths {
+		pub := subjectKey(t)
+		fields := bytes.Fields(pub)
+		blob, err := base64.StdEncoding.DecodeString(string(fields[1]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		issued, err := ca.IssueUserCert(context.Background(), profile, IssueRequest{
+			SubjectPublicKey: pub, KeyID: fmt.Sprintf("adopted-%d@corp", i), Principals: []string{"qa"}, TTL: 30 * time.Minute,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		serials[i], blobs[i] = issued.Serial, blob
+		paths[i] = filepath.Join(dir, fmt.Sprintf("certificate-%d.pub", i))
+		if err := os.WriteFile(paths[i], issued.Certificate, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	krl := NewKRL()
+	krl.RevokeSerial(serials[0]) // also inside the range: listed once
+	krl.RevokeSerialRanges([][2]uint64{{serials[0], serials[0]}})
+	krl.RevokeKey(blobs[1])
+	hash, err := hex.DecodeString(crypto.SHA256Hex(blobs[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	krl.RevokeKeySHA256(hash)
+	krlPath := filepath.Join(dir, "adopted.krl")
+	if err := os.WriteFile(krlPath, krl.DistributeKRL(41), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.CommandContext(t.Context(), "ssh-keygen", "-Q", "-l", "-f", krlPath).CombinedOutput(); err != nil || !bytes.Contains(out, []byte(fmt.Sprintf("serial: %d", serials[0]))) { // #nosec G204 -- fixed reference tool and task-owned test files (CWE-78)
+		t.Fatalf("ssh-keygen -Ql = %v: %s", err, out)
+	}
+	for i, certPath := range paths {
+		out, err := exec.CommandContext(t.Context(), "ssh-keygen", "-Q", "-f", krlPath, certPath).CombinedOutput() // #nosec G204 -- fixed reference tool and task-owned test files (CWE-78)
+		if i < 3 {
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !bytes.HasSuffix(bytes.TrimSpace(out), []byte(": REVOKED")) {
+				t.Errorf("certificate %d: want OpenSSH revocation, got %v: %s", i, err, out)
+			}
+		} else if err != nil || !bytes.HasSuffix(bytes.TrimSpace(out), []byte(": ok")) {
+			t.Errorf("certificate %d: want accepted, got %v: %s", i, err, out)
+		}
+	}
+	if krl.Count() != 4 || !krl.IsRevoked(serials[0], "") || krl.IsRevoked(serials[3], "") {
+		t.Fatalf("count %d / IsRevoked disagree with the list", krl.Count())
+	}
+	clone := krl.Clone()
+	krl.RevokeSerial(serials[3])
+	if clone.IsRevoked(serials[3], "") || !bytes.Equal(clone.DistributeKRL(41), mustRead(t, krlPath)) {
+		t.Fatal("Clone is not an independent copy")
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path) // #nosec G304 -- test-owned file under t.TempDir
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
