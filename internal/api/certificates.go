@@ -260,6 +260,17 @@ func (a *API) ingestCertificate(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, "could not parse certificate: "+err.Error())
 		}
+		// B13-2: keep the signed certificate the operator gave, not only its
+		// metadata. Revocation health reads the CRL and OCSP URLs and the issuer
+		// from the stored bytes, so an imported certificate without them was
+		// never probed. The import stays an observation (ObservationOnly) and
+		// carries the leaf's DER only: for a fingerprint trstctl issued, that is
+		// byte-identical to what it holds, and the retained public chain (PEM)
+		// is never replaced by an import.
+		leafDER, err := certinfo.LeafDER([]byte(req.PEM))
+		if err != nil {
+			return 0, nil, errStatus(http.StatusUnprocessableEntity, "could not parse certificate: "+err.Error())
+		}
 		var ownerID *string
 		if req.OwnerID != "" {
 			if _, err := a.store.GetOwner(ctx, tenantID, req.OwnerID); err != nil {
@@ -283,6 +294,7 @@ func (a *API) ingestCertificate(w http.ResponseWriter, r *http.Request) {
 			Issuer: info.Issuer, Serial: info.SerialNumber, Fingerprint: info.SHA256Fingerprint,
 			KeyAlgorithm: info.KeyAlgorithm, NotBefore: &notBefore, NotAfter: &notAfter,
 			DeploymentLocation: req.DeploymentLocation, Source: source, ObservationOnly: true,
+			CertificateDER: leafDER,
 		})
 		a.observeFeature("inventory", "ingest", start, err)
 		if err != nil {

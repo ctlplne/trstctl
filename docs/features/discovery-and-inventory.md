@@ -627,7 +627,11 @@ Those map to the served REST routes `GET /api/v1/certificates`,
 requires an `Idempotency-Key` header). For `certificates ingest`, `-f` accepts a
 PEM certificate directly as shown above. To set an owner, deployment location,
 or source during import, pass a JSON file with `pem`, `owner_id`,
-`deployment_location`, and `source` fields instead. The CLI supplies a fresh
+`deployment_location`, and `source` fields instead. An import keeps the signed
+certificate, recorded as an observation, so revocation health watches the CRL
+and OCSP endpoints it names (including an AD CS LDAP distribution point covered
+by an AD CS discovery source); importing a certificate trstctl issued updates its
+provenance and never replaces the public chain trstctl retained. The CLI supplies a fresh
 idempotency key for either form; repeat an exact request with the same explicit
 key when recovering from an uncertain response.
 

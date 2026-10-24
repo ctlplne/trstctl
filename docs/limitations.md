@@ -2072,7 +2072,13 @@ publishing succeeded once.
 `revocation.probe` is now an hourly, database-clocked relay job. The leader
 scheduler derives distinct CRL distribution points and OCSP responders from
 inventory, matches every leaf to its real issuer key, and carries the exact
-public leaf/issuer certificate context needed to verify the answer. It queues
+public leaf/issuer certificate context needed to verify the answer. It reads
+them from the certificates whose signed bytes trstctl holds: those issued
+through trstctl or its external CAs, adopted from a host, or imported with
+`trstctl-cli certificates ingest`, which keeps the certificate it is given (an
+import never replaces the public chain of a certificate trstctl issued). A
+certificate known only from a network or cloud scan carries its metadata, not
+its bytes, so its endpoints are not probed yet; import it to have them watched. It queues
 at most 32 endpoints per bounded network-role command through the event/outbox
 transaction. Concurrent leaders converge on the same command ID; if the
 representative leaf changes, its OCSP serial changes the ID and creates new work
