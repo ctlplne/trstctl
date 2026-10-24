@@ -278,7 +278,8 @@ Use a separate approval workflow if your policy requires two people.
   certificate before recording. `GET /api/v1/ssh/krl/receipts`
   (`trstctl ssh krl receipts`) places each reporting host against the served
   list as current, behind, refusing (with what the served list would drop),
-  failing, or stale. Existing SSH sessions are not
+  failing, or stale; **SSH access** shows the same view under **Revocation
+  list on hosts**. Existing SSH sessions are not
   terminated by a KRL update. A host keeps its installed KRL if the control
   plane is unavailable or cannot finish a verified event catch-up; it retries
   the download. A restored or replacement control plane counts its own KRL

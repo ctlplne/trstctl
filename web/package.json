@@ -85,7 +85,7 @@
     {
       "name": "entry chunk only (Brotli; complete graph checked separately)",
       "path": "../internal/webui/dist/assets/index-*.js",
-      "limit": "240 kB"
+      "limit": "245 kB"
     },
     {
       "name": "largest page chunk (Brotli)",

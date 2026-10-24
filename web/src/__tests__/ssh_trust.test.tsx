@@ -9,6 +9,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     sshStatus: vi.fn(),
     sshFleet: vi.fn(),
+    sshKRLFleet: vi.fn(),
     recordSSHTrustRollout: vi.fn(),
     previewSSHCertificate: vi.fn(),
     issueSSHCertificate: vi.fn(),
@@ -60,6 +61,13 @@ describe("SSH trust served workflow surface", () => {
       key_count: 1,
       standing_key_count: 1,
       orphaned_key_count: 1,
+    });
+    apiMock.sshKRLFleet.mockResolvedValue({
+      tenant_id: "tenant-1",
+      served: { krl_version: 7, sha256: "a".repeat(64), revoked_count: 2 },
+      summary: { hosts: 0, current: 0, behind: 0, refusing: 0, failing: 0, stale: 0 },
+      hosts: [],
+      stale_after_seconds: 600,
     });
     apiMock.recordSSHTrustRollout.mockResolvedValue({
       id: "evt-rollout",
@@ -206,6 +214,46 @@ describe("SSH trust served workflow surface", () => {
       ),
     );
     expect(await screen.findByText("evt-rollout")).toBeInTheDocument();
+  });
+
+  it("shows each host's signed KRL receipt against the served list (A109)", async () => {
+    const host = (agent: string, state: string, outcome: string, extra: Record<string, unknown> = {}) => ({
+      agent_id: `id-${agent}`,
+      agent,
+      state,
+      outcome,
+      installed_version: 6,
+      installed_sha256: "b".repeat(64),
+      checked_at: "2026-10-24T10:00:00Z",
+      poll_every_seconds: 30,
+      reported_at: "2026-10-24T10:00:30Z",
+      signer_fingerprint: "c".repeat(64),
+      ...extra,
+    });
+    apiMock.sshKRLFleet.mockResolvedValue({
+      tenant_id: "tenant-1",
+      served: { krl_version: 7, sha256: "a".repeat(64), revoked_count: 2 },
+      summary: { hosts: 3, current: 1, behind: 0, refusing: 1, failing: 1, stale: 0 },
+      hosts: [
+        host("edge-1", "current", "current", { installed_version: 7, installed_sha256: "a".repeat(64) }),
+        host("edge-2", "refusing", "refused_drops_revocations", {
+          fetched_version: 7,
+          fetched_sha256: "a".repeat(64),
+          dropped: { serials: 3, key_ids: 1, keys: 0, key_hashes: 0 },
+        }),
+        host("edge-3", "failing", "fetch_failed"),
+      ],
+      stale_after_seconds: 600,
+    });
+    renderSSHTrust();
+    const panel = await screen.findByRole("region", { name: "Revocation list on hosts" });
+    expect(within(panel).getByText(/Current list v7 \(aaaaaaaaaaaa…\) · Hosts: 3 · Current: 1/)).toBeInTheDocument();
+    const table = within(panel).getByRole("table", { name: "Hosts enforcing the SSH revocation list" });
+    expect(within(table).getByText("edge-2")).toBeInTheDocument();
+    expect(within(table).getByText("Refusing")).toBeInTheDocument();
+    expect(within(table).getByText(/would drop revocations it holds \(serials: 3 · key IDs: 1 · keys: 0\)/)).toBeInTheDocument();
+    expect(within(table).getByText("Could not fetch the current list; keeps its installed list")).toBeInTheDocument();
+    expect(within(panel).getByText(/adopt the list the host holds with trstctl ssh krl adopt/)).toBeInTheDocument();
   });
 
   it("renders the honest empty state for a pre-inventory rolling-upgrade payload", async () => {

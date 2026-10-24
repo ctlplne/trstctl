@@ -12066,6 +12066,102 @@ export const messages = {
     defaultMessage: "SSH access certificate issued",
     description: "F45 issuance result title.",
   },
+  "sshTrust.krlFleet.heading": {
+    defaultMessage: "Revocation list on hosts",
+    description: "Heading for the per-host SSH KRL receipts panel (A109).",
+  },
+  "sshTrust.krlFleet.description": {
+    defaultMessage:
+      "Signed receipts from enrolled host agents that run the KRL watcher: the list each host's sshd enforces, read back from its RevokedKeys file.",
+    description: "Explains where the SSH KRL receipts come from.",
+  },
+  "sshTrust.krlFleet.summary": {
+    defaultMessage:
+      "Current list v{version} ({digest}) · Hosts: {hosts} · Current: {current} · Behind: {behind} · Refusing: {refusing} · Failing: {failing} · Stale: {stale}",
+    description: "Compact summary of the current SSH KRL and host states.",
+  },
+  "sshTrust.krlFleet.empty": {
+    defaultMessage:
+      "No host reports its revocation list yet. Run the KRL watcher beside an enrolled host agent to see receipts here; a standalone watcher reports nothing.",
+    description: "Empty state for SSH KRL receipts.",
+  },
+  "sshTrust.krlFleet.tableLabel": {
+    defaultMessage: "Hosts enforcing the SSH revocation list",
+    description: "Accessible label for the SSH KRL receipts table.",
+  },
+  "sshTrust.krlFleet.host": {
+    defaultMessage: "Host",
+    description: "SSH KRL receipts table host column.",
+  },
+  "sshTrust.krlFleet.state": {
+    defaultMessage: "State",
+    description: "SSH KRL receipts table state column.",
+  },
+  "sshTrust.krlFleet.installed": {
+    defaultMessage: "Installed list",
+    description: "SSH KRL receipts table installed-list column.",
+  },
+  "sshTrust.krlFleet.lastCheck": {
+    defaultMessage: "Last check",
+    description: "SSH KRL receipts table last watcher check column.",
+  },
+  "sshTrust.krlFleet.detail": {
+    defaultMessage: "Detail",
+    description: "SSH KRL receipts table detail column.",
+  },
+  "sshTrust.krlFleet.installedValue": {
+    defaultMessage: "v{version} · {digest}",
+    description: "Installed KRL version and digest prefix for one host.",
+  },
+  "sshTrust.krlFleet.stateCurrent": {
+    defaultMessage: "Current",
+    description: "Host enforces the current SSH KRL.",
+  },
+  "sshTrust.krlFleet.stateBehind": {
+    defaultMessage: "Behind",
+    description: "Host has not taken the newest SSH KRL yet.",
+  },
+  "sshTrust.krlFleet.stateRefusing": {
+    defaultMessage: "Refusing",
+    description: "Host keeps its SSH KRL because the current one is not newer or would drop revocations.",
+  },
+  "sshTrust.krlFleet.stateFailing": {
+    defaultMessage: "Failing",
+    description: "Host could not fetch or apply the current SSH KRL.",
+  },
+  "sshTrust.krlFleet.stateStale": {
+    defaultMessage: "Stale",
+    description: "Host has not reported or checked its SSH KRL recently.",
+  },
+  "sshTrust.krlFleet.dropsDetail": {
+    defaultMessage: "Keeps its list: the current list would drop revocations it holds (serials: {serials} · key IDs: {keyIds} · keys: {keys})",
+    description: "Why a host refuses the current SSH KRL: what it would drop, as labeled counts.",
+  },
+  "sshTrust.krlFleet.notNewerDetail": {
+    defaultMessage: "Keeps its list: the current list (v{version}) is not newer than the installed one",
+    description: "Why a host refuses the current SSH KRL: its version does not advance.",
+  },
+  "sshTrust.krlFleet.fetchFailedDetail": {
+    defaultMessage: "Could not fetch the current list; keeps its installed list",
+    description: "Host could not fetch the SSH KRL.",
+  },
+  "sshTrust.krlFleet.applyFailedDetail": {
+    defaultMessage: "The current list failed OpenSSH or host checks; keeps its installed list",
+    description: "Host could not apply the SSH KRL.",
+  },
+  "sshTrust.krlFleet.staleDetail": {
+    defaultMessage: "No current receipt since {reported}",
+    description: "A host whose SSH KRL receipt is stale.",
+  },
+  "sshTrust.krlFleet.behindDetail": {
+    defaultMessage: "Has not taken the newest list yet",
+    description: "A host behind the current SSH KRL.",
+  },
+  "sshTrust.krlFleet.refusingHint": {
+    defaultMessage:
+      "A refusing host keeps its list on purpose. If this control plane replaced or restored the one that host followed, adopt the list the host holds with trstctl ssh krl adopt.",
+    description: "Next step for hosts refusing the current SSH KRL.",
+  },
   "sshTrust.fleet.heading": {
     defaultMessage: "Standing SSH access inventory",
     description: "Heading for agent-reported standing SSH access.",

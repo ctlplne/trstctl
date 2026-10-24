@@ -538,6 +538,8 @@ import type {
   SSHFleetInventory,
   SSHHostRetirement,
   SSHHostRetireRequest,
+  SSHKRLFleet,
+  SSHKRLHost,
   SSHRevokeCertificateRequest,
   SSHStatus,
   SSHTrustRollout,
@@ -1353,6 +1355,8 @@ export type {
   SSHFleetInventory,
   SSHHostRetirement,
   SSHHostRetireRequest,
+  SSHKRLFleet,
+  SSHKRLHost,
   SSHRevokeCertificateRequest,
   SSHStatus,
   SSHTrustRollout,
@@ -2288,6 +2292,7 @@ export interface Api {
   issueAttestedSVID(input: AttestedSVIDRequest, idempotencyKey?: string): Promise<AttestedSVID>;
   sshStatus(): Promise<SSHStatus>;
   sshFleet(): Promise<SSHFleetInventory>;
+  sshKRLFleet(): Promise<SSHKRLFleet>;
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
   previewSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificatePreview>;
   issueSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificate>;
@@ -3075,6 +3080,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   issueAttestedSVID: (input, idempotencyKey) => mutate<AttestedSVID>("POST", "/api/v1/workloads/attested-issuance", input, idempotencyKey),
   sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
   sshFleet: () => req<SSHFleetInventory>("/api/v1/ssh/fleet"),
+  sshKRLFleet: () => req<SSHKRLFleet>("/api/v1/ssh/krl/receipts"),
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),
   previewSSHCertificate: (input) => postRead<SSHCertificatePreview>("/api/v1/ssh/certificates/preview", input),
   issueSSHCertificate: (input) => mutate<SSHCertificate>("POST", "/api/v1/ssh/certificates", input),

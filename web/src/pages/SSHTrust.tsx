@@ -13,6 +13,7 @@ import {
   type SSHAttestedUserCertPreview,
   type SSHAttestedUserCertRequest,
   type SSHFleetInventory,
+  type SSHKRLFleet,
   type SSHHostRetirement,
   type SSHStatus,
   type SSHTrustRollout,
@@ -20,6 +21,7 @@ import {
 } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SSHCertificateWorkflow } from "@/pages/ssh/SSHCertificateWorkflow";
+import { SSHKRLFleetPanel } from "@/pages/ssh/SSHKRLFleetPanel";
 import { SSHRevocationWorkflow, type SSHRevocationSeed } from "@/pages/ssh/SSHRevocationWorkflow";
 
 const rolloutStatuses: SSHTrustRolloutRequest["status"][] = ["planned", "validating", "health_passed", "rolled_back", "failed"];
@@ -89,6 +91,7 @@ export function SSHTrust() {
   const [activeTask, setActiveTask] = useState<"certificate" | "rollout" | "access" | "remove" | null>(null);
   const [status, setStatus] = useState<SSHStatus | null>(null);
   const [fleet, setFleet] = useState<SSHFleetInventory | null>(null);
+  const [krlFleet, setKRLFleet] = useState<SSHKRLFleet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
   const [rollout, setRollout] = useState<SSHTrustRollout | null>(null);
@@ -134,11 +137,14 @@ export function SSHTrust() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.allSettled([api.sshStatus(), api.sshFleet()]).then(([statusResult, fleetResult]) => {
+    Promise.allSettled([api.sshStatus(), api.sshFleet(), api.sshKRLFleet()]).then(([statusResult, fleetResult, krlFleetResult]) => {
       if (cancelled) return;
 
       if (statusResult.status === "fulfilled") setStatus(statusResult.value);
       if (fleetResult.status === "fulfilled") setFleet(fleetResult.value);
+      // Host receipts are secondary, like the fleet inventory: a failure
+      // leaves the panel out rather than hiding the workflow status.
+      if (krlFleetResult.status === "fulfilled") setKRLFleet(krlFleetResult.value);
 
       // The status response says whether SSH exists at all; the fleet response
       // is secondary inventory. During overload both can fail, and Promise.all
@@ -353,6 +359,8 @@ export function SSHTrust() {
           </details>
         </section>
       )}
+
+      {krlFleet && <SSHKRLFleetPanel fleet={krlFleet} />}
 
       {fleet && (
         <section aria-labelledby="ssh-fleet-heading" className="grid gap-3 border-y border-border py-4">

@@ -301,7 +301,8 @@ mutation stays in the operator-confirmed agent path.
    not advance its version, or would drop revocations it holds; the counts say
    how many), `failing` (it could not fetch or apply the list), or `stale` (no
    receipt within ten minutes, or no check within two polls and ten minutes).
-   A standalone watcher reports nothing.
+   **SSH access → Revocation list on hosts** shows the same view. A standalone
+   watcher reports nothing.
 
    When a control plane is restored from a backup or replaced, its KRL counts
    its own versions and lacks revocations recorded only by its predecessor, so

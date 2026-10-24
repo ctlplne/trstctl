@@ -3156,8 +3156,9 @@ than sending an operator looking for a credential that was never there.
   an enrolled host-role agent: each heartbeat carries a receipt, signed with
   the agent's certificate key, of the digest and version read back from its
   `RevokedKeys` file and how its latest attempt ended, and
-  `trstctl ssh krl receipts` places each host against the served list
-  (current, behind, refusing, failing, stale). A standalone watcher still
+  `trstctl ssh krl receipts` (and the **SSH access** console page) places
+  each host against the served list (current, behind, refusing, failing,
+  stale). A standalone watcher still
   reports nothing, a receipt is the host's own account rather than a login
   attempt against its sshd, and there is no control-plane push. A lab proof
   with real hosts moving between two control planes, and receipts from a
