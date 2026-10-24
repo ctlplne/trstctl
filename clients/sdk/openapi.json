@@ -22932,6 +22932,9 @@
             },
             "type": "array"
           },
+          "reachability": {
+            "$ref": "#/components/schemas/NHIExposureReachability"
+          },
           "recommendation": {
             "type": "string"
           },
@@ -23015,6 +23018,146 @@
         ],
         "type": "object"
       },
+      "NHIExposureProbeEndpoint": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "inventory_id": {
+            "type": "string"
+          },
+          "server_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inventory_id",
+          "endpoint",
+          "address"
+        ],
+        "type": "object"
+      },
+      "NHIExposureProbeRequest": {
+        "properties": {
+          "inventory_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "NHIExposureProbeResult": {
+        "properties": {
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/NHIExposureProbeEndpoint"
+            },
+            "type": "array"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "vantage": {
+            "enum": [
+              "relay"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "vantage",
+          "endpoints",
+          "omitted",
+          "requested_at"
+        ],
+        "type": "object"
+      },
+      "NHIExposureReachability": {
+        "properties": {
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/NHIExposureReachabilityProbe"
+            },
+            "type": "array"
+          },
+          "probed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "reachable",
+              "unreachable",
+              "not_public"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "probed_at",
+          "endpoints"
+        ],
+        "type": "object"
+      },
+      "NHIExposureReachabilityProbe": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_fingerprint": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "tls_certificate",
+              "unparseable_certificate",
+              "listener_without_tls",
+              "not_public",
+              "unreachable"
+            ],
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "server_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "outcome",
+          "reachable",
+          "observed_at"
+        ],
+        "type": "object"
+      },
       "NHIExposureSummary": {
         "properties": {
           "critical": {
@@ -23032,6 +23175,9 @@
           "internet_exposed": {
             "type": "integer"
           },
+          "live_reachable": {
+            "type": "integer"
+          },
           "low": {
             "type": "integer"
           },
@@ -23039,6 +23185,9 @@
             "type": "integer"
           },
           "missing_network_policy": {
+            "type": "integer"
+          },
+          "probed": {
             "type": "integer"
           },
           "public_callbacks": {
@@ -23066,6 +23215,8 @@
           "public_callbacks",
           "missing_network_policy",
           "wildcard_reachability",
+          "probed",
+          "live_reachable",
           "critical",
           "high",
           "medium",
@@ -57191,6 +57342,74 @@
         ],
         "summary": "List internet-exposed and insecure-deployment NHI posture findings",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/exposure/probe": {
+      "post": {
+        "operationId": "probeNHIExposure",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIExposureProbeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIExposureProbeResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Probe exposed NHI endpoints for live reachability from a network relay",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/nhi/posture/overprivilege": {

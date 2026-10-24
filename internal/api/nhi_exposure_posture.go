@@ -20,6 +20,7 @@ var nhiExposureCoverage = []string{
 	"weak_authentication",
 	"public_callbacks",
 	"network_policy",
+	"relay_reachability_probes",
 	"remediation_recommendations",
 }
 
@@ -122,6 +123,8 @@ type nhiExposurePostureSummary struct {
 	PublicCallbacks      int `json:"public_callbacks"`
 	MissingNetworkPolicy int `json:"missing_network_policy"`
 	WildcardReachability int `json:"wildcard_reachability"`
+	Probed               int `json:"probed"`
+	LiveReachable        int `json:"live_reachable"`
 	Critical             int `json:"critical"`
 	High                 int `json:"high"`
 	Medium               int `json:"medium"`
@@ -150,6 +153,9 @@ type nhiExposurePostureFinding struct {
 	Environment       string   `json:"environment,omitempty"`
 	Recommendation    string   `json:"recommendation"`
 	EvidenceRefs      []string `json:"evidence_refs"`
+	// Reachability is the latest live probe of the row's endpoints from a
+	// network relay (A102); absent until one is probed.
+	Reachability *nhiExposureReachability `json:"reachability,omitempty"`
 }
 
 func (a *API) listNHIExposurePosture(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +177,10 @@ func (a *API) nhiExposurePosture(ctx context.Context, tenantID string) (nhiExpos
 	if err != nil {
 		return nhiExposurePostureResponse{}, err
 	}
+	reachability, probeEvidence, err := a.nhiExposureReachabilityByInventory(ctx, tenantID)
+	if err != nil {
+		return nhiExposurePostureResponse{}, err
+	}
 	out := nhiExposurePostureResponse{
 		Capability:  "CAP-POST-04",
 		GeneratedAt: time.Now().UTC(),
@@ -185,6 +195,14 @@ func (a *API) nhiExposurePosture(ctx context.Context, tenantID string) (nhiExpos
 		finding, ok := nhiExposureFindingForItem(item)
 		if !ok {
 			continue
+		}
+		if view := reachability[finding.InventoryID]; view != nil {
+			finding.Reachability = view
+			finding.EvidenceRefs = append(finding.EvidenceRefs, probeEvidence[finding.InventoryID]...)
+			out.Summary.Probed++
+			if view.Status == "reachable" {
+				out.Summary.LiveReachable++
+			}
 		}
 		out.Findings = append(out.Findings, finding)
 		out.Summary.Findings++

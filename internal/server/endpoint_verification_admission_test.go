@@ -91,3 +91,44 @@ func TestDeploymentVerificationReadsRollbackTargetConfig(t *testing.T) {
 		t.Fatalf("rollback routing lost its verification binding: %+v", got)
 	}
 }
+
+// A102: an exposure probe carries no expectation and an ordinary sweep always
+// carries one; neither command shape is admitted in the other's place.
+func TestVerificationAdmissionKeepsExposureProbesAndSweepsApart(t *testing.T) {
+	now := time.Now().Unix()
+	report := func(want relay.EndpointExpectation) (string, string) {
+		tr := transport.ProbeTranscript{Address: want.Address, ServerName: want.ServerName, Vantage: transport.VantageRelay,
+			ExpectedFingerprint: normalizeVerificationFingerprint(want.Fingerprint), Error: "tlsprobe: dial " + want.Address + ": i/o timeout", ObservedAtUnix: now}
+		payload, err := json.Marshal(relay.EndpointVerifyReport{Results: []relay.EndpointVerifyResult{{EndpointID: want.EndpointID, Transcript: tr}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(payload), transport.SweepDigest(append(tr.Canonical(), '\n'))
+	}
+	exposure := &relay.EndpointVerifyExposure{RequestID: "req-1", RunID: "run-1"}
+	probe := relay.EndpointExpectation{EndpointID: "exposure|finding/x|api.example.com:443", Address: "api.example.com:443", ServerName: "api.example.com"}
+	sweep := probe
+	sweep.Fingerprint = strings.Repeat("ab", 32)
+	for _, tc := range []struct {
+		name   string
+		intent relay.EndpointVerifyIntent
+		ok     bool
+	}{
+		{"probe-without-expectation", relay.EndpointVerifyIntent{Endpoints: []relay.EndpointExpectation{probe}, Exposure: exposure}, true},
+		{"sweep-with-expectation", relay.EndpointVerifyIntent{Endpoints: []relay.EndpointExpectation{sweep}}, true},
+		{"probe-with-expectation", relay.EndpointVerifyIntent{Endpoints: []relay.EndpointExpectation{sweep}, Exposure: exposure}, false},
+		{"sweep-without-expectation", relay.EndpointVerifyIntent{Endpoints: []relay.EndpointExpectation{probe}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			intent, err := json.Marshal(tc.intent)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, digest := report(tc.intent.Endpoints[0])
+			_, err = validateEndpointVerificationReport(intent, payload, digest)
+			if (err == nil) != tc.ok {
+				t.Fatalf("admitted=%v err=%v; want admitted=%v", err == nil, err, tc.ok)
+			}
+		})
+	}
+}

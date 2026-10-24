@@ -644,6 +644,11 @@ trstctl-cli nhi posture static-credentials
 # List internet-exposed and insecure-deployment NHI posture findings.
 trstctl-cli nhi posture exposure
 
+# Probe the exposed NHIs' public endpoints from a network relay; the exposure
+# posture then shows what answered. An empty inventory_ids list probes every
+# exposed record, most severe first, up to 50 endpoints.
+trstctl-cli nhi posture exposure probe -f nhi-exposure-probe.json --force
+
 # Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each.
 trstctl-cli nhi posture automation
 

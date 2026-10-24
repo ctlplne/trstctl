@@ -150,6 +150,11 @@ func (s *Server) recordEndpointVerificationSweep(ctx context.Context, tenantID, 
 	if err := json.Unmarshal(jobPayload, &intent); err == nil && intent.Pilot != nil {
 		return s.orch.RecordPQCPilotWave(ctx, tenantID, intent.Pilot.PilotID, intent.Pilot.Wave, report)
 	}
+	// An exposure probe (A102) records what answered as the probe run's
+	// findings; it has no expectation to verify.
+	if intent.Exposure != nil {
+		return s.orch.RecordExposureProbe(ctx, tenantID, agentName, idempotencyKey, intent, report)
+	}
 	for _, res := range report.Results {
 		id := res.EndpointID
 		eventID := orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "endpoint-verification:"+id)

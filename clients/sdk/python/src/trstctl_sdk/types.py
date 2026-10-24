@@ -7654,6 +7654,7 @@ NHIExposureFinding = TypedDict(
         'owner_id': str,
         'owner_status': str,
         'public_endpoints': list[str],
+        'reachability': dict[str, Any],
         'recommendation': str,
         'ref': str,
         'risk_score': int,
@@ -7677,6 +7678,62 @@ NHIExposurePosture = TypedDict(
     total=False,
 )
 
+NHIExposureProbeEndpoint = TypedDict(
+    'NHIExposureProbeEndpoint',
+    {
+        'address': str,
+        'endpoint': str,
+        'inventory_id': str,
+        'server_name': str,
+    },
+    total=False,
+)
+
+NHIExposureProbeRequest = TypedDict(
+    'NHIExposureProbeRequest',
+    {
+        'inventory_ids': list[str],
+    },
+    total=False,
+)
+
+NHIExposureProbeResult = TypedDict(
+    'NHIExposureProbeResult',
+    {
+        'endpoints': list[dict[str, Any]],
+        'omitted': int,
+        'requested_at': str,
+        'run_id': str,
+        'vantage': str,
+    },
+    total=False,
+)
+
+NHIExposureReachability = TypedDict(
+    'NHIExposureReachability',
+    {
+        'endpoints': list[dict[str, Any]],
+        'probed_at': str,
+        'status': str,
+    },
+    total=False,
+)
+
+NHIExposureReachabilityProbe = TypedDict(
+    'NHIExposureReachabilityProbe',
+    {
+        'address': str,
+        'agent': str,
+        'error': str,
+        'observed_at': str,
+        'observed_fingerprint': str,
+        'outcome': str,
+        'reachable': bool,
+        'server_name': str,
+    },
+    total=False,
+)
+
 NHIExposureSummary = TypedDict(
     'NHIExposureSummary',
     {
@@ -7685,9 +7742,11 @@ NHIExposureSummary = TypedDict(
         'high': int,
         'insecure_transport': int,
         'internet_exposed': int,
+        'live_reachable': int,
         'low': int,
         'medium': int,
         'missing_network_policy': int,
+        'probed': int,
         'public_callbacks': int,
         'recommendations': int,
         'total_analyzed': int,

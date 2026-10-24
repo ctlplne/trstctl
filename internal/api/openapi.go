@@ -8,6 +8,7 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/issuancerequest"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
@@ -2669,12 +2670,14 @@ func componentSchemas() map[string]*Schema {
 		"public_callbacks":       {Type: "integer"},
 		"missing_network_policy": {Type: "integer"},
 		"wildcard_reachability":  {Type: "integer"},
+		"probed":                 {Type: "integer"},
+		"live_reachable":         {Type: "integer"},
 		"critical":               {Type: "integer"},
 		"high":                   {Type: "integer"},
 		"medium":                 {Type: "integer"},
 		"low":                    {Type: "integer"},
 		"recommendations":        {Type: "integer"},
-	}, "total_analyzed", "findings", "internet_exposed", "insecure_transport", "weak_authentication", "public_callbacks", "missing_network_policy", "wildcard_reachability", "critical", "high", "medium", "low", "recommendations")
+	}, "total_analyzed", "findings", "internet_exposed", "insecure_transport", "weak_authentication", "public_callbacks", "missing_network_policy", "wildcard_reachability", "probed", "live_reachable", "critical", "high", "medium", "low", "recommendations")
 	nhiExposureFinding := object(map[string]*Schema{
 		"inventory_id":       str(),
 		"ref":                str(),
@@ -2696,7 +2699,28 @@ func componentSchemas() map[string]*Schema {
 		"environment":        str(),
 		"recommendation":     str(),
 		"evidence_refs":      {Type: "array", Items: str()},
+		"reachability":       ref("NHIExposureReachability"),
 	}, "inventory_id", "kind", "source", "display_name", "owner_status", "status", "severity", "risk_score", "finding_types", "exposure_level", "network_surface", "public_endpoints", "callback_urls", "transport_security", "auth_mode", "recommendation", "evidence_refs")
+	nhiExposureReachabilityProbe := object(map[string]*Schema{
+		"address": str(), "server_name": str(),
+		"outcome":   {Type: "string", Enum: []string{"tls_certificate", "unparseable_certificate", "listener_without_tls", "not_public", "unreachable"}},
+		"reachable": {Type: "boolean"}, "observed_at": timestamp(), "observed_fingerprint": str(), "error": str(), "agent": str(),
+	}, "address", "outcome", "reachable", "observed_at")
+	nhiExposureReachability := object(map[string]*Schema{
+		"status":    {Type: "string", Enum: []string{"reachable", "unreachable", "not_public"}},
+		"probed_at": timestamp(), "endpoints": {Type: "array", Items: ref("NHIExposureReachabilityProbe")},
+	}, "status", "probed_at", "endpoints")
+	nhiExposureProbeRequest := object(map[string]*Schema{
+		"inventory_ids": {Type: "array", Items: str(), MaxItems: orchestrator.MaxExposureProbeEndpoints},
+	})
+	nhiExposureProbeEndpoint := object(map[string]*Schema{
+		"inventory_id": str(), "endpoint": str(), "address": str(), "server_name": str(),
+	}, "inventory_id", "endpoint", "address")
+	nhiExposureProbeResult := object(map[string]*Schema{
+		"run_id": uuid(), "vantage": {Type: "string", Enum: []string{"relay"}},
+		"endpoints": {Type: "array", Items: ref("NHIExposureProbeEndpoint")}, "omitted": {Type: "integer"},
+		"requested_at": timestamp(),
+	}, "run_id", "vantage", "endpoints", "omitted", "requested_at")
 	nhiExposurePosture := object(map[string]*Schema{
 		"capability":   str(),
 		"generated_at": timestamp(),
@@ -6953,6 +6977,11 @@ func componentSchemas() map[string]*Schema {
 		"NHIExposureSummary":                       nhiExposureSummary,
 		"NHIExposureFinding":                       nhiExposureFinding,
 		"NHIExposurePosture":                       nhiExposurePosture,
+		"NHIExposureReachability":                  nhiExposureReachability,
+		"NHIExposureReachabilityProbe":             nhiExposureReachabilityProbe,
+		"NHIExposureProbeRequest":                  nhiExposureProbeRequest,
+		"NHIExposureProbeEndpoint":                 nhiExposureProbeEndpoint,
+		"NHIExposureProbeResult":                   nhiExposureProbeResult,
 		"NHIStaleHandoffRequest":                   nhiStaleHandoffRequest,
 		"NHIStaleHandoffItem":                      nhiStaleHandoffItem,
 		"NHIStaleHandoffResult":                    nhiStaleHandoffResult,

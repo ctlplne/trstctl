@@ -4748,6 +4748,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/exposure/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Probe exposed NHI endpoints for live reachability from a network relay */
+        post: operations["probeNHIExposure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/overprivilege": {
         parameters: {
             query?: never;
@@ -13747,6 +13764,7 @@ export interface components {
             /** @enum {string} */
             owner_status: "owned" | "subject_bound" | "orphaned";
             public_endpoints: string[];
+            reachability?: components["schemas"]["NHIExposureReachability"];
             recommendation: string;
             ref?: string;
             risk_score: number;
@@ -13764,15 +13782,55 @@ export interface components {
             generated_at: string;
             summary: components["schemas"]["NHIExposureSummary"];
         };
+        NHIExposureProbeEndpoint: {
+            address: string;
+            endpoint: string;
+            inventory_id: string;
+            server_name?: string;
+        };
+        NHIExposureProbeRequest: {
+            inventory_ids?: string[];
+        };
+        NHIExposureProbeResult: {
+            endpoints: components["schemas"]["NHIExposureProbeEndpoint"][];
+            omitted: number;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: uuid */
+            run_id: string;
+            /** @enum {string} */
+            vantage: "relay";
+        };
+        NHIExposureReachability: {
+            endpoints: components["schemas"]["NHIExposureReachabilityProbe"][];
+            /** Format: date-time */
+            probed_at: string;
+            /** @enum {string} */
+            status: "reachable" | "unreachable" | "not_public";
+        };
+        NHIExposureReachabilityProbe: {
+            address: string;
+            agent?: string;
+            error?: string;
+            /** Format: date-time */
+            observed_at: string;
+            observed_fingerprint?: string;
+            /** @enum {string} */
+            outcome: "tls_certificate" | "unparseable_certificate" | "listener_without_tls" | "not_public" | "unreachable";
+            reachable: boolean;
+            server_name?: string;
+        };
         NHIExposureSummary: {
             critical: number;
             findings: number;
             high: number;
             insecure_transport: number;
             internet_exposed: number;
+            live_reachable: number;
             low: number;
             medium: number;
             missing_network_policy: number;
+            probed: number;
             public_callbacks: number;
             recommendations: number;
             total_analyzed: number;
@@ -31011,6 +31069,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIExposurePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    probeNHIExposure: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIExposureProbeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIExposureProbeResult"];
                 };
             };
             /** @description client error */

@@ -150,7 +150,7 @@ not this file.
 | `internal/api/notifications.go:892` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1261` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/openapi.go:187` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/openapi.go:188` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1053` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1201` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
@@ -1725,7 +1725,7 @@ not this file.
 | `internal/crypto/mtls/tls_floor_test.go:34` | loopback test dial against the test's own self-signed server (CWE-295) |
 | `internal/crypto/tlsprobe/native_fallback_test.go:23` | interoperability fixture pins TLS 1.2 to prove the native fallback preserves an existing supported listener. |
 | `internal/crypto/tlsprobe/openssl_test.go:59` | negative control: this fixture must reject the TLS 1.3-only native probe. |
-| `internal/crypto/tlsprobe/tlsprobe.go:189` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
+| `internal/crypto/tlsprobe/tlsprobe.go:204` | discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295) |
 | `internal/crypto/trust/tls_test.go:140` | the test proves the check runs with verification off (CWE-295) |
 
 ### G403 — CWE-326 Inadequate encryption strength (RSA key size) (4 sites)

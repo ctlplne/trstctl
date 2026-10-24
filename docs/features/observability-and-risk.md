@@ -75,13 +75,23 @@ access tokens, and discovery findings — across four conditions:
 | `GET /api/v1/nhi/posture/overprivilege` | Which grants exceed observed usage? | Unused grants, least-privilege recommendation, source row, severity, evidence refs |
 | `GET /api/v1/nhi/posture/stale` | Which credentials are stale, dormant, unused, or orphaned? | Thresholds, activity/creation age, owner status, severity, evidence refs, remediation |
 | `GET /api/v1/nhi/posture/static-credentials` | Which credentials are long-lived, static, or overdue for rotation? | Credential age, TTL, rotation age, lifetime thresholds, owner status, severity, evidence refs, remediation |
-| `GET /api/v1/nhi/posture/exposure` | Which credentials are internet-exposed or insecurely deployed? | Sanitized endpoint/callback URLs, severity, evidence refs, remediation |
+| `GET /api/v1/nhi/posture/exposure` | Which credentials are internet-exposed or insecurely deployed? | Sanitized endpoint/callback URLs, severity, evidence refs, remediation, and each record's latest live probe from a relay (`reachability`) |
 | `GET /api/v1/nhi/posture/automation` | What will the tenant's `nhi_posture` rules do automatically? | Each rule match's action (revoke, right_size, report_only, not_applicable), the evaluated module digest, the latest automatic playbook run |
 
 Grants with no usage evidence stay unclassified rather than counting as a finding; the
 exposure route is read-only and never echoes credential values. For example,
 `trstctl-cli nhi posture stale` reports each stale credential's activity age, owner
 status, severity, and remediation.
+
+What the exposure posture reads from metadata can be checked live:
+`POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture exposure probe`,
+discovery:write) asks a network relay to connect to the exposed records' public
+endpoints and callback URLs, up to 50 per probe. The relay connects only to public
+addresses, refusing a name that resolves to a private or loopback one, and reports
+what answered: a served TLS certificate, a listener without TLS, a non-public address or
+no answer. The probe is a discovery run; the posture then shows each record's latest
+result and the Risk page's exposure panel has a **Probe from a relay** button and a
+**Live reachability** column. The control plane never dials the endpoints itself.
 
 A stale NHI can be handed to a new accountable owner with
 `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):
@@ -323,6 +333,9 @@ trstctl-cli nhi posture overprivilege
 trstctl-cli nhi posture stale
 trstctl-cli nhi posture static-credentials
 trstctl-cli nhi posture exposure
+
+# probe the exposed records' public endpoints live from a network relay
+trstctl-cli nhi posture exposure probe -f nhi-exposure-probe.json --force
 ```
 
 Those map to `GET /api/v1/risk/credentials?sort=score&min_score=50&privilege=high`,

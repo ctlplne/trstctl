@@ -5,11 +5,13 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/agent/verify"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 // The relay vantage: seeing an endpoint as a client sees it (epic D2).
@@ -49,6 +51,18 @@ type EndpointVerifyIntent struct {
 	// signed report to the pilot's assessment instead of the endpoint
 	// verification read model.
 	Pilot *EndpointVerifyPilot `json:"pilot,omitempty"`
+	// Exposure marks a live reachability probe of NHI endpoints the exposure
+	// posture found (A102). The endpoints come from discovery metadata, not
+	// operator configuration, so the relay connects only to public addresses
+	// (netsec's SSRF guard, checked on the address each socket connects to)
+	// and carries no expectation: the report says what answered, if anything.
+	Exposure *EndpointVerifyExposure `json:"exposure,omitempty"`
+}
+
+// EndpointVerifyExposure binds a sweep to one exposure probe request.
+type EndpointVerifyExposure struct {
+	RequestID string `json:"request_id"`
+	RunID     string `json:"run_id"`
 }
 
 // EndpointVerifyPilot binds a sweep to one pilot wave.
@@ -120,6 +134,10 @@ func runEndpointVerify(ctx context.Context, ch Channel, job Job) bool {
 		timeout = time.Duration(intent.TimeoutSeconds) * time.Second
 	}
 
+	var dialControl func(string, string, syscall.RawConn) error
+	if intent.Exposure != nil {
+		dialControl = netsec.SafeDialControl
+	}
 	out := EndpointVerifyReport{Results: make([]EndpointVerifyResult, 0, len(intent.Endpoints))}
 	for _, want := range intent.Endpoints {
 		res, err := verify.Endpoint(ctx, verify.Request{
@@ -128,6 +146,7 @@ func runEndpointVerify(ctx context.Context, ch Channel, job Job) bool {
 			Vantage:      transport.VantageRelay,
 			Timeout:      timeout,
 			PreHandshake: connectorTLSNegotiation(want.Connector),
+			DialControl:  dialControl,
 			Expect: certinfo.Expectation{
 				SHA256Fingerprint: want.Fingerprint,
 				DNSNames:          want.DNSNames,

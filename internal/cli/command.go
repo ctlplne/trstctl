@@ -224,6 +224,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"nhi", "posture", "stale"}, Method: "GET", Path: "/api/v1/nhi/posture/stale", Summary: "List stale, unused, orphaned, and dormant NHI posture findings"},
 	{Name: []string{"nhi", "posture", "static-credentials"}, Method: "GET", Path: "/api/v1/nhi/posture/static-credentials", Summary: "List long-lived and static NHI credential posture findings"},
 	{Name: []string{"nhi", "posture", "automation"}, Method: "GET", Path: "/api/v1/nhi/posture/automation", Summary: "Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each"},
+	{Name: []string{"nhi", "posture", "exposure", "probe"}, Method: "POST", Path: "/api/v1/nhi/posture/exposure/probe", Body: bodyFile, ExampleFile: "nhi-exposure-probe.json", Summary: "Probe exposed NHI endpoints for live reachability from a network relay"},
 	{Name: []string{"nhi", "posture", "stale", "handoff"}, Method: "POST", Path: "/api/v1/nhi/posture/stale/handoff", Body: bodyFile, ExampleFile: "nhi-handoff.json", Summary: "Hand stale NHIs to a new accountable owner and notify them"},
 	{Name: []string{"nhi", "posture", "exposure"}, Method: "GET", Path: "/api/v1/nhi/posture/exposure", Summary: "List internet-exposed and insecure-deployment NHI posture findings"},
 	{Name: []string{"nhi", "decommission"}, Method: "POST", Path: "/api/v1/nhi/decommission", Body: bodyFile, Summary: "Decommission NHIs from departure, vendor-term, or inactivity signals"},

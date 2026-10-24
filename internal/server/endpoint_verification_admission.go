@@ -34,7 +34,12 @@ func validateEndpointVerificationReport(jobPayload []byte, reportJSON, evidenceD
 	}
 	expected := make(map[string]relay.EndpointExpectation, len(intent.Endpoints))
 	for _, want := range intent.Endpoints {
-		if strings.TrimSpace(want.EndpointID) == "" || strings.TrimSpace(want.Address) == "" || strings.TrimSpace(want.Fingerprint) == "" {
+		if strings.TrimSpace(want.EndpointID) == "" || strings.TrimSpace(want.Address) == "" {
+			return report, errors.New("endpoint verification command has an incomplete endpoint binding")
+		}
+		// A sweep verifies an expectation; an exposure probe (A102) has none
+		// and records what answered. Neither may borrow the other's shape.
+		if (intent.Exposure == nil) == (strings.TrimSpace(want.Fingerprint) == "") {
 			return report, errors.New("endpoint verification command has an incomplete endpoint binding")
 		}
 		if _, duplicate := expected[want.EndpointID]; duplicate {

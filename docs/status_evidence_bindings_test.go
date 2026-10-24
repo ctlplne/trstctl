@@ -114,6 +114,8 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("NHIPolicyComplianceFinding", "status", observationPredicate, "internal/api/nhi_policy_compliance.go:nhiPolicyComplianceForItem"),
 	evidence("NHIPostureAutomationItem", "status", observationPredicate, "internal/api/nhi_posture_automation.go:API.nhiPostureAutomationPlan"),
 	evidence("NHIPostureAutomationRun", "status", eventProjectionPredicate, "internal/store/remediation_playbooks.go:Store.ApplyRemediationPlaybookRunRecordedTx"),
+	evidence("NHIExposureReachability", "status", observationPredicate, "internal/api/nhi_exposure_probe.go:nhiExposureReachabilityStatus"),
+	evidence("NHIExposureReachabilityProbe", "outcome", predicate(evidenceObservation, "tls_certificate/unparseable_certificate/listener_without_tls/not_public/unreachable are classified from the network relay's signed probe transcript: a completed handshake with a parsed or unparseable leaf, a handshake-stage failure after the connection was accepted, the SSRF guard's refusal of a non-public address, or a failed dial"), "internal/orchestrator/exposure_probe.go:exposureProbeOutcome"),
 	evidence("NHIReviewCampaign", "status", eventProjectionPredicate, "internal/orchestrator/nhi_access_review.go:Orchestrator.StartNHIReviewCampaign"),
 	evidence("NHIReviewItem", "status", eventProjectionPredicate, "internal/orchestrator/nhi_access_review.go:Orchestrator.DecideNHIReviewItem"),
 	evidence("NHIStaleFinding", "status", observationPredicate, "internal/api/nhi_stale_posture.go:nhiStaleFindingForItem"),

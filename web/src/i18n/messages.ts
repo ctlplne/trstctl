@@ -14741,6 +14741,55 @@ export const messages = {
     defaultMessage: "Recommendation",
     description: "Exposed NHI table column for remediation recommendation.",
   },
+  "risk.nhiExposure.reachabilitySummary": {
+    defaultMessage: "Live reachability: {probed} probed from a relay, {reachable} answered.",
+    description: "Exposed NHI posture summary of the latest live reachability probes from a network relay.",
+  },
+  "risk.nhiExposure.reachability": {
+    defaultMessage: "Live reachability",
+    description: "Exposed NHI table column for the latest live probe from a network relay.",
+  },
+  "risk.nhiExposure.reachabilityValue": {
+    defaultMessage: "{status} · {probedAt}",
+    description: "Exposed NHI table value: the latest probe outcome and when the relay observed it.",
+  },
+  "risk.nhiExposure.reachability.reachable": {
+    defaultMessage: "Answered from a relay",
+    description: "Live reachability: an endpoint of this NHI accepted the network relay's connection.",
+  },
+  "risk.nhiExposure.reachability.unreachable": {
+    defaultMessage: "No answer from a relay",
+    description: "Live reachability: no endpoint of this NHI accepted the network relay's connection.",
+  },
+  "risk.nhiExposure.reachability.notPublic": {
+    defaultMessage: "Resolved to a private address; not probed",
+    description: "Live reachability: every endpoint resolved to a non-public address, which the relay refuses to probe.",
+  },
+  "risk.nhiExposure.notProbed": {
+    defaultMessage: "Not probed yet",
+    description: "Live reachability value for an exposed NHI no relay has probed.",
+  },
+  "risk.nhiExposure.probe": {
+    defaultMessage: "Probe from a relay",
+    description: "Button that queues a live reachability probe of the exposed NHIs' public endpoints on a network relay.",
+  },
+  "risk.nhiExposure.probing": {
+    defaultMessage: "Queuing probe…",
+    description: "Button label while the reachability probe request is in flight.",
+  },
+  "risk.nhiExposure.probeQueued": {
+    defaultMessage: "Probe queued for {endpoints} endpoints (run {run}). Results appear here after a network relay reports.",
+    description: "Confirmation after a reachability probe is queued; names the discovery run.",
+  },
+  "risk.nhiExposure.probeQueuedOmitted": {
+    defaultMessage:
+      "Probe queued for {endpoints} endpoints (run {run}); {omitted} more were left out of this probe. Results appear here after a network relay reports.",
+    description: "Confirmation after a reachability probe is queued when the 50-endpoint bound left some endpoints out.",
+  },
+  "risk.nhiExposure.probeFailed": {
+    defaultMessage: "The probe was not queued: {error}",
+    description: "Error shown when the reachability probe request fails.",
+  },
   "risk.nhiAutomation.heading": {
     defaultMessage: "Automatic NHI posture actions",
     description: "Risk page section heading for the automatic actions tenant nhi_posture rules ask for.",

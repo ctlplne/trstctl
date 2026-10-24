@@ -53,6 +53,10 @@ func ProbeWithNativeFallback(ctx context.Context, executable, addr string, opts 
 	for _, option := range opts {
 		option(&cfg)
 	}
+	if cfg.dialControl != nil {
+		// The native executable dials outside the control hook.
+		return Probe(ctx, addr, opts...)
+	}
 	timeout := cfg.timeout
 	if timeout <= 0 || timeout > DefaultTimeout {
 		timeout = DefaultTimeout

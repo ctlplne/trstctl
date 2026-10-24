@@ -2898,10 +2898,10 @@
             "phase": "P0",
             "priority": 8,
             "served_state": "served",
-            "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture, CAP-POST-02 stale/dormant/orphaned NHI posture, CAP-POST-03 static-credential posture, CAP-POST-04 exposure/insecure-deployment posture, and CAP-POST-05 contextual blast-radius prioritization, and CAP-POST-06 automatic NHI posture actions (tenant nhi_posture rules that ask to revoke through the lifecycle gate or right-size usage-backed unused grants, acted on by the leader's lifecycle sweep as playbook runs), plus the A101 stale NHI owner handoff (one step: ownership assignment the inventory honors for every source, previous owner kept, ownership-channel notice to the new owner)",
-            "current_frontend_mapping": "served: Risk page lists certificate scores, CAP-POST-05 contextual blast-radius priorities, CAP-POST-01 NHI over-privilege findings, CAP-POST-02 stale/dormant/orphaned findings, CAP-POST-03 static-credential findings, and CAP-POST-04 exposure/insecure-deployment findings with recommendations; the CAP-POST-06 automatic actions panel shows each rule match's action and last automatic run",
+            "backend_status": "served credential risk scoring plus CAP-POST-01 NHI over-privilege posture, CAP-POST-02 stale/dormant/orphaned NHI posture, CAP-POST-03 static-credential posture, CAP-POST-04 exposure/insecure-deployment posture, and CAP-POST-05 contextual blast-radius prioritization, and CAP-POST-06 automatic NHI posture actions (tenant nhi_posture rules that ask to revoke through the lifecycle gate or right-size usage-backed unused grants, acted on by the leader's lifecycle sweep as playbook runs), plus the A101 stale NHI owner handoff (one step: ownership assignment the inventory honors for every source, previous owner kept, ownership-channel notice to the new owner), plus the A102 live reachability probe of exposed NHIs (a public-only network-relay sweep of the posture's endpoints recorded as an exposure-probe discovery run, with each record's latest outcome in the exposure posture)",
+            "current_frontend_mapping": "served: Risk page lists certificate scores, CAP-POST-05 contextual blast-radius priorities, CAP-POST-01 NHI over-privilege findings, CAP-POST-02 stale/dormant/orphaned findings, CAP-POST-03 static-credential findings, and CAP-POST-04 exposure/insecure-deployment findings with recommendations, a Live reachability column and a Probe from a relay action (A102); the CAP-POST-06 automatic actions panel shows each rule match's action and last automatic run",
             "target_gui_mapping": "Risk dashboard with factor breakdown, filters, owner drilldown, evidence links, recommended action, and change-over-time.",
-            "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-05 contextual priorities panel, the CAP-POST-01 over-privilege panel, the CAP-POST-02 stale/dormant/orphaned panel, the CAP-POST-03 static-credential panel, and the CAP-POST-04 exposure panel. Served Go tests prove /api/v1/risk/contextual-priorities ranks credentials with graph blast-radius and CBOM crypto context, /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs, /api/v1/nhi/posture/static-credentials detects long-lived/static credentials, and /api/v1/nhi/posture/exposure detects internet-exposed/insecure-deployment NHIs without leaking credential material. Vitest covers the CAP-POST-06 automatic actions panel (plan summary, action labels, last automatic run); served Go tests prove the sweep revokes through the gate, queues right-size once, and records a dual-control refusal with back-off.",
+            "acceptance_test": "Vitest covers risk ranking, factor explanation, empty state, filtering, navigation from risk row to graph/audit/certificate evidence, the CAP-POST-05 contextual priorities panel, the CAP-POST-01 over-privilege panel, the CAP-POST-02 stale/dormant/orphaned panel, the CAP-POST-03 static-credential panel, and the CAP-POST-04 exposure panel. Served Go tests prove /api/v1/risk/contextual-priorities ranks credentials with graph blast-radius and CBOM crypto context, /api/v1/nhi/posture/overprivilege analyzes managed and discovered NHIs and returns usage-driven least-privilege recommendations, /api/v1/nhi/posture/stale detects stale, dormant, unused, and orphaned NHIs, /api/v1/nhi/posture/static-credentials detects long-lived/static credentials, and /api/v1/nhi/posture/exposure detects internet-exposed/insecure-deployment NHIs without leaking credential material. Vitest covers the CAP-POST-06 automatic actions panel (plan summary, action labels, last automatic run); served Go tests prove the sweep revokes through the gate, queues right-size once, and records a dual-control refusal with back-off. A102: Vitest covers the exposure panel's reachability column and probe action; a served Go test queues a probe, claims it as a network relay, reports a signed sweep and reads each record's reachability back from the exposure posture; a relay test proves the probe refuses a loopback listener an ordinary sweep reaches.",
             "source_docs": [
                 "docs/features/observability-and-risk.md"
             ],
@@ -2913,7 +2913,8 @@
                 "/api/v1/nhi/posture/static-credentials",
                 "/api/v1/nhi/posture/exposure",
                 "/api/v1/nhi/posture/automation",
-                "/api/v1/nhi/posture/stale/handoff"
+                "/api/v1/nhi/posture/stale/handoff",
+                "/api/v1/nhi/posture/exposure/probe"
             ],
             "source_frontend": [
                 "web/src/pages/Risk.tsx"
@@ -2928,7 +2929,8 @@
                 "listNHIStaticPosture",
                 "listNHIExposurePosture",
                 "listNHIPostureAutomation",
-                "handOffStaleNHIs"
+                "handOffStaleNHIs",
+                "probeNHIExposure"
             ],
             "api_na": "",
             "cli_surface": [
@@ -2939,7 +2941,8 @@
                 "nhi posture static-credentials",
                 "nhi posture exposure",
                 "nhi posture automation",
-                "nhi posture stale handoff"
+                "nhi posture stale handoff",
+                "nhi posture exposure probe"
             ],
             "cli_na": "",
             "facet_evidence": {

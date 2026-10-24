@@ -366,6 +366,8 @@ import type {
   NHIDecommissionRequest,
   NHIDecommissionResponse,
   NHIExposurePosture,
+  NHIExposureProbeRequest,
+  NHIExposureProbeResult,
   NHIPostureAutomation,
   NHIInventory,
   NHIInventoryItem,
@@ -1187,6 +1189,8 @@ export type {
   NHIDecommissionRequest,
   NHIDecommissionResponse,
   NHIExposurePosture,
+  NHIExposureProbeRequest,
+  NHIExposureProbeResult,
   NHIPostureAutomation,
   NHIInventory,
   NHIInventoryItem,
@@ -1922,6 +1926,8 @@ export interface Api {
   nhiStalePosture(): Promise<NHIStalePosture>;
   nhiStaticPosture(): Promise<NHIStaticPosture>;
   nhiExposurePosture(): Promise<NHIExposurePosture>;
+  /** A102: queue a live reachability probe of exposed NHI endpoints on a network relay. */
+  probeNHIExposure(input: NHIExposureProbeRequest, idempotencyKey?: string): Promise<NHIExposureProbeResult>;
   nhiPostureAutomation(): Promise<NHIPostureAutomation>;
   decommissionNHI(input: NHIDecommissionRequest): Promise<NHIDecommissionResponse>;
   ownershipAttribution(): Promise<OwnershipAttribution>;
@@ -2631,6 +2637,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   nhiStalePosture: () => req<NHIStalePosture>("/api/v1/nhi/posture/stale"),
   nhiStaticPosture: () => req<NHIStaticPosture>("/api/v1/nhi/posture/static-credentials"),
   nhiExposurePosture: () => req<NHIExposurePosture>("/api/v1/nhi/posture/exposure"),
+  probeNHIExposure: (input, idempotencyKey) => mutate<NHIExposureProbeResult>("POST", "/api/v1/nhi/posture/exposure/probe", input, idempotencyKey),
   nhiPostureAutomation: () => req<NHIPostureAutomation>("/api/v1/nhi/posture/automation"),
   decommissionNHI: (input) => mutate<NHIDecommissionResponse>("POST", "/api/v1/nhi/decommission", input),
   ownershipAttribution: () => req<OwnershipAttribution>("/api/v1/ownership/attribution"),

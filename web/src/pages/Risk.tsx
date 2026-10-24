@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/auth/AuthProvider";
 import {
   api,
   type ContextualRiskPriorities,
   type ContextualRiskPriority,
   type CredentialRisk,
   type NHIExposurePosture,
+  type NHIExposureProbeResult,
   type NHIPostureAutomation,
   type NHIOverPrivilegePosture,
   type NHIPolicyCompliance,
@@ -25,6 +27,7 @@ import { RiskPosture } from "@/components/risk/posture";
 import { Meter, type ChartTone, type MeterSegment } from "@/components/charts";
 import { Num } from "@/components/typography";
 import { riskBand } from "@/lib/statusVocab";
+import { hasPermission } from "@/lib/access";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
@@ -821,9 +824,37 @@ function NHIStaticPanel({ posture, loading, error }: { posture: NHIStaticPosture
   );
 }
 
+const nhiReachabilityKeys = {
+  reachable: "risk.nhiExposure.reachability.reachable",
+  unreachable: "risk.nhiExposure.reachability.unreachable",
+  not_public: "risk.nhiExposure.reachability.notPublic",
+} as const;
+
 function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePosture | null; loading: boolean; error: string | null }) {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  // A102: probing makes a network relay connect to the endpoints, so it takes
+  // the same permission as starting a discovery run.
+  const canProbe = hasPermission(user, "discovery:write");
+  const [probing, setProbing] = useState(false);
+  const [probe, setProbe] = useState<NHIExposureProbeResult | null>(null);
+  const [probeError, setProbeError] = useState<string | null>(null);
   const topFindings = posture?.findings?.slice(0, 5) ?? [];
+  const probeable = (posture?.findings ?? []).some((finding) => finding.public_endpoints.length + finding.callback_urls.length > 0);
+
+  async function startProbe() {
+    setProbing(true);
+    setProbeError(null);
+    try {
+      setProbe(await api.probeNHIExposure({ inventory_ids: [] }));
+    } catch (err) {
+      setProbe(null);
+      setProbeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProbing(false);
+    }
+  }
+
   return (
     <section aria-labelledby="nhi-exposure-heading" className="mb-4 border-b border-border pb-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -842,14 +873,41 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
               })}
             </p>
           )}
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiExposure.reachabilitySummary", {
+                probed: posture.summary.probed ?? 0,
+                reachable: posture.summary.live_reachable ?? 0,
+              })}
+            </p>
+          )}
         </div>
-        {posture && (
-          <StatusBadge
-            vocabulary="risk"
-            value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"}
-          />
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canProbe && probeable && (
+            <Button type="button" size="sm" variant="outline" disabled={probing} onClick={() => void startProbe()}>
+              {probing ? t("risk.nhiExposure.probing") : t("risk.nhiExposure.probe")}
+            </Button>
+          )}
+          {posture && (
+            <StatusBadge
+              vocabulary="risk"
+              value={posture.summary.critical > 0 ? "critical" : posture.summary.high > 0 ? "high" : posture.summary.medium > 0 ? "medium" : "low"}
+            />
+          )}
+        </div>
       </div>
+      {probe && (
+        <p role="status" className="mt-2 text-sm text-muted-foreground">
+          {probe.omitted > 0
+            ? t("risk.nhiExposure.probeQueuedOmitted", { endpoints: probe.endpoints.length, omitted: probe.omitted, run: probe.run_id })
+            : t("risk.nhiExposure.probeQueued", { endpoints: probe.endpoints.length, run: probe.run_id })}
+        </p>
+      )}
+      {probeError && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {t("risk.nhiExposure.probeFailed", { error: probeError })}
+        </p>
+      )}
 
       {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.loading")}</p>}
       {error && (
@@ -867,6 +925,7 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
                 <th scope="col">{t("risk.nhiExposure.nhi")}</th>
                 <th scope="col">{t("risk.nhiExposure.finding")}</th>
                 <th scope="col">{t("risk.nhiExposure.exposure")}</th>
+                <th scope="col">{t("risk.nhiExposure.reachability")}</th>
                 <th scope="col">{t("risk.nhiExposure.recommendation")}</th>
               </tr>
             </thead>
@@ -891,6 +950,14 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
                       auth: finding.auth_mode || t("risk.nhiExposure.unknown"),
                       transport: finding.transport_security || t("risk.nhiExposure.unknown"),
                     })}
+                  </td>
+                  <td>
+                    {finding.reachability
+                      ? t("risk.nhiExposure.reachabilityValue", {
+                          status: t(nhiReachabilityKeys[finding.reachability.status]),
+                          probedAt: formatDate(finding.reachability.probed_at),
+                        })
+                      : t("risk.nhiExposure.notProbed")}
                   </td>
                   <td>{finding.recommendation}</td>
                 </tr>

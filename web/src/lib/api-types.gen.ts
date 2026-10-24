@@ -5538,6 +5538,7 @@ export interface NHIExposureFinding {
   owner_id?: string;
   owner_status: "owned" | "subject_bound" | "orphaned";
   public_endpoints: string[];
+  reachability?: NHIExposureReachability;
   recommendation: string;
   ref?: string;
   risk_score: number;
@@ -5555,15 +5556,53 @@ export interface NHIExposurePosture {
   summary: NHIExposureSummary;
 }
 
+export interface NHIExposureProbeEndpoint {
+  address: string;
+  endpoint: string;
+  inventory_id: string;
+  server_name?: string;
+}
+
+export interface NHIExposureProbeRequest {
+  inventory_ids?: string[];
+}
+
+export interface NHIExposureProbeResult {
+  endpoints: NHIExposureProbeEndpoint[];
+  omitted: number;
+  requested_at: string;
+  run_id: string;
+  vantage: "relay";
+}
+
+export interface NHIExposureReachability {
+  endpoints: NHIExposureReachabilityProbe[];
+  probed_at: string;
+  status: "reachable" | "unreachable" | "not_public";
+}
+
+export interface NHIExposureReachabilityProbe {
+  address: string;
+  agent?: string;
+  error?: string;
+  observed_at: string;
+  observed_fingerprint?: string;
+  outcome: "tls_certificate" | "unparseable_certificate" | "listener_without_tls" | "not_public" | "unreachable";
+  reachable: boolean;
+  server_name?: string;
+}
+
 export interface NHIExposureSummary {
   critical: number;
   findings: number;
   high: number;
   insecure_transport: number;
   internet_exposed: number;
+  live_reachable: number;
   low: number;
   medium: number;
   missing_network_policy: number;
+  probed: number;
   public_callbacks: number;
   recommendations: number;
   total_analyzed: number;

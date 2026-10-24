@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 )
 
@@ -60,11 +61,20 @@ type Result struct {
 type config struct {
 	timeout             time.Duration
 	dialer              *net.Dialer
+	dialControl         func(network, address string, c syscall.RawConn) error
 	alpn                []string
 	serverName          string
 	preHandshake        PreHandshake
 	requiredHybridGroup bool
 	maxVersion          uint16
+}
+
+// WithDialControl sets the dialer's Control hook. It sees the exact address
+// each connection is made to after name resolution, so a caller can refuse a
+// non-public address without a resolve-then-dial race. A probe with a dial
+// control never falls back to a native executable, which would dial outside it.
+func WithDialControl(control func(network, address string, c syscall.RawConn) error) Option {
+	return func(cfg *config) { cfg.dialControl = control }
 }
 
 // WithRequiredHybridGroup offers only X25519MLKEM768. A successful handshake
@@ -152,6 +162,11 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 	cfg := config{timeout: DefaultTimeout, dialer: &net.Dialer{}}
 	for _, o := range opts {
 		o(&cfg)
+	}
+	if cfg.dialControl != nil {
+		dialer := *cfg.dialer
+		dialer.Control = cfg.dialControl
+		cfg.dialer = &dialer
 	}
 
 	host, _, err := net.SplitHostPort(addr)

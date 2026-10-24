@@ -1313,9 +1313,22 @@ never live in the API process. What you can do end to end against the running bi
   - Exposure (`GET /api/v1/nhi/posture/exposure`): internet-exposed NHIs, public
     endpoints/callbacks, plaintext transport, weak authentication, missing
     network policy, wildcard reachability, and insecure-deployment markers; URL
-    query strings are sanitized and no credential values are returned. Live
-    reachability probing and provider-native attack-path validation remain
-    deeper connector work.
+    query strings are sanitized and no credential values are returned.
+    `POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture
+    exposure probe`, discovery:write, idempotent) probes those public endpoints
+    and callback URLs live from a network relay: up to 50 endpoints per probe,
+    most severe records first, as one discovery run under the product's
+    exposure-probe source. The relay connects only to public addresses, checked
+    on the address each socket would connect to, so a name that resolves to a
+    private or loopback address is refused, not probed. Each endpoint becomes a
+    finding (`nhi-exposure-probe`) with its outcome: a served TLS certificate, an
+    unparseable one, a listener that accepted the connection without TLS, a
+    non-public address, or no answer. The exposure posture then shows each
+    record's latest probe (`reachability`) and counts probed and answering
+    records. The control plane never dials the endpoints itself; with no network
+    relay enrolled, the probe run stays queued. Provider-native attack-path
+    validation (whether a cloud's routes and security groups allow the path) is
+    what comes next.
 - Rogue and non-compliant certificate posture:
   `GET /api/v1/revocation/rogue-certificates` and
   `trstctl-cli revocation rogue-certificates` combine unexpected CT findings with

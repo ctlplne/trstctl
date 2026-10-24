@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -59,6 +60,9 @@ type Request struct {
 	// PreHandshake performs the configured application's TLS upgrade before
 	// ClientHello. Nil is direct TLS; a refusal never falls back to plaintext.
 	PreHandshake tlsprobe.PreHandshake
+	// DialControl, when set, vets the exact address each connection is made
+	// to (an exposure probe refuses non-public addresses with it).
+	DialControl func(network, address string, c syscall.RawConn) error `json:"-"`
 }
 
 // Result pairs the verdict with the transcript that justifies it.
@@ -112,7 +116,11 @@ func Endpoint(ctx context.Context, req Request) (Result, error) {
 	// handshake worked (M1). Measured around the dial itself, so it includes the
 	// key exchange whose size is the whole question for a hybrid group.
 	handshakeStart := time.Now()
-	probe, err := tlsprobe.ProbeWithNativeFallback(ctx, req.NativeProbeExecutable, addr, tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)), tlsprobe.WithPreHandshake(req.PreHandshake))
+	probeOptions := []tlsprobe.Option{tlsprobe.WithTimeout(timeout), tlsprobe.WithServerName(strings.TrimSpace(req.ServerName)), tlsprobe.WithPreHandshake(req.PreHandshake)}
+	if req.DialControl != nil {
+		probeOptions = append(probeOptions, tlsprobe.WithDialControl(req.DialControl))
+	}
+	probe, err := tlsprobe.ProbeWithNativeFallback(ctx, req.NativeProbeExecutable, addr, probeOptions...)
 	tr.HandshakeMillis = time.Since(handshakeStart).Milliseconds()
 	if err != nil {
 		// Unreachable. The transcript says so and claims nothing else: no

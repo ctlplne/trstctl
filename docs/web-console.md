@@ -426,11 +426,15 @@ The full certificate score projection and NHI posture panels for policy complian
 over-privilege, stale/static credentials, exposure, and the automatic NHI posture actions
 the tenant's `nhi_posture` rules ask for (each match's action and last automatic run)
 stay available under **Score inputs and supporting projections**. They do not compete with the default decision.
+The exposure panel's **Live reachability** column shows each record's latest probe from a
+network relay, and **Probe from a relay** (discovery:write) queues a new one for up to 50
+public endpoints.
 For fleet-wide crypto hygiene (drift, PQC readiness), see Posture. Backed by
 `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`,
 `/api/v1/nhi/policy/compliance`, `/api/v1/nhi/posture/overprivilege`,
 `/api/v1/nhi/posture/stale`, `/api/v1/nhi/posture/static-credentials`,
-`/api/v1/nhi/posture/exposure`, and `/api/v1/nhi/posture/automation`.
+`/api/v1/nhi/posture/exposure`, `/api/v1/nhi/posture/exposure/probe`, and
+`/api/v1/nhi/posture/automation`.
 
 ### Secrets workspaces (`/secrets`, `/secrets/*`)
 
