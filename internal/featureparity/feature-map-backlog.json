@@ -17038,7 +17038,7 @@
             "cli_surface": [
                 "secrets pki preview",
                 "secrets pki",
-                "certificates recover-pki-secret"
+                "certificates inventory-pki-secret"
             ],
             "cli_na": "",
             "facet_evidence": {

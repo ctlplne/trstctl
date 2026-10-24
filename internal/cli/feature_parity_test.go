@@ -328,7 +328,7 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A106's `discovery findings resolve` raised it to 578, mapped onto the discovery row.
 	// A110's `ssh krl adopt` raised it to 579, mapped onto the SSH CA row.
 	// A109's `ssh krl receipts` raised it to 580, mapped onto the SSH CA row.
-	// A111's `certificates recover-pki-secret` raised it to 581, mapped onto F67.
+	// A111's `certificates inventory-pki-secret` raised it to 581, mapped onto F67.
 	if len(out) != 581 {
 		t.Fatalf("CLI commands = %d, want 581", len(out))
 	}

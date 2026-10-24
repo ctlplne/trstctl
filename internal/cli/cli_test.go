@@ -1048,6 +1048,33 @@ func TestOwnersImportUsesCSVContract(t *testing.T) {
 	}
 }
 
+// The binary-body commands send the file's exact bytes with their own media
+// type, and neither is destructive: adopting a KRL and inventorying a
+// historical leaf add records and remove nothing, so neither needs --force.
+func TestRawBodyCommandsSendExactBytesWithoutForce(t *testing.T) {
+	for _, tc := range []struct {
+		args        []string
+		path, media string
+		body        string
+	}{
+		{[]string{"ssh", "krl", "adopt", "-f", "-"}, "/api/v1/ssh/krl/adoptions", "application/octet-stream", "SSHKRL\n\x00\x00\x00\x00\x01"},
+		{[]string{"certificates", "inventory-pki-secret", "-f", "-"}, "/api/v1/certificates/pki-secret-recoveries", "application/x-pem-file",
+			"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n"},
+	} {
+		var captured capture
+		srv := mockServer(t, http.StatusOK, `{}`, &captured)
+		code, _, stderr := run(t, tc.args, cli.Env{Server: srv.URL, HTTPClient: srv.Client()}, tc.body)
+		if code != 0 {
+			t.Fatalf("%v exit = %d, stderr = %q", tc.args, code, stderr)
+		}
+		if captured.Method != http.MethodPost || captured.Path != tc.path || captured.Header.Get("Content-Type") != tc.media ||
+			string(captured.Body) != tc.body || captured.Header.Get("Idempotency-Key") == "" {
+			t.Errorf("%v request = %s %s content-type=%q body=%q", tc.args, captured.Method, captured.Path,
+				captured.Header.Get("Content-Type"), captured.Body)
+		}
+	}
+}
+
 func TestRootHelpIsSuccessfulAndScriptFriendly(t *testing.T) {
 	for _, args := range [][]string{{"--help"}, {"-h"}, {"help"}} {
 		code, stdout, stderr := run(t, args, cli.Env{}, "")

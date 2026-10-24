@@ -245,7 +245,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"revocation", "rogue-certificates", "takedown"}, Method: "POST", Path: "/api/v1/revocation/rogue-certificates/takedown", Body: bodyFile, Summary: "Queue removal of a rogue certificate from the connector target where trstctl installed it"},
 	{Name: []string{"revocation", "ct-submit"}, Method: "POST", Path: "/api/v1/revocation/ct-submissions", Body: bodyFile, Summary: "Queue precertificate and certificate submission to Certificate Transparency logs"},
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
-	{Name: []string{"certificates", "recover-pki-secret"}, Method: "POST", Path: "/api/v1/certificates/pki-secret-recoveries", Body: bodyFile, ContentType: "application/x-pem-file", ExampleFile: "leaf.pem", Summary: "Give a historical PKI-secret leaf its inventory row from its public certificate"},
+	{Name: []string{"certificates", "inventory-pki-secret"}, Method: "POST", Path: "/api/v1/certificates/pki-secret-recoveries", Body: bodyFile, ContentType: "application/x-pem-file", ExampleFile: "leaf.pem", Summary: "Give a historical PKI-secret leaf its inventory row from its public certificate"},
 	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Revoke exact certificates or explicitly selected lifecycle identities"},
 
 	{Name: []string{"workloads", "attester-trust-sources", "create"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources", Body: bodyFile, Summary: "Create a tenant workload attester trust source"},
