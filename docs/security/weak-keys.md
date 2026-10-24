@@ -98,6 +98,20 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   and name the replacement path: plan its re-issue through the crypto
   migration flow (`POST /api/v1/pqc/migrations/plan` with the asset's id).
 
+- **Every requester key trstctl certifies.** A subject key that fails a
+  structural check (small factor, close primes, ROCA, an operator blocklist
+  hit, a small EC scalar, a bad RSA exponent) is refused before anything is
+  signed, and the refusal names the check: ACME (`badCSR`, 400), EST and CMP
+  (400, the check in the response), SCEP (the issuance evidence names it; the
+  client sees a refusal), the REST identity transition with `subject_csr_pem`
+  (400 before the transition is recorded), the Vault-compatible PKI engine
+  (422), SPIFFE X.509-SVIDs, agent enrollment, CA authority issuance, and an
+  external CA (422, before any connector is called). Size and algorithm floors
+  are not part of this: they stay with each profile's key policy
+  (`allowed_key_algorithms`, `min_rsa_bits`), so a profile without a floor
+  still issues RSA-1024. Ed25519 and post-quantum keys have no structural
+  checks and pass.
+
 - **The CA key ceremony.** The signer refuses a weak key it generates, mints
   or imports; an HSM or KMS key that fails is zeroized and the operation fails
   with `provider_key_weak`. No weak key is certified as a CA, and an imported

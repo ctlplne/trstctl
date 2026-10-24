@@ -282,6 +282,9 @@ func (c *CA) SignClientCSR(csrDER []byte, ttl time.Duration) ([]byte, error) {
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("mtls: csr signature: %w", err)
 	}
+	if err := boundary.RefuseWeakSubjectKey(csr.RawSubjectPublicKeyInfo); err != nil {
+		return nil, fmt.Errorf("mtls: agent CSR: %w", err)
+	}
 	serial, err := randomSerial()
 	if err != nil {
 		return nil, err
@@ -351,6 +354,9 @@ func (c *CA) SignClientCSRWithTenant(
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("mtls: csr signature: %w", err)
+	}
+	if err := boundary.RefuseWeakSubjectKey(csr.RawSubjectPublicKeyInfo); err != nil {
+		return nil, fmt.Errorf("mtls: agent CSR: %w", err)
 	}
 	// The CN becomes a PATH SEGMENT of the SPIFFE ID below, and capability roles
 	// are encoded as further segments of that same path. A CN of

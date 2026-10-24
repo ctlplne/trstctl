@@ -320,6 +320,11 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		if errors.Is(err, ca.ErrExternalIssuePending) {
 			return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %w", api.ErrExternalCAUpstream, ca.ErrExternalIssuePending)
 		}
+		if crypto.RefusedSubjectKey(err) {
+			// Refused before any connector was called: the request's fault,
+			// not the upstream's (owner decision, batch 11).
+			return api.ExternalCAIssuedCertificate{}, err
+		}
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: %s", api.ErrExternalCAUpstream, externalCAUpstreamDetail(err))
 	}
 	return api.ExternalCAIssuedCertificate{

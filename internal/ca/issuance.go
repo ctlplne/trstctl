@@ -222,6 +222,17 @@ func (s *IssuanceService) Issue(ctx context.Context, req IssueRequest, idempoten
 	if err := s.enforceProfile(ctx, req); err != nil {
 		return Certificate{}, err
 	}
+	// A subject key that fails a structural weak-key check never reaches an
+	// external CA connector (owner decision, batch 11).
+	if len(req.CSR) > 0 {
+		inspected, err := crypto.InspectOpaqueCSR(req.CSR)
+		if err != nil {
+			return Certificate{}, fmt.Errorf("ca: CSR does not parse: %w", err)
+		}
+		if err := crypto.RefuseWeakSubjectKey(inspected.RawSubjectPublicKeyInfo); err != nil {
+			return Certificate{}, err
+		}
+	}
 	if req.ProviderIdempotencyKey == "" {
 		req.ProviderIdempotencyKey = ProviderIdempotencyKey(idempotencyKey)
 	}

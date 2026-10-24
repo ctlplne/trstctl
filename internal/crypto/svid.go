@@ -35,6 +35,9 @@ func SignSVID(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffe
 	if err != nil {
 		return nil, fmt.Errorf("crypto: parse SVID public key: %w", err)
 	}
+	if err := RefuseWeakSubjectKey(leafPubDER); err != nil {
+		return nil, fmt.Errorf("crypto: SVID: %w", err)
+	}
 	adapter, err := newX509Signer(caSigner)
 	if err != nil {
 		return nil, err

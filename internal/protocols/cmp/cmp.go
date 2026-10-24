@@ -203,6 +203,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepIssue, enrollmentdiag.CMPReasonCapacityRejected, rerr),
 			"cmp:"+txid, cmpIdentityRef(req))
 		http.Error(w, "busy", http.StatusServiceUnavailable)
+	case crypto.RefusedSubjectKey(rerr):
+		detail := crypto.SubjectKeyRefusalDetail(rerr)
+		s.audit(r.Context(), "deny", detail, txid)
+		s.emitFailure(r, enrollmentdiag.ClassifyCMP(enrollmentdiag.StepIssue, enrollmentdiag.CMPReasonUnknown, rerr),
+			"cmp:"+txid, cmpIdentityRef(req))
+		http.Error(w, "cmp: enrollment refused: "+detail, http.StatusBadRequest)
 	case rerr != nil:
 		s.audit(r.Context(), "deny", rerr.Error(), txid)
 		// The Enroller contract intentionally does not expose whether an

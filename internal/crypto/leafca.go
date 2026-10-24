@@ -212,6 +212,11 @@ func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csr
 	if err := csr.CheckSignature(); err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: CSR signature: %w", err)
 	}
+	// A subject key that fails a structural weak-key check is refused before
+	// anything is signed, naming the check (owner decision, batch 11).
+	if err := RefuseWeakSubjectKey(csr.RawSubjectPublicKeyInfo); err != nil {
+		return IssuedLeaf{}, newSubjectKeyRefusal(err)
+	}
 	// Enforce the profile's constraints before signing (PKIGOV-002): an
 	// out-of-profile request is rejected, never minted.
 	if err := enforceLeafProfile(csr, ttl, prof); err != nil {
@@ -495,6 +500,9 @@ func SignAgentClientCSR(
 	}
 	if err := csr.CheckSignature(); err != nil {
 		return nil, fmt.Errorf("crypto: agent CSR signature: %w", err)
+	}
+	if err := RefuseWeakSubjectKey(csr.RawSubjectPublicKeyInfo); err != nil {
+		return nil, fmt.Errorf("crypto: agent CSR: %w", err)
 	}
 	uri, err := url.Parse(spiffeURI)
 	if err != nil {

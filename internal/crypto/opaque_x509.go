@@ -201,6 +201,9 @@ func signOpaqueLeafWithPreparation(caCertDER []byte, caSigner DigestSigner, req 
 	if len(req.SubjectPublicKeyInfoDER) == 0 {
 		return IssuedLeaf{}, errors.New("crypto: opaque leaf requires subject SPKI")
 	}
+	if err := RefuseWeakSubjectKey(req.SubjectPublicKeyInfoDER); err != nil {
+		return IssuedLeaf{}, newSubjectKeyRefusal(err)
+	}
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
 		return IssuedLeaf{}, fmt.Errorf("crypto: parse opaque-leaf CA cert: %w", err)

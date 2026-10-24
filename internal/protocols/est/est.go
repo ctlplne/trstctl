@@ -356,6 +356,13 @@ func (s *Server) enroll(opType string) http.HandlerFunc {
 			http.Error(w, "busy", http.StatusServiceUnavailable)
 			return
 		}
+		if detail := crypto.SubjectKeyRefusalDetail(rerr); detail != "" {
+			s.audit(r.Context(), opType, "deny", detail)
+			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepIssue, http.StatusBadRequest, rerr),
+				estOperationRef(r, opType, csrDER), s.diagnosticIdentityRef(csrDER))
+			http.Error(w, "est: enrollment refused: "+detail, http.StatusBadRequest)
+			return
+		}
 		if rerr != nil {
 			s.audit(r.Context(), opType, "deny", rerr.Error())
 			s.emitFailure(r, enrollmentdiag.ClassifyEST(enrollmentdiag.StepAuthorize, http.StatusForbidden, rerr),

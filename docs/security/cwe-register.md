@@ -1705,8 +1705,8 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:421` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
-| `internal/crypto/leafca.go:675` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
-| `internal/crypto/opaque_x509.go:271` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/leafca.go:683` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
 | `internal/crypto/tsa_verify.go:115` | RFC 5816 ESSCertIDv1 certificate identifier, not a signature digest (CWE-328) |

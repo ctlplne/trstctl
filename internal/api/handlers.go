@@ -720,9 +720,9 @@ func flattenABACResource(prefix string, attrs map[string]any, out map[string]str
 // caller mistake and belongs in the response to the request that carried it —
 // not surfaced minutes later as a failed outbox delivery nobody is watching.
 func validateSubjectCSRPEM(csrPEM string) error {
-	_, _, err := crypto.ParsePublicCSRPEM([]byte(csrPEM))
+	der, _, err := crypto.ParsePublicCSRPEM([]byte(csrPEM))
 	if err != nil {
 		return fmt.Errorf("subject_csr_pem: %w", err)
 	}
-	return nil
+	return refuseWeakSubjectCSR(der)
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -27,6 +28,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// server failure. Use the established 499 code so access logs and SLOs do
 		// not turn a harmless client cancellation into a misleading 500.
 		a.writeProblem(w, problem.New(499, "request canceled by client").WithTitle("Client Closed Request"))
+	case crypto.RefusedSubjectKey(err):
+		// A weak or recorded-compromised subject key is the request's fault
+		// and names its check (owner decision, batch 11).
+		a.writeProblem(w, problem.New(http.StatusUnprocessableEntity, crypto.SubjectKeyRefusalDetail(err)).
+			WithExtension("code", "subject_key_refused"))
 	case errors.As(err, &ae):
 		p := problem.New(ae.status, ae.detail)
 		for k, v := range ae.ext {

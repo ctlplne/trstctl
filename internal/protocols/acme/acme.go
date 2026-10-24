@@ -1529,6 +1529,11 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		ProfileName: o.profile, Protocol: "acme",
 	})
 	if err != nil {
+		if detail := crypto.SubjectKeyRefusalDetail(err); detail != "" {
+			// RFC 8555 §7.4: an unacceptable CSR, here its key, is badCSR.
+			s.problemWithError(w, r, http.StatusBadRequest, "badCSR", detail, err)
+			return
+		}
 		s.problemWithError(w, r, http.StatusInternalServerError, "serverInternal", "issuance failed: "+err.Error(), err)
 		return
 	}

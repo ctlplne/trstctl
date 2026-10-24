@@ -34,7 +34,9 @@ signer-backed CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f4
 14 third-party authorities (Let's Encrypt/ACME, DigiCert, Sectigo, Microsoft AD CS,
 AWS Private CA, Azure Key Vault, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect,
 Vault PKI, GlobalSign, Entrust, and the shell CA escape hatch) all implement that same
-interface. The running binary exposes configured upstreams as a served registry at
+interface. On every one of these paths a requester's key that fails a structural
+weak-key check is refused before it is signed or sent upstream, naming the check (see
+[Weak keys](../security/weak-keys.md#where-the-checks-run)). The running binary exposes configured upstreams as a served registry at
 `GET /api/v1/external-cas`; callers issue through one selected CA with
 `POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
 `Idempotency-Key`. The CA Hierarchy page drives the same route from the browser: pick

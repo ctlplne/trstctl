@@ -325,6 +325,9 @@ func (s *Server) pkiOperation(w http.ResponseWriter, r *http.Request) {
 		failed := baseEvidence
 		failed.Outcome = "failed"
 		failed.Detail = "The signer-backed issuance path refused this request; inspect the profile and signer evidence before retrying."
+		if detail := crypto.SubjectKeyRefusalDetail(rerr); detail != "" {
+			failed.Detail = "The subject key was refused: " + detail + "."
+		}
 		s.emitAttempt(r.Context(), EventIssuanceObserved, failed)
 		s.emitFailure(r, enrollmentdiag.ClassifySCEP(enrollmentdiag.StepIssue, "badRequest", rerr),
 			"scep:"+req.TransactionID, identityRef)

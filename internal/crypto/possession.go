@@ -92,7 +92,11 @@ func RefuseWeakKey(pub PublicKey) error {
 		return fmt.Errorf("crypto: public key does not parse: %w", err)
 	}
 	if len(findings) > 0 {
-		return fmt.Errorf("crypto: refusing a weak key: %s", weakkey.Reasons(findings))
+		checks := make([]string, 0, len(findings))
+		for _, f := range findings {
+			checks = append(checks, f.Check)
+		}
+		return &WeakKeyError{Checks: checks, Reasons: weakkey.Reasons(findings)}
 	}
 	return nil
 }
