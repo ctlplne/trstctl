@@ -4440,9 +4440,13 @@ the RA split and dual control too. The `/request` and `/approvals` console
 pair is served for profile-bound certificate requests: it records
 requester/profile/purpose metadata, keeps the request in `requested`, blocks
 requester self-issue, accepts a distinct approval, and mints through the
-signer-backed outbox. The remaining gap is a first-class `issuance_request`
-API object with its own cancel/deny/expiry status; today that state is
-represented by identity metadata plus the approval tables.
+signer-backed outbox. The request is a first-class object
+(`/api/v1/issuance-requests`, `trstctl issuance-requests`) with its own
+lifecycle: `requested`, then `approved`, `denied` (by a distinct approver, with
+a reason), `cancelled` (by the requester), `expired` (seven days after it
+opened, recorded with no decider because nobody decided), or `issued`; the
+list keeps closed requests for audit (A117, proven on the lab: open, withdraw,
+deny with a reason, refused self-approval, approve).
 
 The OPA/Rego policy gate is default-deny on issue/deploy/revoke. With
 `ca.policy.enabled` set, the served binary invokes the embedded policy engine
