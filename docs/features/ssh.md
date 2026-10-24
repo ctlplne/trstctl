@@ -275,9 +275,13 @@ Use a separate approval workflow if your policy requires two people.
   collect central per-host delivery receipts. Existing SSH sessions are not
   terminated by a KRL update. A host keeps its installed KRL if the control
   plane is unavailable or cannot finish a verified event catch-up; it retries
-  the download. A new control-plane deployment has its own KRL version lineage.
-  Preserve existing host revocations until that lineage is reconciled; the
-  agent refuses to replace a newer installed KRL with an older one.
+  the download. A restored or replacement control plane counts its own KRL
+  versions, so the agent compares what the lists revoke as well as their
+  versions: it refuses a list whose version does not advance the installed
+  one, and it refuses any list, however new, that would stop revoking a
+  serial, key ID, key, or key hash the installed list revokes (a revocation
+  for any CA keeps one scoped to a single CA). The installed list stays in
+  force and the refusal counts what the served list would drop.
 
 ## Reference
 

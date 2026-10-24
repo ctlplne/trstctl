@@ -67,6 +67,78 @@ func setupInstaller(t *testing.T) (Config, *fakeChecks, []byte, []byte) {
 	return cfg, checks, old, krlFixture(2, 101, 202)
 }
 
+func installerWith(t *testing.T, installed []byte) Config {
+	t.Helper()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "revoked_keys")
+	if err := os.WriteFile(target, installed, 0o644); err != nil { // #nosec G306 -- a public KRL fixture under t.TempDir; sshd lists are world-readable
+		t.Fatal(err)
+	}
+	return Config{TargetPath: target, SSHDConfigPath: filepath.Join(dir, "sshd_config"), RollbackDir: filepath.Join(dir, "rollbacks"), Checks: &fakeChecks{activePath: target}}
+}
+
+func applyList(t *testing.T, cfg Config, next []byte) error {
+	t.Helper()
+	before, err := os.ReadFile(cfg.TargetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Apply(context.Background(), cfg, next, crypto.SHA256Hex(next))
+	after, readErr := os.ReadFile(cfg.TargetPath)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if err != nil && !bytes.Equal(after, before) {
+		t.Fatalf("refused list still changed the target: %v", err)
+	}
+	if err == nil && !bytes.Equal(after, next) {
+		t.Fatal("accepted list is not the installed one")
+	}
+	return err
+}
+
+// A110: a newer list that stops revoking something this host revokes is
+// refused, and the installed list stays in force.
+func TestApplyRefusesNewerListThatDropsInstalledRevocations(t *testing.T) {
+	cfg := installerWith(t, krlFixture(1, 101))
+	err := applyList(t, cfg, krlFixture(2, 202))
+	var drop *DropError
+	if !errors.Is(err, ErrDropsRevocations) || !errors.As(err, &drop) || drop.Serials != 1 || drop.KeyIDs != 0 {
+		t.Fatalf("Apply = %v; want one dropped serial", err)
+	}
+}
+
+// A110: a host moves from one control plane's KRL lineage to another's only
+// when the new list is newer than the installed one and still revokes all of
+// it. Each lineage counts its own versions, so neither alone is enough.
+func TestApplyMigratesToAnotherLineageOnlyWhenNewerAndComplete(t *testing.T) {
+	cfg := installerWith(t, trstctlList(5, []uint64{101, 102}, "pam:a"))
+	if err := applyList(t, cfg, trstctlList(3, []uint64{101, 102, 303}, "pam:a")); !errors.Is(err, ErrNotNewer) {
+		t.Fatalf("lower-version replacement list = %v; want refused as not newer", err)
+	}
+	if err := applyList(t, cfg, trstctlList(6, []uint64{101, 303}, "pam:a")); !errors.Is(err, ErrDropsRevocations) {
+		t.Fatalf("replacement list without serial 102 = %v; want refused as dropping revocations", err)
+	}
+	if err := applyList(t, cfg, trstctlList(6, []uint64{101, 303}, "pam:b")); !errors.Is(err, ErrDropsRevocations) {
+		t.Fatalf("replacement list without key ID pam:a = %v; want refused as dropping revocations", err)
+	}
+	if err := applyList(t, cfg, trstctlList(6, []uint64{101, 102, 303}, "pam:a")); err != nil {
+		t.Fatalf("complete newer replacement list refused: %v", err)
+	}
+}
+
+// A host whose RevokedKeys file starts as the operator's own CA-scoped list
+// takes a trstctl list only if it revokes the same serials and key IDs.
+func TestApplyKeepsAnOperatorListsCARevocations(t *testing.T) {
+	cfg := installerWith(t, readFixture(t, "ssh-keygen-ca-scoped.krl"))
+	if err := applyList(t, cfg, trstctlList(8, []uint64{5, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20}, "alice@corp")); !errors.Is(err, ErrDropsRevocations) {
+		t.Fatalf("list without serial 15 = %v; want refused", err)
+	}
+	if err := applyList(t, cfg, trstctlList(8, []uint64{5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, "alice@corp")); err != nil {
+		t.Fatalf("covering list refused: %v", err)
+	}
+}
+
 func TestApplyUpdatesVersionAndKeepsDurablePredecessor(t *testing.T) {
 	cfg, checks, old, next := setupInstaller(t)
 	result, err := Apply(context.Background(), cfg, next, crypto.SHA256Hex(next))

@@ -3141,9 +3141,14 @@ than sending an operator looking for a credential that was never there.
   KRL endpoint returns 503 during a catch-up it cannot finish within its read
   deadline, and an opted-in host retains its installed list and retries.
   Control-plane health alone does not prove KRL or audit-read readiness during
-  startup. Fleet receipts and migration between independently versioned KRL
-  lineages remain unverified; an older host KRL must not be overwritten with a
-  lower-version list from a replacement deployment.
+  startup. A host agent refuses a KRL whose version does not advance its
+  installed one, and refuses any KRL, whatever its version, that would stop
+  revoking a serial, key ID, key, or key hash the installed list revokes, so a
+  restored or replacement control plane, which counts its own versions, cannot
+  silently un-revoke anything on a host; before this guard a newer list that
+  omitted an installed serial replaced it. Carrying a predecessor's
+  revocations into a replacement control plane, and fleet receipts, remain
+  unverified.
   PAM sessions created before the verified-attestation event field was added
   retained an attestation ID and audit summary. Their verified selectors,
   claims, and verification time cannot be reconstructed from that start event. The

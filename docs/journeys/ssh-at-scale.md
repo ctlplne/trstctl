@@ -276,6 +276,11 @@ mutation stays in the operator-confirmed agent path.
    DNS identity instead of that address, set `--ssh-krl-server-name`. The watcher
    refuses redirects and a mismatched tenant, retries fetch failures without
    replacing the last good KRL, and skips reload when the artifact is unchanged.
+   Both modes refuse a list whose version does not advance the installed one,
+   and a list of any version that would stop revoking a serial, key ID, key, or
+   key hash the installed list revokes; the installed list stays in force. A
+   host whose `RevokedKeys` file already holds the operator's own revocations
+   therefore keeps them until the served list carries them too.
    Configure it on every relying host: there is not yet a control-plane fleet
    push or a central per-host receipt.
 

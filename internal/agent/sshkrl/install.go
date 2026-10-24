@@ -66,7 +66,8 @@ func Version(data []byte) (uint64, error) {
 	return binary.BigEndian.Uint64(data[12:20]), nil
 }
 
-// Apply installs a newer, pinned KRL only at sshd's effective RevokedKeys path.
+// Apply installs a newer, pinned KRL only at sshd's effective RevokedKeys path,
+// and only if it keeps every revocation the installed list holds.
 // A failed runtime check restores the last known-good bytes and checks the
 // restored daemon. The predecessor also remains on disk across a process crash.
 func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) (Result, error) {
@@ -120,7 +121,12 @@ func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) 
 		return Result{}, fmt.Errorf("sshkrl: predecessor failed OpenSSH validation: %w", err)
 	}
 	if nextVersion < previousVersion || (nextVersion == previousVersion && !bytes.Equal(previous, next)) {
-		return Result{}, fmt.Errorf("sshkrl: refusing KRL version %d over installed version %d", nextVersion, previousVersion)
+		return Result{}, fmt.Errorf("%w: refusing KRL version %d over installed version %d", ErrNotNewer, nextVersion, previousVersion)
+	}
+	if !bytes.Equal(previous, next) {
+		if err := retainsRevocations(previous, next); err != nil {
+			return Result{}, err
+		}
 	}
 	result := Result{PreviousVersion: previousVersion, Version: nextVersion, SHA256: crypto.SHA256Hex(next)}
 	if bytes.Equal(previous, next) {
@@ -161,6 +167,23 @@ func Apply(ctx context.Context, cfg Config, next []byte, expectedSHA256 string) 
 	}
 	result.Changed = true
 	return result, nil
+}
+
+// retainsRevocations refuses a candidate that stops revoking anything the
+// installed list revokes, whatever the two versions say (A110).
+func retainsRevocations(installed, candidate []byte) error {
+	have, err := ParseRevocations(installed)
+	if err != nil {
+		return fmt.Errorf("sshkrl: the installed KRL cannot be compared, so it stays; replace it deliberately: %w", err)
+	}
+	next, err := ParseRevocations(candidate)
+	if err != nil {
+		return fmt.Errorf("sshkrl: candidate KRL: %w", err)
+	}
+	if drop := next.Dropped(have); !drop.Empty() {
+		return &drop
+	}
+	return nil
 }
 
 func verifyUnchangedRuntime(ctx context.Context, cfg Config) error {
