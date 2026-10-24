@@ -1607,6 +1607,17 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			default:
 				return fmt.Errorf("orchestrator: reconcile %s (seq %d): unsupported job_kind %q", ev.Type, ev.Sequence, pl.JobKind)
 			}
+			// A finished run needs no job. The product records an agent's
+			// inventory, a secret scan, the weak-key audit and an endpoint-chain
+			// finding as runs that finish in the call that queues them; a job
+			// restored for any finished run could only no-op.
+			finished, err := o.discoveryRunFinished(ctx, ev.TenantID, pl.ID)
+			if err != nil {
+				return err
+			}
+			if finished {
+				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+			}
 			if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
 				inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{
 					TenantID:          ev.TenantID,

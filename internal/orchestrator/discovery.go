@@ -1238,6 +1238,27 @@ func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error
 // emitPreparedExact verifies that duplicate suppression returned the same
 // immutable meaning. Reusing a receipt key with changed report bytes fails
 // closed instead of silently applying the earlier event.
+// discoveryRunFinished reports whether the projection holds a run in a
+// terminal status. A run it has not seen, or an id that names no run, is not
+// finished.
+func (o *Orchestrator) discoveryRunFinished(ctx context.Context, tenantID, runID string) (bool, error) {
+	if _, err := uuid.Parse(runID); err != nil {
+		return false, nil
+	}
+	run, err := o.store.GetDiscoveryRun(ctx, tenantID, runID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	switch run.Status {
+	case "succeeded", "partial", "failed":
+		return true, nil
+	}
+	return false, nil
+}
+
 func (o *Orchestrator) emitPreparedExact(ctx context.Context, next events.Event) (events.Event, error) {
 	ev, err := o.emitPrepared(ctx, next)
 	if err != nil {
