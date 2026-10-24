@@ -6013,8 +6013,16 @@ signed CRL or OCSP responder from that leaf and independently reject it on
 revocation grounds. The lab can prove upstream acceptance and can use the
 host agent plus a fresh TLS probe to prove the compromised leaf is no longer
 served. It cannot claim stock client revocation enforcement for that Pebble
-certificate. Use an issuer that publishes reachable revocation status and a
-relying client configured to check it for that separate proof.
+certificate. The same upstream ACME path is proven with an independent issuer
+that does publish revocation status (A114): the lab's step-ca 0.28.3, an ACME
+CA validating dns-01 through the lab's own DNS-01 webhook, regenerating its CRL
+on revoke and naming it in every leaf. trstctl ordered a certificate from it,
+revoked it through its ACME `revokeCert`, and stock OpenSSL then refused the
+leaf by step-ca's CRL (`openssl verify -crl_check`: certificate revoked; a TLS
+handshake with CRL checking fails the same way), while a client that does not
+check revocation still connects. That proves the trstctl side for any
+upstream ACME CA that publishes status; each issuer's own publication is its
+own to qualify.
 
 After exact host containment, the endpoint replacement preview can prove the
 tenant-side original, target, CA, profile and queued effects, but it cannot
