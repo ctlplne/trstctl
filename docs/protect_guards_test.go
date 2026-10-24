@@ -4401,6 +4401,7 @@ func TestWireStrengthGuardsStayRequired(t *testing.T) {
 		"persistent internal TLS state permissions",
 		"os.Link(tmpName, stateFile)",
 		"func CurvePreferences() []tls.CurveID",
+		"tls.X25519MLKEM768",
 		"tls.X25519",
 		"tls.CurveP256",
 		"tls.CurveP384",

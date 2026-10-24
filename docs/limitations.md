@@ -5408,7 +5408,10 @@ Cloudflare's CIRCL. What is available today:
   parameter sets are checked against FIPS 203 known-answer vectors. The
   served HTTPS and mTLS listeners prefer `X25519MLKEM768` for TLS 1.3
   hybrid key exchange when a peer supports it, with classical TLS 1.3
-  groups retained for compatibility.
+  groups retained for compatibility (restored in B13-8: from July until
+  then the listeners offered only classical groups, and stock OpenSSL
+  offering only the hybrid group was refused). Pure ML-KEM groups are
+  not offered: Go's TLS stack implements the hybrid group.
 - SLH-DSA / SPHINCS+ (FIPS 205; `SLH-DSA-SHA2-128s` / `128f` / `192s` /
   `256s`) — the NIST-standard stateless hash-based signature. Its security
   rests only on the hash function, so it is the conservative choice for

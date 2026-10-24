@@ -424,9 +424,13 @@ func PeerCertificateDER(conn net.Conn) ([]byte, error) {
 }
 
 // CurvePreferences returns the key-agreement groups offered by core served
-// TLS paths.
+// TLS paths. The hybrid post-quantum group X25519MLKEM768 comes first, so a
+// peer that supports it (another trstctl process, OpenSSL 3.5+, current
+// browsers) negotiates it; the classical groups stay for every other client.
+// Go's FIPS 140-3 mode drops any group it does not approve on its own (B13-8).
 func CurvePreferences() []tls.CurveID {
 	return []tls.CurveID{
+		tls.X25519MLKEM768,
 		tls.X25519,
 		tls.CurveP256,
 		tls.CurveP384,
