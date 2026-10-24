@@ -845,8 +845,27 @@ func TestServedCAHierarchyCeremonyAndLeafIssuance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pcasLeafDER, err := h.srv.caHierarchy.IssuePCASLeaf(t.Context(), h.tenant,
+	// The leaf above was revoked for keyCompromise, so its key is now recorded
+	// as compromised in this tenant and no path certifies it again (batch 11):
+	// the PCAS leaf needs a fresh key.
+	pcasKey, err := client.GenerateKey(context.Background(), crypto.ECDSAP256)
+	if err != nil {
+		t.Fatalf("generate PCAS leaf key in signer: %v", err)
+	}
+	pcasCSRDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		CommonName: "leaf.svc.example.test",
+		DNSNames:   []string{"leaf.svc.example.test"},
+	}, pcasKey)
+	if err != nil {
+		t.Fatalf("create PCAS CSR: %v", err)
+	}
+	if _, err := h.srv.caHierarchy.IssuePCASLeaf(t.Context(), h.tenant,
 		inter.SignerHandle, caCertDER(t, []byte(inter.CertificatePEM)), csrDER,
+		time.Hour, pcasExtension); !crypto.RefusedSubjectKey(err) {
+		t.Fatalf("PCAS issuance for the key revoked for keyCompromise = %v; want it refused", err)
+	}
+	pcasLeafDER, err := h.srv.caHierarchy.IssuePCASLeaf(t.Context(), h.tenant,
+		inter.SignerHandle, caCertDER(t, []byte(inter.CertificatePEM)), pcasCSRDER,
 		time.Hour, pcasExtension)
 	if err != nil {
 		t.Fatalf("managed CA refused the PCAS extension through its authorized signer path: %v", err)

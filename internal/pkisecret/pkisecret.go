@@ -87,6 +87,7 @@ type PKIProvider struct {
 	profile   Profile
 	gate      func(cn string) (bool, string) // optional policy gate (S10.1)
 	sink      RevocationSink                 // optional event-sourced revocation pipeline (AN-2)
+	keyGuard  func(ctx context.Context, spkiDER []byte) error
 
 	mu   sync.Mutex
 	live map[string]bool
@@ -105,6 +106,14 @@ func WithRevocationSink(tenantID, caID string, sink RevocationSink) Option {
 		p.caID = caID
 		p.sink = sink
 	}
+}
+
+// WithSubjectKeyGuard refuses, before signing, a subject key the guard
+// rejects: the served build passes the tenant's recorded-compromised check
+// (owner decision, batch 11). The structural weak-key checks run inside the
+// signer itself.
+func WithSubjectKeyGuard(guard func(ctx context.Context, spkiDER []byte) error) Option {
+	return func(p *PKIProvider) { p.keyGuard = guard }
 }
 
 // NewPKIProvider constructs a PKIProvider over an internal CA.
@@ -295,6 +304,15 @@ func (p *PKIProvider) constrainTTL(ttl time.Duration) time.Duration {
 }
 
 func (p *PKIProvider) signAndRecord(ctx context.Context, cn string, csrDER []byte, ttl time.Duration, keyOrigin custody.KeyOrigin) (dynsecret.Credential, error) {
+	if p.keyGuard != nil {
+		inspected, err := crypto.InspectOpaqueCSR(csrDER)
+		if err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("pkisecret: CSR does not parse: %w", err)
+		}
+		if err := p.keyGuard(ctx, inspected.RawSubjectPublicKeyInfo); err != nil {
+			return dynsecret.Credential{}, fmt.Errorf("pkisecret: %w", err)
+		}
+	}
 	certDER, err := crypto.SignLeafFromCSR(p.caCertDER, p.caSigner, csrDER, ttl)
 	if err != nil {
 		return dynsecret.Credential{}, fmt.Errorf("pkisecret: sign cert: %w", err)

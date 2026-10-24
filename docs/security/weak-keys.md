@@ -110,7 +110,12 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   are not part of this: they stay with each profile's key policy
   (`allowed_key_algorithms`, `min_rsa_bits`), so a profile without a floor
   still issues RSA-1024. Ed25519 and post-quantum keys have no structural
-  checks and pass.
+  checks and pass. The same paths refuse a key the tenant has recorded as
+  compromised: one that a certificate of the tenant, revoked with reason
+  `keyCompromise`, carried (CA/B BR 6.1.1.3, condition 4). A bootstrap
+  enrollment is checked for structural weakness before its single-use token
+  is consumed; a key recorded as compromised is only known after the token
+  names its tenant, so that refusal consumes the token.
 
 - **The CA key ceremony.** The signer refuses a weak key it generates, mints
   or imports; an HSM or KMS key that fails is zeroized and the operation fails

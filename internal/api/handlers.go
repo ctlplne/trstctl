@@ -711,18 +711,3 @@ func flattenABACResource(prefix string, attrs map[string]any, out map[string]str
 		}
 	}
 }
-
-// validateSubjectCSRPEM rejects a caller-supplied certificate request that is not
-// a well-formed, self-signed PKCS#10 (epic B1). Parsing goes through the crypto
-// boundary (AN-3); this package names no crypto/* itself.
-//
-// The check is deliberately at the API edge. A CSR that cannot be parsed is a
-// caller mistake and belongs in the response to the request that carried it —
-// not surfaced minutes later as a failed outbox delivery nobody is watching.
-func validateSubjectCSRPEM(csrPEM string) error {
-	der, _, err := crypto.ParsePublicCSRPEM([]byte(csrPEM))
-	if err != nil {
-		return fmt.Errorf("subject_csr_pem: %w", err)
-	}
-	return refuseWeakSubjectCSR(der)
-}

@@ -164,7 +164,7 @@ func (a *API) previewPKISecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caCertDER, caSigner := a.secrets.resolveCA()
-	provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
+	provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 	plan, err := pkiSecretIssuancePlan(provider, req, csrDER)
 	if err != nil {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))

@@ -1426,7 +1426,7 @@ not this file.
 | `internal/server/backup_test.go:435` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:574` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/breakglass.go:169` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/breakglass.go:173` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/breakglass_material_test.go:67` | test-owned public kit under t.TempDir (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:46` | fixed repository source path (CWE-22) |

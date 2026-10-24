@@ -314,6 +314,9 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 	if err != nil {
 		return api.AttestedSVID{}, fmt.Errorf("%w: %v", api.ErrAttestedIssuanceInvalid, err)
 	}
+	if err := refuseCompromisedPublicKey(ctx, s.store, tenantID, req.PublicKeyDER); err != nil {
+		return api.AttestedSVID{}, err
+	}
 	certDER, err := crypto.SignSVID(s.caCertDER, s.caSigner, req.PublicKeyDER, spiffeID, ttl)
 	if err != nil {
 		return api.AttestedSVID{}, fmt.Errorf("server: sign attested SVID: %w", err)

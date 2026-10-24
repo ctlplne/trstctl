@@ -200,6 +200,9 @@ func (r *configuredBreakglassRuntime) IssueBreakglass(ctx context.Context, tenan
 	if err := r.requireTenant(tenantID); err != nil {
 		return breakglass.Bundle{}, 0, err
 	}
+	if err := refuseCompromisedCSRKey(ctx, r.store, tenantID, req.CSRDer); err != nil {
+		return breakglass.Bundle{}, 0, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	purpose := breakglass.IssuePurpose(tenantID, req, ttl)

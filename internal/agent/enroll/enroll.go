@@ -118,9 +118,38 @@ type Authority struct {
 	tenantServiceCheck tenancy.ServiceCheck
 	tenantServiceWork  tenancy.ServiceWork
 	certificateBinding ClientCertificateBinding
+	keyGuard           SubjectKeyGuard
 	ca                 CAIssuer
 	store              TokenStore
 	ttl                time.Duration
+}
+
+// SubjectKeyGuard refuses an agent key the tenant has recorded as
+// compromised (owner decision, batch 11).
+type SubjectKeyGuard func(ctx context.Context, tenantID string, spkiDER []byte) error
+
+// WithSubjectKeyGuard checks the agent's key against the tenant's recorded
+// compromises before bootstrap or renewal signs it. A bootstrap refused here
+// has consumed its token, like a CSR identity mismatch: the operator mints a
+// fresh one for a fresh key.
+func WithSubjectKeyGuard(guard SubjectKeyGuard) Option {
+	return func(a *Authority) { a.keyGuard = guard }
+}
+
+// refuseAgentKey runs the structural weak-key checks (tenant == "") or the
+// tenant's compromised-key guard on the CSR's key.
+func (a *Authority) refuseAgentKey(ctx context.Context, tenantID string, csrDER []byte) error {
+	inspected, err := crypto.InspectOpaqueCSR(csrDER)
+	if err != nil {
+		return fmt.Errorf("enroll: CSR does not parse: %w", err)
+	}
+	if tenantID == "" {
+		return crypto.RefuseWeakSubjectKey(inspected.RawSubjectPublicKeyInfo)
+	}
+	if a.keyGuard == nil {
+		return nil
+	}
+	return a.keyGuard(ctx, tenantID, inspected.RawSubjectPublicKeyInfo)
 }
 
 // Option configures admission before the authority is served.
@@ -259,6 +288,11 @@ func (a *Authority) IssueBootstrapTokenWithRoles(
 // the token pins an allowed identity, a CSR whose common name or identity SANs
 // differ is rejected.
 func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []byte) ([]byte, error) {
+	// A structurally weak key is refused before the token is consumed, so the
+	// operator can retry with a sound key (owner decision, batch 11).
+	if err := a.refuseAgentKey(ctx, "", csrDER); err != nil {
+		return nil, err
+	}
 	hash := bootstrapLookupHash(token)
 	redeemed, err := a.store.Redeem(ctx, hash)
 	if err != nil {
@@ -288,6 +322,9 @@ func (a *Authority) EnrollBootstrap(ctx context.Context, token []byte, csrDER []
 		if !matches {
 			return nil, ErrBadToken
 		}
+	}
+	if err := a.refuseAgentKey(ctx, redeemed.TenantID, csrDER); err != nil {
+		return nil, err
 	}
 	bindings, err := a.certificateAuthorityURIs(ctx, redeemed.TenantID, nil)
 	if err != nil {
@@ -357,6 +394,9 @@ func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, cs
 		return nil, fmt.Errorf("%w: renewal CSR: %v", ErrRenewalIdentityChange, err)
 	} else if csrName != peer.CommonName {
 		return nil, fmt.Errorf("%w: the CSR names %q but this certificate belongs to %q", ErrRenewalIdentityChange, csrName, peer.CommonName)
+	}
+	if err := a.refuseAgentKey(ctx, tenantID, csrDER); err != nil {
+		return nil, err
 	}
 	bindings, err := a.certificateAuthorityURIs(ctx, tenantID, peerCertsDER[0])
 	if err != nil {

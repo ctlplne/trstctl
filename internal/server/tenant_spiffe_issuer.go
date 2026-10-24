@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/protocols/spiffe"
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -18,6 +19,9 @@ type tenantSPIFFEIssuer struct {
 	tenantID string
 	check    tenancy.ServiceCheck
 	work     tenancy.ServiceWork
+	// store, when set, refuses a workload key the tenant recorded as
+	// compromised (owner decision, batch 11).
+	store *store.Store
 }
 
 func (i tenantSPIFFEIssuer) SignX509SVID(ctx context.Context, id string, pub []byte, ttl time.Duration) ([]byte, error) {
@@ -27,6 +31,9 @@ func (i tenantSPIFFEIssuer) SignX509SVID(ctx context.Context, id string, pub []b
 	}
 	defer release()
 	if err := i.check.Check(ctx, i.tenantID); err != nil {
+		return nil, err
+	}
+	if err := refuseCompromisedPublicKey(ctx, i.store, i.tenantID, pub); err != nil {
 		return nil, err
 	}
 	return i.Issuer.SignX509SVID(ctx, id, pub, ttl)

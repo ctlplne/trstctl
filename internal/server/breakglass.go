@@ -32,6 +32,7 @@ type breakglassReconciler struct {
 type breakglassOnlineIssuer struct {
 	svc        *breakglass.Service
 	reconciler api.BreakglassReconciler
+	store      *store.Store
 }
 
 // breakglassDependencyPresent rejects both a nil interface and an interface that
@@ -95,7 +96,7 @@ func buildBreakglassIssuer(d Deps, reconciler api.BreakglassReconciler) (api.Bre
 	if reconciler == nil {
 		return nil, errors.New("server: online break-glass issuance requires verifier material and an event log for audit reconciliation")
 	}
-	return breakglassOnlineIssuer{svc: d.BreakglassOfflineIssuer, reconciler: reconciler}, nil
+	return breakglassOnlineIssuer{svc: d.BreakglassOfflineIssuer, reconciler: reconciler, store: d.Store}, nil
 }
 
 func (r breakglassReconciler) ReconcileBreakglass(ctx context.Context, tenantID string, bundles []breakglass.Bundle) (int, error) {
@@ -125,6 +126,9 @@ func (i breakglassOnlineIssuer) IssueBreakglass(ctx context.Context, tenantID st
 	}
 	if i.svc == nil || i.reconciler == nil {
 		return breakglass.Bundle{}, 0, errors.New("server: online break-glass issuance is not configured")
+	}
+	if err := refuseCompromisedCSRKey(ctx, i.store, tenantID, req.CSRDer); err != nil {
+		return breakglass.Bundle{}, 0, err
 	}
 	bundle, err := i.svc.IssueOffline(req, ttl)
 	if err != nil {

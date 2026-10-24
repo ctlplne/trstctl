@@ -486,6 +486,9 @@ func (s *agentBrokerService) sign(tenantID, agentID string) ephemeral.SignFunc {
 		if err != nil {
 			return nil, err
 		}
+		if err := refuseCompromisedPublicKey(ctx, s.store, tenantID, pubDER); err != nil {
+			return nil, err
+		}
 		return crypto.SignSVID(s.caCertDER, s.caSigner, pubDER, spiffeID, ttl)
 	}
 }

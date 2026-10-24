@@ -1453,9 +1453,9 @@ func (s *Server) configureAgentEnrollment(ctx context.Context, d Deps) error {
 	var authority *enroll.Authority
 	var err error
 	if s.agentCASigner != nil && len(s.agentCACertDER) > 0 {
-		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck), enroll.WithTenantServiceWork(d.Store.BeginTenantService), enroll.WithClientCertificateBinding(agentCertificateBinding(d.Store, d.Log)))
+		authority, err = enroll.NewAuthorityWithIssuer(agentCAIssuer{caSigner: s.agentCASigner, caCertDER: s.agentCACertDER}, storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck), enroll.WithTenantServiceWork(d.Store.BeginTenantService), enroll.WithClientCertificateBinding(agentCertificateBinding(d.Store, d.Log)), enroll.WithSubjectKeyGuard(agentKeyGuard(d.Store)))
 	} else {
-		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck), enroll.WithTenantServiceWork(d.Store.BeginTenantService), enroll.WithClientCertificateBinding(agentCertificateBinding(d.Store, d.Log)))
+		authority, err = enroll.NewAuthority("trstctl Agent Enrollment CA", storeTokenStore{st: d.Store}, enroll.WithTenantServiceCheck(d.TenantServiceCheck), enroll.WithTenantServiceWork(d.Store.BeginTenantService), enroll.WithClientCertificateBinding(agentCertificateBinding(d.Store, d.Log)), enroll.WithSubjectKeyGuard(agentKeyGuard(d.Store)))
 	}
 	if err != nil {
 		return fmt.Errorf("server: create enrollment authority: %w", err)

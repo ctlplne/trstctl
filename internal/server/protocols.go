@@ -188,6 +188,9 @@ func (p *protocolIssuer) issueProtocolLeafForProfile(ctx context.Context, tenant
 		if err != nil {
 			return nil, err
 		}
+		if err := refuseCompromisedCSRKey(ctx, p.store, tenantID, csrDER); err != nil {
+			return nil, err
+		}
 		// Sign through the signer (AN-3/AN-4). Proprietary CSR formats are recognized
 		// only by the licensed attach seam; core sees a boolean and never imports the
 		// proprietary implementation.

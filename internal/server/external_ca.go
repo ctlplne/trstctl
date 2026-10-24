@@ -135,6 +135,9 @@ func (c diagnosticExternalCA) Issue(ctx context.Context, req ca.IssueRequest) (c
 type externalCARegistry struct {
 	items []api.ExternalCA
 	byID  map[string]externalCAEntry
+	// store refuses a subject key the tenant recorded as compromised before a
+	// CSR goes to any connector (owner decision, batch 11).
+	store *store.Store
 }
 
 type externalCAEntry struct {
@@ -189,7 +192,7 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 	if d.Store == nil || idem == nil || s.outbox == nil {
 		return nil, fmt.Errorf("server: external CA registry requires store, idempotency, and outbox")
 	}
-	reg := &externalCARegistry{byID: map[string]externalCAEntry{}}
+	reg := &externalCARegistry{byID: map[string]externalCAEntry{}, store: d.Store}
 	for _, cfg := range externalCAs {
 		id := strings.TrimSpace(cfg.ID)
 		if id == "" {
@@ -302,6 +305,9 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 	ttl := time.Duration(req.TTLSeconds) * time.Second
 	if req.TTLSeconds < 0 {
 		return api.ExternalCAIssuedCertificate{}, fmt.Errorf("%w: ttl_seconds cannot be negative", api.ErrExternalCAInvalid)
+	}
+	if err := refuseCompromisedCSRKey(ctx, r.store, tenantID, req.CSRDER); err != nil {
+		return api.ExternalCAIssuedCertificate{}, err
 	}
 	cert, err := entry.svc.Issue(ctx, ca.IssueRequest{
 		TenantID:       tenantID,

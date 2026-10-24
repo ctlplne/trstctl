@@ -312,7 +312,7 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 	}
 	idempotencyKey := r.Header.Get("Idempotency-Key")
 	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
+		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		plan, planErr := pkiSecretIssuancePlan(provider, req, csrDER)
 		if planErr != nil {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, planErr.Error())
@@ -1065,9 +1065,9 @@ func (s *secretsService) resolveCA() ([]byte, crypto.DigestSigner) {
 // pkiProvider builds a per-tenant PKIProvider over the issuing CA, wiring the
 // revocation sink so issuance/revocation are recorded on the served pipeline
 // (GAP-005). The leaf key is generated AND returned by Generate (GAP-004).
-func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner crypto.DigestSigner) *pkisecret.PKIProvider {
+func (s *secretsService) pkiProvider(tenantID string, caCertDER []byte, caSigner crypto.DigestSigner, keyGuard func(context.Context, []byte) error) *pkisecret.PKIProvider {
 	profile := pkisecret.Profile{Name: "secrets-api", MaxTTL: 30 * 24 * time.Hour}
-	var opts []pkisecret.Option
+	opts := []pkisecret.Option{pkisecret.WithSubjectKeyGuard(keyGuard)}
 	if s.be.RevocationSink != nil {
 		opts = append(opts, pkisecret.WithRevocationSink(tenantID, s.be.CAID, s.be.RevocationSink))
 	}

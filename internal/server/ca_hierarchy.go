@@ -298,6 +298,9 @@ func (h *caHierarchyService) issueLeafForExactAuthority(
 	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent && keyOrigin != custody.OriginControlPlane {
 		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: exact-authority issuance requires a known subject-key origin", api.ErrCAHierarchyInvalid)
 	}
+	if err := refuseCompromisedCSRKey(ctx, h.store, tenantID, csrDER); err != nil {
+		return crypto.IssuedLeaf{}, nil, "", err
+	}
 	authority, err := h.store.GetCAAuthority(ctx, tenantID, authorityID)
 	if err != nil {
 		return crypto.IssuedLeaf{}, nil, "", err

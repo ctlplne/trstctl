@@ -175,7 +175,7 @@ func TestCSRFirstIssuanceIsActuallyWired(t *testing.T) {
 	t.Parallel()
 	for _, want := range []struct{ file, token, why string }{
 		{"../internal/api/handlers.go", "SubjectCSRPEM", "the transition request must accept a caller-supplied CSR"},
-		{"../internal/api/handlers.go", "validateSubjectCSRPEM", "a malformed CSR must be rejected at the API edge, not in the outbox worker"},
+		{"../internal/api/identity_transition_execution.go", "a.validateSubjectCSRPEM(", "a malformed CSR must be rejected at the API edge, not in the outbox worker"},
 		{"../internal/orchestrator/orchestrator.go", "TransitionWithSubjectCSR", "the CSR must reach the issuance dispatcher on the transition"},
 		{"../internal/server/issuance_csr.go", "mintServedLeafFromCSRForSelection", "the mint must sign the caller's request instead of generating a key"},
 		{"../internal/server/issuance_csr.go", "issuance.server_side_keygen", "the legacy keygen path must record its own deprecation"},

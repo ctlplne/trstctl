@@ -74,6 +74,9 @@ func (d *issuanceDispatcher) issueEndpointCSR(
 	leafProfile crypto.LeafProfile,
 	keyOrigin custody.KeyOrigin,
 ) (leafPEM, chainPEM []byte, caID, source string, anchor *time.Time, err error) {
+	if err := refuseCompromisedCSRKey(ctx, d.store, tenantID, csrDER); err != nil {
+		return nil, nil, "", "", nil, err
+	}
 	var issued crypto.IssuedLeaf
 	switch selection.Source {
 	case "platform":

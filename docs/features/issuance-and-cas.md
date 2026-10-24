@@ -35,7 +35,8 @@ signer-backed CA, a CA in your own [hierarchy](#running-your-own-ca-hierarchy-f4
 AWS Private CA, Azure Key Vault, Google CAS, EJBCA, Smallstep, Venafi TPP/TLS Protect,
 Vault PKI, GlobalSign, Entrust, and the shell CA escape hatch) all implement that same
 interface. On every one of these paths a requester's key that fails a structural
-weak-key check is refused before it is signed or sent upstream, naming the check (see
+weak-key check, or that the tenant has recorded as compromised, is refused before it
+is signed or sent upstream, naming the check (see
 [Weak keys](../security/weak-keys.md#where-the-checks-run)). The running binary exposes configured upstreams as a served registry at
 `GET /api/v1/external-cas`; callers issue through one selected CA with
 `POST /api/v1/external-cas/{id}/issue` using a PEM CSR, DNS names, and an
@@ -729,6 +730,15 @@ revocation reasons and for an X.509 identity that has not entered a serving
 state. If no exact managed host target exists, revoke the exact certificate
 with its issuing CA and stop the host through an independently verified
 procedure.
+
+Once a certificate is revoked for `keyCompromise` (directly, or by the compound
+response once its CA revocation is recorded), its key is recorded as compromised in
+the tenant: no certifying path in that tenant will certify it again (CA/B BR 6.1.1.3,
+condition 4). The ACME, EST, SCEP, CMP, REST, Vault-compatible PKI, SPIFFE, agent
+enrollment, CA authority, break-glass and external CA paths refuse a request for that
+key with `the subject key is recorded as compromised in this tenant`, so the
+replacement must use a new key. The check stays inside the tenant; another tenant's
+records are never consulted.
 
 For an X.509 identity, the preview checks the exact unrevoked certificates tied to
 its issuance or verified deployment, including superseded leaves that could be

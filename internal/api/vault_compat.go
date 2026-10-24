@@ -814,7 +814,7 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
+		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		if err := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "vault_pki_issue"); err != nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, err.Error())
 		}
@@ -889,7 +889,7 @@ func (a *API) vaultPKISign(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
-		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner)
+		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
 		cred, err := provider.GenerateFromCSR(ctx, csrDER, ttl)
 		if err != nil {
 			return 0, nil, errStatus(http.StatusUnprocessableEntity, err.Error())

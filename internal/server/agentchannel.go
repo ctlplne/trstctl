@@ -907,6 +907,12 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 		return nil, status.Error(codes.Unavailable, "agent tenant registration authority is unavailable")
 	}
 	roleURIs = append(roleURIs, bindings...)
+	if err := refuseCompromisedCSRKey(ctx, a.store, info.TenantID, req.CSRDER); err != nil {
+		if detail := crypto.SubjectKeyRefusalDetail(err); detail != "" {
+			return nil, status.Error(codes.InvalidArgument, detail)
+		}
+		return nil, status.Error(codes.Unavailable, "agent key check is unavailable")
+	}
 	// AN-5: the raw slot is the agent + serial it presented, while the immutable
 	// binding is the exact CSR digest. A byte-identical retry returns the original
 	// chain; a different CSR cannot read those cached public certificate bytes and
