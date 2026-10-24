@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1702 annotated sites across 26 rules. Each row is
+1708 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -463,7 +463,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (261 sites)
+### G115 — CWE-190 Integer overflow or wraparound (262 sites)
 
 | Location | Reason |
 |---|---|
@@ -504,6 +504,7 @@ not this file.
 | `internal/crypto/signauth.go:76` | enum purpose and bounded message length framing (CWE-190) |
 | `internal/crypto/ssh.go:69` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
 | `internal/crypto/ssh.go:70` | certificate validity epoch seconds; non-negative by validation (CWE-190) |
+| `internal/crypto/sshkeys/certificate.go:112` | clamped to maxCertificateUnix above (CWE-190) |
 | `internal/crypto/sshkeys/property_test.go:37` | generator bounds the value to 0..2 (CWE-190) |
 | `internal/crypto/sshkeys/property_test.go:40` | generator bounds the value to 0..3 (CWE-190) |
 | `internal/crypto/sshkeys/property_test.go:114` | generator bounds the value to one byte (CWE-190) |
@@ -1133,7 +1134,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (481 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (485 sites)
 
 | Location | Reason |
 |---|---|
@@ -1158,7 +1159,7 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/main.go:1129` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1775` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1783` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
@@ -1300,6 +1301,8 @@ not this file.
 | `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:119` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:143` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
+| `internal/agent/sshdiscovery/sshdtrust.go:302` | the agent inventories operator-configured sshd configuration and the public files it names (CWE-22) |
+| `internal/agent/sshdiscovery/sshdtrust_test.go:21` | committed test fixture |
 | `internal/agent/sshkrl/install.go:304` | read only the derived predecessor in the checked private rollback directory |
 | `internal/agent/sshkrl/install.go:338` | syncs only the validated target or private rollback directory |
 | `internal/agent/sshkrl/install_test.go:29` | test fixture path created under t.TempDir |
@@ -1378,6 +1381,8 @@ not this file.
 | `internal/crypto/samltest/material_test.go:46` | test-owned temporary identity file |
 | `internal/crypto/secretfile/secretfile.go:34` | operator-configured local secret path; parents and file mode validated above (CWE-22) |
 | `internal/crypto/secretfile/secretfile.go:65` | operator-configured local secret path; O_EXCL + 0600, parents validated above (CWE-22) |
+| `internal/crypto/sshkeys/certificate_fuzz_test.go:14` | committed test fixture |
+| `internal/crypto/sshkeys/certificate_test.go:20` | committed test fixture |
 | `internal/crypto/trust/systemroots.go:99` | audit input: a path resolved inside an exported image filesystem (CWE-22) |
 | `internal/discovery/ctmonitor/ctmonitor_posture_test.go:20` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/discovery/netscan/chain_observation_test.go:22` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -1830,10 +1835,11 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (91 sites)
+### G703 — CWE-22 Path traversal (taint) (92 sites)
 
 | Location | Reason |
 |---|---|
+| `cmd/trstctl-agent/sshtrust_report_test.go:56` | committed stock KRL fixture bytes written under t.TempDir (CWE-22) |
 | `cmd/trstctl-license/main.go:151` | vendor operator explicitly selects the local CLI output path (CWE-22) |
 | `cmd/trstctl-trustbundle/main.go:79` | build-time output path named by the image build (CWE-22) |
 | `cmd/trstctl-trustbundle/main.go:82` | a public trust bundle at a build-time path (CWE-276) |

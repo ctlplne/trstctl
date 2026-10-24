@@ -401,9 +401,16 @@ plane.
 SSH is where forgotten access hides. trstctl inventories SSH credentials two ways: a
 network-side SSH handshake captures each host's **host key**, and the on-host agent
 reads host keys, user keys, `authorized_keys` grants, `known_hosts` trust anchors, and
-the `TrustedUserCAKeys` directive from `sshd_config`. The same agent path locates and
-classifies SSH and TLS private-key files as metadata-only findings instead of copying
-key bytes into the control plane.
+each configured `sshd_config`'s trust posture (A115): the fingerprints of the CAs in its
+`TrustedUserCAKeys` file, its `RevokedKeys` list (KRL version and digest, a plain key
+list, or a missing file), each `HostCertificate` it presents (signing CA, CA signature
+verified or not, key ID, principals, validity), and `AuthorizedKeysFile`. It reads the
+global section the way sshd resolves it (first value wins, `HostCertificate`
+accumulates, `Include` files in place) and counts `Match` blocks rather than applying
+them. The posture is reported when the agent connects, so restart the agent after
+changing `sshd_config`. The same agent path locates and classifies SSH and TLS
+private-key files as metadata-only findings instead of copying key bytes into the
+control plane.
 
 On-host SSH collection is explicit, not a surprise filesystem crawl. Configure only
 the paths the agent may read with `--inventory-ssh-host-key-globs`,

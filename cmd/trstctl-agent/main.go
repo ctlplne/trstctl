@@ -113,7 +113,7 @@ func main() {
 	inventorySSHUserKeyGlobs := flag.String("inventory-ssh-user-key-globs", "", "comma-separated public user-key globs to inventory; empty disables this SSH source")
 	inventorySSHAuthorizedKeys := flag.String("inventory-ssh-authorized-keys", "", "comma-separated authorized_keys paths or globs to inventory; empty disables this SSH source")
 	inventorySSHKnownHosts := flag.String("inventory-ssh-known-hosts", "", "comma-separated known_hosts paths or globs to inventory; empty disables this SSH source")
-	inventorySSHSSHDConfigs := flag.String("inventory-ssh-sshd-configs", "", "comma-separated sshd_config paths or globs whose TrustedUserCAKeys references are inventoried; empty disables this SSH source")
+	inventorySSHSSHDConfigs := flag.String("inventory-ssh-sshd-configs", "", "comma-separated sshd_config paths or globs whose trust posture is inventoried (TrustedUserCAKeys fingerprints, RevokedKeys digest and KRL version, HostCertificate details, AuthorizedKeysFile); empty disables this SSH source")
 	k8sMode := flag.Bool("k8s", false, "run as a Kubernetes DaemonSet: publish the identity into a Secret and reconcile Kubernetes certificate CRDs")
 	k8sSecret := flag.String("k8s-secret", "", "Kubernetes Secret to publish the identity into (namespace/name)")
 	cmIssuer := flag.String("cert-manager-issuer", "", "standalone legacy cert-manager bridge for one issuerRef name; cannot combine with --cert-manager-controller")
@@ -1386,6 +1386,14 @@ func reportSSHInventory(ctx context.Context, reporter inventoryReporter, ch agen
 			},
 		})
 	}
+	// A115: each sshd configuration's trust posture (the CAs it trusts for
+	// user certificates, its RevokedKeys list, the host certificates it
+	// presents, AuthorizedKeysFile) rides the same report.
+	trust, err := sshTrustInventoryFindings(sshdiscovery.New(cfg).TrustPosture())
+	if err != nil {
+		return err
+	}
+	findings = append(findings, trust...)
 	if len(findings) == 0 {
 		return nil
 	}
