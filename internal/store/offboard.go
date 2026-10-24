@@ -152,6 +152,7 @@ var TenantScopedTables = []string{
 	"connector_delivery_receipts",
 	"lifecycle_rotation_runs",
 	"acme_upstream_ari",
+	"compromised_subject_keys",
 	"certificates",
 	"certificate_metadata_watermarks", "certificate_metadata_receipts",
 	"identity_transitions",

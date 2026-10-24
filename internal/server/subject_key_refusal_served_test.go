@@ -93,10 +93,10 @@ func compromisedSubjectSigner(t *testing.T, st *store.Store, tenantID string) *c
 		Fingerprint: info.SHA256Fingerprint, CertificateDER: der, Source: "import"}); err != nil {
 		t.Fatalf("record the compromised key's certificate: %v", err)
 	}
+	// Revoke through the projection writer a certificate.revoked event drives,
+	// which records the subject key as compromised.
 	if err := st.WithTenant(t.Context(), tenantID, func(tx pgx.Tx) error {
-		_, err := tx.Exec(t.Context(), `UPDATE certificates SET status = 'revoked', revocation_reason = 'keyCompromise',
-			revoked_at = now() WHERE tenant_id = $1 AND fingerprint = $2`, tenantID, info.SHA256Fingerprint)
-		return err
+		return st.SetCertificateRevokedTx(t.Context(), tx, tenantID, info.SHA256Fingerprint, "keyCompromise", time.Now().UTC())
 	}); err != nil {
 		t.Fatalf("revoke the compromised key's certificate: %v", err)
 	}

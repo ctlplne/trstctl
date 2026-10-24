@@ -738,7 +738,12 @@ condition 4). The ACME, EST, SCEP, CMP, REST, Vault-compatible PKI, SPIFFE, agen
 enrollment, CA authority, break-glass and external CA paths refuse a request for that
 key with `the subject key is recorded as compromised in this tenant`, so the
 replacement must use a new key. The check stays inside the tenant; another tenant's
-records are never consulted.
+records are never consulted. Projecting the revocation records the certificate's
+SubjectPublicKeyInfo SHA-256, and each issuance makes one indexed lookup by tenant
+and hash. There is no cap, so a mass `keyCompromise` revocation never blocks the
+replacement issuance it calls for. At startup the server records the keys of
+revocations an earlier build projected. A revoked certificate with no retained DER
+has no key to record, and once a key is recorded as compromised it stays recorded.
 
 For an X.509 identity, the preview checks the exact unrevoked certificates tied to
 its issuance or verified deployment, including superseded leaves that could be

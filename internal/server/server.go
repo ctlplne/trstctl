@@ -1415,6 +1415,14 @@ func (s *Server) configureMutationSpine(
 		orchOptions...,
 	)
 	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
+	// Issuance refuses a key the tenant recorded as compromised with one
+	// indexed lookup; revocations an older build projected record theirs here.
+	if recorded, unreadable, err := d.Store.BackfillCompromisedSubjectKeys(ctx); err != nil {
+		return nil, nil, fmt.Errorf("server: record the subject keys of keyCompromise revocations: %w", err)
+	} else if (recorded > 0 || unreadable > 0) && d.Logger != nil {
+		d.Logger.Info("recorded the subject keys of earlier keyCompromise revocations",
+			slog.Int("recorded", recorded), slog.Int("without_readable_key", unreadable))
+	}
 	if healed, err := orch.ReconcileOutbox(ctx, d.Log); err != nil {
 		return nil, nil, fmt.Errorf("server: reconcile outbox side effects: %w", err)
 	} else if healed > 0 && d.Logger != nil {

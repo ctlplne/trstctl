@@ -5,16 +5,10 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/store"
 )
-
-// compromisedKeyScanLimit bounds the keyCompromise revocations one issuance
-// compares against. A tenant beyond it fails closed: the refusal says so.
-const compromisedKeyScanLimit = 10000
 
 // RefuseCompromisedSubjectKey refuses to certify a subject key the tenant has
 // recorded as compromised: a certificate of the tenant revoked with reason
@@ -30,7 +24,10 @@ func (o *Orchestrator) RefuseCompromisedSubjectKey(ctx context.Context, tenantID
 }
 
 // RefuseCompromisedSubjectKeyIn is the same refusal for a caller that holds
-// the store but no orchestrator.
+// the store but no orchestrator. The revocation projection records each
+// keyCompromise revocation's SPKI SHA-256, so this is one indexed lookup by
+// tenant and hash however many revocations the tenant has; a mass
+// key-compromise revocation never blocks the replacement issuance it needs.
 func RefuseCompromisedSubjectKeyIn(ctx context.Context, st *store.Store, tenantID string, spkiDER []byte) error {
 	if st == nil {
 		return nil
@@ -38,23 +35,12 @@ func RefuseCompromisedSubjectKeyIn(ctx context.Context, st *store.Store, tenantI
 	if len(spkiDER) == 0 {
 		return fmt.Errorf("orchestrator: no subject key to check")
 	}
-	revoked, err := st.KeyCompromiseRevokedCertificates(ctx, tenantID, compromisedKeyScanLimit+1)
+	fingerprint, compromised, err := st.CompromisedSubjectKey(ctx, tenantID, crypto.SHA256Hex(spkiDER))
 	if err != nil {
 		return fmt.Errorf("orchestrator: read the tenant's compromised keys: %w", err)
 	}
-	if len(revoked) > compromisedKeyScanLimit {
-		return fmt.Errorf("%w: the tenant records more than %d keyCompromise revocations; the subject key could not be checked against all of them",
-			crypto.ErrCompromisedKey, compromisedKeyScanLimit)
-	}
-	want := crypto.SHA256Hex(spkiDER)
-	for _, der := range revoked {
-		info, err := certinfo.Inspect(der)
-		if err != nil {
-			continue
-		}
-		if strings.EqualFold(info.SPKISHA256, want) {
-			return fmt.Errorf("%w: certificate %s, revoked for keyCompromise, carried this key", crypto.ErrCompromisedKey, info.SHA256Fingerprint)
-		}
+	if compromised {
+		return fmt.Errorf("%w: certificate %s, revoked for keyCompromise, carried this key", crypto.ErrCompromisedKey, fingerprint)
 	}
 	return nil
 }
