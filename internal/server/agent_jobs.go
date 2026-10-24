@@ -489,6 +489,9 @@ func (a *agentService) acceptExecutedReport(ctx context.Context, info mtls.PeerC
 		if claim.Destination == relay.KindDiscoveryRun && errors.Is(ingestErr, segmentscan.ErrFindingCountMismatch) {
 			return a.failInconsistentDiscoveryReport(ctx, info, agentID, claim, req, now)
 		}
+		if claim.Destination == relay.KindRevocationProbe && errors.Is(ingestErr, errRevocationReportRefused) {
+			return a.failRefusedRevocationReport(ctx, info, agentID, claim, req, now, ingestErr)
+		}
 		return nil, status.Errorf(codes.Internal, "ingest signed agent result: %v", ingestErr)
 	}
 	if err := a.recordCertificateCustodyFromJob(ctx, info, claim, req); err != nil {
@@ -587,6 +590,35 @@ func (a *agentService) failInconsistentDiscoveryReport(ctx context.Context, info
 		if a.logger != nil {
 			a.logger.Warn("signed discovery report had inconsistent counts; no findings imported and exact job failed",
 				slog.String("tenant_id", info.TenantID), slog.Int64("job_id", req.JobID), slog.String("reason", reason))
+		}
+	}
+	return &transport.ReportJobResultResponse{Accepted: ok}, nil
+}
+
+// failRefusedRevocationReport closes a revocation probe whose signed report can
+// never validate (B13-7). Returning an error instead left the agent holding a
+// report it must deliver before claiming anything else, so one bad report
+// stopped the relay's whole job lane. The receipt is kept, the exact job fails
+// terminally, and the scheduler's next hourly sweep asks again.
+func (a *agentService) failRefusedRevocationReport(ctx context.Context, info mtls.PeerCertInfo,
+	agentID string, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest,
+	now time.Time, cause error) (*transport.ReportJobResultResponse, error) {
+	const reason = "revocation_report_refused"
+	if err := a.recordVerifiedReceipt(ctx, info, req, claim.Destination, now); err != nil {
+		return nil, status.Error(codes.Unavailable, "signed revocation receipt could not be stored; retry the same report")
+	}
+	ok, err := a.store.FailAgentJobTerminally(ctx, info.TenantID, agentID, req.JobID, req.Attempt, reason, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fail refused revocation probe: %v", err)
+	}
+	if ok {
+		failed := map[string]any{"agent": info.CommonName, "job_id": req.JobID, "detail": reason, "outcome": strings.TrimSpace(req.Outcome)}
+		a.attachJobReceipt(failed, info, req)
+		a.recordAgentJobEvent(ctx, info.TenantID, "agent.job.failed", failed)
+		if a.logger != nil {
+			a.logger.Warn("signed revocation probe report can never validate; nothing recorded and the exact job failed",
+				slog.String("tenant_id", info.TenantID), slog.Int64("job_id", req.JobID), slog.String("reason", reason),
+				slog.String("cause", cause.Error()))
 		}
 	}
 	return &transport.ReportJobResultResponse{Accepted: ok}, nil

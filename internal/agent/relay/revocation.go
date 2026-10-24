@@ -462,6 +462,8 @@ func runRevocationProbe(ctx context.Context, ch Channel, client *http.Client, jo
 		report(ctx, ch, job, OutcomeFailed, "revocation findings could not be encoded")
 		return false
 	}
-	report(ctx, ch, job, OutcomeExecuted, string(detail))
+	// The evidence digest names the exact findings document the receipt
+	// covers; the control plane requires it to record the observation (B13-7).
+	reportWithEvidence(ctx, ch, job, OutcomeExecuted, string(detail), crypto.SHA256Hex(detail))
 	return probeReport.Healthy
 }

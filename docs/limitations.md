@@ -2113,7 +2113,12 @@ unreachable, because sending someone to check a network path that was never
 the problem wastes the hour that mattered. Whether
 the signature was checked is reported explicitly — "we did not check" and "it
 verified" must never read the same. The signed terminal receipt is accepted only
-for the live lease and exact command. It emits immutable queue and observation
+for the live lease and exact command, and its evidence digest must be the
+SHA-256 of the findings document it reports. A report that can never validate
+(an older relay's report carried no digest, so before B13-7 no real relay's
+observation was ever recorded) is refused once: the receipt is kept, the job
+fails, and the next hourly sweep asks again, so one bad report cannot hold a
+relay's other work behind it. It emits immutable queue and observation
 events, projects tenant-scoped endpoint health, and queues one warning/critical
 notification per unhealthy endpoint. `GET /api/v1/revocation/health` and
 Certificates → Revocation & CT show the endpoint, issuer/certificate context, relay,
