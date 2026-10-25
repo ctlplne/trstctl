@@ -2098,7 +2098,9 @@ from a SaaS control plane by design — so monitoring only what is reachable fro
 outside would inventory exactly the endpoints least likely to break.
 
 Five outcomes, kept distinct because they need different people. **fresh** and
-**expiring** differ by a warning window, and expiring is the one worth alerting
+**expiring** differ by a warning window (the last quarter of the answer's own
+signed lifetime, at most 24 hours, so a responder that keeps signing
+short-lived answers reads fresh), and expiring is the one worth alerting
 on: after `nextUpdate` passes, relying parties are already failing. **stale**
 means that has happened. **unreachable** is deliberately not the same as stale.
 And **unparseable** catches the case that fools status-code checks: a proxy or

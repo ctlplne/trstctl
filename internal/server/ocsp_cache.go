@@ -24,7 +24,12 @@ type ocspResponseCacheEntry struct {
 	key        string
 	der        []byte
 	nextUpdate time.Time
-	index      int
+	// refreshAt is the cached response's half-life (B13-R2). Past it the
+	// responder signs a new response, so a relying party is never handed one in
+	// the last half of its life: a client a few minutes off stays inside it,
+	// and a relay's revocation-health probe reads the endpoint as fresh.
+	refreshAt time.Time
+	index     int
 }
 
 type ocspResponseCacheKey struct {
@@ -55,6 +60,10 @@ func (c *ocspResponseCache) get(key ocspResponseCacheKey, now time.Time) ([]byte
 		c.removeLocked(entry)
 		return nil, false
 	}
+	if !entry.refreshAt.After(now) {
+		// The caller signs a new response and put replaces this one in place.
+		return nil, false
+	}
 	return append([]byte(nil), entry.der...), true
 }
 
@@ -63,16 +72,18 @@ func (c *ocspResponseCache) put(key ocspResponseCacheKey, der []byte, nextUpdate
 		return
 	}
 	id := key.String()
+	refreshAt := now.Add(nextUpdate.Sub(now) / 2)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if entry, replacing := c.entries[id]; replacing {
 		entry.der = append([]byte(nil), der...)
 		entry.nextUpdate = nextUpdate
+		entry.refreshAt = refreshAt
 		heap.Fix(&c.expiry, entry.index)
 		return
 	}
 	c.evictLocked(now)
-	entry := &ocspResponseCacheEntry{key: id, der: append([]byte(nil), der...), nextUpdate: nextUpdate}
+	entry := &ocspResponseCacheEntry{key: id, der: append([]byte(nil), der...), nextUpdate: nextUpdate, refreshAt: refreshAt}
 	c.entries[id] = entry
 	heap.Push(&c.expiry, entry)
 }

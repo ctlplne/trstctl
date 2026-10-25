@@ -636,8 +636,10 @@ such as `keyCompromise`, `cessationOfOperation`, or `privilegeWithdrawn` (unknow
 integers are rejected), and bulk revoke at `/api/v1/certificates/bulk-revoke` /
 `/api/v1/identities/bulk-revoke` returns matched, revoked, skipped, and failed counts
 so a wide incident response is explicit about partial success. OCSP responses echo a
-valid OCSP nonce when the request carries one and sign with the delegated responder;
-if the certificate route's durable event-ID index is catching up, it returns
+valid OCSP nonce when the request carries one and sign with the delegated responder.
+Each response is valid for ten minutes; a nonce-free response is reused only in the
+first half of that lifetime, then signed again, so no relying party is handed one about
+to expire. If the certificate route's durable event-ID index is catching up, it returns
 `503` with `Retry-After: 1`; repeat the exact request with the same
 `Idempotency-Key` rather than creating a second revocation command.
 CRL serving returns weak ETag validators and honors `If-None-Match` with `304 Not
@@ -768,7 +770,11 @@ them. The relay verifies CRL/OCSP signatures and exact certificate context, then
 returns a signed lease-bound report. `GET /api/v1/revocation/health` and
 Certificates → Revocation & CT expose fresh, expiring, stale, unreachable, and invalid
 answers with latency, `nextUpdate`, relay identity, and evidence digest; non-fresh
-answers create notifications. A missing observation is shown as unknown, never healthy.
+answers create notifications. An answer is expiring when its `nextUpdate` falls in the
+last quarter of its own signed lifetime, capped at 24 hours: a seven-day CRL warns in
+its last day and a ten-minute OCSP response in its last two and a half minutes, so a
+responder that keeps signing short-lived answers reads fresh. A missing observation is
+shown as unknown, never healthy.
 This proves the relay's observation, not every relying party's fail-closed or
 soft-fail configuration. Controlled CRL/OCSP responders cover repository CI; a
 real Windows AD CS lab run remains external infrastructure evidence.

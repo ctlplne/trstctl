@@ -268,7 +268,7 @@ func evaluateCRL(body []byte, target revocationhealth.Target, staleWithin time.D
 		finding.DetailCode = "next_update_passed"
 		finding.Detail = "nextUpdate passed " + now.Sub(nextUpdate).Truncate(time.Second).String() +
 			" ago; relying parties checking revocation are failing now"
-	case staleWithin > 0 && nextUpdate.Sub(now) <= staleWithin:
+	case nextUpdate.Sub(now) <= nearExpiryWindow(staleWithin, thisUpdate, nextUpdate):
 		finding.Status = RevocationExpiring
 		finding.DetailCode = "next_update_near"
 		finding.Detail = "nextUpdate is " + nextUpdate.Sub(now).Truncate(time.Second).String() +
@@ -282,6 +282,24 @@ func evaluateCRL(body []byte, target revocationhealth.Target, staleWithin time.D
 }
 
 const ocspBodyLimit = 1 << 20
+
+// nearExpiryWindow is how close to nextUpdate a signed CRL or OCSP response may
+// come before it reads as expiring (B13-R2): the probe's warning window, but
+// never more than a quarter of the response's own lifetime. A publisher that
+// signs short-lived answers is current while it keeps signing them (trstctl's
+// own OCSP responses live ten minutes); only one near the end of its own
+// lifetime warns. Negative (no warning) when the probe asks for none.
+func nearExpiryWindow(staleWithin time.Duration, thisUpdate, nextUpdate time.Time) time.Duration {
+	if staleWithin <= 0 {
+		return -1
+	}
+	if !thisUpdate.IsZero() && nextUpdate.After(thisUpdate) {
+		if quarter := nextUpdate.Sub(thisUpdate) / 4; quarter < staleWithin {
+			return quarter
+		}
+	}
+	return staleWithin
+}
 
 func probeOCSP(ctx context.Context, client *http.Client, target revocationhealth.Target, staleWithin time.Duration, finding RevocationFinding) RevocationFinding {
 	if len(target.CertificateDER) == 0 {
@@ -378,7 +396,7 @@ func probeOCSP(ctx context.Context, client *http.Client, target revocationhealth
 		finding.Status = RevocationStale
 		finding.DetailCode = "next_update_passed"
 		finding.Detail = "OCSP nextUpdate has passed; clients checking revocation may fail or soft-fail"
-	case staleWithin > 0 && nextUpdate.Sub(now) <= staleWithin:
+	case nextUpdate.Sub(now) <= nearExpiryWindow(staleWithin, thisUpdate, nextUpdate):
 		finding.Status = RevocationExpiring
 		finding.DetailCode = "next_update_near"
 		finding.Detail = "OCSP nextUpdate is inside the warning window"
