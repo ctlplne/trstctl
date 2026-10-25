@@ -157,7 +157,7 @@ type API struct {
 	coreRoutes                         []LicensedRoute
 	licensedSchemas                    map[string]*Schema
 	complianceEvidence                 ComplianceEvidenceService
-	complianceReportArchive            reportarchive.Dir
+	complianceReportArchive            reportarchive.Archive
 	license                            *license.Manager
 	fipsRequired                       bool
 	remediation                        bool
@@ -292,7 +292,7 @@ type config struct {
 	coreRoutes                  []LicensedRoute
 	licensedSchemas             map[string]*Schema
 	complianceEvidence          ComplianceEvidenceService
-	complianceReportArchive     reportarchive.Dir
+	complianceReportArchive     reportarchive.Archive
 	license                     *license.Manager
 	fipsRequired                bool
 	remediation                 bool

@@ -105,7 +105,7 @@ func TestComplianceReportWorkerSignsArchivesAndRecoversExactDueEdge(t *testing.T
 	if err != nil || !selected.NextRunAt.Equal(due) {
 		t.Fatalf("seeded due schedule = %+v, %v", selected, err)
 	}
-	if _, _, _, err := h.srv.reportArchive.FindRun(h.tenant,
+	if _, _, _, err := h.srv.reportArchive.FindRun(ctx, h.tenant,
 		orchestrator.ComplianceReportRunID(h.tenant, scheduleID, due)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("empty private archive should have no signed run: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestComplianceReportWorkerSignsArchivesAndRecoversExactDueEdge(t *testing.T
 	if err != nil || completed.Status != "completed" || completed.Attempt != 2 || completed.ArtifactDigest == "" {
 		t.Fatalf("completed report receipt = %+v, %v", completed, err)
 	}
-	artifact, err := h.srv.reportArchive.Read(h.tenant, run.ID, completed.ArtifactDigest)
+	artifact, err := h.srv.reportArchive.Read(ctx, completed.ArtifactRef, h.tenant, run.ID, completed.ArtifactDigest)
 	if err != nil || h.srv.api.VerifyScheduledComplianceArtifact(artifact, completed) != nil {
 		t.Fatalf("independent archived signed readback = %v, artifact bytes %d", err, len(artifact))
 	}

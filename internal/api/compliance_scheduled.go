@@ -121,8 +121,8 @@ func (a *API) VerifyScheduledComplianceArtifact(artifact []byte, run store.Compl
 		}
 		currentKey = signer.ScheduledVerificationKeyDER()
 	} else {
-		ref, err := reportarchive.Reference(run.TenantID, run.ID, run.ArtifactDigest)
-		if err != nil || ref != run.ArtifactRef || crypto.SHA256Hex(artifact) != run.ArtifactDigest {
+		if !reportarchive.ValidReference(run.ArtifactRef, run.TenantID, run.ID, run.ArtifactDigest) ||
+			crypto.SHA256Hex(artifact) != run.ArtifactDigest {
 			return errors.New("compliance: completed report artifact differs from the event-backed digest")
 		}
 	}

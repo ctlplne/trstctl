@@ -137,7 +137,7 @@ func (a *API) downloadComplianceReportArtifact(w http.ResponseWriter, r *http.Re
 		a.writeError(w, errStatus(http.StatusConflict, "report run has no completed signed artifact"))
 		return
 	}
-	artifact, err := a.complianceReportArchive.Read(run.TenantID, run.ID, run.ArtifactDigest)
+	artifact, err := a.complianceReportArchive.Read(r.Context(), run.ArtifactRef, run.TenantID, run.ID, run.ArtifactDigest)
 	if err != nil || a.VerifyScheduledComplianceArtifact(artifact, run) != nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "signed report archive is unavailable or failed verification"))
 		return

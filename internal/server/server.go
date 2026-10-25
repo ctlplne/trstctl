@@ -58,6 +58,7 @@ import (
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
 	"trstctl.com/trstctl/internal/notify/tenantchannel"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/observ/otlp"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -321,6 +322,10 @@ type Deps struct {
 	ComplianceSigner crypto.DigestSigner
 	AuditRetention   time.Duration // licensed audit retention window; >0 with AuditArchiveDir configures the attached worker
 	AuditArchiveDir  string        // cold-storage directory for signed audit archive bundles (R4.4)
+	// ArchiveObjectStore, when set (audit.archive_object_store), receives signed
+	// audit archive segments and new scheduled report artifacts under each
+	// tenant's object prefix instead of AuditArchiveDir.
+	ArchiveObjectStore objectstore.Store
 	// PrivacyRetention enables the non-audit PII retention worker (PRIVACY-003).
 	// It emits privacy.retention.enforced events and projects pseudonymization from
 	// the event's cutoffs, so operational retention remains replayable (AN-2).
@@ -685,7 +690,7 @@ type Server struct {
 	store              *store.Store
 	log                *events.Log
 	audit              *audit.Service
-	reportArchive      reportarchive.Dir
+	reportArchive      reportarchive.Archive
 	reportSweepMu      sync.Mutex
 	reportTenantOffset int
 	outbox             *orchestrator.Outbox
@@ -1057,7 +1062,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		tenantServiceCheck:        d.TenantServiceCheck,
 		store:                     d.Store,
 		log:                       d.Log,
-		reportArchive:             reportarchive.Dir{Root: d.AuditArchiveDir},
+		reportArchive:             reportarchive.Archive{Dir: reportarchive.Dir{Root: d.AuditArchiveDir}, Objects: d.ArchiveObjectStore},
 		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
 		signerTopology:            d.SignerMode,
@@ -1616,7 +1621,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// through the public auth bootstrap so the browser can fail closed without
 	// probing the intentionally dark /provider/v1 namespace.
 	defaults = append(defaults, api.WithProviderPlaneAvailable(d.ProviderHandler != nil))
-	defaults = append(defaults, api.WithComplianceReportArchive(d.AuditArchiveDir))
+	defaults = append(defaults, api.WithComplianceReportArchive(d.AuditArchiveDir), api.WithComplianceReportObjectStore(d.ArchiveObjectStore))
 	defaults = append(defaults, api.WithFirstIssuanceRetry(s))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
@@ -1654,6 +1659,7 @@ func (s *Server) appendAuditAPIOptions(d Deps, options *[]api.Option) *audit.Ser
 		runtime := d.AuditComplianceFactory(editionseam.AuditComplianceDeps{
 			Audit: auditSvc, Log: d.Log, Signer: d.AuditSigningKey, Checkpoints: d.Store,
 			Timestamper: auditTimestamper{srv: s}, Retention: d.AuditRetention, ArchiveDir: d.AuditArchiveDir,
+			ArchiveStore: d.ArchiveObjectStore,
 		})
 		s.retention = runtime.Retention
 		*options = append(*options, api.WithAuditAnchor(runtime.Anchor))

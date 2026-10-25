@@ -191,12 +191,19 @@ references, inventory counts, and the first page of tenant report schedules.
 
 Before enabling a schedule, set `audit.archive_dir` (or
 `TRSTCTL_AUDIT_ARCHIVE_DIR`) to a durable, mounted 0700 directory writable by
-the control plane. The licensed governance signer must be attached. Preview
-returns `ready=false` with blockers if either prerequisite is absent; create
-and resume return 503. Back up this directory with the event log and PostgreSQL.
-Its `reports/` subtree contains tenant-scoped signed artifacts that can include
-inventory and audit metadata. Access, retention, and erasure of those files are
-operator responsibilities; an event-log backup alone is not a report backup.
+the control plane, or set `audit.archive_object_store` (or
+`TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE`) with an [object store](configuration.md#object-store).
+The licensed governance signer must be attached. Preview returns `ready=false`
+with blockers if either prerequisite is absent; create and resume return 503.
+In the directory, the `reports/` subtree holds the tenant-scoped signed
+artifacts; in the object store each one is created once under the tenant's
+prefix (`tenant/<tenant-id>/reports/<run>/<sha256>.json`), and the run records
+that object as its reference, so a download reads exactly the bytes the run
+pinned. Artifacts can include inventory and audit metadata. Back up the
+directory with the event log and PostgreSQL, or apply the bucket's own
+replication and retention; access, retention and erasure of report artifacts
+remain operator responsibilities, and an event-log backup alone is not a report
+backup.
 
 An operator with `audit:write` first reviews the exact definition and then records it.
 Review returns a tenant-bound SHA-256 fingerprint, normalized definition, later writes,
@@ -278,12 +285,13 @@ trstctl enables the controls below; you operate them:
   storage, ticketing, email, and webhook dispatch remain operator-run
   until a served runner exists.
 - Set a retention policy. By default the served audit view is retained
-  indefinitely; setting both `TRSTCTL_AUDIT_RETENTION` (e.g. `8760h`) and
-  `TRSTCTL_AUDIT_ARCHIVE_DIR` makes a background worker enforce its logical
-  query floor while preserving the AN-2 source envelopes: see
+  indefinitely; setting `TRSTCTL_AUDIT_RETENTION` (e.g. `8760h`) with an
+  archive target (`TRSTCTL_AUDIT_ARCHIVE_DIR` or
+  `TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE`) makes a background worker enforce its
+  logical query floor while preserving the AN-2 source envelopes: see
   [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle)
-  below. Pointing the archive dir at WORM-backed storage is still your
-  call.
+  below. WORM retention on the archive (a WORM-backed directory, or object lock
+  on the bucket) is still your call.
 - Schedule periodic signed exports to anchor the log over time (above).
 - Handle privacy-erasure residue in old evidence. A served subject erasure
   activates a signed, sequence-preserving replacement history generation with
@@ -306,17 +314,26 @@ the ordinary signed history export available and visibly unanchored.
 
 ## Audit retention and archive lifecycle
 
-When Enterprise audit compliance is licensed and `TRSTCTL_AUDIT_RETENTION` and
-`TRSTCTL_AUDIT_ARCHIVE_DIR` are both set, a bounded background worker (per tenant, hourly) enforces the served
-audit-view policy in four ordered steps:
+When Enterprise audit compliance is licensed, `TRSTCTL_AUDIT_RETENTION` is set,
+and an archive target is configured (`TRSTCTL_AUDIT_ARCHIVE_DIR`, or
+`TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE` with an object store), a bounded background
+worker (per tenant, hourly) enforces the served audit-view policy in four
+ordered steps:
 
-1. Archive. Records older than the window are signed as a self-contained,
-   offline-verifiable bundle and written to
-   `ARCHIVE_DIR/<tenant>/audit-<sequence>.jws` (`0600`), verifiable with
-   the audit verification key like a live export.
-2. Verify. The worker re-verifies the bundle it wrote — recovers it
-   and checks the hash chain — before advancing any served boundary; a
-   failed verification aborts the run and the visible view is unchanged.
+1. Sign and verify. Records older than the window are signed as a
+   self-contained, offline-verifiable bundle, verifiable with the audit
+   verification key like a live export, and the worker verifies it —
+   recovers it and checks the hash chain — before writing it anywhere.
+2. Archive and read back. The bundle is written to
+   `ARCHIVE_DIR/<tenant>/audit-<sequence>.jws` (`0600`), or created once in the
+   object store under the tenant's prefix as
+   `tenant/<tenant-id>/audit/audit-<sequence>.jws` with its SHA-256. The worker
+   reads back what was stored and checks it is the verified segment before
+   advancing any served boundary; a failed write or read-back aborts the run
+   and the visible view is unchanged. If a crash interrupted an earlier
+   attempt after its write, the object store already holds that attempt's
+   segment: the worker accepts it only if it verifies and covers exactly the
+   same records, and refuses anything else.
 3. Record a replayable checkpoint. An `audit.archived` v2 event carries
    the global event boundary, cumulative tenant record count, chain head,
    archive locator, and an explicit retained-source assertion. Replaying

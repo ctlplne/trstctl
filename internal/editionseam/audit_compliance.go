@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/objectstore"
 )
 
 // AuditRetentionWorker is supervised by core; its archival policy and execution
@@ -33,6 +34,8 @@ type AuditComplianceDeps struct {
 	Timestamper auditanchor.Timestamper
 	Retention   time.Duration
 	ArchiveDir  string
+	// ArchiveStore, when set, takes the archive segments instead of ArchiveDir.
+	ArchiveStore objectstore.Store
 }
 
 type AuditComplianceRuntime struct {

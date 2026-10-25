@@ -837,8 +837,9 @@ you must operate.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_AUDIT_SIGNING_KEY_FILE` | `data/audit/signing-key.pem` | **Upgrade migration path only.** If this historical PEM exists, the isolated `trstctl-signer` imports it into the sealed, purpose-constrained `audit-export` handle and deletes the plaintext after durable persistence. Fresh deployments never create this file. In external-signer mode, mount the legacy path into the signer and pass `--legacy-audit-key`; the control plane refuses to rotate around a leftover PEM. |
-| `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Served audit-view window, a Go duration (e.g. `8760h`). Empty means **indefinite** (the default). When set **and** `TRSTCTL_AUDIT_ARCHIVE_DIR` is given, a background worker archives older records to signed bundles, verifies the bundle, and advances a replayable tenant checkpoint so those records leave the live query view. Their underlying AN-2 event envelopes remain retained for projection rebuild, disaster recovery, and authorized privacy rewrite. |
+| `TRSTCTL_AUDIT_RETENTION` | — (indefinite) | Served audit-view window, a Go duration (e.g. `8760h`). Empty means **indefinite** (the default). When set **and** an archive target is configured (`TRSTCTL_AUDIT_ARCHIVE_DIR` or `TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE`), a background worker archives older records to signed bundles, reads back and verifies what it stored, and advances a replayable tenant checkpoint so those records leave the live query view. Their underlying AN-2 event envelopes remain retained for projection rebuild, disaster recovery, and authorized privacy rewrite. |
 | `TRSTCTL_AUDIT_ARCHIVE_DIR` | — | Private mounted 0700 directory for signed audit archive bundles (`<dir>/<tenant>/audit-<seq>.jws`, `0600`) and scheduled report artifacts (`<dir>/reports/<tenant>/<run>/<sha256>.json`, `0600`). Required to advance the served audit-view retention floor and to enable signed report schedules. Back it up with PostgreSQL and the event log; protect access and apply retention/erasure policy to report files. See [Audit retention and archive lifecycle](compliance.md#audit-retention-and-archive-lifecycle). |
+| `TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE` | `false` | Keep signed audit archive segments (`<tenant prefix>audit/audit-<seq>.jws`) and new scheduled report artifacts (`<tenant prefix>reports/<run>/<sha256>.json`) in the [object store](#object-store) under each tenant's prefix instead of the archive directory. Requires an `object_store` section. With `TRSTCTL_AUDIT_ARCHIVE_DIR` also set, report artifacts written to the directory before the move stay downloadable; each run records where its artifact lives. Equivalent config key: `audit.archive_object_store`. |
 
 The audit query (`/api/v1/audit/events`) and signed export (`/api/v1/audit/export`)
 endpoints are wired into the serving binary, so they return real data — not an
@@ -1796,8 +1797,11 @@ transaction as that history row.
 ## Object store
 
 An S3-compatible object store (AWS S3, MinIO, or another service that speaks
-the S3 API) for durable artifacts. `trstctl doctor` proves its tenant-prefix
-confinement with the OBJ probes ([doctor runbook](operations/doctor.md)).
+the S3 API) for durable artifacts: signed audit archive segments and scheduled
+report and evidence-pack artifacts when `audit.archive_object_store` is set. The
+control plane opens it at startup without a network call; `trstctl doctor`
+proves its tenant-prefix confinement with the OBJ probes
+([doctor runbook](operations/doctor.md)).
 Objects are created, never replaced: every write is conditional
 (`If-None-Match: *`) and carries its SHA-256 for the store to verify, and every
 read is checked against that digest. Each tenant's objects live under its own

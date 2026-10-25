@@ -46,6 +46,7 @@ import (
 	"trstctl.com/trstctl/internal/notify/slack"
 	"trstctl.com/trstctl/internal/notify/sms"
 	"trstctl.com/trstctl/internal/notify/teams"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/observ/otlp"
 	"trstctl.com/trstctl/internal/pluginhost"
@@ -130,6 +131,11 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		return err
 	}
 	defer runSecrets.Close()
+	archiveStore, err := openArchiveObjectStore(cfg)
+	if err != nil {
+		return err
+	}
+	defer archiveStore.Destroy()
 
 	runSigner, auditKey, err := openAuditSigningRuntime(ctx, cfg)
 	if err != nil {
@@ -152,6 +158,9 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	deps, err := buildRunDeps(ctx, cfg, st, log, runSigner, runSecrets, logger, egressGuard, auditKey)
 	if err != nil {
 		return err
+	}
+	if archiveStore != nil {
+		deps.ArchiveObjectStore = archiveStore
 	}
 	notificationOwner := ensureNotificationChannelOwnership(&deps)
 	// Until Build transfers the channels to its Dispatcher, Run owns their
@@ -181,6 +190,21 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		return err
 	}
 	return serveRuntime(ctx, cfg, srv, logger, stopBackground)
+}
+
+// openArchiveObjectStore opens the object store when the deployment archives
+// audit segments and report artifacts there (audit.archive_object_store). It
+// makes no network call; trstctl doctor proves the store. Run destroys the
+// store's locked credentials when it returns.
+func openArchiveObjectStore(cfg *config.Config) (*objectstore.S3, error) {
+	if !cfg.Audit.ArchiveObjectStore {
+		return nil, nil
+	}
+	store, err := objectstore.FromConfig(cfg.ObjectStore)
+	if err != nil {
+		return nil, fmt.Errorf("object store: %w", err)
+	}
+	return store, nil
 }
 
 func loadConfiguredLicense(cfg *config.Config, trustedPubPEMs [][]byte) (*license.Manager, error) {

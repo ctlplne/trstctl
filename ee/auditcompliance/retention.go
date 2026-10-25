@@ -21,9 +21,10 @@ import (
 )
 
 // Archiver writes a signed, offline-verifiable audit segment to durable cold
-// storage and returns a locator. DirArchiver writes to a local directory
-// (Audit.ArchiveDir); an S3-compatible archiver is the production target and
-// plugs in here unchanged — this interface is the seam.
+// storage, confirms the storage holds it, and returns a locator. DirArchiver
+// writes to a local directory (audit.archive_dir); ObjectArchiver writes to the
+// S3-compatible object store under the tenant's prefix
+// (audit.archive_object_store).
 type Archiver interface {
 	Archive(ctx context.Context, tenantID string, boundarySeq uint64, signedBundle string) (uri string, err error)
 }
@@ -49,6 +50,15 @@ func (a DirArchiver) Archive(_ context.Context, tenantID string, boundarySeq uin
 	path := filepath.Join(dir, fmt.Sprintf("audit-%020d.jws", boundarySeq))
 	if err := os.WriteFile(path, []byte(signedBundle), 0o600); err != nil {
 		return "", fmt.Errorf("audit: write archive %q: %w", path, err)
+	}
+	// Read back what landed: the checkpoint advances only over the verified
+	// segment's exact bytes.
+	stored, err := os.ReadFile(path) // #nosec G304 -- the archive path built above under the operator's archive dir (CWE-22)
+	if err != nil {
+		return "", fmt.Errorf("audit: read back archive %q: %w", path, err)
+	}
+	if string(stored) != signedBundle {
+		return "", fmt.Errorf("audit: archive %q does not hold the verified segment", path)
 	}
 	return path, nil
 }

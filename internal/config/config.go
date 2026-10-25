@@ -1955,6 +1955,11 @@ type Audit struct {
 	SigningKeyFile string `json:"signing_key_file"` // legacy PEM migration path; private custody lives in trstctl-signer
 	Retention      string `json:"retention"`        // Go duration; empty means an indefinite served audit view
 	ArchiveDir     string `json:"archive_dir"`      // signed cold-storage bundles; required to advance the served-view retention floor
+	// ArchiveObjectStore sends signed audit archive segments and scheduled
+	// report artifacts to object_store, under each tenant's prefix, instead of
+	// ArchiveDir. An ArchiveDir set alongside it stays readable for report
+	// artifacts written there before the move.
+	ArchiveObjectStore bool `json:"archive_object_store,omitempty"`
 }
 
 // RetentionDuration parses the retention window. An empty value means indefinite
@@ -2890,6 +2895,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setBool(getenv, "TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE", &c.Audit.ArchiveObjectStore)
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ENABLED", &c.Breakglass.Enabled)
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ONLINE_ENABLED", &c.Breakglass.OnlineEnabled)
 	setString(getenv, "TRSTCTL_BREAKGLASS_CA_CERT_FILE", &c.Breakglass.CACertFile)
@@ -4386,6 +4392,9 @@ func validateServedSurfaces(c *Config) []error {
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
 	errs = append(errs, validateObjectStore(c.ObjectStore)...)
+	if c.Audit.ArchiveObjectStore && !c.ObjectStore.Configured() {
+		errs = append(errs, errors.New("audit.archive_object_store requires an object_store section (or TRSTCTL_OBJECT_STORE_*)"))
+	}
 	// Served enrollment protocols are public protocol endpoints. Resolve the
 	// explicit eval preset before validation so its convenience never bypasses the
 	// same tenant/material checks as seven hand-written toggles. Production keeps

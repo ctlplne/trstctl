@@ -108,3 +108,28 @@ func TestLoadObjectStoreReadsTheSectionAndItsOverlay(t *testing.T) {
 		t.Fatalf("no configuration = %+v %v, want an empty section", got, err)
 	}
 }
+
+// The archive switch needs a configured object store; with an archive
+// directory as well, the directory stays readable for earlier report
+// artifacts while new archives go to the store.
+func TestAuditArchiveObjectStoreNeedsAConfiguredStore(t *testing.T) {
+	cfg := Default()
+	cfg.Audit.ArchiveObjectStore = true
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "audit.archive_object_store requires an object_store") {
+		t.Fatalf("archive_object_store without a store = %v", err)
+	}
+	cfg.ObjectStore = validObjectStore()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("archive_object_store with a store = %v", err)
+	}
+	cfg.Audit.ArchiveDir = "/var/lib/trstctl/archive"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("archive_object_store with an archive directory kept for earlier reports = %v", err)
+	}
+	env := map[string]string{"TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE": "true"}
+	var overlaid Config
+	overlaid.applyEnv(func(k string) string { return env[k] })
+	if !overlaid.Audit.ArchiveObjectStore {
+		t.Fatal("TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE does not reach audit.archive_object_store")
+	}
+}

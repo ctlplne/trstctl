@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -280,7 +281,14 @@ func WithComplianceEvidence(svc ComplianceEvidenceService) Option {
 // WithComplianceReportArchive binds scheduled reports to a private durable
 // directory under the operator's audit archive mount.
 func WithComplianceReportArchive(root string) Option {
-	return func(c *config) { c.complianceReportArchive.Root = root }
+	return func(c *config) { c.complianceReportArchive.Dir.Root = root }
+}
+
+// WithComplianceReportObjectStore keeps new scheduled report artifacts in the
+// object store under each tenant's prefix (audit.archive_object_store). A
+// directory bound alongside it stays readable for earlier artifacts.
+func WithComplianceReportObjectStore(store objectstore.Store) Option {
+	return func(c *config) { c.complianceReportArchive.Objects = store }
 }
 
 func (a *API) complianceReportBlockers() []string {
@@ -289,8 +297,8 @@ func (a *API) complianceReportBlockers() []string {
 	if !ok || len(signer.ScheduledVerificationKeyDER()) == 0 {
 		blockers = append(blockers, "The licensed, isolated governance report signer is not attached.")
 	}
-	if err := a.complianceReportArchive.ValidateRoot(); err != nil {
-		blockers = append(blockers, "Configure audit.archive_dir as a mounted private 0700 directory writable by the control plane.")
+	if err := a.complianceReportArchive.Ready(); err != nil {
+		blockers = append(blockers, "Configure audit.archive_dir as a mounted private 0700 directory writable by the control plane, or audit.archive_object_store with an object store.")
 	}
 	return blockers
 }

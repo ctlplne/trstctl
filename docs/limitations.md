@@ -1569,8 +1569,9 @@ does not resurrect the tenant's PostgreSQL rows.
 That is the limit of what tenant offboarding deletes — it is not a promise that
 the append-only event log or a signed audit archive disappears when a tenant is
 offboarded. Those records are governed by audit/privacy retention policy:
-configure `TRSTCTL_AUDIT_RETENTION` plus `TRSTCTL_AUDIT_ARCHIVE_DIR` for
-archive-backed retirement from the served audit view, and use **Privacy Retention**
+configure `TRSTCTL_AUDIT_RETENTION` plus an archive target
+(`TRSTCTL_AUDIT_ARCHIVE_DIR`, or `TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE` with an
+object store) for archive-backed retirement from the served audit view, and use **Privacy Retention**
 for non-audit personal data pseudonymization. The underlying AN-2 event envelopes
 stay retained for rebuild and disaster recovery. WORM/object-store archive cleanup and legal
 hold decisions remain operator privacy/compliance work, but the product gives
@@ -1582,9 +1583,10 @@ redacted evidence refs rather than the raw subject.
 
 An empty Change history search reports the tenant's sealed archived-prefix
 count when one exists. The API returns only its count and chain head, never
-the archive file or host path; retention does not silently turn an online
-audit read into an archive retrieval. An archive custodian must supply the
-signed JWS files and pinned verification keys for offline checking.
+the archive file, host path or object locator; retention does not silently
+turn an online audit read into an archive retrieval. An archive custodian must
+supply the signed JWS files (from the directory, or downloaded from the object
+store with any S3 client) and pinned verification keys for offline checking.
 
 Retention elects one archiver per audit scope across control-plane replicas.
 It pins the source generation until the signed segment, `audit.archived` event,

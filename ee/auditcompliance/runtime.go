@@ -7,6 +7,7 @@ package auditcompliance
 import (
 	"context"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/editionseam"
 )
@@ -19,8 +20,26 @@ func Build(d editionseam.AuditComplianceDeps) editionseam.AuditComplianceRuntime
 			return auditanchor.AnchorHead(ctx, d.Timestamper, head)
 		},
 	}
-	if d.Audit != nil && d.Log != nil && d.Signer != nil && d.Checkpoints != nil && d.Retention > 0 && d.ArchiveDir != "" {
-		runtime.Retention = NewRetentionWorker(d.Audit, d.Log, DirArchiver{Dir: d.ArchiveDir}, d.Checkpoints, d.Retention, d.Signer)
+	if d.Audit != nil && d.Log != nil && d.Signer != nil && d.Checkpoints != nil && d.Retention > 0 {
+		if archiver := archiverFor(d); archiver != nil {
+			runtime.Retention = NewRetentionWorker(d.Audit, d.Log, archiver, d.Checkpoints, d.Retention, d.Signer)
+		}
 	}
 	return runtime
+}
+
+// archiverFor picks the configured archive target: the object store when the
+// deployment archives there, else the archive directory, else none (retention
+// then does not run).
+func archiverFor(d editionseam.AuditComplianceDeps) Archiver {
+	switch {
+	case d.ArchiveStore != nil:
+		svc := d.Audit
+		return ObjectArchiver{Store: d.ArchiveStore, Verify: func(signed string) (audit.Bundle, error) {
+			return audit.VerifyRetentionBundle(signed, svc.VerificationKeys())
+		}}
+	case d.ArchiveDir != "":
+		return DirArchiver{Dir: d.ArchiveDir}
+	}
+	return nil
 }

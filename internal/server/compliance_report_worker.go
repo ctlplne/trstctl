@@ -135,10 +135,10 @@ func (s *Server) runComplianceReportDue(ctx context.Context, selected store.Comp
 }
 
 func (s *Server) produceComplianceReportRun(ctx context.Context, schedule store.ComplianceReportSchedule, run store.ComplianceReportRun) error {
-	if s.reportArchive.Root == "" {
+	if !s.reportArchive.Configured() {
 		return s.recordComplianceReportFailure(ctx, run, "archive_unavailable", false)
 	}
-	ref, digest, artifact, err := s.reportArchive.FindRun(run.TenantID, run.ID)
+	ref, digest, artifact, err := s.reportArchive.FindRun(ctx, run.TenantID, run.ID)
 	if errors.Is(err, os.ErrNotExist) {
 		artifact, err = s.api.BuildScheduledComplianceArtifact(ctx, run.TenantID, schedule, run.ID, time.Now().UTC())
 		if err != nil {
@@ -154,7 +154,7 @@ func (s *Server) produceComplianceReportRun(ctx context.Context, schedule store.
 		if err := s.api.VerifyScheduledComplianceArtifact(artifact, run); err != nil {
 			return s.recordComplianceReportFailure(ctx, run, "invalid_signature", true)
 		}
-		ref, digest, err = s.reportArchive.Put(run.TenantID, run.ID, artifact)
+		ref, digest, err = s.reportArchive.Put(ctx, run.TenantID, run.ID, artifact)
 		if err != nil {
 			if errors.Is(err, reportarchive.ErrArtifactTooLarge) {
 				return s.recordComplianceReportFailure(ctx, run, "artifact_too_large", true)

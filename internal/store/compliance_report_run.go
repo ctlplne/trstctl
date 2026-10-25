@@ -81,9 +81,8 @@ func ValidateComplianceReportRun(run ComplianceReportRun) error {
 			return errors.New("store: failed report run needs an attempt and code")
 		}
 	case "completed":
-		wantRef, refErr := reportarchive.Reference(run.TenantID, run.ID, run.ArtifactDigest)
 		if run.Attempt == 0 || run.CompletedAt.IsZero() || !run.NextAttemptAt.IsZero() || run.ErrorCode != "" ||
-			refErr != nil || run.ArtifactRef != wantRef {
+			!reportarchive.ValidReference(run.ArtifactRef, run.TenantID, run.ID, run.ArtifactDigest) {
 			return errors.New("store: completed report run needs exact retained artifact and digest")
 		}
 	default:
