@@ -105,9 +105,10 @@ func TestRuntimeFinalizesFullOfflineRecordAfterGatedDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncodeFinalizationContext: %v", err)
 	}
+	approvers := []string{"alice@example.test", "bob@example.test"}
 	quorum, err := gate.EncodeQuorumEvidence(gate.QuorumEvidence{
 		KeyClass: requested.KeyClass, Threshold: 2, AuthorizedCount: 3,
-		Approvers: []string{"alice@example.test", "bob@example.test"},
+		Approvers: approvers,
 	})
 	if err != nil {
 		t.Fatalf("EncodeQuorumEvidence: %v", err)
@@ -137,8 +138,14 @@ func TestRuntimeFinalizesFullOfflineRecordAfterGatedDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncodeRecord: %v", err)
 	}
-	if bytes.Contains(rawRecord, []byte("alice")) || bytes.Contains(rawRecord, []byte("bob")) {
-		t.Fatalf("public destruction record retained operator identities: %s", rawRecord)
+	// Look for the identities themselves. A bare name such as "bob" also turns up
+	// by chance inside the base64 of the record's per-run attestation key and
+	// signature (3 of 10,000 runs); an address cannot, since base64 has no "@"
+	// or ".".
+	for _, approver := range approvers {
+		if bytes.Contains(rawRecord, []byte(approver)) {
+			t.Fatalf("public destruction record retained operator identity %q: %s", approver, rawRecord)
+		}
 	}
 	if err := record.VerifyRecord(rec, crypto.PublicKey{
 		Algorithm: rec.AttestationAlgorithm, DER: rec.AttestationPublicKeyDER,
