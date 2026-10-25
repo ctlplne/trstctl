@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -29,7 +30,7 @@ const (
 	// the request's own bucket.
 	DestinationRevocationProbeRequest = "revocation.probe.request"
 	// EventRevocationProbeRequested records who asked for the probe, and when.
-	EventRevocationProbeRequested = "revocation.probe.requested"
+	EventRevocationProbeRequested = projections.EventRevocationProbeRequested
 	// RevocationProbeRequestBucketPrefix starts every on-demand probe bucket.
 	RevocationProbeRequestBucketPrefix = "manual:"
 )
