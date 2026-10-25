@@ -58,6 +58,18 @@ export function ControlPlaneKeygenPanel() {
           {translateNow("keygen.decidedBy", { who: p.set_by || "?", at: formatDateTime(p.set_at), reason: p.reason || "" })}
         </p>
       ) : null}
+      {p?.source === "upgrade" && p.evidence ? (
+        // A tenant that predates the switch was decided once from its own use;
+        // the evidence it was decided from stays with the decision.
+        <p className="text-caption text-muted-foreground">
+          {translateNow("keygen.upgradeEvidence", {
+            certificates: p.evidence.control_plane_certificates,
+            unrecorded: p.evidence.unrecorded_served_certificates,
+            events: p.evidence.deprecation_events,
+            socket: translateNow(p.evidence.workload_api_socket ? "keygen.upgradeEvidence.socketOn" : "keygen.upgradeEvidence.socketOff"),
+          })}
+        </p>
+      ) : null}
       {p && p.control_plane_identities > 0 ? <p className="text-caption">{translateNow("keygen.renewals", { count: p.control_plane_identities })}</p> : null}
       {p ? <p className="text-caption text-muted-foreground">{p.guidance}</p> : null}
       {canWrite && p ? (

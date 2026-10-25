@@ -258,6 +258,11 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// details. The second call reads PostgreSQL's clock so every replica uses
 		// one scheduling bucket; it contains no tenant data at all.
 		"internal/store/revocation_health.go": 2,
+		// Owner decision 2026-10-24: the leader's one-time decision for tenants
+		// that predate the control-plane key generation switch lists only the
+		// tenant IDs with no recorded decision, then reads each tenant's evidence
+		// back inside that tenant's RLS context. It returns no tenant payload.
+		"internal/store/control_plane_keygen.go": 1,
 		// H5: the CA calendar's leader enumerator — "which tenants operate a CA
 		// authority with a known expiry" — mirrors the expiry-alert enumerator in
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are

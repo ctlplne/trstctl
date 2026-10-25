@@ -1415,6 +1415,9 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunHostRotationRecovery),
+			// Owner decision 2026-10-24: decide, once, the control-plane key
+			// generation switch of every tenant that predates it.
+			startRuntimeWorker(workCtx, srv.RunControlPlaneKeygenUpgrade),
 			startRuntimeWorker(workCtx, srv.RunDiscoveryScheduler),
 			// I2: the tenant CMDB reconcile ticker. Without this line a configured
 			// schedule would sit in the table and never fire, and the epic's

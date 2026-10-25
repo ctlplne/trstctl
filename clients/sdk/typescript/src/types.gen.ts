@@ -10886,9 +10886,11 @@ export interface components {
             /** @description Whether the control plane may generate a subject private key for a requester in this tenant. */
             enabled: boolean;
             evidence?: {
-                /** @description Certificates whose recorded custody says the control plane generated the key. */
+                /** @description Certificates whose custody, recorded or derived from the retained issuance event, says the control plane generated the key. */
                 control_plane_certificates: number;
-                /** @description Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key. */
+                /** @description The tenant's retained records of a generator run: issuance.server_side_keygen events, and compatibility socket uses that issued an X.509-SVID. */
+                deprecation_events: number;
+                /** @description Certificates from a path that could have generated the key in the control plane whose origin is still unrecorded; any could have had a server-generated key. */
                 unrecorded_served_certificates: number;
                 /** @description The compatibility Workload API socket was configured for this tenant. */
                 workload_api_socket: boolean;

@@ -41,12 +41,17 @@ type ControlPlaneKeygenEvidence struct {
 	// WorkloadAPISocket is true when the compatibility Workload API socket is
 	// configured for this tenant.
 	WorkloadAPISocket bool `json:"workload_api_socket"`
+	// DeprecationEvents counts the tenant's retained records of a generator
+	// run: issuance.server_side_keygen, and spiffe.workload_api.local_socket_used
+	// for an X.509-SVID.
+	DeprecationEvents int64 `json:"deprecation_events"`
 }
 
 // Used reports whether any evidence shows the tenant using control-plane key
 // generation.
 func (e ControlPlaneKeygenEvidence) Used() bool {
-	return e.ControlPlaneCertificates > 0 || e.UnrecordedServedCertificates > 0 || e.WorkloadAPISocket
+	return e.ControlPlaneCertificates > 0 || e.UnrecordedServedCertificates > 0 || e.WorkloadAPISocket ||
+		e.DeprecationEvents > 0
 }
 
 // ControlPlaneKeygenPolicy is a tenant's decision.
@@ -77,6 +82,15 @@ func (s *Store) ApplyControlPlaneKeygenSetTx(ctx context.Context, tx pgx.Tx, p C
 		if evidence, err = json.Marshal(p.Evidence); err != nil {
 			return err
 		}
+	}
+	if p.Source == ControlPlaneKeygenSourceUpgrade {
+		// The upgrade decides only a tenant nobody has decided yet: an
+		// operator's change recorded before it, even in the same moment, stands.
+		_, err := tx.Exec(ctx, `INSERT INTO tenant_control_plane_keygen (tenant_id, enabled, source, reason, set_by, set_at, evidence)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (tenant_id) DO NOTHING`,
+			p.TenantID, p.Enabled, p.Source, p.Reason, p.SetBy, p.SetAt.UTC(), evidence)
+		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO tenant_control_plane_keygen (tenant_id, enabled, source, reason, set_by, set_at, evidence)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -136,4 +150,47 @@ func (s *Store) ActiveControlPlaneKeyCertificates(ctx context.Context, tenantID 
 			WHERE tenant_id = $1 AND status = 'active' AND key_origin = 'control_plane'`, tenantID).Scan(&n)
 	})
 	return n, err
+}
+
+// TenantsWithoutControlPlaneKeygenDecision lists registered tenants with no
+// decision yet: tenants that predate the switch.
+func (s *Store) TenantsWithoutControlPlaneKeygenDecision(ctx context.Context) ([]string, error) {
+	rows, err := s.SystemPool().Query(ctx,
+		//trstctl:system-query — cross-tenant by design: the leader's one-time upgrade decision lists only tenant IDs without a recorded decision, then reads each tenant's evidence back inside that tenant's RLS context.
+		`SELECT t.tenant_id::text FROM tenants t
+		  WHERE NOT EXISTS (SELECT 1 FROM tenant_control_plane_keygen k WHERE k.tenant_id = t.tenant_id)
+		  ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tenants []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		tenants = append(tenants, tenantID)
+	}
+	return tenants, rows.Err()
+}
+
+// ControlPlaneKeygenEvidenceFor counts a tenant's own use of control-plane key
+// generation in its certificate inventory: certificates whose custody, recorded
+// or derived, says the control plane generated the key, and certificates from a
+// path that could have generated it whose origin is still unrecorded. The
+// caller adds the deprecation events and the compatibility socket
+// configuration, which the inventory does not hold.
+func (s *Store) ControlPlaneKeygenEvidenceFor(ctx context.Context, tenantID string) (ControlPlaneKeygenEvidence, error) {
+	var out ControlPlaneKeygenEvidence
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT
+			  count(*) FILTER (WHERE key_origin = 'control_plane'),
+			  count(*) FILTER (WHERE key_origin = '' AND (source IN ('issued', 'discovery:k8s_ingress_gateway')
+			    OR issuance_idempotency_key LIKE 'issue:%' OR issuance_idempotency_key LIKE 'renew:%'
+			    OR issuance_idempotency_key LIKE 'k8s-auto:%'))
+			FROM certificates WHERE tenant_id = $1`, tenantID).
+			Scan(&out.ControlPlaneCertificates, &out.UnrecordedServedCertificates)
+	})
+	return out, err
 }

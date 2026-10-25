@@ -184,7 +184,14 @@ agent-executed target.
 `trstctl tenant key-generation show|set`, or Platform → Configuration →
 Control-plane key generation. A tenant registered after the switch starts with
 it off; the evaluation preset starts with it on and records why; a tenant that
-predates the switch reads undecided and keeps the fallback until it is decided.
+predates the switch is decided once, on the leader's first start of a version that
+has it, from its own use: it stays on if any of its certificates' custody (recorded,
+or derived from the retained issuance event) says the control plane generated the
+key, if any certificate from a path that could have generated one still has an
+unrecorded origin, if it has a retained `issuance.server_side_keygen` record or an
+X.509-SVID from the compatibility socket, or if that socket serves it; otherwise it
+is turned off. The decision keeps its evidence, shown beside it, and never replaces
+an operator's own decision; until it is made, the tenant keeps the behavior it had.
 Every change names who made it and why in a `tenant.control_plane_keygen.set`
 event. With it off, an identity issuance that would use the fallback is refused
 before anything is recorded (`409`, `control_plane_keygen_off`, naming

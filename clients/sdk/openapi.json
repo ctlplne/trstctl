@@ -11453,11 +11453,15 @@
           "evidence": {
             "properties": {
               "control_plane_certificates": {
-                "description": "Certificates whose recorded custody says the control plane generated the key.",
+                "description": "Certificates whose custody, recorded or derived from the retained issuance event, says the control plane generated the key.",
+                "type": "integer"
+              },
+              "deprecation_events": {
+                "description": "The tenant's retained records of a generator run: issuance.server_side_keygen events, and compatibility socket uses that issued an X.509-SVID.",
                 "type": "integer"
               },
               "unrecorded_served_certificates": {
-                "description": "Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key.",
+                "description": "Certificates from a path that could have generated the key in the control plane whose origin is still unrecorded; any could have had a server-generated key.",
                 "type": "integer"
               },
               "workload_api_socket": {
@@ -11468,7 +11472,8 @@
             "required": [
               "control_plane_certificates",
               "unrecorded_served_certificates",
-              "workload_api_socket"
+              "workload_api_socket",
+              "deprecation_events"
             ],
             "type": "object"
           },

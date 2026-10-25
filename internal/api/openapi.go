@@ -5561,10 +5561,11 @@ func componentSchemas() map[string]*Schema {
 		"guidance": str(),
 	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "coverage_status", "removed_count", "changed_count", "guidance")
 	controlPlaneKeygenEvidence := object(map[string]*Schema{
-		"control_plane_certificates":     {Type: "integer", Description: "Certificates whose recorded custody says the control plane generated the key."},
-		"unrecorded_served_certificates": {Type: "integer", Description: "Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key."},
+		"control_plane_certificates":     {Type: "integer", Description: "Certificates whose custody, recorded or derived from the retained issuance event, says the control plane generated the key."},
+		"unrecorded_served_certificates": {Type: "integer", Description: "Certificates from a path that could have generated the key in the control plane whose origin is still unrecorded; any could have had a server-generated key."},
 		"workload_api_socket":            {Type: "boolean", Description: "The compatibility Workload API socket was configured for this tenant."},
-	}, "control_plane_certificates", "unrecorded_served_certificates", "workload_api_socket")
+		"deprecation_events":             {Type: "integer", Description: "The tenant's retained records of a generator run: issuance.server_side_keygen events, and compatibility socket uses that issued an X.509-SVID."},
+	}, "control_plane_certificates", "unrecorded_served_certificates", "workload_api_socket", "deprecation_events")
 	revocationProbeNow := object(map[string]*Schema{
 		"queued":   {Type: "boolean", Description: "False when a request in the same minute already queued this probe; requests inside one minute share it."},
 		"bucket":   {Type: "string", Description: "The request's probe bucket (manual:<minute>), which its relay observations carry."},

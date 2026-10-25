@@ -67,4 +67,24 @@ describe("ControlPlaneKeygenPanel", () => {
     renderPanel();
     expect(await screen.findByText(/Not decided yet/)).toBeInTheDocument();
   });
+  it("shows the evidence a pre-switch tenant was decided from", async () => {
+    apiMock.controlPlaneKeygen.mockResolvedValue({
+      decided: true,
+      enabled: true,
+      source: "upgrade",
+      reason: "predates the switch and already used control-plane key generation",
+      set_by: "system:upgrade",
+      set_at: "2026-10-25T09:00:00Z",
+      evidence: { control_plane_certificates: 2, unrecorded_served_certificates: 0, workload_api_socket: false, deprecation_events: 5 },
+      control_plane_identities: 2,
+      paths: [],
+      guidance: "",
+    });
+    renderPanel();
+    expect(
+      await screen.findByText(
+        /Decided once from this tenant's own use: 2 certificates with control-plane keys, 0 older certificates whose origin is unrecorded, 5 recorded key generations, and no compatibility Workload API socket/,
+      ),
+    ).toBeInTheDocument();
+  });
 });

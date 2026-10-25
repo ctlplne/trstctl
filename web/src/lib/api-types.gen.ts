@@ -2778,7 +2778,7 @@ export interface ControlPlaneKeygen {
   control_plane_identities: number;
   decided: boolean;
   enabled: boolean;
-  evidence?: { control_plane_certificates: number; unrecorded_served_certificates: number; workload_api_socket: boolean };
+  evidence?: { control_plane_certificates: number; deprecation_events: number; unrecorded_served_certificates: number; workload_api_socket: boolean };
   guidance: string;
   paths: string[];
   reason?: string;

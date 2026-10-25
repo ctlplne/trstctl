@@ -27280,6 +27280,19 @@ export const messages = {
     defaultMessage: "Not decided yet: this tenant predates the switch and keeps control-plane key generation until it is decided.",
     description: "State of the switch for a tenant that predates it.",
   },
+  "keygen.upgradeEvidence": {
+    defaultMessage:
+      "Decided once from this tenant's own use: {certificates} certificates with control-plane keys, {unrecorded} older certificates whose origin is unrecorded, {events} recorded key generations, and {socket}.",
+    description: "Evidence behind the switch decision for a tenant that predates it.",
+  },
+  "keygen.upgradeEvidence.socketOn": {
+    defaultMessage: "the compatibility Workload API socket serving it",
+    description: "Upgrade evidence: the compatibility socket is configured for this tenant.",
+  },
+  "keygen.upgradeEvidence.socketOff": {
+    defaultMessage: "no compatibility Workload API socket",
+    description: "Upgrade evidence: no compatibility socket for this tenant.",
+  },
   "keygen.decidedBy": {
     defaultMessage: "Decided by {who} at {at}: {reason}",
     description: "Who changed the switch, when and why.",

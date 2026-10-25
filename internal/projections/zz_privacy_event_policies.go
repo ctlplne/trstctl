@@ -270,6 +270,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/evidence/control_plane_certificates", opaque),
 		privacyRule("/evidence/unrecorded_served_certificates", opaque),
 		privacyRule("/evidence/workload_api_socket", opaque),
+		privacyRule("/evidence/deprecation_events", opaque),
 	)
 	// A95: the customer's Provider-access policy names who set it; a consent
 	// names the deciding subject and may carry a free-text reason.
