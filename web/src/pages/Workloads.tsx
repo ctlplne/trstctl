@@ -645,7 +645,7 @@ export function Workloads() {
             <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.workload.api.hosts.help.b3wla0002")}</p>
           </div>
           <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[52rem]">
+            <table className="ui-table min-w-208">
               <caption className="sr-only">{translateNow("source.workload.api.hosts.caption.b3wla0003")}</caption>
               <thead>
                 <tr>
@@ -659,7 +659,7 @@ export function Workloads() {
                 {workloadAPIHosts.map((host) => (
                   <tr key={host.id} className="align-top">
                     <td className="font-mono text-xs">{host.name}</td>
-                    <td className="max-w-[26rem]">
+                    <td className="max-w-104">
                       {host.workload_api.state === "serving" ? (
                         <span className="font-medium text-status-success">{translateNow("source.workload.api.serving.b3wla0008")}</span>
                       ) : host.workload_api.state === "unreported" ? (
@@ -957,7 +957,7 @@ export function Workloads() {
             ) : null}
 
             <div className="ui-panel overflow-x-auto">
-              <table className="ui-table min-w-[58rem]">
+              <table className="ui-table min-w-232">
                 <caption className="sr-only">{t("workloads.leases.heading")}</caption>
                 <thead>
                   <tr>
@@ -1236,7 +1236,7 @@ export function Workloads() {
 
         {trustSourceError && <ErrorState title={t("workloads.attestation.errorTitle")}>{trustSourceError}</ErrorState>}
         <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.caption")}>
-          <table className="ui-table min-w-[64rem]">
+          <table className="ui-table min-w-5xl">
             <caption className="sr-only">{t("workloads.attestation.caption")}</caption>
             <thead>
               <tr>
@@ -1321,7 +1321,7 @@ export function Workloads() {
         {attestedSVIDs.length > 0 || attestationFailures.length > 0 ? <AttesterBreakdown rows={attestedSVIDs} failures={attestationFailures} /> : null}
         {attestedSVIDs.length > 0 ? (
           <ScrollableTableRegion className="ui-panel" label={t("workloads.attestation.outcomesCaption")}>
-            <table className="ui-table min-w-[58rem]">
+            <table className="ui-table min-w-232">
               <caption className="sr-only">{t("workloads.attestation.outcomesCaption")}</caption>
               <thead>
                 <tr>
@@ -1488,7 +1488,7 @@ export function AttesterBreakdown({ rows, failures }: { rows: AttestedSVIDRow[];
   return (
     <div className="grid gap-3">
       <div className="ui-panel overflow-x-auto">
-        <table className="ui-table min-w-[40rem]">
+        <table className="ui-table min-w-160">
           <caption className="sr-only">{translateNow("workloads.attesterBreakdown.caption")}</caption>
           <thead>
             <tr>

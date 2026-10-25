@@ -280,7 +280,7 @@ export function Operations() {
                 aria-label={translateNow("source.status.filter.9bfe8b184f")}
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-hidden focus:border-focus focus:ring-2 focus:ring-focus/20"
               >
                 {statusOptions(t("operations.status.queued")).map((option) => (
                   <option key={option.value || "all"} value={option.value}>
@@ -295,7 +295,7 @@ export function Operations() {
                 aria-label={translateNow("source.type.filter.5607113309")}
                 value={typeFilter}
                 onChange={(event) => setTypeFilter(event.target.value as "" | OperationType)}
-                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+                className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-hidden focus:border-focus focus:ring-2 focus:ring-focus/20"
               >
                 {typeOptions.map((option) => (
                   <option key={option.value || "all"} value={option.value}>
@@ -565,7 +565,7 @@ function OperationDetailDialog({ onClose, row }: { onClose: () => void; row: Ope
           {fields.map((field) => (
             <div key={field.label} className={field.wide ? "sm:col-span-2" : undefined}>
               <dt className="text-caption font-medium text-muted-foreground">{field.label}</dt>
-              <dd className={field.technical ? "mt-1 break-all font-mono text-xs" : "mt-1 break-words"}>{field.value}</dd>
+              <dd className={field.technical ? "mt-1 break-all font-mono text-xs" : "mt-1 wrap-break-word"}>{field.value}</dd>
             </div>
           ))}
         </dl>
@@ -687,7 +687,7 @@ function RejectDialog({
             rows={4}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/20"
+            className="rounded-control border border-border bg-background px-3 py-2 text-sm outline-hidden focus:border-focus focus:ring-2 focus:ring-focus/20"
           />
         </label>
         <div className="flex justify-end gap-2">
@@ -718,7 +718,7 @@ function OperationNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () 
           }
           aria-hidden="true"
         />
-        <p className="min-w-0 break-words font-medium">{notice.message}</p>
+        <p className="min-w-0 wrap-break-word font-medium">{notice.message}</p>
       </div>
       <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
         {translateNow("source.dismiss.48845bff33")}
@@ -1084,7 +1084,7 @@ function RotationRunDetailRow({ children, mono = false, term }: { term: string; 
   return (
     <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
       <dt className="font-medium text-muted-foreground">{term}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+      <dd className={mono ? "break-all font-mono text-xs" : "wrap-break-word"}>{children}</dd>
     </div>
   );
 }

@@ -303,7 +303,7 @@ function AssistantRuntimeDisclosure({
                 </div>
                 <div className="ui-panel p-comfortable">
                   <dt className="text-caption text-muted-foreground">{translateNow("source.endpoint.host.4f0d916bb9")}</dt>
-                  <dd className="mt-1 break-words text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : endpoint}</dd>
+                  <dd className="mt-1 wrap-break-word text-title font-semibold">{loading ? translateNow("source.loading.b4a070a2d3") : endpoint}</dd>
                 </div>
               </dl>
               <p className="text-body text-muted-foreground">
@@ -630,7 +630,7 @@ export function Assistant() {
       {workspaceOpen && productHelpReady && (
         <section aria-labelledby="product-help-workspace-heading" className="mt-6">
           <div className="mb-4">
-            <h2 ref={workspaceHeadingRef} id="product-help-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-none">
+            <h2 ref={workspaceHeadingRef} id="product-help-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-hidden">
               {t("assistant.design.workspaceTitle")}
             </h2>
             <p className="mt-1 max-w-3xl text-body text-muted-foreground">{t("assistant.design.workspaceBoundary")}</p>

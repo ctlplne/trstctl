@@ -453,7 +453,7 @@ function CTSubmissionPanel({
               type="checkbox"
               checked={allowPrivate}
               onChange={(event) => onAllowPrivate(event.target.checked)}
-              className="h-4 w-4 rounded border-border"
+              className="h-4 w-4 rounded-sm border-border"
             />
             {t("certificates.ct.allowPrivate")}
           </label>
@@ -1438,7 +1438,7 @@ function CertificateWorkspace() {
                 </Link>
               )}
             </nav>
-            <dl className="grid min-w-0 grid-cols-1 gap-3 text-sm [overflow-wrap:anywhere] md:grid-cols-2 [&>div]:min-w-0 [&_dd]:min-w-0">
+            <dl className="grid min-w-0 grid-cols-1 gap-3 text-sm wrap-anywhere md:grid-cols-2 [&>div]:min-w-0 [&_dd]:min-w-0">
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.subject.6897128384")}</dt>
                 <dd className="break-all">{certificateDisplayName(detail)}</dd>

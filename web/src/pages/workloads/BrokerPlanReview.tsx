@@ -62,7 +62,7 @@ export function BrokerFact({ label, children }: { label: string; children: React
   return (
     <div className="min-w-0">
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-sm">{children}</dd>
+      <dd className="mt-1 wrap-break-word text-sm">{children}</dd>
     </div>
   );
 }

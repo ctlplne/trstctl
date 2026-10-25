@@ -555,7 +555,7 @@ export function FleetReissuanceTable({
   }
   return (
     <div className="overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[76rem]">
+      <table className="ui-table min-w-304">
         <caption className="sr-only">{translateNow("source.fleet.reissuance.runs.c1afb05039")}</caption>
         <thead>
           <tr>
@@ -578,7 +578,7 @@ export function FleetReissuanceTable({
                 <p className="font-medium">{run.status}</p>
                 <p className="text-xs text-muted-foreground">{run.phase}</p>
                 {run.halted_reason && (
-                  <p className="mt-1 max-w-[22rem] text-xs text-danger" role="alert">
+                  <p className="mt-1 max-w-88 text-xs text-danger" role="alert">
                     {run.halted_reason}
                   </p>
                 )}
@@ -625,7 +625,7 @@ export function FleetReissuanceTable({
               <td>{run.failed_targets?.length ? run.failed_targets.join(", ") : translateNow("source.none.140bedbf9c")}</td>
               <td>
                 <p className="font-medium">{run.evidence_bundle_format || translateNow("source.unavailable.ba691ba042")}</p>
-                <p className="max-w-[14rem] truncate font-mono text-xs text-muted-foreground">{run.evidence_bundle || "-"}</p>
+                <p className="max-w-56 truncate font-mono text-xs text-muted-foreground">{run.evidence_bundle || "-"}</p>
               </td>
               <td>
                 <FleetRunActions run={run} action={action} onAction={onAction} />

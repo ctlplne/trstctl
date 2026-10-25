@@ -75,7 +75,7 @@ export function CredentialChip({
         type="button"
         aria-label={t("credentialChip.copy", { label })}
         onClick={() => void copyValue()}
-        className="shrink-0 rounded-sm p-0.5 text-muted-foreground transition-colors duration-fast hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+        className="shrink-0 rounded-xs p-0.5 text-muted-foreground transition-colors duration-fast hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
       >
         {copied ? <Check className="h-3 w-3 text-status-success" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
       </button>

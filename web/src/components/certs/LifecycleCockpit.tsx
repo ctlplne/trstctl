@@ -545,7 +545,7 @@ export function LifecycleCockpit(props: LifecycleCockpitProps) {
           <p className="mt-1 text-caption text-muted-foreground">{t("certificateCockpit.queue.help")}</p>
         </div>
         <ScrollableTableRegion label={t("certificateCockpit.queue.title")} className="rounded-none border-0">
-          <table aria-label={t("certificateCockpit.queue.title")} className="w-full min-w-[68rem] text-left text-sm">
+          <table aria-label={t("certificateCockpit.queue.title")} className="w-full min-w-272 text-left text-sm">
             <thead className="bg-muted/50 text-caption text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 font-medium" scope="col">

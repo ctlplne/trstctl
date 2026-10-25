@@ -179,7 +179,7 @@ export function SSHRevocationWorkflow({
               ) : null}
               <div>
                 <dt className="text-caption text-muted-foreground">{t("source.reason.f81ab834de")}</dt>
-                <dd className="break-words text-sm">{reviewed.request.reason || t("sshTrust.revoke.noReason")}</dd>
+                <dd className="wrap-break-word text-sm">{reviewed.request.reason || t("sshTrust.revoke.noReason")}</dd>
               </div>
             </dl>
             <p className="text-sm text-muted-foreground">{t("sshTrust.revoke.distributionBoundary")}</p>

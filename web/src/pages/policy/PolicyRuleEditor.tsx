@@ -162,7 +162,7 @@ export function PolicyRuleEditor({
                   <dt>{t("policy.versions.evidenceRefs")}</dt>
                   <dd>{values.evidenceRefs?.trim() || t("policy.editor.none")}</dd>
                 </dl>
-                <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-control border border-border p-3 text-xs">
+                <pre className="max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word rounded-control border border-border p-3 text-xs">
                   {values.module?.trim()}
                 </pre>
                 <Button type="submit" loading={busy} disabled={busy}>

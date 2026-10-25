@@ -334,7 +334,7 @@ function PlanFact({ icon, label, value }: { icon?: ReactNode; label: string; val
         ) : null}
         {label}
       </dt>
-      <dd className="mt-0.5 break-words font-medium">{value}</dd>
+      <dd className="mt-0.5 wrap-break-word font-medium">{value}</dd>
     </div>
   );
 }

@@ -1644,7 +1644,7 @@ function OfflineRootWorkflow({
                 rows={5}
                 value={rootForm.certificatePEM}
                 onChange={(event) => onRootFormChange({ certificatePEM: event.target.value })}
-                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
                 placeholder={t("caHierarchy.offline.placeholderCertificate")}
               />
             </div>
@@ -1665,7 +1665,7 @@ function OfflineRootWorkflow({
                 value={rootPossessionSignature}
                 onChange={(event) => onRootPossessionSignatureChange(event.target.value)}
                 aria-describedby="offline-root-possession-help"
-                className="min-h-20 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/30"
+                className="min-h-20 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/30"
               />
               <p id="offline-root-possession-help" className="text-xs text-muted-foreground">
                 {t("caHierarchy.offline.possessionSignatureHelp")}
@@ -1751,7 +1751,7 @@ function OfflineRootWorkflow({
                   readOnly
                   rows={5}
                   value={offlineCSR.csr_pem}
-                  className="min-h-32 rounded-control border border-border bg-muted/40 px-3 py-2 font-mono text-xs outline-none"
+                  className="min-h-32 rounded-control border border-border bg-muted/40 px-3 py-2 font-mono text-xs outline-hidden"
                 />
               </div>
             )}
@@ -1764,7 +1764,7 @@ function OfflineRootWorkflow({
                 rows={5}
                 value={intermediateForm.certificatePEM}
                 onChange={(event) => onIntermediateFormChange({ certificatePEM: event.target.value })}
-                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+                className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
                 placeholder={t("caHierarchy.offline.placeholderCertificate")}
               />
             </div>
@@ -2517,7 +2517,7 @@ function LabeledTextarea({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+        className="min-h-32 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </div>
   );
@@ -2540,7 +2540,7 @@ function ProbeBanner({ onDismiss, probe }: { probe: ProbeState; onDismiss: () =>
           }
           aria-hidden="true"
         />
-        <p className="min-w-0 break-words font-medium">
+        <p className="min-w-0 wrap-break-word font-medium">
           {translateNow("source.value1.value2.efae3eb968", { value1: probe.issuerName, value2: probe.message })}
         </p>
       </div>
@@ -2581,7 +2581,7 @@ function IssuerTable({
   return (
     <>
       <div className="ui-panel overflow-x-auto">
-        <table className="ui-table min-w-[60rem]">
+        <table className="ui-table min-w-240">
           <caption className="sr-only">{translateNow("source.issuer.list.477db22fd7")}</caption>
           <thead>
             <tr>
@@ -2621,7 +2621,7 @@ function IssuerTable({
                   the served capability matrix. An operator holding a compromised
                   key needs to know before they reach for the button, not after
                   a revocation that went nowhere. */}
-                <td className="max-w-[22rem] text-sm">
+                <td className="max-w-88 text-sm">
                   {(() => {
                     const cap = capabilityFor(issuer);
                     if (cap === "internal") {
@@ -2643,7 +2643,7 @@ function IssuerTable({
                   compresses the validation-reuse window, an authority that
                   reads "manual" here needs a person every cycle, and the
                   number of cycles per year is going up. */}
-                <td className="max-w-[22rem] text-sm">
+                <td className="max-w-88 text-sm">
                   {(() => {
                     const cap = capabilityFor(issuer);
                     if (cap === "internal") {

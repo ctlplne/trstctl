@@ -522,7 +522,7 @@ export function Protocols() {
   }, []);
 
   return (
-    <section aria-labelledby="protocols-heading" className="grid min-w-0 gap-6 [&>*]:min-w-0">
+    <section aria-labelledby="protocols-heading" className="grid min-w-0 gap-6 *:min-w-0">
       <PageHeader
         titleId="protocols-heading"
         title={t("nav.item.protocols")}
@@ -613,7 +613,7 @@ export function Protocols() {
             ) : null}
           </div>
           <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[60rem]">
+            <table className="ui-table min-w-240">
               <caption className="sr-only">{translateNow("source.enrollment.diagnostics.caption.i4diag0002")}</caption>
               <thead>
                 <tr>
@@ -635,7 +635,7 @@ export function Protocols() {
                     {/* An unclassified failure shows what it is rather than an
                         empty cell: "we could not place this" is a real answer
                         and a blank looks like a rendering bug. */}
-                    <td className="max-w-[26rem] text-xs">
+                    <td className="max-w-104 text-xs">
                       {row.actionable ? (
                         row.remediation
                       ) : (
@@ -664,7 +664,7 @@ export function Protocols() {
                         ) : null}
                       </dl>
                     </td>
-                    <td className="max-w-[22rem] text-xs">
+                    <td className="max-w-88 text-xs">
                       {row.verification_status === "verified" ? (
                         <div className="grid gap-1">
                           <span className="font-semibold text-success">{translateNow("source.verified.fixed.i4diag0015")}</span>
@@ -716,7 +716,7 @@ export function Protocols() {
           <span className="font-medium">{t("protocols.operations.summary")}</span>
           <span className="ms-2 text-caption text-muted-foreground">{t("protocols.operations.description")}</span>
         </summary>
-        <div className="mt-5 grid min-w-0 gap-6 [&>*]:min-w-0">
+        <div className="mt-5 grid min-w-0 gap-6 *:min-w-0">
           <MDMDevicesPanel />
 
           <details data-testid="protocol-network-evidence" className="group border-y border-border py-3">
@@ -749,7 +749,7 @@ export function Protocols() {
                   </div>
                 ) : (
                   <div className="ui-panel mt-3 overflow-x-auto">
-                    <table className="ui-table min-w-[76rem]">
+                    <table className="ui-table min-w-304">
                       <caption className="sr-only">{t("protocols.relays.caption")}</caption>
                       <thead>
                         <tr>
@@ -864,7 +864,7 @@ export function Protocols() {
               {translateNow("source.protocol.register.6109f4cf46")}
             </h2>
             <ScrollableTableRegion className="ui-panel" label={translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}>
-              <table className="ui-table min-w-[56rem]">
+              <table className="ui-table min-w-4xl">
                 <caption className="sr-only">{translateNow("source.enrollment.protocol.surfaces.de695f7aa5")}</caption>
                 <thead>
                   <tr>
@@ -925,7 +925,7 @@ export function Protocols() {
               {t("protocols.dns01.heading")}
             </h2>
             <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.caption")}>
-              <table className="ui-table min-w-[62rem]">
+              <table className="ui-table min-w-248">
                 <caption className="sr-only">{t("protocols.dns01.caption")}</caption>
                 <thead>
                   <tr>
@@ -1027,7 +1027,7 @@ export function Protocols() {
                 </p>
               )}
               <div className="ui-panel overflow-x-auto">
-                <table className="ui-table min-w-[64rem]">
+                <table className="ui-table min-w-5xl">
                   <caption className="sr-only">{t("protocols.dns01.upstreamCaption")}</caption>
                   <thead>
                     <tr>
@@ -1073,7 +1073,7 @@ export function Protocols() {
               </Button>
             </div>
             <ScrollableTableRegion className="ui-panel" label={t("protocols.dns01.configCaption")}>
-              <table className="ui-table min-w-[76rem]">
+              <table className="ui-table min-w-304">
                 <caption className="sr-only">{t("protocols.dns01.configCaption")}</caption>
                 <thead>
                   <tr>
@@ -1187,7 +1187,7 @@ export function Protocols() {
             </div>
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
               <ScrollableTableRegion className="ui-panel" label={t("protocols.mdm.caption")}>
-                <table className="ui-table min-w-[72rem]">
+                <table className="ui-table min-w-6xl">
                   <caption className="sr-only">{t("protocols.mdm.caption")}</caption>
                   <thead>
                     <tr>
@@ -1300,20 +1300,20 @@ export function Protocols() {
             )}
           </section>
 
-          <section aria-labelledby="client-setup-heading" className="grid min-w-0 gap-4 [&>*]:min-w-0">
+          <section aria-labelledby="client-setup-heading" className="grid min-w-0 gap-4 *:min-w-0">
             <h2 id="client-setup-heading" className="text-title font-semibold">
               {translateNow("source.client.setup.4ba2b51d20")}
             </h2>
             {protocolSurfaces.map((protocol) => (
               <section key={protocol.id} aria-labelledby={`${protocol.id}-heading`} className="min-w-0 border-y border-border py-4">
-                <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] [&>*]:min-w-0">
+                <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)] *:min-w-0">
                   <div>
                     <h3 id={`${protocol.id}-heading`} className="text-base font-semibold">
                       {protocol.name}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">{protocol.capability}</p>
                   </div>
-                  <div className="grid min-w-0 gap-3 [&>*]:min-w-0">
+                  <div className="grid min-w-0 gap-3 *:min-w-0">
                     {protocol.snippets.map((snippet) => {
                       const copiedKey = `${protocol.id}:${snippet.label}`;
                       return (
@@ -1377,7 +1377,7 @@ export function Protocols() {
 
 function NeutralEmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div role="status" className="min-w-0 max-w-full rounded-control border border-border bg-muted/20 px-3 py-2 text-sm [overflow-wrap:anywhere]">
+    <div role="status" className="min-w-0 max-w-full rounded-control border border-border bg-muted/20 px-3 py-2 text-sm wrap-anywhere">
       <p className="font-medium">{title}</p>
       <p className="mt-1 text-muted-foreground">{body}</p>
     </div>

@@ -76,7 +76,7 @@ function CopyRef({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 font-mono text-xs">{value}</code>
+      <code className="min-w-0 flex-1 truncate rounded-sm bg-muted px-2 py-1 font-mono text-xs">{value}</code>
       <Button
         type="button"
         size="sm"
@@ -426,7 +426,7 @@ export function Integrate() {
                       aria-label={t("integrate.design.gitopsScrollArea")}
                       tabIndex={0}
                     >
-                      <table className="ui-table min-w-[40rem]">
+                      <table className="ui-table min-w-160">
                         <caption className="sr-only">{t("integrate.gitops.driftComparison")}</caption>
                         <thead>
                           <tr>
@@ -558,7 +558,7 @@ function IntegrationFact({ label, value }: { label: string; value: ReactNode }) 
   return (
     <div className="min-w-0 rounded-control border border-border bg-muted/20 p-3">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-medium text-foreground">{value}</dd>
+      <dd className="mt-1 wrap-break-word text-sm font-medium text-foreground">{value}</dd>
     </div>
   );
 }

@@ -249,7 +249,7 @@ export function DataGrid<Row>({
         {translateNow("source.columns.53aade77cd")}
       </Button>
       {chooserOpen && (
-        <div className="absolute end-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
+        <div className="absolute inset-e-0 z-20 mt-2 min-w-52 rounded-panel border border-border bg-card p-2 text-sm shadow-elevation2">
           <fieldset>
             <legend className="px-2 pb-1 text-caption font-medium text-muted-foreground">{translateNow("source.visible.columns.1da58ee7c6")}</legend>
             {columns.map((column) => (
@@ -334,7 +334,7 @@ export function DataGrid<Row>({
       ) : (
         <div
           aria-label={translateNow("grid.scrollableColumns", { label: ariaLabel })}
-          className="min-w-0 max-w-full overflow-auto rounded-panel border border-border bg-card shadow-elevation1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 [contain:paint]"
+          className="min-w-0 max-w-full overflow-auto rounded-panel border border-border bg-card shadow-elevation1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 contain-[paint]"
           data-testid="data-grid-scroll-viewport"
           data-virtualized={virtualized ? "true" : "false"}
           data-total-rows={rows.length}
@@ -343,7 +343,7 @@ export function DataGrid<Row>({
           tabIndex={0}
           onScroll={virtualized ? (event) => setVirtualScrollTop(event.currentTarget.scrollTop) : undefined}
         >
-          <table className="w-full min-w-[40rem] text-start text-body" aria-rowcount={rows.length + 1}>
+          <table className="w-full min-w-160 text-start text-body" aria-rowcount={rows.length + 1}>
             <caption className="sr-only">{ariaLabel}</caption>
             <thead className={virtualized ? "sticky top-0 z-10 bg-card" : undefined}>
               <tr className="border-b border-border text-muted-foreground">

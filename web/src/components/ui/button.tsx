@@ -6,14 +6,14 @@ import { cn } from "@/lib/utils";
  * channel, while marketing-style pills and hover lifts stay out of dense
  * operator workflows. */
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control text-sm font-medium transition-[color,background-color,border-color,box-shadow,filter] duration-fast disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background",
   {
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground shadow-elevation1 hover:brightness-105 active:brightness-95",
-        secondary: "border border-border bg-foreground/[0.03] text-foreground hover:border-brand-accent/60 hover:text-brand-accent",
+        secondary: "border border-border bg-foreground/3 text-foreground hover:border-brand-accent/60 hover:text-brand-accent",
         outline: "border border-border bg-background hover:border-brand-accent/40 hover:bg-muted/60",
-        ghost: "hover:bg-foreground/[0.05]",
+        ghost: "hover:bg-foreground/5",
         destructive: "bg-destructive text-destructive-foreground shadow-elevation1 hover:brightness-105 active:brightness-95",
         "destructive-outline": "border border-destructive/50 bg-background text-destructive hover:border-destructive hover:bg-destructive/10",
       },

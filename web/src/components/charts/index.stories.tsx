@@ -31,7 +31,7 @@ export const TonePalette: Story = {
     <div className="flex max-w-2xl flex-wrap gap-3">
       {tones.map((tone) => (
         <span key={tone} className="flex items-center gap-1.5 text-caption text-muted-foreground">
-          <span aria-hidden="true" className="h-3.5 w-3.5 rounded-sm" style={{ background: chartToneColor(tone) }} />
+          <span aria-hidden="true" className="h-3.5 w-3.5 rounded-xs" style={{ background: chartToneColor(tone) }} />
           {tone}
         </span>
       ))}

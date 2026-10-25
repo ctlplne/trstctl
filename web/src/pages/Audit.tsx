@@ -247,7 +247,7 @@ function AuditWorkspace() {
             <button
               type="button"
               onClick={clearModuleScope}
-              className="rounded-control px-1 text-brand-accent/80 hover:text-brand-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+              className="rounded-control px-1 text-brand-accent/80 hover:text-brand-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
               aria-label={t("audit.moduleScope.clear")}
             >
               ✕
@@ -477,7 +477,7 @@ function SummaryFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-control border border-border bg-muted/20 p-3">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-medium text-foreground">{value}</dd>
+      <dd className="mt-1 wrap-break-word font-medium text-foreground">{value}</dd>
     </div>
   );
 }

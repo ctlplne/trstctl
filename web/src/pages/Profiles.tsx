@@ -445,7 +445,7 @@ function CheckboxSet({
       <div className="flex flex-wrap gap-3">
         {values.map((value) => (
           <label key={value} className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={selected.includes(value)} onChange={() => onToggle(value)} className="h-4 w-4 rounded border-border" />
+            <input type="checkbox" checked={selected.includes(value)} onChange={() => onToggle(value)} className="h-4 w-4 rounded-sm border-border" />
             <span>{value}</span>
           </label>
         ))}
@@ -609,7 +609,7 @@ function ProfileVersionDetail({
                 <p className="text-sm text-muted-foreground">{translateNow("source.no.spec.differences.de9813046a")}</p>
               ) : (
                 <div className="ui-panel overflow-x-auto">
-                  <table className="ui-table min-w-[36rem]">
+                  <table className="ui-table min-w-xl">
                     <thead>
                       <tr>
                         <th scope="col">{translateNow("source.change.c0bf75bd78")}</th>
@@ -766,7 +766,7 @@ function ProfileRestoreDialog({
         <ProfileRestoreList title={translateNow("profiles.restore.verify")} items={preview.verification_steps} />
 
         {error ? (
-          <p className="min-w-0 break-words rounded-control border border-destructive/35 bg-destructive/5 p-3 text-destructive" role="alert">
+          <p className="min-w-0 wrap-break-word rounded-control border border-destructive/35 bg-destructive/5 p-3 text-destructive" role="alert">
             {error}
           </p>
         ) : null}
@@ -788,7 +788,7 @@ function ProfileRestoreValue({ label, value, wide = false }: { label: string; va
   return (
     <div className={`grid min-w-0 gap-1 ${wide ? "sm:col-span-2" : ""}`}>
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium">{value}</dd>
+      <dd className="wrap-break-word font-medium">{value}</dd>
     </div>
   );
 }
@@ -801,7 +801,7 @@ function ProfileRestoreList({ title, items }: { title: string; items: string[] }
         {items.map((item) => (
           <li key={item} className="flex min-w-0 gap-2">
             <span aria-hidden="true">•</span>
-            <span className="min-w-0 break-words">{item}</span>
+            <span className="min-w-0 wrap-break-word">{item}</span>
           </li>
         ))}
       </ul>

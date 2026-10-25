@@ -802,7 +802,7 @@ export function Notifications() {
                 <NotificationDetailRow term="Read at">{detail.read_at ? formatDateTime(detail.read_at) : "-"}</NotificationDetailRow>
                 <NotificationDetailRow term="Last error">
                   {detail.last_error ? (
-                    <span className="break-words font-medium text-risk-critical">{detail.last_error}</span>
+                    <span className="wrap-break-word font-medium text-risk-critical">{detail.last_error}</span>
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}
@@ -1148,7 +1148,7 @@ function ChannelAuthoring({
             type="checkbox"
             checked={form.enabled}
             onChange={(event) => onFormChange({ ...form, enabled: event.target.checked })}
-            className="h-4 w-4 rounded border-border text-brand-accent focus:ring-focus"
+            className="h-4 w-4 rounded-sm border-border text-brand-accent focus:ring-focus"
           />
           {t("notifications.channels.enabled")}
         </label>
@@ -1596,7 +1596,7 @@ function NotificationsTable({
             <span className="font-medium">{notificationSubject(notification)}</span>
           </div>
           <span className="text-sm text-muted-foreground">{notificationType(notification)}</span>
-          {notification.detail && <span className="max-w-[28rem] truncate text-sm text-muted-foreground">{notification.detail}</span>}
+          {notification.detail && <span className="max-w-md truncate text-sm text-muted-foreground">{notification.detail}</span>}
         </div>
       ),
     },
@@ -1804,7 +1804,7 @@ function NotificationDetailRow({ term, children, mono = false }: { term: string;
   return (
     <div className="grid min-w-0 gap-1 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-2">
       <dt className="font-medium text-muted-foreground">{term}</dt>
-      <dd className={mono ? "min-w-0 break-all font-mono text-xs" : "min-w-0 [overflow-wrap:anywhere]"}>{children}</dd>
+      <dd className={mono ? "min-w-0 break-all font-mono text-xs" : "min-w-0 wrap-anywhere"}>{children}</dd>
     </div>
   );
 }

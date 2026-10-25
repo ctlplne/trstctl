@@ -38,7 +38,7 @@ export function RevocationCachePanel() {
         <>
           <p className="text-sm text-muted-foreground">{t("protocols.revocationCache.summary", summary(posture))}</p>
           <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[82rem]">
+            <table className="ui-table min-w-328">
               <caption className="sr-only">{t("protocols.revocationCache.caption")}</caption>
               <thead>
                 <tr>

@@ -97,18 +97,14 @@ export function NeedsAttention({
                   ) : (
                     <BellRing className="h-4 w-4 text-status-warning" aria-hidden="true" />
                   )}
-                  <h3 className="min-w-0 [overflow-wrap:anywhere] font-semibold">
-                    {notification.subject || notification.certificate_id || notification.destination}
-                  </h3>
+                  <h3 className="min-w-0 wrap-anywhere font-semibold">{notification.subject || notification.certificate_id || notification.destination}</h3>
                   <StatusBadge
                     value={notification.severity || notification.status}
                     label={notification.severity || notification.status}
                     tone={notification.status === "dead" || notification.severity === "critical" ? "critical" : "warning"}
                   />
                 </div>
-                <p className="min-w-0 [overflow-wrap:anywhere] text-sm text-muted-foreground">
-                  {notification.detail || t("notifications.center.defaultImpact")}
-                </p>
+                <p className="min-w-0 wrap-anywhere text-sm text-muted-foreground">{notification.detail || t("notifications.center.defaultImpact")}</p>
               </div>
               <div className="grid min-w-0 gap-4 sm:grid-cols-3">
                 <Fact
@@ -188,7 +184,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <dl className="grid min-w-0 gap-1 text-sm">
       <Eyebrow as="dt">{label}</Eyebrow>
-      <dd className="min-w-0 [overflow-wrap:anywhere] font-medium">{value}</dd>
+      <dd className="min-w-0 wrap-anywhere font-medium">{value}</dd>
     </dl>
   );
 }

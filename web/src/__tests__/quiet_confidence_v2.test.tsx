@@ -87,7 +87,10 @@ describe("quiet confidence v2", () => {
   });
 
   it("keeps routine table hierarchy in sentence case", () => {
-    const tableRule = css.slice(css.indexOf(".ui-table thead th"), css.indexOf(".ui-table tbody td"));
+    const tableUtility = css.slice(css.indexOf("@utility ui-table {"));
+    const tableRule = tableUtility.slice(tableUtility.indexOf("& thead th {"), tableUtility.indexOf("& tbody td {"));
+    // Anchor on the header rule itself so a stylesheet reshuffle fails here instead of comparing an empty string.
+    expect(tableRule).toMatch(/^& thead th \{[^}]*font-weight: 600;/);
     expect(tableRule).not.toContain("text-transform: uppercase");
     expect(tableRule).not.toContain("letter-spacing: 0.04em");
   });

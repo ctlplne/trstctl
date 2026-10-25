@@ -130,7 +130,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
 
       {custody && custody.unrecorded_certificates.length > 0 && (
         <ScrollableTableRegion className="mt-4" label={t("policy.compliance.custodyGaps")}>
-          <table className="ui-table min-w-[48rem]">
+          <table className="ui-table min-w-3xl">
             <caption className="text-left font-medium">{t("policy.compliance.custodyGaps")}</caption>
             <thead>
               <tr>
@@ -157,7 +157,7 @@ export function ComplianceEvidencePackPanel({ label, pack }: { label: string; pa
 
       {controls.length > 0 && (
         <ScrollableTableRegion className="mt-4" label={`${label} ${translateNow("source.controls.1e2135d1b5")}`}>
-          <table className="ui-table min-w-[72rem]">
+          <table className="ui-table min-w-6xl">
             <caption className="sr-only">
               {label} {translateNow("source.controls.1e2135d1b5")}
             </caption>

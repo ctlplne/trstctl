@@ -492,7 +492,7 @@ function ContextualRiskPanel({
       {!loading && !error && priorities && topPriorities.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.contextual.empty")}</p>}
       {!loading && !error && topPriorities.length > 0 && (
         <div className="mt-3 min-w-0 w-full max-w-full overflow-x-auto">
-          <table className="ui-table min-w-[48rem]">
+          <table className="ui-table min-w-3xl">
             <caption className="sr-only">{t("risk.contextual.caption")}</caption>
             <thead>
               <tr>
@@ -609,7 +609,7 @@ function RiskFact({ label, value, mono = false }: { label: string; value: string
   return (
     <div className="min-w-0 rounded-control border border-border p-2">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className={mono ? "mt-1 break-all font-mono text-xs" : "mt-1 break-words"}>{value || "—"}</dd>
+      <dd className={mono ? "mt-1 break-all font-mono text-xs" : "mt-1 wrap-break-word"}>{value || "—"}</dd>
     </div>
   );
 }
@@ -701,7 +701,7 @@ function NHIPolicyCompliancePanel({ posture, loading, error }: { posture: NHIPol
       {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiPolicy.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="ui-table min-w-[62rem]">
+          <table className="ui-table min-w-248">
             <caption className="sr-only">{t("risk.nhiPolicy.caption")}</caption>
             <thead>
               <tr>
@@ -781,7 +781,7 @@ function NHIStaticPanel({ posture, loading, error }: { posture: NHIStaticPosture
       {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStatic.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="ui-table min-w-[56rem]">
+          <table className="ui-table min-w-4xl">
             <caption className="sr-only">{t("risk.nhiStatic.caption")}</caption>
             <thead>
               <tr>
@@ -918,7 +918,7 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
       {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="ui-table min-w-[62rem]">
+          <table className="ui-table min-w-248">
             <caption className="sr-only">{t("risk.nhiExposure.caption")}</caption>
             <thead>
               <tr>
@@ -1010,7 +1010,7 @@ function NHIAutomationPanel({ plan, loading, error }: { plan: NHIPostureAutomati
       {!loading && !error && plan && items.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiAutomation.noRules")}</p>}
       {!loading && !error && items.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="ui-table min-w-[62rem]">
+          <table className="ui-table min-w-248">
             <caption className="sr-only">{t("risk.nhiAutomation.caption")}</caption>
             <thead>
               <tr>
@@ -1087,7 +1087,7 @@ function NHIStalePanel({ posture, loading, error }: { posture: NHIStalePosture |
       {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiStale.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="ui-table min-w-[56rem]">
+          <table className="ui-table min-w-4xl">
             <caption className="sr-only">{t("risk.nhiStale.caption")}</caption>
             <thead>
               <tr>
@@ -1161,7 +1161,7 @@ function NHIOverPrivilegePanel({ posture, loading, error }: { posture: NHIOverPr
       {!loading && !error && posture && topFindings.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiOverprivilege.empty")}</p>}
       {!loading && !error && topFindings.length > 0 && (
         <div className="mt-3 overflow-x-auto">
-          <table className="ui-table min-w-[56rem]">
+          <table className="ui-table min-w-4xl">
             <caption className="sr-only">{t("risk.nhiOverprivilege.caption")}</caption>
             <thead>
               <tr>
@@ -1331,7 +1331,7 @@ function RiskLegend() {
       <div
         id="risk-band-tooltip"
         role="tooltip"
-        className="pointer-events-none absolute start-0 top-full z-20 mt-2 w-72 rounded-panel border border-border bg-card p-3 text-sm opacity-0 shadow-elevation2 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+        className="pointer-events-none absolute inset-s-0 top-full z-20 mt-2 w-72 rounded-panel border border-border bg-card p-3 text-sm opacity-0 shadow-elevation2 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
       >
         <p className="mb-2 font-medium">{translateNow("source.risk.band.thresholds.e80274c7e5")}</p>
         <div className="flex flex-wrap gap-2">
@@ -1410,7 +1410,7 @@ export function riskScoreSegments(score: number): MeterSegment[] {
 function RiskScoreMeter({ risk }: { risk: CredentialRisk }) {
   const score = Math.round(risk.score);
   return (
-    <div className="flex min-w-[7.5rem] flex-col gap-1">
+    <div className="flex min-w-30 flex-col gap-1">
       <div className="flex items-center gap-2">
         <Num className="font-medium">{String(score)}</Num>
         <StatusBadge vocabulary="risk" value={riskBand(risk.score)} />

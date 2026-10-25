@@ -475,7 +475,7 @@ export function AWSHoneyTokenWorkflow() {
           ) : (
             <ul className="grid gap-2">
               {selected.uses.map((use) => (
-                <li key={use.event_id} className="rounded border border-border p-2">
+                <li key={use.event_id} className="rounded-sm border border-border p-2">
                   {formatDateTime(use.event_time)} · {use.region} · {use.event_source}/{use.event_name} · {use.source_ip_address} ·{" "}
                   {use.error_code || t("secrets.awsHoney.noError")}
                 </li>

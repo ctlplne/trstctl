@@ -86,7 +86,7 @@ export function ShortcutsHelp({ open, onClose, returnFocusRef }: ShortcutsHelpPr
             {shortcuts.map((shortcut) => (
               <div key={shortcut.label} className="flex items-center justify-between gap-4">
                 <dt className="text-sm font-medium">{shortcut.label}</dt>
-                <dd className="rounded border border-border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">{shortcut.keys}</dd>
+                <dd className="rounded-sm border border-border bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">{shortcut.keys}</dd>
               </div>
             ))}
           </dl>

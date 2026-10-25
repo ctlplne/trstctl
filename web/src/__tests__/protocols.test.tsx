@@ -688,8 +688,8 @@ describe("protocol surface", () => {
   it("keeps wide protocol tables inside the page at narrow viewports (AUD-125)", async () => {
     await renderProtocols();
 
-    expect(screen.getByRole("region", { name: "How machines request credentials" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
-    expect(screen.getByRole("region", { name: "Client setup" })).toHaveClass("min-w-0", "[&>*]:min-w-0");
+    expect(screen.getByRole("region", { name: "How machines request credentials" })).toHaveClass("min-w-0", "*:min-w-0");
+    expect(screen.getByRole("region", { name: "Client setup" })).toHaveClass("min-w-0", "*:min-w-0");
     expect(screen.getByRole("region", { name: "ACME" })).toHaveClass("min-w-0");
     for (const label of [
       "Enrollment protocol surfaces",

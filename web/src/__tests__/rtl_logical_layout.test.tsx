@@ -76,7 +76,7 @@ describe("RTL logical layout (PRODUCT-003)", () => {
     // logical-start anchored, not physical-left.
     const skip = container.querySelector('a[href="#main"]') as HTMLElement;
     expect(skip).not.toBeNull();
-    expect(skip.className).toMatch(/focus:start-2/);
+    expect(skip.className).toMatch(/focus:inset-s-2/);
     expect(skip.className).not.toMatch(/focus:left-2/);
 
     // The desktop sidebar uses a logical inline-end border (border-e), not border-r.
@@ -88,7 +88,7 @@ describe("RTL logical layout (PRODUCT-003)", () => {
     }
   });
 
-  it("DataGrid renders logical text-start and end-0 affordances, no physical equivalents", () => {
+  it("DataGrid renders logical text-start and inset-e-0 affordances, no physical equivalents", () => {
     const columns: Array<DataGridColumn<{ id: string; name: string }>> = [
       { id: "name", header: "Name", cell: (r) => r.name, sortable: true },
       { id: "id", header: "Id", cell: (r) => r.id },
@@ -110,7 +110,7 @@ describe("RTL logical layout (PRODUCT-003)", () => {
 
     // Open the column chooser so its absolutely-positioned dropdown renders.
     fireEvent.click(screen.getByRole("button", { name: "Columns" }));
-    const dropdown = container.querySelector("[class*='end-0']");
+    const dropdown = container.querySelector("[class*='inset-e-0']");
     expect(dropdown).not.toBeNull();
 
     for (const cls of classNamesIn(container)) {
@@ -131,7 +131,7 @@ describe("RTL logical layout (PRODUCT-003)", () => {
     expect(search.className).not.toMatch(/pl-9/);
 
     // The search icon is logical-start anchored.
-    const icon = dialog.querySelector("[class*='start-3']");
+    const icon = dialog.querySelector("[class*='inset-s-3']");
     expect(icon).not.toBeNull();
 
     for (const cls of classNamesIn(container)) {

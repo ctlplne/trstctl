@@ -1603,7 +1603,7 @@ function PolicyDryRunResultPanel({ result }: { result: PolicyDryRun }) {
       </dl>
       {trace.length > 0 && (
         <ScrollableTableRegion className="mt-4" label={t("policy.dryRun.traceCaption")}>
-          <table className="ui-table min-w-[64rem]">
+          <table className="ui-table min-w-5xl">
             <caption className="sr-only">{t("policy.dryRun.traceCaption")}</caption>
             <thead>
               <tr>
@@ -1691,7 +1691,7 @@ function NHIReviewCampaignPanel({
 
       {items.length > 0 ? (
         <ScrollableTableRegion className="mt-4" label={translateNow("source.nhi.access.review.items.d360cac314")}>
-          <table className="ui-table min-w-[64rem]">
+          <table className="ui-table min-w-5xl">
             <caption className="sr-only">{translateNow("source.nhi.access.review.items.d360cac314")}</caption>
             <thead>
               <tr>
@@ -1888,7 +1888,7 @@ function AccessChangeRequestPanel({
 
       {decisions.length > 0 && (
         <ScrollableTableRegion className="mt-4" label={t("policy.accessChange.decisionsCaption")}>
-          <table className="ui-table min-w-[48rem]">
+          <table className="ui-table min-w-3xl">
             <caption className="sr-only">{t("policy.accessChange.decisionsCaption")}</caption>
             <thead>
               <tr>

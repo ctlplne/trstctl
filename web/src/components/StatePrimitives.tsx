@@ -15,7 +15,7 @@ export function ErrorState({ title, children }: { title: string; children?: Reac
     <div
       role="alert"
       data-state-primitive="error"
-      className="min-w-0 max-w-full rounded-control border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm [overflow-wrap:anywhere]"
+      className="min-w-0 max-w-full rounded-control border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm wrap-anywhere"
     >
       <p className="font-medium text-destructive">{title}</p>
       {children && <div className="mt-1 min-w-0 text-muted-foreground">{children}</div>}
@@ -30,7 +30,7 @@ export function PermissionDeniedState({ children }: { children: ReactNode }) {
     <div
       role="alert"
       data-state-primitive="permission-denied"
-      className="min-w-0 max-w-full rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm [overflow-wrap:anywhere]"
+      className="min-w-0 max-w-full rounded-control border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm wrap-anywhere"
     >
       <p className="font-medium text-status-warning">{t("state.permissionDenied")}</p>
       <div className="mt-1 min-w-0 text-muted-foreground">{children}</div>
@@ -42,7 +42,7 @@ export function UnavailableState({ title, children }: { title: string; children?
   return (
     <div
       data-state-primitive="unavailable"
-      className="min-w-0 max-w-full rounded-control border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground [overflow-wrap:anywhere]"
+      className="min-w-0 max-w-full rounded-control border border-dashed border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground wrap-anywhere"
     >
       <p className="font-medium text-foreground">{title}</p>
       {children && <div className="mt-1 min-w-0">{children}</div>}

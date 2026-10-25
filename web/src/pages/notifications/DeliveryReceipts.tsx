@@ -22,7 +22,7 @@ export function DeliveryReceipts({ deliveries }: { deliveries: Notification["del
       {deliveries?.length ? (
         <ul className="mt-3 grid min-w-0 gap-3">
           {deliveries.map((receipt) => (
-            <li key={receipt.id} className="min-w-0 border-t border-border pt-3 text-sm [overflow-wrap:anywhere]">
+            <li key={receipt.id} className="min-w-0 border-t border-border pt-3 text-sm wrap-anywhere">
               <p className="font-medium">
                 {receipt.channel} · <Num>{formatDateTime(receipt.delivered_at)}</Num>
               </p>

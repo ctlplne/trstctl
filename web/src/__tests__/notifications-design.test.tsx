@@ -558,8 +558,8 @@ describe("Global Alert Center", () => {
     expect(await screen.findByRole("heading", { name: "1 alert chains need attention" })).toBeInTheDocument();
     const alertHeading = screen.getByRole("heading", { level: 3, name: "payments-api" });
     expect(alertHeading.closest("article")).toHaveClass("min-w-0", "max-w-full");
-    expect(alertHeading).toHaveClass("[overflow-wrap:anywhere]");
-    expect(screen.getByText("Checkout TLS expires soon.")).toHaveClass("[overflow-wrap:anywhere]");
+    expect(alertHeading).toHaveClass("wrap-anywhere");
+    expect(screen.getByText("Checkout TLS expires soon.")).toHaveClass("wrap-anywhere");
     expect(screen.getByText("Platform SRE")).toBeInTheDocument();
     expect(screen.getByText("Delivery stopped after retries")).toBeInTheDocument();
     expect(screen.queryByText("inventory complete")).not.toBeInTheDocument();

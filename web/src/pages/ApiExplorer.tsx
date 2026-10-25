@@ -953,7 +953,7 @@ export function ApiExplorer() {
       {workspaceOpen && selected && (
         <section aria-labelledby="api-workspace-heading" className="grid min-w-0 gap-4">
           <div className="grid gap-1">
-            <h2 ref={workspaceHeading} id="api-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-none">
+            <h2 ref={workspaceHeading} id="api-workspace-heading" tabIndex={-1} className="text-title font-semibold outline-hidden">
               {t("apiExplorer.workspaceTitle")}
             </h2>
             <p className="max-w-3xl text-sm text-muted-foreground">

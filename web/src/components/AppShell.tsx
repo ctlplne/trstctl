@@ -191,7 +191,7 @@ function SpaceRail({ user, onNavigate, orientation }: SpaceRailProps) {
 
   function railButtonClass(selected: boolean): string {
     return cn(
-      "relative flex h-10 w-10 items-center justify-center rounded-control transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus",
+      "relative flex h-10 w-10 items-center justify-center rounded-control transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus",
       selected ? "bg-sidebar-active text-brand-accent" : "text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-foreground",
     );
   }
@@ -238,7 +238,7 @@ function SpaceRail({ user, onNavigate, orientation }: SpaceRailProps) {
             className={railButtonClass(selected)}
           >
             <Icon aria-hidden="true" className="h-[18px] w-[18px]" />
-            {selected && <span aria-hidden="true" className="absolute inset-y-2 start-0 w-0.5 rounded-e bg-brand-accent" />}
+            {selected && <span aria-hidden="true" className="absolute inset-y-2 inset-s-0 w-0.5 rounded-e bg-brand-accent" />}
           </button>
         );
       })}
@@ -307,7 +307,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                   <li key={`primary-${to}`}>
                     <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive)}>
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 break-words">{t(labelKey)}</span>
+                      <span className="min-w-0 flex-1 wrap-break-word">{t(labelKey)}</span>
                       <CapabilityNavStatus featureIds={item.featureIds} />
                     </NavLink>
                   </li>
@@ -336,8 +336,8 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                     >
                       <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span className="min-w-0 flex-1">
-                        <span className="block break-words leading-snug">{label}</span>
-                        <span className="mt-0.5 block break-words text-xs font-normal leading-snug text-sidebar-foreground/80">{description}</span>
+                        <span className="block wrap-break-word leading-snug">{label}</span>
+                        <span className="mt-0.5 block wrap-break-word text-xs font-normal leading-snug text-sidebar-foreground/80">{description}</span>
                       </span>
                       <CapabilityNavStatus featureIds={item.featureIds} />
                     </NavLink>
@@ -367,7 +367,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 aria-expanded={!collapsed}
                 aria-controls={contentId}
                 onClick={() => toggleGroup(group.labelKey)}
-                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/80 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                className="flex w-full items-center justify-between gap-2 rounded-control px-3 pb-1 pt-0.5 text-sidebar-foreground/80 transition-colors duration-fast hover:text-sidebar-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
               >
                 <Eyebrow className="text-inherit">{t(group.labelKey)}</Eyebrow>
                 <ChevronDown aria-hidden="true" className={cn("h-3.5 w-3.5 transition-transform duration-fast", collapsed && "-rotate-90")} />
@@ -382,7 +382,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                     <li key={`${group.labelKey}-${to}-${labelKey}`}>
                       <NavLink to={to} end={end} onClick={onNavigate} className={({ isActive }) => navItemClass(isActive && !suppressed)}>
                         <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span className="min-w-0 flex-1 break-words">{label}</span>
+                        <span className="min-w-0 flex-1 wrap-break-word">{label}</span>
                         <CapabilityNavStatus featureIds={item.featureIds} />
                       </NavLink>
                     </li>
@@ -399,7 +399,7 @@ function PrimaryNav({ className, id, onNavigate, user }: PrimaryNavProps) {
                 unscoped Audit row itself, so it needs no extra lens). */}
             <NavLink to={`/audit?module=${activeSpace.id}`} onClick={onNavigate} className={navItemClass(false)}>
               <AuditLensIcon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-              <span className="min-w-0 flex-1 break-words">{t("nav.module.auditLens")}</span>
+              <span className="min-w-0 flex-1 wrap-break-word">{t("nav.module.auditLens")}</span>
             </NavLink>
           </li>
         )}
@@ -542,12 +542,12 @@ export function AppShell() {
     <div className="min-h-screen">
       <a
         href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:start-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+        className="sr-only focus:not-sr-only focus:absolute focus:inset-s-2 focus:top-2 focus:z-50 focus:rounded-sm focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
       >
         {t("app.skipToMain")}
       </a>
 
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/90 px-4 backdrop-blur">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card/90 px-4 backdrop-blur-sm">
         <div className="flex min-w-0 items-center gap-2">
           {!isDesktop && (
             <Button
@@ -600,7 +600,7 @@ export function AppShell() {
           >
             <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-start">{t("shell.searchOrJump")}</span>
-            <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-2xs">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
+            <kbd className="rounded-sm border border-border px-1.5 py-0.5 font-mono text-2xs">{translateNow("source.cmd.k.abdd8e293f")}</kbd>
           </Button>
           {user && hasAnyPermission(user, permissionAnyForPath("/notifications")) ? <HeaderAlertIndicator /> : null}
           {user && (
@@ -627,7 +627,7 @@ export function AppShell() {
                   id="account-menu"
                   role="dialog"
                   aria-label={t("shell.accountMenu")}
-                  className="absolute end-0 top-11 z-50 grid w-[min(19rem,calc(100vw-1rem))] gap-3 rounded-panel border border-border bg-card p-3 text-card-foreground shadow-elevation3"
+                  className="absolute inset-e-0 top-11 z-50 grid w-[min(19rem,calc(100vw-1rem))] gap-3 rounded-panel border border-border bg-card p-3 text-card-foreground shadow-elevation3"
                 >
                   <div className="min-w-0 border-b border-border pb-3 text-sm">
                     <strong className="block truncate">{user.email || user.subject}</strong>
@@ -709,7 +709,7 @@ export function AppShell() {
           titleId="mobile-primary-navigation-title"
           returnFocusRef={mobileNavButtonRef}
           className="fixed inset-0 z-40"
-          overlayClassName="absolute inset-0 bg-background/80 backdrop-blur-sm"
+          overlayClassName="absolute inset-0 bg-background/80 backdrop-blur-xs"
           panelClassName="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-e border-sidebar-active/40 bg-sidebar text-sidebar-foreground shadow-xl"
           panelAnimation="drawer"
         >
@@ -829,12 +829,12 @@ function HeaderAlertLink({ label, count = 0 }: { label: string; count?: number }
       to="/notifications"
       aria-label={label}
       title={label}
-      className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-colors duration-fast hover:bg-foreground/5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <Bell className="h-4 w-4" aria-hidden="true" />
       {count > 0 ? (
         <span
-          className="absolute -end-1 -top-1 min-w-4 rounded-control bg-risk-critical px-1 text-center text-2xs font-semibold leading-4 text-white"
+          className="absolute -inset-e-1 -top-1 min-w-4 rounded-control bg-risk-critical px-1 text-center text-2xs font-semibold leading-4 text-white"
           aria-hidden="true"
         >
           {count > 99 ? "99+" : count}

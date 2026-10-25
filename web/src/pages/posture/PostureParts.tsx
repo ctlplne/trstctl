@@ -12,7 +12,7 @@ export function Metric({ label, value }: { label: string; value: string }) {
 export function PreviewTable({ title, headers, children }: { title: string; headers: string[]; children: ReactNode }) {
   return (
     <div className="overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[52rem]">
+      <table className="ui-table min-w-208">
         <caption className="sr-only">{title}</caption>
         <thead>
           <tr>

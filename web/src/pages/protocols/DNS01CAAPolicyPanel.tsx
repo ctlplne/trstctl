@@ -152,7 +152,7 @@ function CAAFact({ label, value, mono = false }: { label: string; value: string;
   return (
     <div className="min-w-0">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 break-words ${mono ? "font-mono text-xs" : "font-medium"}`}>{value}</dd>
+      <dd className={`mt-0.5 wrap-break-word ${mono ? "font-mono text-xs" : "font-medium"}`}>{value}</dd>
     </div>
   );
 }

@@ -1501,7 +1501,7 @@ function DeliveryEvidencePanel({
       {(loadedDeliveries.length > 0 || loadedRotations.length > 0) && (
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[42rem]">
+            <table className="ui-table min-w-2xl">
               <caption className="sr-only">{translateNow("source.recent.connector.delivery.receipts.3a2bf7db18")}</caption>
               <thead>
                 <tr>
@@ -1542,7 +1542,7 @@ function DeliveryEvidencePanel({
             </table>
           </div>
           <div className="ui-panel overflow-x-auto">
-            <table className="ui-table min-w-[42rem]">
+            <table className="ui-table min-w-2xl">
               <caption className="sr-only">{translateNow("source.recent.lifecycle.rotation.runs.4de11752b6")}</caption>
               <thead>
                 <tr>
@@ -1953,7 +1953,7 @@ function NewIdentityForm({ owners, onDone }: { owners: Owner[]; onDone: (issued:
                 type="checkbox"
                 checked={wildcardAck}
                 onChange={(e) => setWildcardAck(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-border"
+                className="mt-1 h-4 w-4 rounded-sm border-border"
               />
               <span>
                 {translateNow("source.acknowledge.wildcard.blast.radius.868520eb71")}

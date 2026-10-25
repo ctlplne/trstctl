@@ -341,7 +341,7 @@ export function Donut({
         {segments.map((segment, index) => (
           <li key={`${segment.label}-${index}`} className="flex items-center justify-between gap-2 text-caption">
             <span className="flex min-w-0 items-center gap-2">
-              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: toneColor(segment.tone) }} />
+              <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-xs" style={{ background: toneColor(segment.tone) }} />
               <span className="truncate text-muted-foreground">{segment.label}</span>
             </span>
             <span className="shrink-0 font-medium tabular-nums">{segment.value}</span>

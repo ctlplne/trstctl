@@ -325,7 +325,7 @@ function PreviewFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 border-s-2 border-border ps-3">
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 break-words font-medium">{value}</dd>
+      <dd className="mt-0.5 wrap-break-word font-medium">{value}</dd>
     </div>
   );
 }

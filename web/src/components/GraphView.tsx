@@ -185,7 +185,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
           role="img"
           aria-labelledby="graph-visual-heading"
           viewBox={`0 0 ${width} ${height}`}
-          className="h-[28rem] w-full cursor-grab touch-none active:cursor-grabbing"
+          className="h-112 w-full cursor-grab touch-none active:cursor-grabbing"
           data-testid="graph-visualization"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -242,7 +242,7 @@ export function GraphView({ nodes, edges, selectedId, onSelect, impactIds, focus
                   opacity={dimmed ? 0.25 : 1}
                   onClick={() => onSelect(node.id)}
                   onKeyDown={(event) => selectWithKeyboard(event, node.id)}
-                  className="cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                  className="cursor-pointer outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   {isFocus && (
                     <circle cx={node.x} cy={node.y} r={24} fill="none" stroke="hsl(var(--risk-critical) / 0.6)" strokeWidth={1.5} strokeDasharray="4 3" />

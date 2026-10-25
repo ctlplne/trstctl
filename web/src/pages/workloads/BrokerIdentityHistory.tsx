@@ -75,7 +75,7 @@ export function BrokerIdentityHistory({ scope }: { scope: string }) {
       header: t("source.agent.11b39c9377"),
       cell: (row) => (row.metadata_state === "recorded" && row.issuance ? row.issuance.agent_id : t("broker.metadataUnavailable")),
     },
-    { id: "subject", header: t("source.subject.6897128384"), cell: (row) => <span className="block max-w-xs break-words">{row.certificate_subject}</span> },
+    { id: "subject", header: t("source.subject.6897128384"), cell: (row) => <span className="block max-w-xs wrap-break-word">{row.certificate_subject}</span> },
     { id: "state", header: t("broker.history.state"), cell: (row) => <BrokerState row={row} /> },
     {
       id: "expires",

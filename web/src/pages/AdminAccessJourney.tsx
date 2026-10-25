@@ -566,9 +566,9 @@ export function AdminAccess() {
               role="region"
               aria-label={t("admin.access.rolePermissionsRegion")}
               tabIndex={0}
-              className="max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <table className="ui-table min-w-[44rem]">
+              <table className="ui-table min-w-176">
                 <thead>
                   <tr>
                     <th scope="col">{translateNow("source.role.14736a2eb9")}</th>
@@ -583,7 +583,7 @@ export function AdminAccess() {
                         <ul className="flex max-w-4xl flex-wrap gap-1.5">
                           {role.permissions.map((permission) => (
                             <li key={permission}>
-                              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{permission}</code>
+                              <code className="rounded-sm bg-muted px-1.5 py-0.5 text-xs">{permission}</code>
                             </li>
                           ))}
                         </ul>
@@ -617,9 +617,9 @@ export function AdminAccess() {
               role="region"
               aria-label={t("admin.access.memberRosterRegion")}
               tabIndex={0}
-              className="max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <table className="ui-table min-w-[44rem]">
+              <table className="ui-table min-w-176">
                 <thead>
                   <tr>
                     <th scope="col">{translateNow("source.subject.6897128384")}</th>
@@ -692,9 +692,9 @@ export function AdminAccess() {
                       role="region"
                       aria-label={t("admin.access.accessKeysRegion")}
                       tabIndex={0}
-                      className="max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <table className="ui-table min-w-[48rem]">
+                      <table className="ui-table min-w-3xl">
                         <thead>
                           <tr>
                             <th scope="col">{t("admin.access.keyId")}</th>
@@ -1035,8 +1035,8 @@ function OverviewFact({ icon, label, value, detail }: { icon?: ReactNode; label:
         {icon}
         {label}
       </dt>
-      <dd className="mt-1 break-words text-body font-semibold">{value}</dd>
-      {detail ? <dd className="mt-1 break-words text-xs text-muted-foreground">{detail}</dd> : null}
+      <dd className="mt-1 wrap-break-word text-body font-semibold">{value}</dd>
+      {detail ? <dd className="mt-1 wrap-break-word text-xs text-muted-foreground">{detail}</dd> : null}
     </div>
   );
 }
@@ -1441,7 +1441,7 @@ function DetailRow({ term, children, mono = false }: { term: string; children: R
   return (
     <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
       <dt className="font-medium text-muted-foreground">{term}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+      <dd className={mono ? "break-all font-mono text-xs" : "wrap-break-word"}>{children}</dd>
     </div>
   );
 }

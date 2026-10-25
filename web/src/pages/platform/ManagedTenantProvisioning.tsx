@@ -244,7 +244,7 @@ function ProvisioningWorkspace({ principal, enabled }: { principal: ManagedTenan
                 header: t("managedRecovery.customer"),
                 cell: (saved) => (
                   <div className="grid min-w-0 gap-1">
-                    <span className="break-words">{saved.request.name}</span>
+                    <span className="wrap-break-word">{saved.request.name}</span>
                     <CredentialChip value={saved.request.tenant_id} label={t(fieldKeys.tenant_id)} />
                   </div>
                 ),
@@ -312,7 +312,7 @@ function ProvisioningWorkspace({ principal, enabled }: { principal: ManagedTenan
               {(Object.keys(fieldKeys) as Array<keyof ManagedTenantProvisionRequest>).map((field) => (
                 <div key={field}>
                   <dt className="font-medium">{t(fieldKeys[field])}</dt>
-                  <dd className="break-words">{review?.[field] || "—"}</dd>
+                  <dd className="wrap-break-word">{review?.[field] || "—"}</dd>
                 </div>
               ))}
             </dl>

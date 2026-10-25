@@ -403,7 +403,7 @@ export function Privacy() {
               <p className="text-caption text-muted-foreground">{t("privacy.catalog.empty")}</p>
             ) : (
               <div className="overflow-x-auto" role="region" aria-label={t("privacy.design.catalogScrollArea")} tabIndex={0}>
-                <table className="w-full min-w-[56rem] text-sm" aria-label={t("privacy.catalog.title")}>
+                <table className="w-full min-w-4xl text-sm" aria-label={t("privacy.catalog.title")}>
                   <thead>
                     <tr className="border-b border-border text-left text-caption text-muted-foreground">
                       <th className="py-2 font-medium">{t("privacy.catalog.categoryColumn")}</th>
@@ -472,7 +472,7 @@ export function Privacy() {
                 <p className="mt-3 text-caption text-muted-foreground">{t("privacy.erasure.empty")}</p>
               ) : (
                 <div className="mt-4 overflow-x-auto" role="region" aria-label={t("privacy.design.erasureScrollArea")} tabIndex={0}>
-                  <table className="w-full min-w-[42rem] text-sm" aria-label={t("privacy.erasure.tableCaption")}>
+                  <table className="w-full min-w-2xl text-sm" aria-label={t("privacy.erasure.tableCaption")}>
                     <thead>
                       <tr className="border-b border-border text-left text-caption text-muted-foreground">
                         <th className="py-2 font-medium">{t("privacy.subjectColumn")}</th>
@@ -629,7 +629,7 @@ export function Privacy() {
               <p className="text-caption text-muted-foreground">{t("privacy.retention.empty")}</p>
             ) : (
               <div className="overflow-x-auto" role="region" aria-label={t("privacy.design.retentionScrollArea")} tabIndex={0}>
-                <table className="w-full min-w-[42rem] text-sm" aria-label={t("privacy.retention.tableCaption")}>
+                <table className="w-full min-w-2xl text-sm" aria-label={t("privacy.retention.tableCaption")}>
                   <thead>
                     <tr className="border-b border-border text-left text-caption text-muted-foreground">
                       <th className="py-2 font-medium">{t("privacy.retention.runColumn")}</th>
@@ -963,7 +963,7 @@ function PrivacyFact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-control border border-border bg-muted/20 p-3">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-medium text-foreground">{value}</dd>
+      <dd className="mt-1 wrap-break-word font-medium text-foreground">{value}</dd>
     </div>
   );
 }

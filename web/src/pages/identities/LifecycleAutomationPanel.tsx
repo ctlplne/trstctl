@@ -125,7 +125,7 @@ export function LifecycleAutomationPanel({ onReviewRenewal }: Props) {
             <Metric label={t("identities.automation.failed")} value={plan.summary.renewal_failed + plan.summary.outbox_failed} />
           </div>
 
-          <div className="grid min-w-0 gap-2 break-words text-sm text-muted-foreground">
+          <div className="grid min-w-0 gap-2 wrap-break-word text-sm text-muted-foreground">
             <p>
               {t("identities.automation.maintenance")}
               {plan.scheduler.maintenance_deferral ? t("identities.automation.maintenanceDeferral", { reason: plan.scheduler.maintenance_deferral }) : ""}
@@ -151,11 +151,11 @@ export function LifecycleAutomationPanel({ onReviewRenewal }: Props) {
                         {item.identity_name.startsWith("*.") && (
                           <p className="mt-1 text-xs font-medium text-status-warning">{t("identities.wildcard.renewalGuard")}</p>
                         )}
-                        <p className="break-words text-xs text-muted-foreground">
+                        <p className="wrap-break-word text-xs text-muted-foreground">
                           {item.owner_name} · {item.reason}
                           {item.not_after ? t("identities.automation.expires", { time: formatDateTime(item.not_after) }) : ""}
                         </p>
-                        {item.blockers.length > 0 && <p className="mt-1 break-words text-xs text-risk-warning">{item.blockers.join(" ")}</p>}
+                        {item.blockers.length > 0 && <p className="mt-1 wrap-break-word text-xs text-risk-warning">{item.blockers.join(" ")}</p>}
                       </div>
                       <Button
                         type="button"
@@ -181,9 +181,9 @@ export function LifecycleAutomationPanel({ onReviewRenewal }: Props) {
           )}
 
           <details className="min-w-0 border-t border-border pt-3 text-sm">
-            <summary className="cursor-pointer break-words font-medium">{t("identities.automation.details")}</summary>
+            <summary className="cursor-pointer wrap-break-word font-medium">{t("identities.automation.details")}</summary>
             <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 text-muted-foreground md:grid-cols-2">
-              <div className="min-w-0 break-words">
+              <div className="min-w-0 wrap-break-word">
                 <p className="font-medium text-foreground">{t("identities.automation.queueHeading")}</p>
                 <p>
                   {t("identities.automation.queueCounts", {
@@ -194,16 +194,16 @@ export function LifecycleAutomationPanel({ onReviewRenewal }: Props) {
                 </p>
                 <p className="mt-2">{t("identities.automation.previewSafe")}</p>
               </div>
-              <div className="min-w-0 break-words">
+              <div className="min-w-0 wrap-break-word">
                 <p className="font-medium text-foreground">{t("identities.automation.recoveryHeading")}</p>
                 <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1">
-                  <Link className="break-words font-medium text-brand-accent hover:underline" to="/operations">
+                  <Link className="wrap-break-word font-medium text-brand-accent hover:underline" to="/operations">
                     {t("identities.automation.openRuns")}
                   </Link>
-                  <Link className="break-words font-medium text-brand-accent hover:underline" to="/connectors">
+                  <Link className="wrap-break-word font-medium text-brand-accent hover:underline" to="/connectors">
                     {t("identities.automation.openConnectors")}
                   </Link>
-                  <Link className="break-words font-medium text-brand-accent hover:underline" to="/notifications">
+                  <Link className="wrap-break-word font-medium text-brand-accent hover:underline" to="/notifications">
                     {t("identities.automation.openAlerts")}
                   </Link>
                 </div>

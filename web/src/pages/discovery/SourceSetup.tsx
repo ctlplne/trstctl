@@ -478,7 +478,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
                 {previewItems(planPreview).map((item) => (
                   <div key={item.label} className="min-w-0 border-s-2 border-border ps-3">
                     <dt className="text-caption text-muted-foreground">{item.label}</dt>
-                    <dd className="mt-0.5 break-words font-medium">{item.value}</dd>
+                    <dd className="mt-0.5 wrap-break-word font-medium">{item.value}</dd>
                   </div>
                 ))}
               </dl>
@@ -651,7 +651,7 @@ function NetworkFields({
         <section role="note" className="rounded-panel border border-brand-accent/25 bg-brand-accent/5 p-4 text-sm">
           <strong>{t("discovery.setup.newScopeTitle", { scope: values.segment.trim() })}</strong>
           <p className="mt-1 text-muted-foreground">{t("discovery.setup.newScopeBody")}</p>
-          <p className="mt-2 break-words font-mono text-xs text-muted-foreground">
+          <p className="mt-2 wrap-break-word font-mono text-xs text-muted-foreground">
             {proposedDeclarations.length > 0 ? proposedDeclarations.join(" · ") : t("discovery.setup.newScopeEmpty")}
           </p>
         </section>

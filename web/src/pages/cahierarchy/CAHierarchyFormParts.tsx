@@ -34,7 +34,7 @@ export function LabeledSelect({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-control border border-border bg-background px-3 py-2 outline-none transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
+        className="rounded-control border border-border bg-background px-3 py-2 outline-hidden transition-colors focus:border-focus focus:ring-2 focus:ring-focus/20"
       >
         {children}
       </select>
@@ -74,7 +74,7 @@ export function LabeledInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+        className="h-10 rounded-control border border-border bg-background px-3 text-sm outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
       />
     </div>
   );

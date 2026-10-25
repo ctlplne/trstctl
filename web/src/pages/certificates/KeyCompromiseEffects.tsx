@@ -81,7 +81,7 @@ export function KeyCompromiseEffects({ identityID, requestKey, initial }: { iden
               <p className="mt-1 text-xs">{t("certificates.revocation.compromiseAttempts", { count: read.revocation.attempts })}</p>
             ) : null}
             {read.revocation.last_error ? (
-              <p role="alert" className="mt-2 break-words text-sm text-status-warning">
+              <p role="alert" className="mt-2 wrap-break-word text-sm text-status-warning">
                 {read.revocation.last_error}
               </p>
             ) : null}

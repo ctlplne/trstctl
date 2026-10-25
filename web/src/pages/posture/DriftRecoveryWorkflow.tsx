@@ -182,7 +182,7 @@ function PlanFact({ label, value, mono = false }: { label: string; value: string
   return (
     <div className="min-w-0">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 break-words text-foreground ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
+      <dd className={`mt-0.5 wrap-break-word text-foreground ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
     </div>
   );
 }

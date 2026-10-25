@@ -351,7 +351,7 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-mono text-sm">{value}</dd>
+      <dd className="mt-1 wrap-break-word font-mono text-sm">{value}</dd>
     </div>
   );
 }

@@ -61,7 +61,7 @@ export function GrantSecretVerification({ token, secretNames, onDismiss }: { tok
             {t("secrets.grant.dismiss")}
           </Button>
         </div>
-        <code className="mt-2 block break-all rounded bg-background px-2 py-1 text-xs">{token}</code>
+        <code className="mt-2 block break-all rounded-sm bg-background px-2 py-1 text-xs">{token}</code>
         <p className="mt-1 text-xs text-muted-foreground">{t("secrets.grant.revealNote")}</p>
       </div>
       <Field label={t("secrets.grant.verifyName")} description={t("secrets.grant.verifyScope")} required>

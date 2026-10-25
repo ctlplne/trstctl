@@ -490,7 +490,7 @@ describe("operational console surface", () => {
     expect(within(dialog).getByText("Nothing has changed yet")).toBeInTheDocument();
     expect(dialog).toHaveClass("min-w-0", "overflow-x-hidden");
     expect(within(dialog).getByRole("region", { name: "Effect-free recovery preview" }).parentElement).toHaveClass("min-w-0", "grid-cols-1");
-    expect(within(dialog).getByText("Recover the known-good web TLS rule")).toHaveClass("break-words");
+    expect(within(dialog).getByText("Recover the known-good web TLS rule")).toHaveClass("wrap-break-word");
     expect(apiMock.restoreProfileVersion).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole("button", { name: "Go back" }));

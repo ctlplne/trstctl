@@ -655,7 +655,7 @@ export function SSHTrust() {
                       </div>
                       <div>
                         <dt className="text-caption text-muted-foreground">{t("sshTrust.attested.approver")}</dt>
-                        <dd className="mt-1 break-words font-mono text-sm">{exactAttestedPlan.approver}</dd>
+                        <dd className="mt-1 wrap-break-word font-mono text-sm">{exactAttestedPlan.approver}</dd>
                       </div>
                     </dl>
                     <p className="text-sm text-muted-foreground">{t("workloads.attested.proofDeferred")}</p>

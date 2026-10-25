@@ -554,7 +554,7 @@ export function AdminSystem() {
                 </dl>
                 <div className="grid gap-4">
                   <SystemTableRegion label={t("platform.scale.executionCaption")}>
-                    <table className="ui-table min-w-[44rem]">
+                    <table className="ui-table min-w-176">
                       <caption className="sr-only">{t("platform.scale.executionCaption")}</caption>
                       <thead>
                         <tr>
@@ -581,7 +581,7 @@ export function AdminSystem() {
                   </SystemTableRegion>
                   <div className="grid gap-4 xl:grid-cols-2">
                     <SystemTableRegion label={t("platform.scale.releaseCaption")}>
-                      <table className="ui-table min-w-[28rem]">
+                      <table className="ui-table min-w-md">
                         <caption className="sr-only">{t("platform.scale.releaseCaption")}</caption>
                         <thead>
                           <tr>
@@ -600,7 +600,7 @@ export function AdminSystem() {
                       </table>
                     </SystemTableRegion>
                     <SystemTableRegion label={t("platform.scale.bandCaption")}>
-                      <table className="ui-table min-w-[28rem]">
+                      <table className="ui-table min-w-md">
                         <caption className="sr-only">{t("platform.scale.bandCaption")}</caption>
                         <thead>
                           <tr>
@@ -674,7 +674,7 @@ export function AdminSystem() {
                 </dl>
                 <div className="grid gap-4">
                   <SystemTableRegion label={translateNow("source.enterprise.support.tier.table.0b375fcc18")}>
-                    <table className="ui-table min-w-[44rem]">
+                    <table className="ui-table min-w-176">
                       <caption className="sr-only">{translateNow("source.enterprise.support.tier.table.0b375fcc18")}</caption>
                       <thead>
                         <tr>
@@ -700,7 +700,7 @@ export function AdminSystem() {
                     </table>
                   </SystemTableRegion>
                   <SystemTableRegion label={translateNow("source.enterprise.sla.target.table.dfd20c29f8")}>
-                    <table className="ui-table min-w-[44rem]">
+                    <table className="ui-table min-w-176">
                       <caption className="sr-only">{translateNow("source.enterprise.sla.target.table.dfd20c29f8")}</caption>
                       <thead>
                         <tr>
@@ -723,7 +723,7 @@ export function AdminSystem() {
                     </table>
                   </SystemTableRegion>
                   <SystemTableRegion label={translateNow("source.professional.services.package.table.60626ecbca")}>
-                    <table className="ui-table min-w-[44rem]">
+                    <table className="ui-table min-w-176">
                       <caption className="sr-only">{translateNow("source.professional.services.package.table.60626ecbca")}</caption>
                       <thead>
                         <tr>
@@ -863,7 +863,7 @@ function SystemFact({ label, mono = false, value }: { label: string; mono?: bool
 function SystemTableRegion({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
-      className="min-w-0 max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+      className="min-w-0 max-w-full overflow-x-auto rounded-panel border border-border focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
       role="region"
       aria-label={label}
       tabIndex={0}
@@ -1052,7 +1052,7 @@ export function AdminEditions() {
         >
           {editions ? (
             <SystemTableRegion label={t("admin.editions.featureTable")}>
-              <table className="ui-table min-w-[34rem]">
+              <table className="ui-table min-w-136">
                 <caption className="sr-only">{t("admin.editions.featureTable")}</caption>
                 <thead>
                   <tr>
@@ -1156,7 +1156,7 @@ export function AdminEditions() {
                 <summary className="cursor-pointer font-semibold">{t("source.packaging.edition.matrix.265d443ef4")}</summary>
                 <div className="mt-4 grid gap-4">
                   <SystemTableRegion label={t("source.packaging.edition.matrix.265d443ef4")}>
-                    <table className="ui-table min-w-[36rem]">
+                    <table className="ui-table min-w-xl">
                       <caption className="sr-only">{t("source.packaging.edition.matrix.265d443ef4")}</caption>
                       <thead>
                         <tr>
@@ -1311,7 +1311,7 @@ function RegionalIssuanceEvidence({ plan, formatPolicy }: { plan: ActiveActiveIs
       {(plan.regions ?? []).length > 0 ? (
         <div className="mt-4 min-w-0">
           <SystemTableRegion label={t("platform.ha.regionCaption")}>
-            <table className="ui-table min-w-[44rem]">
+            <table className="ui-table min-w-176">
               <caption className="sr-only">{t("platform.ha.regionCaption")}</caption>
               <thead>
                 <tr>

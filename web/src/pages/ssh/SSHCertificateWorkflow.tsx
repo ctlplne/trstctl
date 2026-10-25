@@ -342,7 +342,7 @@ function Fact({ label, value, mono = false }: { label: string; value: string; mo
   return (
     <div className="min-w-0">
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words text-sm font-medium"}>{value}</dd>
+      <dd className={mono ? "break-all font-mono text-xs" : "wrap-break-word text-sm font-medium"}>{value}</dd>
     </div>
   );
 }

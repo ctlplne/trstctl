@@ -207,7 +207,7 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
                         <dl className="mt-3 grid gap-2 text-sm">
                           <div>
                             <dt className="text-caption text-muted-foreground">{t("owners.cockpit.route")}</dt>
-                            <dd className={route.length === 0 ? "font-medium text-risk-critical" : "break-words"}>
+                            <dd className={route.length === 0 ? "font-medium text-risk-critical" : "wrap-break-word"}>
                               {route.length === 0 ? t("owners.cockpit.route.missing") : route.join(" → ")}
                             </dd>
                           </div>
@@ -325,7 +325,7 @@ export function OwnershipCockpit(props: OwnershipCockpitProps) {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[50rem] text-left text-sm" aria-label={t("owners.cockpit.queue.ariaLabel")}>
+              <table className="w-full min-w-200 text-left text-sm" aria-label={t("owners.cockpit.queue.ariaLabel")}>
                 <thead className="border-y border-border bg-muted/50 text-caption text-muted-foreground">
                   <tr>
                     <th className="px-4 py-2 font-medium">{t("owners.cockpit.queue.select")}</th>

@@ -370,7 +370,7 @@ export function EndpointBindingWorkflow({
                 <ul className="mt-2 grid gap-2">
                   {renewingIdentities.map((identity) => (
                     <li key={identity.id}>
-                      <Link className="text-primary underline [overflow-wrap:anywhere]" to={`/identities?identity=${encodeURIComponent(identity.id)}`}>
+                      <Link className="text-primary underline wrap-anywhere" to={`/identities?identity=${encodeURIComponent(identity.id)}`}>
                         {t("connectors.binding.reviewRenewingOriginal", { name: identity.name, id: identity.id })}
                       </Link>
                     </li>
@@ -627,7 +627,7 @@ function Fact({ label, value, mono = false }: { label: string; value: string; mo
   return (
     <div className="min-w-0">
       <dt className="font-medium text-muted-foreground">{label}</dt>
-      <dd className={`${mono ? "font-mono text-xs" : ""} break-words`}>{value}</dd>
+      <dd className={`${mono ? "font-mono text-xs" : ""} wrap-break-word`}>{value}</dd>
     </div>
   );
 }

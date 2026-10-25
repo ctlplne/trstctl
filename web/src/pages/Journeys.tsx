@@ -314,7 +314,7 @@ export function Journeys() {
         <div
           id="journey-workspace"
           tabIndex={-1}
-          className="grid min-w-0 content-start gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          className="grid min-w-0 content-start gap-4 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus"
         >
           {active.id === "first-certificate" && (
             <form

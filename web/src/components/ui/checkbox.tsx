@@ -5,5 +5,5 @@ import { cn } from "@/lib/utils";
  * keeps its accessible checked/indeterminate behavior while this wrapper owns
  * the shared size, border, and React ref seam. */
 export const Checkbox = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type">>(function Checkbox({ className, ...props }, ref) {
-  return <input ref={ref} type="checkbox" className={cn("h-4 w-4 shrink-0 rounded border-border", className)} {...props} />;
+  return <input ref={ref} type="checkbox" className={cn("h-4 w-4 shrink-0 rounded-sm border-border", className)} {...props} />;
 });

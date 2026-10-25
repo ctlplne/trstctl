@@ -579,7 +579,7 @@ export function RevealPanel({ title, value, children, onDismiss }: { title: stri
           {translateNow("source.dismiss.48845bff33")}
         </Button>
       </div>
-      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded bg-muted px-3 py-2 font-mono text-xs">{value}</pre>
+      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-sm bg-muted px-3 py-2 font-mono text-xs">{value}</pre>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" variant="outline" onClick={() => void copyValue()}>
           <Copy className="h-4 w-4" aria-hidden="true" />
@@ -617,7 +617,7 @@ export function Snippet({ title, text }: { title: string; text: string }) {
           {t("secrets.developer.copy")}
         </Button>
       </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted px-3 py-2 font-mono text-xs">{text}</pre>
+      <pre className="overflow-x-auto whitespace-pre-wrap rounded-sm bg-muted px-3 py-2 font-mono text-xs">{text}</pre>
       {copied && (
         <p role="status" className="text-xs text-status-success">
           {t("secrets.developer.copied")}
@@ -725,7 +725,7 @@ export function RepositoryScanPosture({ posture }: { posture: SecretRepositorySc
         <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
       </div>
       <div className="min-w-0 max-w-full overflow-x-auto">
-        <table className="ui-table min-w-[52rem]">
+        <table className="ui-table min-w-208">
           <caption className="sr-only">{t("secrets.repoScan.providerCaption")}</caption>
           <thead>
             <tr>
@@ -787,7 +787,7 @@ export function ThirdPartyScanPosture({ posture }: { posture: ThirdPartySecretSc
         <span className="text-muted-foreground">{t("secrets.repoScan.ruleFloor", { scanner: posture.scanner, rules: posture.minimum_rules_active })}</span>
       </div>
       <div className="min-w-0 max-w-full overflow-x-auto">
-        <table className="ui-table min-w-[52rem]">
+        <table className="ui-table min-w-208">
           <caption className="sr-only">{t("secrets.thirdPartyScan.providerCaption")}</caption>
           <thead>
             <tr>

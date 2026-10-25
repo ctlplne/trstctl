@@ -10,7 +10,7 @@ export function AdminHeaderActions() {
   return (
     <details className="group relative">
       <summary className={cn(buttonVariants({ variant: "outline" }), "cursor-pointer list-none marker:hidden")}>{t("dashboard.moreActions")}</summary>
-      <div className="absolute end-0 z-30 mt-2 grid min-w-56 overflow-hidden rounded-panel border border-border bg-card p-1 shadow-elevation2">
+      <div className="absolute inset-e-0 z-30 mt-2 grid min-w-56 overflow-hidden rounded-panel border border-border bg-card p-1 shadow-elevation2">
         <Link to="/privacy" className="flex items-center gap-2 rounded-control px-3 py-2 text-sm hover:bg-muted/70">
           {t("nav.item.privacy")}
         </Link>

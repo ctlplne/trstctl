@@ -39,7 +39,7 @@ export function ModuleKpiStrip({ ariaLabel, kpis }: { ariaLabel: string; kpis: M
         <Link
           key={kpi.id}
           to={kpi.to}
-          className="group block min-w-0 p-4 transition-colors hover:bg-muted/55 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+          className="group block min-w-0 p-4 transition-colors hover:bg-muted/55 focus-visible:relative focus-visible:z-10 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
         >
           <span className="block text-caption font-medium text-muted-foreground">{kpi.label}</span>
           <span className="mt-1 block text-heading font-semibold tracking-tight tabular-nums">

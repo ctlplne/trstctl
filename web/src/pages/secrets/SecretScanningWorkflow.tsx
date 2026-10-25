@@ -357,7 +357,7 @@ export function SecretScanningWorkflow({
               ))}
             </div>
             <div className="overflow-x-auto">
-              <table className="ui-table min-w-[48rem]">
+              <table className="ui-table min-w-3xl">
                 <caption className="sr-only">{translateNow("source.secret.scan.findings.3462f78805")}</caption>
                 <thead>
                   <tr>
@@ -470,7 +470,7 @@ export function SecretScanningWorkflow({
                 <label className="grid gap-1 text-sm md:col-span-2">
                   <span className="font-medium">{t("secrets.thirdPartyScan.signerKey")}</span>
                   <textarea
-                    className="min-h-[5.5rem] rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                    className="min-h-22 rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
                     value={thirdPartySignerKey}
                     onChange={(event) => setThirdPartySignerKey(event.target.value)}
                     placeholder={t("secrets.thirdPartyScan.signerKeyPlaceholder")}

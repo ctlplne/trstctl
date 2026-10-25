@@ -744,7 +744,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 break-words font-medium">{value}</dd>
+      <dd className="mt-0.5 wrap-break-word font-medium">{value}</dd>
     </div>
   );
 }

@@ -1541,7 +1541,7 @@ export function Incidents() {
 function ResponseIntegrationDestinationTable({ dispatch, t }: { dispatch: ResponseIntegrationDispatch; t: I18nContextValue["t"] }) {
   return (
     <div className="mt-3 overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[54rem]">
+      <table className="ui-table min-w-216">
         <caption className="sr-only">{t("incidents.response.tableCaption")}</caption>
         <thead>
           <tr>
@@ -1574,7 +1574,7 @@ function RemediationPlaybookRunTable({ runs, t }: { runs: RemediationPlaybookRun
   }
   return (
     <div className="overflow-x-auto rounded-panel border border-border">
-      <table className="ui-table min-w-[64rem]">
+      <table className="ui-table min-w-5xl">
         <caption className="sr-only">{t("incidents.playbooks.tableCaption")}</caption>
         <thead>
           <tr>
@@ -1622,7 +1622,7 @@ function IncidentExecutionTable({ executions }: { executions: IncidentExecution[
   return (
     <div className="grid gap-3">
       <div className="overflow-x-auto rounded-panel border border-border">
-        <table className="ui-table min-w-[68rem]">
+        <table className="ui-table min-w-272">
           <caption className="sr-only">{translateNow("source.incident.execution.evidence.ed369964a3")}</caption>
           <thead>
             <tr>
@@ -1769,7 +1769,7 @@ const evidenceRunColumns: DataGridColumn<RemediationPlaybookRun>[] = [
     id: "target",
     header: "Target",
     cell: (run) => (
-      <span className="block max-w-[14rem] truncate font-mono text-xs" title={run.target_identity_id || run.inventory_id || run.target || ""}>
+      <span className="block max-w-56 truncate font-mono text-xs" title={run.target_identity_id || run.inventory_id || run.target || ""}>
         {run.target_identity_id || run.inventory_id || run.target || "-"}
       </span>
     ),
@@ -1871,7 +1871,7 @@ function IncidentDetailRow({ term, children, mono = false }: { term: string; chi
   return (
     <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
       <dt className="font-medium text-muted-foreground">{term}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+      <dd className={mono ? "break-all font-mono text-xs" : "wrap-break-word"}>{children}</dd>
     </div>
   );
 }

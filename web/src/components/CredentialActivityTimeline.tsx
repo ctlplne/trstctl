@@ -78,8 +78,8 @@ export function CredentialActivityTimeline({
         {rows.map((row) => (
           <li key={row.label} className="min-w-0 rounded-md border border-border p-2">
             <p className="font-medium">{row.label}</p>
-            <p className="mt-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{row.value}</p>
-            {row.detail && <p className="mt-2 break-words text-xs [overflow-wrap:anywhere]">{row.detail}</p>}
+            <p className="mt-1 wrap-break-word text-xs text-muted-foreground wrap-anywhere">{row.value}</p>
+            {row.detail && <p className="mt-2 wrap-break-word text-xs wrap-anywhere">{row.detail}</p>}
             {row.jobId != null && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {translateNow("operations.detail.jobId")}: <Num>{row.jobId}</Num>

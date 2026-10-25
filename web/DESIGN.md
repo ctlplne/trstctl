@@ -19,7 +19,7 @@ the same change.
 | Layer                                                     | File                                                                                                                                          |
 | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tokens (colors, type, density, radius, elevation, motion) | `src/index.css` (`:root` + `.dark`)                                                                                                           |
-| Tailwind mapping (every token becomes a utility)          | `tailwind.config.js`                                                                                                                          |
+| Tailwind mapping (every token becomes a utility)          | `src/index.css` (`@theme` block)                                                                                                              |
 | Primitives                                                | `src/components/ui/` (Button, Card, Skeleton)                                                                                                 |
 | Shared components                                         | `src/components/` (BrandMark, PageHeader, PageTabs, StatusBadge, CredentialChip, DataGrid, DetailDrawer, Dialog, EmptyState, StatePrimitives) |
 | Typography primitives (S-C9)                              | `src/components/typography.tsx` (Eyebrow — the one tracked micro-label; Num — inline mono tabular data values)                                |

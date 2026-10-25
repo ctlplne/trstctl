@@ -41,7 +41,7 @@ export function EmptyState({
       data-state-primitive="empty"
       className={cn("border-y border-dashed border-border bg-card/35 px-5 py-8 text-center sm:px-8", "flex flex-col items-center justify-center", className)}
     >
-      {icon ? <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary/[0.08] text-brand-accent">{icon}</div> : null}
+      {icon ? <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-primary/8 text-brand-accent">{icon}</div> : null}
       <Heading className="mb-1 text-title font-semibold">{title}</Heading>
       {children && <p className="mx-auto mb-5 max-w-md text-sm text-muted-foreground">{children}</p>}
       {(primary || secondaryAction) && (
@@ -57,8 +57,8 @@ export function EmptyState({
 function EmptyStateActionControl({ action, variant }: { action: EmptyStateAction; variant: "primary" | "secondary" }) {
   const className =
     variant === "primary"
-      ? "inline-flex min-h-10 items-center justify-center gap-2 rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      : "inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-brand-accent/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+      ? "inline-flex min-h-10 items-center justify-center gap-2 rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      : "inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:border-brand-accent/40 hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background";
   if (action.to) {
     return (
       <Link to={action.to} className={className}>

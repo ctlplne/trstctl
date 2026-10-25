@@ -80,7 +80,7 @@ function TrustFact({ label, value, mono = false }: { label: string; value: strin
   return (
     <div className="min-w-0">
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-0.5 ${mono ? "break-all font-mono text-xs" : "break-words font-medium"}`}>{value}</dd>
+      <dd className={`mt-0.5 ${mono ? "break-all font-mono text-xs" : "wrap-break-word font-medium"}`}>{value}</dd>
     </div>
   );
 }

@@ -9,6 +9,11 @@ content security policy. Support is declared by evidence, not by intent:
 | Gecko | Firefox (current and ESR) | CI matrix; the cold design-partner evaluation of 2026-09-06 drove every journey in Firefox from an isolated profile with TLS validation on |
 | WebKit | Safari (current) | CI matrix |
 
+The console's stylesheet is built with Tailwind CSS 4, which relies on cascade
+layers, registered custom properties and `color-mix()`. That sets a floor of
+Safari 16.4, Chrome and Edge 111, and Firefox 128; every browser in the table is
+above it.
+
 What "supported" means here: the primary journeys (setup, discovery, ownership,
 connectors and endpoint lifecycle, identities, certificates, alert routing, audit
 export) render and operate with keyboard and pointer, at 200% zoom and in a

@@ -95,7 +95,7 @@ export function CryptoReadinessPanel() {
                 <tbody>
                   {items.map((row) => (
                     <tr key={row.asset.id}>
-                      <td className="max-w-[14rem]">
+                      <td className="max-w-56">
                         <span className={row.quantum_vulnerable || row.out_of_policy ? "font-medium text-status-danger" : "font-medium"}>{row.asset.name}</span>
                         <span className="mt-1 block text-xs text-muted-foreground">{(row.exhibitors ?? []).map((e) => e.name).join(", ")}</span>
                       </td>
@@ -119,7 +119,7 @@ export function CryptoReadinessPanel() {
                           </span>
                         ))}
                       </td>
-                      <td className="max-w-[26rem] align-top text-xs text-muted-foreground">{row.recommendation}</td>
+                      <td className="max-w-104 align-top text-xs text-muted-foreground">{row.recommendation}</td>
                     </tr>
                   ))}
                 </tbody>

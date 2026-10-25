@@ -479,7 +479,7 @@ export function Dashboard() {
             <summary className="cursor-pointer rounded-control border border-border px-3 py-2 text-sm font-medium hover:bg-muted/60">
               {t("dashboard.moreActions")}
             </summary>
-            <div className="absolute end-0 top-11 z-10 grid min-w-56 gap-1 rounded-panel border border-border bg-card p-2 shadow-elevation2">
+            <div className="absolute inset-e-0 top-11 z-10 grid min-w-56 gap-1 rounded-panel border border-border bg-card p-2 shadow-elevation2">
               <Link to="/discovery" className="rounded-control px-3 py-2 text-sm hover:bg-muted">
                 {translateNow("source.discover.d4a33d5b78")}
               </Link>
@@ -972,8 +972,8 @@ function ActionLink({ to, icon, children, primary }: { to: string; icon: ReactNo
       to={to}
       className={
         primary
-          ? "inline-flex min-h-9 items-center gap-2 rounded-control bg-primary px-3 py-2 text-body font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          : "inline-flex min-h-9 items-center gap-2 rounded-control border border-border bg-card px-3 py-2 text-body font-medium transition-colors hover:border-brand-accent/40 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          ? "inline-flex min-h-9 items-center gap-2 rounded-control bg-primary px-3 py-2 text-body font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          : "inline-flex min-h-9 items-center gap-2 rounded-control border border-border bg-card px-3 py-2 text-body font-medium transition-colors hover:border-brand-accent/40 hover:bg-muted/60 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       }
     >
       <span className={primary ? "" : "text-brand-accent"}>{icon}</span>
@@ -1046,7 +1046,7 @@ function Kpi({
   return to ? (
     <Link
       to={to}
-      className="group block rounded-panel focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="group block rounded-panel focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       {inner}
     </Link>

@@ -15,7 +15,9 @@ import { describeStatus, expiryBandForDate, expiryBands, riskBand, validityBandF
 
 const webRoot = process.cwd();
 const css = readFileSync(path.join(webRoot, "src/index.css"), "utf8");
-const tailwind = readFileSync(path.join(webRoot, "tailwind.config.js"), "utf8");
+// Tailwind CSS 4 keeps the theme in the stylesheet's @theme block, not a JS config.
+const themeStart = css.indexOf("@theme {");
+const tailwindTheme = themeStart >= 0 ? css.slice(themeStart) : "";
 const agentsSource = readFileSync(path.join(webRoot, "src/pages/Agents.tsx"), "utf8");
 const certsSource = readFileSync(path.join(webRoot, "src/pages/Certificates.tsx"), "utf8");
 const riskSource = readFileSync(path.join(webRoot, "src/pages/Risk.tsx"), "utf8");
@@ -152,8 +154,16 @@ describe("Clarity/Console design-system foundation", () => {
       expect(css).toContain(token);
     }
 
-    for (const themeKey of ["brand", "operate", "observe", "disclose", "risk", "fontSize", "elevation2"]) {
-      expect(tailwind).toContain(themeKey);
+    for (const themeKey of [
+      "--color-brand-accent",
+      "--color-operate",
+      "--color-observe",
+      "--color-disclose",
+      "--color-risk-critical",
+      "--text-heading",
+      "--shadow-elevation2",
+    ]) {
+      expect(tailwindTheme).toContain(themeKey);
     }
   });
 
@@ -169,15 +179,15 @@ describe("Clarity/Console design-system foundation", () => {
   });
 
   it("keeps shared dialog motion from replacing each panel's positioning transform", () => {
-    const panelStart = tailwind.indexOf('"panel-in": {');
-    const drawerStart = tailwind.indexOf('"drawer-in": {', panelStart);
+    const panelStart = tailwindTheme.indexOf("@keyframes panel-in {");
+    const drawerStart = tailwindTheme.indexOf("@keyframes drawer-in {", panelStart);
     expect(panelStart).toBeGreaterThanOrEqual(0);
     expect(drawerStart).toBeGreaterThan(panelStart);
 
     // A transform inside the keyframe wins over Tailwind's centering
     // transform after animation-fill-mode: both. The result looks centered
     // during unit tests but sits half a panel off-screen in a real browser.
-    expect(tailwind.slice(panelStart, drawerStart)).not.toContain("transform:");
+    expect(tailwindTheme.slice(panelStart, drawerStart)).not.toContain("transform:");
   });
 
   it("defines every ui-* component class that source references (R-01 guard)", () => {
@@ -200,7 +210,8 @@ describe("Clarity/Console design-system foundation", () => {
       }
     };
     walk(path.join(webRoot, "src"));
-    const defined = new Set([...css.matchAll(/\.(ui-[a-z][a-z0-9-]*)/g)].map((m) => m[1]));
+    // A rule is a class selector or, since Tailwind CSS 4, an @utility definition.
+    const defined = new Set([...css.matchAll(/(?:\.|@utility\s+)(ui-[a-z][a-z0-9-]*)/g)].map((m) => m[1]));
     const missing = [...referenced].filter((name) => !defined.has(name)).sort();
     expect(referenced.size).toBeGreaterThanOrEqual(3); // ui-input, ui-panel, ui-table
     expect(missing).toEqual([]);

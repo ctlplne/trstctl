@@ -1359,7 +1359,7 @@ export function Discovery() {
 
                 {(coverageReport.segments ?? []).length > 0 && (
                   <div className="overflow-x-auto">
-                    <table className="ui-table min-w-[48rem]">
+                    <table className="ui-table min-w-3xl">
                       <caption className="sr-only">{t("discovery.coverage.segmentsCaption")}</caption>
                       <thead>
                         <tr>
@@ -1375,7 +1375,7 @@ export function Discovery() {
                             <td className="font-mono text-xs">{seg.name}</td>
                             <td className={seg.status === "swept" ? undefined : "text-status-warning"}>{seg.status}</td>
                             <td className="text-sm">{seg.last_swept_at ? formatDateTime(seg.last_swept_at) : t("discovery.coverage.never")}</td>
-                            <td className="max-w-[28rem] text-sm text-muted-foreground">
+                            <td className="max-w-md text-sm text-muted-foreground">
                               {seg.status === "excluded" ? seg.exclusion_reason : (seg.ranges ?? []).join(", ")}
                             </td>
                           </tr>
@@ -1399,7 +1399,7 @@ export function Discovery() {
                   </div>
                 )}
                 <div className="overflow-x-auto">
-                  <table className="ui-table min-w-[54rem]">
+                  <table className="ui-table min-w-216">
                     <caption className="sr-only">{t("discovery.coverage.caption")}</caption>
                     <thead>
                       <tr>
@@ -1413,7 +1413,7 @@ export function Discovery() {
                         <tr key={row.class}>
                           <td className="font-mono text-xs">{row.class}</td>
                           <td>{row.status}</td>
-                          <td className="max-w-[36rem] text-sm">
+                          <td className="max-w-xl text-sm">
                             {row.status === "OBSERVED"
                               ? t("discovery.coverage.observedBy", { sources: (row.observed_by ?? []).join(", ") })
                               : [row.reason, row.action].filter(Boolean).join(" — ")}
@@ -1696,7 +1696,7 @@ function StructuredSourceField({
         <input
           id={id}
           type="checkbox"
-          className="h-4 w-4 rounded border-border"
+          className="h-4 w-4 rounded-sm border-border"
           checked={value === true}
           onChange={(event) => onChange(event.target.checked)}
         />
@@ -1764,7 +1764,7 @@ function ShadowPosturePanel({ posture }: { posture: NHIShadowPosture | null }) {
           <ShadowBreakdown title={t("discovery.shadow.surfaceBreakdown")} entries={surfaceCounts} />
         </div>
         <div className="ui-panel overflow-x-auto">
-          <table className="ui-table min-w-[54rem]">
+          <table className="ui-table min-w-216">
             <caption className="sr-only">{t("discovery.shadow.caption")}</caption>
             <thead>
               <tr>
@@ -1791,7 +1791,7 @@ function ShadowPosturePanel({ posture }: { posture: NHIShadowPosture | null }) {
                     <td>
                       <StatusBadge vocabulary="risk" value={finding.severity} />
                     </td>
-                    <td className="max-w-[26rem] text-sm">{finding.recommendation}</td>
+                    <td className="max-w-104 text-sm">{finding.recommendation}</td>
                   </tr>
                 ))
               )}
@@ -1822,7 +1822,7 @@ function ShadowBreakdown({ title, entries }: { title: string; entries: { key: st
         <dl className="grid gap-2">
           {entries.map((entry) => (
             <div key={entry.key} className="flex items-center justify-between gap-3 text-sm">
-              <dt className="break-words text-muted-foreground">{entry.key}</dt>
+              <dt className="wrap-break-word text-muted-foreground">{entry.key}</dt>
               <dd className="font-semibold">{entry.value}</dd>
             </div>
           ))}
@@ -2773,7 +2773,7 @@ function FindingDetail({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1">
       <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="break-words text-sm font-medium">{value}</dd>
+      <dd className="wrap-break-word text-sm font-medium">{value}</dd>
     </div>
   );
 }

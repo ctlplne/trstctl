@@ -619,7 +619,7 @@ export function Connectors() {
               ) : (
                 targets && (
                   <ScrollableTableRegion label={t("connectors.design.destinationsTable")}>
-                    <table className="ui-table min-w-[60rem]">
+                    <table className="ui-table min-w-240">
                       <caption className="sr-only">{t("connectors.design.destinationsTable")}</caption>
                       <thead>
                         <tr>
@@ -904,7 +904,7 @@ export function Connectors() {
                 </EmptyState>
               ) : (
                 <ScrollableTableRegion label={t("connectors.design.capabilitiesTable")}>
-                  <table className="ui-table min-w-[54rem]">
+                  <table className="ui-table min-w-216">
                     <caption className="sr-only">{t("connectors.design.capabilitiesTable")}</caption>
                     <thead>
                       <tr>
@@ -971,7 +971,7 @@ export function Connectors() {
                           For an appliance the whole implementation IS an API
                           conversation, so conformance alone says nothing about
                           whether the device would have accepted the call. */}
-                          <td className="max-w-[30rem]">
+                          <td className="max-w-120">
                             {connector.device_proven ? (
                               <span className="font-medium text-status-success">{translateNow("source.device.proven.e1dev00002")}</span>
                             ) : connector.target_vantage === "network_relay" ? (
@@ -1007,7 +1007,7 @@ export function Connectors() {
                           {/* E1: all thirteen accepted families use the API's closed
                           disposition. The runtime executor census must never
                           decide which rows are visible: that was the AUD-33 bug. */}
-                          <td className="max-w-[26rem]">
+                          <td className="max-w-104">
                             {!connector.relay_parity ? (
                               /* This connector is genuinely outside E1's thirteen,
                              not merely absent from the current relay binary. */
@@ -1061,7 +1061,7 @@ export function Connectors() {
                 <EmptyState title={translateNow("connectors.relayPlugins.emptyTitle")}>{translateNow("connectors.relayPlugins.emptyBody")}</EmptyState>
               ) : (
                 <ScrollableTableRegion label={translateNow("connectors.relayPlugins.title")}>
-                  <table className="ui-table min-w-[76rem]">
+                  <table className="ui-table min-w-304">
                     <caption className="sr-only">{translateNow("connectors.relayPlugins.title")}</caption>
                     <thead>
                       <tr>
@@ -1105,7 +1105,7 @@ export function Connectors() {
                               ) : null}
                             </td>
                             <td className="font-mono text-xs">{plugin?.execution_context ?? "—"}</td>
-                            <td className="max-w-[22rem]">
+                            <td className="max-w-88">
                               {plugin?.grants.map((grant) => (
                                 <span key={grant.capability} className="block text-xs">
                                   <span className="font-mono font-semibold">{grant.capability}</span>{" "}
@@ -1183,7 +1183,7 @@ export function Connectors() {
                     </p>
                   </div>
                   <ScrollableTableRegion label={translateNow("source.endpoint.key.custody.caption.b2cus00004")}>
-                    <table className="ui-table min-w-[56rem]">
+                    <table className="ui-table min-w-4xl">
                       <caption className="sr-only">{translateNow("source.endpoint.key.custody.caption.b2cus00004")}</caption>
                       <thead>
                         <tr>
@@ -1244,7 +1244,7 @@ export function Connectors() {
                     <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.endpoint.verification.help.d2ver00002")}</p>
                   </div>
                   <ScrollableTableRegion label={translateNow("source.endpoint.verification.caption.d2ver00003")}>
-                    <table className="ui-table min-w-[72rem]">
+                    <table className="ui-table min-w-6xl">
                       <caption className="sr-only">{translateNow("source.endpoint.verification.caption.d2ver00003")}</caption>
                       <thead>
                         <tr>
@@ -1346,7 +1346,7 @@ export function Connectors() {
                 <EmptyState title={t("parity.noOutboxCircuitBreakers_b8a7be")}>{t("parity.noOutboxDestinationHasRecordedCircuit_1c248f")}</EmptyState>
               ) : (
                 <ScrollableTableRegion label={t("parity.outboxCircuitBreakers_278ec6")}>
-                  <table className="ui-table min-w-[48rem]">
+                  <table className="ui-table min-w-3xl">
                     <caption className="sr-only">{t("parity.outboxCircuitBreakers_278ec6")}</caption>
                     <thead>
                       <tr>
@@ -1367,7 +1367,7 @@ export function Connectors() {
                           </td>
                           <td>{circuit.failures}</td>
                           <td>{circuit.open_until ? formatDateTime(circuit.open_until) : "-"}</td>
-                          <td className="break-words">{circuit.last_error || "-"}</td>
+                          <td className="wrap-break-word">{circuit.last_error || "-"}</td>
                           <td>{formatDateTime(circuit.updated_at)}</td>
                         </tr>
                       ))}
@@ -1737,7 +1737,7 @@ function ConnectorDetails({ title, open, onToggle, children }: { title: string; 
 function ScrollableTableRegion({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div
-      className="ui-panel w-full min-w-0 max-w-full overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+      className="ui-panel w-full min-w-0 max-w-full overflow-x-auto focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
       role="region"
       aria-label={label}
       tabIndex={0}
@@ -1752,7 +1752,7 @@ function ConnectorDetailRow({ children, mono = false, term }: { term: string; ch
   return (
     <div className="grid gap-1 sm:grid-cols-[11rem_1fr] sm:gap-2">
       <dt className="font-medium text-muted-foreground">{term}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+      <dd className={mono ? "break-all font-mono text-xs" : "wrap-break-word"}>{children}</dd>
     </div>
   );
 }

@@ -134,7 +134,7 @@ export function ExistingCAImportWorkflow({
                   rows={6}
                   value={form.issuerCertificatePEM}
                   onChange={(event) => onFormChange({ issuerCertificatePEM: event.target.value })}
-                  className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+                  className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
                   placeholder={t("caHierarchy.offline.placeholderCertificate")}
                 />
               </div>
@@ -174,7 +174,7 @@ export function ExistingCAImportWorkflow({
               rows={6}
               value={form.certificatePEM}
               onChange={(event) => onFormChange({ certificatePEM: event.target.value })}
-              className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-none transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
+              className="min-h-36 rounded-control border border-border bg-background px-3 py-2 font-mono text-xs outline-hidden transition-colors placeholder:text-muted-foreground focus:border-focus focus:ring-2 focus:ring-focus/20"
               placeholder={t("caHierarchy.offline.placeholderCertificate")}
             />
           </div>

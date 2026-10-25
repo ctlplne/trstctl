@@ -345,7 +345,7 @@ export function Styleguide() {
               <div className="flex flex-wrap gap-2">
                 {chartTones.map((tone) => (
                   <span key={tone} className="inline-flex items-center gap-1.5 font-mono text-caption">
-                    <span aria-hidden="true" className="h-3 w-3 rounded-sm" style={{ background: chartToneColor(tone) }} />
+                    <span aria-hidden="true" className="h-3 w-3 rounded-xs" style={{ background: chartToneColor(tone) }} />
                     {tone}
                   </span>
                 ))}

@@ -84,16 +84,16 @@ export function RunTable({
           return <span className="text-muted-foreground">—</span>;
         }
         return (
-          <div className="max-w-[28rem] space-y-1 text-xs">
+          <div className="max-w-md space-y-1 text-xs">
             {run.error ? (
-              <span className="block break-words text-risk-critical" title={run.error}>
+              <span className="block wrap-break-word text-risk-critical" title={run.error}>
                 {run.error}
               </span>
             ) : null}
             {unresolved.length > 0 ? (
               <ul className="list-none space-y-0.5 pl-0 font-mono" aria-label={translateNow("discovery.run.targetOutcomes")}>
                 {unresolved.map((result) => (
-                  <li key={`${run.id}:${result.target}`} className="break-words">
+                  <li key={`${run.id}:${result.target}`} className="wrap-break-word">
                     <span className="text-foreground">{result.target}</span> <StatusBadge vocabulary="lifecycle" value={result.status} />
                     {/* A reason the run summary already states is not repeated under every target. */}
                     {result.error && !run.error?.includes(result.error) ? <span className="text-muted-foreground"> {result.error}</span> : null}

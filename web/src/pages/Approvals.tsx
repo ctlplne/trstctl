@@ -913,7 +913,7 @@ function ReviewFact({ label, value, mono = false, className = "" }: { label: str
   return (
     <div className={className}>
       <dt className="text-caption font-medium text-muted-foreground">{label}</dt>
-      <dd className={`mt-1 break-words text-sm ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
+      <dd className={`mt-1 wrap-break-word text-sm ${mono ? "font-mono text-xs" : ""}`}>{value}</dd>
     </div>
   );
 }

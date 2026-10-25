@@ -138,7 +138,7 @@ function WizardBody({ pollMs }: { pollMs: number }) {
           <div className="flex flex-wrap gap-2">
             <Link
               to="/certificates"
-              className="inline-flex min-h-10 items-center justify-center rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="inline-flex min-h-10 items-center justify-center rounded-control bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-elevation1 transition hover:brightness-110 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {translateNow("source.track.and.renew.certificates.f0f36882b6")}
             </Link>

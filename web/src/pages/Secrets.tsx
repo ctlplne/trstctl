@@ -2013,7 +2013,7 @@ export function Secrets() {
               )}
               {canReadTokens && tokenRows && (
                 <ScrollableTableRegion label={t("secrets.grant.ledgerCaption")}>
-                  <table className="ui-table min-w-[44rem]">
+                  <table className="ui-table min-w-176">
                     <caption className="sr-only">{t("secrets.grant.ledgerCaption")}</caption>
                     <thead>
                       <tr>
@@ -2091,7 +2091,7 @@ export function Secrets() {
                   <p className="text-sm text-muted-foreground">{machineAuthMethodList.unavailable?.detail ?? t("secrets.methods.unavailable")}</p>
                 ) : (
                   <ScrollableTableRegion className="rounded-panel" label={t("secrets.methods.heading")}>
-                    <table className="ui-table min-w-[52rem]">
+                    <table className="ui-table min-w-208">
                       <caption className="sr-only">{t("secrets.methods.heading")}</caption>
                       <thead>
                         <tr>
@@ -2161,7 +2161,7 @@ export function Secrets() {
                   <p className="text-sm text-muted-foreground">{machineSessionList.unavailable?.detail ?? t("secrets.sessions.unavailable")}</p>
                 ) : (
                   <ScrollableTableRegion className="rounded-panel" label={t("secrets.sessions.heading")}>
-                    <table className="ui-table min-w-[52rem]">
+                    <table className="ui-table min-w-208">
                       <caption className="sr-only">{t("secrets.sessions.heading")}</caption>
                       <thead>
                         <tr>
@@ -2553,7 +2553,7 @@ export function Secrets() {
                   )}
                   {credential.state === "issued" && credential.certificate_pem && (
                     <div className="grid gap-2">
-                      <pre className="max-h-48 overflow-auto rounded bg-muted px-3 py-2 font-mono text-xs">{credential.certificate_pem}</pre>
+                      <pre className="max-h-48 overflow-auto rounded-sm bg-muted px-3 py-2 font-mono text-xs">{credential.certificate_pem}</pre>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
@@ -2683,7 +2683,7 @@ export function Secrets() {
                       </span>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="ui-table min-w-[58rem]">
+                      <table className="ui-table min-w-232">
                         <caption className="sr-only">{t("secrets.cloudManagers.caption")}</caption>
                         <thead>
                           <tr>
@@ -2736,7 +2736,7 @@ export function Secrets() {
                       <span className="text-muted-foreground">{t("secrets.sync.configuredCount", { count: syncCatalog.configured_targets.length })}</span>
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="ui-table min-w-[54rem]">
+                      <table className="ui-table min-w-216">
                         <caption className="sr-only">{t("secrets.sync.catalogCaption")}</caption>
                         <thead>
                           <tr>

@@ -546,7 +546,7 @@ export function Agents() {
               <dl className="grid gap-2 sm:grid-cols-2">
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.identity")}</dt>
-                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.allowed_identity || t("agents.enrollment.tenantWide")}</dd>
+                  <dd className="wrap-break-word font-mono text-xs">{currentEnrollmentPlan.allowed_identity || t("agents.enrollment.tenantWide")}</dd>
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.roles")}</dt>
@@ -554,15 +554,15 @@ export function Agents() {
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.connection")}</dt>
-                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.agent_server || t("agents.enrollment.notConfigured")}</dd>
+                  <dd className="wrap-break-word font-mono text-xs">{currentEnrollmentPlan.agent_server || t("agents.enrollment.notConfigured")}</dd>
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.tlsName")}</dt>
-                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.agent_server_name || t("agents.enrollment.notConfigured")}</dd>
+                  <dd className="wrap-break-word font-mono text-xs">{currentEnrollmentPlan.agent_server_name || t("agents.enrollment.notConfigured")}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.permissions")}</dt>
-                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.required_permissions.join(", ")}</dd>
+                  <dd className="wrap-break-word font-mono text-xs">{currentEnrollmentPlan.required_permissions.join(", ")}</dd>
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.renewalStatus")}</dt>
@@ -572,7 +572,7 @@ export function Agents() {
                 </div>
                 <div>
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.renewalPath")}</dt>
-                  <dd className="break-words font-mono text-xs">{currentEnrollmentPlan.renewal_path}</dd>
+                  <dd className="wrap-break-word font-mono text-xs">{currentEnrollmentPlan.renewal_path}</dd>
                 </div>
                 <div className="sm:col-span-2">
                   <dt className="font-medium text-muted-foreground">{t("agents.enrollment.renewalAuthentication")}</dt>
@@ -624,7 +624,7 @@ export function Agents() {
                         {installPlan.blockedReason}
                       </p>
                     ) : (
-                      <code className="block overflow-x-auto rounded bg-muted px-3 py-2 text-xs">{command}</code>
+                      <code className="block overflow-x-auto rounded-sm bg-muted px-3 py-2 text-xs">{command}</code>
                     )}
                   </dd>
                 </div>
@@ -773,7 +773,7 @@ export function Agents() {
               <input
                 id="agent-revoke-confirm"
                 type="checkbox"
-                className="mt-1 h-4 w-4 rounded border-border"
+                className="mt-1 h-4 w-4 rounded-sm border-border"
                 checked={revokeConfirmed}
                 onChange={(event) => setRevokeConfirmed(event.target.checked)}
               />
@@ -896,7 +896,7 @@ function AgentOperationsEvidence({
           })}
         </p>
         {posture.claimable_kinds.length > 0 && (
-          <p className="break-words text-xs text-muted-foreground">
+          <p className="wrap-break-word text-xs text-muted-foreground">
             {t("agents.design.claimableKinds")} <span className="font-mono">{posture.claimable_kinds.join(", ")}</span>
           </p>
         )}

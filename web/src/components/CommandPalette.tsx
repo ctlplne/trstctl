@@ -307,7 +307,7 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
       </div>
       <div className="border-b border-border p-comfortable">
         <label className="relative block">
-          <Search aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search aria-hidden="true" className="pointer-events-none absolute inset-s-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             ref={inputRef}
             type="search"
@@ -316,12 +316,12 @@ export function CommandPalette({ open, onClose, returnFocusRef, user }: CommandP
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onInputKeyDown}
             placeholder={t("command.searchPlaceholder")}
-            className="h-10 w-full rounded-md border border-border bg-background ps-9 pe-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            className="h-10 w-full rounded-md border border-border bg-background ps-9 pe-3 text-sm outline-hidden focus:ring-2 focus:ring-ring"
           />
         </label>
         {search.unavailableSources.length > 0 && <p className="mt-2 text-xs text-muted-foreground">{t("command.sourcesUnavailable")}</p>}
       </div>
-      <div className="max-h-[24rem] overflow-y-auto p-2">
+      <div className="max-h-96 overflow-y-auto p-2">
         {search.loading && <p className="px-3 py-2 text-sm text-muted-foreground">{t("command.searchingInventory")}</p>}
         {filteredActions.length > 0 && (
           <PaletteSection title={translateNow("source.actions.ff8059dc67")}>
@@ -375,7 +375,7 @@ function PaletteButton({ description, label, onClick }: { description: string; l
       onClick={onClick}
       className={cn(
         "flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-start text-sm",
-        "hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring",
+        "hover:bg-muted focus:outline-hidden focus:ring-2 focus:ring-ring",
       )}
     >
       <span className="min-w-0">

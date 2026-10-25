@@ -277,7 +277,7 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
                   </span>
                   {log.last_polled_at ? <span className="text-2xs text-muted-foreground">{formatDateTime(log.last_polled_at)}</span> : null}
                   {log.last_error ? (
-                    <span className="break-words text-2xs text-risk-critical">{t("discovery.ct.lastPollError", { detail: log.last_error })}</span>
+                    <span className="wrap-break-word text-2xs text-risk-critical">{t("discovery.ct.lastPollError", { detail: log.last_error })}</span>
                   ) : null}
                 </li>
               ))}
@@ -297,7 +297,7 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
                       <span className="text-2xs text-muted-foreground">{t("discovery.ct.retiredAt", { value: formatDateTime(log.retired_at) })}</span>
                     ) : null}
                     {log.last_error ? (
-                      <span className="break-words text-2xs text-muted-foreground">{t("discovery.ct.lastPollError", { detail: log.last_error })}</span>
+                      <span className="wrap-break-word text-2xs text-muted-foreground">{t("discovery.ct.lastPollError", { detail: log.last_error })}</span>
                     ) : null}
                   </li>
                 ))}
@@ -339,8 +339,8 @@ export function CTMonitoringPanel({ refreshToken = 0, pollIntervalMs = 1000, onR
         <div className="mt-4 grid gap-2 rounded-card border border-risk-critical/35 bg-risk-critical/5 p-3">
           <div>
             <h3 className="text-sm font-semibold">{t("discovery.ct.retryTitle")}</h3>
-            <p className="mt-1 break-words text-xs text-muted-foreground">{t("discovery.ct.failedRun", { id: failedRun.id, status: failedRun.status })}</p>
-            {failedRun.error ? <p className="mt-1 break-words text-xs text-risk-critical">{failedRun.error}</p> : null}
+            <p className="mt-1 wrap-break-word text-xs text-muted-foreground">{t("discovery.ct.failedRun", { id: failedRun.id, status: failedRun.status })}</p>
+            {failedRun.error ? <p className="mt-1 wrap-break-word text-xs text-risk-critical">{failedRun.error}</p> : null}
           </div>
           {!currentRetryPreview ? (
             <Button

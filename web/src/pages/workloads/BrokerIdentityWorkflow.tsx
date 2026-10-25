@@ -327,7 +327,7 @@ function BrokerWorkspace({ scope }: { scope: string }) {
                 <dl className="grid min-w-0 gap-3 sm:grid-cols-2">
                   <div className="min-w-0">
                     <dt>{t("source.subject.6897128384")}</dt>
-                    <dd className="break-words">{receipt.subject}</dd>
+                    <dd className="wrap-break-word">{receipt.subject}</dd>
                   </div>
                   <div>
                     <dt>{t("source.expires.f6725f3af0")}</dt>

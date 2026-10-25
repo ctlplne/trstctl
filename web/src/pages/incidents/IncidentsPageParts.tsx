@@ -139,7 +139,7 @@ function ProofRow({ label, mono = false, children }: { label: string; mono?: boo
   return (
     <div>
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
-      <dd className={mono ? "break-all font-mono text-xs" : "break-words"}>{children}</dd>
+      <dd className={mono ? "break-all font-mono text-xs" : "wrap-break-word"}>{children}</dd>
     </div>
   );
 }

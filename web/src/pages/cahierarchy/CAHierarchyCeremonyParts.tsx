@@ -325,7 +325,7 @@ function ReviewValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1">
       <dt className="text-caption text-muted-foreground">{label}</dt>
-      <dd className="break-words font-medium text-foreground">{value}</dd>
+      <dd className="wrap-break-word font-medium text-foreground">{value}</dd>
     </div>
   );
 }

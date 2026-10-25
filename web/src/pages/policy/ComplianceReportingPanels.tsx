@@ -61,7 +61,7 @@ export function ComplianceInventoryReportPanel({
 
       {rows.length > 0 ? (
         <ScrollableTableRegion className="mt-4" label={t("policy.reporting.tableCaption")}>
-          <table className="ui-table min-w-[48rem]">
+          <table className="ui-table min-w-3xl">
             <caption className="sr-only">{t("policy.reporting.tableCaption")}</caption>
             <thead>
               <tr>
@@ -300,7 +300,7 @@ export function NHIComplianceReportPanel({ report }: { report: NHIComplianceRepo
 
       {controlRows.length > 0 && (
         <ScrollableTableRegion className="mt-4" label={t("policy.nhiCompliance.tableCaption")}>
-          <table className="ui-table min-w-[58rem]">
+          <table className="ui-table min-w-232">
             <caption className="sr-only">{t("policy.nhiCompliance.tableCaption")}</caption>
             <thead>
               <tr>

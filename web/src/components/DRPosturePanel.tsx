@@ -174,7 +174,9 @@ export function DRPosturePanel({ posture, error, formatPolicy }: { posture: DRPo
                     itself cannot tell an operator whether only events replayed. */}
                   <p className="mt-3 max-w-4xl text-caption text-muted-foreground">{drPosture.last_drill.detail}</p>
                   {(drPosture.last_drill.artifacts_restored ?? []).length > 0 ? (
-                    <p className="mt-2 break-words font-mono text-xs text-muted-foreground">{(drPosture.last_drill.artifacts_restored ?? []).join(" · ")}</p>
+                    <p className="mt-2 wrap-break-word font-mono text-xs text-muted-foreground">
+                      {(drPosture.last_drill.artifacts_restored ?? []).join(" · ")}
+                    </p>
                   ) : null}
                   {(drPosture.last_drill.limitations ?? []).length > 0 ? (
                     <ul className="mt-3 list-disc pl-5 text-xs text-muted-foreground">

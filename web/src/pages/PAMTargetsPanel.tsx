@@ -155,7 +155,7 @@ export function PAMTargetsPanel({ canManage }: { canManage: boolean }) {
       {query.data?.items.length === 0 ? <UnavailableState title={t("admin.access.noTargets")} /> : null}
       {query.data?.items.length ? (
         <div role="region" aria-label={t("admin.access.targetsHeading")} tabIndex={0} className="max-w-full overflow-x-auto rounded-panel border border-border">
-          <table className="ui-table min-w-[46rem]">
+          <table className="ui-table min-w-184">
             <thead>
               <tr>
                 <th scope="col">{t("admin.access.target")}</th>
