@@ -50,6 +50,8 @@ enabled and may reopen this section when a new finding cannot be patched safely.
   now names `7.18.2` as the patched 7.x release. The console's direct package floor and lockfile both
   resolve `react-router-dom` and its `react-router` dependency to `7.18.2`, so
   the compatible React 18 line no longer carries this advisory.
+- **Upgraded:** 2026-10-25, `react-router@7.18.4` through `react-router-dom@7.18.4`
+  (tracked dependency upgrade); the pair stays at or above the patched `7.18.2`.
 - **Verification:** every route test, the full console suite, TypeScript, lint,
   the production build, the embedded-console identity test, and the supported
   live-browser matrix must remain green. `npm audit` and the SCA gates remain

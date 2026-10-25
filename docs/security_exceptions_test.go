@@ -5,6 +5,7 @@ package docs
 import (
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -152,12 +153,48 @@ func TestReactRouterExceptionRecordsCompatiblePatchedPair(t *testing.T) {
 	if err := json.Unmarshal(contents, &lock); err != nil {
 		t.Fatalf("decode web lockfile: %v", err)
 	}
-	for path, want := range map[string]string{
-		"node_modules/react-router":     "7.18.2",
-		"node_modules/react-router-dom": "7.18.2",
-	} {
-		if got := lock.Packages[path].Version; got != want {
-			t.Errorf("%s version = %q, want remediated %q", path, got, want)
+	// The closure's security property is the pair resolving together at or above
+	// the patched 7.18.2; a later tracked upgrade keeps it and is recorded in the
+	// register, so the lockfile is not frozen at the remediation version.
+	router, dom := lock.Packages["node_modules/react-router"].Version, lock.Packages["node_modules/react-router-dom"].Version
+	if router != dom {
+		t.Errorf("react-router %q and react-router-dom %q no longer resolve as a pair", router, dom)
+	}
+	for path, got := range map[string]string{"node_modules/react-router": router, "node_modules/react-router-dom": dom} {
+		if !semverAtLeast(got, "7.18.2") {
+			t.Errorf("%s version = %q, want at least the patched 7.18.2", path, got)
 		}
 	}
+	if !strings.Contains(normalized, "react-router-dom@"+dom+"`") {
+		t.Errorf("the register does not record the resolved react-router-dom@%s", dom)
+	}
+}
+
+// semverAtLeast compares two plain major.minor.patch versions.
+func semverAtLeast(version, floor string) bool {
+	parse := func(v string) (out [3]int, ok bool) {
+		parts := strings.Split(v, ".")
+		if len(parts) != 3 {
+			return out, false
+		}
+		for i, part := range parts {
+			n, err := strconv.Atoi(part)
+			if err != nil {
+				return out, false
+			}
+			out[i] = n
+		}
+		return out, true
+	}
+	v, okV := parse(version)
+	f, okF := parse(floor)
+	if !okV || !okF {
+		return false
+	}
+	for i := range v {
+		if v[i] != f[i] {
+			return v[i] > f[i]
+		}
+	}
+	return true
 }
