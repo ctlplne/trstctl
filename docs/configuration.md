@@ -2063,15 +2063,17 @@ externalKMS:
   enabled: true
   provider: awskms        # awskms | gcpkms | azurekv | pkcs11
   keyRef: arn:aws:kms:us-east-1:111122223333:key/trstctl-signer
-  wrapCommand: /usr/local/bin/trstctl-kms-wrap
+  wrapCommand: /usr/local/bin/kms-wrap-adapter   # yours: trstctl ships no adapter
   timeout: 10s
 ```
 
 With `externalKMS.enabled=true`, the chart passes `--kms-provider`,
 `--kms-key-ref`, `--kms-wrap-command`, and `--kms-timeout` to the signer and does
-not mount the local KEK Secret. The signer invokes the adapter without a shell as
+not mount the local KEK Secret. trstctl does not ship a wrap adapter: `wrapCommand`
+names one you install in the signer image, against your provider's own client.
+The signer invokes it without a shell as
 `<wrapCommand> wrap|unwrap <provider> <keyRef>`, with DEK bytes only on
-stdin/stdout. Missing provider/keyRef/command values, unsupported provider names,
+stdin/stdout; a non-zero exit or a timeout fails the operation closed. Missing provider/keyRef/command values, unsupported provider names,
 or a relative command path fail at template time.
 
 Back up the sealed key store, the signer custody input, and the CA cert together

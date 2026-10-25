@@ -678,7 +678,9 @@ This example deliberately permits an owned RFC1918 target inside the declared
 segment. Without `allow_rfc1918`, private IPv4 targets remain blocked. In the
 console, select **Allow approved RFC1918 targets** for that same explicit scope.
 This permission does not allow metadata, link-local, multicast, or other prohibited
-addresses. Hostnames must be declared by their exact name; an IP-only segment does
+addresses. A separate `allow_loopback` admits loopback targets (127.0.0.0/8, ::1)
+for an authorized local diagnostic, such as a relay checking a listener on its own
+host; it widens nothing else. Hostnames must be declared by their exact name; an IP-only segment does
 not implicitly authorize a hostname that resolves into it. Preflight checks known
 literal-address blockers without dialing; DNS and connectivity are checked by the
 relay during the run.

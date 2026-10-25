@@ -1799,9 +1799,11 @@ decides: at enqueue, the control plane reads the connector name out of the raw
 payload — the one moment it is not yet sealed — consults the shipped vantage
 census (`nativeConnectorVantage`), and stamps `required_agent_role` onto the
 outbox row. The claim SQL filters on that plain column, so a host agent asking
-for `connector.deploy` receives the nginx deploy and never the F5 deploy, and a
-cloud-store deploy (ACM, Azure Key Vault, GCP Certificate Manager) is stamped
-`control_plane` and handed to no agent ever. The stamp is durable in the
+for `connector.deploy` receives the nginx deploy and never the F5 deploy. A
+cloud-store deploy (ACM, Azure Key Vault, GCP Certificate Manager) is
+network-relay work since A59, reached over the store's management API from the
+segment a relay sits in; where a tenant runs no relay, the control plane's
+egress-guarded client carries it. The stamp is durable in the
 lifecycle event's side-effect record, so reconcile-replay reproduces it rather
 than re-deriving it against a possibly-changed census; rows enqueued before the
 census existed carry the empty demand. The dispatcher reclassifies those legacy
@@ -2045,7 +2047,9 @@ role or wrong exact agent cannot claim the row.
 
 **The reserved-range guard travels with the scanner, not with the control
 plane.** A relay does not escape it by being somewhere else: loopback,
-link-local and multicast targets are refused inside the scanner, and the sweep
+link-local and multicast targets are refused inside the scanner (a network
+source's `allow_loopback` admits loopback for an authorized local diagnostic;
+link-local, which covers cloud metadata, and multicast cannot be enabled), and the sweep
 reports how many were `blocked` rather than presenting a refused range as an
 empty segment. Attempted, discovered, failed, rejected and blocked are all
 reported, because a sweep that reached nothing and a segment with nothing in it
@@ -2365,8 +2369,9 @@ installed, which remains the truthful answer at execution time.
 
 Second, objects now accumulate. Each deployment leaves its predecessor on the
 appliance rather than overwriting it, which is the entire point, and nothing
-prunes them — trstctl does not delete objects it did not create during the
-customer's appliance. On a target renewed every 90 days that is a handful of
+prunes them automatically: trstctl removes an object from a customer's appliance
+only on an explicit takedown request (f5, kemp, netscaler and a10), never as
+housekeeping. On a target renewed every 90 days that is a handful of
 objects a year; on a short-lived-certificate target it is not, and operators
 running those should expect to prune. Automatic pruning is deliberately not
 served: deleting a crypto object that something else might be bound to is a
@@ -2501,9 +2506,11 @@ Two honest limits. The signature attests what the agent SAID, not what the
 appliance did — an agent that is lying, or that is wrong about its own outcome,
 produces a perfectly valid receipt for a false statement; making the claim
 checkable against the endpoint itself is the verification work (WS-D), not this.
-And the transcript behind `evidence_digest` stays on the agent: the receipt
-binds to a digest of something the control plane has never seen, which is a real
-binding and not the same as holding the evidence.
+For a deploy with a verify address the transcript behind `evidence_digest` now
+travels in the report: the control plane checks it against the digest, against
+its own record of the target and the issued certificate, and keeps it as the
+verification receipt. A deploy without a verify address has no transcript, and
+the receipt binds only the agent's signed statement.
 
 **What is served, and what is not.** `connector.deploy` has both the network-relay
 executor from A3 and the host executor for the 14 host-vantage families; a role-
@@ -3948,10 +3955,10 @@ artifact the running binary serves:
   issue/deploy, fleet reissuance, revocation queue, connector receipt,
   rollback evidence, remediation playbooks, response dispatch, sealed audit
   bundle), and Product help (`/assistant`) with grounded questions, cause
-  investigation, and on-demand read-only MCP tools. Deliberately
-  API-only surfaces stay labeled until they get their own UI, including the
-  bounded break-glass reconciliation workflow — a UI boundary, not a claim
-  that the underlying API is library-only.
+  investigation, and on-demand read-only MCP tools. The bounded
+  break-glass reconciliation workflow has its own panel on the Incidents
+  page. Deliberately API-only surfaces stay labeled until they get their own
+  UI — a UI boundary, not a claim that the underlying API is library-only.
 - Console UX hardening. A destructive-transition confirmation (revoke/retire
   require an explicit, credential-named confirm dialog) and
   429/`Retry-After` handling (a concrete "retry in Ns" hint) are served and

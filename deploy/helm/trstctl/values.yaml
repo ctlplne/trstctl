@@ -420,5 +420,5 @@ externalKMS:
   enabled: false
   provider: ""      # awskms | gcpkms | azurekv | pkcs11
   keyRef: ""        # KMS key id/ARN/resource name, HSM object handle, or PKCS#11 URI
-  wrapCommand: ""   # absolute path inside the signer container, e.g. /usr/local/bin/trstctl-kms-wrap
+  wrapCommand: ""   # absolute path of YOUR adapter inside the signer container (trstctl ships none), e.g. /usr/local/bin/kms-wrap-adapter
   timeout: 10s
