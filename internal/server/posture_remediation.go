@@ -195,3 +195,29 @@ func (s *Server) runRiskAcceptanceExpiryOnce(ctx context.Context, now time.Time)
 	}
 	return total
 }
+
+// runProfilePostureOnce reconciles every tenant's certificate-profile RSA
+// floor findings with its active profiles (batch 14): a profile created while
+// the finding could not be recorded, or one raised since, converges here. One
+// tenant's failure is logged and does not stall the others.
+func (s *Server) runProfilePostureOnce(ctx context.Context) int {
+	if s.orch == nil || s.store == nil {
+		return 0
+	}
+	tenants, err := s.store.ListTenants(ctx)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("profile posture sweep could not list tenants", slog.String("error", err.Error()))
+		}
+		return 0
+	}
+	total := 0
+	for _, tenant := range tenants {
+		n, err := s.orch.ReconcileProfileRSAFloorPosture(ctx, tenant.TenantID)
+		total += n
+		if err != nil && s.logger != nil {
+			s.logger.Warn("profile posture sweep failed for a tenant", slog.String("tenant_id", tenant.TenantID), slog.String("error", err.Error()))
+		}
+	}
+	return total
+}

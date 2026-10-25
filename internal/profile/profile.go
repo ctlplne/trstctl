@@ -41,7 +41,7 @@ type CertificateProfile struct {
 
 	RequiresApproval      bool                        `json:"requires_approval,omitempty"`       // profile create/edit and future issuance require dual control
 	AllowedKeyAlgorithms  []string                    `json:"allowed_key_algorithms"`            // e.g. ["ECDSA","RSA"]; empty = any
-	MinRSABits            int                         `json:"min_rsa_bits"`                      // floor for RSA keys; 0 = no floor
+	MinRSABits            int                         `json:"min_rsa_bits"`                      // floor for RSA keys; 0 = DefaultMinRSABits
 	MinECDSABits          int                         `json:"min_ecdsa_bits"`                    // floor for ECDSA curve size
 	AllowedEKUs           []string                    `json:"allowed_ekus"`                      // e.g. ["serverAuth","clientAuth"]; empty = any
 	MaxValidity           Duration                    `json:"max_validity"`                      // full signed validity ceiling, including backdating; 0 = no ceiling
@@ -52,6 +52,24 @@ type CertificateProfile struct {
 	AllowedEmailDomains   []string                    `json:"allowed_email_domains"`             // rfc822Name domains; set to permit email SANs under a SAN policy
 	AllowedURIPrefixes    []string                    `json:"allowed_uri_prefixes"`              // URI string prefixes; set to permit URI SANs under a SAN policy
 	ACMEDeviceAttestation ACMEDeviceAttestationPolicy `json:"acme_device_attestation,omitempty"` // explicit, default-off device-attest-01 policy
+}
+
+// DefaultMinRSABits is the RSA floor a profile enforces when it sets none
+// (owner decision, batch 14). A profile may set a lower floor explicitly;
+// that version raises a posture finding (see BelowDefaultRSAFloor).
+const DefaultMinRSABits = 2048
+
+// EffectiveMinRSABits is the RSA floor Validate enforces.
+func (p CertificateProfile) EffectiveMinRSABits() int {
+	if p.MinRSABits > 0 {
+		return p.MinRSABits
+	}
+	return DefaultMinRSABits
+}
+
+// BelowDefaultRSAFloor reports an explicit RSA floor under the default.
+func (p CertificateProfile) BelowDefaultRSAFloor() bool {
+	return p.MinRSABits > 0 && p.MinRSABits < DefaultMinRSABits
 }
 
 // ACMEDeviceAttestationPolicy is the tenant profile's fail-closed
@@ -120,6 +138,9 @@ func (p CertificateProfile) ValidateDefinition() error {
 	id := fmt.Sprintf("profile %q v%d", p.Name, p.Version)
 	if _, err := NormalizeACMEAuthMode(p.ACMEAuthMode); err != nil {
 		return fmt.Errorf("%s: %w", id, err)
+	}
+	if p.MinRSABits < 0 || p.MinECDSABits < 0 {
+		return fmt.Errorf("%s: min_rsa_bits and min_ecdsa_bits must not be negative", id)
 	}
 	if err := p.ACMEDeviceAttestation.validate(id); err != nil {
 		return err
@@ -217,8 +238,11 @@ func (p CertificateProfile) Validate(r Request) error {
 	}
 	switch r.KeyAlgorithm {
 	case "RSA":
-		if p.MinRSABits > 0 && r.KeyBits < p.MinRSABits {
-			return fmt.Errorf("%s requires RSA keys of at least %d bits, got %d", id, p.MinRSABits, r.KeyBits)
+		if floor := p.EffectiveMinRSABits(); r.KeyBits < floor {
+			if p.MinRSABits == 0 {
+				return fmt.Errorf("%s requires RSA keys of at least %d bits (the default when min_rsa_bits is unset), got %d", id, floor, r.KeyBits)
+			}
+			return fmt.Errorf("%s requires RSA keys of at least %d bits, got %d", id, floor, r.KeyBits)
 		}
 	case "ECDSA":
 		if p.MinECDSABits > 0 && r.KeyBits < p.MinECDSABits {

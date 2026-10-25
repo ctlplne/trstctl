@@ -16,6 +16,7 @@ const (
 	EndpointChainSourcePrefix       = "endpoint-chain:"
 	ExposureProbeSourcePrefix       = "exposure-probe:"
 	RemediationRotationSourcePrefix = "remediation-rotation:"
+	ProfilePostureSourcePrefix      = "profile-posture:"
 )
 
 type ReservedNamespace struct {
@@ -32,6 +33,7 @@ var reservedNamespaces = [...]ReservedNamespace{
 	{EndpointChainSourcePrefix, "endpoint issuer-chain verification"},
 	{ExposureProbeSourcePrefix, "NHI exposure reachability probe"},
 	{RemediationRotationSourcePrefix, "credential-rotate replacement verification"},
+	{ProfilePostureSourcePrefix, "certificate profile posture"},
 }
 
 // ReservedNamespaces returns a copy for the registration guard and docs.

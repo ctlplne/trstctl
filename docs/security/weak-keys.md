@@ -108,8 +108,10 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   (422), SPIFFE X.509-SVIDs, agent enrollment, CA authority issuance, and an
   external CA (422, before any connector is called). Size and algorithm floors
   are not part of this: they stay with each profile's key policy
-  (`allowed_key_algorithms`, `min_rsa_bits`), so a profile without a floor
-  still issues RSA-1024. Ed25519 and post-quantum keys have no structural
+  (`allowed_key_algorithms`, `min_rsa_bits`). An unset `min_rsa_bits` is
+  2048 bits; a profile that sets a lower floor explicitly still issues below
+  it and raises a `profile-rsa-floor-below-default` finding until a later
+  version raises it. Ed25519 and post-quantum keys have no structural
   checks and pass. The same paths refuse a key the tenant has recorded as
   compromised: one that a certificate of the tenant carried when it, or its
   identity, was revoked with reason `keyCompromise` (CA/B BR 6.1.1.3,

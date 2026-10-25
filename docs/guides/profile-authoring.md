@@ -91,12 +91,24 @@ A profile spec is JSON:
 | Field | Meaning |
 | --- | --- |
 | `allowed_key_algorithms` | permitted key algorithms, e.g. `["ECDSA","RSA"]` (empty = any) |
-| `min_rsa_bits` / `min_ecdsa_bits` | minimum key strength floors |
+| `min_rsa_bits` / `min_ecdsa_bits` | minimum key strength floors; an unset `min_rsa_bits` enforces 2048 bits, and an explicit lower value is honored but raises a `profile-rsa-floor-below-default` finding |
 | `allowed_ekus` | permitted extended key usages, e.g. `["serverAuth"]` (empty = any) |
 | `max_validity` | validity ceiling as a duration, e.g. `"2160h"` (0 = no ceiling) |
 | `allowed_protocols` | enrollment protocols that may use this profile, e.g. `["api","acme"]` |
 | `allowed_dns_suffixes` | name constraint on SAN dNSNames (empty = unconstrained) |
 | `acme_device_attestation` | explicit, default-off TPM `device-attest-01` policy: operator roots, device identifier allowlist, COSE algorithms, and maximum proof age |
+
+### RSA floor below the default
+
+An unset `min_rsa_bits` means 2048: an RSA request below it is refused, and
+the refusal says the floor is the default. A profile may still set a lower
+floor explicitly, for example to keep issuing to a legacy appliance that
+cannot take a larger key. That version issues as configured, and while it is
+the active version a `profile-rsa-floor-below-default` finding in the
+Findings queue names the profile, the version and the floor. A later version
+at or above 2048 bits (or a restore of one) marks the finding remediated with
+that version as its evidence; lowering the floor again reopens it. The finding
+can also be investigated or accepted as a risk until a date, like any other.
 
 ## TPM device-attest-01
 

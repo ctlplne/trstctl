@@ -5952,7 +5952,7 @@ func componentSchemas() map[string]*Schema {
 		"version":                 {Type: "integer"},
 		"requires_approval":       {Type: "boolean"},
 		"allowed_key_algorithms":  {Type: "array", Items: str()},
-		"min_rsa_bits":            {Type: "integer"},
+		"min_rsa_bits":            {Type: "integer", Description: "RSA key floor in bits; unset enforces 2048, and an explicit lower value is honored but raises a profile-rsa-floor-below-default finding"},
 		"min_ecdsa_bits":          {Type: "integer"},
 		"allowed_ekus":            {Type: "array", Items: str()},
 		"max_validity":            str(),

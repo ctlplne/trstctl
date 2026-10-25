@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"reflect"
 	"strings"
@@ -432,6 +433,13 @@ func (o *Orchestrator) createProfileVersionWithOptions(ctx context.Context, tena
 	})
 	if err != nil {
 		return store.ProfileRecord{}, err
+	}
+	// An explicit RSA floor below the default raises a posture finding and a
+	// compliant version resolves it (batch 14). The version is already
+	// recorded, so a failure here is left to the lifecycle sweep.
+	if _, err := o.ReconcileProfileRSAFloorPosture(ctx, tenantID); err != nil {
+		slog.Default().Warn("profile RSA floor posture not reconciled; the lifecycle sweep retries it",
+			slog.String("tenant_id", tenantID), slog.String("profile", name), slog.String("error", err.Error()))
 	}
 	return rec, nil
 }

@@ -3840,6 +3840,7 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 		return queued, err
 	}
 	s.runRiskAcceptanceExpiryOnce(ctx, now)
+	s.runProfilePostureOnce(ctx)
 	s.runPKISecretInventoryRecoveryOnce(ctx)
 	s.observeLifecycleSweep(queued, alerted+horizonAlerts+ownershipAlerts, ariDiscoveryErr)
 	return queued, ariDiscoveryErr

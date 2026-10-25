@@ -10428,6 +10428,7 @@ export interface components {
             allowed_uri_prefixes?: string[];
             max_validity?: string;
             min_ecdsa_bits?: number;
+            /** @description RSA key floor in bits; unset enforces 2048, and an explicit lower value is honored but raises a profile-rsa-floor-below-default finding */
             min_rsa_bits?: number;
             name?: string;
             requires_approval?: boolean;

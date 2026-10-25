@@ -29,6 +29,7 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 		"internal/orchestrator/endpoint_chain_finding.go:RecordEndpointChainMismatch": "product-owned endpoint issuer-chain verification",
 		"internal/orchestrator/exposure_probe.go:QueueExposureProbe":                  "product-owned NHI exposure reachability probe",
 		"internal/orchestrator/remediation_rotate.go:RecordRotationUnverified":        "product-owned credential-rotate replacement verification",
+		"internal/orchestrator/profile_posture.go:recordProfileRSAFloorFinding":       "product-owned certificate profile posture",
 	}
 	found := make(map[string]bool)
 	for _, tree := range []string{"internal", "cmd", "ee", "deploy", "plugins", "clients"} {
@@ -93,6 +94,7 @@ func TestEveryProductSourceNamespaceIsRegistered(t *testing.T) {
 		EndpointChainSourcePrefix:       "endpoint issuer-chain verification",
 		ExposureProbeSourcePrefix:       "NHI exposure reachability probe",
 		RemediationRotationSourcePrefix: "credential-rotate replacement verification",
+		ProfilePostureSourcePrefix:      "certificate profile posture",
 	}
 	seen := make(map[string]bool)
 	for _, namespace := range ReservedNamespaces() {
