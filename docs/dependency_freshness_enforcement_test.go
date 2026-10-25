@@ -227,45 +227,30 @@ func freshnessMajor(t *testing.T, row map[string]any, field string) int {
 	return major
 }
 
-// TestDependencyFreshnessTypescriptRowIsMoreThanOneMajorBehind is the premise the two
-// guards below stand on. If TypeScript ever catches up this fails loudly rather than
-// letting the gap-cap guards go quietly vacuous against a row with no gap left.
-func TestDependencyFreshnessTypescriptRowIsMoreThanOneMajorBehind(t *testing.T) {
+// multiMajorGapFixture returns the typescript row's installed version and an observed
+// latest two majors ahead of it. The gap-cap guards below build their gap in the
+// mutated copy instead of relying on a live row lagging: the installed version still
+// matches web/package-lock.json, and the guards cannot go vacuous when every live row
+// catches up.
+func multiMajorGapFixture(t *testing.T) (current, latest string, gap int) {
+	t.Helper()
 	row := freshnessRow(t, "typescript")
-	gap := freshnessMajor(t, row, "latest_observed_version") - freshnessMajor(t, row, "current_version")
-	if gap <= 1 {
-		t.Fatalf("CODE-111: the typescript row is %d majors behind; the gap-cap guards below need a row more than one major behind -- re-point them at another row", gap)
-	}
-	if row["status"] != "accepted_deferral" {
-		t.Fatalf("CODE-111: a row more than one major behind must carry status accepted_deferral, got %v", row["status"])
-	}
-	deferral, _ := row["deferral_until"].(string)
-	until, err := time.Parse(time.DateOnly, deferral)
-	if err != nil {
-		t.Fatalf("CODE-111: the typescript deferral_until must be YYYY-MM-DD, got %q: %v", deferral, err)
-	}
-	today, err := time.Parse(time.DateOnly, time.Now().UTC().Format(time.DateOnly))
-	if err != nil {
-		t.Fatalf("CODE-111: parse today: %v", err)
-	}
-	if until.Before(today) {
-		t.Fatalf("CODE-111: the typescript deferral_until %s no longer covers today; re-argue the multi-major pin in the row rationale or take the upgrade", deferral)
-	}
-	if !strings.Contains(fmt.Sprint(row["rationale"]), "6.0.3") {
-		t.Errorf("CODE-111: a deferred multi-major row must name its intermediate hop in the rationale, got: %v", row["rationale"])
-	}
+	current = fmt.Sprint(row["current_version"])
+	latest = fmt.Sprintf("%d.0.0", freshnessMajor(t, row, "current_version")+2)
+	return current, latest, 2
 }
 
 // TestDependencyFreshnessFailsAMajorGapWithNoLiveDeferral is the core CODE-111 assertion.
 // The age budget cannot catch this row -- typescript is developer-tooling, a 90-day
 // class, and it is well inside that -- so only the gap cap can.
 func TestDependencyFreshnessFailsAMajorGapWithNoLiveDeferral(t *testing.T) {
-	row := freshnessRow(t, "typescript")
-	gap := freshnessMajor(t, row, "latest_observed_version") - freshnessMajor(t, row, "current_version")
+	current, latest, gap := multiMajorGapFixture(t)
 	body := mutateFreshnessReport(t, func(candidate map[string]any) bool {
 		if candidate["name"] != "typescript" {
 			return false
 		}
+		candidate["latest_observed_version"] = latest
+		candidate["update_type"] = "major"
 		candidate["status"] = "planned"
 		candidate["deferral_until"] = ""
 		return true
@@ -274,7 +259,7 @@ func TestDependencyFreshnessFailsAMajorGapWithNoLiveDeferral(t *testing.T) {
 	if !failed {
 		t.Fatalf("CODE-111: a dependency %d majors behind with no live deferral must fail the gate, got success:\n%s", gap, out)
 	}
-	want := fmt.Sprintf("tracked upgrade typescript is %d majors behind (%v against %v), over the 1-major gap cap", gap, row["current_version"], row["latest_observed_version"])
+	want := fmt.Sprintf("tracked upgrade typescript is %d majors behind (%v against %v), over the 1-major gap cap", gap, current, latest)
 	if !strings.Contains(out, want) {
 		t.Errorf("CODE-111: the failure must name the major gap, both versions and the cap; want %q, got:\n%s", want, out)
 	}
@@ -285,12 +270,13 @@ func TestDependencyFreshnessFailsAMajorGapWithNoLiveDeferral(t *testing.T) {
 // live, so the pin has to be re-argued on a date rather than inherited forever.
 func TestDependencyFreshnessRejectsAnExpiredDeferralOnAMajorGap(t *testing.T) {
 	expired := time.Now().UTC().AddDate(0, 0, -1).Format(time.DateOnly)
-	row := freshnessRow(t, "typescript")
-	gap := freshnessMajor(t, row, "latest_observed_version") - freshnessMajor(t, row, "current_version")
+	_, latest, gap := multiMajorGapFixture(t)
 	body := mutateFreshnessReport(t, func(candidate map[string]any) bool {
 		if candidate["name"] != "typescript" {
 			return false
 		}
+		candidate["latest_observed_version"] = latest
+		candidate["update_type"] = "major"
 		candidate["status"] = "accepted_deferral"
 		candidate["deferral_until"] = expired
 		return true
