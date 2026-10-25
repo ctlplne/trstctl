@@ -5562,6 +5562,11 @@ func componentSchemas() map[string]*Schema {
 		"unrecorded_served_certificates": {Type: "integer", Description: "Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key."},
 		"workload_api_socket":            {Type: "boolean", Description: "The compatibility Workload API socket was configured for this tenant."},
 	}, "control_plane_certificates", "unrecorded_served_certificates", "workload_api_socket")
+	revocationProbeNow := object(map[string]*Schema{
+		"queued":   {Type: "boolean", Description: "False when a request in the same minute already queued this probe; requests inside one minute share it."},
+		"bucket":   {Type: "string", Description: "The request's probe bucket (manual:<minute>), which its relay observations carry."},
+		"guidance": str(),
+	}, "queued", "bucket", "guidance")
 	controlPlaneKeygen := object(map[string]*Schema{
 		"decided": {Type: "boolean", Description: "False for a tenant that predates the switch and has not been decided yet; it keeps the behavior it had (allowed)."},
 		"enabled": {Type: "boolean", Description: "Whether the control plane may generate a subject private key for a requester in this tenant."},
@@ -7103,6 +7108,7 @@ func componentSchemas() map[string]*Schema {
 		"RevocationEndpointHealth":                 revocationEndpointHealth,
 		"RevocationHealthSummary":                  revocationHealthSummary,
 		"RevocationHealth":                         revocationHealth,
+		"RevocationProbeNow":                       revocationProbeNow,
 		"RevocationCacheStatus":                    revocationCacheStatus,
 		"RevocationCacheSummary":                   revocationCacheSummary,
 		"RevocationCachePosture":                   revocationCachePosture,

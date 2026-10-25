@@ -6196,6 +6196,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/health/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Probe this tenant's CRL and OCSP endpoints now through the network relay, instead of at the next hourly sweep */
+        post: operations["probeRevocationHealth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/rogue-certificates": {
         parameters: {
             query?: never;
@@ -16156,6 +16173,13 @@ export interface components {
             stale: number;
             unparseable: number;
             unreachable: number;
+        };
+        RevocationProbeNow: {
+            /** @description The request's probe bucket (manual:<minute>), which its relay observations carry. */
+            bucket: string;
+            guidance: string;
+            /** @description False when a request in the same minute already queued this probe; requests inside one minute share it. */
+            queued: boolean;
         };
         RiskComponents: {
             age: number;
@@ -35855,6 +35879,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RevocationHealth"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    probeRevocationHealth: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevocationProbeNow"];
                 };
             };
             /** @description client error */

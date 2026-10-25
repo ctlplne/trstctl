@@ -329,6 +329,8 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/profile", opaque), catalogPrivacyRule("/version", opaque),
 			catalogPrivacyRule("/decision", opaque), catalogPrivacyRule("/reason", clear),
 			catalogPrivacyRule("/protocol", opaque)),
+		entry("revocation.probe.requested",
+			catalogPrivacyRule("/bucket", opaque), catalogPrivacyRule("/requested_by", exact)),
 		entry("issuance.server_side_keygen",
 			catalogPrivacyRule("/identity_id", opaque), catalogPrivacyRule("/name", token),
 			catalogPrivacyRule("/detail", clear), catalogPrivacyRule("/successor", clear)),

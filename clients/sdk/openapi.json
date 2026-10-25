@@ -31455,6 +31455,27 @@
         ],
         "type": "object"
       },
+      "RevocationProbeNow": {
+        "properties": {
+          "bucket": {
+            "description": "The request's probe bucket (manual:\u003cminute\u003e), which its relay observations carry.",
+            "type": "string"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "queued": {
+            "description": "False when a request in the same minute already queued this probe; requests inside one minute share it.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queued",
+          "bucket",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "RiskComponents": {
         "properties": {
           "age": {
@@ -64674,6 +64695,64 @@
         ],
         "summary": "List relay-verified CRL and OCSP endpoint reachability, signature, status, and freshness",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/revocation/health/probe": {
+      "post": {
+        "operationId": "probeRevocationHealth",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevocationProbeNow"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Probe this tenant's CRL and OCSP endpoints now through the network relay, instead of at the next hourly sweep",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/revocation/rogue-certificates": {

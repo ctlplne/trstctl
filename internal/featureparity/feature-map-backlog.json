@@ -4875,6 +4875,7 @@
                 "listRogueCertificates",
                 "takedownRogueCertificate",
                 "listRevocationHealth",
+                "probeRevocationHealth",
                 "listRevocationCaches"
             ],
             "api_na": "",
@@ -4886,6 +4887,7 @@
                 "revocation crls",
                 "revocation caches",
                 "revocation health",
+                "revocation health probe",
                 "revocation ct-submit",
                 "revocation rogue-certificates",
                 "revocation rogue-certificates takedown",

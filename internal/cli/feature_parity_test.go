@@ -331,8 +331,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A111's `certificates inventory-pki-secret` raised it to 581, mapped onto F67.
 	// The tenant's control-plane key generation switch (`tenant key-generation
 	// show|set`, owner decision 2026-10-24) raised it to 583, mapped onto F4.
-	if len(out) != 583 {
-		t.Fatalf("CLI commands = %d, want 583", len(out))
+	// The on-demand revocation endpoint probe (`revocation health probe`)
+	// raised it to 584, mapped onto the revocation center row.
+	if len(out) != 584 {
+		t.Fatalf("CLI commands = %d, want 584", len(out))
 	}
 	return out
 }

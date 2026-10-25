@@ -2087,7 +2087,13 @@ soft-fail and stop checking revocation at all. Neither appears on any dashboard
 until an incident, while the CA's operator believes revocation works because
 publishing succeeded once.
 
-`revocation.probe` is now an hourly, database-clocked relay job. The leader
+`revocation.probe` is now an hourly, database-clocked relay job, and an operator
+can ask for one now: `POST /api/v1/revocation/health/probe` (`certs:write`),
+`trstctl-cli revocation health probe`, or **Probe endpoints now** under
+Certificates → Revocation & CT records who asked and queues the same targets under
+the request's own bucket, so an operator who fixed a relay's trust bundle or a
+distribution point need not wait for the next hour; requests inside one minute
+share one probe. The leader
 scheduler derives distinct CRL distribution points and OCSP responders from
 inventory, matches every leaf to its real issuer key, and carries the exact
 public leaf/issuer certificate context needed to verify the answer. It reads

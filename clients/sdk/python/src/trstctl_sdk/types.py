@@ -10576,6 +10576,16 @@ RevocationHealthSummary = TypedDict(
     total=False,
 )
 
+RevocationProbeNow = TypedDict(
+    'RevocationProbeNow',
+    {
+        'bucket': str,
+        'guidance': str,
+        'queued': bool,
+    },
+    total=False,
+)
+
 RiskComponents = TypedDict(
     'RiskComponents',
     {

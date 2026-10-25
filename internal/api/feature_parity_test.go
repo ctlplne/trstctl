@@ -294,8 +294,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A111's PKI-secret leaf recovery raised it to 527, mapped onto F67.
 	// The tenant's control-plane key generation switch (read and change, owner
 	// decision 2026-10-24) raised it to 529, mapped onto F4.
-	if len(out) != 529 {
-		t.Fatalf("OpenAPI operationIds = %d, want 529", len(out))
+	// The on-demand revocation endpoint probe raised it to 530, mapped onto the
+	// revocation center row.
+	if len(out) != 530 {
+		t.Fatalf("OpenAPI operationIds = %d, want 530", len(out))
 	}
 	return out
 }

@@ -7670,6 +7670,12 @@ export interface RevocationHealthSummary {
   unreachable: number;
 }
 
+export interface RevocationProbeNow {
+  bucket: string;
+  guidance: string;
+  queued: boolean;
+}
+
 export interface RiskComponents {
   age: number;
   exposure: number;

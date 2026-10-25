@@ -224,6 +224,7 @@ import type {
   CRLDistributionList,
   RevocationCachePosture,
   RevocationHealth,
+  RevocationProbeNow,
   CTLogSubmission,
   CTLogSubmissionRequest,
   CTMonitoring,
@@ -1100,6 +1101,7 @@ export type {
   CRLDistributionList,
   RevocationCachePosture,
   RevocationHealth,
+  RevocationProbeNow,
   DeploymentTarget,
   DeploymentTargetList,
   DeploymentTargetRequest,
@@ -1841,6 +1843,7 @@ export interface Api {
   crlDistributions(): Promise<CRLDistributionList>;
   revocationCaches(): Promise<RevocationCachePosture>;
   revocationHealth(): Promise<RevocationHealth>;
+  probeRevocationHealth(idempotencyKey?: string): Promise<RevocationProbeNow>;
   rogueCertificates(): Promise<RogueCertificatePosture>;
   takedownRogueCertificate(input: RogueCertificateTakedownRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
@@ -2584,6 +2587,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   crlDistributions: () => req<CRLDistributionList>("/api/v1/revocation/crls"),
   revocationCaches: () => req<RevocationCachePosture>("/api/v1/revocation/caches"),
   revocationHealth: () => req<RevocationHealth>("/api/v1/revocation/health"),
+  probeRevocationHealth: (idempotencyKey) => mutate<RevocationProbeNow>("POST", "/api/v1/revocation/health/probe", {}, idempotencyKey),
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   takedownRogueCertificate: (input, key) => mutate<ConnectorDelivery>("POST", "/api/v1/revocation/rogue-certificates/takedown", input, key),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),

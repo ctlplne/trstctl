@@ -64,6 +64,7 @@ const (
 	EventDiscoveryScheduleRetired                 = "discovery.schedule.retired"
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
 	EventRevocationProbeQueued                    = "revocation.probe.queued"
+	EventRevocationProbeRequested                 = "revocation.probe.requested"
 	EventRevocationHealthObserved                 = "revocation.health.observed"
 	EventMigrationRunRecorded                     = "migration.run.recorded"
 	EventDiscoveryFindingTriageChanged            = "discovery.finding.triage_changed"
@@ -218,6 +219,7 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},
 	{"R1", "Revocation monitoring", "queue_probe", "listRevocationHealth", []string{EventRevocationProbeQueued}},
 	{"R1", "Revocation monitoring", "observe_health", "listRevocationHealth", []string{EventRevocationHealthObserved}},
+	{"R1", "Revocation monitoring", "request_probe", "probeRevocationHealth", []string{EventRevocationProbeRequested, EventRevocationProbeQueued}},
 	{"H2", "CA migration waves", "record_run", "startMigrationRun", []string{EventMigrationRunRecorded}},
 	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},

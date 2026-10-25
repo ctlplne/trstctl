@@ -29,6 +29,7 @@ import { lifecycleApproval, lifecycleCommandKey, type LifecycleApproval } from "
 import { useApiQuery } from "@/lib/query";
 import { KeyCompromiseEffects } from "./KeyCompromiseEffects";
 import { KeyCompromiseRecovery } from "./KeyCompromiseRecovery";
+import { RevocationProbeNow } from "./RevocationProbeNow";
 
 type ReviewBase = {
   impact: GraphImpact | null;
@@ -397,6 +398,7 @@ export function RevocationCenter({
         <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
           <p className="rounded-control border border-border bg-muted/30 px-3 py-2">{propagationCopy}</p>
           <p className="rounded-control border border-border bg-muted/30 px-3 py-2">{crlCopy}</p>
+          <RevocationProbeNow />
         </div>
       </header>
 

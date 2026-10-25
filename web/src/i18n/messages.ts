@@ -27189,6 +27189,18 @@ export const messages = {
       "This tenant has control-plane key generation off, so this issue needs a key from the requester: paste a CSR above, bind the identity to an agent-executed target so its host generates the key, or turn control-plane key generation on in Platform.",
     description: "Shown on the issue review when the tenant's switch refuses control-plane key generation.",
   },
+  "certificates.revocation.probeNow": {
+    defaultMessage: "Probe endpoints now",
+    description: "Button asking the network relay to probe every CRL and OCSP endpoint now instead of at the next hourly sweep.",
+  },
+  "certificates.revocation.probeQueued": {
+    defaultMessage: "A fresh probe of every CRL and OCSP endpoint is queued for the network relay; its signed observations replace the summary within minutes.",
+    description: "Shown after an on-demand revocation endpoint probe is queued.",
+  },
+  "certificates.revocation.probeAlreadyQueued": {
+    defaultMessage: "A probe requested this minute is already queued; its observations arrive within minutes.",
+    description: "Shown when an on-demand revocation probe was already requested in the same minute.",
+  },
   "identities.lifecycle.profileRefused": {
     defaultMessage:
       "The certificate profile this issuance uses refuses it, so issuing would be refused before anything is recorded: {reason}. Issue it under a profile that permits API issuance, or change the profile.",

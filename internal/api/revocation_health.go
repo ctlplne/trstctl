@@ -3,8 +3,11 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"time"
+
+	"trstctl.com/trstctl/internal/authz"
 )
 
 // RevocationEndpointHealth is one relay-verified CRL or OCSP observation.
@@ -105,4 +108,42 @@ func (a *API) listRevocationHealth(w http.ResponseWriter, r *http.Request) {
 		out.Items = append(out.Items, item)
 	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+// revocationHealthRoutes serves the relay-verified endpoint health and the
+// operator's on-demand probe (replay defect B14-R1).
+func (a *API) revocationHealthRoutes() []route {
+	return []route{
+		{method: "GET", path: "/api/v1/revocation/health", opID: "listRevocationHealth", summary: "List relay-verified CRL and OCSP endpoint reachability, signature, status, and freshness", handler: a.listRevocationHealth, resSchema: "RevocationHealth", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/revocation/health/probe", opID: "probeRevocationHealth", summary: "Probe this tenant's CRL and OCSP endpoints now through the network relay, instead of at the next hourly sweep", handler: a.probeRevocationHealth, resSchema: "RevocationProbeNow", successCode: "202", mutation: true, perm: authz.CertsWrite},
+	}
+}
+
+// RevocationProbeNow answers an on-demand probe request.
+type RevocationProbeNow struct {
+	// Queued is false when a request in the same minute already queued it.
+	Queued   bool   `json:"queued"`
+	Bucket   string `json:"bucket"`
+	Guidance string `json:"guidance"`
+}
+
+const revocationProbeNowGuidance = "The network relay probes every CRL and OCSP endpoint the inventory names, then signs its observations; " +
+	"read them with GET /api/v1/revocation/health once it reports. Scheduled probes also run every hour. " +
+	"Requests inside the same minute share one probe."
+
+func (a *API) probeRevocationHealth(w http.ResponseWriter, r *http.Request) {
+	a.mutateWithRecorder(w, r, r.Header.Get("Idempotency-Key"), "", func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.orch == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "revocation health probing is not configured")
+		}
+		subject, err := requestPrincipalSubject(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		request, queued, err := a.orch.RequestRevocationProbe(ctx, tenantID, subject)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusAccepted, RevocationProbeNow{Queued: queued, Bucket: request.Bucket, Guidance: revocationProbeNowGuidance}, nil
+	}, false)
 }

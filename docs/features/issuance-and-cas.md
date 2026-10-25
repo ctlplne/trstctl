@@ -775,7 +775,10 @@ External distribution health is monitored separately from trstctl's own
 publication state. An hourly leader derives distinct CDP and AIA OCSP URLs from
 the certificate inventory and queues bounded `revocation.probe` work for a
 network relay, so private PKI endpoints are checked from the network that uses
-them. The relay verifies CRL/OCSP signatures and exact certificate context, then
+them. An operator with `certs:write` can also probe now (`POST
+/api/v1/revocation/health/probe`, `trstctl-cli revocation health probe`, or
+**Probe endpoints now** in the console), for example right after fixing a relay's
+trust bundle; requests inside one minute share one probe. The relay verifies CRL/OCSP signatures and exact certificate context, then
 returns a signed lease-bound report. `GET /api/v1/revocation/health` and
 Certificates → Revocation & CT expose fresh, expiring, stale, unreachable, and invalid
 answers with latency, `nextUpdate`, relay identity, and evidence digest; non-fresh

@@ -360,6 +360,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "issuance.profile_evaluated":
 		return shape(`{"profile":"","version":1,"decision":"","reason":"","protocol":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/protocol"}}), true
+	case "revocation.probe.requested":
+		return shape(`{"bucket":"","requested_by":""}`), true
 	case "issuance.server_side_keygen":
 		return shape(`{"identity_id":"","name":"","detail":"","successor":""}`), true
 	case "itsm.ticket.requested":

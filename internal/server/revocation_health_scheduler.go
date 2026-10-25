@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/revocationhealth"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -82,35 +83,51 @@ func (s *Server) RunRevocationHealthOnce(ctx context.Context) (int, error) {
 	queued := 0
 	var firstErr error
 	for _, tenantID := range tenants {
-		targets, err := s.revocationTargets(ctx, tenantID)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		plain, groups, err := s.groupLDAPRevocationTargets(ctx, tenantID, targets)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		n, err := s.queueRevocationBatches(ctx, tenantID, bucket, plain, nil, "")
+		n, err := s.queueRevocationTenant(ctx, tenantID, bucket)
 		queued += n
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
-		for _, group := range groups {
-			binding := group.binding
-			n, err := s.queueRevocationBatches(ctx, tenantID, bucket, group.targets, &binding, group.agentID)
-			queued += n
-			if err != nil && firstErr == nil {
-				firstErr = err
-			}
+	}
+	return queued, firstErr
+}
+
+// queueRevocationTenant derives one tenant's CRL and OCSP targets from its
+// inventory and queues them in bounded batches under bucket. The hourly sweep
+// and an operator's on-demand request share it, so both probe exactly the same
+// endpoints; the bucket keeps their intents distinct.
+func (s *Server) queueRevocationTenant(ctx context.Context, tenantID, bucket string) (int, error) {
+	targets, err := s.revocationTargets(ctx, tenantID)
+	if err != nil {
+		return 0, err
+	}
+	plain, groups, err := s.groupLDAPRevocationTargets(ctx, tenantID, targets)
+	if err != nil {
+		return 0, err
+	}
+	queued, firstErr := s.queueRevocationBatches(ctx, tenantID, bucket, plain, nil, "")
+	for _, group := range groups {
+		binding := group.binding
+		n, err := s.queueRevocationBatches(ctx, tenantID, bucket, group.targets, &binding, group.agentID)
+		queued += n
+		if err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
 	return queued, firstErr
+}
+
+// queueRevocationProbeNow is an operator's on-demand probe (replay defect
+// B14-R1): the same targets as the hourly sweep, under the request's own
+// bucket, so it is new work rather than a duplicate of this hour's.
+func (s *Server) queueRevocationProbeNow(ctx context.Context, tenantID, bucket string) (int, error) {
+	if s.orch == nil || s.store == nil {
+		return 0, errors.New("server: revocation health is not configured")
+	}
+	if !strings.HasPrefix(bucket, orchestrator.RevocationProbeRequestBucketPrefix) {
+		return 0, errors.New("server: an on-demand revocation probe needs its request bucket")
+	}
+	return s.queueRevocationTenant(ctx, tenantID, bucket)
 }
 
 // queueRevocationBatches queues targets in bounded batches. A batch with an

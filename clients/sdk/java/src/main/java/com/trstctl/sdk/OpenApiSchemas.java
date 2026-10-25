@@ -741,6 +741,7 @@ public final class OpenApiSchemas {
       "RevocationEndpointHealth",
       "RevocationHealth",
       "RevocationHealthSummary",
+      "RevocationProbeNow",
       "RiskComponents",
       "RogueCertificateFinding",
       "RogueCertificatePosture",
