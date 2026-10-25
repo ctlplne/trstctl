@@ -116,6 +116,16 @@ func (s *Store) ControlPlaneKeygenFor(ctx context.Context, tenantID string) (Con
 	return out, found, err
 }
 
+// ControlPlaneKeygenAllowed reads the tenant's decision. A tenant with none
+// predates the switch and keeps the behavior it had: allowed.
+func (s *Store) ControlPlaneKeygenAllowed(ctx context.Context, tenantID string) (bool, error) {
+	policy, found, err := s.ControlPlaneKeygenFor(ctx, tenantID)
+	if err != nil {
+		return false, err
+	}
+	return !found || policy.Enabled, nil
+}
+
 // ActiveControlPlaneKeyCertificates counts the tenant's active certificates
 // whose recorded custody says the control plane generated the key: their
 // renewals generate a key in the control plane again.

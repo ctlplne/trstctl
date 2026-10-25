@@ -24,6 +24,8 @@ var controlPlaneKeygenPaths = []string{
 	"identity issuance without a CSR, and the renewal or rotation of an identity whose key the control plane generated",
 	"PKI-secret issuance by common name, including the Vault-compatible pki/issue route",
 	"X.509-SVIDs from the compatibility Workload API socket served by the control plane",
+	"Kubernetes TLS auto-issuance from a k8s_ingress_gateway discovery source",
+	"the reissue step of a PQC migration run started before host-csr migration",
 }
 
 // refuseControlPlaneKeygen is the switch's check for the API's own key
@@ -44,8 +46,10 @@ const controlPlaneKeygenGuidance = "With control-plane key generation off, each 
 	"key exists and names its replacement: an identity issuance needs a CSR (subject_csr_pem) or an agent-executed " +
 	"target so the host generates the key, and its renewal fails its rotation run with the same reason; a PKI secret " +
 	"needs csr_pem, and the Vault-compatible pki/issue route sends callers to pki/sign; the compatibility Workload API " +
-	"socket refuses X.509-SVIDs and names the host agent's socket. Turning it on lets the control plane generate " +
-	"subject keys again; each use still records an issuance.server_side_keygen or spiffe.workload_api.local_socket_used event."
+	"socket refuses X.509-SVIDs and names the host agent's socket; Kubernetes TLS auto-issuance refuses each resource " +
+	"and names cert-manager; an older PQC migration's reissue waits and names host-csr migration. Turning it on lets the " +
+	"control plane generate subject keys again; each use still records an issuance.server_side_keygen or " +
+	"spiffe.workload_api.local_socket_used event."
 
 // controlPlaneKeygenRoutes serves the tenant's switch (owner decision
 // 2026-10-24, A120/A130/A132).

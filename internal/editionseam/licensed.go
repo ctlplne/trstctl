@@ -10,6 +10,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/protocols/spiffe"
@@ -81,7 +82,11 @@ type PCASLeafIssuer interface {
 		ttl time.Duration, extension crypto.CertificateExtension) ([]byte, error)
 }
 
-type ProtocolLeafIssuer func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error)
+// ProtocolLeafIssuer signs csrDER through the protocol issuance path. origin
+// is what the caller knows about who generated the CSR's key; it is recorded as
+// the certificate's custody, so a caller that cannot say passes
+// custody.OriginUnrecorded rather than guessing.
+type ProtocolLeafIssuer func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte, origin custody.KeyOrigin) ([]byte, error)
 
 // SuccessionMinter mints a PCAS successor inside the out-of-process signer over the
 // signer transport (satisfied by *signing.Client). It is optional in

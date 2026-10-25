@@ -90,6 +90,8 @@ silently counted as a complete custody record.
 | Automated renewal successor, no CSR and retained control-plane target | The control plane | Tenant-bound encrypted recovery record; sealed deploy intent when a control-plane connector is configured | **Yes — deprecated** identity fallback, see below |
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
 | Direct attested X.509-SVID | The requesting workload | Not established by the attestation request | No — only the public key travels up |
+| Kubernetes TLS auto-issuance | The control plane | Held in locked memory and wiped; nothing delivers it to the cluster | **Yes**, see below |
+| PQC migration reissue, older run | The control plane | Held in locked memory and wiped; nothing delivers it to the asset | **Yes** — only runs queued before host-csr migration, see below |
 
 ACME, EST simple enrollment, SCEP, CMP, direct attested issuance, and a
 certificate ordered through an external CA (`POST /api/v1/external-cas/{id}/issue`
@@ -129,11 +131,13 @@ the control-plane path while the tenant allows it; a derived requester origin
 still renews only through its requester's protocol, because no retained CSR links
 it to the renewal.
 
-## The three retained control-plane generators, and what replaces each
+## The five retained control-plane generators, and what replaces each
 
-There are four `Yes` rows because the identity generator is reused by its
-automated-renewal fallback. There are only three distinct control-plane subject-key
-generators to remove.
+There are six `Yes` rows because the identity generator is reused by its
+automated-renewal fallback. There are five distinct control-plane subject-key
+generators: the three deprecated paths below, Kubernetes TLS auto-issuance, and the
+reissue step of a PQC migration run that predates host-csr migration. The tenant's
+switch governs all five.
 
 **Identity leaf without a CSR, including its renewal fallback.** Supplying
 `subject_csr_pem` is the primary direct-identity path: trstctl signs the request
@@ -190,7 +194,8 @@ change is refused when it reaches the mint, before a key exists; it completes if
 the tenant turns key generation back on. The renewal of an identity whose key the
 control plane generated fails its rotation run with the same reason. The switch
 also governs PKI-as-a-secret by common name and the Vault-compatible
-`pki/issue/{role}`, and the compatibility Workload API socket (both below).
+`pki/issue/{role}`, the compatibility Workload API socket, Kubernetes TLS
+auto-issuance, and the reissue step of an older PQC migration run (all below).
 
 Lifecycle issuance also retains the exact public certificate template before the
 CA signature. The isolated signer journals that operation and returns the same
@@ -238,6 +243,27 @@ and `pki/issue/{role}` is refused the same way, naming `pki/sign/{role}`. The Se
 legacy choice to its filtered Audit evidence. Vault/OpenBao clients use
 `pki/sign/{role}` for CSR custody; `pki/issue/{role}` is the same deprecated
 server-keygen choice.
+
+**Kubernetes TLS auto-issuance.** A `k8s_ingress_gateway` discovery source with
+`auto_issue` mints a signer-backed certificate for each Ingress or Gateway TLS
+resource. Its subject key is generated in the control plane, recorded as
+`key_origin=control_plane` with `key_storage=locked_memory`, and wiped after the
+certificate is recorded: nothing writes it into the cluster's TLS Secret, so the
+certificate is inventory, not a deployed credential. Each key it generates records an
+`issuance.server_side_keygen` event naming the resource. With the tenant's switch off
+the run refuses each resource before a key exists and says why; the run reports
+`failed` (or `partial`) naming the switch and its replacement: issue the certificate
+with cert-manager against trstctl's ACME directory, so the cluster generates the key
+and sends only a CSR.
+
+**PQC migration reissue from an older run.** A PQC migration started today binds each
+certificate asset to a host target and runs as host-csr migration: the host agent
+generates the post-quantum key. A run started before host-csr migration existed may
+still hold reissue work whose step generates an ECDSA P-256 and ML-DSA-44 key in the
+control plane, builds the hybrid CSR, and destroys the key after issuance. That step
+now records `key_origin=control_plane`, records an `issuance.server_side_keygen`
+event, and is refused before any key exists while the tenant's switch is off, as a
+retryable no-effect; the replacement is to start the migration again with host-csr.
 
 ## What this page does not claim
 

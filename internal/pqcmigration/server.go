@@ -24,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -85,6 +86,16 @@ type outboxHandler struct {
 	lookupPrepared  func(context.Context, string, pqcMigrationTLSPosturePayload) (connector.TLSPosture, bool, error)
 	lookupCompleted func(context.Context, string, pqcMigrationTLSPosturePayload, []byte) (TLSFindingCompleted, bool, error)
 	afterTLSApply   func() error
+	keygenAllowed   func(context.Context, string) (bool, error)
+}
+
+// controlPlaneKeygenAllowed reads the tenant's switch over control-plane key
+// generation (owner decision 2026-10-24).
+func (h *outboxHandler) controlPlaneKeygenAllowed(ctx context.Context, tenantID string) (bool, error) {
+	if h.keygenAllowed != nil {
+		return h.keygenAllowed(ctx, tenantID)
+	}
+	return h.store.ControlPlaneKeygenAllowed(ctx, tenantID)
 }
 
 func (h *outboxHandler) doIdempotent(ctx context.Context, tenantID, key string, fn func(context.Context) ([]byte, error)) ([]byte, error) {
@@ -1362,11 +1373,25 @@ func (h *outboxHandler) handlePQCReissue(ctx context.Context, m orchestrator.Mes
 		return fmt.Errorf("server: decode PQC migration reissue payload: %w", err)
 	}
 	_, err := h.doIdempotent(ctx, m.TenantID, "licensed-crypto-migration-reissue:"+m.IdempotencyKey, func(ctx context.Context) ([]byte, error) {
+		// This older reissue builds its CSR from a key the control plane
+		// generates, so the tenant's switch governs it (owner decision
+		// 2026-10-24): while it is off the job is refused before any key
+		// exists, and retried, naming the host-csr migration that replaces it.
+		allowed, err := h.controlPlaneKeygenAllowed(ctx, m.TenantID)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, orchestrator.DefiniteNoEffect(fmt.Errorf("pqcmigration: %w",
+				orchestrator.ControlPlaneKeygenOff(orchestrator.PQCReissueKeygenReplacement)))
+		}
+		h.recordReissueKeygen(ctx, m.TenantID, payload.Location)
 		csrDER, err := buildPQCMigrationHybridCSR(payload.Location)
 		if err != nil {
 			return nil, err
 		}
-		leafDER, err := h.issue(ctx, m.TenantID, payload.Protocol, "licensed-crypto-migration:"+payload.RunID+":"+payload.AssetID, csrDER)
+		leafDER, err := h.issue(ctx, m.TenantID, payload.Protocol, "licensed-crypto-migration:"+payload.RunID+":"+payload.AssetID, csrDER,
+			custody.OriginControlPlane)
 		if err != nil {
 			return nil, err
 		}
@@ -1655,6 +1680,33 @@ func (h *outboxHandler) appendProjected(ctx context.Context, tenantID, eventType
 		opts = append(opts, WithProgressProjection(h.progress))
 	}
 	return projections.New(h.store, opts...).Apply(ctx, ev)
+}
+
+// recordReissueKeygen records that the older reissue generated a subject key
+// in the control plane, as every control-plane generator does. Best-effort:
+// failing to record it must not fail the migration step.
+func (h *outboxHandler) recordReissueKeygen(ctx context.Context, tenantID, location string) {
+	if h.log == nil {
+		return
+	}
+	body, err := json.Marshal(struct {
+		IdentityID string `json:"identity_id"`
+		Name       string `json:"name"`
+		Detail     string `json:"detail"`
+		Successor  string `json:"successor"`
+	}{
+		Name:      location,
+		Detail:    "the control plane generated this PQC migration reissue's subject key, and nothing delivers that key to the asset",
+		Successor: orchestrator.PQCReissueKeygenReplacement,
+	})
+	if err != nil {
+		return
+	}
+	if h.appendEvent != nil {
+		_ = h.appendEvent(ctx, tenantID, "issuance.server_side_keygen", json.RawMessage(body))
+		return
+	}
+	_, _ = h.log.Append(ctx, events.Event{Type: "issuance.server_side_keygen", TenantID: tenantID, Data: body})
 }
 
 func buildPQCMigrationHybridCSR(location string) ([]byte, error) {

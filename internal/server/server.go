@@ -47,6 +47,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/decommission/release"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/editionseam"
@@ -2203,7 +2204,7 @@ func (s *Server) kemCustody() KEMCustody {
 }
 
 func (s *Server) protocolLeafIssuer(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) ProtocolLeafIssuer {
-	return func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte) ([]byte, error) {
+	return func(ctx context.Context, tenantID, protocol, idempotencyKey string, csrDER []byte, origin custody.KeyOrigin) ([]byte, error) {
 		issuer := &protocolIssuer{
 			issue: s.IssueLeafWithProfile, issueLicensed: s.IssueLicensedLeafWithProfile,
 			inspectLicensedCSR: s.licensedCSRInspector, parseLicensedCSR: s.licensedCSRParser,
@@ -2212,7 +2213,7 @@ func (s *Server) protocolLeafIssuer(d Deps, orch *orchestrator.Orchestrator, ide
 			ensureCRL: ensureCRL, publishCRL: publishCRL,
 			tenantCrypto: d.TenantCrypto,
 		}
-		return issuer.IssueProtocolLeaf(ctx, tenantID, protocol, idempotencyKey, csrDER, protocolLeafTTL)
+		return issuer.issueProtocolLeafWithOrigin(ctx, tenantID, protocol, idempotencyKey, csrDER, protocolLeafTTL, origin)
 	}
 }
 

@@ -711,6 +711,15 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 			return rep, "", "", err
 		}
 		if len(existing) == 0 {
+			// Auto-issuance generates the subject key in the control plane, so
+			// the tenant's switch governs it (owner decision 2026-10-24), and
+			// each run that generates one records that it did.
+			if err := d.requireKubernetesAutoIssuanceKeygen(ctx, tenantID); err != nil {
+				rep.Failed++
+				lastMintErr = err.Error()
+				continue
+			}
+			d.recordKubernetesAutoIssuanceKeygen(ctx, tenantID, f.Ref)
 			cert, err := d.mintServedLeaf(ctx, tenantID, "", f.CommonName, f.DNSNames)
 			if err != nil {
 				rep.Failed++

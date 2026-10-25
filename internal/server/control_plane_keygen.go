@@ -4,9 +4,11 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -21,11 +23,7 @@ func controlPlaneKeygenAllowed(ctx context.Context, st *store.Store, tenantID st
 	if st == nil {
 		return true, nil
 	}
-	policy, found, err := st.ControlPlaneKeygenFor(ctx, tenantID)
-	if err != nil {
-		return false, err
-	}
-	return !found || policy.Enabled, nil
+	return st.ControlPlaneKeygenAllowed(ctx, tenantID)
 }
 
 // controlPlaneKeygenGuard is the orchestrator's first-issuance check: a
@@ -62,4 +60,41 @@ func (d *issuanceDispatcher) requireControlPlaneKeygen(ctx context.Context, tena
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: %w", orchestrator.ControlPlaneKeygenOff(orchestrator.IdentityKeygenReplacement)))
 	}
 	return nil
+}
+
+// requireKubernetesAutoIssuanceKeygen is the switch's check for Kubernetes TLS
+// auto-issuance, which generates each certificate's subject key in the control
+// plane. The discovery run reports a refusal as that resource's failure.
+func (d *issuanceDispatcher) requireKubernetesAutoIssuanceKeygen(ctx context.Context, tenantID string) error {
+	allowed, err := controlPlaneKeygenAllowed(ctx, d.store, tenantID)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return orchestrator.ControlPlaneKeygenOff(orchestrator.KubernetesAutoIssuanceKeygenReplacement)
+	}
+	return nil
+}
+
+// recordKubernetesAutoIssuanceKeygen records that Kubernetes TLS auto-issuance
+// generated a subject key in the control plane for one discovered resource. It
+// is best-effort for the same reason as the identity path's record.
+func (d *issuanceDispatcher) recordKubernetesAutoIssuanceKeygen(ctx context.Context, tenantID, resource string) {
+	if d.log == nil {
+		return
+	}
+	body, err := json.Marshal(struct {
+		IdentityID string `json:"identity_id"`
+		Name       string `json:"name"`
+		Detail     string `json:"detail"`
+		Successor  string `json:"successor"`
+	}{
+		Name:      resource,
+		Detail:    "the control plane generated this Kubernetes resource's subject key for TLS auto-issuance; nothing delivers that key to the cluster",
+		Successor: orchestrator.KubernetesAutoIssuanceKeygenReplacement,
+	})
+	if err != nil {
+		return
+	}
+	_, _ = d.log.Append(ctx, events.Event{Type: "issuance.server_side_keygen", TenantID: tenantID, Data: body})
 }

@@ -42,6 +42,8 @@ var custodyKinds = []string{
 	"Automated renewal successor, recorded `subject_csr_pem`",
 	"Automated renewal successor, no CSR and retained control-plane target",
 	"Ephemeral workload credential",
+	"Kubernetes TLS auto-issuance",
+	"PQC migration reissue, older run",
 }
 
 // custodyControlPlaneKeygen are the paths that still generate a subject key
@@ -51,6 +53,8 @@ var custodyControlPlaneKeygen = map[string]string{
 	"Identity leaf without a CSR":              "subject_csr_pem",
 	"Control-plane compatibility Workload API": "host-agent Workload API",
 	"PKI-as-a-secret with only a common name":  "csr_pem",
+	"Kubernetes TLS auto-issuance":             "cert-manager",
+	"PQC migration reissue from an older run":  "host-csr",
 }
 
 func TestCustodyTableCoversEveryCredentialKind(t *testing.T) {
@@ -163,8 +167,8 @@ func TestRenewalCustodyRowsFollowTheProductionBranch(t *testing.T) {
 			t.Errorf("docs/custody.md retains the pre-B2 claim %q", stale)
 		}
 	}
-	if !strings.Contains(custody, "three retained control-plane generators") {
-		t.Error("docs/custody.md must state the current generator count; renewal reuses the deprecated no-CSR identity fallback rather than adding a fourth generator")
+	if !strings.Contains(custody, "five retained control-plane generators") {
+		t.Error("docs/custody.md must state the current generator count; renewal reuses the deprecated no-CSR identity fallback rather than adding another generator, and Kubernetes TLS auto-issuance and the older PQC reissue are the other two")
 	}
 }
 
