@@ -531,7 +531,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// to different places.
 	if !hostJob {
 		if verdict, readback := applianceReadback(ctx, client, intent, material); readback != "" {
-			detail = detail + " | appliance readback: " + readback
+			detail = withApplianceReadback(detail, verdict, readback)
 			// A readback that contradicts a passing handshake downgrades the
 			// outcome. The handshake can pass against a cached session or a
 			// second listener while the object this deploy installed is not the

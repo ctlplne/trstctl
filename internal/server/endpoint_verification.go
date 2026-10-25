@@ -234,7 +234,7 @@ func (s *Server) appendEndpointVerificationWithEventID(
 //
 // The same shape the dry-run result uses (D5): a distinct idempotency key
 // suffix, because "we asked" and "here is the answer" are different rows.
-func deploymentVerificationReceipt(intent relay.DeployIntent, tr transport.ProbeTranscript, detail string) store.ConnectorDeliveryReceipt {
+func deploymentVerificationReceipt(intent relay.DeployIntent, tr transport.ProbeTranscript, detail string, readback *relay.ApplianceReadback) store.ConnectorDeliveryReceipt {
 	status := servedstatus.ConnectorVerified
 	reason := "endpoint_serving_deployed_identity"
 	if !tr.Reached {
@@ -256,6 +256,20 @@ func deploymentVerificationReceipt(intent relay.DeployIntent, tr transport.Probe
 	} else if tr.Mismatch != "" {
 		status = servedstatus.ConnectorVerifyFailed
 		reason = "endpoint_serving_" + string(tr.Mismatch) + "_mismatch"
+	}
+	if readback != nil && readback.Detail != "" {
+		// B1: the appliance's own answer. A contradicted handshake fails the
+		// receipt and names what the device said; a confirming one is kept
+		// beside the handshake's detail.
+		if !relay.ReadbackConfirms(readback) && status == servedstatus.ConnectorVerified {
+			status = servedstatus.ConnectorVerifyFailed
+			reason = "appliance_readback_" + readback.Verdict
+		}
+		if detail == "" {
+			detail = "appliance readback: " + readback.Detail
+		} else {
+			detail += "; appliance readback: " + readback.Detail
+		}
 	}
 
 	identityID := strings.TrimSpace(intent.IdentityID)

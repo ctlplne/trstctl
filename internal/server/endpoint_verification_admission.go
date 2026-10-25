@@ -29,6 +29,12 @@ func validateEndpointVerificationReport(jobPayload []byte, reportJSON, evidenceD
 	if err := decodeStrictJSON([]byte(reportJSON), &report); err != nil {
 		return report, errors.New("endpoint verification report cannot be decoded")
 	}
+	for _, result := range report.Results {
+		if result.ApplianceReadback != nil {
+			// Only a deploy asks the appliance what it has (B1).
+			return report, errors.New("endpoint verification sweep carries an appliance readback")
+		}
+	}
 	if len(report.Results) != len(intent.Endpoints) {
 		return report, errors.New("endpoint verification report must cover every claimed endpoint exactly once")
 	}
@@ -156,9 +162,14 @@ func validateDeploymentVerificationReport(intent relay.DeployIntent, expected ce
 	if tr.Digest() != evidenceDigest {
 		return empty, errors.New("deployment verification digest differs from its signed evidence")
 	}
+	if !relay.ValidApplianceReadback(result.ApplianceReadback) {
+		return empty, errors.New("deployment verification carries an invalid appliance readback")
+	}
 	// One rule for deploy and rollback (B10-L1): a chain-only mismatch passes
-	// unless the target is strict.
-	healthy := relay.VerificationPasses(tr, relay.StrictChainVerification(intent.TargetConfig))
+	// unless the target is strict. The appliance's own readback (B1) must also
+	// confirm: the relay downgrades a passing handshake the device contradicts.
+	healthy := relay.VerificationPasses(tr, relay.StrictChainVerification(intent.TargetConfig)) &&
+		relay.ReadbackConfirms(result.ApplianceReadback)
 	if (outcome == transport.JobOutcomeVerified) != healthy {
 		return empty, errors.New("deployment outcome contradicts its verification observation")
 	}

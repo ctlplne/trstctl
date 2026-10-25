@@ -93,6 +93,55 @@ func readbackDetail(verdict connector.ReadbackVerdict, installed connector.Insta
 	}
 }
 
+// applianceReadbackLimit bounds the readback sentence a report carries; an
+// object name is the only part of it the device chooses.
+const applianceReadbackLimit = 512
+
+// withApplianceReadback adds the appliance's readback to a deploy's report
+// detail (B1). When verification produced the JSON EndpointVerifyReport the
+// control plane decodes strictly, the readback travels inside it, verdict and
+// sentence, so the receiver can weigh it; appending text to that JSON made the
+// whole report undecodable. A detail that is not a report (no verify address,
+// or a sentence saying why verification could not run) gets the sentence
+// appended as before.
+func withApplianceReadback(detail string, verdict connector.ReadbackVerdict, sentence string) string {
+	if len(sentence) > applianceReadbackLimit {
+		sentence = sentence[:applianceReadbackLimit]
+	}
+	var report EndpointVerifyReport
+	if decodeJobPayload([]byte(detail), &report) == nil && len(report.Results) == 1 {
+		report.Results[0].ApplianceReadback = &ApplianceReadback{Verdict: string(verdict), Detail: sentence}
+		if encoded, err := json.Marshal(report); err == nil {
+			return string(encoded)
+		}
+	}
+	if detail == "" {
+		return "appliance readback: " + sentence
+	}
+	return detail + " | appliance readback: " + sentence
+}
+
+// ReadbackConfirms reports whether a report's readback is consistent with a
+// good deploy: none, a device that did not answer, or the deployed certificate
+// serving. The control plane applies the same rule the relay does.
+func ReadbackConfirms(r *ApplianceReadback) bool {
+	return r == nil || readbackConfirms(connector.ReadbackVerdict(r.Verdict))
+}
+
+// ValidApplianceReadback reports whether a received readback names a known
+// verdict and stays inside the bound.
+func ValidApplianceReadback(r *ApplianceReadback) bool {
+	if r == nil {
+		return true
+	}
+	switch connector.ReadbackVerdict(r.Verdict) {
+	case "", connector.ReadbackServing, connector.ReadbackInstalledNotBound, connector.ReadbackDiverged,
+		connector.ReadbackAbsent, connector.ReadbackUnknown:
+		return len(r.Detail) <= applianceReadbackLimit
+	}
+	return false
+}
+
 // readbackConfirms reports whether a verdict is consistent with a good deploy.
 //
 // Only ReadbackServing and an absent verdict count. ReadbackUnknown does NOT:

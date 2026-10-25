@@ -794,7 +794,7 @@ func (a *agentService) recordAgentConnectorDelivery(
 		return errors.New("admitted deployment verification cannot be decoded")
 	}
 	result := report.Results[0]
-	verified := deploymentVerificationReceipt(intent, result.Transcript, result.Detail)
+	verified := deploymentVerificationReceipt(intent, result.Transcript, result.Detail, result.ApplianceReadback)
 	verified.ID = evidenceID("connector-verification", info.TenantID, claim.IdempotencyKey, req.JobID)
 	// The delivery row owns the unique outbox correlation. Verification is a
 	// separate historical fact, linked by its stable ID and :verified key.

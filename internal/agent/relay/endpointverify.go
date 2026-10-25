@@ -106,6 +106,18 @@ type EndpointVerifyResult struct {
 	Transcript transport.ProbeTranscript `json:"transcript"`
 	// Detail is the operator-facing explanation, already sanitized.
 	Detail string `json:"detail,omitempty"`
+	// ApplianceReadback is what the appliance itself reported having installed
+	// right after a deploy (E2). Only a deploy's report carries it, never a
+	// sweep; nil when the family cannot be asked.
+	ApplianceReadback *ApplianceReadback `json:"appliance_readback,omitempty"`
+}
+
+// ApplianceReadback is the device's answer beside the handshake: the verdict
+// (a connector.ReadbackVerdict; empty when the device did not answer) and the
+// operator-facing sentence.
+type ApplianceReadback struct {
+	Verdict string `json:"verdict,omitempty"`
+	Detail  string `json:"detail"`
 }
 
 // runEndpointVerify probes every endpoint in the intent and reports the lot.
