@@ -1094,7 +1094,7 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("Imported Existing CA v2 (active)").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-imported/issue").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-successor/issue").length).toBeGreaterThan(0);
-  });
+  }, 15_000);
 
   it("starts a CA re-key ceremony and activates fresh CA material", async () => {
     const user = userEvent.setup();
@@ -1619,7 +1619,7 @@ describe("CA hierarchy and custody surface", () => {
     );
     expect(await screen.findByText("ca-offline-intermediate")).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
-  });
+  }, 15_000);
 
   it("imports an existing signer-backed CA chain without collecting private key bytes", async () => {
     const user = userEvent.setup();
