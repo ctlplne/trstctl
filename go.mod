@@ -20,7 +20,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/hcl v1.0.0
 	github.com/hashicorp/hcl/v2 v2.24.0
-	github.com/jackc/pgx/v5 v5.10.0
+	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jcmturner/goidentity/v6 v6.0.1
 	github.com/jcmturner/gokrb5/v8 v8.4.4
 	github.com/miekg/dns v1.1.57
