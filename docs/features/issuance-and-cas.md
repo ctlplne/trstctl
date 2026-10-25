@@ -738,19 +738,28 @@ state. If no exact managed host target exists, revoke the exact certificate
 with its issuing CA and stop the host through an independently verified
 procedure.
 
-Once a certificate is revoked for `keyCompromise` (directly, or by the compound
-response once its CA revocation is recorded), its key is recorded as compromised in
-the tenant: no certifying path in that tenant will certify it again (CA/B BR 6.1.1.3,
-condition 4). The ACME, EST, SCEP, CMP, REST, Vault-compatible PKI, SPIFFE, agent
-enrollment, CA authority, break-glass and external CA paths refuse a request for that
-key with `the subject key is recorded as compromised in this tenant`, so the
-replacement must use a new key. The check stays inside the tenant; another tenant's
-records are never consulted. Projecting the revocation records the certificate's
-SubjectPublicKeyInfo SHA-256, and each issuance makes one indexed lookup by tenant
-and hash. There is no cap, so a mass `keyCompromise` revocation never blocks the
-replacement issuance it calls for. At startup the server records the keys of
-revocations an earlier build projected. A revoked certificate with no retained DER
-has no key to record, and once a key is recorded as compromised it stays recorded.
+A key is recorded as compromised in the tenant from the moment the compromise is
+reported, not from the moment the revocation publishes. Revoking an identity with
+reason `keyCompromise` (the ordinary transition or the compound response) records,
+in the same transaction, the keys of the certificates that revocation will revoke,
+one `certificate.subject_key.compromised` event per certificate, before
+`revocation.publish` runs. An exact certificate revocation for `keyCompromise` that
+is queued at its external CA records the key when it is queued, whatever the CA
+answers later, and a certificate revoked for `keyCompromise` directly records its
+key as the revocation is recorded. From then on no certifying path in that tenant
+will certify the key again (CA/B BR 6.1.1.3, condition 4). The ACME, EST, SCEP,
+CMP, REST, Vault-compatible PKI, SPIFFE, agent enrollment, CA authority, break-glass
+and external CA paths refuse a request for that key with `the subject key is
+recorded as compromised in this tenant`, so the replacement must use a new key. The
+check stays inside the tenant; another tenant's records are never consulted. Each
+record is the certificate's SubjectPublicKeyInfo SHA-256, and each issuance makes
+one indexed lookup by tenant and hash. There is no cap, so a mass `keyCompromise`
+revocation never blocks the replacement issuance it calls for. At startup the server
+records the keys of revocations an earlier build projected. If the server stops
+between an identity's revocation and its key records, the keys are recorded when
+the revocation publishes instead. A certificate with no retained DER has no key to
+record, and once a key is recorded as compromised it stays recorded, even if the
+CA's revocation later fails.
 
 For an X.509 identity, the preview checks the exact unrevoked certificates tied to
 its issuance or verified deployment, including superseded leaves that could be

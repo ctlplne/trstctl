@@ -325,6 +325,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/serial", opaque), privacyRule("/reason", clear),
 		privacyRule("/reason_code", opaque), privacyRule("/revoked_at", opaque),
 	)
+	certificateSubjectKeyCompromised := privacyRules(
+		privacyRule("/identity_id", opaque), privacyRule("/fingerprint", opaque),
+		privacyRule("/spki_sha256", opaque),
+	)
 	certificateRecorded := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/ca_id", opaque),
 		privacyRule("/owner_id", opaque), privacyRule("/subject", token),
@@ -1005,6 +1009,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAccessChangeRequestCreated, 1}:                                                 accessChangeRequest,
 		{EventAccessChangeRequestDecided, 1}:                                                 accessChangeDecision,
 		{EventCertificateRevoked, 1}:                                                         certificateRevoked,
+		{EventCertificateSubjectKeyCompromised, 1}:                                           certificateSubjectKeyCompromised,
 		{EventKeyCompromiseCAEffectCompleted, 1}:                                             keyCompromiseCAEffectPrivacyPolicy(),
 		{EventKeyCompromiseEffectRetried, 1}:                                                 keyCompromiseEffectRetriedPrivacyPolicy(),
 		{EventCertificateRevocationBatchApplied, 1}:                                          revocationBatchPrivacyPolicy(),
@@ -1535,6 +1540,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAccessChangeRequestCreated, 1}:                                                 privacyPayloadShape[AccessChangeRequestCreated](),
 		{EventAccessChangeRequestDecided, 1}:                                                 privacyPayloadShape[AccessChangeRequestDecided](),
 		{EventCertificateRevoked, 1}:                                                         privacyPayloadShape[CertificateRevoked](),
+		{EventCertificateSubjectKeyCompromised, 1}:                                           privacyPayloadShape[CertificateSubjectKeyCompromised](),
 		{EventKeyCompromiseCAEffectCompleted, 1}:                                             privacyPayloadShape[KeyCompromiseCAEffectCompleted](),
 		{EventKeyCompromiseEffectRetried, 1}:                                                 privacyPayloadShape[KeyCompromiseEffectRetried](),
 		{EventCertificateRevocationBatchApplied, 1}:                                          privacyPayloadShape[CertificateRevocationBatchApplied](),

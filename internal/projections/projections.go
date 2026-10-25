@@ -4393,6 +4393,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true, CertificateObservationEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
 	EventCertificateRevoked:                       {1: true},
+	EventCertificateSubjectKeyCompromised:         {1: true},
 	EventKeyCompromiseCAEffectCompleted:           {1: true},
 	EventKeyCompromiseEffectRetried:               {1: true},
 	EventCertificateRevocationBatchApplied:        {1: true, CertificateExternalRevocationSchemaVersion: true},
@@ -5300,6 +5301,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.CompleteCertificateRevocationAuthorityTx(ctx, tx, e, nil)
 	case EventCertificateRevocationBatchApplied:
 		return p.applyCertificateRevocationBatchTx(ctx, tx, e)
+	case EventCertificateSubjectKeyCompromised:
+		return p.applyCertificateSubjectKeyCompromisedTx(ctx, tx, e)
 	case EventCertificateSuperseded:
 		var pl CertificateSuperseded
 		if err := decode(e, &pl); err != nil {

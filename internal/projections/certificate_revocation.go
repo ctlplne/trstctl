@@ -119,6 +119,13 @@ func (p *Projector) applyCertificateRevocationBatchTx(ctx context.Context, tx pg
 			}); err != nil {
 				return err
 			}
+			// The key is compromised from the operator's report, not from the
+			// external CA's answer, which can take hours or fail (batch 14).
+			if batch.Reason == string(crypto.RevocationReasonKeyCompromise) {
+				if err := p.store.RecordCompromisedCertificateKeyTx(ctx, tx, event.TenantID, item.Fingerprint, event.Time); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		if item.Status != "revoked" {

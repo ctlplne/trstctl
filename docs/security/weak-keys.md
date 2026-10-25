@@ -111,11 +111,15 @@ A missing, empty or malformed file fails startup instead of checking nothing.
   (`allowed_key_algorithms`, `min_rsa_bits`), so a profile without a floor
   still issues RSA-1024. Ed25519 and post-quantum keys have no structural
   checks and pass. The same paths refuse a key the tenant has recorded as
-  compromised: one that a certificate of the tenant, revoked with reason
-  `keyCompromise`, carried (CA/B BR 6.1.1.3, condition 4). The revocation
-  projection records that certificate's SPKI SHA-256 (backfilled at startup
-  for earlier revocations), and the check is one indexed lookup by tenant and
-  hash, with no cap on how many revocations a tenant records. A bootstrap
+  compromised: one that a certificate of the tenant carried when it, or its
+  identity, was revoked with reason `keyCompromise` (CA/B BR 6.1.1.3,
+  condition 4). The key is recorded with the report, not with the
+  publication: an identity's `keyCompromise` revocation records its
+  certificates' SPKI SHA-256 in the same transaction, a revocation queued at an
+  external CA records it when queued, and a direct revocation records it as it
+  projects (backfilled at startup for earlier revocations). The check is one
+  indexed lookup by tenant and hash, with no cap on how many revocations a
+  tenant records. A bootstrap
   enrollment is checked for structural weakness before its single-use token
   is consumed; a key recorded as compromised is only known after the token
   names its tenant, so that refusal consumes the token.

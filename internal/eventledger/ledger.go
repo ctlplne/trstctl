@@ -39,6 +39,7 @@ const (
 	EventCertificateRecorded                      = "certificate.recorded"
 	EventCertificateCustodyAttested               = "certificate.custody.attested"
 	EventCertificateRevoked                       = "certificate.revoked"
+	EventCertificateSubjectKeyCompromised         = "certificate.subject_key.compromised"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
 	EventCACeremonyApproved                       = "ca.ceremony.approved"
@@ -203,6 +204,7 @@ var ledger = []FeatureEvent{
 	{"B5", "Certificate key custody", "attest", "agent job receipt", []string{EventCertificateCustodyAttested}},
 	// F47 — X.509 revocation infrastructure (served revocation of an inventoried cert).
 	{"F47", "X.509 revocation infrastructure", "revoke", "transitionIdentity", []string{EventCertificateRevoked}},
+	{"F47", "X.509 revocation infrastructure", "record_compromised_key", "transitionIdentity", []string{EventCertificateSubjectKeyCompromised}},
 	{"F47", "X.509 revocation infrastructure", "supersede", "transitionIdentity", []string{EventCertificateSuperseded}},
 	{"F47", "X.509 revocation infrastructure", "rotate_ocsp_responder", "respondOCSP", []string{EventOCSPResponderRotated}},
 

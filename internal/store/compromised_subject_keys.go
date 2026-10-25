@@ -15,10 +15,12 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
-// Compromised subject keys (owner decision, batch 11; CA/B BR 6.1.1.3,
-// condition 4). Each certificate revoked for keyCompromise records its
-// SubjectPublicKeyInfo SHA-256 once, when the revocation is projected, so
-// issuance asks one indexed question per request — has this tenant recorded
+// Compromised subject keys (owner decisions, batches 11 and 14; CA/B BR
+// 6.1.1.3, condition 4). Each certificate revoked for keyCompromise records its
+// SubjectPublicKeyInfo SHA-256 once, as early as the compromise is reported:
+// at its identity's keyCompromise revocation, when its revocation is queued at
+// an external CA, or when its revocation is projected, whichever comes first.
+// Issuance asks one indexed question per request — has this tenant recorded
 // this key as compromised? — however many revocations the tenant has.
 
 // recordCompromisedSubjectKeyTx records the subject key of a certificate the
@@ -40,6 +42,70 @@ func (s *Store) recordCompromisedSubjectKeyTx(ctx context.Context, tx pgx.Tx, te
 		return nil
 	}
 	return insertCompromisedSubjectKeyTx(ctx, tx, tenantID, fingerprint, spki, at)
+}
+
+// RecordCompromisedCertificateKeyTx records the subject key of a certificate
+// whose revocation for keyCompromise has been requested but not yet confirmed:
+// an external CA's revocation queued for its authority. The key is compromised
+// from the report, not from the authority's answer.
+func (s *Store) RecordCompromisedCertificateKeyTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint string, at time.Time) error {
+	return s.recordCompromisedSubjectKeyTx(ctx, tx, tenantID, fingerprint, at)
+}
+
+// RecordCompromisedSubjectKeyTx projects a certificate.subject_key.compromised
+// event: the key of a certificate whose identity was revoked for
+// keyCompromise, recorded before that certificate's own revocation publishes.
+func (s *Store) RecordCompromisedSubjectKeyTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint, spkiSHA256 string, at time.Time) error {
+	return insertCompromisedSubjectKeyTx(ctx, tx, tenantID, fingerprint, strings.ToLower(spkiSHA256), at)
+}
+
+// CertificateSubjectKey names one certificate's subject key by its SPKI
+// SHA-256 (lowercase hex).
+type CertificateSubjectKey struct {
+	Fingerprint string
+	SPKISHA256  string
+}
+
+// identityRevocationKeyPage bounds one read of an identity's certificates.
+const identityRevocationKeyPage = 101
+
+// IdentityRevocationSubjectKeysTx lists the subject keys of the certificates
+// an identity's revocation will revoke: the same exact issuance or delivery
+// evidence IdentityRevocationCertificates follows for revocation.publish, read
+// in bounded keyset pages. A certificate with no retained DER, or DER that does
+// not parse, carries no key to record.
+func (s *Store) IdentityRevocationSubjectKeysTx(ctx context.Context, tx pgx.Tx, tenantID, identityID string) ([]CertificateSubjectKey, error) {
+	var out []CertificateSubjectKey
+	after := ""
+	for {
+		rows, err := tx.Query(ctx, `SELECT fingerprint, certificate_der FROM certificates
+   WHERE tenant_id=$1 AND status <> 'revoked' AND fingerprint > $3 AND `+identityRevocationBinding+`
+   ORDER BY fingerprint LIMIT $4`, tenantID, identityID, after, identityRevocationKeyPage)
+		if err != nil {
+			return nil, err
+		}
+		read := 0
+		for rows.Next() {
+			var fingerprint string
+			var der []byte
+			if err := rows.Scan(&fingerprint, &der); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			read++
+			after = fingerprint
+			if spki, ok := certificateSPKISHA256(der); ok {
+				out = append(out, CertificateSubjectKey{Fingerprint: fingerprint, SPKISHA256: spki})
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		if read < identityRevocationKeyPage {
+			return out, nil
+		}
+	}
 }
 
 func insertCompromisedSubjectKeyTx(ctx context.Context, tx pgx.Tx, tenantID, fingerprint, spkiSHA256 string, at time.Time) error {

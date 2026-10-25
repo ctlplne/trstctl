@@ -992,6 +992,11 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 			if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 				return err
 			}
+			if canonical.To == StateRevoked && canonical.Reason == "keyCompromise" {
+				if err := o.recordCompromisedSubjectKeysTx(ctx, tx, tenantID, identityID, ev.Time); err != nil {
+					return err
+				}
+			}
 			if hasSideEffect && !sideEffectCompleted {
 				canonicalKey, canonicalPayload, err := lifecycleOutboxIntentFromEvent(ev, canonical, sideEffectDest)
 				if err != nil {
