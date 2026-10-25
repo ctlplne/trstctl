@@ -1162,7 +1162,12 @@ func (o *Outbox) finalizeClaim(ctx context.Context, claim claimedOutboxEntry, de
 			// retry budget. It made no new receiver call, so release any probe
 			// reservation without recording either success or another failure.
 			// dispatchClaim releases only the reservation this attempt owns.
-		} else if !deferred {
+		} else if !deferred && !IsDefiniteNoEffect(deliverErr) {
+			// A definite no-effect failure returned before any receiver I/O
+			// (a local refusal, a missing configuration, a policy gate), so it
+			// says nothing about the receiver's health; counting it would let
+			// one refused message open the circuit for every other message of
+			// the tenant's destination. Its own retry budget still bounds it.
 			o.recordCircuitFailure(claim.msg, deliverErr, now)
 		}
 		return nil

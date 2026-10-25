@@ -76,6 +76,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		// replacement (owner decision 2026-10-24).
 		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()).
 			WithExtension("code", "control_plane_keygen_off"))
+	case errors.Is(err, orchestrator.ErrIssuanceProfileRefused):
+		// The certificate profile the mint would apply refuses the request; the
+		// message names the profile, its version and the refusal.
+		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()).
+			WithExtension("code", "profile_refused"))
 	case errors.Is(err, orchestrator.ErrKeyCompromiseEffectNotRetryable):
 		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()))
 	case errors.Is(err, orchestrator.ErrDiscoverySourceIdentityConflict):

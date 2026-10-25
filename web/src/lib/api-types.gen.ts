@@ -4427,6 +4427,8 @@ export interface IdentityTransitionPreview {
   prerequisites: string[];
   preview_external_effects: string[];
   preview_writes: string[];
+  profile_refusal?: string;
+  profile_refused?: boolean;
   ready: boolean;
   request_fingerprint: string;
   required_permission: string;

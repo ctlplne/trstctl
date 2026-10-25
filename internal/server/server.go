@@ -1406,6 +1406,10 @@ func (s *Server) configureMutationSpine(
 	// plane is refused before anything is recorded while the tenant has that
 	// turned off (owner decision 2026-10-24).
 	orchOptions = append(orchOptions, orchestrator.WithControlPlaneKeygenGuard(controlPlaneKeygenGuard(d.Store)))
+	// A first issuance the mint's certificate profile would refuse for a
+	// reason that needs no key is refused before anything is recorded. The
+	// check reads the served mint's own configuration when it runs.
+	orchOptions = append(orchOptions, orchestrator.WithIssuanceAdmissionGuard(s.issuanceAdmissionGuard))
 	idem := orchestrator.NewIdempotency(
 		d.Store,
 		orchestrator.WithResultProtector(d.IdempotencyResultProtector),

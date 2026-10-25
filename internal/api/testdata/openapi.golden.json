@@ -18337,6 +18337,14 @@
             },
             "type": "array"
           },
+          "profile_refusal": {
+            "description": "The profile's own reason when profile_refused is true.",
+            "type": "string"
+          },
+          "profile_refused": {
+            "description": "The certificate profile the mint would apply refuses this issuance for a reason that needs no key (its enrollment protocol or validity); execution refuses it before recording anything.",
+            "type": "boolean"
+          },
           "ready": {
             "type": "boolean"
           },

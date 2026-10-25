@@ -6115,6 +6115,8 @@ IdentityTransitionPreview = TypedDict(
         'prerequisites': list[str],
         'preview_external_effects': list[str],
         'preview_writes': list[str],
+        'profile_refusal': str,
+        'profile_refused': bool,
         'ready': bool,
         'request_fingerprint': str,
         'required_permission': str,

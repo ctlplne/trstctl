@@ -963,6 +963,8 @@ func componentSchemas() map[string]*Schema {
 		"warnings":                   {Type: "array", Items: str()},
 		"guidance":                   str(),
 		"keygen_refused":             {Type: "boolean", Description: "The issuance needs a requester key: this tenant has control-plane key generation off and neither a CSR nor an agent-executed target would supply one."},
+		"profile_refused":            {Type: "boolean", Description: "The certificate profile the mint would apply refuses this issuance for a reason that needs no key (its enrollment protocol or validity); execution refuses it before recording anything."},
+		"profile_refusal":            {Type: "string", Description: "The profile's own reason when profile_refused is true."},
 	}, "capability", "ready", "identity_id", "identity_name", "identity_kind", "owner_id", "from", "to", "expected_version", "event_type", "side_effect", "request_fingerprint", "required_permission", "prerequisites", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps", "warnings", "guidance")
 	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
 	bulkRevokeReq := object(map[string]*Schema{

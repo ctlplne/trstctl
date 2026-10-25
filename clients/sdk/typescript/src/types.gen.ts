@@ -12683,6 +12683,10 @@ export interface components {
             prerequisites: string[];
             preview_external_effects: string[];
             preview_writes: string[];
+            /** @description The profile's own reason when profile_refused is true. */
+            profile_refusal?: string;
+            /** @description The certificate profile the mint would apply refuses this issuance for a reason that needs no key (its enrollment protocol or validity); execution refuses it before recording anything. */
+            profile_refused?: boolean;
             ready: boolean;
             request_fingerprint: string;
             required_permission: string;

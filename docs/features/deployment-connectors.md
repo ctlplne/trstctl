@@ -91,7 +91,10 @@ It is evidence of what the relay loaded, not a control-plane mechanism for pushi
 modules or widening an operator-owned grant.
 
 Retries use capped backoff with jitter, and a tenant/destination circuit breaker opens
-after repeated failures, skipping new claims until a half-open probe succeeds.
+after repeated failures, skipping new claims until a half-open probe succeeds. A failure
+that provably happened before any receiver I/O (a local refusal such as a certificate
+profile's, a missing configuration, a policy gate) says nothing about the receiver, so it
+never counts toward the circuit; it is bounded by its own message's retry budget.
 Operators inspect live state with `GET /api/v1/connectors/outbox-circuits`; Prometheus
 exposes transitions through
 `trstctl_outbox_circuit_transitions_total{destination,from,to}` (circuits stay per tenant and destination; the metric names no tenant because `/metrics` is unauthenticated).

@@ -1641,3 +1641,69 @@ func mustRegisterTenant(t *testing.T, s *store.Store, id string) {
 		t.Fatalf("register tenant: %v", err)
 	}
 }
+
+// A definite no-effect failure returned before any receiver I/O (a local
+// refusal, a missing configuration, a policy gate), so it says nothing about
+// the receiver: it never counts toward the destination's circuit, and the
+// tenant's next message is still delivered. An ordinary failure still opens it.
+func TestOutboxDefiniteNoEffectFailureNeverOpensTheCircuit(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Add(time.Hour).Truncate(time.Millisecond)
+	ob := orchestrator.NewOutbox(s,
+		orchestrator.WithNow(func() time.Time { return now }),
+		orchestrator.WithBackoff(func(int) time.Duration { return time.Hour }),
+		orchestrator.WithRetryJitter(func(delay time.Duration) time.Duration { return delay }),
+		orchestrator.WithCircuitBreaker(1, time.Minute),
+	)
+	refusedID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "ca.issue", IdempotencyKey: "refused-locally", Payload: []byte(`{"refuse":true}`),
+	})
+	nextID := enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "ca.issue", IdempotencyKey: "deliverable", Payload: []byte(`{}`),
+	})
+	handler := orchestrator.HandlerFunc(func(_ context.Context, m orchestrator.Message) error {
+		if string(m.Payload) == `{"refuse":true}` {
+			return orchestrator.DefiniteNoEffect(errors.New("the certificate profile refuses this issuance"))
+		}
+		return nil
+	})
+	if _, err := ob.Dispatch(ctx, handler); err != nil {
+		t.Fatal(err)
+	}
+	for _, snapshot := range ob.CircuitStates() {
+		if snapshot.State == orchestrator.CircuitOpen {
+			t.Fatalf("a definite no-effect refusal opened the circuit: %+v", snapshot)
+		}
+	}
+	refused, err := ob.Get(ctx, tenantA, refusedID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refused.Status != "pending" || refused.Attempts != 1 {
+		t.Fatalf("refused row = {status:%q attempts:%d}, want pending on its own retry budget", refused.Status, refused.Attempts)
+	}
+	next, err := ob.Get(ctx, tenantA, nextID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Status != "delivered" {
+		t.Fatalf("the tenant's next message = %q, want delivered despite the refusal", next.Status)
+	}
+
+	// An ordinary failure is a receiver signal and still opens the circuit.
+	enqueue(t, s, ob, orchestrator.Entry{
+		TenantID: tenantA, Destination: "ca.issue", IdempotencyKey: "receiver-down", Payload: []byte(`{"down":true}`),
+	})
+	down := orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error { return errors.New("receiver down") })
+	if _, err := ob.Dispatch(ctx, down); err != nil {
+		t.Fatal(err)
+	}
+	opened := false
+	for _, snapshot := range ob.CircuitStates() {
+		opened = opened || snapshot.State == orchestrator.CircuitOpen
+	}
+	if !opened {
+		t.Fatalf("an ordinary failure did not open the circuit: %+v", ob.CircuitStates())
+	}
+}

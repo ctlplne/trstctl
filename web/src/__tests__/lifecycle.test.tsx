@@ -711,6 +711,29 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.any(String), csr, expect.any(String), 2));
   });
 
+  it("names the certificate profile that refuses an issuance and links to the profiles", async () => {
+    const identity = { id: "req-2", name: "acme-only-svc", kind: "x509_certificate", owner_id: "own-1", status: "requested" };
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.previewIdentityTransition.mockImplementation(async (id: string, to: string) => ({
+      ...transitionPlanFor(id, to),
+      ready: false,
+      profile_refused: true,
+      profile_refusal: 'the certificate profile refuses this issuance: profile "acme-only" v1 does not permit enrollment protocol "api"',
+      warnings: ['profile "acme-only" v1 does not permit enrollment protocol "api"'],
+    }));
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const detail = await openIdentityDetails(user, "acme-only-svc");
+    await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
+    const review = await screen.findByRole("dialog", { name: /Review Issue for acme-only-svc/i });
+    expect(await within(review).findByText(/The certificate profile this issuance uses refuses it/i)).toBeInTheDocument();
+    expect(within(review).getAllByText(/does not permit enrollment protocol "api"/).length).toBeGreaterThan(0);
+    expect(within(review).getByRole("link", { name: "Open certificate profiles" })).toHaveAttribute("href", "/policy");
+    expect(within(review).getByRole("button", { name: "Run reviewed action" })).toBeDisabled();
+  });
+
   it("reviews an exact server-owned lifecycle plan before execution and verifies the returned state", async () => {
     const identity = { id: "dep-1", name: "deployed-svc", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
     apiMock.identities.mockResolvedValue([identity]);

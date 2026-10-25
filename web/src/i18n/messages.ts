@@ -27189,6 +27189,15 @@ export const messages = {
       "This tenant has control-plane key generation off, so this issue needs a key from the requester: paste a CSR above, bind the identity to an agent-executed target so its host generates the key, or turn control-plane key generation on in Platform.",
     description: "Shown on the issue review when the tenant's switch refuses control-plane key generation.",
   },
+  "identities.lifecycle.profileRefused": {
+    defaultMessage:
+      "The certificate profile this issuance uses refuses it, so issuing would be refused before anything is recorded: {reason}. Issue it under a profile that permits API issuance, or change the profile.",
+    description: "Shown on the issue review when the effective certificate profile refuses the issuance; reason is the profile's own refusal.",
+  },
+  "identities.lifecycle.profilePolicyLink": {
+    defaultMessage: "Open certificate profiles",
+    description: "Link from the issue review to the certificate profiles in Policy.",
+  },
   "identities.lifecycle.keygenPlatformLink": {
     defaultMessage: "Open key generation settings",
     description: "Link from the issue review to the tenant's control-plane key generation switch.",

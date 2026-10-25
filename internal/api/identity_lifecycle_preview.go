@@ -42,6 +42,11 @@ type identityLifecyclePreviewResponse struct {
 	// KeygenRefused says the issuance needs a requester key: the tenant has
 	// control-plane key generation off and nothing else would supply one.
 	KeygenRefused bool `json:"keygen_refused,omitempty"`
+	// ProfileRefused says the certificate profile the mint would apply
+	// refuses this issuance for a reason that needs no key (its protocol or
+	// validity); ProfileRefusal is the profile's own reason.
+	ProfileRefused bool   `json:"profile_refused,omitempty"`
+	ProfileRefusal string `json:"profile_refusal,omitempty"`
 }
 
 func lifecyclePreviewAPIError(err error) error {
@@ -211,6 +216,17 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		plan.Prerequisites = append(plan.Prerequisites, authorityFact)
 		if authorityWarning != "" {
 			plan.Warnings = append(plan.Warnings, authorityWarning)
+		}
+		if err := a.orch.IssuanceAdmissionRefusal(r.Context(), tenantID, identity, nil); errors.Is(err, orchestrator.ErrIssuanceProfileRefused) {
+			// The profile the mint would apply refuses it; execution would
+			// refuse this issuance before recording anything.
+			plan.Ready = false
+			plan.ProfileRefused = true
+			plan.ProfileRefusal = err.Error()
+			plan.Warnings = append(plan.Warnings, err.Error())
+		} else if err != nil {
+			a.writeError(w, err)
+			return
 		}
 		if csrPEM == "" {
 			if err := a.orch.ControlPlaneKeygenRefusal(r.Context(), tenantID, identity, csrPEM); errors.Is(err, orchestrator.ErrControlPlaneKeygenOff) {

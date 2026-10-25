@@ -972,30 +972,26 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 	if len(issuance) > 1 {
 		return crypto.LeafProfile{}, errors.New("server: multiple issuance approval bindings")
 	}
-	var (
-		rec         store.ProfileRecord
-		profileName string
-		err         error
-	)
-	if len(issuance) == 1 && issuance[0] != nil {
-		binding := issuance[0]
-		profileName = strings.TrimSpace(binding.ProfileName)
-		if profileName == "" {
-			if d.defaultProfile == "" {
-				return d.leafProfile, nil
-			}
-			return crypto.LeafProfile{}, errors.New("server: approved issuance did not pin the configured profile revision")
+	var binding *store.OperationApprovalIssuanceBinding
+	if len(issuance) == 1 {
+		binding = issuance[0]
+	}
+	rec, profileName, found, err := servedIssuanceProfile(ctx, d.store, d.defaultProfile, tenantID, binding)
+	if errors.Is(err, errServedDefaultProfileMissing) {
+		// Configured profile does not resolve: deny (fail closed) and record it.
+		msg := fmt.Sprintf("served default profile %q not found", profileName)
+		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, 0, "deny", msg, purpose); aerr != nil {
+			return crypto.LeafProfile{}, aerr
 		}
-		if binding.ProfileID == "" || binding.ProfileVersion <= 0 || binding.ProfileSpecDigest == "" {
-			return crypto.LeafProfile{}, fmt.Errorf("server: approved profile %q has no immutable revision binding", profileName)
-		}
-		rec, err = d.store.GetProfileVersion(ctx, tenantID, profileName, binding.ProfileVersion)
-		if err != nil {
-			return crypto.LeafProfile{}, fmt.Errorf("server: resolve approved profile %q version %d: %w", profileName, binding.ProfileVersion, err)
-		}
-		if rec.ID != binding.ProfileID || store.ProfileSpecDigest(rec.Spec) != binding.ProfileSpecDigest {
-			return crypto.LeafProfile{}, fmt.Errorf("server: approved profile %q revision evidence drifted", profileName)
-		}
+		return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
+	}
+	if err != nil {
+		return crypto.LeafProfile{}, err
+	}
+	if !found {
+		return d.leafProfile, nil
+	}
+	if binding != nil {
 		if purpose == "ca-reprotect" {
 			active, activeErr := d.store.GetActiveProfile(ctx, tenantID, profileName)
 			if activeErr != nil {
@@ -1007,23 +1003,6 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 				}
 				return crypto.LeafProfile{}, fmt.Errorf("server: selected CA re-protection profile %q changed before signing", profileName)
 			}
-		}
-	} else {
-		profileName = d.defaultProfile
-		if profileName == "" {
-			return d.leafProfile, nil
-		}
-		rec, err = d.store.GetActiveProfile(ctx, tenantID, profileName)
-		if err != nil {
-			if store.IsNotFound(err) {
-				// Configured profile does not resolve: deny (fail closed) and record it.
-				msg := fmt.Sprintf("served default profile %q not found", profileName)
-				if aerr := d.auditProfileDecision(ctx, tenantID, profileName, 0, "deny", msg, purpose); aerr != nil {
-					return crypto.LeafProfile{}, aerr
-				}
-				return crypto.LeafProfile{}, fmt.Errorf("server: %s (fail closed)", msg)
-			}
-			return crypto.LeafProfile{}, err
 		}
 	}
 	var prof profile.CertificateProfile
@@ -1060,7 +1039,10 @@ func (d *issuanceDispatcher) enforceProfileForPurpose(ctx context.Context, tenan
 		if aerr := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "deny", verr.Error(), purpose); aerr != nil {
 			return crypto.LeafProfile{}, aerr
 		}
-		return crypto.LeafProfile{}, verr
+		// The refusal comes before any signature, so it is a definite
+		// no-effect: the job retries on its own budget without opening the
+		// tenant's circuit for every other issuance.
+		return crypto.LeafProfile{}, orchestrator.DefiniteNoEffect(orchestrator.IssuanceProfileRefused(verr))
 	}
 	if err := d.auditProfileDecision(ctx, tenantID, profileName, rec.Version, "allow", "", purpose); err != nil {
 		return crypto.LeafProfile{}, err

@@ -1322,6 +1322,14 @@ export function Identities() {
 
             {pending.to === "issued" && (
               <div className="mt-3 grid gap-2">
+                {transitionPreview.plan?.profile_refused && (
+                  <div role="status" className="rounded-control border border-status-warning/30 bg-status-warning/5 p-3 text-sm text-status-warning">
+                    <p>{translateNow("identities.lifecycle.profileRefused", { reason: transitionPreview.plan?.profile_refusal ?? "" })}</p>
+                    <Link to="/policy" className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-2`}>
+                      {translateNow("identities.lifecycle.profilePolicyLink")}
+                    </Link>
+                  </div>
+                )}
                 {transitionPreview.plan?.keygen_refused && (
                   <div role="status" className="rounded-control border border-status-warning/30 bg-status-warning/5 p-3 text-sm text-status-warning">
                     <p>{translateNow("identities.lifecycle.keygenRefused")}</p>

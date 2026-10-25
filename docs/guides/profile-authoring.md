@@ -212,3 +212,14 @@ An issuance bound to `web-server` above is rejected, with the reason, when it as
 disallowed key algorithm, an RSA key below 3072 bits, an EKU outside `serverAuth`, a
 validity longer than 2160h, a protocol other than `api`/`acme`, or a SAN outside
 `example.com`. A compliant request is signed normally.
+
+The checks that need no key run when the request is made. An identity issuance through
+the API whose profile does not permit the `api` protocol, or whose validity it caps
+below what the issuance asks, is refused at the transition with `409` and code
+`profile_refused`, naming the profile, its version and the refusal, before anything is
+recorded; the transition preview says the same (`profile_refused`, `profile_refusal`).
+The transition pins the profile revision it admitted, so a later profile edit cannot
+strand queued work. The checks that need the key (algorithm, strength, EKUs, names) run
+when the certificate is minted; a refusal there happens before any signature, retries on
+the job's own budget, and never opens the tenant's outbox circuit, so other issuance is
+not delayed.

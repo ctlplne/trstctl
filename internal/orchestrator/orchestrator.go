@@ -102,6 +102,10 @@ type Orchestrator struct {
 	// subject key in the control plane while the tenant has it off (owner
 	// decision 2026-10-24); nil allows it.
 	controlPlaneKeygenGuard ControlPlaneKeygenGuard
+	// issuanceAdmissionGuard refuses a first issuance the effective
+	// certificate profile would refuse at the mint for reasons that need no
+	// key (its protocol and validity); nil allows it.
+	issuanceAdmissionGuard IssuanceAdmissionGuard
 	// ownershipAttestationCadence enables the I1 steady-state authority gate.
 	// Zero keeps source-compatible embedded/test orchestrators disabled; the
 	// shipped composition always supplies its validated production setting.
@@ -465,6 +469,15 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 	from := State(ident.Status)
 	if from == StateRequested && to == StateIssued && o.controlPlaneKeygenGuard != nil && completedDestination == "" {
 		if err := o.controlPlaneKeygenGuard(ctx, tenantID, ident, subjectCSRPEM); err != nil {
+			return err
+		}
+	}
+	if from == StateRequested && to == StateIssued && o.issuanceAdmissionGuard != nil && completedDestination == "" {
+		binding := issuance
+		if approval != nil {
+			binding = approval.Issuance
+		}
+		if err := o.issuanceAdmissionGuard(ctx, tenantID, ident, binding); err != nil {
 			return err
 		}
 	}
