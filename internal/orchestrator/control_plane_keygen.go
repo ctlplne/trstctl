@@ -99,6 +99,8 @@ const (
 	IdentityKeygenReplacement      = "supply subject_csr_pem, or bind the identity to an agent-executed target so the host generates the key"
 	PKICommonNameKeygenReplacement = "send csr_pem with a key the requester generated (pki/sign/{role} on the Vault-compatible API)"
 	VaultPKIKeygenReplacement      = "send the requester's CSR to pki/sign/{role}"
+	// WorkloadSocketKeygenReplacement is the compatibility Workload API socket's.
+	WorkloadSocketKeygenReplacement = "fetch the SVID from the host agent's Workload API socket (trstctl-agent --workload-api-socket), which generates the key on the workload's host"
 )
 
 // ControlPlaneKeygenOff is the switch's refusal for one path.

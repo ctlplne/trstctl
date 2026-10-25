@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/enrollmentdiag"
 	mdmchallenge "trstctl.com/trstctl/internal/mdm/challenge"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/protocols/acme"
 	"trstctl.com/trstctl/internal/protocols/cmp"
 	"trstctl.com/trstctl/internal/protocols/est"
@@ -1107,6 +1108,19 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		// workloads unless the operator says so explicitly.
 		workloadOpts = append(workloadOpts, spiffe.WithLocalWorkloadsRefused())
 	}
+	// This socket generates each X.509-SVID key in the control plane, so the
+	// tenant's switch decides before every one (owner decision 2026-10-24).
+	keygenStore := s.store
+	workloadOpts = append(workloadOpts, spiffe.WithX509KeygenCheck(func(ctx context.Context) error {
+		allowed, err := controlPlaneKeygenAllowed(ctx, keygenStore, tenant)
+		if err != nil {
+			return fmt.Errorf("cannot read whether control-plane key generation is on for this tenant: %w", err)
+		}
+		if !allowed {
+			return orchestrator.ControlPlaneKeygenOff(orchestrator.WorkloadSocketKeygenReplacement)
+		}
+		return nil
+	}))
 	if cfg.HybridSVIDs {
 		if s.licensedSPIFFESVIDFactory == nil {
 			return nil, errors.New("server: hybrid SPIFFE SVIDs requested but the additional issuer is unavailable")

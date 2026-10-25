@@ -60,6 +60,12 @@ type WorkloadAPIServer struct {
 	// its retention release is over. FetchX509SVID and FetchJWTSVID refuse,
 	// naming the host socket; bundles and validation keep being served.
 	refuseLocalWorkloads bool
+	// x509KeygenCheck decides, before each X.509-SVID key is generated here,
+	// whether this socket's tenant still lets the control plane generate
+	// subject keys (owner decision 2026-10-24). A non-nil error refuses, and
+	// its text names the replacement. JWT-SVIDs carry no key and are not
+	// asked.
+	x509KeygenCheck func(context.Context) error
 }
 
 // LocalWorkloadsRefusedMessage is the exact refusal a workload sees on the
@@ -97,6 +103,26 @@ func WithAdditionalX509SVIDIssuer(issuer AdditionalX509SVIDIssuer) WorkloadAPIOp
 // is where workloads are meant to fetch.
 func WithLocalWorkloadsRefused() WorkloadAPIOption {
 	return func(s *WorkloadAPIServer) { s.refuseLocalWorkloads = true }
+}
+
+// WithX509KeygenCheck asks check before every X.509-SVID key this socket
+// would generate. Only the control plane passes it: a host agent's socket
+// generates the key on the workload's own host.
+func WithX509KeygenCheck(check func(context.Context) error) WorkloadAPIOption {
+	return func(s *WorkloadAPIServer) { s.x509KeygenCheck = check }
+}
+
+// refuseX509Keygen records the refused attempt like refuseLocalIssuance and
+// returns the tenant's refusal, naming its replacement.
+func (s *WorkloadAPIServer) refuseX509Keygen(ctx context.Context) error {
+	if s.x509KeygenCheck == nil {
+		return nil
+	}
+	if err := s.x509KeygenCheck(ctx); err != nil {
+		s.recordLocalSocketDeprecation(ctx, "x509_refused")
+		return status.Error(codes.PermissionDenied, "spiffe: "+err.Error())
+	}
+	return nil
 }
 
 // refuseLocalIssuance records the attempt in the same audit event the
@@ -150,6 +176,9 @@ func (s *WorkloadAPIServer) FetchX509SVID(_ *workloadpb.X509SVIDRequest, stream 
 	}
 	if s.refuseLocalWorkloads {
 		return s.refuseLocalIssuance(ctx, "x509")
+	}
+	if err := s.refuseX509Keygen(ctx); err != nil {
+		return err
 	}
 	for {
 		expiresAt, err := s.sendX509SVIDResponse(stream)
@@ -231,6 +260,11 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 		return nil, status.Error(codes.Unavailable, "spiffe: tenant service is unavailable")
 	}
 	defer release()
+	// The tenant can turn control-plane key generation off between two sends
+	// on a long stream; every key is asked for.
+	if err := s.refuseX509Keygen(ctx); err != nil {
+		return nil, err
+	}
 	// Mint the workload key pair server-side (the Workload API owns the key). It is a
 	// LockedSigner (AN-8) destroyed before we return; only its public key crosses to
 	// the SVID signer and only its PKCS#8 encoding is returned to the local caller.

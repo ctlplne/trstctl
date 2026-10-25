@@ -163,8 +163,7 @@ change is refused when it reaches the mint, before a key exists; it completes if
 the tenant turns key generation back on. The renewal of an identity whose key the
 control plane generated fails its rotation run with the same reason. The switch
 also governs PKI-as-a-secret by common name and the Vault-compatible
-`pki/issue/{role}` (below). The compatibility Workload API still generates keys
-whatever it says, and comes next.
+`pki/issue/{role}`, and the compatibility Workload API socket (both below).
 
 Lifecycle issuance also retains the exact public certificate template before the
 CA signature. The isolated signer journals that operation and returns the same
@@ -189,7 +188,12 @@ Unix-domain socket.
 
 The control plane still composes its older Workload API socket during the
 deprecation window. A workload that dials that compatibility socket receives a key
-generated in the control-plane process, so that row remains `Yes`. The host-agent
+generated in the control-plane process, so that row remains `Yes`. Where
+`serve_local_workloads` keeps that socket issuing, the tenant's control-plane key
+generation switch still decides before every X.509-SVID key: with it off,
+`FetchX509SVID` is refused with `PermissionDenied`, naming the host agent's
+`--workload-api-socket`, and the refusal is recorded like the socket's other uses.
+JWT-SVIDs carry no key and are still issued. The host-agent
 Workload API is its replacement; the two rows stay separate until the compatibility
 socket is removed.
 

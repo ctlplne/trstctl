@@ -363,8 +363,11 @@ refused with a message naming the host socket, and the attempt is recorded as
 `spiffe.workload_api.local_socket_used`. `protocols.spiffe.serve_local_workloads:
 true` (or `TRSTCTL_PROTOCOLS_SPIFFE_SERVE_LOCAL_WORKLOADS=true`) keeps local
 issuance on for a single-machine deployment, audited on every SVID; the eval profile
-sets it. The readiness check and its `local_workloads_served` field say which mode
-the running socket is in.
+sets it. Even then, each X.509-SVID key that socket would generate is subject to the
+tenant's control-plane key generation switch (`PUT /api/v1/tenant/key-generation`):
+with it off, `FetchX509SVID` is refused naming the host agent's socket, and JWT-SVIDs,
+which carry no key, are still issued. The readiness check and its
+`local_workloads_served` field say which mode the running socket is in.
 
 ### SPIRE upstream authority — keep SPIRE, anchor it in trstctl
 

@@ -23,6 +23,7 @@ import (
 var controlPlaneKeygenPaths = []string{
 	"identity issuance without a CSR, and the renewal or rotation of an identity whose key the control plane generated",
 	"PKI-secret issuance by common name, including the Vault-compatible pki/issue route",
+	"X.509-SVIDs from the compatibility Workload API socket served by the control plane",
 }
 
 // refuseControlPlaneKeygen is the switch's check for the API's own key
@@ -42,8 +43,9 @@ func (a *API) refuseControlPlaneKeygen(ctx context.Context, tenantID, replacemen
 const controlPlaneKeygenGuidance = "With control-plane key generation off, each governed path is refused before a " +
 	"key exists and names its replacement: an identity issuance needs a CSR (subject_csr_pem) or an agent-executed " +
 	"target so the host generates the key, and its renewal fails its rotation run with the same reason; a PKI secret " +
-	"needs csr_pem, and the Vault-compatible pki/issue route sends callers to pki/sign. Turning it on lets the control " +
-	"plane generate subject keys again; each use still records an issuance.server_side_keygen event."
+	"needs csr_pem, and the Vault-compatible pki/issue route sends callers to pki/sign; the compatibility Workload API " +
+	"socket refuses X.509-SVIDs and names the host agent's socket. Turning it on lets the control plane generate " +
+	"subject keys again; each use still records an issuance.server_side_keygen or spiffe.workload_api.local_socket_used event."
 
 // controlPlaneKeygenRoutes serves the tenant's switch (owner decision
 // 2026-10-24, A120/A130/A132).
