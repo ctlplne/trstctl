@@ -13131,7 +13131,8 @@
                   "enum": [
                     "network",
                     "ssh",
-                    "cloud_provider"
+                    "cloud_provider",
+                    "k8s_tls_auto_issuance"
                   ],
                   "type": "string"
                 },
@@ -13140,7 +13141,8 @@
                     "succeeded",
                     "failed",
                     "blocked",
-                    "rejected"
+                    "rejected",
+                    "not_delivered"
                   ],
                   "type": "string"
                 },

@@ -101,8 +101,6 @@ const (
 	VaultPKIKeygenReplacement      = "send the requester's CSR to pki/sign/{role}"
 	// WorkloadSocketKeygenReplacement is the compatibility Workload API socket's.
 	WorkloadSocketKeygenReplacement = "fetch the SVID from the host agent's Workload API socket (trstctl-agent --workload-api-socket), which generates the key on the workload's host"
-	// KubernetesAutoIssuanceKeygenReplacement is Kubernetes TLS auto-issuance's.
-	KubernetesAutoIssuanceKeygenReplacement = "issue the Ingress or Gateway certificate with cert-manager against trstctl's ACME directory, so the cluster generates the key and sends only a CSR"
 	// PQCReissueKeygenReplacement is the older PQC migration reissue's.
 	PQCReissueKeygenReplacement = "start the migration again with protocol host-csr, so the host agent generates the post-quantum key"
 )

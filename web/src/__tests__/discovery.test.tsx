@@ -1606,6 +1606,43 @@ describe("discovery control-plane surface", () => {
     await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(2));
   });
 
+  it("B15-L1 reports each Kubernetes TLS resource as not delivered, with the reason", async () => {
+    apiMock.discoveryRuns.mockResolvedValueOnce({
+      items: [
+        {
+          id: "run-k8s",
+          tenant_id: "tenant-1",
+          source_id: "source-k8s",
+          status: "partial",
+          dry_run: false,
+          execution: "control_plane",
+          targets: 1,
+          discovered: 1,
+          failed: 0,
+          rejected: 0,
+          blocked: 0,
+          error: "1 Kubernetes TLS resource was not delivered: the in-cluster agent mode is not built yet",
+          target_results: [
+            {
+              kind: "k8s_tls_auto_issuance",
+              target: "Ingress:payments/web",
+              status: "not_delivered",
+              error: "not delivered: an in-cluster agent writes the Secret, and that agent mode is not built yet",
+            },
+          ],
+          created_at: "2026-10-25T10:02:00Z",
+          completed_at: "2026-10-25T10:02:05Z",
+        },
+      ],
+    });
+    renderDiscovery(["/discovery?tab=runs"]);
+
+    const outcomes = await screen.findByRole("list", { name: "Target outcomes" });
+    expect(within(outcomes).getByText("Ingress:payments/web")).toBeInTheDocument();
+    expect(within(outcomes).getByText("Not delivered")).toBeInTheDocument();
+    expect(within(outcomes).getByText(/that agent mode is not built yet/)).toBeInTheDocument();
+  });
+
   it("recovers a failed run as a separate server-backed run and renders lineage after reload", async () => {
     apiMock.discoverySources.mockResolvedValue({
       items: [

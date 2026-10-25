@@ -1195,7 +1195,7 @@ func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error
 	seen := make(map[string]struct{}, len(results))
 	for _, result := range results {
 		switch result.Kind {
-		case "ct_log", "network", "ssh", "cloud_provider":
+		case "ct_log", "network", "ssh", "cloud_provider", "k8s_tls_auto_issuance":
 		default:
 			return fmt.Errorf("orchestrator: unsupported discovery target result kind %q", result.Kind)
 		}
@@ -1214,6 +1214,12 @@ func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error
 		case "succeeded", "failed":
 		case "blocked", "rejected":
 			if result.Kind == "ct_log" {
+				return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
+			}
+		case "not_delivered":
+			// A Kubernetes TLS resource the run found and could not deliver to
+			// (B15-L1); the reason travels with it.
+			if result.Kind != "k8s_tls_auto_issuance" || strings.TrimSpace(result.Error) == "" {
 				return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
 			}
 		default:

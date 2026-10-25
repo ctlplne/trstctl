@@ -2288,16 +2288,30 @@ func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T
 		t.Fatalf("get Kubernetes ingress/gateway run: status %d body %s", status, body)
 	}
 	var completed struct {
-		Status     string `json:"status"`
-		Targets    int    `json:"targets"`
-		Discovered int    `json:"discovered"`
-		Failed     int    `json:"failed"`
+		Status        string `json:"status"`
+		Targets       int    `json:"targets"`
+		Discovered    int    `json:"discovered"`
+		Failed        int    `json:"failed"`
+		Error         string `json:"error"`
+		TargetResults []struct {
+			Target string `json:"target"`
+			Status string `json:"status"`
+		} `json:"target_results"`
 	}
 	if err := json.Unmarshal(body, &completed); err != nil {
 		t.Fatalf("decode completed Kubernetes run: %v (%s)", err, body)
 	}
-	if completed.Status != "succeeded" || completed.Targets != 2 || completed.Discovered != 2 || completed.Failed != 0 {
-		t.Fatalf("completed Kubernetes run = %+v, want two auto-issued resources", completed)
+	// Owner decision 2026-10-25 (B15-L1): delivery belongs to the in-cluster
+	// agent, which is not built yet, so both discovered resources are reported
+	// not delivered with the reason and nothing is issued.
+	if completed.Status != "partial" || completed.Targets != 2 || completed.Discovered != 2 || completed.Failed != 0 ||
+		!strings.Contains(completed.Error, "not delivered") || len(completed.TargetResults) != 2 {
+		t.Fatalf("completed Kubernetes run = %+v, want two discovered resources reported not delivered", completed)
+	}
+	for _, result := range completed.TargetResults {
+		if result.Status != "not_delivered" {
+			t.Fatalf("Kubernetes target outcome = %+v, want not_delivered", result)
+		}
 	}
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/findings?run_id="+queued.ID, tok, nil)
@@ -2347,41 +2361,15 @@ func TestServedKubernetesIngressGatewayAutoIssuanceCAPK8S03EndToEnd(t *testing.T
 
 	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/certificates", tok, nil)
 	if status != http.StatusOK {
-		t.Fatalf("list certificates after Kubernetes auto-issuance: status %d body %s", status, body)
+		t.Fatalf("list certificates after the Kubernetes run: status %d body %s", status, body)
 	}
-	var certs struct {
-		Items []struct {
-			DeploymentLocation string   `json:"deployment_location"`
-			Source             string   `json:"source"`
-			Fingerprint        string   `json:"fingerprint"`
-			SANs               []string `json:"sans"`
-		} `json:"items"`
-	}
-	if err := json.Unmarshal(body, &certs); err != nil {
-		t.Fatalf("decode Kubernetes certificates: %v (%s)", err, body)
-	}
-	if len(certs.Items) != 2 {
-		t.Fatalf("Kubernetes auto-issuance certificate count = %d body %s, want 2", len(certs.Items), body)
-	}
-	seenLocations := map[string]bool{}
-	for _, cert := range certs.Items {
-		if cert.Source != "discovery:k8s_ingress_gateway" || cert.Fingerprint == "" {
-			t.Fatalf("bad Kubernetes auto-issued cert: %+v", cert)
-		}
-		seenLocations[cert.DeploymentLocation] = true
-		if len(cert.SANs) == 0 {
-			t.Fatalf("Kubernetes auto-issued cert missing SANs: %+v", cert)
-		}
-	}
-	for _, location := range []string{"k8s:Ingress:payments/payments-web:secret/payments-web-tls", "k8s:Gateway:edge/public:secret/edge-public-tls"} {
-		if !seenLocations[location] {
-			t.Fatalf("certificate location %q was not represented: %+v", location, seenLocations)
-		}
+	if strings.Contains(string(body), "discovery:k8s_ingress_gateway") {
+		t.Fatalf("the Kubernetes run recorded a certificate nobody delivered: %s", body)
 	}
 
-	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "certificate.recorded", "discovery.run.completed"} {
+	for _, eventType := range []string{"discovery.source.upserted", "discovery.run.queued", "discovery.finding.recorded", "discovery.run.completed"} {
 		if !h.hasEvent(t, eventType) {
-			t.Fatalf("missing %s event; Kubernetes auto-issuance is not fully event-sourced", eventType)
+			t.Fatalf("missing %s event; the Kubernetes run is not fully event-sourced", eventType)
 		}
 	}
 }

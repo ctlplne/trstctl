@@ -11344,9 +11344,9 @@ export interface components {
             target_results: {
                 error?: string;
                 /** @enum {string} */
-                kind: "network" | "ssh" | "cloud_provider";
+                kind: "network" | "ssh" | "cloud_provider" | "k8s_tls_auto_issuance";
                 /** @enum {string} */
-                status: "succeeded" | "failed" | "blocked" | "rejected";
+                status: "succeeded" | "failed" | "blocked" | "rejected" | "not_delivered";
                 target: string;
             }[];
             targets: number;

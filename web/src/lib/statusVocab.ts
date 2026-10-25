@@ -73,6 +73,13 @@ export const lifecycleStatus: Record<string, StatusDescriptor> = {
     tone: "warning",
     order: 8,
   },
+  not_delivered: {
+    get label() {
+      return translateNow("lifecycle.status.notDelivered");
+    },
+    tone: "warning",
+    order: 9,
+  },
 };
 
 export const certificateStatus: Record<string, StatusDescriptor> = {

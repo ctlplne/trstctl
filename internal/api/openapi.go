@@ -2050,9 +2050,9 @@ func componentSchemas() map[string]*Schema {
 		"rejected": {Type: "integer"}, "blocked": {Type: "integer"}, "error": str(), "started_at": timestamp(),
 		"completed_at": timestamp(), "created_at": timestamp(),
 		"target_results": {Type: "array", Items: object(map[string]*Schema{
-			"kind":   {Type: "string", Enum: []string{"network", "ssh", "cloud_provider"}},
+			"kind":   {Type: "string", Enum: []string{"network", "ssh", "cloud_provider", "k8s_tls_auto_issuance"}},
 			"target": str(),
-			"status": {Type: "string", Enum: []string{"succeeded", "failed", "blocked", "rejected"}},
+			"status": {Type: "string", Enum: []string{"succeeded", "failed", "blocked", "rejected", "not_delivered"}},
 			"error":  str(),
 		}, "kind", "target", "status")},
 	}, "id", "tenant_id", "source_id", "status", "dry_run", "execution", "targets", "discovered", "failed", "rejected", "blocked", "created_at", "target_results")

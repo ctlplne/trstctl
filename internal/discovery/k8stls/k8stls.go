@@ -55,8 +55,10 @@ type Finding struct {
 }
 
 // Findings decodes, validates, and normalizes a source config into Kubernetes TLS
-// auto-issuance findings. The normal run mints certificates; discovery dry-run is
-// the planning mode, so resource-level auto_issue must be true when present.
+// auto-issuance findings. A normal run records each finding and reports the
+// resource not delivered until the in-cluster agent delivers it; discovery
+// dry-run is the planning mode, so resource-level auto_issue must be true when
+// present.
 func Findings(raw json.RawMessage) ([]Finding, error) {
 	var cfg Config
 	if err := json.Unmarshal(raw, &cfg); err != nil {
@@ -107,7 +109,7 @@ func normalizeResource(resource Resource) (Finding, error) {
 		return Finding{}, fmt.Errorf("tls_secret_name %q is not a valid Kubernetes DNS label", tlsSecret)
 	}
 	if resource.AutoIssue != nil && !*resource.AutoIssue {
-		return Finding{}, errors.New("auto_issue must be true; use discovery dry_run to plan without minting")
+		return Finding{}, errors.New("auto_issue must be true; use discovery dry_run to plan without recording the resources")
 	}
 	hosts, err := normalizeHosts(resource.Hosts)
 	if err != nil {

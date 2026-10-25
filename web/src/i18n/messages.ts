@@ -30942,6 +30942,11 @@ export const messages = {
     defaultMessage: "Cancellation pending",
     description: "CA ceremony is fenced from approval and signing while its exact cancellation event is recovering.",
   },
+  "lifecycle.status.notDelivered": {
+    defaultMessage: "Not delivered",
+    description:
+      "B15-L1: a Kubernetes TLS resource a discovery run found and could not deliver a certificate to, because the in-cluster agent that writes the Secret is not built yet.",
+  },
   "identities.automation.pendingHeading": { defaultMessage: "Renewals to review or unblock", description: "Heading above due or blocked renewals." },
   "identities.automation.expires": { defaultMessage: " · expires {time}", description: "Certificate expiry in lifecycle plan." },
   "identities.automation.startAction": { defaultMessage: "Review renewal now", description: "Open effect-free review for a due renewal." },

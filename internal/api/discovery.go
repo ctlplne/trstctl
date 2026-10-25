@@ -427,8 +427,9 @@ type discoveryRunResponse struct {
 	CompletedAt       *time.Time `json:"completed_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 	// TargetResults names every assigned target's outcome for network, SSH and
-	// cloud-provider runs (empty for runs recorded before per-target outcomes and
-	// for CT-log monitoring, which has its own per-log view).
+	// cloud-provider runs, and each Kubernetes TLS resource a run could not
+	// deliver to (empty for runs recorded before per-target outcomes and for
+	// CT-log monitoring, which has its own per-log view).
 	TargetResults []discoveryTargetResultResponse `json:"target_results"`
 }
 
