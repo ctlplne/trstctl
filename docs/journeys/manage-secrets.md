@@ -412,7 +412,9 @@ today (see [Current limitations](../limitations.md) and
 
    -> you get back a short-lived certificate and no private key; `payments.key` never
    left the workload environment. Supplying `common_name` instead is the deprecated
-   key-returning mode and creates an `issuance.server_side_keygen` Audit receipt first.
+   key-returning mode and creates an `issuance.server_side_keygen` Audit receipt first;
+   a tenant with control-plane key generation off refuses it with `409` and names
+   `csr_pem`.
    Keep the returned `certificate_id`: it identifies the exact inventory row for
    `POST /api/v1/certificates/bulk-revoke`. The console links to that row in
    **Certificates → Revocation** even after the one-time certificate reveal closes.

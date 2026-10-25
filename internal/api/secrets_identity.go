@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/pkisecret"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secretsdk"
@@ -333,6 +334,11 @@ func (a *API) issuePKISecret(w http.ResponseWriter, r *http.Request) {
 		if req.CSRPEM != "" {
 			cred, err = provider.GenerateFromCSR(ctx, csrDER, plan.EffectiveTTL)
 		} else {
+			// The tenant's switch decides first: refused, nothing is recorded or
+			// generated (owner decision 2026-10-24).
+			if err := a.refuseControlPlaneKeygen(ctx, tenantID, orchestrator.PKICommonNameKeygenReplacement); err != nil {
+				return 0, nil, err
+			}
 			// Fail closed before creating the key: a legacy custody choice is allowed
 			// only when its immutable deprecation receipt is already durable.
 			if evidenceErr := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "native_pki_secret"); evidenceErr != nil {

@@ -22,13 +22,28 @@ import (
 // controlPlaneKeygenPaths are the generators the switch governs.
 var controlPlaneKeygenPaths = []string{
 	"identity issuance without a CSR, and the renewal or rotation of an identity whose key the control plane generated",
+	"PKI-secret issuance by common name, including the Vault-compatible pki/issue route",
 }
 
-const controlPlaneKeygenGuidance = "With control-plane key generation off, an identity issuance without a CSR is " +
-	"refused before anything is recorded and names its replacements: a CSR (subject_csr_pem), or an identity bound " +
-	"to an agent-executed target so the host generates the key. The renewal of an identity whose key the control " +
-	"plane generated fails its rotation run with the same reason. Turning it on lets the control plane generate " +
-	"subject keys again; each use still records an issuance.server_side_keygen event."
+// refuseControlPlaneKeygen is the switch's check for the API's own key
+// generators. A tenant that predates the switch and has not been decided yet
+// keeps them.
+func (a *API) refuseControlPlaneKeygen(ctx context.Context, tenantID, replacement string) error {
+	policy, found, err := a.store.ControlPlaneKeygenFor(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if found && !policy.Enabled {
+		return orchestrator.ControlPlaneKeygenOff(replacement)
+	}
+	return nil
+}
+
+const controlPlaneKeygenGuidance = "With control-plane key generation off, each governed path is refused before a " +
+	"key exists and names its replacement: an identity issuance needs a CSR (subject_csr_pem) or an agent-executed " +
+	"target so the host generates the key, and its renewal fails its rotation run with the same reason; a PKI secret " +
+	"needs csr_pem, and the Vault-compatible pki/issue route sends callers to pki/sign. Turning it on lets the control " +
+	"plane generate subject keys again; each use still records an issuance.server_side_keygen event."
 
 // controlPlaneKeygenRoutes serves the tenant's switch (owner decision
 // 2026-10-24, A120/A130/A132).

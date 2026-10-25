@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/dynsecret"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
@@ -815,6 +816,11 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 		provider := a.secrets.pkiProvider(tenantID, caCertDER, caSigner, a.compromisedKeyGuard(tenantID))
+		// This route generates the key in the control plane, so the tenant's
+		// switch governs it like the native common-name mode.
+		if err := a.refuseControlPlaneKeygen(ctx, tenantID, orchestrator.VaultPKIKeygenReplacement); err != nil {
+			return 0, nil, err
+		}
 		if err := a.recordPKIServerSideKeygen(ctx, tenantID, req.CommonName, "vault_pki_issue"); err != nil {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, err.Error())
 		}

@@ -45,7 +45,7 @@ func controlPlaneKeygenGuard(st *store.Store) orchestrator.ControlPlaneKeygenGua
 		if _, hostExecuted, err := hostExecutedTarget(ctx, st, tenantID, ident); err != nil || hostExecuted {
 			return err
 		}
-		return orchestrator.ErrControlPlaneKeygenOff
+		return orchestrator.ControlPlaneKeygenOff(orchestrator.IdentityKeygenReplacement)
 	}
 }
 
@@ -59,7 +59,7 @@ func (d *issuanceDispatcher) requireControlPlaneKeygen(ctx context.Context, tena
 		return err
 	}
 	if !allowed {
-		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: %w", orchestrator.ErrControlPlaneKeygenOff))
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: %w", orchestrator.ControlPlaneKeygenOff(orchestrator.IdentityKeygenReplacement)))
 	}
 	return nil
 }

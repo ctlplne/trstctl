@@ -161,10 +161,10 @@ before anything is recorded (`409`, `control_plane_keygen_off`, naming
 console's issue review says so and takes a pasted CSR. Work queued before the
 change is refused when it reaches the mint, before a key exists; it completes if
 the tenant turns key generation back on. The renewal of an identity whose key the
-control plane generated fails its rotation run with the same reason. Today the
-switch governs this identity path only: the compatibility Workload API and
-PKI-as-a-secret by common name (including the Vault-compatible
-`pki/issue/{role}`) still generate keys whatever it says, and come next.
+control plane generated fails its rotation run with the same reason. The switch
+also governs PKI-as-a-secret by common name and the Vault-compatible
+`pki/issue/{role}` (below). The compatibility Workload API still generates keys
+whatever it says, and comes next.
 
 Lifecycle issuance also retains the exact public certificate template before the
 CA signature. The isolated signer journals that operation and returns the same
@@ -199,8 +199,11 @@ Supply `csr_pem` and trstctl validates the self-signed PKCS#10 request through t
 crypto boundary, signs it, and returns only the certificate; the matching key never
 entered the control plane. Supplying `common_name` keeps the legacy brain-local convenience:
 trstctl first commits an `issuance.server_side_keygen` deprecation receipt, then
-generates and returns a keypair. If that receipt cannot become durable, issuance
-fails before key generation. The Secrets console defaults to CSR mode and links the
+generates and returns a keypair, while the tenant allows control-plane key
+generation. If that receipt cannot become durable, issuance fails before key
+generation. With the tenant's switch off, the request is refused before anything
+is recorded or generated (`409`, `control_plane_keygen_off`, naming `csr_pem`),
+and `pki/issue/{role}` is refused the same way, naming `pki/sign/{role}`. The Secrets console defaults to CSR mode and links the
 legacy choice to its filtered Audit evidence. Vault/OpenBao clients use
 `pki/sign/{role}` for CSR custody; `pki/issue/{role}` is the same deprecated
 server-keygen choice.

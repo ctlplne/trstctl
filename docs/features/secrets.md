@@ -346,7 +346,10 @@ leaf key from wipeable memory. That mode is deprecated: its
 `issuance.server_side_keygen` receipt must be durable before key generation begins,
 and its idempotent replay returns the original sealed response without generating a
 second key. The console defaults to CSR mode; Vault/OpenBao uses `pki/sign` for the
-same custody model and retains `pki/issue` only as the legacy equivalent.
+same custody model and retains `pki/issue` only as the legacy equivalent. Both
+key-returning routes run only while the tenant allows control-plane key generation
+(`PUT /api/v1/tenant/key-generation`, off for tenants registered since that switch);
+with it off they are refused before anything is recorded, naming the CSR route.
 Native issuance returns `certificate_id` alongside the serial and public PEM.
 The event projects that exact leaf into tenant certificate inventory, records its
 subject-key origin, and queues its initial signed CRL publication. Use

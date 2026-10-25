@@ -42,8 +42,8 @@ func TestServedTenantSwitchesControlPlaneKeygenWithAReason(t *testing.T) {
 		}
 		return out
 	}
-	if got := read(reader); got.Decided || !got.Enabled || len(got.Paths) != 1 {
-		t.Fatalf("pre-switch tenant = %+v, want undecided, still allowed, the governed path named", got)
+	if got := read(reader); got.Decided || !got.Enabled || len(got.Paths) != 2 {
+		t.Fatalf("pre-switch tenant = %+v, want undecided, still allowed, the governed paths named", got)
 	}
 	if status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/tenant/key-generation", reader, "cpk-reader", map[string]any{"enabled": false, "reason": "x"}); status != http.StatusForbidden {
 		t.Fatalf("change with access:read = %d %s, want 403", status, body)

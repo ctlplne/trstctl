@@ -5636,8 +5636,9 @@ of your flows still rely on it. Each tenant can turn it off with
 `PUT /api/v1/tenant/key-generation`, and a tenant registered since that switch
 starts with it off: an issuance that would generate the key in the control plane
 is then refused before anything is recorded, naming a CSR or an agent-executed
-target. The switch does not yet govern the other two (the compatibility Workload
-API and PKI-as-a-secret by common name); see [Key custody](custody.md). An identity issued from your own CSR cannot
+target. The switch governs PKI-as-a-secret by common name (and the
+Vault-compatible `pki/issue`) the same way, naming the CSR route; it does not yet
+govern the compatibility Workload API; see [Key custody](custody.md). An identity issued from your own CSR cannot
 be deployed by a control-plane connector — the key that deployment needs is
 on your side, which is the correct consequence. Its renewal honors the same
 CSR, and an endpoint whose target is agent-executed renews on its host

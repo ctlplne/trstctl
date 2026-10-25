@@ -74,7 +74,7 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, orchestrator.ErrControlPlaneKeygenOff):
 		// The tenant's own setting refuses it; the message names every
 		// replacement (owner decision 2026-10-24).
-		a.writeProblem(w, problem.New(http.StatusConflict, orchestrator.ErrControlPlaneKeygenOff.Error()).
+		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()).
 			WithExtension("code", "control_plane_keygen_off"))
 	case errors.Is(err, orchestrator.ErrKeyCompromiseEffectNotRetryable):
 		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()))

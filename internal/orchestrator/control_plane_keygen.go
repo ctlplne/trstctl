@@ -88,12 +88,24 @@ func (o *Orchestrator) SetControlPlaneKeygen(ctx context.Context, tenantID strin
 	return decision, nil
 }
 
-// ErrControlPlaneKeygenOff refuses an issuance that would generate the subject
-// key in the control plane while the tenant has that turned off. It names
-// every replacement, so a caller is never left with only "no".
-var ErrControlPlaneKeygenOff = errors.New("control-plane key generation is off for this tenant: supply subject_csr_pem, " +
-	"bind the identity to an agent-executed target so the host generates the key, or turn control-plane key " +
-	"generation on (PUT /api/v1/tenant/key-generation)")
+// ErrControlPlaneKeygenOff marks a refusal by the tenant's switch: a request
+// that would generate the subject key in the control plane while the tenant
+// has that turned off. The error carrying it names the path's replacements
+// (ControlPlaneKeygenOff), so a caller is never left with only "no".
+var ErrControlPlaneKeygenOff = errors.New("control-plane key generation is off for this tenant")
+
+// The replacement each governed path names when the switch refuses it.
+const (
+	IdentityKeygenReplacement      = "supply subject_csr_pem, or bind the identity to an agent-executed target so the host generates the key"
+	PKICommonNameKeygenReplacement = "send csr_pem with a key the requester generated (pki/sign/{role} on the Vault-compatible API)"
+	VaultPKIKeygenReplacement      = "send the requester's CSR to pki/sign/{role}"
+)
+
+// ControlPlaneKeygenOff is the switch's refusal for one path.
+func ControlPlaneKeygenOff(replacement string) error {
+	return fmt.Errorf("%w: %s, or turn control-plane key generation on (PUT /api/v1/tenant/key-generation)",
+		ErrControlPlaneKeygenOff, replacement)
+}
 
 // ControlPlaneKeygenGuard decides, before a first issuance is recorded,
 // whether it would generate the subject key in the control plane while the
