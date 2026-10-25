@@ -2174,6 +2174,10 @@ type AgentExecutorCensus struct {
 	// HostProfileError: why the host exec profile could not be loaded (B7);
 	// empty when it loaded.
 	HostProfileError string `json:"host_profile_error,omitempty"`
+	// PendingReportError: why the agent has paused job claims over a pending
+	// report it cannot send under its current registration (B13-R1); empty
+	// while claims run.
+	PendingReportError string `json:"pending_report_error,omitempty"`
 	// RelayCABundle: the --relay-ca-bundle in force on the relay (A86).
 	RelayCABundle *AgentRelayCABundle `json:"relay_ca_bundle,omitempty"`
 }

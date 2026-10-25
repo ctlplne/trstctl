@@ -124,10 +124,15 @@ func reportIdentityBinding(id *mtls.AgentIdentity, caPEM []byte, serverName stri
 	return crypto.SHA256Hex(identity), nil
 }
 
+// pendingReportsDir is the agent's report store, beside its identity key.
+func pendingReportsDir(o agentOptions) (string, error) {
+	return filepath.Abs(filepath.Join(filepath.Dir(o.keyPath), "pending-reports"))
+}
+
 // openAgentReportState also recovers existing observations when the operator
 // disables claiming. Removing a capability must not discard its last result.
 func openAgentReportState(o agentOptions, id *mtls.AgentIdentity, caPEM []byte, serverName string, claiming bool) (*reportstate.Store, error) {
-	path, err := filepath.Abs(filepath.Join(filepath.Dir(o.keyPath), "pending-reports"))
+	path, err := pendingReportsDir(o)
 	if err != nil {
 		return nil, err
 	}
@@ -143,4 +148,61 @@ func openAgentReportState(o agentOptions, id *mtls.AgentIdentity, caPEM []byte, 
 		return nil, err
 	}
 	return reportstate.Open(path, binding)
+}
+
+const pendingReportErrorLimit = 512
+
+// pendingReportPause separates a retained report this registration cannot
+// send (B13-R1), which pauses job claims while the agent keeps running, from a
+// report-store environment failure (another process owns the store, an
+// unusable directory), which still stops the agent. The reason is bounded,
+// names the remedy and carries no report contents.
+func pendingReportPause(err error) (string, bool) {
+	var reason string
+	switch {
+	case errors.Is(err, reportstate.ErrUnopenable):
+		reason = err.Error() + ". It was sealed under another registration or server trust (re-enrollment, a changed --ca-bundle or --server-name), its sealing key is missing, or it is damaged. Restore those settings to send it, or stop the agent and run it once with --set-aside-pending-report to move it aside unsent; job claims stay paused until then"
+	case errors.Is(err, reportstate.ErrInvalidPending):
+		reason = err.Error() + ". Run the agent build that wrote it to send it, or stop the agent and run it once with --set-aside-pending-report to move it aside unsent; job claims stay paused until then"
+	default:
+		return "", false
+	}
+	if len(reason) > pendingReportErrorLimit {
+		reason = reason[:pendingReportErrorLimit]
+	}
+	return reason, true
+}
+
+// setAsidePendingReportFor (B13-R1) loads the enrolled identity from disk,
+// without connecting, and sets aside a pending report this registration cannot
+// open. "" means there was nothing to move: no store, nothing pending, or a
+// report the agent can still send.
+func setAsidePendingReportFor(o agentOptions) (string, error) {
+	path, err := pendingReportsDir(o)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	caPEM, err := os.ReadFile(o.caBundle)
+	if err != nil {
+		return "", fmt.Errorf("read CA bundle: %w", err)
+	}
+	id, err := mtls.LoadAgentIdentity(o.commonName, o.keyPath, o.certPath)
+	if err != nil {
+		return "", fmt.Errorf("load this agent's enrolled identity: %w", err)
+	}
+	defer id.Destroy()
+	serverName := o.serverName
+	if serverName == "" {
+		serverName = o.commonName
+	}
+	binding, err := reportIdentityBinding(id, caPEM, serverName)
+	if err != nil {
+		return "", err
+	}
+	return reportstate.SetAsideUnopenable(path, binding)
 }

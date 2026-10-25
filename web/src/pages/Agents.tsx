@@ -982,6 +982,16 @@ function AgentDetail({ agent }: { agent: Agent }) {
                         at: agent.capabilities_reported_at ? formatAgentTime(agent.capabilities_reported_at) : "?",
                       })}
                     </span>
+                    {agent.reported_pending_report_error ? (
+                      <span className="block text-xs text-status-warning">
+                        {t("agents.executors.claimsPaused", { reason: agent.reported_pending_report_error })}
+                      </span>
+                    ) : null}
+                    {agent.reported_host_profile_error ? (
+                      <span className="block text-xs text-status-warning">
+                        {t("agents.executors.hostProfileError", { reason: agent.reported_host_profile_error })}
+                      </span>
+                    ) : null}
                     {agent.reported_relay_ca_bundle ? (
                       <span className="block text-xs text-muted-foreground">
                         {t("agents.executors.relayCABundle", {

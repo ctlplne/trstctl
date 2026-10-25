@@ -5706,12 +5706,13 @@ func componentSchemas() map[string]*Schema {
 		// A62: what the enrolled binary itself reported on its newest
 		// heartbeat, role-filtered the same way; capability_source says which
 		// list describes this agent.
-		"reported_capabilities":       {Type: "array", Items: ref("AgentReportedCapability")},
-		"capability_source":           {Type: "string", Enum: []string{"reported", "server_census"}},
-		"capabilities_reported_at":    timestamp(),
-		"reported_executor_version":   str(),
-		"reported_host_tls_probe":     {Type: "boolean"},
-		"reported_host_profile_error": {Type: "string", Description: "The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded."},
+		"reported_capabilities":         {Type: "array", Items: ref("AgentReportedCapability")},
+		"capability_source":             {Type: "string", Enum: []string{"reported", "server_census"}},
+		"capabilities_reported_at":      timestamp(),
+		"reported_executor_version":     str(),
+		"reported_host_tls_probe":       {Type: "boolean"},
+		"reported_host_profile_error":   {Type: "string", Description: "The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded."},
+		"reported_pending_report_error": {Type: "string", Description: "The enrolled binary's own reason it has paused job claims: a pending job report it cannot send under its current registration (after re-enrollment, a changed CA bundle or server name, a missing sealing key, or damage), with the remedy; absent while claims run. Work bound to the agent is refused by name until it clears."},
 		"reported_relay_ca_bundle": {Type: "object", Description: "A86: the relay's own account of its --relay-ca-bundle: the digest and load time of the bundle in force and the last reload error when the operator's latest replacement was unusable; absent until a relay with a bundle has reported.", Properties: map[string]*Schema{
 			"sha256": str(), "loaded_at": timestamp(), "error": str(),
 		}, Required: []string{"sha256", "loaded_at"}},

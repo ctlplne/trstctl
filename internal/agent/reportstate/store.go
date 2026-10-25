@@ -13,7 +13,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
@@ -22,6 +24,25 @@ import (
 )
 
 const maxRecordBytes = 4 << 20
+
+const (
+	setAsidePrefix = "set-aside-"
+	// setAsideLimit bounds the reports kept aside, so the directory keeps a
+	// fixed size however often an operator sets one aside.
+	setAsideLimit = 4
+)
+
+// ErrUnopenable marks a retained report this store cannot open under its
+// binding and sealing key: it was sealed under another registration or server
+// trust, its sealing key is missing, or its bytes were damaged. Open refuses
+// it and leaves it in place; SetAsideUnopenable moves it aside, intact, on an
+// operator's decision.
+var ErrUnopenable = errors.New("reportstate: pending report cannot be opened")
+
+// ErrInvalidPending marks a retained report that is not a record this build
+// can use: not a regular file, over the size bound, or an encoding, version
+// or outcome it does not read. Open refuses it like ErrUnopenable.
+var ErrInvalidPending = errors.New("reportstate: pending report is not a valid record")
 
 // Observation contains the original execution facts, without a timestamp or
 // signature for a later transmission. Detail can contain untrusted device text;
@@ -75,7 +96,43 @@ type Store struct {
 	fault   error
 }
 
+// Open takes the directory's process lock and refuses a retained report it
+// cannot open (ErrUnopenable, ErrInvalidPending) without changing its bytes or
+// replacing a missing sealing key.
 func Open(path, binding string) (*Store, error) {
+	s, err := lockStore(path, binding)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.load(); err != nil {
+		_ = s.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+// SetAsideUnopenable is an operator's explicit decision about a retained report
+// this registration cannot deliver, one Open refuses as ErrUnopenable or
+// ErrInvalidPending: it is renamed, intact and still sealed, to
+// set-aside-<UTC>.state in the same directory and is never sent under the
+// current binding. It returns that path, or "" when nothing needed moving; a
+// report that opens stays in place for the agent to send. At most
+// setAsideLimit reports are kept aside. The agent must not be running.
+func SetAsideUnopenable(path, binding string) (string, error) {
+	s, err := lockStore(path, binding)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = s.Close() }()
+	err = s.load()
+	if err == nil || (!errors.Is(err, ErrUnopenable) && !errors.Is(err, ErrInvalidPending)) {
+		return "", err
+	}
+	return s.setAside(time.Now())
+}
+
+// lockStore checks the private directory and takes its process lock.
+func lockStore(path, binding string) (*Store, error) {
 	path = filepath.Clean(path)
 	if !filepath.IsAbs(path) || path == string(os.PathSeparator) || binding == "" {
 		return nil, errors.New("reportstate: an absolute private directory and identity binding are required")
@@ -114,47 +171,90 @@ func Open(path, binding string) (*Store, error) {
 	if err := lockFile(s.lock); err != nil {
 		return nil, fmt.Errorf("reportstate: another process owns this agent report store: %w", err)
 	}
-	keyPath := filepath.Join(path, "sealing.key")
-	if _, err := root.Lstat("pending.state"); err == nil {
-		if _, err := root.Lstat("sealing.key"); err != nil {
-			return nil, errors.New("reportstate: pending result has no accessible sealing key; preserve the state for recovery")
+	ok = true
+	return s, nil
+}
+
+// load creates the sealing key when nothing is retained and checks that a
+// retained report opens. A report without its key is refused before a new
+// key could replace the one that sealed it.
+func (s *Store) load() error {
+	keyPath := filepath.Join(s.path, "sealing.key")
+	if _, err := s.root.Lstat("pending.state"); err == nil {
+		if _, err := s.root.Lstat("sealing.key"); err != nil {
+			return fmt.Errorf("%w: it has no accessible sealing key; preserve the state for recovery", ErrUnopenable)
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
+		return err
 	}
 	key, err := secretfile.LoadOrCreate(keyPath, func() ([]byte, error) { return crypto.RandomBytes(32) })
 	if err != nil {
-		return nil, err
+		return err
 	}
 	validKey := len(key) == 32
 	secret.Wipe(key)
 	if !validKey {
-		return nil, errors.New("reportstate: invalid sealing key length")
+		return errors.New("reportstate: invalid sealing key length")
 	}
-	keyFile, err := root.OpenFile("sealing.key", os.O_RDWR, 0)
+	keyFile, err := s.root.OpenFile("sealing.key", os.O_RDWR, 0)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	err = keyFile.Sync()
 	closeErr := keyFile.Close()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if closeErr != nil {
-		return nil, closeErr
+		return closeErr
 	}
-	if err := syncDirectory(root); err != nil {
-		return nil, err
+	if err := syncDirectory(s.root); err != nil {
+		return err
 	}
 	pending, err := s.read()
 	if pending != nil {
 		pending.Destroy()
 	}
+	return err
+}
+
+// setAside renames the retained report, without reading or rewriting it, so
+// the bytes (or a symbolic link) stay exactly as they were.
+func (s *Store) setAside(now time.Time) (string, error) {
+	dir, err := s.root.Open(".")
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	ok = true
-	return s, nil
+	names, err := dir.Readdirnames(-1)
+	closeErr := dir.Close()
+	if err != nil {
+		return "", err
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	kept := 0
+	for _, name := range names {
+		if strings.HasPrefix(name, setAsidePrefix) {
+			kept++
+		}
+	}
+	if kept >= setAsideLimit {
+		return "", fmt.Errorf("reportstate: %d reports are already set aside in %s; review and remove the ones no longer needed before setting aside another", kept, s.path)
+	}
+	name := setAsidePrefix + now.UTC().Format("20060102T150405.000000000Z") + ".state"
+	if _, err := s.root.Lstat(name); err == nil {
+		return "", fmt.Errorf("reportstate: %s already exists", name)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	if err := s.root.Rename("pending.state", name); err != nil {
+		return "", err
+	}
+	if err := syncDirectory(s.root); err != nil {
+		return "", err
+	}
+	return filepath.Join(s.path, name), nil
 }
 
 func (s *Store) Close() error {
@@ -297,7 +397,7 @@ func (s *Store) read() (*Observation, error) {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Size() > maxRecordBytes+64 {
-		return nil, errors.New("reportstate: invalid or oversized pending result")
+		return nil, fmt.Errorf("%w: not a regular file, or over the size bound", ErrInvalidPending)
 	}
 	ciphertext, err := secretfile.Load(filepath.Join(s.path, "pending.state"))
 	if err != nil {
@@ -310,21 +410,21 @@ func (s *Store) read() (*Observation, error) {
 		plain, err = crypto.AESGCMOpen(key, ciphertext, s.aad())
 		return err
 	}); err != nil {
-		return nil, fmt.Errorf("reportstate: pending result authentication failed: %w", err)
+		return nil, fmt.Errorf("%w under this registration and sealing key: %w", ErrUnopenable, err)
 	}
 	defer secret.Wipe(plain)
 	var record diskRecord
 	if err := json.Unmarshal(plain, &record); err != nil {
 		record.Value.Destroy()
-		return nil, errors.New("reportstate: invalid pending result encoding")
+		return nil, fmt.Errorf("%w: invalid encoding", ErrInvalidPending)
 	}
 	if record.Version != 1 {
 		record.Value.Destroy()
-		return nil, errors.New("reportstate: unsupported pending result version")
+		return nil, fmt.Errorf("%w: unsupported version %d", ErrInvalidPending, record.Version)
 	}
 	if err := validate(record.Value); err != nil {
 		record.Value.Destroy()
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", ErrInvalidPending, err)
 	}
 	return &record.Value, nil
 }

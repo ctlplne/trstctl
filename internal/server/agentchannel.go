@@ -685,7 +685,12 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		// A62: the binary's own executor census. A self-report over the
 		// authenticated channel that authorizes nothing; bounded here and in
 		// the projector so a heartbeat cannot carry arbitrary bulk.
-		census := &projections.AgentExecutorCensus{Version: strings.TrimSpace(req.Executors.Version), Kinds: []projections.AgentExecutorKind{}, HostTLSProbe: req.Executors.HostTLSProbe, HostProfileError: strings.TrimSpace(req.Executors.HostProfileError)}
+		census := &projections.AgentExecutorCensus{Version: strings.TrimSpace(req.Executors.Version), Kinds: []projections.AgentExecutorKind{}, HostTLSProbe: req.Executors.HostTLSProbe, HostProfileError: strings.TrimSpace(req.Executors.HostProfileError),
+			PendingReportError: strings.TrimSpace(req.Executors.PendingReportError)}
+		if len(census.PendingReportError) > 512 {
+			// B13-R1: bounded like the relay CA bundle's reload error below.
+			census.PendingReportError = census.PendingReportError[:512]
+		}
 		if census.Version == "" {
 			census.Version = strings.TrimSpace(req.Version)
 		}

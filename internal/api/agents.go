@@ -131,6 +131,10 @@ type agentResponse struct {
 	// ReportedHostProfileError is the binary's own reason its host exec
 	// profile could not be loaded (B7); absent when it loaded.
 	ReportedHostProfileError string `json:"reported_host_profile_error,omitempty"`
+	// ReportedPendingReportError is the binary's own reason it has paused job
+	// claims (B13-R1): a pending job report it cannot send under its current
+	// registration; absent while claims run.
+	ReportedPendingReportError string `json:"reported_pending_report_error,omitempty"`
 	// ReportedRelayCABundle is the relay's own account of its --relay-ca-bundle
 	// (A86): the digest and load time of the bundle in force and the last
 	// reload error; absent until a relay with a bundle has reported.
@@ -392,19 +396,39 @@ func AgentReportedHostProfileError(a store.Agent) string {
 	return strings.TrimSpace(census.HostProfileError)
 }
 
-// RequireHostAgentProfileUsable refuses work bound to a host agent whose
-// executor census says its host execution profile could not be loaded (B7):
-// that relay claims no host work, so the row would wait on a claim that never
-// comes and the operator would see only a timeout. An agent that reported no
-// census, or no error, is admitted.
-func RequireHostAgentProfileUsable(agent store.Agent, work string) error {
-	reason := AgentReportedHostProfileError(agent)
-	if reason == "" {
-		return nil
+// AgentReportedPendingReportError reads the census's paused-claims reason
+// (B13-R1); empty until a census was reported or while claims run.
+func AgentReportedPendingReportError(a store.Agent) string {
+	if a.ExecutorsReportedAt == nil || len(a.Executors) == 0 {
+		return ""
 	}
-	return ErrStatus(http.StatusConflict, fmt.Sprintf(
-		"%s is bound to host agent %s, whose host execution profile could not be loaded (%s); repair the profile and restart the agent first; nothing was queued or changed",
-		work, agent.Name, reason))
+	var census struct {
+		PendingReportError string `json:"pending_report_error"`
+	}
+	if err := json.Unmarshal(a.Executors, &census); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(census.PendingReportError)
+}
+
+// RequireHostAgentProfileUsable refuses work bound to a host agent whose
+// executor census says it claims no host work: its host execution profile
+// could not be loaded (B7), or it paused job claims over a pending report it
+// cannot send under its current registration (B13-R1). The row would wait on a
+// claim that never comes and the operator would see only a timeout. An agent
+// that reported no census, or no error, is admitted.
+func RequireHostAgentProfileUsable(agent store.Agent, work string) error {
+	if reason := AgentReportedHostProfileError(agent); reason != "" {
+		return ErrStatus(http.StatusConflict, fmt.Sprintf(
+			"%s is bound to host agent %s, whose host execution profile could not be loaded (%s); repair the profile and restart the agent first; nothing was queued or changed",
+			work, agent.Name, reason))
+	}
+	if reason := AgentReportedPendingReportError(agent); reason != "" {
+		return ErrStatus(http.StatusConflict, fmt.Sprintf(
+			"%s is bound to host agent %s, which has paused job claims (%s); nothing was queued or changed",
+			work, agent.Name, reason))
+	}
+	return nil
 }
 
 func agentReportedCapabilities(a store.Agent) []agentReportedCapabilityResponse {
@@ -520,6 +544,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		out.ReportedExecutorVersion = census.Version
 		out.ReportedHostTLSProbe = agentReportedHostTLSProbe(a)
 		out.ReportedHostProfileError = AgentReportedHostProfileError(a)
+		out.ReportedPendingReportError = AgentReportedPendingReportError(a)
 		out.ReportedRelayCABundle = agentReportedRelayCABundle(a)
 	}
 	if len(out.Roles) == 0 {

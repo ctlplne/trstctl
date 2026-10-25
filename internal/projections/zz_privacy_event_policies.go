@@ -557,6 +557,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/executors/kinds/*/missing_flags/*", opaque),
 		privacyRule("/executors/host_tls_probe", opaque),
 		privacyRule("/executors/host_profile_error", opaque),
+		privacyRule("/executors/pending_report_error", opaque),
 		privacyRule("/executors/relay_ca_bundle/sha256", opaque),
 		privacyRule("/executors/relay_ca_bundle/loaded_at", opaque),
 		privacyRule("/executors/relay_ca_bundle/error", opaque),

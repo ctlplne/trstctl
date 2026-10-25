@@ -2742,7 +2742,18 @@ than sending an operator looking for a credential that was never there.
   refuses while naming the resolved path to pin): that relay claims no host
   work, so a connector target deploy or an ML-DSA host migration bound to it
   is refused with HTTP 409 naming the agent and the reason, instead of
-  waiting on a claim that never comes.
+  waiting on a claim that never comes. The same holds while an agent has
+  paused job claims over a pending job report it cannot open under its
+  current registration (`reported_pending_report_error`: after re-enrollment,
+  a changed CA bundle or server name, a missing sealing key, or damage); it
+  keeps heartbeating and renewing its own certificate, and claims resume after
+  the operator restores the previous settings or runs the agent once with
+  `--set-aside-pending-report`. A host renewal whose report was set aside
+  keeps its retained key in the host rollback state: a retry of that job
+  resumes with it, but if the control plane fails the job instead, a later
+  renewal of that target is refused as "the encrypted pending host key belongs
+  to another job" until that renewal is rolled back on the target, which
+  clears the slot.
   When the certificate was issued but the host could not install it, the
   agent's receipt names the step that failed (the host sandbox refused the
   write, the connector's configuration test refused the new pair, or the

@@ -136,6 +136,13 @@ type ExecutorReport struct {
 	// them wait on a claim that never comes. Empty when the profile loaded or
 	// none was configured.
 	HostProfileError string `json:"host_profile_error,omitempty"`
+	// PendingReportError is why this agent has paused job claims (B13-R1): it
+	// holds a pending job report it cannot send under its current registration
+	// (sealed under another registration or server trust, without its sealing
+	// key, damaged, or from another agent build). The control plane refuses
+	// work bound to it by name instead of letting it wait on a claim that never
+	// comes. Empty while claims run.
+	PendingReportError string `json:"pending_report_error,omitempty"`
 	// RelayCABundle is the --relay-ca-bundle actually in force on this relay
 	// (A86): its digest, when it was loaded, and the last reload error if the
 	// operator's latest replacement was unusable. Nil when no bundle is set.

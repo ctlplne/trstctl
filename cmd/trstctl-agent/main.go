@@ -54,6 +54,7 @@ func main() {
 	// The runtime distrust list guards the process default transport too (eMudhra, Part 2).
 	netsec.HardenProcessDefaults()
 	showVersion := flag.Bool("version", false, "print version information and exit")
+	setAsidePendingReport := flag.Bool("set-aside-pending-report", false, "one-shot, with the agent stopped: move a pending job report this registration cannot open (after re-enrollment, a changed --ca-bundle or --server-name, a missing sealing key, or damage) aside, intact and unsent, so job claims resume; a report the agent can still send is left in place. Reads --key, --cert, --ca-bundle, --name and --server-name, then exits")
 	distrustFile := flag.String("distrust-file", "", "optional operator distrust list, in the control plane's trust.distrust_file format, added to the shipped entries; the agent rates discovered certificates and removes distrusted trust-store roots against it")
 	tomcatReloadURL := flag.String("tomcat-reload-url", "", "one-shot: reload TLS through the stock Tomcat Manager /manager/text/sslReload on a literal loopback address, then exit")
 	tomcatReloadUser := flag.String("tomcat-reload-user", "", "Tomcat Manager username with manager-script permission (one-shot TLS reload)")
@@ -458,6 +459,23 @@ func main() {
 		}
 	}
 
+	// B13-R1: the operator's explicit decision about a pending job report this
+	// registration cannot open. It needs no connection, and the report store's
+	// process lock refuses it while the agent runs.
+	if *setAsidePendingReport {
+		moved, err := setAsidePendingReportFor(o)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		if moved == "" {
+			fmt.Println("trstctl-agent: no pending job report that this registration cannot open; nothing was set aside")
+		} else {
+			fmt.Printf("trstctl-agent: set aside the pending job report this registration cannot open, intact and unsent, at %s; job claims resume when the agent starts\n", moved)
+		}
+		return
+	}
+
 	if *service != "" {
 		if err := handleService(*service, o); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
@@ -720,12 +738,21 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	defer stopEnrollProxy()
 	reportRevocationCaches, stopRevocationCaches := startRevocationCache(ctx, o)
 	defer stopRevocationCaches()
+	// B13-R1: set when a pending job report pauses claims; every later census
+	// carries it so work bound to this agent is refused by name.
+	var pendingReportError atomic.Pointer[string]
 	ch := channelAdapter{
 		c:                  transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())),
 		enrollmentProxy:    reportEnrollmentProxy,
 		revocationCaches:   reportRevocationCaches,
 		revocationIssuedAt: &atomic.Int64{},
-		executors:          func() *transport.ExecutorReport { return executorCensus(o, relayCAStatus) },
+		executors: func() *transport.ExecutorReport {
+			report := executorCensus(o, relayCAStatus)
+			if reason := pendingReportError.Load(); reason != nil {
+				report.PendingReportError = *reason
+			}
+			return report
+		},
 	}
 	if w := o.sshKRLWatch; w != nil {
 		ch.sshKRL = w.options.Receipts.Latest
@@ -812,7 +839,18 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		if relayTimer != nil {
 			relayTimer.Stop()
 		}
-		return fmt.Errorf("initialize pending agent reports: %w", err)
+		reason, paused := pendingReportPause(err)
+		if !paused {
+			return fmt.Errorf("initialize pending agent reports: %w", err)
+		}
+		// B13-R1: a pending report this registration cannot send pauses job
+		// claims instead of stopping the agent. Heartbeats, renewal and
+		// inventory continue; the census says why at once, so work bound to
+		// this agent is refused by name rather than waiting on a claim.
+		fmt.Fprintln(os.Stderr, "trstctl-agent: job claims paused:", reason)
+		pendingReportError.Store(&reason)
+		relayTimer, relayCh, claimsEnabled, pendingReports = nil, nil, false, nil
+		resetTimer(heartbeatTimer, 0)
 	}
 	if pendingReports != nil {
 		defer func() { _ = pendingReports.Close() }()

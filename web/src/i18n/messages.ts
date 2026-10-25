@@ -14517,6 +14517,15 @@ export const messages = {
     defaultMessage: "Relay CA bundle in force: sha256 {digest}…, loaded {at}. A changed file is picked up without a restart.",
     description: "A86: the relay's self-reported appliance CA bundle digest and load time.",
   },
+  "agents.executors.claimsPaused": {
+    defaultMessage: "Job claims paused: {reason}",
+    description:
+      "B13-R1: the agent's own reason it has paused job claims over a pending report it cannot send under its current registration; work bound to it is refused by name.",
+  },
+  "agents.executors.hostProfileError": {
+    defaultMessage: "Host execution profile not loaded; this agent claims no host work: {reason}",
+    description: "B7: the agent's own reason its host execution profile could not be loaded; deploys bound to it are refused by name.",
+  },
   "agents.executors.relayCABundleError": {
     defaultMessage: "Latest bundle replacement rejected; the previous bundle stays in force: {error}",
     description: "A86: the relay's last CA bundle reload error.",

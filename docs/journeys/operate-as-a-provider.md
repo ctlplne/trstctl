@@ -445,7 +445,11 @@ recovers the pending report before claiming more work, including after restart.
 Disabling job claiming still permits reporting an existing result. A refusal or
 unavailable control plane retains the observation and blocks further claims.
 Corrupt state, a missing sealing key, or a changed server trust, agent identity or
-tenant registration causes an explicit refusal; do not delete the state to bypass it.
+tenant registration is refused explicitly: the agent keeps running with job claims
+paused, reports why on its heartbeat, and work bound to it is refused by name. Do not
+delete the state to bypass it. Restore the previous settings to deliver the report, or
+run the agent once with `--set-aside-pending-report`, which moves it aside intact and
+unsent (Configuration → Agent mTLS channel).
 
 A late report receives a receipt acknowledgement, not a renewed claim. The agent
 can clear its saved report, but this does not authorize execution or rollback.

@@ -289,6 +289,36 @@ describe("agent fleet surface", () => {
     expect(screen.getByText("Agent job capabilities")).toBeInTheDocument();
   });
 
+  it("says why an agent claims no work: paused claims or an unloadable host profile", async () => {
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        id: "host-agent-9",
+        name: "rebuilt-host",
+        status: "active",
+        version: "host-0.9.2",
+        roles: ["host"],
+        role_source: "certificate",
+        presence: { state: "online", online: true, evaluated_at: "2026-10-25T00:00:00Z", detail: "Fresh heartbeat." },
+        relay_capabilities: [{ kind: "connector.deploy", connectors: ["nginx"], enable_flags: ["--relay-claim"] }],
+        capability_source: "reported",
+        capabilities_reported_at: "2026-10-25T00:00:00Z",
+        reported_executor_version: "host-0.9.2",
+        reported_capabilities: [{ kind: "connector.deploy", connectors: ["nginx"], missing_flags: [], enabled: true }],
+        reported_pending_report_error:
+          "reportstate: pending report cannot be opened under this registration and sealing key: cipher: message authentication failed. Restore those settings to send it, or stop the agent and run it once with --set-aside-pending-report to move it aside unsent; job claims stay paused until then",
+        reported_host_profile_error: "relay: invalid tls_probe_openssl: pin the resolved path",
+      },
+    ]);
+    renderAgents();
+
+    await screen.findByRole("heading", { name: /1 of 1 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("heading", { name: "rebuilt-host" });
+    expect(screen.getByText(/Job claims paused:/)).toBeInTheDocument();
+    expect(screen.getByText(/--set-aside-pending-report/)).toBeInTheDocument();
+    expect(screen.getByText(/Host execution profile not loaded; this agent claims no host work:/)).toBeInTheDocument();
+  });
+
   it("says when an agent has not reported its own executors", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {

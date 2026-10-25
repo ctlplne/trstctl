@@ -8836,6 +8836,8 @@ export interface components {
             /** @description The enrolled binary's own reason its host execution profile could not be loaded; absent when it loaded. */
             reported_host_profile_error?: string;
             reported_host_tls_probe?: boolean;
+            /** @description The enrolled binary's own reason it has paused job claims: a pending job report it cannot send under its current registration (after re-enrollment, a changed CA bundle or server name, a missing sealing key, or damage), with the remedy; absent while claims run. Work bound to the agent is refused by name until it clears. */
+            reported_pending_report_error?: string;
             /** @description A86: the relay's own account of its --relay-ca-bundle: the digest and load time of the bundle in force and the last reload error when the operator's latest replacement was unusable; absent until a relay with a bundle has reported. */
             reported_relay_ca_bundle?: {
                 error?: string;

@@ -2395,6 +2395,23 @@ understand this request, so an updated agent refuses restoration. Ordinary lease
 extension also requires the current claim attempt; an expired or stale attempt
 cannot renew its lease. Host rollback still redeems no control-plane credential.
 
+The agent keeps one terminal job report at a time in encrypted `pending-reports`
+state beside `--key` until the control plane acknowledges it. If that report cannot
+be opened under the agent's current registration (after re-enrollment against a
+rebuilt control plane, a changed `--ca-bundle` file or `--server-name`, a missing
+sealing key, or damage), the agent keeps running with job claims paused. Heartbeats,
+its own certificate renewal and inventory continue. Its executor census reports the
+reason (`reported_pending_report_error` on the agent, shown on Agents), and a deploy
+or host migration bound to it is refused with HTTP 409 naming the agent. To deliver
+the report, restore the previous settings. Otherwise stop the agent and run it once
+with the same flags plus `--set-aside-pending-report`: it moves the report, intact and
+unsent, to `pending-reports/set-aside-<UTC>.state` and exits, and claims resume when
+the agent starts. A report the agent can still send is never moved, and at most four
+set-aside reports are kept. A set-aside report is never sent under the new
+registration; the control plane that issued its job retries or fails that job when
+the lease expires. To recover one set aside by mistake, stop the agent, restore the
+previous settings, and move the file back to `pending-reports/pending.state`.
+
 ## WASM plugins
 
 The WASM plugin surface is off by default. When enabled, the binary admits only signed
