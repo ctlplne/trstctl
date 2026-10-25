@@ -467,3 +467,16 @@ func TestAuditFeedCursorAndReceiptAreSnapshotSafeAUD52(t *testing.T) {
 		t.Fatalf("SnapshotFormatVersion = %d; a v31 payload cannot restore AUD-52 collector cursors and receipts", SnapshotFormatVersion)
 	}
 }
+
+// Owner decision 2026-10-24: certificates carry the rule and the event behind
+// a key origin derived from a retained pre-custody issuance event. A v60
+// snapshot has no such columns, and jsonb_populate_recordset would fill the
+// NOT NULL columns with NULL, so it must not be restored.
+func TestDerivedKeyOriginColumnsAreSnapshotSafe(t *testing.T) {
+	if !containsRecoveryTable(snapshotTables, "certificates") {
+		t.Fatal("certificates are missing from snapshots")
+	}
+	if SnapshotFormatVersion < 61 {
+		t.Fatalf("SnapshotFormatVersion = %d; a v60 payload cannot restore derived key origins", SnapshotFormatVersion)
+	}
+}

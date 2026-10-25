@@ -865,6 +865,36 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getByText("Key custody was not recorded for this credential.")).toBeInTheDocument();
   });
 
+  it("says when a key origin was derived from the retained issuance event, and names the event", async () => {
+    const certificate = {
+      id: "pre-custody-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=old.acme.example",
+      sans: ["old.acme.example"],
+      issuer: "CN=trstctl Issuing CA",
+      status: "active",
+      fingerprint: "fp-old",
+      source: "protocol:acme",
+      not_before: "2026-07-01T00:00:00Z",
+      not_after: "2027-07-01T00:00:00Z",
+      key_origin: "requester",
+      key_origin_derivation: "protocol_enrollment",
+      key_origin_proof_event_id: "evt-acme-0701",
+      custody_summary:
+        "The requester supplied the public key; the control plane did not receive its private key for this issuance. This origin was derived from the certificate's retained issuance record.",
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /old\.acme\.example/ });
+    fireEvent.click(within(row).getByRole("button", { name: "View" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText(/derived after the fact/)).toBeInTheDocument();
+    expect(within(detail).getByText(/an ACME, EST, SCEP or CMP enrollment signed the client's own CSR/)).toBeInTheDocument();
+    expect(within(detail).getByText(/Proving event: evt-acme-0701/)).toBeInTheDocument();
+  });
+
   it("updates a short-lived deadline when expiry passes while the page stays open", async () => {
     // This test owns the clock: coverage/instrumentation latency must not
     // advance a 500 ms lifetime before the initial assertion observes it.

@@ -5285,6 +5285,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				return err
 			}
 		}
+		// Owner decision 2026-10-24: an event from before its path recorded
+		// custody may still prove the origin by its shape; the row then says
+		// which rule derived it and from which event.
+		keyOrigin, derivation, proofEventID := pl.KeyOrigin, "", ""
+		if rule, derived := DeriveKeyOrigin(e, pl); derived {
+			keyOrigin, derivation, proofEventID = string(rule.Origin()), string(rule), e.ID
+		}
 		if err := p.store.ApplyCertificateRecordedTx(ctx, tx, store.Certificate{
 			ID: pl.ID, TenantID: e.TenantID, CAID: pl.CAID, OwnerID: pl.OwnerID, Subject: pl.Subject, SANs: pl.SANs,
 			Issuer: pl.Issuer, Serial: pl.Serial, Fingerprint: pl.Fingerprint, KeyAlgorithm: pl.KeyAlgorithm,
@@ -5299,10 +5306,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			// B5/B2: the custody claim is projected like any other field, so a
 			// Rebuild() reproduces it. Without this the column stayed empty no
 			// matter what the issuing path recorded.
-			KeyOrigin:      pl.KeyOrigin,
-			KeyStorage:     pl.KeyStorage,
-			KeyExportable:  pl.KeyExportable,
-			KeyGeneratedBy: pl.KeyGeneratedBy,
+			KeyOrigin:             keyOrigin,
+			KeyStorage:            pl.KeyStorage,
+			KeyExportable:         pl.KeyExportable,
+			KeyGeneratedBy:        pl.KeyGeneratedBy,
+			KeyOriginDerivation:   derivation,
+			KeyOriginProofEventID: proofEventID,
 		}); err != nil {
 			return err
 		}
@@ -9025,6 +9034,16 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			}
 			return nil
 		}
+		derivedOrigin, err := p.keyOriginDerivationNeedsRebuild(ctx, log)
+		if err != nil {
+			return fmt.Errorf("projections: inspect derivable key origins: %w", err)
+		}
+		if derivedOrigin {
+			if err := p.rebuildWithPrivacyBarrier(ctx, log); err != nil {
+				return fmt.Errorf("projections: rebuild derived key origins from retained history: %w", err)
+			}
+			return nil
+		}
 		legacyManagedLeaf, err := p.legacyManagedCAInventoryNeedsRebuild(ctx, log)
 		if err != nil {
 			return fmt.Errorf("projections: inspect legacy managed CA inventory: %w", err)
@@ -9305,6 +9324,9 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 				return err
 			}
 			if err := p.store.SetLegacyManagedCAInventoryCheckedThroughTx(readCtx, tx, replayHead); err != nil {
+				return err
+			}
+			if err := p.store.SetKeyOriginDerivationCheckedThroughTx(readCtx, tx, replayHead); err != nil {
 				return err
 			}
 			return p.store.SetExternalIssuerCheckedThroughTx(readCtx, tx, replayHead)

@@ -2276,6 +2276,8 @@ export interface Certificate {
   key_generated_by?: string;
   key_observations?: CertificateKeyObservation[];
   key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
+  key_origin_derivation?: "protocol_enrollment" | "pqc_migration_reissue" | "identity_issuance" | "identity_renewal" | "kubernetes_auto_issuance" | "ephemeral_credential" | "attested_svid" | "agent_broker" | "external_ca_order";
+  key_origin_proof_event_id?: string;
   key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
   kubernetes_provenance?: KubernetesCertificateProvenance[];
   not_after?: string;

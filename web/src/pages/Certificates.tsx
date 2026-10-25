@@ -478,6 +478,20 @@ function CTSubmissionPanel({
   );
 }
 
+// The closed derivation vocabulary (internal/custody), each with its own
+// sentence so a derived origin reads as the issuing path that proves it.
+const keyOriginDerivationLabels: Record<string, MessageKey> = {
+  protocol_enrollment: "certificateCockpit.derivation.protocolEnrollment",
+  pqc_migration_reissue: "certificateCockpit.derivation.pqcMigrationReissue",
+  identity_issuance: "certificateCockpit.derivation.identityIssuance",
+  identity_renewal: "certificateCockpit.derivation.identityRenewal",
+  kubernetes_auto_issuance: "certificateCockpit.derivation.kubernetesAutoIssuance",
+  ephemeral_credential: "certificateCockpit.derivation.ephemeralCredential",
+  attested_svid: "certificateCockpit.derivation.attestedSVID",
+  agent_broker: "certificateCockpit.derivation.agentBroker",
+  external_ca_order: "certificateCockpit.derivation.externalCAOrder",
+};
+
 export function Certificates() {
   // The app supplies a shared cache. Isolated component workbenches use the
   // same provider, never a second implementation of the live read behavior.
@@ -1486,6 +1500,17 @@ function CertificateWorkspace() {
                   // as reassurance is exactly what an auditor should not be
                   // handed.
                   <dd className="mt-1 text-xs text-muted-foreground">{translateNow("source.custody.unrecorded.b5cust0002")}</dd>
+                ) : null}
+                {detail.key_origin_derivation ? (
+                  // Owner decision 2026-10-24: an origin derived from the
+                  // certificate's retained issuance event says so, and names
+                  // the event an auditor can read to check it.
+                  <dd className="mt-1 break-all text-xs text-muted-foreground">
+                    {translateNow("certificateCockpit.detail.keyOriginDerived", {
+                      rule: translateNow(keyOriginDerivationLabels[detail.key_origin_derivation] ?? "certificateCockpit.derivation.other"),
+                      event: detail.key_origin_proof_event_id ?? "",
+                    })}
+                  </dd>
                 ) : null}
               </div>
               {detail.key_observations && detail.key_observations.length > 0 ? (

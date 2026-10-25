@@ -99,8 +99,35 @@ exportability, and the named key generator unrecorded: receiving a CSR or valid
 workload proof does not establish those facts. The detail describes this issuance;
 it does not attest the key's entire history. EST server key generation uses a
 separate interface and does not acquire requester provenance from this rule.
-Older rows without custody evidence stay unknown; the console does not invent
-an explanation for missing evidence or silently backfill a security claim.
+A certificate issued before its issuing path recorded custody gets the origin
+its own retained issuance event proves, and nothing else. The projection derives
+it from the event alone (so a rebuild reproduces it) and marks it derived: the
+certificate carries `key_origin_derivation` (the rule) and
+`key_origin_proof_event_id` (the event an auditor can read), the summary says the
+origin was derived and that the key's storage was not recorded, and the
+certificate detail names the rule. Each rule is one issuing path whose retained
+event shape, by itself, proves the origin, and it applies only to events older
+than the moment that path began recording custody itself:
+
+| Rule | Proves | From events of |
+|---|---|---|
+| `protocol_enrollment` | requester | ACME, EST, SCEP and CMP enrollments (each signs the client's CSR) |
+| `external_ca_order` | requester | external CA orders taken through the CSR-only route |
+| `ephemeral_credential`, `attested_svid`, `agent_broker` | requester | attested workload and brokered agent issuance (the caller presents its public key) |
+| `identity_issuance` | control plane | identity issuance before CSR-first issuance existed |
+| `identity_renewal` | control plane | renewals before CSR-preserving renewal existed |
+| `kubernetes_auto_issuance` | control plane | Kubernetes TLS auto-issuance |
+| `pqc_migration_reissue` | control plane | the older PQC migration reissue, which built its CSR from a key it generated |
+
+Everything else stays unrecorded: PKI-secret leaves, managed-hierarchy leaves,
+edge delegations, identity issuance from the window when a CSR could be honored
+but custody was not yet recorded, and the oldest rows that carry no issuance key.
+A recorded origin always replaces a derived one; a derived one never replaces a
+recorded one. On upgrade, rows projected by an older binary are derived once by
+an atomic rebuild. A derived control-plane origin lets an identity renew through
+the control-plane path while the tenant allows it; a derived requester origin
+still renews only through its requester's protocol, because no retained CSR links
+it to the renewal.
 
 ## The three retained control-plane generators, and what replaces each
 

@@ -3172,6 +3172,8 @@ Certificate = TypedDict(
         'key_generated_by': str,
         'key_observations': list[dict[str, Any]],
         'key_origin': str,
+        'key_origin_derivation': str,
+        'key_origin_proof_event_id': str,
         'key_storage': str,
         'kubernetes_provenance': list[dict[str, Any]],
         'not_after': str,

@@ -680,6 +680,66 @@ func TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor(t *testing.T)
 	}
 }
 
+// Migration 0311 adds the derivation columns and their recovery cursor. It
+// must not change a legacy certificate or invent a derivation: the derived
+// origin comes only from the projection's replay of the retained event, which
+// the cursor (starting at zero while the projection is ahead) triggers.
+func TestMigration0311PreservesLegacyCertificatesAndDerivationCursor(t *testing.T) {
+	ctx := context.Background()
+	prefix, target := splitMigrationsAtVersion(t, 311)
+	pool, err := pgxpool.New(ctx, createFreshMigrationDatabase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	applyMigrationFiles(t, ctx, pool, prefix)
+	for _, row := range []struct{ tenant, id, fingerprint, origin string }{
+		{"11111111-1111-4111-8111-111111111111", "31100000-0000-4000-8000-000000000001", "pre-311-a", ""},
+		{"22222222-2222-4222-8222-222222222222", "31100000-0000-4000-8000-000000000002", "pre-311-b", "requester"},
+	} {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.tenant_id',$1,true)`, row.tenant); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO certificates(id,tenant_id,subject,fingerprint,source,created_at,key_origin)
+			VALUES($1,$2,'legacy.example.test',$3,'protocol:acme','2026-07-01T00:00:00Z',$4)`,
+			row.id, row.tenant, row.fingerprint, row.origin); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatalf("seed pre-0311 certificate: %v", err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatalf("commit pre-0311 certificate: %v", err)
+		}
+	}
+	if _, err := pool.Exec(ctx, `UPDATE projection_checkpoint SET applied_seq=57 WHERE id=1`); err != nil {
+		t.Fatalf("seed pre-0311 checkpoint: %v", err)
+	}
+	const stable = `SELECT id::text,tenant_id::text,subject,fingerprint,source,created_at::text,key_origin
+		FROM certificates WHERE id IN ('31100000-0000-4000-8000-000000000001','31100000-0000-4000-8000-000000000002')
+		ORDER BY tenant_id,id`
+	beforeCount, beforeChecksum := checksumQuery(t, ctx, pool, stable)
+	applyMigrationFiles(t, ctx, pool, []migrationFile{target})
+	afterCount, afterChecksum := checksumQuery(t, ctx, pool, stable)
+	if beforeCount != 2 || afterCount != beforeCount || afterChecksum != beforeChecksum {
+		t.Fatalf("0311 changed legacy certificate content: %d/%s before, %d/%s after",
+			beforeCount, beforeChecksum, afterCount, afterChecksum)
+	}
+	var invented int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM certificates
+		WHERE id IN ('31100000-0000-4000-8000-000000000001','31100000-0000-4000-8000-000000000002')
+		AND (key_origin_derivation<>'' OR key_origin_proof_event_id<>'')`).Scan(&invented); err != nil || invented != 0 {
+		t.Fatalf("0311 invented a key origin derivation: count=%d err=%v", invented, err)
+	}
+	var applied, inspected int64
+	if err := pool.QueryRow(ctx, `SELECT applied_seq,key_origin_derivation_checked_through FROM projection_checkpoint WHERE id=1`).Scan(&applied, &inspected); err != nil || applied != 57 || inspected != 0 {
+		t.Fatalf("0311 derivation cursor: applied=%d inspected=%d err=%v", applied, inspected, err)
+	}
+}
+
 // Migration 0244 must leave an old managed-CA receipt unclaimed until the
 // retained issuance event is replayed. A pre-upgrade checkpoint may already be
 // ahead of that event, so the new inspection cursor starts at zero while the
@@ -1098,6 +1158,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	294: true, // TestMigration0294LeavesExistingReceiptsWithoutAnAdoptedPredecessor
 	293: true, // TestMigration0293LabelsExistingARIRowsAsAuthenticatedIssuer
 	247: true, // TestMigration0247PreservesLegacyCertificatesAndRecoveryCursor
+	311: true, // TestMigration0311PreservesLegacyCertificatesAndDerivationCursor
 	244: true, // TestMigration0244PreservesLegacyCAReceiptAndRecoveryCursor
 	237: true, // TestMigration0237PreservesProviderAuthorityReceipts
 	238: true, // TestMigration0238PreservesTenantBrands

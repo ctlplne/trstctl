@@ -469,13 +469,15 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		         -- recorded an empty custody origin. A custody claim that lives
 		         -- in the code and not in the row is not auditable, which is the
 		         -- entire reason the column exists.
-		         key_origin, key_storage, key_exportable, key_generated_by, validity_anchor, issuing_external_ca_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+		         key_origin, key_storage, key_exportable, key_generated_by, validity_anchor, issuing_external_ca_id,
+		         key_origin_derivation, key_origin_proof_event_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
 		 ON CONFLICT DO NOTHING`,
 		c.ID, c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID, c.CreatedAt,
-		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID)
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID,
+		c.KeyOriginDerivation, c.KeyOriginProofEventID)
 	if err != nil {
 		return err
 	}
@@ -497,7 +499,22 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		        -- collector's CSR correlation supplies the custody fact. Permit
 		        -- that one-way UNKNOWN -> KNOWN enrichment, but never erase or
 		        -- replace a custody value already retained for this fingerprint.
-		        key_origin = CASE WHEN key_origin = '' AND $19::text <> '' THEN $19 ELSE key_origin END,
+		        -- Owner decision 2026-10-24: an origin derived from a retained
+		        -- pre-custody issuance event ($25 names its rule) fills only an
+		        -- empty origin, and a recorded origin replaces a derived one. The
+		        -- derivation columns follow whichever value the row keeps.
+		        key_origin_derivation = CASE
+		          WHEN key_origin = '' AND $19::text <> '' THEN $25
+		          WHEN key_origin_derivation <> '' AND $19::text <> '' AND $25::text = '' THEN ''
+		          ELSE key_origin_derivation END,
+		        key_origin_proof_event_id = CASE
+		          WHEN key_origin = '' AND $19::text <> '' THEN $26
+		          WHEN key_origin_derivation <> '' AND $19::text <> '' AND $25::text = '' THEN ''
+		          ELSE key_origin_proof_event_id END,
+		        key_origin = CASE
+		          WHEN key_origin = '' AND $19::text <> '' THEN $19
+		          WHEN key_origin_derivation <> '' AND $19::text <> '' AND $25::text = '' THEN $19
+		          ELSE key_origin END,
 		        key_storage = CASE WHEN key_storage = '' AND $20::text <> '' THEN $20 ELSE key_storage END,
 		        key_exportable = CASE WHEN key_exportable = '' AND $21::text <> '' THEN $21 ELSE key_exportable END,
 		        key_generated_by = CASE WHEN key_generated_by = '' AND $22::text <> '' THEN $22 ELSE key_generated_by END,
@@ -509,7 +526,8 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		    AND (issuance_idempotency_key NOT LIKE 'issue:transition:%'
 		      OR (($16::text = '' OR issuance_idempotency_key = $16)
 		        AND (octet_length($14::bytea) = 0 OR octet_length(certificate_pem) = 0 OR certificate_pem = $14)))
-		    AND (key_origin = '' OR $19::text = '' OR key_origin = $19)
+		    AND (key_origin = '' OR $19::text = '' OR key_origin = $19 OR $25::text <> ''
+		      OR (key_origin_derivation <> '' AND $25::text = ''))
 		    AND (key_storage = '' OR $20::text = '' OR key_storage = $20)
 		    AND (key_exportable = '' OR $21::text = '' OR key_exportable = $21)
 		    AND (key_generated_by = '' OR $22::text = '' OR key_generated_by = $22)
@@ -517,7 +535,8 @@ func (s *Store) ApplyCertificateRecordedTx(ctx context.Context, tx pgx.Tx, c Cer
 		c.TenantID, c.OwnerID, c.Subject, sans, c.Issuer, c.Serial, c.Fingerprint,
 		c.KeyAlgorithm, c.NotBefore, c.NotAfter, c.DeploymentLocation, c.Source, certDER, certPEM, issuanceResponse,
 		c.IssuanceIdempotencyKey, c.IssuanceRequestBinding, c.ReplacesID,
-		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID)
+		c.KeyOrigin, c.KeyStorage, c.KeyExportable, c.KeyGeneratedBy, c.ValidityAnchor, c.IssuingExternalCAID,
+		c.KeyOriginDerivation, c.KeyOriginProofEventID)
 	if err != nil {
 		return err
 	}
@@ -590,9 +609,10 @@ func (s *Store) ApplyCertificateCustodyAttestedTx(ctx context.Context, tx pgx.Tx
 	fingerprint string, record custody.Record) error {
 	tag, err := tx.Exec(ctx,
 		`UPDATE certificates
-		    SET key_origin = $3, key_storage = $4, key_exportable = $5, key_generated_by = $6
+		    SET key_origin = $3, key_storage = $4, key_exportable = $5, key_generated_by = $6,
+		        key_origin_derivation = '', key_origin_proof_event_id = ''
 		  WHERE tenant_id = $1 AND fingerprint = $2
-		    AND key_origin IN ('', $3)
+		    AND (key_origin IN ('', $3) OR key_origin_derivation <> '')
 		    AND key_storage IN ('', $4)
 		    AND key_exportable IN ('', $5)
 		    AND key_generated_by IN ('', $6)`,

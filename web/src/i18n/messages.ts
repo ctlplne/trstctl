@@ -8991,6 +8991,51 @@ export const messages = {
   "certificateCockpit.owner.unresolved": { defaultMessage: "Owner reference is unresolved", description: "Certificate owner reference is not in the roster." },
   "certificateCockpit.owner.unchecked": { defaultMessage: "Owner contact not checked", description: "Certificate owner roster was unavailable." },
   "certificateCockpit.detail.effectiveOwnership": { defaultMessage: "Effective ownership", description: "Certificate detail effective ownership label." },
+  "certificateCockpit.detail.keyOriginDerived": {
+    defaultMessage:
+      "This origin was derived after the fact: the certificate was issued before its issuing path recorded custody, and its retained issuance event proves it ({rule}). Proving event: {event}.",
+    description: "Certificate detail line for a key origin derived from the retained issuance event; rule names the issuing path, event the event id.",
+  },
+  "certificateCockpit.derivation.protocolEnrollment": {
+    defaultMessage: "an ACME, EST, SCEP or CMP enrollment signed the client's own CSR",
+    description: "Derivation rule: protocol enrollment.",
+  },
+  "certificateCockpit.derivation.pqcMigrationReissue": {
+    defaultMessage: "a PQC migration reissue built its CSR from a key the control plane generated",
+    description: "Derivation rule: PQC migration reissue.",
+  },
+  "certificateCockpit.derivation.identityIssuance": {
+    defaultMessage: "identity issuance before CSR-first issuance existed always generated the key in the control plane",
+    description: "Derivation rule: early identity issuance.",
+  },
+  "certificateCockpit.derivation.identityRenewal": {
+    defaultMessage: "renewal before CSR-preserving renewal existed always generated the key in the control plane",
+    description: "Derivation rule: early identity renewal.",
+  },
+  "certificateCockpit.derivation.kubernetesAutoIssuance": {
+    defaultMessage: "Kubernetes TLS auto-issuance generates the key in the control plane",
+    description: "Derivation rule: Kubernetes auto-issuance.",
+  },
+  "certificateCockpit.derivation.ephemeralCredential": {
+    defaultMessage: "the attested workload presented its own public key",
+    description: "Derivation rule: ephemeral credential.",
+  },
+  "certificateCockpit.derivation.attestedSVID": {
+    defaultMessage: "the attested workload presented its own public key for an X.509-SVID",
+    description: "Derivation rule: attested SVID.",
+  },
+  "certificateCockpit.derivation.agentBroker": {
+    defaultMessage: "the brokered agent presented its own public key",
+    description: "Derivation rule: agent broker.",
+  },
+  "certificateCockpit.derivation.externalCAOrder": {
+    defaultMessage: "an external CA order took only the caller's CSR",
+    description: "Derivation rule: external CA order.",
+  },
+  "certificateCockpit.derivation.other": {
+    defaultMessage: "a rule this console does not name yet",
+    description: "Fallback for a derivation rule without its own sentence.",
+  },
   "certificateCockpit.detail.keyObservations": {
     defaultMessage: "Matching key seen on hosts",
     description: "Certificate detail label for private-key files host agents reported (A121).",

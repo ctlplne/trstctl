@@ -1774,8 +1774,11 @@ func componentSchemas() map[string]*Schema {
 		"key_storage":      {Type: "string", Enum: []string{"", "locked_memory", "sealed_store", "file", "os_store", "pkcs11", "device_bound", "service"}},
 		"key_exportable":   {Type: "string", Enum: []string{"", "exportable", "non_exportable"}},
 		"key_generated_by": str(),
-		"custody_summary":  str(),
-		"key_observations": {Type: "array", Items: ref("CertificateKeyObservation"), Description: "A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held."},
+		"key_origin_derivation": {Type: "string", Enum: []string{"protocol_enrollment", "pqc_migration_reissue", "identity_issuance", "identity_renewal", "kubernetes_auto_issuance", "ephemeral_credential", "attested_svid", "agent_broker", "external_ca_order"},
+			Description: "Set only when key_origin was derived from this certificate's retained issuance event because it was issued before its path recorded custody: the rule that proves it. Absent when the origin was recorded at issuance or is unrecorded."},
+		"key_origin_proof_event_id": {Type: "string", Description: "The retained issuance event that proves a derived key_origin."},
+		"custody_summary":           str(),
+		"key_observations":          {Type: "array", Items: ref("CertificateKeyObservation"), Description: "A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held."},
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
 	certificateKeyObservation := object(map[string]*Schema{
 		"agent": str(), "path": str(), "file_mode": str(), "encrypted": {Type: "boolean"}, "key_format": str(),

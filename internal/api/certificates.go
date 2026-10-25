@@ -69,7 +69,13 @@ type certificateResponse struct {
 	KeyStorage     string `json:"key_storage,omitempty"`
 	KeyExportable  string `json:"key_exportable,omitempty"`
 	KeyGeneratedBy string `json:"key_generated_by,omitempty"`
-	CustodySummary string `json:"custody_summary"`
+	// KeyOriginDerivation and KeyOriginProofEventID are set only when the
+	// origin was derived from the certificate's retained issuance event, for a
+	// certificate issued before its path recorded custody (owner decision
+	// 2026-10-24): the rule, and the event an auditor can read to check it.
+	KeyOriginDerivation   string `json:"key_origin_derivation,omitempty"`
+	KeyOriginProofEventID string `json:"key_origin_proof_event_id,omitempty"`
+	CustodySummary        string `json:"custody_summary"`
 	// KeyObservations (A121) are private-key files host agents reported whose
 	// public key matches this certificate: where a matching key was seen, not
 	// a custody record. Detail reads only; absent when none was reported or
@@ -158,6 +164,7 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		Status:                  c.Status, RevokedAt: c.RevokedAt, RevocationReason: certificateRevocationReason(c.RevocationReason),
 		KeyOrigin: c.KeyOrigin, KeyStorage: c.KeyStorage,
 		KeyExportable: c.KeyExportable, KeyGeneratedBy: c.KeyGeneratedBy,
+		KeyOriginDerivation: c.KeyOriginDerivation, KeyOriginProofEventID: c.KeyOriginProofEventID,
 		// The summary is computed rather than stored, so a surface cannot render
 		// custody by concatenating fields and accidentally imply something the
 		// record does not say. The vocabulary owns the sentence.
@@ -166,6 +173,7 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 			Storage:     custody.StorageClass(c.KeyStorage),
 			Exportable:  custody.Exportability(c.KeyExportable),
 			GeneratedBy: c.KeyGeneratedBy,
+			Derivation:  custody.DerivationRule(c.KeyOriginDerivation),
 		}.Summary(),
 	}
 }

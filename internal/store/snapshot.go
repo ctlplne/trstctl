@@ -184,7 +184,10 @@ import (
 // decision 2026-10-24). A v59 snapshot carries none, so a restore would forget
 // every decision while its covered offset skipped the events that recorded
 // them, and a new tenant would quietly regain control-plane key generation.
-const SnapshotFormatVersion = 60
+// Version 61 carries the key origins derived from retained pre-custody
+// issuance events (owner decision 2026-10-24). A v60 snapshot has no
+// derivation columns, and restoring one would fill them with NULL.
+const SnapshotFormatVersion = 61
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 

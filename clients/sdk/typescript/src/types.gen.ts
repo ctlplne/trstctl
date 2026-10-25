@@ -10345,6 +10345,13 @@ export interface components {
             key_observations?: components["schemas"]["CertificateKeyObservation"][];
             /** @enum {string} */
             key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
+            /**
+             * @description Set only when key_origin was derived from this certificate's retained issuance event because it was issued before its path recorded custody: the rule that proves it. Absent when the origin was recorded at issuance or is unrecorded.
+             * @enum {string}
+             */
+            key_origin_derivation?: "protocol_enrollment" | "pqc_migration_reissue" | "identity_issuance" | "identity_renewal" | "kubernetes_auto_issuance" | "ephemeral_credential" | "attested_svid" | "agent_broker" | "external_ca_order";
+            /** @description The retained issuance event that proves a derived key_origin. */
+            key_origin_proof_event_id?: string;
             /** @enum {string} */
             key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
             /** @description Exact authenticated cert-manager request/Certificate UID observations for this issued fingerprint; absent when unobserved. Not deployment verification. */

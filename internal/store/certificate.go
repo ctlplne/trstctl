@@ -58,6 +58,13 @@ type Certificate struct {
 	KeyStorage     string
 	KeyExportable  string
 	KeyGeneratedBy string
+	// KeyOriginDerivation and KeyOriginProofEventID are set when KeyOrigin was
+	// derived from the certificate's retained issuance event instead of being
+	// recorded at issuance (owner decision 2026-10-24): the rule
+	// (custody.DerivationRule) and the event that proves it. A recorded origin
+	// always replaces a derived one; a derived one never replaces a recorded one.
+	KeyOriginDerivation   string
+	KeyOriginProofEventID string
 	// ObservedBy, ObservedKind and LastSeenAt are provenance (epic C3): which
 	// source last confirmed this certificate exists, of what kind, and when.
 	//
@@ -190,6 +197,10 @@ func (s *Store) UpsertCertificate(ctx context.Context, c Certificate) (Certifica
 			        -- letting it blank the recorded origin would quietly turn an
 			        -- audit fact into an unknown. A row that has custody keeps it.
 			        key_origin = CASE WHEN EXCLUDED.key_origin <> '' THEN EXCLUDED.key_origin ELSE certificates.key_origin END,
+			        -- A recorded origin replaces a derived one, so the
+			        -- derivation that described the old value goes with it.
+			        key_origin_derivation = CASE WHEN EXCLUDED.key_origin <> '' THEN '' ELSE certificates.key_origin_derivation END,
+			        key_origin_proof_event_id = CASE WHEN EXCLUDED.key_origin <> '' THEN '' ELSE certificates.key_origin_proof_event_id END,
 			        key_storage = CASE WHEN EXCLUDED.key_storage <> '' THEN EXCLUDED.key_storage ELSE certificates.key_storage END,
 			        key_exportable = CASE WHEN EXCLUDED.key_exportable <> '' THEN EXCLUDED.key_exportable ELSE certificates.key_exportable END,
 			        key_generated_by = CASE WHEN EXCLUDED.key_generated_by <> '' THEN EXCLUDED.key_generated_by ELSE certificates.key_generated_by END,
@@ -399,7 +410,8 @@ const certificateColumns = `id::text, tenant_id::text, owner_id::text, subject, 
         certificate_der, issuance_idempotency_key, certificate_pem, created_at,
         status, replaces_id::text, revoked_at, revocation_reason, renewed_at, alerted_at,
         key_origin, key_storage, key_exportable, key_generated_by,
-        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id, validity_anchor, issuing_external_ca_id`
+        observed_by, observed_kind, last_seen_at, issuance_request_binding, broker_issuance, issuance_event_id, validity_anchor, issuing_external_ca_id,
+        key_origin_derivation, key_origin_proof_event_id`
 
 func scanCertificate(row pgx.Row, c *Certificate) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.OwnerID, &c.Subject, &c.SANs, &c.Issuer, &c.Serial,
@@ -412,7 +424,10 @@ func scanCertificate(row pgx.Row, c *Certificate) error {
 		// C3: provenance. Which source last confirmed this certificate exists,
 		// and when — distinct from created_at, which only says when trstctl
 		// first recorded it.
-		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID, &c.ValidityAnchor, &c.IssuingExternalCAID)
+		&c.ObservedBy, &c.ObservedKind, &c.LastSeenAt, &c.IssuanceRequestBinding, &c.BrokerIssuance, &c.IssuanceEventID, &c.ValidityAnchor, &c.IssuingExternalCAID,
+		// Owner decision 2026-10-24: an origin derived from the retained
+		// issuance event, and the rule and event that prove it.
+		&c.KeyOriginDerivation, &c.KeyOriginProofEventID)
 }
 
 // GetCertificate loads a certificate in its tenant context.
