@@ -289,7 +289,8 @@ func NewAzureKeyVaultTarget(p Pusher) *Target { return NewTarget("azure-key-vaul
 // NewCITarget syncs secrets to a generic CI/CD secret endpoint.
 func NewCITarget(p Pusher) *Target { return NewTarget("ci", p) }
 
-// NewWebhookTarget syncs secrets to a generic signed webhook.
+// NewWebhookTarget syncs secrets to a generic webhook: JSON over HTTPS,
+// authenticated by the operator's bearer token. The payload is not signed.
 func NewWebhookTarget(p Pusher) *Target { return NewTarget("webhook", p) }
 
 // ProviderCatalog returns the built-in sync provider templates exposed by the API
@@ -355,7 +356,7 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			ID:           "ci",
 			Name:         "Generic CI secret endpoint",
 			Platform:     "ci",
-			DeliveryMode: "signed JSON secret push over HTTPS",
+			DeliveryMode: "JSON secret push over HTTPS (bearer token only, no payload signature)",
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "provider/key/encoded_value JSON envelope",
 			Capabilities: []string{"ci-secret", "generic-json", "outbox-delivery"},

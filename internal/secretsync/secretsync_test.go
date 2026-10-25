@@ -163,3 +163,18 @@ func TestNativeResidualTargetsAreNotCatalogedAsGenericPushers(t *testing.T) {
 		}
 	}
 }
+
+// B4 (design-limit review lead): the catalog called the generic CI endpoint a
+// "signed JSON secret push" and NewWebhookTarget a "generic signed webhook",
+// but the pusher sends plain JSON with the operator's bearer token and signs
+// nothing. A catalog entry may say "signed" only for a pusher that signs its
+// payload, and none does today.
+func TestProviderCatalogClaimsNoSignatureThePushersDoNotMake(t *testing.T) {
+	signsPayload := map[string]bool{}
+	for _, entry := range ProviderCatalog() {
+		text := strings.ToLower(entry.DeliveryMode + " " + entry.WireFormat)
+		if strings.Contains(text, "signed") && !signsPayload[entry.ID] {
+			t.Errorf("catalog entry %s says %q, but its pusher signs nothing", entry.ID, entry.DeliveryMode)
+		}
+	}
+}
