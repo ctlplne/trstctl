@@ -28,6 +28,7 @@ func doctorSources(t *testing.T) string {
 		"../internal/cli/doctor/doctor.go",
 		"../internal/cli/doctor/probes_isolation.go",
 		"../internal/cli/doctor/probes_ops.go",
+		"../internal/cli/doctor/probes_objectstore.go",
 	} {
 		blob, err := os.ReadFile(f) // #nosec G304 -- fixed literal list of the repo's own committed doctor sources; no external input reaches this path (CWE-22)
 		if err != nil {

@@ -133,6 +133,7 @@ func Run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	receipt.Deployment.WriteProbe = opts.writeProbe
 
 	receipt.Probes = append(receipt.Probes, runIsolationProbes(ctx, s, opts.writeProbe)...)
+	receipt.Probes = append(receipt.Probes, runObjectStoreProbes(ctx, getenv, opts.writeProbe)...)
 	receipt.Probes = append(receipt.Probes, runOpsProbes(ctx, s, opts)...)
 
 	for _, p := range receipt.Probes {

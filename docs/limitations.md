@@ -3613,11 +3613,16 @@ than sending an operator looking for a credential that was never there.
   JetStream reports it, or a note saying why there is none); the Provider
   console shows it in each customer's setup view beside health, and the
   isolation drill with its lane and audit-stream checks sits on the same page.
-  The per-tenant KEK/HSM remains unbuilt. The object-key prefix is a
-  derivation only: the product ships no object-store client, the silo
-  provisioner's object-prefix plane has only an in-memory implementation used
-  by tests, so the doctor's operator-run isolation suite cannot yet drive an
-  object-store lane against a live backend (A97 stays open as a build item).
+  The per-tenant KEK/HSM remains unbuilt. The product ships an S3-compatible
+  object-store client that keeps each tenant's objects under the object-key
+  prefix the tenancy router resolves (`tenant/<id>/`, or `silo/<id>/` for an
+  isolated tenant), and the doctor's operator-run isolation suite proves that
+  confinement against the deployment's configured store (OBJ-1 to OBJ-3 in
+  `docs/operations/doctor.md`). The silo provisioner itself is not wired into
+  the served binary: its planes, the object-prefix one included, have only
+  in-memory implementations used by tests, so moving a tenant between isolation
+  models neither creates nor clears anything in the store, and objects keep the
+  full name they were written under.
 - XREC reconciliation rounds are configurable (AUD-1, C4): a `reconcile` block
   in the config file supplies the schedules the rounds worker needs. Before
   this, `roundSchedules` was declared and never assigned, so the worker —

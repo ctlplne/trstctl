@@ -7,7 +7,8 @@ fails, so you can run it in your own pipeline.
 
 This is a **served** command in the shipping `trstctl` binary — not a library, not
 a hosted service. It talks to the same PostgreSQL database your control plane
-serves from.
+serves from and, when one is configured, the same S3-compatible object store that
+holds its audit archives, report artifacts and backups.
 
 ## What it actually does
 
@@ -23,7 +24,7 @@ probe call it. They cannot drift, because there is only one of each query.
 
 A probe that cannot run reports `skip` with the reason. **A skipped proof never
 looks like a passed proof.** That rule is why the summary line reports skips
-separately, and why the honest answer below is "10 pass, 11 skipped" rather than
+separately, and why the honest answer below is "11 pass, 15 skipped" rather than
 a green tick.
 
 ## Running it
@@ -33,12 +34,16 @@ trstctl doctor --prove-isolation --write-probe --json receipt.json --sign
 ```
 
 The database connection comes from `--postgres-dsn`, defaulting to
-`$TRSTCTL_POSTGRES_DSN`. Without a DSN the command exits 2.
+`$TRSTCTL_POSTGRES_DSN`. Without a DSN the command exits 2. The object store comes
+from the same settings the control plane reads: the `object_store` section of the
+file named by `$TRSTCTL_CONFIG_FILE` and the `TRSTCTL_OBJECT_STORE_*` variables
+(see [configuration](../configuration.md#object-store)). Without them the object
+probes report `skip`.
 
 | Flag | Default | What it does |
 |---|---|---|
 | `--prove-isolation` | off | Runs the tenant-isolation probe group. All read-only groups run regardless; this flag is accepted for the documented surface. |
-| `--write-probe` | off | Permits the two ephemeral probe tenants and the cross-tenant write attempts. **Required for a full proof.** Without it, ISO-3, ISO-4, and ISO-5 report `skip`. |
+| `--write-probe` | off | Permits the two ephemeral probe tenants and the cross-tenant write attempts. **Required for a full proof.** Without it, ISO-3, ISO-4, ISO-5, OBJ-1, OBJ-2, and OBJ-3 report `skip`. |
 | `--json PATH` | none | Writes the machine-readable receipt (mode `0600`). |
 | `--sign` | off | Signs the receipt through the isolated signer's existing, purpose-constrained `audit-export` handle. Requires the signer socket; doctor never reads private-key bytes. |
 | `--signer-socket PATH` | `$TRSTCTL_SIGNER_SOCKET` | Required by `--sign`; also enables the SIG-2 socket posture probe. |
@@ -66,6 +71,11 @@ and they do so like this:
 - **Probe activity is ordinary database activity** and may surface in your
   operational monitoring. It is not hidden. If you see two short-lived tenants
   under the reserved prefix, that was doctor.
+- **Object probes stay under the same reserved prefix.** The object lane writes
+  only under `tenant/00000000-d0c7…/` (beneath your deployment prefix). OBJ-CLEAN
+  deletes those objects and then lists the reserved prefix, and reports `pass`
+  only on an empty listing; OBJ-LEAK fails any run that finds an earlier run's
+  objects there. Without `--write-probe` the lane only lists that prefix.
 
 ## What each probe proves, and what it does not
 
@@ -80,6 +90,20 @@ and they do so like this:
 | ISO-5 | A cross-tenant foreign-key parent reference is rejected | This FK, not every FK |
 | ISO-6 | Tenant work runs as the non-owner `trstctl_app` role with a transaction-local `trstctl.tenant_id` GUC, unset outside the transaction | The connection discipline of this client path |
 | ISO-7 | *Skipped by design* | The RLS-bypass call-site inventory is pinned by a compile-time CI guard and is not derivable from a running deployment |
+
+### Object-store isolation (AN-1)
+
+These run when an object store is configured. They use the same tenant-prefixed
+client the audit archive, report artifact and backup targets use, so the proof and
+the product cannot drift.
+
+| ID | Proves | Does not prove |
+|---|---|---|
+| OBJ-LEAK | No object sits under the reserved probe prefix, and the store answers a listing with the deployment's credentials | Anything about prefixes doctor did not list |
+| OBJ-1 | A marker written under probe tenant A's prefix reads back byte-for-byte with its SHA-256 | The store's durability or replication |
+| OBJ-2 | Probe tenant B's listing of its own prefix never shows A's marker, B cannot read it by its relative name, and every name that would climb out of B's prefix is refused before a request is sent | Isolation at the storage layer: the deployment's credential can read every prefix in the bucket, so per-tenant separation inside the store needs per-prefix bucket policies |
+| OBJ-3 | The store refuses a second write to an existing object (a conditional `If-None-Match` write) and keeps the original bytes; a store that ignores conditional writes fails here, because archives written to it could be overwritten | Object lock or retention settings on the bucket |
+| OBJ-CLEAN | Every probe object was deleted, verified by an empty listing of the reserved prefix | — |
 
 ### The groups that mostly skip, and why
 
@@ -136,16 +160,16 @@ abridged to four probes. Values are as emitted; nothing here is illustrative.
 ```jsonc
 {
   "schema": "trstctl.doctor.v1",
-  "generated_at": "2026-08-01T17:31:08.082828Z",
+  "generated_at": "2026-10-25T10:47:04.71674Z",
   "deployment": {
     "version": "trstctl dev (commit none, built unknown, darwin/arm64, go1.26.10)",
     "write_probe": true
   },
   "probes": [
     { "id": "ISO-1", "group": "tenant-isolation (AN-1)", "status": "pass",
-      "detail": "80/80 tenant tables ENABLE + FORCE row level security",
+      "detail": "182/182 tenant tables ENABLE + FORCE row level security",
       "limits": "proves the catalog posture of every tenant table now, not the absence of RLS-bypassing SQL elsewhere",
-      "evidence": { "source": "pg_class", "tables_checked": 80 } },
+      "evidence": { "source": "pg_class", "tables_checked": 182 } },
     { "id": "ISO-3", "group": "tenant-isolation (AN-1)", "status": "pass",
       "detail": "cross-tenant read returned 0 rows (expected 0)",
       "limits": "proves the policy held for this table and this path, not that no bug exists anywhere" },
@@ -154,7 +178,7 @@ abridged to four probes. Values are as emitted; nothing here is illustrative.
     { "id": "SIG-1", "group": "signer-isolation (AN-4)", "status": "skip",
       "detail": "the signer health RPC intentionally reports only serving status, not a PID; separate-process proof stays with the AN-4 dependency-closure gate in CI" }
   ],
-  "summary": { "pass": 10, "fail": 0, "warn": 0, "skip": 11 }
+  "summary": { "pass": 11, "fail": 0, "warn": 0, "skip": 15 }
 }
 ```
 

@@ -1793,6 +1793,38 @@ appended to tenant-isolated history, and available through
 create an idempotent `notification.restore_drill` intent in the same PostgreSQL
 transaction as that history row.
 
+## Object store
+
+An S3-compatible object store (AWS S3, MinIO, or another service that speaks
+the S3 API) for durable artifacts. `trstctl doctor` proves its tenant-prefix
+confinement with the OBJ probes ([doctor runbook](operations/doctor.md)).
+Objects are created, never replaced: every write is conditional
+(`If-None-Match: *`) and carries its SHA-256 for the store to verify, and every
+read is checked against that digest. Each tenant's objects live under its own
+prefix (`tenant/<tenant-id>/`, or `silo/<tenant-id>/` for a tenant the Provider
+isolates), beneath the optional deployment prefix.
+
+| Variable | Config key | Default | Meaning |
+| --- | --- | --- | --- |
+| `TRSTCTL_OBJECT_STORE_ENDPOINT` | `object_store.endpoint` | — | Base URL, a bare `https://host[:port]` such as `https://s3.us-east-1.amazonaws.com` or `https://minio.internal:9000`. Plain `http` is accepted only for a loopback host with the opt-in below. Setting any object-store field requires the endpoint, bucket, access key ID and secret file. |
+| `TRSTCTL_OBJECT_STORE_REGION` | `object_store.region` | `us-east-1` | Signing region. MinIO accepts the default. |
+| `TRSTCTL_OBJECT_STORE_BUCKET` | `object_store.bucket` | — | Bucket name. Create it before pointing trstctl at it; trstctl never creates or reconfigures buckets. |
+| `TRSTCTL_OBJECT_STORE_PREFIX` | `object_store.prefix` | — | Optional deployment root every object is stored under, so several deployments can share a bucket. |
+| `TRSTCTL_OBJECT_STORE_PATH_STYLE` | `object_store.path_style` | `false` | Address `<endpoint>/<bucket>/<key>`; MinIO and most S3-compatible stores need it. |
+| `TRSTCTL_OBJECT_STORE_ACCESS_KEY_ID` | `object_store.access_key_id` | — | Access key ID. |
+| `TRSTCTL_OBJECT_STORE_SECRET_ACCESS_KEY_FILE` | `object_store.secret_access_key_file` | — | Private file (mode `0600`, safe parent directories) holding the secret access key. It is read once into locked memory; the secret is never accepted inline. |
+| `TRSTCTL_OBJECT_STORE_SESSION_TOKEN_FILE` | `object_store.session_token_file` | — | Optional private file with a session token for temporary credentials. |
+| `TRSTCTL_OBJECT_STORE_CA_FILE` | `object_store.ca_file` | — | PEM CA bundle that replaces the system roots for this endpoint (a private MinIO). The runtime distrust list still applies. |
+| `TRSTCTL_OBJECT_STORE_ALLOW_INSECURE_LOOPBACK` | `object_store.allow_insecure_loopback` | `false` | Permit a plain-`http` loopback endpoint (local labs and tests). |
+| `TRSTCTL_OBJECT_STORE_TIMEOUT` | `object_store.timeout` | `30s` | Deadline for one call that moves no payload, between `1s` and `10m`; a call that moves an object gets one more second per MiB. |
+| `TRSTCTL_OBJECT_STORE_MAX_IN_FLIGHT` | `object_store.max_in_flight` | `8` | Concurrent calls per process, at most `64`. A call over the bound is refused at once instead of queued, so a slow store cannot hold the workers that read from it. |
+
+The client sends requests only to the configured origin and follows no
+redirects. The endpoint may be on a private network; it does not pass through
+the SSRF guard that tenant-supplied URLs do. Credentials are the static access
+key above; instance roles and other SDK credential chains are not read. A single
+object holds at most 5 GiB (no multipart upload).
+
 ## License
 
 trstctl ships as a single binary. Enterprise-tier features (managed keys, HA

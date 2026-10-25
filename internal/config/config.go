@@ -114,6 +114,7 @@ type Config struct {
 	AgentBroker               AgentBroker              `json:"agent_broker"`
 	PAM                       PAM                      `json:"pam"`
 	Backup                    Backup                   `json:"backup"`
+	ObjectStore               ObjectStore              `json:"object_store"`
 	License                   License                  `json:"license"`
 	RateLimit                 RateLimit                `json:"rate_limit"`
 	Bulkheads                 Bulkheads                `json:"bulkheads"`
@@ -2885,18 +2886,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_HOSTS", &c.AirGap.AllowHosts)
 	setCSV(getenv, "TRSTCTL_AIRGAP_ALLOW_CIDRS", &c.AirGap.AllowCIDRs)
 	setCSV(getenv, "TRSTCTL_OUTBOUND_ENV_CREDENTIAL_REFS", &c.OutboundEnvCredentialRefs)
-	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &c.Telemetry.Enabled)
-	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &c.Telemetry.Endpoint)
-	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &c.Telemetry.Interval)
-	setString(getenv, "TRSTCTL_TELEMETRY_INSTANCE_ID_FILE", &c.Telemetry.InstanceIDFile)
-	setBool(getenv, "TRSTCTL_OTLP_ENABLED", &c.OTLP.Enabled)
-	setString(getenv, "TRSTCTL_OTLP_ENDPOINT", &c.OTLP.Endpoint)
-	setBool(getenv, "TRSTCTL_OTLP_INSECURE", &c.OTLP.Insecure)
-	setBytes(getenv, "TRSTCTL_OTLP_BEARER_TOKEN", &c.OTLP.Token)
-	setString(getenv, "TRSTCTL_OTLP_BEARER_TOKEN_FILE", &c.OTLP.TokenFile)
-	setString(getenv, "TRSTCTL_OTLP_TIMEOUT", &c.OTLP.Timeout)
-	setInt(getenv, "TRSTCTL_OTLP_QUEUE_SIZE", &c.OTLP.QueueSize)
-	setString(getenv, "TRSTCTL_OTLP_SERVICE_NAME", &c.OTLP.ServiceName)
+	applyTelemetryEnv(getenv, &c.Telemetry, &c.OTLP)
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
@@ -2913,6 +2903,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setInt(getenv, "TRSTCTL_BREAKGLASS_THRESHOLD", &c.Breakglass.Threshold)
 	applyPrivacyEnv(getenv, &c.Privacy)
 	applyBackupEnv(getenv, &c.Backup)
+	applyObjectStoreEnv(getenv, &c.ObjectStore)
 	setString(getenv, "TRSTCTL_LICENSE_FILE", &c.License.File)
 	setString(getenv, "TRSTCTL_LICENSE_DEPLOYMENT_ID", &c.License.DeploymentID)
 	setString(getenv, "TRSTCTL_LICENSE_ENVIRONMENT", &c.License.Environment)
@@ -3349,6 +3340,23 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setBool(getenv, "TRSTCTL_PROTOCOLS_SSH_ENABLED", &p.SSH.Enabled)
 	setString(getenv, "TRSTCTL_PROTOCOLS_SSH_TENANT_ID", &p.SSH.TenantID)
 	setCSV(getenv, "TRSTCTL_PROTOCOLS_SSH_USER_PRINCIPALS", &p.SSHUserPrincipals)
+}
+
+// applyTelemetryEnv is the usage-telemetry and OpenTelemetry-export stage of
+// the environment overlay.
+func applyTelemetryEnv(getenv func(string) string, t *Telemetry, o *OTLP) {
+	setBool(getenv, "TRSTCTL_TELEMETRY_ENABLED", &t.Enabled)
+	setString(getenv, "TRSTCTL_TELEMETRY_ENDPOINT", &t.Endpoint)
+	setString(getenv, "TRSTCTL_TELEMETRY_INTERVAL", &t.Interval)
+	setString(getenv, "TRSTCTL_TELEMETRY_INSTANCE_ID_FILE", &t.InstanceIDFile)
+	setBool(getenv, "TRSTCTL_OTLP_ENABLED", &o.Enabled)
+	setString(getenv, "TRSTCTL_OTLP_ENDPOINT", &o.Endpoint)
+	setBool(getenv, "TRSTCTL_OTLP_INSECURE", &o.Insecure)
+	setBytes(getenv, "TRSTCTL_OTLP_BEARER_TOKEN", &o.Token)
+	setString(getenv, "TRSTCTL_OTLP_BEARER_TOKEN_FILE", &o.TokenFile)
+	setString(getenv, "TRSTCTL_OTLP_TIMEOUT", &o.Timeout)
+	setInt(getenv, "TRSTCTL_OTLP_QUEUE_SIZE", &o.QueueSize)
+	setString(getenv, "TRSTCTL_OTLP_SERVICE_NAME", &o.ServiceName)
 }
 
 // applyBackupEnv is the DR/backup stage of the environment overlay. Every
@@ -4377,6 +4385,7 @@ func validateServedSurfaces(c *Config) []error {
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
+	errs = append(errs, validateObjectStore(c.ObjectStore)...)
 	// Served enrollment protocols are public protocol endpoints. Resolve the
 	// explicit eval preset before validation so its convenience never bypasses the
 	// same tenant/material checks as seven hand-written toggles. Production keeps
