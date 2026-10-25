@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -122,6 +123,70 @@ func TestVaultCLICompatibilityAgainstServedHandler(t *testing.T) {
 	if h.logContains(t, "vault-compat-s3cr3t") || h.logContains(t, issued.Data.PrivateKey) || h.logContains(t, "PRIVATE KEY") {
 		t.Fatal("Vault compatibility leaked secret material into the event log")
 	}
+}
+
+// The tenant's control-plane key generation switch refuses Vault's pki/issue,
+// which generates the key in the control plane, and the refusal names pki/sign.
+// The stock CLI reads only Vault's own error shape ({"errors": [...]}): the
+// refusal reached it as problem+json, so it printed "Errors:" with nothing after
+// it and the operator never learned why or what to use instead.
+func TestVaultCLIShowsWhyPKIIssueIsRefused(t *testing.T) {
+	vault := vaultCLIBinary(t)
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "Vault refusal stock-client tenant")
+	token := seedScopedToken(t, h.store, h.tenant, "secrets:read", "secrets:write", "access:read", "access:write")
+	if status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/tenant/key-generation", token, "vault-keygen-off",
+		map[string]any{"enabled": false, "reason": "requesters bring their own keys"}); status != http.StatusOK {
+		t.Fatalf("turn control-plane key generation off = %d %s", status, body)
+	}
+
+	out := runVaultExpectingFailure(t, vault, t.TempDir(), h.ts.URL, token,
+		"write", "pki/issue/trstctl", "common_name=svc.vault.test", "ttl=1h")
+	if !strings.Contains(string(out), "pki/sign") || !strings.Contains(string(out), "key generation is off") {
+		t.Fatalf("stock vault CLI refusal = %s, want the reason naming pki/sign", out)
+	}
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPut, h.ts.URL+"/v1/pki/issue/default",
+		strings.NewReader(`{"common_name":"raw.vault.test","ttl":"1h"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Vault-Token", token)
+	req.Header.Set("Idempotency-Key", "vault-refusal-shape")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shaped struct {
+		Errors []string `json:"errors"`
+	}
+	if resp.StatusCode != http.StatusConflict || json.Unmarshal(raw, &shaped) != nil || len(shaped.Errors) != 1 ||
+		!strings.Contains(shaped.Errors[0], "pki/sign") {
+		t.Fatalf("pki/issue refusal = %d %s, want 409 in Vault's error shape naming pki/sign", resp.StatusCode, raw)
+	}
+}
+
+// runVaultExpectingFailure runs the stock CLI for a request the server refuses
+// and returns what the CLI printed.
+func runVaultExpectingFailure(t *testing.T, vault, home, addr, token string, args ...string) []byte {
+	t.Helper()
+	cmd := exec.Command(vault, args...) // #nosec G204 -- test executes a fixed local tool or fixture it built itself (CWE-78)
+	cmd.Env = append(os.Environ(),
+		"HOME="+home,
+		"VAULT_ADDR="+addr,
+		"VAULT_TOKEN="+token,
+		"VAULT_SKIP_VERIFY=true",
+	)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("vault %s succeeded, want a refusal:\n%s", strings.Join(args, " "), out)
+	}
+	return out
 }
 
 func vaultCLIBinary(t *testing.T) string {

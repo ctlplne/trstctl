@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1726 annotated sites across 26 rules. Each row is
+1727 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -845,7 +845,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (192 sites)
+### G204 — CWE-78 OS command injection (193 sites)
 
 | Location | Reason |
 |---|---|
@@ -1006,7 +1006,8 @@ not this file.
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/ssh_krl_adoption_served_test.go:31` | fixed ssh-keygen argv over a test-owned temp path |
-| `internal/server/vault_compat_served_test.go:147` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/vault_compat_served_test.go:178` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/vault_compat_served_test.go:212` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/helpers_test.go:29` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/static_test.go:41` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/signing/supervisor.go:46` | spawns the repo's own signer binary; AN-4 child-process mode (CWE-78) |
@@ -1917,7 +1918,7 @@ not this file.
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_krl_adoption_served_test.go:52` | target is a fixed name under t.TempDir, not request-derived |
-| `internal/server/vault_compat_served_test.go:130` | test path inside its own tempdir/checkout (CWE-22) |
+| `internal/server/vault_compat_served_test.go:195` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/signing/keystore.go:306` | both absolute paths passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:317` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:454` | path passed the explicit signer-keystore confinement check above (CWE-22) |

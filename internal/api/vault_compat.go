@@ -341,6 +341,12 @@ func writeVaultJSON(w http.ResponseWriter, status int, v any) {
 	_, _ = w.Write(body)
 }
 
+// vaultErrorShape carries a Vault route's response writer through the shared
+// mutation recorder so that its refusals reach Vault and OpenBao clients in
+// their own error shape. The stock CLI prints only the "errors" array; a
+// problem+json refusal reached it as "Errors:" with nothing after it.
+type vaultErrorShape struct{ http.ResponseWriter }
+
 func writeVaultError(w http.ResponseWriter, status int, detail string) {
 	if status == 0 {
 		status = http.StatusInternalServerError
@@ -802,7 +808,7 @@ func (a *API) vaultPKIIssue(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusInternalServerError, "cannot bind PKI request")
 		return
 	}
-	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateWithRecorder(vaultErrorShape{w}, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultPKIIssueRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
@@ -879,7 +885,7 @@ func (a *API) vaultPKISign(w http.ResponseWriter, r *http.Request) {
 		writeVaultError(w, http.StatusInternalServerError, "cannot bind PKI request")
 		return
 	}
-	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
+	a.mutateWithRecorder(vaultErrorShape{w}, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		var req vaultPKISignRequest
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)

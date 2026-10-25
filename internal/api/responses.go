@@ -113,6 +113,10 @@ func writeTenantCryptoError(a *API, w http.ResponseWriter, err error) bool {
 }
 
 func (a *API) writeProblem(w http.ResponseWriter, p *problem.Problem) {
+	if _, vault := w.(vaultErrorShape); vault {
+		writeVaultError(w, p.Status, p.Detail)
+		return
+	}
 	if localizeProblemResponse(w, p) {
 		w.Header().Set("Content-Language", problemLocaleFromWriter(w))
 		addVaryHeader(w.Header(), "Accept-Language")
