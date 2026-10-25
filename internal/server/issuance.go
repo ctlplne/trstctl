@@ -1182,7 +1182,7 @@ func (d *issuanceDispatcher) deployCredential(ctx context.Context, tenantID stri
 		// the last moment before the payload is sealed into an outbox row and
 		// an append-only event — after that the bytes are durable and the
 		// event log is permanent.
-		if err := enforceExecutorParity(configured.Config, keyPEM); err != nil {
+		if err := enforceExecutorParity(configured.Type, configured.Config, keyPEM); err != nil {
 			return err
 		}
 		connName = configured.Type

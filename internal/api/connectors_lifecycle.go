@@ -1192,7 +1192,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 				"original already has active replacement "+active+"; complete or revoke it before starting another; nothing was queued or changed")
 		}
 	}
-	agentKeygen := custody.TargetExecutorIsAgent(target.Config)
+	agentKeygen := custody.TargetGeneratesKeyOnHost(target.Connector, target.Config)
 	custodySummary := endpointBindingCustody{
 		KeyOrigin:              "control_plane",
 		PrivateKeyControlPlane: true,

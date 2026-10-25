@@ -58,21 +58,23 @@ func targetExecutorIsAgent(cfg json.RawMessage) bool {
 	return custody.TargetExecutorIsAgent(cfg)
 }
 
-// enforceExecutorParity refuses a credential-bearing deploy to an agent-executed
-// target.
+// enforceExecutorParity refuses a credential-bearing deploy to a target whose
+// key the serving host generates (executor=agent on a host-executed family).
+// An appliance marked executor=agent is executed by its pinned relay and still
+// takes a control-plane key, so its sealed deploy is not refused.
 //
 // Called at the one place the control plane still holds the unsealed payload
 // and knows both the target and whether key bytes are present. Checking later —
 // at seal time, or at redemption — would be too late in the useful sense: the
 // bytes would already have been written into an outbox row and an append-only
 // event, and the event log is permanent.
-func enforceExecutorParity(targetConfig json.RawMessage, keyPEM []byte) error {
+func enforceExecutorParity(family string, targetConfig json.RawMessage, keyPEM []byte) error {
 	if len(keyPEM) == 0 {
 		// Nothing to leak. A certificate-only deploy is exactly what an
 		// agent-executed target should receive.
 		return nil
 	}
-	if !targetExecutorIsAgent(targetConfig) {
+	if !custody.TargetGeneratesKeyOnHost(family, targetConfig) {
 		return nil
 	}
 	return ErrCredentialBearingPathRefused

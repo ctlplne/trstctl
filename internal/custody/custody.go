@@ -25,6 +25,8 @@ package custody
 import (
 	"encoding/json"
 	"strings"
+
+	"trstctl.com/trstctl/internal/connector"
 )
 
 // KeyOrigin describes the observed source of the key for this issuance.
@@ -444,6 +446,21 @@ const ExecutorConfigKey = "executor"
 
 // ExecutorAgent is the value that opts a target into host-generated keys.
 const ExecutorAgent = "agent"
+
+// TargetGeneratesKeyOnHost reports whether a target's subject key is generated
+// by the host agent that serves it: the target is marked executor=agent AND a
+// host agent executes it. The same marker on a network-relay target means an
+// enrolled agent executes the deploy (a CA migration requires it on every
+// member, appliances included); it cannot move key generation onto an
+// appliance, so the control plane still generates that key, under the tenant's
+// key-generation switch, and the relay installs it.
+func TargetGeneratesKeyOnHost(family string, cfg []byte) bool {
+	if !TargetExecutorIsAgent(cfg) {
+		return false
+	}
+	vantage, known := connector.EffectiveTargetVantage(family, cfg)
+	return known && vantage == connector.VantageHostAgent
+}
 
 // TargetExecutorIsAgent reports whether a target's config opts it into
 // host-generated keys.

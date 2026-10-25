@@ -12,6 +12,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -124,7 +125,7 @@ func hostExecutedTarget(ctx context.Context, st *store.Store, tenantID string, i
 			"server: cannot determine the executor for deployment target %s, so this renewal "+
 				"will not fall back to control-plane key generation: %w", targetID, err)
 	}
-	if !configured.Enabled || !targetExecutorIsAgent(configured.Config) {
+	if !configured.Enabled || !custody.TargetGeneratesKeyOnHost(configured.Type, configured.Config) {
 		return store.DeploymentTarget{}, false, nil
 	}
 	return configured, true, nil

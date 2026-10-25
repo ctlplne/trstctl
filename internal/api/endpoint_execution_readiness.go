@@ -22,7 +22,7 @@ func WithAgentJobClaimability(provider func(string) bool) Option {
 // connector.deploy alone cannot execute that CSR-and-install workflow.
 func (a *API) validateEndpointExecutionReady(ctx context.Context, tenantID string, target endpointBindingTargetSummary) error {
 	kind := ""
-	if custody.TargetExecutorIsAgent(target.Config) {
+	if custody.TargetGeneratesKeyOnHost(target.Connector, target.Config) {
 		kind = "endpoint.renew"
 	} else if a.connectorRegistry.TargetVantageFor(target.Connector) != connector.VantageControlPlane {
 		kind = "connector.deploy"

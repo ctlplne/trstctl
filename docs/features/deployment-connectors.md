@@ -848,6 +848,14 @@ enrolled agents, with pagination for larger fleets. The selection is saved as
 `required_agent_id`, the UUID shown on the Agents page. An enabled host destination
 requires an enrolled, same-tenant agent with the host role.
 
+On an appliance or other relay-executed target, `"executor": "agent"` only names
+the agent that executes the work (a CA migration requires it on every member, with
+the network relay pinned in `required_agent_id`). No host serves such a target, so
+its key cannot be generated on one: the control plane generates it under the
+tenant's control-plane key-generation switch, seals it to the deploy job, and the
+relay installs it. The key-custody readout and the lifecycle preview report these
+targets as control-plane generated.
+
 A host-executed first issuance does its work on the host before the identity can
 reach `deployed`: the agent generates the key, the CA signs its CSR, the files are
 installed and the listener is probed. The ownership-readiness authority that guards

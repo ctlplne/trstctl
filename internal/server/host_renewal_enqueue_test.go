@@ -95,15 +95,15 @@ func TestTheExecutorMarkerIsReadIdenticallyOnBothSides(t *testing.T) {
 func TestAKeyBearingDeployToAnAgentTargetIsRefused(t *testing.T) {
 	t.Parallel()
 	target := agentExecutedTarget(t)
-	if err := enforceExecutorParity(target.Config, []byte("-----BEGIN PRIVATE KEY-----")); err == nil {
+	if err := enforceExecutorParity(target.Type, target.Config, []byte("-----BEGIN PRIVATE KEY-----")); err == nil {
 		t.Fatal("a deploy carrying key bytes to an agent-executed target was permitted")
 	}
 	// A certificate-only deploy is exactly what such a target should receive.
-	if err := enforceExecutorParity(target.Config, nil); err != nil {
+	if err := enforceExecutorParity(target.Type, target.Config, nil); err != nil {
 		t.Errorf("a certificate-only deploy to an agent-executed target was refused: %v", err)
 	}
 	// And an unmarked target is untouched by this feature entirely.
-	if err := enforceExecutorParity(json.RawMessage(`{"cert_path":"/etc/x"}`),
+	if err := enforceExecutorParity("nginx", json.RawMessage(`{"cert_path":"/etc/x"}`),
 		[]byte("-----BEGIN PRIVATE KEY-----")); err != nil {
 		t.Errorf("an unmarked target's legacy deploy was refused: %v; targets that never opted "+
 			"in must not change behavior because a version shipped", err)

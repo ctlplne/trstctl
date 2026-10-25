@@ -56,18 +56,24 @@ func TestTheParityGateOnlyRefusesWhatWasExplicitlyOptedOut(t *testing.T) {
 	keyBytes := []byte("-----BEGIN PRIVATE KEY-----")
 
 	// No config at all — the untargeted case. Nothing opted out, nothing refused.
-	if err := enforceExecutorParity(nil, keyBytes); err != nil {
+	if err := enforceExecutorParity("nginx", nil, keyBytes); err != nil {
 		t.Errorf("the parity gate refused a deploy for an identity with no deployment target "+
 			"config: %v. There is no executor marker to opt out with, so a refusal here would "+
 			"break every legacy-routed identity while protecting nothing", err)
 	}
 	// A config that exists and says nothing about the executor: same answer.
-	if err := enforceExecutorParity(json.RawMessage(`{"host":"edge-1"}`), keyBytes); err != nil {
+	if err := enforceExecutorParity("nginx", json.RawMessage(`{"host":"edge-1"}`), keyBytes); err != nil {
 		t.Errorf("the parity gate refused a target that never opted out: %v", err)
 	}
 	// And a config that DOES opt out is refused — the gate still works.
-	if err := enforceExecutorParity(json.RawMessage(`{"executor":"agent"}`), keyBytes); err == nil {
+	if err := enforceExecutorParity("nginx", json.RawMessage(`{"executor":"agent"}`), keyBytes); err == nil {
 		t.Fatal("the parity gate permitted key bytes to a target marked executor=agent")
+	}
+	// An appliance marked executor=agent is executed by its pinned relay; no
+	// host can generate its key, so the sealed control-plane key is its only
+	// path and is not refused.
+	if err := enforceExecutorParity("f5", json.RawMessage(`{"executor":"agent","required_agent_role":"network"}`), keyBytes); err != nil {
+		t.Errorf("the parity gate refused the sealed deploy to an appliance its relay executes: %v", err)
 	}
 }
 

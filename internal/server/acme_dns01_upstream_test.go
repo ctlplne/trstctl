@@ -670,14 +670,14 @@ func TestAnAgentExecutedTargetRefusesCredentialBearingDeploys(t *testing.T) {
 	legacyTarget := json.RawMessage(`{"cert_path":"/etc/nginx/server.crt"}`)
 	key := []byte("-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----")
 
-	if err := enforceExecutorParity(agentTarget, key); !errors.Is(err, ErrCredentialBearingPathRefused) {
+	if err := enforceExecutorParity("nginx", agentTarget, key); !errors.Is(err, ErrCredentialBearingPathRefused) {
 		t.Fatalf("err = %v; a target marked executor=agent must refuse key bytes rather than "+
 			"quietly falling back to the legacy path", err)
 	}
 	// The refusal names what an operator has to do, because mid-migration this
 	// means the identity still has no CSR on record — not a transient fault to
 	// retry.
-	if err := enforceExecutorParity(agentTarget, key); err != nil {
+	if err := enforceExecutorParity("nginx", agentTarget, key); err != nil {
 		for _, want := range []string{"executor=agent", "subject CSR", "re-enroll"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("refusal does not mention %q: %v", want, err)
@@ -686,13 +686,13 @@ func TestAnAgentExecutedTargetRefusesCredentialBearingDeploys(t *testing.T) {
 	}
 
 	// A certificate-only deploy is exactly what such a target should get.
-	if err := enforceExecutorParity(agentTarget, nil); err != nil {
+	if err := enforceExecutorParity("nginx", agentTarget, nil); err != nil {
 		t.Errorf("a key-less deploy to an agent-executed target was refused: %v", err)
 	}
 
 	// Partial migration: targets not marked keep working precisely as before.
 	// This is the property that makes migrating a few at a time safe.
-	if err := enforceExecutorParity(legacyTarget, key); err != nil {
+	if err := enforceExecutorParity("nginx", legacyTarget, key); err != nil {
 		t.Errorf("an unmarked target refused the legacy path: %v — a global cutover would force "+
 			"all-or-nothing on exactly the systems least able to take one", err)
 	}
