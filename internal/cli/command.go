@@ -465,6 +465,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"owners", "resolve-conflict"}, Method: "POST", Path: "/api/v1/owners/ownership-conflicts/{id}/resolve", Body: bodyFile, Summary: "Close an ownership disagreement with the reason it was decided"},
 	{Name: []string{"owners", "cmdb-schedule", "set"}, Method: "PUT", Path: "/api/v1/owners/cmdb-schedule", Body: bodyFile, Summary: "Configure scheduled read-only ownership reconciliation against a ServiceNow CMDB"},
 	{Name: []string{"owners", "cmdb-schedule", "show"}, Method: "GET", Path: "/api/v1/owners/cmdb-schedule", Summary: "Show the CMDB schedule, bounded-page coverage, retained cursor, terminal run, and last failure"},
+	{Name: []string{"tenant", "key-generation", "show"}, Method: "GET", Path: "/api/v1/tenant/key-generation", Summary: "Show whether the control plane may generate subject private keys for this tenant, who decided and why"},
+	{Name: []string{"tenant", "key-generation", "set"}, Method: "PUT", Path: "/api/v1/tenant/key-generation", Body: bodyFile, Summary: "Turn control-plane key generation on or off for this tenant, with a reason"},
 	{Name: []string{"provider-access", "policy", "show"}, Method: "GET", Path: "/api/v1/provider-access/policy", Summary: "Show whether this tenant's own consent is required before a Provider emergency grant may be used"},
 	{Name: []string{"provider-access", "policy", "set"}, Method: "PUT", Path: "/api/v1/provider-access/policy", Body: bodyFile, Summary: "Require or stop requiring this tenant's own consent for Provider emergency access"},
 	{Name: []string{"provider-access", "requests"}, Method: "GET", Path: "/api/v1/provider-access/requests", Summary: "List the Provider emergency requests this tenant can decide on"},

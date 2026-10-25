@@ -148,6 +148,24 @@ after the dispatcher finishes. This compatibility path is deprecated, and
 the event identifies the flows that must move to `subject_csr_pem` or an
 agent-executed target.
 
+**Per-tenant switch.** Each tenant decides whether this fallback may run at all:
+`GET`/`PUT /api/v1/tenant/key-generation` (`access:read`/`access:write`),
+`trstctl tenant key-generation show|set`, or Platform → Configuration →
+Control-plane key generation. A tenant registered after the switch starts with
+it off; the evaluation preset starts with it on and records why; a tenant that
+predates the switch reads undecided and keeps the fallback until it is decided.
+Every change names who made it and why in a `tenant.control_plane_keygen.set`
+event. With it off, an identity issuance that would use the fallback is refused
+before anything is recorded (`409`, `control_plane_keygen_off`, naming
+`subject_csr_pem`, an agent-executed target, or turning the switch on), and the
+console's issue review says so and takes a pasted CSR. Work queued before the
+change is refused when it reaches the mint, before a key exists; it completes if
+the tenant turns key generation back on. The renewal of an identity whose key the
+control plane generated fails its rotation run with the same reason. Today the
+switch governs this identity path only: the compatibility Workload API and
+PKI-as-a-secret by common name (including the Vault-compatible
+`pki/issue/{role}`) still generate keys whatever it says, and come next.
+
 Lifecycle issuance also retains the exact public certificate template before the
 CA signature. The isolated signer journals that operation and returns the same
 signature on retry. An unfinished outbox command keeps its template and encrypted

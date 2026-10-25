@@ -279,6 +279,8 @@ public final class OpenApiSchemas {
       "ContextualRiskPriorities",
       "ContextualRiskPriority",
       "ContextualRiskSummary",
+      "ControlPlaneKeygen",
+      "ControlPlaneKeygenInput",
       "CredentialRisk",
       "CredentialRiskList",
       "CryptoDependent",

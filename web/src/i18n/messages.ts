@@ -27175,6 +27175,73 @@ export const messages = {
     defaultMessage: "Enable scheduled reads",
     description: "I2: whether a configured relay CMDB schedule starts polling.",
   },
+  "identities.lifecycle.csrLabel": {
+    defaultMessage: "Requester CSR (PEM, optional)",
+    description: "Label of the field where an operator pastes the requester's own certificate signing request for an issue.",
+  },
+  "identities.lifecycle.csrHelp": {
+    defaultMessage:
+      "Paste a PKCS#10 request generated where the key will live, and trstctl signs it without ever holding the key. Leave it empty to let a host agent generate the key on an agent-executed target, or, where this tenant allows it, the control plane.",
+    description: "Explains the optional CSR field on the issue review.",
+  },
+  "identities.lifecycle.keygenRefused": {
+    defaultMessage:
+      "This tenant has control-plane key generation off, so this issue needs a key from the requester: paste a CSR above, bind the identity to an agent-executed target so its host generates the key, or turn control-plane key generation on in Platform.",
+    description: "Shown on the issue review when the tenant's switch refuses control-plane key generation.",
+  },
+  "identities.lifecycle.keygenPlatformLink": {
+    defaultMessage: "Open key generation settings",
+    description: "Link from the issue review to the tenant's control-plane key generation switch.",
+  },
+  "keygen.heading": {
+    defaultMessage: "Control-plane key generation",
+    description: "Heading of the tenant's control-plane key generation switch.",
+  },
+  "keygen.intro": {
+    defaultMessage:
+      "Whether trstctl may generate a subject private key for a requester in this tenant, instead of signing a CSR the requester made. New tenants start with it off. Every change names who made it and why, and is an event in this tenant's history.",
+    description: "Explains the tenant's control-plane key generation switch.",
+  },
+  "keygen.state.on": {
+    defaultMessage: "On: the control plane may generate subject keys for this tenant.",
+    description: "State of the switch when control-plane key generation is allowed.",
+  },
+  "keygen.state.off": {
+    defaultMessage: "Off: requesters bring their own keys (a CSR, or a host agent that generates the key).",
+    description: "State of the switch when control-plane key generation is refused.",
+  },
+  "keygen.state.undecided": {
+    defaultMessage: "Not decided yet: this tenant predates the switch and keeps control-plane key generation until it is decided.",
+    description: "State of the switch for a tenant that predates it.",
+  },
+  "keygen.decidedBy": {
+    defaultMessage: "Decided by {who} at {at}: {reason}",
+    description: "Who changed the switch, when and why.",
+  },
+  "keygen.renewals": {
+    defaultMessage: "{count} active certificates have keys the control plane generated; their renewals need it on, or a CSR or host agent instead.",
+    description: "How many active certificates depend on control-plane key generation to renew.",
+  },
+  "keygen.reason": {
+    defaultMessage: "Reason for the change",
+    description: "Input label for the reason a tenant changes the switch.",
+  },
+  "keygen.turnOff": {
+    defaultMessage: "Turn off",
+    description: "Button that turns control-plane key generation off.",
+  },
+  "keygen.turnOn": {
+    defaultMessage: "Turn on",
+    description: "Button that turns control-plane key generation on.",
+  },
+  "keygen.changed.on": {
+    defaultMessage: "Control-plane key generation is on for this tenant.",
+    description: "Confirmation after turning the switch on.",
+  },
+  "keygen.changed.off": {
+    defaultMessage: "Control-plane key generation is off for this tenant.",
+    description: "Confirmation after turning the switch off.",
+  },
   "providerAccess.heading": {
     defaultMessage: "Provider emergency access",
     description: "A95: heading of the customer's Provider-access consent panel.",

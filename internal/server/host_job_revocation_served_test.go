@@ -59,10 +59,13 @@ func TestServedRevokedIdentityStopsPendingHostIssuance(t *testing.T) {
 	}
 }
 
-func servedHostRevocationFixture(t *testing.T) (*roleHarness, string, string) {
+func servedHostRevocationFixture(t *testing.T, prepare ...func(*roleHarness)) (*roleHarness, string, string) {
 	t.Helper()
 	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
 	ctx := t.Context()
+	for _, step := range prepare {
+		step(h)
+	}
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "connectors:write", "certs:issue", "certs:revoke", "identities:write")
 	post := func(path string, input any, expected int) map[string]json.RawMessage {
 		t.Helper()

@@ -7583,6 +7583,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenant/key-generation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read whether the control plane may generate subject private keys for this tenant, who decided and why */
+        get: operations["getControlPlaneKeygen"];
+        /** Turn control-plane key generation on or off for this tenant, with a reason */
+        put: operations["putControlPlaneKeygen"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transit/decrypt": {
         parameters: {
             query?: never;
@@ -10836,6 +10854,39 @@ export interface components {
             total_analyzed: number;
             weak_crypto_context: number;
         };
+        ControlPlaneKeygen: {
+            /** @description Active certificates whose key the control plane generated; their renewals need control-plane key generation. */
+            control_plane_identities: number;
+            /** @description False for a tenant that predates the switch and has not been decided yet; it keeps the behavior it had (allowed). */
+            decided: boolean;
+            /** @description Whether the control plane may generate a subject private key for a requester in this tenant. */
+            enabled: boolean;
+            evidence?: {
+                /** @description Certificates whose recorded custody says the control plane generated the key. */
+                control_plane_certificates: number;
+                /** @description Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key. */
+                unrecorded_served_certificates: number;
+                /** @description The compatibility Workload API socket was configured for this tenant. */
+                workload_api_socket: boolean;
+            };
+            guidance: string;
+            /** @description The generators this switch governs. */
+            paths: string[];
+            reason?: string;
+            /** Format: date-time */
+            set_at?: string;
+            set_by?: string;
+            /**
+             * @description registration: a new tenant starts off; upgrade: a tenant that predates the switch, decided once from its own use; operator: a change with a reason.
+             * @enum {string}
+             */
+            source?: "registration" | "upgrade" | "operator";
+        };
+        ControlPlaneKeygenInput: {
+            enabled: boolean;
+            /** @description Why the tenant changes it; recorded in the event (up to 512 bytes). */
+            reason: string;
+        };
         CredentialRisk: {
             components: components["schemas"]["RiskComponents"];
             /** Format: uuid */
@@ -12624,6 +12675,8 @@ export interface components {
             /** @enum {string} */
             identity_kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
             identity_name: string;
+            /** @description The issuance needs a requester key: this tenant has control-plane key generation off and neither a CSR nor an agent-executed target would supply one. */
+            keygen_refused?: boolean;
             /** Format: uuid */
             owner_id: string;
             owner_name?: string;
@@ -39672,6 +39725,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnterpriseSupportStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getControlPlaneKeygen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneKeygen"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    putControlPlaneKeygen: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlPlaneKeygenInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlPlaneKeygen"];
                 };
             };
             /** @description client error */

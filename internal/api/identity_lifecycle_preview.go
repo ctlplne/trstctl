@@ -39,6 +39,9 @@ type identityLifecyclePreviewResponse struct {
 	VerificationSteps      []string `json:"verification_steps"`
 	Warnings               []string `json:"warnings"`
 	Guidance               string   `json:"guidance"`
+	// KeygenRefused says the issuance needs a requester key: the tenant has
+	// control-plane key generation off and nothing else would supply one.
+	KeygenRefused bool `json:"keygen_refused,omitempty"`
 }
 
 func lifecyclePreviewAPIError(err error) error {
@@ -210,8 +213,19 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 			plan.Warnings = append(plan.Warnings, authorityWarning)
 		}
 		if csrPEM == "" {
-			plan.Warnings = append(plan.Warnings,
-				"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
+			if err := a.orch.ControlPlaneKeygenRefusal(r.Context(), tenantID, identity, csrPEM); errors.Is(err, orchestrator.ErrControlPlaneKeygenOff) {
+				// The tenant turned control-plane key generation off; execution
+				// would refuse this issuance before recording anything.
+				plan.Ready = false
+				plan.KeygenRefused = true
+				plan.Warnings = append(plan.Warnings, err.Error())
+			} else if err != nil {
+				a.writeError(w, err)
+				return
+			} else {
+				plan.Warnings = append(plan.Warnings,
+					"No requester-generated CSR is attached. The deprecated compatibility path may generate a subject key inside the control plane.")
+			}
 		}
 	}
 	if to == orchestrator.StateRevoked && (identity.Kind == store.KindX509Certificate || identity.Kind == "x509") {

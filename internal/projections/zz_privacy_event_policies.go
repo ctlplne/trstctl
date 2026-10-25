@@ -262,6 +262,15 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/status", opaque), privacyRule("/changed_at", opaque),
 		privacyRule("/replacement_id", opaque),
 	)
+	// Owner decision 2026-10-24: the control-plane key generation decision
+	// names who made it and may carry a free-text reason.
+	controlPlaneKeygen := privacyRules(
+		privacyRule("/enabled", opaque), privacyRule("/source", opaque),
+		privacyRule("/reason", clear), privacyRule("/set_by", exact), privacyRule("/set_at", opaque),
+		privacyRule("/evidence/control_plane_certificates", opaque),
+		privacyRule("/evidence/unrecorded_served_certificates", opaque),
+		privacyRule("/evidence/workload_api_socket", opaque),
+	)
 	// A95: the customer's Provider-access policy names who set it; a consent
 	// names the deciding subject and may carry a free-text reason.
 	providerAccessPolicy := privacyRules(
@@ -930,6 +939,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventTenantMemberUpserted, 1}:                               tenantMember,
 		{EventProviderAccessPolicySet, 1}:                            providerAccessPolicy,
 		{EventProviderAccessConsented, 1}:                            providerAccessConsent,
+		{EventControlPlaneKeygenSet, 1}:                              controlPlaneKeygen,
 		{EventSCIMWritebackRecorded, 1}:                              scimWriteback,
 		{EventLDAPWritebackRecorded, 1}:                              ldapWriteback,
 		{EventTenantMemberUpserted, TenantMemberSCIMSchemaVersion}:   tenantMemberSCIM,
@@ -1484,6 +1494,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventTenantMemberUpserted, 1}:                                                       privacyPayloadShape[privacyTenantMemberUpsertedV1](),
 		{EventProviderAccessPolicySet, 1}:                                                    privacyPayloadShape[ProviderAccessPolicySet](),
 		{EventProviderAccessConsented, 1}:                                                    privacyPayloadShape[ProviderAccessConsented](),
+		{EventControlPlaneKeygenSet, 1}:                                                      privacyPayloadShape[ControlPlaneKeygenSet](),
 		{EventTenantMemberOffboarded, 1}:                                                     privacyPayloadShape[privacyTenantMemberOffboardedV1](),
 		{EventAPITokenCreated, 1}:                                                            privacyPayloadShape[APITokenCreated](),
 		{EventAPITokenRevoked, 1}:                                                            privacyPayloadShape[APITokenRevoked](),

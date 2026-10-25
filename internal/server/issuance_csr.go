@@ -56,6 +56,9 @@ func (d *issuanceDispatcher) mintServedLeafForTrigger(ctx context.Context, tenan
 	if csr := subjectCSRFromIdentity(ident); csr != "" {
 		return d.mintServedLeafFromCSRForSelection(ctx, tenantID, ident, selection, issueKey, []byte(csr), custody.OriginRequester, binding)
 	}
+	if err := d.requireControlPlaneKeygen(ctx, tenantID); err != nil {
+		return issuedLeafMaterial{}, err
+	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
 	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, ident.Name, []string{ident.Name}, selection, issueKey, binding)
 }
@@ -88,6 +91,9 @@ func (d *issuanceDispatcher) mintServedLeafForRenewal(
 	}
 	if predecessor.KeyOrigin != string(custody.OriginControlPlane) || subjectCSRFromIdentity(ident) != "" {
 		return issuedLeafMaterial{}, errors.New("server: renewal key custody is unknown or requires its original requester/agent protocol")
+	}
+	if err := d.requireControlPlaneKeygen(ctx, tenantID); err != nil {
+		return issuedLeafMaterial{}, err
 	}
 	d.recordServerSideKeygenDeprecation(ctx, tenantID, ident)
 	return d.mintServedLeafMaterialForSelection(ctx, tenantID, ident.OwnerID, commonName, dnsNames, selection, issueKey, issuance...)

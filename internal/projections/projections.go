@@ -133,6 +133,9 @@ const (
 	// A95: the customer's side of Provider emergency access.
 	EventProviderAccessPolicySet = "tenant.provider_access.policy_set"
 	EventProviderAccessConsented = "tenant.provider_access.consented"
+	// Owner decision 2026-10-24 (A120/A130/A132): whether the control plane may
+	// generate a subject private key for a requester in this tenant.
+	EventControlPlaneKeygenSet = "tenant.control_plane_keygen.set"
 	// A5: a staged agent-upgrade campaign and every state change on it. The
 	// halt is the product, so it is an event: an automatic halt that lived only
 	// in a mutable column could not be audited after the fact.
@@ -587,6 +590,20 @@ type OwnershipConflictResolved struct {
 	ResolvedBy string    `json:"resolved_by"`
 	Resolution string    `json:"resolution"`
 	ResolvedAt time.Time `json:"resolved_at"`
+}
+
+// ControlPlaneKeygenSet is the payload of tenant.control_plane_keygen.set:
+// whether the control plane may generate a subject private key for a requester
+// in this tenant. Source says who decided: registration (a new tenant),
+// upgrade (a tenant that predates the switch, decided once from its own use,
+// with that evidence), or operator.
+type ControlPlaneKeygenSet struct {
+	Enabled  bool                              `json:"enabled"`
+	Source   string                            `json:"source"`
+	Reason   string                            `json:"reason,omitempty"`
+	SetBy    string                            `json:"set_by"`
+	SetAt    time.Time                         `json:"set_at"`
+	Evidence *store.ControlPlaneKeygenEvidence `json:"evidence,omitempty"`
 }
 
 // ProviderAccessPolicySet is the payload of tenant.provider_access.policy_set
@@ -4372,6 +4389,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventOwnershipConflictResolved:                {1: true},
 	EventProviderAccessPolicySet:                  {1: true},
 	EventProviderAccessConsented:                  {1: true},
+	EventControlPlaneKeygenSet:                    {1: true},
 	EventAgentUpgradeCampaignOpened:               {1: true},
 	EventAgentUpgradeCampaignAdvanced:             {1: true},
 	EventAgentUpgradeRingAssigned:                 {1: true},
@@ -4858,6 +4876,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyOwnershipConflictResolvedTx(ctx, tx, e.TenantID, pl.ID, pl.ResolvedBy, pl.Resolution, pl.ResolvedAt)
+	case EventControlPlaneKeygenSet:
+		var pl ControlPlaneKeygenSet
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyControlPlaneKeygenSetTx(ctx, tx, store.ControlPlaneKeygenPolicy{
+			TenantID: e.TenantID, Enabled: pl.Enabled, Source: pl.Source, Reason: pl.Reason, SetBy: pl.SetBy,
+			SetAt: pl.SetAt, Evidence: pl.Evidence,
+		})
 	case EventProviderAccessPolicySet:
 		var pl ProviderAccessPolicySet
 		if err := decode(e, &pl); err != nil {

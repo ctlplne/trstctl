@@ -180,7 +180,11 @@ import (
 // revocations (B11-8 fix). A v58 snapshot carries none, so a restore would let
 // issuance certify a compromised key again while the covered offset skipped the
 // revocation events that recorded it.
-const SnapshotFormatVersion = 59
+// Version 60 carries each tenant's control-plane key generation decision (owner
+// decision 2026-10-24). A v59 snapshot carries none, so a restore would forget
+// every decision while its covered offset skipped the events that recorded
+// them, and a new tenant would quietly regain control-plane key generation.
+const SnapshotFormatVersion = 60
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -258,7 +262,10 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"agent_lifecycle_receipts",
 	// Format 58 (A95): the customer's Provider-access policy, requests and
 	// consent decisions; same pairing with ReadModelTables.
-	"provider_access_policy", "provider_access_requests", "provider_access_consents"}
+	"provider_access_policy", "provider_access_requests", "provider_access_consents",
+	// Format 60: the tenant's control-plane key generation decision; same
+	// pairing with ReadModelTables.
+	"tenant_control_plane_keygen"}
 
 // joinReadModel renders the read-model table list for a TRUNCATE, matching the set
 // the rebuild path empties so a snapshot restore starts from the same clean slate.
@@ -485,6 +492,7 @@ SELECT jsonb_build_object(
   'provider_access_policy', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_access_policy t),
   'provider_access_requests', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_access_requests t),
   'provider_access_consents', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM provider_access_consents t),
+  'tenant_control_plane_keygen', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM tenant_control_plane_keygen t),
   'owner_ownership_conflicts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM owner_ownership_conflicts t),
   'ownership_assignments', (SELECT coalesce(jsonb_agg(to_jsonb(t.*) ORDER BY t.inventory_id), '[]'::jsonb) FROM ownership_assignments t),
   'cmdb_reconcile_schedules', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM cmdb_reconcile_schedules t),

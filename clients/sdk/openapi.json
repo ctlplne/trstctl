@@ -11417,6 +11417,97 @@
         ],
         "type": "object"
       },
+      "ControlPlaneKeygen": {
+        "properties": {
+          "control_plane_identities": {
+            "description": "Active certificates whose key the control plane generated; their renewals need control-plane key generation.",
+            "type": "integer"
+          },
+          "decided": {
+            "description": "False for a tenant that predates the switch and has not been decided yet; it keeps the behavior it had (allowed).",
+            "type": "boolean"
+          },
+          "enabled": {
+            "description": "Whether the control plane may generate a subject private key for a requester in this tenant.",
+            "type": "boolean"
+          },
+          "evidence": {
+            "properties": {
+              "control_plane_certificates": {
+                "description": "Certificates whose recorded custody says the control plane generated the key.",
+                "type": "integer"
+              },
+              "unrecorded_served_certificates": {
+                "description": "Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key.",
+                "type": "integer"
+              },
+              "workload_api_socket": {
+                "description": "The compatibility Workload API socket was configured for this tenant.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "control_plane_certificates",
+              "unrecorded_served_certificates",
+              "workload_api_socket"
+            ],
+            "type": "object"
+          },
+          "guidance": {
+            "type": "string"
+          },
+          "paths": {
+            "description": "The generators this switch governs.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "set_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "set_by": {
+            "type": "string"
+          },
+          "source": {
+            "description": "registration: a new tenant starts off; upgrade: a tenant that predates the switch, decided once from its own use; operator: a change with a reason.",
+            "enum": [
+              "registration",
+              "upgrade",
+              "operator"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "decided",
+          "enabled",
+          "control_plane_identities",
+          "paths",
+          "guidance"
+        ],
+        "type": "object"
+      },
+      "ControlPlaneKeygenInput": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "reason": {
+            "description": "Why the tenant changes it; recorded in the event (up to 512 bytes).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "reason"
+        ],
+        "type": "object"
+      },
       "CredentialRisk": {
         "properties": {
           "components": {
@@ -18216,6 +18307,10 @@
           },
           "identity_name": {
             "type": "string"
+          },
+          "keygen_refused": {
+            "description": "The issuance needs a requester key: this tenant has control-plane key generation off and neither a CSR nor an agent-executed target would supply one.",
+            "type": "boolean"
           },
           "owner_id": {
             "format": "uuid",
@@ -70118,6 +70213,119 @@
         ],
         "summary": "Enterprise support, SLA, and services posture",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/tenant/key-generation": {
+      "get": {
+        "operationId": "getControlPlaneKeygen",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlPlaneKeygen"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read whether the control plane may generate subject private keys for this tenant, who decided and why",
+        "x-trstctl-permission": "access:read"
+      },
+      "put": {
+        "operationId": "putControlPlaneKeygen",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlPlaneKeygenInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlPlaneKeygen"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Turn control-plane key generation on or off for this tenant, with a reason",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/transit/decrypt": {

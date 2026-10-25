@@ -230,6 +230,8 @@ var TenantScopedTables = []string{
 	"provider_access_policy",
 	"provider_access_requests",
 	"provider_access_consents",
+	// Owner decision 2026-10-24: the tenant's control-plane key generation decision.
+	"tenant_control_plane_keygen",
 	// A5: staged upgrade campaigns and their dispatch ledger are the tenant's
 	// own rollout history.
 	"agent_upgrade_campaigns",

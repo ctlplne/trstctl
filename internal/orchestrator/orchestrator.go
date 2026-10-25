@@ -98,6 +98,10 @@ type Orchestrator struct {
 	// composition root; nil means every row gets the empty demand, which is the
 	// pre-A3 behavior.
 	effectRole SideEffectRoleClassifier
+	// controlPlaneKeygenGuard refuses a first issuance that would generate the
+	// subject key in the control plane while the tenant has it off (owner
+	// decision 2026-10-24); nil allows it.
+	controlPlaneKeygenGuard ControlPlaneKeygenGuard
 	// ownershipAttestationCadence enables the I1 steady-state authority gate.
 	// Zero keeps source-compatible embedded/test orchestrators disabled; the
 	// shipped composition always supplies its validated production setting.
@@ -459,6 +463,11 @@ func (o *Orchestrator) transition(ctx context.Context, tenantID, identityID stri
 		return fmt.Errorf("orchestrator: load identity %s: %w", identityID, err)
 	}
 	from := State(ident.Status)
+	if from == StateRequested && to == StateIssued && o.controlPlaneKeygenGuard != nil && completedDestination == "" {
+		if err := o.controlPlaneKeygenGuard(ctx, tenantID, ident, subjectCSRPEM); err != nil {
+			return err
+		}
+	}
 	if (from == StateDeployed && to == StateIssued) != (option.verifiedRollback || option.verifiedPurge) ||
 		(option.verifiedRollback && completedDestination != "connector.rollback") ||
 		(option.verifiedPurge && completedDestination != "endpoint.purge") {

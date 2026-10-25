@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -32,6 +33,13 @@ func TestServedEvalFirstCertificateRevokesWithBlankTenancy(t *testing.T) {
 	authority, err := orchestrator.ResolveLiveTenantRegistrationAuthority(t.Context(), h.log, h.store, h.tenant)
 	if err != nil || authority.EventSequence == 0 {
 		t.Fatalf("blank evaluation has no durable tenant: %+v %v", authority, err)
+	}
+	// Owner decision 2026-10-24: new tenants start with control-plane key
+	// generation off; the evaluation preset turns the compatibility Workload
+	// API socket on, so its tenant starts on and the decision says why.
+	if keygen, found, err := h.store.ControlPlaneKeygenFor(t.Context(), h.tenant); err != nil || !found || !keygen.Enabled ||
+		keygen.Source != store.ControlPlaneKeygenSourceRegistration || !strings.Contains(keygen.Reason, "evaluation preset") {
+		t.Fatalf("evaluation tenant key generation = %+v found %t (%v), want on from registration with the preset's reason", keygen, found, err)
 	}
 	token := seedScopedToken(t, h.store, h.tenant, "owners:write", "identities:write", "identities:read", "certs:issue", "certs:read")
 	owner := servedCreateID(t, h, token, "eval-owner", "/api/v1/owners", map[string]any{"kind": "workload", "name": "payments"})

@@ -676,6 +676,41 @@ describe("lifecycle actions from the UI", () => {
     await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("dep-1", "renewing", expect.anything(), undefined, expect.any(String), 2));
   });
 
+  it("offers a CSR and the key generation settings when the tenant has control-plane key generation off", async () => {
+    const identity = { id: "req-1", name: "requested-svc", kind: "x509_certificate", owner_id: "own-1", status: "requested" };
+    const csr = "-----BEGIN CERTIFICATE REQUEST-----\nMIIB\n-----END CERTIFICATE REQUEST-----";
+    apiMock.identities.mockResolvedValue([identity]);
+    apiMock.getIdentity.mockResolvedValue(identity);
+    apiMock.previewIdentityTransition.mockImplementation(async (id: string, to: string, _reason: string, subjectCSRPEM?: string) =>
+      subjectCSRPEM
+        ? transitionPlanFor(id, to)
+        : {
+            ...transitionPlanFor(id, to),
+            ready: false,
+            keygen_refused: true,
+            warnings: ["control-plane key generation is off for this tenant"],
+          },
+    );
+    apiMock.transitionIdentity.mockResolvedValue({ ...identity, status: "issued" });
+    const user = userEvent.setup();
+    renderIdentities();
+
+    const detail = await openIdentityDetails(user, "requested-svc");
+    await user.click(within(detail).getByRole("button", { name: /^issue$/i }));
+    const review = await screen.findByRole("dialog", { name: /Review Issue for requested-svc/i });
+    expect(await within(review).findByText(/this issue needs a key from the requester/i)).toBeInTheDocument();
+    expect(within(review).getByRole("link", { name: "Open key generation settings" })).toHaveAttribute("href", "/platform");
+    expect(within(review).getByRole("button", { name: "Run reviewed action" })).toBeDisabled();
+
+    await user.click(within(review).getByLabelText("Requester CSR (PEM, optional)"));
+    await user.paste(csr);
+    await user.click(within(review).getByRole("button", { name: "Review updated action" }));
+    await waitFor(() => expect(apiMock.previewIdentityTransition).toHaveBeenLastCalledWith("req-1", "issued", expect.any(String), csr));
+    await waitFor(() => expect(within(review).queryByText(/this issue needs a key from the requester/i)).not.toBeInTheDocument());
+    await user.click(within(review).getByRole("button", { name: "Run reviewed action" }));
+    await waitFor(() => expect(apiMock.transitionIdentity).toHaveBeenCalledWith("req-1", "issued", expect.any(String), csr, expect.any(String), 2));
+  });
+
   it("reviews an exact server-owned lifecycle plan before execution and verifies the returned state", async () => {
     const identity = { id: "dep-1", name: "deployed-svc", kind: "x509_certificate", owner_id: "own-1", status: "deployed" };
     apiMock.identities.mockResolvedValue([identity]);

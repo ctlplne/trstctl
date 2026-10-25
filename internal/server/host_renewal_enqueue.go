@@ -95,7 +95,13 @@ func hostRenewalCommonName(dnsNames, ipAddresses, emailAddresses, uris []string)
 func (d *issuanceDispatcher) hostRenewalTargetFor(
 	ctx context.Context, tenantID string, ident store.Identity,
 ) (store.DeploymentTarget, bool, error) {
-	if d.store == nil {
+	return hostExecutedTarget(ctx, d.store, tenantID, ident)
+}
+
+// hostExecutedTarget is hostRenewalTargetFor for callers that hold only the
+// store, such as the first-issuance key generation guard.
+func hostExecutedTarget(ctx context.Context, st *store.Store, tenantID string, ident store.Identity) (store.DeploymentTarget, bool, error) {
+	if st == nil {
 		return store.DeploymentTarget{}, false, nil
 	}
 	targetID := deploymentTargetID(ident.Attributes)
@@ -103,7 +109,7 @@ func (d *issuanceDispatcher) hostRenewalTargetFor(
 		// No target row, so no executor marker, so nothing was opted out of.
 		return store.DeploymentTarget{}, false, nil
 	}
-	configured, err := d.store.GetDeploymentTarget(ctx, tenantID, targetID)
+	configured, err := st.GetDeploymentTarget(ctx, tenantID, targetID)
 	if err != nil {
 		// A read failure is NOT "no". The earlier version swallowed this and
 		// called falling through "the safe direction", which had it exactly

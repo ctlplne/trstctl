@@ -1402,6 +1402,10 @@ func (s *Server) configureMutationSpine(
 	// census still answers, and a plugin a relay carries still routes to it.
 	orchOptions = append(orchOptions,
 		orchestrator.WithSideEffectRoleClassifier(connectorSideEffectRoleClassifier(d.ConnectorRegistry, relayPluginCarrierFor(d.Store))))
+	// A first issuance that would generate the subject key in the control
+	// plane is refused before anything is recorded while the tenant has that
+	// turned off (owner decision 2026-10-24).
+	orchOptions = append(orchOptions, orchestrator.WithControlPlaneKeygenGuard(controlPlaneKeygenGuard(d.Store)))
 	idem := orchestrator.NewIdempotency(
 		d.Store,
 		orchestrator.WithResultProtector(d.IdempotencyResultProtector),

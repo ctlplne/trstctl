@@ -286,8 +286,8 @@ function deniedKey(id: string, to: TransitionTo): string {
   return `${id}:${to}`;
 }
 
-function transitionPreviewKey(id: string, to: TransitionTo, reason: string): string {
-  return JSON.stringify([id, to, reason.trim()]);
+function transitionPreviewKey(id: string, to: TransitionTo, reason: string, subjectCSRPEM = ""): string {
+  return JSON.stringify([id, to, reason.trim(), subjectCSRPEM.trim()]);
 }
 
 function decommissionInputLabelKey(
@@ -401,6 +401,9 @@ export function Identities() {
   const [pending, setPending] = useState<PendingTransition | null>(null);
   const [pendingConfirmName, setPendingConfirmName] = useState("");
   const [pendingReason, setPendingReason] = useState("");
+  // A requester's own CSR for an issue, so the key never has to be generated
+  // in the control plane (and must not be, when the tenant turned that off).
+  const [pendingCSR, setPendingCSR] = useState("");
   const [transitionPreview, setTransitionPreview] = useState<TransitionPreviewState>({ key: "", plan: null, loading: false, error: null });
   const [approvalNotice, setApprovalNotice] = useState<LifecycleApproval | null>(null);
   const [approvalRestart, setApprovalRestart] = useState<{ fingerprint: string; requestId: string } | null>(null);
@@ -503,7 +506,7 @@ export function Identities() {
   );
 
   const act = useCallback(
-    async (id: string, to: TransitionTo, reason: string, plan: IdentityTransitionPreview, identityName?: string): Promise<boolean> => {
+    async (id: string, to: TransitionTo, reason: string, plan: IdentityTransitionPreview, identityName?: string, subjectCSRPEM = ""): Promise<boolean> => {
       setBusyId(id);
       setError(null);
       setNotice(null);
@@ -514,7 +517,7 @@ export function Identities() {
           id,
           to,
           reason.trim() || `${to} via UI`,
-          undefined,
+          subjectCSRPEM.trim() || undefined,
           lifecycleCommandKey(plan, closedRequestId),
           plan.expected_version,
         );
@@ -566,6 +569,7 @@ export function Identities() {
     setPending(null);
     setPendingConfirmName("");
     setPendingReason("");
+    setPendingCSR("");
     setTransitionPreview({ key: "", plan: null, loading: false, error: null });
     setApprovalNotice(null);
     setApprovalRestart(null);
@@ -612,12 +616,16 @@ export function Identities() {
       });
   }, []);
 
-  const reviewTransition = useCallback(async (transition: PendingTransition, reason: string) => {
-    const key = transitionPreviewKey(transition.id, transition.to, reason);
+  const reviewTransition = useCallback(async (transition: PendingTransition, reason: string, subjectCSRPEM = "") => {
+    const key = transitionPreviewKey(transition.id, transition.to, reason, subjectCSRPEM);
     setTransitionPreview({ key, plan: null, loading: true, error: null });
     setApprovalNotice(null);
     try {
-      const plan = await api.previewIdentityTransition(transition.id, transition.to, reason.trim() || `${transition.to} via UI`);
+      const reasonText = reason.trim() || `${transition.to} via UI`;
+      const csr = subjectCSRPEM.trim();
+      const plan = csr
+        ? await api.previewIdentityTransition(transition.id, transition.to, reasonText, csr)
+        : await api.previewIdentityTransition(transition.id, transition.to, reasonText);
       setTransitionPreview({ key, plan, loading: false, error: null });
     } catch (err) {
       setTransitionPreview({
@@ -647,6 +655,7 @@ export function Identities() {
       setSelectedId(identity.id);
       setPendingConfirmName("");
       setPendingReason(reviewedReason);
+      setPendingCSR("");
       setPending(transition);
       setApprovalNotice(null);
       setApprovalRestart(null);
@@ -1229,7 +1238,7 @@ export function Identities() {
             {transitionPreview.error && (
               <div role="alert" className="mt-4 rounded-control border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
                 <p>{transitionPreview.error}</p>
-                <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void reviewTransition(pending, pendingReason)}>
+                <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => void reviewTransition(pending, pendingReason, pendingCSR)}>
                   {translateNow("identities.lifecycle.reviewRetry")}
                 </Button>
               </div>
@@ -1311,6 +1320,30 @@ export function Identities() {
               </section>
             )}
 
+            {pending.to === "issued" && (
+              <div className="mt-3 grid gap-2">
+                {transitionPreview.plan?.keygen_refused && (
+                  <div role="status" className="rounded-control border border-status-warning/30 bg-status-warning/5 p-3 text-sm text-status-warning">
+                    <p>{translateNow("identities.lifecycle.keygenRefused")}</p>
+                    <Link to="/platform" className={`${buttonVariants({ variant: "outline", size: "sm" })} mt-2`}>
+                      {translateNow("identities.lifecycle.keygenPlatformLink")}
+                    </Link>
+                  </div>
+                )}
+                <label className="block text-sm font-medium" htmlFor="issue-subject-csr">
+                  {translateNow("identities.lifecycle.csrLabel")}
+                </label>
+                <textarea
+                  id="issue-subject-csr"
+                  value={pendingCSR}
+                  onChange={(event) => setPendingCSR(event.target.value)}
+                  spellCheck={false}
+                  className="min-h-24 rounded-control border border-border bg-background px-3 py-2 font-mono text-caption text-foreground"
+                />
+                <p className="text-caption text-muted-foreground">{translateNow("identities.lifecycle.csrHelp")}</p>
+              </div>
+            )}
+
             {pending.destructive && (
               <>
                 <BlastRadiusImpactPanel state={pendingImpact} />
@@ -1355,7 +1388,7 @@ export function Identities() {
               </>
             )}
 
-            {transitionPreview.plan && transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason) && (
+            {transitionPreview.plan && transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason, pendingCSR) && (
               <p role="status" className="mt-3 text-sm text-status-warning">
                 {translateNow("identities.lifecycle.reviewChanged")}
               </p>
@@ -1372,7 +1405,7 @@ export function Identities() {
                 setApprovalRestart({ fingerprint: transitionPreview.plan.request_fingerprint, requestId });
                 setApprovalNotice(null);
                 setError(null);
-                void reviewTransition(pending, pendingReason);
+                void reviewTransition(pending, pendingReason, pendingCSR);
               }}
             />
             <div className="mt-3 flex gap-2">
@@ -1383,14 +1416,14 @@ export function Identities() {
                 disabled={
                   busyId === pending.id ||
                   !transitionPreview.plan?.ready ||
-                  transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason) ||
+                  transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason, pendingCSR) ||
                   (pending.destructive && pendingConfirmName.trim() !== pending.name)
                 }
                 onClick={() => {
                   const transition = pending;
                   const plan = transitionPreview.plan;
                   if (!plan) return;
-                  void act(transition.id, transition.to, pendingReason, plan, transition.name).then((succeeded) => {
+                  void act(transition.id, transition.to, pendingReason, plan, transition.name, pendingCSR).then((succeeded) => {
                     if (succeeded) clearPending();
                   });
                 }}
@@ -1399,8 +1432,8 @@ export function Identities() {
                   ? translateNow("source.yes.value1.0cb667502c", { value1: pending.label.toLowerCase() })
                   : translateNow("identities.lifecycle.reviewRun")}
               </Button>
-              {transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason) && (
-                <Button type="button" size="sm" variant="outline" onClick={() => void reviewTransition(pending, pendingReason)}>
+              {transitionPreview.key !== transitionPreviewKey(pending.id, pending.to, pendingReason, pendingCSR) && (
+                <Button type="button" size="sm" variant="outline" onClick={() => void reviewTransition(pending, pendingReason, pendingCSR)}>
                   {translateNow("identities.lifecycle.reviewUpdated")}
                 </Button>
               )}

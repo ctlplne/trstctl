@@ -2772,6 +2772,24 @@ export interface ContextualRiskSummary {
   weak_crypto_context: number;
 }
 
+export interface ControlPlaneKeygen {
+  control_plane_identities: number;
+  decided: boolean;
+  enabled: boolean;
+  evidence?: { control_plane_certificates: number; unrecorded_served_certificates: number; workload_api_socket: boolean };
+  guidance: string;
+  paths: string[];
+  reason?: string;
+  set_at?: string;
+  set_by?: string;
+  source?: "registration" | "upgrade" | "operator";
+}
+
+export interface ControlPlaneKeygenInput {
+  enabled: boolean;
+  reason: string;
+}
+
 export interface CredentialRisk {
   components: RiskComponents;
   credential_id: string;
@@ -4403,6 +4421,7 @@ export interface IdentityTransitionPreview {
   identity_id: string;
   identity_kind: "x509_certificate" | "ssh_certificate" | "ssh_key" | "secret" | "api_key" | "workload_identity";
   identity_name: string;
+  keygen_refused?: boolean;
   owner_id: string;
   owner_name?: string;
   prerequisites: string[];

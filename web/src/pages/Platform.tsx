@@ -25,6 +25,7 @@ import {
 import { optionalApiCall } from "@/lib/optionalApi";
 import { ManagedTenantProvisioning } from "@/pages/platform/ManagedTenantProvisioning";
 import { ProviderAccessConsentPanel } from "@/components/ProviderAccessConsentPanel";
+import { ControlPlaneKeygenPanel } from "@/components/ControlPlaneKeygenPanel";
 
 export { AdminAccess } from "@/pages/AdminAccess";
 
@@ -364,6 +365,7 @@ export function AdminSystem() {
             <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
             <UsageEvidencePanel />
             <ProviderAccessConsentPanel />
+            <ControlPlaneKeygenPanel />
           </div>
         </SystemDisclosure>
 

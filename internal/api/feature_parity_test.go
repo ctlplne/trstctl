@@ -292,8 +292,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A110's KRL adoption raised it to 525, mapped onto the SSH CA row.
 	// A109's KRL receipts raised it to 526, mapped onto the SSH CA row.
 	// A111's PKI-secret leaf recovery raised it to 527, mapped onto F67.
-	if len(out) != 527 {
-		t.Fatalf("OpenAPI operationIds = %d, want 527", len(out))
+	// The tenant's control-plane key generation switch (read and change, owner
+	// decision 2026-10-24) raised it to 529, mapped onto F4.
+	if len(out) != 529 {
+		t.Fatalf("OpenAPI operationIds = %d, want 529", len(out))
 	}
 	return out
 }

@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -176,6 +177,16 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 	case errors.Is(tenantErr, pgx.ErrNoRows):
 		if err := svc.RegisterTenant(ctx, opts.TenantID, opts.TenantName, "bootstrap-tenant:"+opts.TenantID); err != nil {
 			return nil, fmt.Errorf("bootstrap: register tenant: %w", err)
+		}
+		// Owner decision 2026-10-24: a new tenant starts with control-plane key
+		// generation off. The decision has a stable ID, so a rerun after a crash
+		// records it once.
+		registered := events.ContextWithActor(ctx, events.Actor{Subject: "trstctl:local-bootstrap"})
+		if _, err := orchestrator.NewOrchestrator(log, st, nil).SetControlPlaneKeygen(registered, opts.TenantID, projections.ControlPlaneKeygenSet{
+			Enabled: false, Source: store.ControlPlaneKeygenSourceRegistration,
+			Reason: "a new tenant starts with control-plane key generation off",
+		}); err != nil {
+			return nil, fmt.Errorf("bootstrap: record the new tenant's key generation default: %w", err)
 		}
 	default:
 		return nil, fmt.Errorf("bootstrap: inspect tenant: %w", tenantErr)

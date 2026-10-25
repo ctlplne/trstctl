@@ -5632,7 +5632,12 @@ remaining path that can generate a subject key in the control plane is named the
 with what replaces it. The identity API without a CSR is one of those three:
 it still works for one release train and records an
 `issuance.server_side_keygen` event every time it runs, so you can find which
-of your flows still rely on it. An identity issued from your own CSR cannot
+of your flows still rely on it. Each tenant can turn it off with
+`PUT /api/v1/tenant/key-generation`, and a tenant registered since that switch
+starts with it off: an issuance that would generate the key in the control plane
+is then refused before anything is recorded, naming a CSR or an agent-executed
+target. The switch does not yet govern the other two (the compatibility Workload
+API and PKI-as-a-secret by common name); see [Key custody](custody.md). An identity issued from your own CSR cannot
 be deployed by a control-plane connector — the key that deployment needs is
 on your side, which is the correct consequence. Its renewal honors the same
 CSR, and an endpoint whose target is agent-executed renews on its host

@@ -586,6 +586,8 @@ import type {
   EdgeDelegationRevokeInput,
   EdgeReconcileInput,
   EdgeReconcileResult,
+  ControlPlaneKeygen,
+  ControlPlaneKeygenInput,
 } from "./api-types.gen";
 
 // Re-export the generated, contract-bound resource types under the names the SPA uses.
@@ -692,6 +694,7 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileRunNow, CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
+export type { ControlPlaneKeygen, ControlPlaneKeygenInput } from "./api-types.gen";
 
 /** A95: the customer's Provider-access policy. */
 export interface ProviderAccessPolicy {
@@ -1854,6 +1857,9 @@ export interface Api {
   /** I2: close a disagreement. The reason is required — see the route's own guard. */
   resolveOwnershipConflict(id: string, resolution: string): Promise<unknown>;
   /** I2: whether ownership is actually being re-read from the CMDB, and why the last read failed. */
+  /** Owner decision 2026-10-24: whether the control plane may generate subject keys for this tenant. */
+  controlPlaneKeygen(): Promise<ControlPlaneKeygen>;
+  putControlPlaneKeygen(input: ControlPlaneKeygenInput, idempotencyKey?: string): Promise<ControlPlaneKeygen>;
   /** A95: the customer's side of Provider emergency access. */
   providerAccessPolicy(): Promise<ProviderAccessPolicy>;
   putProviderAccessPolicy(input: { require_tenant_consent: boolean; approvals?: number }, idempotencyKey?: string): Promise<ProviderAccessPolicy>;
@@ -2504,6 +2510,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<unknown>("POST", `/api/v1/owners/ownership-conflicts/${encodeURIComponent(id)}/resolve`, {
       resolution,
     }),
+  controlPlaneKeygen: () => req<ControlPlaneKeygen>("/api/v1/tenant/key-generation"),
+  putControlPlaneKeygen: (input, idempotencyKey) => mutate<ControlPlaneKeygen>("PUT", "/api/v1/tenant/key-generation", input, idempotencyKey),
   providerAccessPolicy: () => req<ProviderAccessPolicy>("/api/v1/provider-access/policy"),
   putProviderAccessPolicy: (input, idempotencyKey) => mutate<ProviderAccessPolicy>("PUT", "/api/v1/provider-access/policy", input, idempotencyKey),
   providerAccessRequests: async () => {

@@ -3838,6 +3838,32 @@ ContextualRiskSummary = TypedDict(
     total=False,
 )
 
+ControlPlaneKeygen = TypedDict(
+    'ControlPlaneKeygen',
+    {
+        'control_plane_identities': int,
+        'decided': bool,
+        'enabled': bool,
+        'evidence': dict[str, Any],
+        'guidance': str,
+        'paths': list[str],
+        'reason': str,
+        'set_at': str,
+        'set_by': str,
+        'source': str,
+    },
+    total=False,
+)
+
+ControlPlaneKeygenInput = TypedDict(
+    'ControlPlaneKeygenInput',
+    {
+        'enabled': bool,
+        'reason': str,
+    },
+    total=False,
+)
+
 CredentialRisk = TypedDict(
     'CredentialRisk',
     {
@@ -6083,6 +6109,7 @@ IdentityTransitionPreview = TypedDict(
         'identity_id': str,
         'identity_kind': str,
         'identity_name': str,
+        'keygen_refused': bool,
         'owner_id': str,
         'owner_name': str,
         'prerequisites': list[str],

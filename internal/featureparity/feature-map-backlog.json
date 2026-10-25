@@ -3518,6 +3518,8 @@
                 "createIdentity",
                 "transitionIdentity",
                 "getIdentityIssuanceResult",
+                "getControlPlaneKeygen",
+                "putControlPlaneKeygen",
                 "retryFirstIssuance",
                 "previewIssuanceRequest",
                 "approveIdentityAction",
@@ -3530,6 +3532,8 @@
             "api_na": "",
             "cli_surface": [
                 "identities issuance-retry",
+                "tenant key-generation show",
+                "tenant key-generation set",
                 "issuers create",
                 "issuers capabilities",
                 "issuers list",

@@ -15,6 +15,7 @@ import (
 
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 const ManagedOfferingDeploymentModel = "managed_provider"
@@ -161,6 +162,14 @@ func (o *Orchestrator) provisionManagedTenant(
 	)
 	if err != nil {
 		return ManagedTenant{}, err
+	}
+	// Owner decision 2026-10-24: a new tenant starts with control-plane key
+	// generation off (stable decision ID, so a retried provision records it once).
+	if _, err := o.SetControlPlaneKeygen(ctx, in.TenantID, projections.ControlPlaneKeygenSet{
+		Enabled: false, Source: store.ControlPlaneKeygenSourceRegistration,
+		Reason: "a new tenant starts with control-plane key generation off",
+	}); err != nil {
+		return ManagedTenant{}, fmt.Errorf("orchestrator: record managed tenant %s key generation default: %w", in.TenantID, err)
 	}
 	projected, err := o.store.GetTenant(ctx, in.TenantID)
 	if err != nil {

@@ -152,6 +152,12 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load freshly registered tenant: %v", err)
 	}
+	// Owner decision 2026-10-24: the bootstrap's new tenant starts with
+	// control-plane key generation off, decided by its registration.
+	initialKeygen, found, err := st.ControlPlaneKeygenFor(ctx, tenantA)
+	if err != nil || !found || initialKeygen.Enabled || initialKeygen.Source != store.ControlPlaneKeygenSourceRegistration {
+		t.Fatalf("bootstrap tenant key generation = %+v found %t (%v), want off from registration", initialKeygen, found, err)
+	}
 
 	// The generic AN-5 receipt is retained for seven days, while a local operator
 	// may need to recover API access months later. Reproduce that real expiry by
@@ -180,6 +186,9 @@ func TestBootstrapTokenAuthenticatesServedRequest(t *testing.T) {
 	}
 	if afterRecovery.EventSeq != registered.EventSeq || afterRecovery.Name != registered.Name {
 		t.Fatalf("bootstrap recovery changed tenant registration from %+v to %+v", registered, afterRecovery)
+	}
+	if keygen, found, err := st.ControlPlaneKeygenFor(ctx, tenantA); err != nil || !found || keygen.Enabled || !keygen.SetAt.Equal(initialKeygen.SetAt) {
+		t.Fatalf("bootstrap recovery re-decided key generation: %+v found %t (%v)", keygen, found, err)
 	}
 
 	assertBootstrapTokensRecorded(t, ctx, st, bootCfg, tenantA, []string{bearer, recoveredBearer})

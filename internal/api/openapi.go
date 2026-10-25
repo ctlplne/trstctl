@@ -962,6 +962,7 @@ func componentSchemas() map[string]*Schema {
 		"verification_steps":         {Type: "array", Items: str()},
 		"warnings":                   {Type: "array", Items: str()},
 		"guidance":                   str(),
+		"keygen_refused":             {Type: "boolean", Description: "The issuance needs a requester key: this tenant has control-plane key generation off and neither a CSR nor an agent-executed target would supply one."},
 	}, "capability", "ready", "identity_id", "identity_name", "identity_kind", "owner_id", "from", "to", "expected_version", "event_type", "side_effect", "request_fingerprint", "required_permission", "prerequisites", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps", "warnings", "guidance")
 	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
 	bulkRevokeReq := object(map[string]*Schema{
@@ -5554,6 +5555,25 @@ func componentSchemas() map[string]*Schema {
 		"removed_count":   {Type: "integer"}, "changed_count": {Type: "integer"},
 		"guidance": str(),
 	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "coverage_status", "removed_count", "changed_count", "guidance")
+	controlPlaneKeygenEvidence := object(map[string]*Schema{
+		"control_plane_certificates":     {Type: "integer", Description: "Certificates whose recorded custody says the control plane generated the key."},
+		"unrecorded_served_certificates": {Type: "integer", Description: "Certificates this control plane issued before per-certificate custody existed; any could have had a server-generated key."},
+		"workload_api_socket":            {Type: "boolean", Description: "The compatibility Workload API socket was configured for this tenant."},
+	}, "control_plane_certificates", "unrecorded_served_certificates", "workload_api_socket")
+	controlPlaneKeygen := object(map[string]*Schema{
+		"decided": {Type: "boolean", Description: "False for a tenant that predates the switch and has not been decided yet; it keeps the behavior it had (allowed)."},
+		"enabled": {Type: "boolean", Description: "Whether the control plane may generate a subject private key for a requester in this tenant."},
+		"source":  {Type: "string", Enum: []string{"registration", "upgrade", "operator"}, Description: "registration: a new tenant starts off; upgrade: a tenant that predates the switch, decided once from its own use; operator: a change with a reason."},
+		"reason":  str(), "set_by": str(), "set_at": timestamp(),
+		"evidence":                 controlPlaneKeygenEvidence,
+		"control_plane_identities": {Type: "integer", Description: "Active certificates whose key the control plane generated; their renewals need control-plane key generation."},
+		"paths":                    {Type: "array", Items: str(), Description: "The generators this switch governs."},
+		"guidance":                 str(),
+	}, "decided", "enabled", "control_plane_identities", "paths", "guidance")
+	controlPlaneKeygenInput := object(map[string]*Schema{
+		"enabled": {Type: "boolean"},
+		"reason":  {Type: "string", Description: "Why the tenant changes it; recorded in the event (up to 512 bytes)."},
+	}, "enabled", "reason")
 	providerAccessPolicy := object(map[string]*Schema{
 		"configured": {Type: "boolean"}, "require_tenant_consent": {Type: "boolean", Description: "A95: the Provider may use an emergency grant only after this tenant records the configured approvals and no denial for it."},
 		"approvals": {Type: "integer"}, "set_by": str(), "set_at": timestamp(), "guidance": str(),
@@ -7449,6 +7469,8 @@ func componentSchemas() map[string]*Schema {
 		"OwnershipResolveInput":                 ownershipResolveInput,
 		"CMDBReconcileSchedule":                 cmdbReconcileSchedule,
 		"CMDBReconcileRunNow":                   cmdbReconcileRunNow,
+		"ControlPlaneKeygen":                    controlPlaneKeygen,
+		"ControlPlaneKeygenInput":               controlPlaneKeygenInput,
 		"ProviderAccessPolicy":                  providerAccessPolicy,
 		"ProviderAccessPolicyInput":             providerAccessPolicyInput,
 		"ProviderAccessRequestList":             providerAccessRequestList,

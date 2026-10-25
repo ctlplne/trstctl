@@ -111,6 +111,7 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.agentUpgradeRoutes()...)
 	out = append(out, a.brandingRoutes()...)
 	out = append(out, a.outboxRecoveryRoutes()...)
-	out = append(out, a.distrustRemovalRoutes()...) // see distrust_removal.go
+	out = append(out, a.distrustRemovalRoutes()...)    // see distrust_removal.go
+	out = append(out, a.controlPlaneKeygenRoutes()...) // see control_plane_keygen.go
 	return out
 }

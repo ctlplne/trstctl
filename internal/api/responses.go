@@ -71,6 +71,11 @@ func (a *API) writeError(w http.ResponseWriter, err error) {
 		a.writeProblem(w, problem.New(http.StatusNotFound, "resource not found"))
 	case errors.Is(err, orchestrator.ErrRenewalWorkPending):
 		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()))
+	case errors.Is(err, orchestrator.ErrControlPlaneKeygenOff):
+		// The tenant's own setting refuses it; the message names every
+		// replacement (owner decision 2026-10-24).
+		a.writeProblem(w, problem.New(http.StatusConflict, orchestrator.ErrControlPlaneKeygenOff.Error()).
+			WithExtension("code", "control_plane_keygen_off"))
 	case errors.Is(err, orchestrator.ErrKeyCompromiseEffectNotRetryable):
 		a.writeProblem(w, problem.New(http.StatusConflict, err.Error()))
 	case errors.Is(err, orchestrator.ErrDiscoverySourceIdentityConflict):

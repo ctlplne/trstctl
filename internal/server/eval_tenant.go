@@ -14,6 +14,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // The explicitly configured evaluation tenant needs the same durable lifecycle
@@ -47,6 +48,15 @@ func ensureEvalTenantRegistration(ctx context.Context, d Deps) error {
 		})
 	if err != nil {
 		return fmt.Errorf("register configured evaluation tenant: %w", err)
+	}
+	// Owner decision 2026-10-24: new tenants start with control-plane key
+	// generation off. The evaluation preset turns the compatibility Workload API
+	// socket on, so its tenant starts on, and the decision says why.
+	if _, err := orchestrator.NewOrchestrator(d.Log, d.Store, nil).SetControlPlaneKeygen(ctx, tenantID, projections.ControlPlaneKeygenSet{
+		Enabled: true, Source: store.ControlPlaneKeygenSourceRegistration,
+		Reason: "evaluation preset: the compatibility Workload API socket is on",
+	}); err != nil {
+		return fmt.Errorf("record the evaluation tenant's key generation default: %w", err)
 	}
 	return nil
 }
