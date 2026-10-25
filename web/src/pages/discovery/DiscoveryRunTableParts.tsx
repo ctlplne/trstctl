@@ -95,7 +95,8 @@ export function RunTable({
                 {unresolved.map((result) => (
                   <li key={`${run.id}:${result.target}`} className="break-words">
                     <span className="text-foreground">{result.target}</span> <StatusBadge vocabulary="lifecycle" value={result.status} />
-                    {result.error ? <span className="text-muted-foreground"> {result.error}</span> : null}
+                    {/* A reason the run summary already states is not repeated under every target. */}
+                    {result.error && !run.error?.includes(result.error) ? <span className="text-muted-foreground"> {result.error}</span> : null}
                   </li>
                 ))}
               </ul>

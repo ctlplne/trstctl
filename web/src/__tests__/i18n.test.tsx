@@ -212,6 +212,24 @@ describe("i18n boundary", () => {
     }
   });
 
+  it("formats ICU plural arguments the catalog uses instead of showing their syntax", () => {
+    // The formatter replaced only {name} placeholders, so these rendered as raw
+    // "{count, plural, one {# order} other {# orders}}" text in the console.
+    expect(formatMessage("protocols.acmeAdmin.orders", { count: 1 })).toBe("1 order");
+    expect(formatMessage("protocols.acmeAdmin.orders", { count: 2 })).toBe("2 orders");
+    expect(formatMessage("protocols.acmeAdmin.certificates", { count: 1200 })).toBe("1,200 certificates");
+    expect(formatMessage("providerAccess.requests.approvals", { count: 0 })).toBe("No approvals recorded yet");
+    expect(formatMessage("providerAccess.requests.approvals", { count: 1 })).toBe("1 approval recorded");
+    expect(formatMessage("provider.assurance.auditStream", { name: "soc", count: 3 })).toBe("Audit stream soc: 3 events sourced from this customer's lane.");
+    expect(formatMessage("keygen.renewals", { count: 1 })).toMatch(
+      /^1 active certificate has a key the control plane generated; its renewal needs it on, or a CSR/,
+    );
+    expect(formatMessage("keygen.renewals", { count: 3 })).toMatch(/^3 active certificates have keys the control plane generated; their renewals need it on/);
+    for (const key of Object.keys(messages) as MessageKey[]) {
+      expect(formatMessage(key, { count: 2 }), key).not.toMatch(/\{\s*count\s*,\s*plural/);
+    }
+  });
+
   it("provides deterministic locale negotiation and formatting helpers", () => {
     expect(negotiateLocale(["fr-CA", "en-GB"])).toBe(defaultLocale);
     expect(negotiateLocale(["es-MX"])).toBe(defaultLocale);

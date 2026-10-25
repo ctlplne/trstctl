@@ -1643,6 +1643,42 @@ describe("discovery control-plane surface", () => {
     expect(within(outcomes).getByText(/that agent mode is not built yet/)).toBeInTheDocument();
   });
 
+  it("states a reason the run summary already gives once, not under every resource", async () => {
+    const reason = "trstctl delivers a Kubernetes TLS Secret through an in-cluster agent; that agent mode is not built yet";
+    apiMock.discoveryRuns.mockResolvedValueOnce({
+      items: [
+        {
+          id: "run-k8s-two",
+          tenant_id: "tenant-1",
+          source_id: "source-k8s",
+          status: "partial",
+          dry_run: false,
+          execution: "control_plane",
+          targets: 2,
+          discovered: 2,
+          failed: 0,
+          rejected: 0,
+          blocked: 0,
+          error: `2 Kubernetes TLS resources were not delivered: ${reason}`,
+          target_results: [
+            { kind: "k8s_tls_auto_issuance", target: "Gateway:edge/gw", status: "not_delivered", error: reason },
+            { kind: "k8s_tls_auto_issuance", target: "Ingress:payments/web", status: "not_delivered", error: reason },
+          ],
+          created_at: "2026-10-25T10:02:00Z",
+          completed_at: "2026-10-25T10:02:05Z",
+        },
+      ],
+    });
+    renderDiscovery(["/discovery?tab=runs"]);
+
+    const outcomes = await screen.findByRole("list", { name: "Target outcomes" });
+    expect(within(outcomes).getByText("Gateway:edge/gw")).toBeInTheDocument();
+    expect(within(outcomes).getByText("Ingress:payments/web")).toBeInTheDocument();
+    expect(within(outcomes).getAllByText("Not delivered")).toHaveLength(2);
+    expect(within(outcomes).queryByText(/that agent mode is not built yet/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/that agent mode is not built yet/)).toHaveLength(1);
+  });
+
   it("recovers a failed run as a separate server-backed run and renders lineage after reload", async () => {
     apiMock.discoverySources.mockResolvedValue({
       items: [

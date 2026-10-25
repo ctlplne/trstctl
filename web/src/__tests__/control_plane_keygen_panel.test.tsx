@@ -33,6 +33,23 @@ describe("ControlPlaneKeygenPanel", () => {
     apiMock.putControlPlaneKeygen.mockReset();
   });
 
+  it("counts one control-plane generated certificate in the singular", async () => {
+    apiMock.controlPlaneKeygen.mockResolvedValue({
+      decided: true,
+      enabled: true,
+      source: "operator",
+      reason: "b15 replay",
+      set_by: "ops@customer.test",
+      set_at: "2026-10-25T14:21:00Z",
+      control_plane_identities: 1,
+      paths: ["identity issuance without a CSR"],
+      guidance: "",
+    });
+    renderPanel();
+
+    expect(await screen.findByText(/1 active certificate has a key the control plane generated; its renewal needs it on/)).toBeInTheDocument();
+  });
+
   it("shows who decided, what renewals depend on it, and changes it only with a reason", async () => {
     apiMock.controlPlaneKeygen.mockResolvedValue({
       decided: true,

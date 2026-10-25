@@ -62,7 +62,7 @@ function initialTimeZonePreference(initialTimeZone?: string): string {
 
 export function formatMessage(key: MessageKey, values?: MessageValues, locale: Locale = defaultLocale): string {
   const message = eagerCatalogs[locale]?.[key] ?? eagerCatalogs[defaultLocale][key];
-  return interpolateMessage(message, values);
+  return interpolateMessage(message, values, locale);
 }
 
 /* activeLocale mirrors the provider's current locale for module-scope copy.

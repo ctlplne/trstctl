@@ -88,6 +88,11 @@ func TestServedKubernetesTLSAutoIssuanceIsReportedNotDelivered(t *testing.T) {
 			if result.Kind != "k8s_tls_auto_issuance" || result.Error == "" {
 				t.Fatalf("switch %v: target result %+v, want a Kubernetes TLS outcome with its reason", enabled, result)
 			}
+			// The status already says not delivered; the reason does not repeat it,
+			// so the console can show it once beside the status.
+			if strings.HasPrefix(result.Error, "not delivered") || !strings.Contains(result.Error, "in-cluster agent") {
+				t.Fatalf("switch %v: target result reason %q, want the reason alone", enabled, result.Error)
+			}
 			outcomes[result.Target] = result.Status
 		}
 		if outcomes["Ingress:payments/web"] != "not_delivered" || outcomes["Gateway:edge/gw"] != "not_delivered" {

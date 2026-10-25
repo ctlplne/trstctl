@@ -724,8 +724,10 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 		}
 		rep.Discovered++
 		if len(rep.TargetResults) < kubernetesTLSOutcomeLimit {
+			// The status says not delivered; the error carries the reason alone.
 			rep.TargetResults = append(rep.TargetResults, netscan.TargetResult{
-				Kind: k8stls.FindingKind, Target: f.Ref, Status: "not_delivered", Error: kubernetesTLSNotDelivered,
+				Kind: k8stls.FindingKind, Target: f.Ref, Status: "not_delivered",
+				Error: strings.TrimPrefix(kubernetesTLSNotDelivered, "not delivered: "),
 			})
 		}
 	}

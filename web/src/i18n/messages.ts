@@ -27298,7 +27298,8 @@ export const messages = {
     description: "Who changed the switch, when and why.",
   },
   "keygen.renewals": {
-    defaultMessage: "{count} active certificates have keys the control plane generated; their renewals need it on, or a CSR or host agent instead.",
+    defaultMessage:
+      "{count, plural, one {# active certificate has a key the control plane generated; its renewal needs it on} other {# active certificates have keys the control plane generated; their renewals need it on}}, or a CSR or host agent instead.",
     description: "How many active certificates depend on control-plane key generation to renew.",
   },
   "keygen.reason": {
@@ -31352,11 +31353,90 @@ export function isSupportedLocale(value: string): value is Locale {
   return (supportedLocales as readonly string[]).includes(value);
 }
 
-export function interpolateMessage(message: string, values: MessageValues = {}): string {
-  return message.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name: string) => {
-    const value = values[name];
-    return value == null ? match : String(value);
-  });
+// Message arguments take the two ICU MessageFormat forms the catalog uses: a
+// plain {name} placeholder, and {count, plural, =0 {…} one {# item} other
+// {# items}}, whose branch is chosen with the same Intl plural rules as
+// formatPlural and whose "#" is the locale-formatted number. Anything else in
+// braces is literal text whose placeholders are still filled.
+export function interpolateMessage(message: string, values: MessageValues = {}, locale: string = defaultLocale): string {
+  let out = "";
+  let at = 0;
+  while (at < message.length) {
+    const open = message.indexOf("{", at);
+    const close = open < 0 ? -1 : matchingBrace(message, open);
+    if (close < 0) break;
+    out += message.slice(at, open) + formatArgument(message.slice(open + 1, close), values, locale);
+    at = close + 1;
+  }
+  return out + message.slice(at);
+}
+
+function matchingBrace(text: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function formatArgument(body: string, values: MessageValues, locale: string): string {
+  if (/^[a-zA-Z0-9_]+$/.test(body)) {
+    const value = values[body];
+    return value == null ? `{${body}}` : String(value);
+  }
+  const plural = /^\s*([a-zA-Z0-9_]+)\s*,\s*plural\s*,/.exec(body);
+  const count = plural ? Number(values[plural[1]]) : Number.NaN;
+  const branches = plural && !Number.isNaN(count) ? pluralBranches(body.slice(plural[0].length)) : null;
+  const branch = branches ? (branches.get(`=${count}`) ?? branches.get(pluralCategory(count, locale)) ?? branches.get("other")) : undefined;
+  if (branch === undefined) {
+    return `{${interpolateMessage(body, values, locale)}}`;
+  }
+  return interpolateMessage(replaceTopLevelHash(branch, formatCount(count, locale)), values, locale);
+}
+
+function pluralBranches(options: string): Map<string, string> | null {
+  const branches = new Map<string, string>();
+  let at = 0;
+  while (at < options.length) {
+    const selector = /^\s*(=\d+|[a-z]+)\s*\{/.exec(options.slice(at));
+    if (!selector) {
+      return options.slice(at).trim() === "" && branches.size > 0 ? branches : null;
+    }
+    const open = at + selector[0].length - 1;
+    const close = matchingBrace(options, open);
+    if (close < 0) return null;
+    branches.set(selector[1], options.slice(open + 1, close));
+    at = close + 1;
+  }
+  return branches.size > 0 ? branches : null;
+}
+
+function replaceTopLevelHash(branch: string, count: string): string {
+  let out = "";
+  let depth = 0;
+  for (const char of branch) {
+    if (char === "{") depth++;
+    if (char === "}") depth--;
+    out += char === "#" && depth === 0 ? count : char;
+  }
+  return out;
+}
+
+function pluralCategory(count: number, locale: string): string {
+  try {
+    return new Intl.PluralRules(locale).select(count);
+  } catch {
+    return new Intl.PluralRules(defaultLocale).select(count);
+  }
+}
+
+function formatCount(count: number, locale: string): string {
+  try {
+    return new Intl.NumberFormat(locale).format(count);
+  } catch {
+    return String(count);
+  }
 }
 
 const pseudoTargetAlphabet = "ÅƁÇÐÉƑĜĦĪĴĶĻṀÑØƤǪŘŞŦŮṼŴẊÝŽåƀçďéƒĝħīĵķļṁñøƥǫřşŧůṽŵẋýž";
