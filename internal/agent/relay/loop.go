@@ -480,7 +480,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	if execErr != nil {
 		// The connector's own error text can contain whatever the appliance
 		// echoed back, including the credential. It is never forwarded: the
-		// relay reports a closed phrase and keeps the detail local.
+		// relay reports a closed phrase and keeps the detail in its own log,
+		// redacted (B2).
+		logDeployFailure(job, intent, execErr, material)
 		report(ctx, ch, job, OutcomeFailed, "connector deploy failed against the target")
 		return false
 	}

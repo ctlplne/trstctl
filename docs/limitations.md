@@ -2195,8 +2195,10 @@ secrets. An appliance password is short and word-shaped — no redactor recogniz
 `hunter2-lab`, and no entropy floor fires on it — so any attempt that redeemed
 material records a closed-set marker instead of the agent's text. The operator
 still gets the failure reason, the redemption's audit reference, and the evidence
-digest; the transcript stays on the relay, where an operator with access to that
-host can read it. An attempt that redeemed nothing never held a secret to echo,
+digest; the connector's own error goes to the relay's log on its host, with every
+redeemed value (and every line of a multi-line one) redacted, where an operator
+with access to that host can read it. (Earlier builds discarded it, despite this
+promise.) An attempt that redeemed nothing never held a secret to echo,
 so its detail flows through redaction as before.
 
 Operations shows credential custody directly: how many redeemed credentials are

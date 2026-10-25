@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1710 annotated sites across 26 rules. Each row is
+1711 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (371 sites)
+### G101 — CWE-798 Use of hardcoded credentials (372 sites)
 
 | Location | Reason |
 |---|---|
@@ -96,6 +96,7 @@ not this file.
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/relay/deploy_failure_log_test.go:35` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
