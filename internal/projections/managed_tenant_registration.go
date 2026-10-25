@@ -11,6 +11,14 @@ import "time"
 type ManagedTenantRegistered struct {
 	Name            string                  `json:"name"`
 	ManagedOffering ManagedOfferingMetadata `json:"managed_offering"`
+	// ControlPlaneKeygen is the hosted tenant's control-plane key generation
+	// default, decided with its registration (owner decision 2026-10-24: a new
+	// tenant starts with it off). It rides on the registration because the
+	// Provider's provisioning request holds the Provider tenant's service
+	// fence, so a separate decision command for the new tenant cannot run
+	// inside it; projected with the tenant row, it is atomic and a rebuild
+	// reproduces it. Registrations recorded before the switch carry none.
+	ControlPlaneKeygen *ControlPlaneKeygenSet `json:"control_plane_keygen,omitempty"`
 }
 
 // ManagedOfferingMetadata records the provider relationship without changing

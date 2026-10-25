@@ -3793,6 +3793,28 @@ func managedTenantMetadata(data []byte) (managed bool, providerTenantID string) 
 	return true, payload.ManagedOffering.ProviderTenantID
 }
 
+// applyRegisteredControlPlaneKeygenTx projects the control-plane key
+// generation default a managed registration decided (owner decision
+// 2026-10-24). Only a registration decision may ride on a registration.
+func (p *Projector) applyRegisteredControlPlaneKeygenTx(ctx context.Context, tx pgx.Tx, e events.Event) error {
+	var registered ManagedTenantRegistered
+	if err := json.Unmarshal(e.Data, &registered); err != nil {
+		return fmt.Errorf("projections: decode %s: %w", e.Type, err)
+	}
+	decision := registered.ControlPlaneKeygen
+	if decision == nil {
+		return nil
+	}
+	if decision.Source != store.ControlPlaneKeygenSourceRegistration || strings.TrimSpace(decision.SetBy) == "" ||
+		decision.Evidence != nil {
+		return fmt.Errorf("projections: %s carries a control-plane key generation decision that is not a registration default", e.Type)
+	}
+	return p.store.ApplyControlPlaneKeygenSetTx(ctx, tx, store.ControlPlaneKeygenPolicy{
+		TenantID: e.TenantID, Enabled: decision.Enabled, Source: decision.Source,
+		Reason: decision.Reason, SetBy: decision.SetBy, SetAt: e.Time,
+	})
+}
+
 // tenantOffboarded is the payload of a tenant.offboarded event (TENANT-002). It
 // carries no secret material — only the count of rows the command-side erase
 // removed — so a replay does not need it to reproduce state (the projector
@@ -4098,9 +4120,14 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
 		managed, providerTenantID := managedTenantMetadata(e.Data)
-		return p.store.UpsertTenant(ctx, store.Tenant{
+		if err := p.store.UpsertTenant(ctx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
 			Managed: managed, ProviderTenantID: providerTenantID,
+		}); err != nil || !managed {
+			return err
+		}
+		return p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
+			return p.applyRegisteredControlPlaneKeygenTx(ctx, tx, e)
 		})
 	}
 	if e.Type == EventTenantOffboarded {
@@ -4664,10 +4691,16 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
 		managed, providerTenantID := managedTenantMetadata(e.Data)
-		return p.store.RegisterTenantTx(ctx, tx, store.Tenant{
+		if err := p.store.RegisterTenantTx(ctx, tx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
 			Managed: managed, ProviderTenantID: providerTenantID,
-		})
+		}); err != nil {
+			return err
+		}
+		if !managed {
+			return nil
+		}
+		return p.applyRegisteredControlPlaneKeygenTx(ctx, tx, e)
 	case EventTenantOffboarded:
 		var payload tenantOffboarded
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
@@ -9462,10 +9495,16 @@ func (p *Projector) applyForRebuild(ctx context.Context, tx pgx.Tx, e events.Eve
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
 		managed, providerTenantID := managedTenantMetadata(e.Data)
-		return p.store.UpsertTenantTx(ctx, tx, store.Tenant{
+		if err := p.store.UpsertTenantTx(ctx, tx, store.Tenant{
 			TenantID: e.TenantID, Name: payload.Name, EventSeq: e.Sequence, CreatedAt: e.Time,
 			Managed: managed, ProviderTenantID: providerTenantID,
-		})
+		}); err != nil || !managed {
+			return err
+		}
+		if err := p.store.SetTenantGUCTx(ctx, tx, e.TenantID); err != nil {
+			return err
+		}
+		return p.applyRegisteredControlPlaneKeygenTx(ctx, tx, e)
 	case EventTenantOffboarded:
 		if err := ValidateSchemaVersion(e); err != nil {
 			return err

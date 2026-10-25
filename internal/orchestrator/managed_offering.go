@@ -156,20 +156,22 @@ func (o *Orchestrator) provisionManagedTenant(
 						ProvisionedBy:    actor,
 						ProvisionedAt:    eventTime.UTC().Truncate(time.Second),
 					},
+					// Owner decision 2026-10-24: a new tenant starts with
+					// control-plane key generation off. The decision rides on
+					// the registration: this request holds the Provider
+					// tenant's service fence, so a separate command for the
+					// new tenant could not run here.
+					ControlPlaneKeygen: &projections.ControlPlaneKeygenSet{
+						Enabled: false, Source: store.ControlPlaneKeygenSourceRegistration,
+						Reason: "a new tenant starts with control-plane key generation off",
+						SetBy:  "system:" + store.ControlPlaneKeygenSourceRegistration, SetAt: eventTime.UTC(),
+					},
 				})
 			},
 		},
 	)
 	if err != nil {
 		return ManagedTenant{}, err
-	}
-	// Owner decision 2026-10-24: a new tenant starts with control-plane key
-	// generation off (stable decision ID, so a retried provision records it once).
-	if _, err := o.SetControlPlaneKeygen(ctx, in.TenantID, projections.ControlPlaneKeygenSet{
-		Enabled: false, Source: store.ControlPlaneKeygenSourceRegistration,
-		Reason: "a new tenant starts with control-plane key generation off",
-	}); err != nil {
-		return ManagedTenant{}, fmt.Errorf("orchestrator: record managed tenant %s key generation default: %w", in.TenantID, err)
 	}
 	projected, err := o.store.GetTenant(ctx, in.TenantID)
 	if err != nil {
