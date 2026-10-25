@@ -115,9 +115,8 @@ func TestServedControlPlaneSocketRefusesWorkloadIssuanceByDefaultA85(t *testing.
 		t.Fatal("the control-plane socket minted an SVID with serve_local_workloads off")
 	}
 	// The operator still sees who dials the old path.
-	if !h.hasEvent(t, "spiffe.workload_api.local_socket_used") {
-		t.Fatal("a refused local-socket fetch left no spiffe.workload_api.local_socket_used record")
-	}
+	expectLocalSocketUse(t, h, "x509_refused", "serve_local_workloads is off")
+	expectLocalSocketUse(t, h, "jwt_refused", "serve_local_workloads is off")
 	qualification := servedSPIFFEQualificationA85(t, h)
 	if qualification.LocalWorkloadsServed || !qualification.LocalSocketDeprecated || qualification.SocketURI != "unix://"+socket {
 		t.Fatalf("qualification = %+v, want local_workloads_served=false on the control-plane socket", qualification)

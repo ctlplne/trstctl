@@ -119,7 +119,7 @@ func (s *WorkloadAPIServer) refuseX509Keygen(ctx context.Context) error {
 		return nil
 	}
 	if err := s.x509KeygenCheck(ctx); err != nil {
-		s.recordLocalSocketDeprecation(ctx, "x509_refused")
+		s.recordLocalSocketDeprecation(ctx, "x509_refused", localSocketKeygenRefusedDetail)
 		return status.Error(codes.PermissionDenied, "spiffe: "+err.Error())
 	}
 	return nil
@@ -129,7 +129,7 @@ func (s *WorkloadAPIServer) refuseX509Keygen(ctx context.Context) error {
 // retention release used, so an operator can still see which workloads dial
 // the old path, and returns the refusal.
 func (s *WorkloadAPIServer) refuseLocalIssuance(ctx context.Context, kind string) error {
-	s.recordLocalSocketDeprecation(ctx, kind+"_refused")
+	s.recordLocalSocketDeprecation(ctx, kind+"_refused", localSocketRefusedDetail)
 	return status.Error(codes.PermissionDenied, LocalWorkloadsRefusedMessage)
 }
 
@@ -244,15 +244,30 @@ func (s *WorkloadAPIServer) sendX509SVIDResponse(stream workloadpb.SpiffeWorkloa
 // exists to replace with evidence.
 //
 // Best-effort: failing to record the deprecation must not fail an issuance a
-// workload is depending on today.
-func (s *WorkloadAPIServer) recordLocalSocketDeprecation(ctx context.Context, kind string) {
+// workload is depending on today. The detail says what happened — an SVID
+// issued here, or a request refused and why — so a refusal never reads as an
+// issuance.
+func (s *WorkloadAPIServer) recordLocalSocketDeprecation(ctx context.Context, kind, detail string) {
 	_ = auditsink.Emit(ctx, s.wl.cfg.Audit, nil, "spiffe.workload_api.local_socket_used", s.wl.cfg.TenantID,
-		[]byte(fmt.Sprintf(`{"type":%q,"detail":%q}`, kind,
-			"this SVID was issued on the control plane's own Workload API socket, which can only "+
-				"serve workloads on this machine and mints the SVID key here rather than on the "+
-				"host that runs the workload. Move the workload to its host agent's socket "+
-				"(--workload-api-socket) and scope its registration entry to that node.")))
+		[]byte(fmt.Sprintf(`{"type":%q,"detail":%q}`, kind, detail)))
 }
+
+const (
+	localSocketX509IssuedDetail = "this SVID was issued on the control plane's own Workload API socket, which can only " +
+		"serve workloads on this machine and mints the SVID key here rather than on the " +
+		"host that runs the workload. Move the workload to its host agent's socket " +
+		"(--workload-api-socket) and scope its registration entry to that node."
+	localSocketJWTIssuedDetail = "this JWT-SVID was issued on the control plane's own Workload API socket, which can " +
+		"only serve workloads on this machine. Move the workload to its host agent's socket " +
+		"(--workload-api-socket) and scope its registration entry to that node."
+	localSocketRefusedDetail = "this request was refused: the control plane's own Workload API socket no longer issues " +
+		"SVIDs to workloads (protocols.spiffe.serve_local_workloads is off). Move the workload to its host " +
+		"agent's socket (--workload-api-socket) and scope its registration entry to that node."
+	localSocketKeygenRefusedDetail = "this X.509-SVID request was refused: this tenant's control-plane key generation is " +
+		"off, and this socket would generate the SVID key in the control plane. Move the workload to its host " +
+		"agent's socket (--workload-api-socket), which generates the key on the workload's host, and scope its " +
+		"registration entry to that node."
+)
 
 func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloadpb.X509SVIDResponse, error) {
 	ctx, release, err := s.wl.cfg.TenantServiceWork.Begin(ctx, s.wl.cfg.TenantID)
@@ -334,7 +349,7 @@ func (s *WorkloadAPIServer) buildX509SVIDResponse(ctx context.Context) (*workloa
 	// Recorded AFTER the issuance, and only on success. "The deprecated socket
 	// was used" is a statement about an SVID that exists; a refused request did
 	// not use the old path, it was turned away by it.
-	s.recordLocalSocketDeprecation(ctx, "x509")
+	s.recordLocalSocketDeprecation(ctx, "x509", localSocketX509IssuedDetail)
 	complete = true
 	return resp, nil
 }
@@ -415,7 +430,7 @@ func (s *WorkloadAPIServer) FetchJWTSVID(ctx context.Context, req *workloadpb.JW
 	if len(resp.Svids) == 0 {
 		return nil, status.Error(codes.PermissionDenied, "spiffe: requested SPIFFE ID is not authorized for caller selectors")
 	}
-	s.recordLocalSocketDeprecation(ctx, "jwt")
+	s.recordLocalSocketDeprecation(ctx, "jwt", localSocketJWTIssuedDetail)
 	return resp, nil
 }
 

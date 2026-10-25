@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/spiffe/workloadpb"
 	"trstctl.com/trstctl/internal/store"
@@ -56,9 +58,9 @@ func TestServedKeygenOffRefusesCompatibilitySocketX509SVIDs(t *testing.T) {
 	if h.hasEvent(t, "spiffe.svid.issued") {
 		t.Fatal("the socket minted an SVID with control-plane key generation off")
 	}
-	if !h.hasEvent(t, "spiffe.workload_api.local_socket_used") {
-		t.Fatal("the refused fetch left no spiffe.workload_api.local_socket_used record")
-	}
+	// The record says what happened and why (the lab replay found refusals
+	// recorded as "this SVID was issued").
+	expectLocalSocketUse(t, h, "x509_refused", "control-plane key generation is off")
 	ctx, cancel := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), metadata.Pairs(spiffeSecurityHeader())), 10*time.Second)
 	defer cancel()
 	if resp, err := client.FetchJWTSVID(ctx, &workloadpb.JWTSVIDRequest{Audience: []string{"api.served.test"}}); err != nil || len(resp.GetSvids()) == 0 {
@@ -67,5 +69,37 @@ func TestServedKeygenOffRefusesCompatibilitySocketX509SVIDs(t *testing.T) {
 	setKeygen(true)
 	if err := fetchX509(); err != nil {
 		t.Fatalf("FetchX509SVID with the switch back on: %v", err)
+	}
+}
+
+// expectLocalSocketUse finds a spiffe.workload_api.local_socket_used record of
+// the given type whose detail gives the reason, and fails if any refusal
+// record claims that an SVID was issued.
+func expectLocalSocketUse(t *testing.T, h *servedHarness, kind, why string) {
+	t.Helper()
+	found := false
+	if err := h.log.Replay(context.Background(), 0, func(e events.Event) error {
+		if e.Type != "spiffe.workload_api.local_socket_used" || e.TenantID != h.tenant {
+			return nil
+		}
+		var use struct {
+			Type   string `json:"type"`
+			Detail string `json:"detail"`
+		}
+		if err := json.Unmarshal(e.Data, &use); err != nil {
+			return err
+		}
+		if strings.HasSuffix(use.Type, "_refused") && strings.Contains(use.Detail, "was issued") {
+			t.Errorf("the %s record says an SVID was issued: %s", use.Type, use.Detail)
+		}
+		if use.Type == kind && strings.Contains(use.Detail, why) {
+			found = true
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("replay events: %v", err)
+	}
+	if !found {
+		t.Fatalf("no %s local-socket record saying %q", kind, why)
 	}
 }
