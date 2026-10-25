@@ -474,8 +474,8 @@ every build through `internal/pqcmigration`.
 - **Two PQC client compatibility anchors** are served in every build.
   Stock OpenSSL 3.5 enrolls and verifies a pure ML-DSA-65 subject leaf over EST; the
   stock SPIFFE Workload API receives a two-entry classical + ML-DSA-65 response.
-  CBOM TLS finding rollout on host-agent Envoy remains open until agent-owned
-  execution and rollback are served. These client proofs do not claim that every
+  CBOM TLS findings roll out to Envoy through an enrolled host agent or a network
+  relay, with agent-owned rollback. These client proofs do not claim that every
   legacy client understands ML-DSA. Hybrid-to-pure
   replacement of an already deployed leaf stays gated by succession and evidence-based
   retirement; direct pure enrollment is served.

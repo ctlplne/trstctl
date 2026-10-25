@@ -2158,8 +2158,11 @@ cryptographically valid CRL and OCSP responders. It does **not** claim a run
 against a domain-joined Windows AD CS CDP/OCSP estate. That externally served AD
 CS lab remains infrastructure evidence to collect when the Windows lab described
 under F4 is available. LDAP CDP reading (A107) is exercised against a stand-in
-directory in the repository tests; a run against a production AD CS forest is
-not claimed.
+directory in the repository tests and against a lab Samba AD DC on the running
+product: through the AD CS binding (StartTLS, simple bind) the relay read the CRL
+entry under `CN=CDP` fresh and signature-verified with its one revocation, and a
+CDP naming no entry read `ldap_entry_missing`. A run against a production AD CS
+forest is not claimed.
 
 ### Just-in-time credential leases: the brain ships references, not secrets
 
@@ -5100,7 +5103,7 @@ shard CRLs at `/crl/{tenant}/shards/{index}`, and RFC 5280 delta CRLs at
 tenant's CRL set ahead of `nextUpdate`. Trusted issue, renewal, revocation,
 protocol-enrollment, and scheduler paths publish CRLs; public CRL reads
 are read-only and return 404 until artifacts are already published for a
-tenant that has issued certificates. A query for a revoked serial returns
+tenant that has issued certificates.
 
 When a local revocation has been accepted but its event has not projected,
 OCSP refuses a Good answer and CRL readers refuse the predecessor artifact.
@@ -5108,7 +5111,12 @@ After projection, CRL readers continue to refuse an older signed artifact
 until its revoked count covers the current issuer ledger. The replacement is
 published by the outbox worker; clients configured to soft-fail may still
 accept a leaf during this unavailable interval, so relay health and stock-client
-rejection remain separate evidence.
+rejection remain separate evidence. Both are proven on the running product: a
+network relay reports the managed CA's CRL fresh and signature-verified with the
+revocation counted, and its OCSP answer signature-verified; stock OpenSSL 4
+refuses the revoked leaf with `verify -crl_check` (error 23), reads it as
+`revoked` over OCSP, and refuses a TLS connection made with `-crl_check`, while a
+TLS client that does not check revocation still connects.
 
 A query for a revoked serial returns
 `revoked` over OCSP and the serial appears on the full CRL, its shard, and
@@ -5447,12 +5455,23 @@ Cloudflare's CIRCL. What is available today:
   groups retained for compatibility (restored in B13-8: from July until
   then the listeners offered only classical groups, and stock OpenSSL
   offering only the hybrid group was refused). Pure ML-KEM groups are
-  not offered: Go's TLS stack implements the hybrid group.
+  not offered: Go's TLS stack implements the hybrid group. With stock
+  OpenSSL 4.0.3, a client offering only `X25519MLKEM768` negotiates it on
+  the HTTPS API and on the agent mTLS channel, a classical `X25519` offer
+  still connects, and a client offering only pure `MLKEM768` is refused for
+  want of a shared group.
 - SLH-DSA / SPHINCS+ (FIPS 205; `SLH-DSA-SHA2-128s` / `128f` / `192s` /
   `256s`) — the NIST-standard stateless hash-based signature. Its security
   rests only on the hash function, so it is the conservative choice for
   long-lived roots where you want assumptions independent of the lattice
-  schemes; the trade-off is much larger signatures.
+  schemes; the trade-off is much larger signatures. Here it is a signer and
+  algorithm-succession primitive: trstctl issues no SLH-DSA X.509
+  certificate and accepts no SLH-DSA CSR (the ML-DSA certificate profile of
+  RFC 9881 is served; the SLH-DSA profile of RFC 9909 is what comes next), so
+  stock-client SLH-DSA interoperation is not claimed even though stock
+  OpenSSL 4 ships the algorithm. A certificate profile may list an
+  `SLH-DSA-SHA2-*` label among its allowed key algorithms, but no enrollment
+  path accepts an SLH-DSA subject key yet.
 - A hybrid signature (`HybridEd25519Dilithium3`) — classical Ed25519 paired
   with ML-DSA, so breaking either component alone does not forge a
   signature.
