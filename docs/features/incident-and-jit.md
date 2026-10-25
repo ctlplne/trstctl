@@ -684,7 +684,22 @@ notifications use the [notification integrations](policy-and-governance.md).
   RFC 5280 `revocation_reason` (identity-revoke defaults to `unspecified`,
   credential-rotate to `superseded`), so the revocation reaches CRL and OCSP; the
   run keeps the operator's free-text `reason`, and `keyCompromise` goes through
-  the identity transition, which contains the key on its hosts first. Owner-driven self-remediation (CAP-REM-02) is served through
+  the identity transition, which contains the key on its hosts first. The rotate
+  playbook works on an X.509 identity bound to a deployment target (anything else
+  is refused with `409`, since nothing could verify the replacement). It issues a
+  replacement for the original's DNS name and target and returns a `running` run
+  (`replacement_awaiting_verification`); it neither marks the replacement deployed
+  nor revokes the original. Its internal `remediation.rotate.verify` command waits
+  for the replacement's signed, verified delivery: the endpoint verification an
+  enrolled host agent or network relay signs. Only then is the replacement marked
+  `deployed` and the original revoked, and the run reads `executed`
+  (`replacement_verified_and_original_revoked`, citing the verification). If the
+  signed verification finds the endpoint not serving the replacement, or none
+  arrives within `verification_timeout_seconds` (default 3600, 300 to 604800), the
+  original stays valid, the run reads `failed` (`replacement_verify_failed_original_kept`
+  or `replacement_unverified_original_kept`), and a
+  `rotation-replacement-unverified` finding names the replacement, the original
+  and the target. Owner-driven self-remediation (CAP-REM-02) is served through
   `/api/v1/remediation/owner-actions`,
   `/api/v1/remediation/owner-actions/{id}/accept`,
   `trstctl-cli remediation owner-actions *`, and the `/incidents` console; NHI

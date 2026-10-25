@@ -30691,6 +30691,7 @@
       "RemediationPlaybookRunRequest": {
         "properties": {
           "connector": {
+            "description": "nhi-right-size routing; credential-rotate delivers to the original identity's deployment target instead",
             "type": "string"
           },
           "inventory_id": {
@@ -30722,11 +30723,16 @@
             "type": "string"
           },
           "target": {
+            "description": "nhi-right-size routing; credential-rotate delivers to the original identity's deployment target instead",
             "type": "string"
           },
           "target_identity_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "verification_timeout_seconds": {
+            "description": "credential-rotate: how long the run waits for the replacement's signed, verified delivery before it keeps the original valid and raises a finding (300 to 604800, default 3600)",
+            "type": "integer"
           }
         },
         "type": "object"

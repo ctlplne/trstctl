@@ -1179,7 +1179,14 @@ never live in the API process. What you can do end to end against the running bi
   `GET /api/v1/remediation/playbook-runs{,/{id}}` cover revoke, rotate, and NHI
   right-size. Revoke and rotate run the identity lifecycle gate; they cannot carry
   an exact dual-control approval yet, so under dual control they refuse and the
-  operator uses the identity transition route, which can. Owner-driven self-remediation is served through
+  operator uses the identity transition route, which can. Rotate revokes the
+  original only after the replacement's signed, verified delivery, so it serves an
+  X.509 identity bound to a deployment target whose delivery an enrolled host agent
+  or network relay verifies and signs. A control-plane connector delivery (a cloud
+  store while the tenant runs no relay) carries no such signature: that rotation
+  keeps the original valid and raises a `rotation-replacement-unverified` finding
+  at its deadline, and the operator completes the change through the identity
+  transitions. Owner-driven self-remediation is served through
   `GET /api/v1/remediation/owner-actions` and
   `POST /api/v1/remediation/owner-actions/{id}/accept`: a bound owner can accept the
   CAP-POST-01 least-privilege recommendation, and trstctl records the same

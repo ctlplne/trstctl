@@ -10,10 +10,7 @@ import (
 	"strings"
 	"time"
 
-	guuid "github.com/google/uuid"
-
 	"trstctl.com/trstctl/internal/orchestrator"
-	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -136,29 +133,6 @@ func (a *API) getIncidentExecution(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.writeJSON(w, http.StatusOK, resp)
-}
-
-func (a *API) recordIncidentDelivery(ctx context.Context, tenantID, replacementIdentityID string, req incidentExecutionRequest, reason, idempotencyKey string) (store.ConnectorDeliveryReceipt, error) {
-	connector := strings.TrimSpace(req.Connector)
-	if connector == "" {
-		connector = "incident-remediation"
-	}
-	target := strings.TrimSpace(req.Target)
-	if target == "" {
-		target = "unconfigured-target"
-	}
-	rollback := strings.TrimSpace(req.DeliveryRollback)
-	if rollback == "" {
-		rollback = "restore previous credential binding if replacement health checks fail"
-	}
-	identityID := replacementIdentityID
-	return a.orch.RecordConnectorDelivery(ctx, tenantID, store.ConnectorDeliveryReceipt{
-		ID: guuid.NewString(), IdentityID: &identityID, Destination: "connector.deploy",
-		Connector: connector, Target: target, Status: servedstatus.ConnectorQueued, Attempts: 0,
-		Reason:      "incident replacement deployment requires connector worker confirmation",
-		Detail:      "served incident execution queued replacement deploy before compromised identity revocation: " + reason,
-		RollbackRef: rollback, IdempotencyKey: idempotencyKey,
-	})
 }
 
 func incidentRevocable(s orchestrator.State) bool {

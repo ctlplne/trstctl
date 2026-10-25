@@ -23,7 +23,12 @@ func TestServedPlaybookRevocationsCarryAnRFC5280Reason(t *testing.T) {
 	}{
 		{"identity-revoke", "", "unspecified", http.StatusCreated},
 		{"identity-revoke", "privilegeWithdrawn", "privilegeWithdrawn", http.StatusCreated},
-		{"credential-rotate", "", "superseded", http.StatusCreated},
+		// credential-rotate revokes only after its replacement's signed
+		// verification, where TestServedCredentialRotateRevokesOnlyAfterSigned
+		// Verification asserts its superseded default; this unbound identity
+		// can never be verified, so the run is refused up front.
+		{"credential-rotate", "", "", http.StatusConflict},
+		{"credential-rotate", "credential exposed", "", http.StatusBadRequest},
 		{"identity-revoke", "credential exposed", "", http.StatusBadRequest},
 		{"identity-revoke", "removeFromCRL", "", http.StatusBadRequest},
 		{"identity-revoke", "keyCompromise", "", http.StatusUnprocessableEntity},

@@ -15918,6 +15918,7 @@ export interface components {
             next_cursor?: string;
         };
         RemediationPlaybookRunRequest: {
+            /** @description nhi-right-size routing; credential-rotate delivers to the original identity's deployment target instead */
             connector?: string;
             inventory_id?: string;
             reason?: string;
@@ -15927,9 +15928,12 @@ export interface components {
             /** @description RFC 5280 reason the identity-revoke (default unspecified) and credential-rotate (default superseded) playbooks revoke with; keyCompromise goes through the identity transition */
             revocation_reason?: string;
             rollback_ref?: string;
+            /** @description nhi-right-size routing; credential-rotate delivers to the original identity's deployment target instead */
             target?: string;
             /** Format: uuid */
             target_identity_id?: string;
+            /** @description credential-rotate: how long the run waits for the replacement's signed, verified delivery before it keeps the original valid and raises a finding (300 to 604800, default 3600) */
+            verification_timeout_seconds?: number;
         };
         RenewalSLO: {
             breached: boolean;

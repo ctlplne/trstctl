@@ -10331,6 +10331,7 @@ RemediationPlaybookRunRequest = TypedDict(
         'rollback_ref': str,
         'target': str,
         'target_identity_id': str,
+        'verification_timeout_seconds': int,
     },
     total=False,
 )

@@ -1739,6 +1739,24 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			if err := json.Unmarshal(ev.Data, &pl); err != nil {
 				return fmt.Errorf("orchestrator: reconcile decode %s (seq %d): %w", ev.Type, ev.Sequence, err)
 			}
+			if pl.Action == "rotate" && pl.Status == RotateRunRunning {
+				// A running credential-rotate snapshot names its one durable
+				// verification command; the handler ignores it once terminal.
+				entry, err := rotateVerificationEntry(ev.TenantID, pl.ID)
+				if err != nil {
+					return err
+				}
+				if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry)
+					if inserted {
+						healed++
+					}
+					return err
+				}); err != nil {
+					return err
+				}
+				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+			}
 			if pl.Action != "right_size" {
 				return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 			}

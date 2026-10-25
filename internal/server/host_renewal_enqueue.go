@@ -312,6 +312,21 @@ func (s *Server) completeHostRenewal(ctx context.Context, tenantID string, paylo
 		if outcome != transport.JobOutcomeExecuted && outcome != transport.JobOutcomeVerified {
 			return nil
 		}
+		// A credential-rotate replacement is marked deployed by its run,
+		// which waits for this report's signed verification.
+		if s.store != nil {
+			identity, err := s.store.GetIdentity(ctx, tenantID, identityID)
+			if err != nil {
+				return err
+			}
+			awaiting, err := rotationAwaitingVerification(ctx, s.store, tenantID, identity.Attributes)
+			if err != nil {
+				return err
+			}
+			if awaiting {
+				return nil
+			}
+		}
 		return s.orch.TransitionAfterCompletedSideEffect(ctx, tenantID, identityID,
 			orchestrator.StateDeployed, "host-generated first issuance deployed", "connector.deploy")
 	case orchestrator.StateRenewing:

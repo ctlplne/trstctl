@@ -324,6 +324,7 @@ func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 		"audit.feed.splunk":               bulkhead.SubsystemOutboxAuditFeeds,
 		"audit.feed.sentinel":             bulkhead.SubsystemOutboxAuditFeeds,
 		"revocation.publish":              bulkhead.SubsystemOutbox,
+		"remediation.rotate.verify":       bulkhead.SubsystemOutbox,
 		"agent.audit.retry":               bulkhead.SubsystemOutbox,
 		"acme.dns01.present":              bulkhead.SubsystemOutbox,
 		"third-party.destination":         bulkhead.SubsystemOutbox,

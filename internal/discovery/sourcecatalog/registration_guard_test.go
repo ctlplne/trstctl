@@ -28,6 +28,7 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 		"internal/orchestrator/weak_key_audit.go:RecordWeakKeyAudit":                  "product-owned inventory weak-key audit",
 		"internal/orchestrator/endpoint_chain_finding.go:RecordEndpointChainMismatch": "product-owned endpoint issuer-chain verification",
 		"internal/orchestrator/exposure_probe.go:QueueExposureProbe":                  "product-owned NHI exposure reachability probe",
+		"internal/orchestrator/remediation_rotate.go:RecordRotationUnverified":        "product-owned credential-rotate replacement verification",
 	}
 	found := make(map[string]bool)
 	for _, tree := range []string{"internal", "cmd", "ee", "deploy", "plugins", "clients"} {
@@ -84,13 +85,14 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 func TestEveryProductSourceNamespaceIsRegistered(t *testing.T) {
 	t.Parallel()
 	want := map[string]string{
-		AgentSourcePrefix:            "authenticated agent inventory",
-		SecretScanSourcePrefix:       "product secret scan",
-		SecretRepositorySourcePrefix: "repository secret scan",
-		ThirdPartySecretSourcePrefix: "third-party secret scan",
-		WeakKeyAuditSourcePrefix:     "inventory weak-key audit",
-		EndpointChainSourcePrefix:    "endpoint issuer-chain verification",
-		ExposureProbeSourcePrefix:    "NHI exposure reachability probe",
+		AgentSourcePrefix:               "authenticated agent inventory",
+		SecretScanSourcePrefix:          "product secret scan",
+		SecretRepositorySourcePrefix:    "repository secret scan",
+		ThirdPartySecretSourcePrefix:    "third-party secret scan",
+		WeakKeyAuditSourcePrefix:        "inventory weak-key audit",
+		EndpointChainSourcePrefix:       "endpoint issuer-chain verification",
+		ExposureProbeSourcePrefix:       "NHI exposure reachability probe",
+		RemediationRotationSourcePrefix: "credential-rotate replacement verification",
 	}
 	seen := make(map[string]bool)
 	for _, namespace := range ReservedNamespaces() {

@@ -103,6 +103,18 @@ func TestServedOperatorActionsPassTheGateWhenAuthorized(t *testing.T) {
 			identity := operatorGateIdentity(t, h, action.name)
 			token := seedScopedToken(t, h.store, h.tenant, append(append([]string(nil), action.scopes...), "certs:issue")...)
 			status, body := action.run(t, h, token, "operator-gate-allowed", identity.ID)
+			if action.name == "credential-rotate" {
+				// Past the gate, a rotation needs a deployment target its
+				// replacement can be verified on; this fixture has none, so
+				// the refusal is the playbook's own, not the gate's, and
+				// nothing changed.
+				after, err := h.store.GetIdentity(t.Context(), h.tenant, identity.ID)
+				if status != http.StatusConflict || !strings.Contains(string(body), "deployment target") ||
+					err != nil || after.Status != string(orchestrator.StateIssued) {
+					t.Fatalf("authorized rotation without a target = HTTP %d body=%s status=%s error=%v", status, body, after.Status, err)
+				}
+				return
+			}
 			if status != http.StatusCreated && status != http.StatusOK {
 				t.Fatalf("authorized %s = HTTP %d body=%s", action.name, status, body)
 			}

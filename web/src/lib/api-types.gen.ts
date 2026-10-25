@@ -7487,6 +7487,7 @@ export interface RemediationPlaybookRunRequest {
   rollback_ref?: string;
   target?: string;
   target_identity_id?: string;
+  verification_timeout_seconds?: number;
 }
 
 export interface RenewalSLO {

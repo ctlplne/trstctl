@@ -3807,11 +3807,14 @@ func componentSchemas() map[string]*Schema {
 	}, "capability", "status", "generated_at", "items")
 	remediationPlaybookRunReq := object(map[string]*Schema{
 		"target_identity_id": uuid(), "inventory_id": str(), "reason": str(),
-		"connector": str(), "target": str(), "replacement_name": str(),
-		"remove_scopes":      {Type: "array", Items: str()},
-		"recommended_scopes": {Type: "array", Items: str()},
-		"rollback_ref":       str(),
-		"revocation_reason":  {Type: "string", Description: "RFC 5280 reason the identity-revoke (default unspecified) and credential-rotate (default superseded) playbooks revoke with; keyCompromise goes through the identity transition"},
+		"connector":                    {Type: "string", Description: "nhi-right-size routing; credential-rotate delivers to the original identity's deployment target instead"},
+		"target":                       {Type: "string", Description: "nhi-right-size routing; credential-rotate delivers to the original identity's deployment target instead"},
+		"replacement_name":             str(),
+		"remove_scopes":                {Type: "array", Items: str()},
+		"recommended_scopes":           {Type: "array", Items: str()},
+		"rollback_ref":                 str(),
+		"revocation_reason":            {Type: "string", Description: "RFC 5280 reason the identity-revoke (default unspecified) and credential-rotate (default superseded) playbooks revoke with; keyCompromise goes through the identity transition"},
+		"verification_timeout_seconds": {Type: "integer", Description: "credential-rotate: how long the run waits for the replacement's signed, verified delivery before it keeps the original valid and raises a finding (300 to 604800, default 3600)"},
 	})
 	remediationPlaybookRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "playbook_id": str(),

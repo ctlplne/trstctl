@@ -8,13 +8,14 @@ import "strings"
 // Tenant-authored generic and CT declarations cannot claim them before the
 // product producer records its deterministic source identity.
 const (
-	AgentSourcePrefix            = "agent:"
-	SecretScanSourcePrefix       = "secretscan:"
-	SecretRepositorySourcePrefix = "secret-repo:"
-	ThirdPartySecretSourcePrefix = "secret-third-party:"
-	WeakKeyAuditSourcePrefix     = "weak-key-audit:"
-	EndpointChainSourcePrefix    = "endpoint-chain:"
-	ExposureProbeSourcePrefix    = "exposure-probe:"
+	AgentSourcePrefix               = "agent:"
+	SecretScanSourcePrefix          = "secretscan:"
+	SecretRepositorySourcePrefix    = "secret-repo:"
+	ThirdPartySecretSourcePrefix    = "secret-third-party:"
+	WeakKeyAuditSourcePrefix        = "weak-key-audit:"
+	EndpointChainSourcePrefix       = "endpoint-chain:"
+	ExposureProbeSourcePrefix       = "exposure-probe:"
+	RemediationRotationSourcePrefix = "remediation-rotation:"
 )
 
 type ReservedNamespace struct {
@@ -30,6 +31,7 @@ var reservedNamespaces = [...]ReservedNamespace{
 	{WeakKeyAuditSourcePrefix, "inventory weak-key audit"},
 	{EndpointChainSourcePrefix, "endpoint issuer-chain verification"},
 	{ExposureProbeSourcePrefix, "NHI exposure reachability probe"},
+	{RemediationRotationSourcePrefix, "credential-rotate replacement verification"},
 }
 
 // ReservedNamespaces returns a copy for the registration guard and docs.

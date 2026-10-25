@@ -1112,6 +1112,37 @@ func (s *Store) SummarizeFleetVerification(ctx context.Context, tenantID string,
 	return out, err
 }
 
+// LatestSignedDeliveryVerification returns the newest signature-verified
+// endpoint verification of one identity's delivery: a verified or
+// verify_failed receipt recorded from an agent or relay report whose signed
+// job receipt checked out, the same evidence SummarizeFleetVerification
+// counts. A delivery that was only executed, or that a control-plane
+// connector reported, has no such receipt.
+func (s *Store) LatestSignedDeliveryVerification(ctx context.Context, tenantID, identityID string) (ConnectorDeliveryReceipt, bool, error) {
+	var receipt ConnectorDeliveryReceipt
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return scanConnectorDeliveryReceipt(tx.QueryRow(ctx, `
+			SELECT c.id::text, c.tenant_id::text, c.outbox_id, c.identity_id::text, c.destination,
+			       c.connector, c.target, c.fingerprint, c.status, c.attempts, c.reason, c.detail,
+			       c.rollback_ref, c.idempotency_key, c.created_at, c.updated_at, c.adopted_predecessor_fingerprint
+			  FROM connector_delivery_receipts c
+			  JOIN outbox o
+			    ON o.tenant_id = c.tenant_id
+			   AND c.idempotency_key = o.idempotency_key || ':verified'
+			  JOIN agent_job_receipts a
+			    ON a.tenant_id = o.tenant_id AND a.job_id = o.id
+			   AND a.state = 'verified'
+			 WHERE c.tenant_id = $1 AND c.identity_id = $2
+			   AND c.status IN ('verified', 'verify_failed')
+			 ORDER BY c.updated_at DESC, c.id DESC
+			 LIMIT 1`, tenantID, identityID), &receipt)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ConnectorDeliveryReceipt{}, false, nil
+	}
+	return receipt, err == nil, err
+}
+
 // RenewalSLO is the renewal success rate and its error budget (epic D6).
 //
 // An SLO is only useful if it is measured over a window an operator chose and

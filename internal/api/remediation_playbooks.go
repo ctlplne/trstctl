@@ -60,7 +60,18 @@ type remediationPlaybookRunRequest struct {
 	// RevocationReason is the RFC 5280 reason the revoke and rotate playbooks
 	// revoke with; Reason stays the operator's free text on the run.
 	RevocationReason string `json:"revocation_reason,omitempty"`
+	// VerificationTimeoutSeconds bounds how long a credential rotation waits
+	// for its replacement's signed, verified delivery before it keeps the
+	// original and records a finding.
+	VerificationTimeoutSeconds int `json:"verification_timeout_seconds,omitempty"`
 }
+
+// Credential-rotate verification deadline bounds.
+const (
+	rotateVerificationDefault = time.Hour
+	rotateVerificationMin     = 5 * time.Minute
+	rotateVerificationMax     = 7 * 24 * time.Hour
+)
 
 type remediationPlaybookRunResponse struct {
 	ID                  string                     `json:"id"`
@@ -106,12 +117,14 @@ func remediationPlaybookCatalog() remediationPlaybookCatalogResponse {
 			{
 				ID: remediationPlaybookRotateIdentity, Name: "Rotate credential",
 				Action: "rotate", Status: "served", Capability: "CAP-REM-01",
-				Summary:        "Issues and deploys a replacement before revoking the compromised identity.",
-				ExternalEffect: "ca.issue, connector.deploy, revocation.publish outbox",
+				Summary: "Issues a replacement for the identity's deployment target and revokes the original only after " +
+					"the replacement's delivery is signed and verified; if that does not happen in time, the original " +
+					"stays valid and a finding is raised.",
+				ExternalEffect: "ca.issue, connector.deploy, " + orchestrator.DestinationRotateVerification + ", revocation.publish outbox",
 				RequiredInputs: []string{"target_identity_id"},
 				EvidenceSources: []string{
 					"replacement identity lifecycle transitions",
-					"connector delivery receipt",
+					"signed delivery verification receipt",
 					"remediation.playbook_run.recorded event",
 				},
 			},
@@ -406,6 +419,11 @@ func playbookRevocationReason(requested string, fallback crypto.RevocationReason
 	return reason, nil
 }
 
+// runRotatePlaybook issues a replacement and returns a running run (owner
+// decision, batch 14). It neither marks the replacement deployed nor revokes
+// the original: the run's verification command does both once the
+// replacement's delivery is signed and verified, and keeps the original valid
+// with a finding when that does not happen in time.
 func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal authz.Principal, req remediationPlaybookRunRequest, idempotencyKey string) (store.RemediationPlaybookRun, error) {
 	identityID := strings.TrimSpace(req.TargetIdentityID)
 	if identityID == "" {
@@ -422,6 +440,10 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 	if err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
+	timeout, err := rotateVerificationTimeout(req.VerificationTimeoutSeconds)
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
 	// Both privileged steps are decided before anything changes. The
 	// replacement inherits the compromised identity's kind, owner, issuer,
 	// attributes and profile, so its issuance is decided on that identity, and
@@ -431,53 +453,104 @@ func (a *API) runRotatePlaybook(ctx context.Context, tenantID string, principal 
 			return store.RemediationPlaybookRun{}, err
 		}
 	}
-	reason := remediationReason(req.Reason, "rotate playbook")
-	replacementName := strings.TrimSpace(req.ReplacementName)
-	if replacementName == "" {
-		replacementName = compromised.Name + "-replacement"
+	// The original is revoked only after the replacement's delivery is signed
+	// and verified, which this build proves for an X.509 certificate on its
+	// deployment target. Anything else could never complete.
+	connectorName, target := rotateDeploymentBinding(compromised.Attributes)
+	if (compromised.Kind != store.KindX509Certificate && compromised.Kind != "x509") || connectorName == "" {
+		return store.RemediationPlaybookRun{}, errStatus(http.StatusConflict,
+			"rotate playbook revokes the original only after the replacement's delivery is signed and verified, which needs an "+
+				"X.509 identity bound to a deployment target; bind this identity to a target, or revoke it with the identity-revoke playbook")
 	}
+	reason := remediationReason(req.Reason, "rotate playbook")
+	// A replacement keeps the original's DNS name: its certificate is issued
+	// for that name and verified on the same endpoint.
+	replacementName := compromised.Name
+	if requested := strings.TrimSpace(req.ReplacementName); requested != "" && requested != compromised.Name {
+		return store.RemediationPlaybookRun{}, errStatus(http.StatusBadRequest,
+			"replacement_name must be the original's name: the replacement certificate is issued for that DNS name and verified on the same endpoint")
+	}
+	runID := guuid.NewString()
 	replacement, err := a.orch.CreateIdentity(ctx, tenantID, store.Identity{
 		Kind: compromised.Kind, Name: replacementName, OwnerID: compromised.OwnerID,
-		IssuerID: compromised.IssuerID, Attributes: incidentReplacementAttributes(compromised.ID, compromised.Attributes),
+		IssuerID: compromised.IssuerID, Attributes: rotateReplacementAttributes(compromised.ID, runID, compromised.Attributes),
 	})
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	verifyBy := time.Now().UTC().Add(timeout).Truncate(time.Second)
+	scopeDelta, err := json.Marshal(map[string]any{
+		"replaced_identity_id":    compromised.ID,
+		"replacement_identity_id": replacement.ID,
+		"revocation_reason":       revocationReason,
+		"verify_by":               verifyBy,
+	})
+	if err != nil {
+		return store.RemediationPlaybookRun{}, err
+	}
+	run := store.RemediationPlaybookRun{
+		ID: runID, PlaybookID: remediationPlaybookRotateIdentity, TargetIdentityID: compromised.ID,
+		InventoryID: "identity/" + compromised.ID, Status: orchestrator.RotateRunRunning,
+		Phase: orchestrator.RotatePhaseAwaitingVerification, Action: "rotate", Reason: reason,
+		Connector: connectorName, Target: target, ScopeDelta: scopeDelta,
+		EvidenceRefs: []string{"identity:" + compromised.ID, "replacement:" + replacement.ID,
+			"revocation_reason:" + revocationReason, "verify_by:" + verifyBy.Format(time.RFC3339)},
+		RollbackRefs:   incidentRollbackRefs(compromised.ID, replacement.ID, req.RollbackRef),
+		IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
+	}
+	// The run exists before its replacement can be issued, so issuance and a
+	// host result already see that the run owns the deployed edge.
+	recorded, err := a.orch.RecordRotatePlaybookRun(ctx, tenantID, run)
 	if err != nil {
 		return store.RemediationPlaybookRun{}, err
 	}
 	if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateIssued, "remediation playbook replacement issued: "+reason); err != nil {
+		run.Status, run.Phase = orchestrator.RotateRunFailed, orchestrator.RotatePhaseIssuanceRefused
+		run.TerminalReason = "the replacement's issuance was refused; the original stays valid"
+		if _, recordErr := a.orch.RecordRotatePlaybookRun(ctx, tenantID, run); recordErr != nil {
+			return store.RemediationPlaybookRun{}, errors.Join(err, recordErr)
+		}
 		return store.RemediationPlaybookRun{}, err
 	}
-	if err := a.orch.Transition(ctx, tenantID, replacement.ID, orchestrator.StateDeployed, "remediation playbook replacement deployed: "+reason); err != nil {
-		return store.RemediationPlaybookRun{}, err
+	return recorded, nil
+}
+
+func rotateVerificationTimeout(seconds int) (time.Duration, error) {
+	if seconds == 0 {
+		return rotateVerificationDefault, nil
 	}
-	if err := a.orch.Transition(ctx, tenantID, compromised.ID, orchestrator.StateRevoked, revocationReason); err != nil {
-		return store.RemediationPlaybookRun{}, err
+	timeout := time.Duration(seconds) * time.Second
+	if seconds < 0 || timeout < rotateVerificationMin || timeout > rotateVerificationMax {
+		return 0, errStatus(http.StatusBadRequest, "verification_timeout_seconds must be between 300 and 604800")
 	}
-	deliveryReq := incidentExecutionRequest{
-		Connector: strings.TrimSpace(req.Connector), Target: strings.TrimSpace(req.Target),
-		DeliveryRollback: strings.TrimSpace(req.RollbackRef),
+	return timeout, nil
+}
+
+// rotateDeploymentBinding names the connector and target the replacement
+// inherits, read the way issuance routes a deployment.
+func rotateDeploymentBinding(attributes json.RawMessage) (string, string) {
+	var attrs map[string]any
+	if len(attributes) == 0 || json.Unmarshal(attributes, &attrs) != nil {
+		return "", ""
 	}
-	delivery, err := a.recordIncidentDelivery(ctx, tenantID, replacement.ID, deliveryReq, reason, idempotencyKey)
-	if err != nil {
-		return store.RemediationPlaybookRun{}, err
+	first := func(keys ...string) string {
+		for _, key := range keys {
+			if value, ok := attrs[key].(string); ok && strings.TrimSpace(value) != "" {
+				return strings.TrimSpace(value)
+			}
+		}
+		return ""
 	}
-	deliveryID := delivery.ID
-	scopeDelta, err := json.Marshal(map[string]any{
-		"replaced_identity_id":    compromised.ID,
-		"replacement_identity_id": replacement.ID,
-	})
-	if err != nil {
-		return store.RemediationPlaybookRun{}, err
-	}
-	return a.orch.RecordRemediationPlaybookRun(ctx, tenantID, store.RemediationPlaybookRun{
-		ID: guuid.NewString(), PlaybookID: remediationPlaybookRotateIdentity, TargetIdentityID: compromised.ID,
-		InventoryID: "identity/" + compromised.ID, Status: "executed", Phase: "replacement_deployed_and_original_revoked",
-		Action: "rotate", Reason: reason, Connector: delivery.Connector, Target: delivery.Target,
-		ConnectorDeliveryID: &deliveryID, ScopeDelta: scopeDelta,
-		EvidenceRefs: []string{"identity:" + compromised.ID, "replacement:" + replacement.ID, "connector_delivery:" + delivery.ID,
-			"revocation_reason:" + revocationReason},
-		RollbackRefs:   incidentRollbackRefs(compromised.ID, replacement.ID, delivery.RollbackRef),
-		IdempotencyKey: idempotencyKey, CreatedBy: principal.Subject,
-	}, "")
+	return first("connector", "deployment_connector", "connector_name"),
+		first("deployment_route", "target", "deployment_target", "deployment_target_id", "deployment_location")
+}
+
+func rotateReplacementAttributes(replaces, runID string, existing json.RawMessage) json.RawMessage {
+	attrs := map[string]any{}
+	_ = json.Unmarshal(incidentReplacementAttributes(replaces, existing), &attrs)
+	attrs[orchestrator.RotateReplacementRunAttribute] = runID
+	body, _ := json.Marshal(attrs)
+	return body
 }
 
 func (a *API) prepareRightSizePlaybook(ctx context.Context, tenantID string, principal authz.Principal, req remediationPlaybookRunRequest, idempotencyKey string) (store.RemediationPlaybookRun, error) {

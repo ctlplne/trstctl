@@ -223,6 +223,8 @@ type issuanceDispatcher struct {
 	// the receiver and durable delivery receipt commit but before the idempotency
 	// result is completed.
 	afterDeploySideEffects func(context.Context) error
+	// rotateNow is the credential-rotate deadline clock; nil reads time.Now.
+	rotateNow func() time.Time
 }
 
 // Deliver implements orchestrator.Handler. It mints on a ca.issue trigger,
@@ -293,6 +295,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleDeploy(ctx, m)
 	case orchestrator.DestinationFleetReissuanceBatch:
 		return d.handleFleetReissuanceBatch(ctx, m)
+	case orchestrator.DestinationRotateVerification:
+		return d.handleRotateVerification(ctx, m)
 	case orchestrator.DestinationIncidentMigrationRevoke:
 		return d.handleIncidentMigrationRevoke(ctx, m)
 	case orchestrator.DestinationMigrationApplianceIssue:
@@ -1209,6 +1213,17 @@ func (d *issuanceDispatcher) deployCredential(ctx context.Context, tenantID stri
 	defer secret.Wipe(payload)
 	switch state {
 	case orchestrator.StateIssued, orchestrator.StateRenewing:
+		if state == orchestrator.StateIssued {
+			// A credential-rotate replacement is delivered now but marked
+			// deployed only by its run, after a signed verification.
+			awaiting, err := rotationAwaitingVerification(ctx, d.store, tenantID, ident.Attributes)
+			if err != nil {
+				return err
+			}
+			if awaiting {
+				return d.enqueueCredentialDeploy(ctx, tenantID, ident.ID, fingerprint, payload)
+			}
+		}
 		return d.orch.TransitionWithSideEffectPayloadTransform(ctx, tenantID, ident.ID, orchestrator.StateDeployed, reason, payload, d.sealConnectorDeploySideEffect)
 	case orchestrator.StateDeployed:
 		return d.enqueueCredentialDeploy(ctx, tenantID, ident.ID, fingerprint, payload)
