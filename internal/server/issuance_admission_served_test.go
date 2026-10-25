@@ -132,3 +132,70 @@ func TestServedIdentityIssuanceIsRefusedUpFrontWhenTheProfileForbidsTheAPI(t *te
 		}
 	}
 }
+
+// The lab replay found the same refusal answering 422 for an identity of kind
+// x509_certificate, the kind the CLI and console send: an older API-level
+// profile check ran before the admission check and returned its own error, so
+// the preview never reported profile_refused (the console showed "could not
+// preview" instead of the refusal and its policy link) and the transition
+// carried no profile_refused code. The historical "x509" spelling skipped that
+// API-level check entirely. Both spellings now get the same answer: a preview
+// that is not ready and names the refusal, and 409 profile_refused, with
+// nothing recorded.
+func TestServedIdentityIssuanceUnderADefaultProfileThatForbidsTheAPIIsAProfileRefusalForBothKindSpellings(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) { d.DefaultProfile = "acme-only" })
+	ctx := t.Context()
+	storeServerTestProfile(t, h.store, h.tenant, "acme-only", profile.CertificateProfile{
+		Name: "acme-only", MaxValidity: profile.Duration(2160 * time.Hour), AllowedProtocols: []string{"acme"},
+	})
+	tok := seedScopedTokenSubject(t, h.store, h.tenant, "alice@customer.test", "owners:read", "owners:write",
+		"identities:read", "identities:write", "certs:read", "certs:issue")
+	owner, err := h.store.CreateOwner(ctx, store.Owner{TenantID: h.tenant, Kind: store.OwnerWorkload, Name: "default-profile-admission"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for kind, name := range map[string]string{"x509_certificate": "issue-certificate.example.test", "x509": "issue-x509.example.test"} {
+		status, body := secretsReq(t, h, http.MethodPost, "/api/v1/identities", tok, map[string]any{"owner_id": owner.ID, "kind": kind, "name": name})
+		var ident struct {
+			ID string `json:"id"`
+		}
+		if status != http.StatusCreated || json.Unmarshal(body, &ident) != nil {
+			t.Fatalf("create %s identity = %d: %s", kind, status, body)
+		}
+		key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(key.Destroy)
+		csr := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: badSubjectCSR(t, key,
+			crypto.CertificateRequestTemplate{CommonName: name, DNSNames: []string{name}})}))
+
+		status, body = secretsReq(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions/preview", tok,
+			map[string]any{"to": "issued", "reason": "requester key", "subject_csr_pem": csr})
+		var preview struct {
+			Ready          bool   `json:"ready"`
+			ProfileRefused bool   `json:"profile_refused"`
+			ProfileRefusal string `json:"profile_refusal"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &preview) != nil || preview.Ready || !preview.ProfileRefused ||
+			!strings.Contains(preview.ProfileRefusal, `"acme-only"`) || !strings.Contains(preview.ProfileRefusal, `"api"`) {
+			t.Fatalf("%s preview under an ACME-only default profile = %d %s, want a plan that is not ready naming the profile and the protocol", kind, status, body)
+		}
+		before, err := h.log.LastSequence(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/identities/"+ident.ID+"/transitions", tok, "issue-"+kind,
+			map[string]any{"to": "issued", "reason": "requester key", "subject_csr_pem": csr})
+		if status != http.StatusConflict || !strings.Contains(string(body), "profile_refused") ||
+			!strings.Contains(string(body), "acme-only") || !strings.Contains(string(body), `\"api\"`) {
+			t.Fatalf("%s issue under an ACME-only default profile = %d %s, want 409 profile_refused naming the profile and protocol", kind, status, body)
+		}
+		if after, err := h.log.LastSequence(ctx); err != nil || after != before {
+			t.Fatalf("%s: the refused issue recorded events: %d -> %d (%v)", kind, before, after, err)
+		}
+		if got, err := h.store.GetIdentity(ctx, h.tenant, ident.ID); err != nil || got.Status != "requested" {
+			t.Fatalf("%s: the refused issue moved the identity: %s %v", kind, got.Status, err)
+		}
+	}
+}

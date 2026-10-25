@@ -277,18 +277,10 @@ func TestIdentityLifecycleRefusesIncompatibleDefaultProfileBeforeAppend(t *testi
 	}
 	path := "/api/v1/identities/" + id + "/transitions"
 	request := map[string]any{"to": "issued", "reason": "review ACME-only profile"}
-	for _, suffix := range []string{"/preview", ""} {
-		code, body := secretsReqKey(t, h, http.MethodPost, path+suffix, token, "acme-only-"+suffix, request)
-		var problem struct {
-			Detail string `json:"detail"`
-		}
-		if err := json.Unmarshal(body, &problem); err != nil {
-			t.Fatal(err)
-		}
-		if code != http.StatusUnprocessableEntity || !strings.Contains(problem.Detail, `profile "acme-only-default" v1 does not permit enrollment protocol "api"`) {
-			t.Fatalf("%s accepted incompatible default profile: %d %s", suffix, code, body)
-		}
-	}
+	// The preview reports the refusal in its plan and execution answers 409
+	// profile_refused (docs/guides/profile-authoring.md), both naming the
+	// profile and what it forbids.
+	expectProfileRefusal(t, h, token, path, "acme-only", request, `profile "acme-only-default" v1 does not permit enrollment protocol "api"`)
 	after, err := h.log.LastSequence(t.Context())
 	if err != nil || after != before {
 		t.Fatalf("profile refusal appended an event: %d -> %d, %v", before, after, err)
@@ -324,18 +316,7 @@ func TestIdentityLifecycleRefusesIncompatibleDefaultProfileBeforeAppend(t *testi
 	}
 	path = "/api/v1/identities/" + nameID + "/transitions"
 	request = map[string]any{"to": "issued", "reason": "review DNS constraint"}
-	for _, suffix := range []string{"/preview", ""} {
-		code, body := secretsReqKey(t, h, http.MethodPost, path+suffix, token, "name-constraint-"+suffix, request)
-		var problem struct {
-			Detail string `json:"detail"`
-		}
-		if err := json.Unmarshal(body, &problem); err != nil {
-			t.Fatal(err)
-		}
-		if code != http.StatusUnprocessableEntity || !strings.Contains(problem.Detail, `profile "api-other-name" v1 does not permit DNS SAN "outside.example.test"`) {
-			t.Fatalf("%s accepted disallowed identity name: %d %s", suffix, code, body)
-		}
-	}
+	expectProfileRefusal(t, h, token, path, "name-constraint", request, `profile "api-other-name" v1 does not permit DNS SAN "outside.example.test"`)
 	after, err = h.log.LastSequence(t.Context())
 	if err != nil || after != before {
 		t.Fatalf("DNS constraint refusal appended an event: %d -> %d, %v", before, after, err)
@@ -343,5 +324,30 @@ func TestIdentityLifecycleRefusesIncompatibleDefaultProfileBeforeAppend(t *testi
 	code, body = secretsReq(t, h, http.MethodGet, "/api/v1/identities/"+nameID, token, nil)
 	if code != http.StatusOK || !strings.Contains(string(body), `"status":"requested"`) {
 		t.Fatalf("DNS constraint refusal changed identity: %d %s", code, body)
+	}
+}
+
+// expectProfileRefusal checks both lifecycle entry points for a transition the
+// certificate profile refuses before anything is recorded: the preview returns
+// a plan that is not ready and carries the refusal, and execution answers 409
+// with code profile_refused. Both name the profile and what it forbids.
+func expectProfileRefusal(t *testing.T, h *servedHarness, token, path, key string, request map[string]any, want string) {
+	t.Helper()
+	code, body := secretsReqKey(t, h, http.MethodPost, path+"/preview", token, key+"-preview", request)
+	var plan struct {
+		Ready          bool   `json:"ready"`
+		ProfileRefused bool   `json:"profile_refused"`
+		ProfileRefusal string `json:"profile_refusal"`
+	}
+	if code != http.StatusOK || json.Unmarshal(body, &plan) != nil || plan.Ready || !plan.ProfileRefused || !strings.Contains(plan.ProfileRefusal, want) {
+		t.Fatalf("preview = %d %s, want a plan that is not ready reporting %s", code, body, want)
+	}
+	code, body = secretsReqKey(t, h, http.MethodPost, path, token, key, request)
+	var problem struct {
+		Detail string `json:"detail"`
+		Code   string `json:"code"`
+	}
+	if code != http.StatusConflict || json.Unmarshal(body, &problem) != nil || problem.Code != "profile_refused" || !strings.Contains(problem.Detail, want) {
+		t.Fatalf("transition = %d %s, want 409 profile_refused reporting %s", code, body, want)
 	}
 }

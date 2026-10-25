@@ -105,13 +105,19 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		a.writeError(w, &orchestrator.TransitionError{IdentityID: id, From: orchestrator.State(identity.Status), To: to})
 		return
 	}
-	if to == orchestrator.StateIssued && identity.Kind == store.KindX509Certificate {
+	var profileRefusal error
+	if to == orchestrator.StateIssued && (identity.Kind == store.KindX509Certificate || identity.Kind == "x509") {
 		requirement, err := a.orch.ProfileApprovalRequirement(r.Context(), tenantID, id)
 		if err == nil && requirement.ProfileName == "" && a.gate.Profile != "" {
 			requirement, err = a.orch.ProfileApprovalRequirementByName(r.Context(), tenantID, a.gate.Profile)
 		}
 		if err == nil {
 			err = a.validateIdentityProfileLifetime(r.Context(), tenantID, identity, requirement, req.SubjectCSRPEM)
+		}
+		if errors.Is(err, orchestrator.ErrIssuanceProfileRefused) {
+			// The plan below reports it: execution refuses this issuance
+			// before recording anything.
+			profileRefusal, err = err, nil
 		}
 		if err != nil {
 			a.writeError(w, err)
@@ -217,15 +223,19 @@ func (a *API) previewIdentityTransition(w http.ResponseWriter, r *http.Request) 
 		if authorityWarning != "" {
 			plan.Warnings = append(plan.Warnings, authorityWarning)
 		}
-		if err := a.orch.IssuanceAdmissionRefusal(r.Context(), tenantID, identity, nil); errors.Is(err, orchestrator.ErrIssuanceProfileRefused) {
+		admission := profileRefusal
+		if admission == nil {
+			admission = a.orch.IssuanceAdmissionRefusal(r.Context(), tenantID, identity, nil)
+		}
+		if errors.Is(admission, orchestrator.ErrIssuanceProfileRefused) {
 			// The profile the mint would apply refuses it; execution would
 			// refuse this issuance before recording anything.
 			plan.Ready = false
 			plan.ProfileRefused = true
-			plan.ProfileRefusal = err.Error()
-			plan.Warnings = append(plan.Warnings, err.Error())
-		} else if err != nil {
-			a.writeError(w, err)
+			plan.ProfileRefusal = admission.Error()
+			plan.Warnings = append(plan.Warnings, admission.Error())
+		} else if admission != nil {
+			a.writeError(w, admission)
 			return
 		}
 		if csrPEM == "" {

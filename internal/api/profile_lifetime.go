@@ -37,7 +37,7 @@ func validateProfileSigningLifetime(name string, maximum time.Duration, issuerSo
 // worker still validates the final CSR, but an ACME-only or name-constrained
 // profile must not leave an identity claiming to be issued with no certificate.
 func (a *API) validateIdentityProfileLifetime(ctx context.Context, tenantID string, identity store.Identity, requirement orchestrator.ProfileApprovalRequirement, transitionCSR string) error {
-	if identity.Kind != store.KindX509Certificate || requirement.ProfileName == "" {
+	if (identity.Kind != store.KindX509Certificate && identity.Kind != "x509") || requirement.ProfileName == "" {
 		return nil
 	}
 	var attrs map[string]json.RawMessage
@@ -95,7 +95,9 @@ func (a *API) validateIdentityProfileLifetime(ctx context.Context, tenantID stri
 		request.DNSNames = []string{identity.Name}
 	}
 	if err := policy.ValidateRequestMetadata(request); err != nil {
-		return errStatus(http.StatusUnprocessableEntity, err.Error()+"; no identity transition or CA issuance was queued")
+		// The same key-free refusal the admission check makes, so the preview
+		// reports it in its plan and execution answers 409 profile_refused.
+		return orchestrator.IssuanceProfileRefused(fmt.Errorf("%w; no identity transition or CA issuance was queued", err))
 	}
 	return nil
 }

@@ -214,12 +214,13 @@ validity longer than 2160h, a protocol other than `api`/`acme`, or a SAN outside
 `example.com`. A compliant request is signed normally.
 
 The checks that need no key run when the request is made. An identity issuance through
-the API whose profile does not permit the `api` protocol, or whose validity it caps
-below what the issuance asks, is refused at the transition with `409` and code
-`profile_refused`, naming the profile, its version and the refusal, before anything is
-recorded; the transition preview says the same (`profile_refused`, `profile_refusal`).
-The transition pins the profile revision it admitted, so a later profile edit cannot
-strand queued work. The checks that need the key (algorithm, strength, EKUs, names) run
-when the certificate is minted; a refusal there happens before any signature, retries on
-the job's own budget, and never opens the tenant's outbox circuit, so other issuance is
-not delayed.
+the API whose profile does not permit the `api` protocol, whose validity it caps below
+what the issuance asks, or whose names it does not permit (the names in the requester's
+CSR, or the identity's own name when there is none) is refused at the transition with
+`409` and code `profile_refused`, naming the profile, its version and the refusal, before
+anything is recorded; the transition preview returns a plan that is not ready and says
+the same (`profile_refused`, `profile_refusal`). The transition pins the profile revision
+it admitted, so a later profile edit cannot strand queued work. The checks that need the
+key (algorithm, strength, EKUs) run when the certificate is minted; a refusal there
+happens before any signature, retries on the job's own budget, and never opens the
+tenant's outbox circuit, so other issuance is not delayed.
