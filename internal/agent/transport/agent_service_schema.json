@@ -94,6 +94,11 @@
           "go_type": "string",
           "name": "key_generated_by",
           "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "key_origin_derivation",
+          "presence": "optional"
         }
       ]
     },
