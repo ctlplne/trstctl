@@ -5,6 +5,7 @@ package relay
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -28,6 +29,13 @@ import (
 var (
 	errLDAPCRLEntryMissing = errors.New("the directory has no entry at that distribution point")
 	errLDAPCRLMissing      = errors.New("the entry carries no certificateRevocationList")
+	// B13-R3: why the relay could not read the bound directory, each its own
+	// detail code, so a TLS or certificate problem is not reported as a wrong
+	// password and a missing credential is not reported as a refused bind.
+	errLDAPConnect    = errors.New("could not connect to the directory")
+	errLDAPTLS        = errors.New("the directory's TLS handshake failed, so the relay did not bind")
+	errLDAPBind       = errors.New("the directory refused the bind")
+	errLDAPCredential = errors.New("the directory bind credential was not redeemed for this attempt")
 )
 
 // crlDirectory reads one entry's CRL from a bound directory.
@@ -49,22 +57,52 @@ func dialCRLDirectory(binding revocationhealth.LDAPBinding, password []byte) (cr
 		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout}),
 		ldap.DialWithTLSConfig(tlsConfig))
 	if err != nil {
-		return nil, errors.New("could not connect to the directory: " + summarizeTransportError(err))
+		if reason := tlsFailureReason(err); reason != "" {
+			// ldaps:// handshakes inside the dial.
+			return nil, fmt.Errorf("%w (%s)", errLDAPTLS, reason)
+		}
+		return nil, fmt.Errorf("%w: %s", errLDAPConnect, summarizeTransportError(err))
 	}
 	if strings.HasPrefix(strings.ToLower(binding.URL), "ldap://") {
 		// The CRL is public; the bind credential is not. A plain connection
 		// is upgraded or the bind does not happen.
 		if err := conn.StartTLS(tlsConfig); err != nil {
 			_ = conn.Close()
-			return nil, errors.New("the directory would not start TLS, so the relay did not bind")
+			reason := tlsFailureReason(err)
+			if reason == "" {
+				reason = "the directory did not complete StartTLS"
+			}
+			return nil, fmt.Errorf("%w (%s)", errLDAPTLS, reason)
 		}
 	}
 	if err := conn.Bind(binding.BindDN, string(password)); err != nil {
 		_ = conn.Close()
-		return nil, errors.New("the directory refused the bind")
+		return nil, errLDAPBind
 	}
 	conn.SetTimeout(revocationFetchTimeout)
 	return &ldapCRLDirectory{conn: conn}, nil
+}
+
+// tlsFailureReason extracts the TLS stack's own reason ("tls: ..." or
+// "x509: ...") from a directory dial or StartTLS error, bounded, or "" when the
+// failure was not a TLS one. A certificate Go refuses to parse, such as one
+// with a negative serial number, is named here instead of as a refused bind.
+func tlsFailureReason(err error) string {
+	text := err.Error()
+	start := -1
+	for _, marker := range []string{"x509: ", "tls: "} {
+		if i := strings.Index(text, marker); i >= 0 && (start < 0 || i < start) {
+			start = i
+		}
+	}
+	if start < 0 {
+		return ""
+	}
+	reason := strings.TrimRight(text[start:], ")")
+	if len(reason) > 200 {
+		reason = reason[:200]
+	}
+	return reason
 }
 
 func (d *ldapCRLDirectory) ReadCRL(ctx context.Context, dn string) ([]byte, error) {
@@ -131,7 +169,16 @@ func probeLDAPCRL(ctx context.Context, binding *revocationhealth.LDAPBinding, di
 	}
 	if directory == nil {
 		finding.Status = RevocationUnreachable
-		finding.DetailCode = "ldap_bind_failed"
+		switch {
+		case errors.Is(directoryErr, errLDAPCredential):
+			finding.DetailCode = "ldap_credential_unavailable"
+		case errors.Is(directoryErr, errLDAPConnect):
+			finding.DetailCode = "ldap_connect_failed"
+		case errors.Is(directoryErr, errLDAPTLS):
+			finding.DetailCode = "ldap_tls_failed"
+		default:
+			finding.DetailCode = "ldap_bind_failed"
+		}
 		finding.Detail = "the relay could not read the directory"
 		if directoryErr != nil {
 			finding.Detail += ": " + directoryErr.Error()

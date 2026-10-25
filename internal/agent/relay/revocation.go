@@ -112,7 +112,7 @@ func ProbeRevocationWithDirectory(ctx context.Context, client *http.Client, inte
 	dir := probeDirectory{binding: intent.LDAPBinding}
 	if intent.LDAPBinding != nil {
 		if password := material[strings.TrimSpace(intent.LDAPBinding.PasswordRef)]; len(password) == 0 {
-			dir.err = errors.New("the directory bind credential was not redeemed for this attempt")
+			dir.err = errLDAPCredential
 		} else if dir.directory, dir.err = openCRLDirectory(*intent.LDAPBinding, password); dir.directory != nil {
 			defer func() { _ = dir.directory.Close() }()
 		}

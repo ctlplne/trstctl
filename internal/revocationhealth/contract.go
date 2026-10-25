@@ -354,7 +354,9 @@ func knownDetailCode(code string) bool {
 		"next_update_near", "fresh",
 		// A107: LDAP distribution points read through an AD CS binding.
 		"ldap_binding_missing", "ldap_host_not_bound", "ldap_dn_outside_binding", "ldap_bind_failed",
-		"ldap_entry_missing", "ldap_crl_missing", "ldap_search_failed":
+		"ldap_entry_missing", "ldap_crl_missing", "ldap_search_failed",
+		// B13-R3: the directory read failed before the bind, or had no credential.
+		"ldap_connect_failed", "ldap_tls_failed", "ldap_credential_unavailable":
 		return true
 	default:
 		return false

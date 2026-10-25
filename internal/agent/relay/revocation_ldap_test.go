@@ -114,7 +114,7 @@ func TestLDAPCRLDistributionPointsAreReadThroughTheADCSBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f := report.Findings[0]; f.DetailCode != "ldap_bind_failed" || !strings.Contains(f.Detail, "not redeemed") || opened.URL != "" {
+	if f := report.Findings[0]; f.DetailCode != "ldap_credential_unavailable" || !strings.Contains(f.Detail, "not redeemed") || opened.URL != "" {
 		t.Fatalf("probe without the bind credential = %+v (dialed %q)", f, opened.URL)
 	}
 	// A refused bind is reported, not mistaken for a stale CRL.

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1709 annotated sites across 26 rules. Each row is
+1710 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (370 sites)
+### G101 — CWE-798 Use of hardcoded credentials (371 sites)
 
 | Location | Reason |
 |---|---|
@@ -115,6 +115,7 @@ not this file.
 | `internal/agent/relay/relay_test.go:189` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:344` | reference NAME, not a credential (CWE-798) |
 | `internal/agent/relay/relay_test.go:402` | reference NAME (CWE-798) |
+| `internal/agent/relay/revocation_ldap_failure_test.go:59` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/revocation_ldap_test.go:77` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/revocation_ldap_test.go:146` | a non-secret secret:// reference fixture, not secret material (CWE-798). |
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
