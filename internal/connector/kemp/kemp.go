@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -93,6 +94,48 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 		return fmt.Errorf("kemp: re-bind virtual service %q to predecessor: %w", rb.Target, err)
 	}
 	return nil
+}
+
+// Readback asks the LoadMaster which certificate the virtual service is bound
+// to (epic E2). The certificate object's name carries the fingerprint prefix
+// the deploy installed it under, so the name is the comparison key. A virtual
+// service that does not exist reports nothing installed, and one with no
+// certificate reports the service without a binding.
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, target string) (connector.Installed, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		c.baseURL+"/access/virtual-services/"+url.PathEscape(target)+"/certificate", nil)
+	if err != nil {
+		return connector.Installed{}, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", c.token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("kemp: read back virtual service %q: %w", target, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return connector.Installed{}, nil
+	}
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return connector.Installed{}, fmt.Errorf("kemp: read back virtual service %q: status %d (response body redacted)", target, resp.StatusCode)
+	}
+	var body struct {
+		CertName string `json:"cert_name"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&body); err != nil {
+		return connector.Installed{}, fmt.Errorf("kemp: decode virtual service %q: %w", target, err)
+	}
+	if body.CertName == "" {
+		return connector.Installed{ObjectName: target}, nil
+	}
+	return connector.Installed{
+		Fingerprint: connector.FingerprintFromObjectName(body.CertName),
+		ObjectName:  body.CertName,
+		Bound:       true,
+	}, nil
 }
 
 // bind points a virtual service at a named certificate. Deploy and Rollback

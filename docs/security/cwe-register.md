@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1723 annotated sites across 26 rules. Each row is
+1726 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (372 sites)
+### G101 — CWE-798 Use of hardcoded credentials (375 sites)
 
 | Location | Reason |
 |---|---|
@@ -100,6 +100,9 @@ not this file.
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
+| `internal/agent/relay/readback_families_test.go:37` | a credential reference name, not a credential (CWE-798) |
+| `internal/agent/relay/readback_families_test.go:45` | a credential reference name, not a credential (CWE-798) |
+| `internal/agent/relay/readback_families_test.go:51` | a credential reference name, not a credential (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:76` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:99` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
 | `internal/agent/relay/relay_appliance_e2e_test.go:119` | a credential REFERENCE NAME, not a credential: the relay looks the value up in redeemed material by this key, and the indirection is the point (CWE-798) |
@@ -825,7 +828,7 @@ not this file.
 | `internal/api/csrf_test.go:70` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:71` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/rate_limit_guard_test.go:50` | test cookie against the test's own local server (CWE-1004) |
-| `internal/connector/netscaler/netscaler.go:272` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
+| `internal/connector/netscaler/netscaler.go:341` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:170` | test cookie against the test's own local server (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:179` | test cookie against the test's own local server (CWE-1004) |
 

@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -170,6 +171,74 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 		return fmt.Errorf("netscaler: re-bind certkey %q to predecessor: %w", rb.Target, err)
 	}
 	return nil
+}
+
+// Readback asks the NetScaler what the SSL certkey resolves to and whether any
+// SSL virtual server uses it (epic E2).
+//
+// The certkey keeps the target's name across deploys; what a deploy moves is
+// the file pair it resolves to, and those file names carry the fingerprint
+// prefix, so the certificate file is the comparison key. A certkey that no SSL
+// virtual server is bound to is installed and serves nothing, so it is
+// reported as not bound: the operator's next step is the vserver binding, not
+// the certificate.
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, target string) (connector.Installed, error) {
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("netscaler: %w", err)
+	}
+	defer secret.Wipe(token)
+	defer func() { _ = c.logout(ctx, sb, token) }()
+
+	var certkeys struct {
+		Sslcertkey []struct {
+			Certkey string `json:"certkey"`
+			Cert    string `json:"cert"`
+		} `json:"sslcertkey"`
+	}
+	found, err := c.readConfig(ctx, sb, token, "/nitro/v1/config/sslcertkey/"+url.PathEscape(target), &certkeys)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("netscaler: read back certkey %q: %w", target, err)
+	}
+	if !found || len(certkeys.Sslcertkey) == 0 {
+		return connector.Installed{}, nil
+	}
+	if certkeys.Sslcertkey[0].Cert == "" {
+		return connector.Installed{ObjectName: target}, nil
+	}
+	// NITRO may report the file with its location; the fingerprint is in the name.
+	certFile := path.Base(certkeys.Sslcertkey[0].Cert)
+	var bindings struct {
+		Bound []struct {
+			Servername string `json:"servername"`
+		} `json:"sslcertkey_sslvserver_binding"`
+	}
+	if _, err := c.readConfig(ctx, sb, token, "/nitro/v1/config/sslcertkey_sslvserver_binding/"+url.PathEscape(target), &bindings); err != nil {
+		return connector.Installed{}, fmt.Errorf("netscaler: read back vserver bindings of %q: %w", target, err)
+	}
+	return connector.Installed{
+		Fingerprint: connector.FingerprintFromObjectName(certFile),
+		ObjectName:  certFile,
+		Bound:       len(bindings.Bound) > 0,
+	}, nil
+}
+
+// readConfig GETs a NITRO config resource into out. found is false when the
+// resource does not exist.
+func (c *Connector) readConfig(ctx context.Context, sb connector.Sandbox, token []byte, resource string, out any) (bool, error) {
+	data, err := c.call(ctx, sb, http.MethodGet, resource, token, nil)
+	defer secret.Wipe(data)
+	if err != nil {
+		var se *statusError
+		if errors.As(err, &se) && se.code == http.StatusNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return false, fmt.Errorf("decode response failed (details redacted)")
+	}
+	return true, nil
 }
 
 // mustExistFile reports ErrNoPredecessorInstalled when the system file is

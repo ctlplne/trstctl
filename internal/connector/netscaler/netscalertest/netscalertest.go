@@ -37,6 +37,7 @@ type Server struct {
 	tokens   map[string]bool   // valid session tokens
 	files    map[string][]byte // filename -> decoded content
 	bindings map[string]Binding
+	vservers map[string][]string // certkey -> SSL vservers bound to it
 	logins   int
 	logouts  int
 	nextTok  int
@@ -49,6 +50,7 @@ func New(user, pass string) *Server {
 		tokens:   map[string]bool{},
 		files:    map[string][]byte{},
 		bindings: map[string]Binding{},
+		vservers: map[string][]string{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -106,6 +108,14 @@ func fileNameFromArgs(rawQuery string) string {
 	return ""
 }
 
+// BindVServer binds an SSL virtual server to a certkey, the operator's
+// one-time configuration a deploy then relies on.
+func (s *Server) BindVServer(certkey, vserver string) {
+	s.mu.Lock()
+	s.vservers[certkey] = append(s.vservers[certkey], vserver)
+	s.mu.Unlock()
+}
+
 // RemoveFile deletes an uploaded system file so a test can model the
 // "predecessor is gone" case.
 func (s *Server) RemoveFile(name string) {
@@ -155,6 +165,39 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			}
 			delete(s.files, name)
 			s.ok(w)
+		})
+	// E2: what a certkey resolves to and which SSL vservers use it, the
+	// readback a relay asks after a deploy.
+	case strings.HasPrefix(r.URL.Path, "/nitro/v1/config/sslcertkey/") && r.Method == http.MethodGet:
+		s.requireSession(w, r, func() {
+			name, _ := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/nitro/v1/config/sslcertkey/"))
+			s.mu.Lock()
+			b, ok := s.bindings[name]
+			s.mu.Unlock()
+			if !ok {
+				s.fail(w, http.StatusNotFound, 258, "no such resource")
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"errorcode": 0, "message": "Done",
+				"sslcertkey": []map[string]string{{"certkey": name, "cert": b.Cert, "key": b.Key}}})
+		})
+	case strings.HasPrefix(r.URL.Path, "/nitro/v1/config/sslcertkey_sslvserver_binding/") && r.Method == http.MethodGet:
+		s.requireSession(w, r, func() {
+			name, _ := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/nitro/v1/config/sslcertkey_sslvserver_binding/"))
+			s.mu.Lock()
+			bound := append([]string(nil), s.vservers[name]...)
+			s.mu.Unlock()
+			out := map[string]any{"errorcode": 0, "message": "Done"}
+			if len(bound) > 0 {
+				rows := make([]map[string]string, 0, len(bound))
+				for _, vs := range bound {
+					rows = append(rows, map[string]string{"certkey": name, "servername": vs})
+				}
+				out["sslcertkey_sslvserver_binding"] = rows
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(out)
 		})
 	case r.URL.Path == "/nitro/v1/config/sslcertkey" && r.Method == http.MethodPut:
 		s.requireSession(w, r, func() { s.sslcertkey(w, body) })

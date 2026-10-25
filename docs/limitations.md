@@ -744,9 +744,16 @@ never live in the API process. What you can do end to end against the running bi
   an E1 row does not let an agent claim work it cannot construct.
   Device-generated CSR is reported as outstanding on the five families whose
   device APIs support it — a separate custody enhancement, not a migration gate:
-  the current mode — the relay generates the key inside the segment and installs
-  it — is correct as it stands, and holding families back to avoid an improvement
-  was the worse trade.
+  in the current mode the control plane generates the key (under the tenant's
+  control-plane key-generation switch), seals it to the deploy job, and the relay
+  redeems it and installs it; a device-generated CSR would keep the key on the
+  appliance and off the control plane. That mode works as it stands, and holding
+  families back to avoid an improvement was the worse trade. Readback answers for
+  every migrated family: kemp, netscaler and a10 were listed as readback-capable
+  before their connectors could read back, so their relay deploys reported an
+  appliance that "did not answer"; the census is now checked against the code
+  (`internal/connector/readback_census_test.go`), and a NetScaler certkey that no
+  SSL virtual server uses is reported as installed but not bound.
   Served DR posture (J2): `GET /api/v1/platform/dr-posture` and
   `trstctl platform dr-posture` report when this deployment's backup was last
   VERIFIED — meaning its artifacts were re-hashed and matched — rather than when one

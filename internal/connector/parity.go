@@ -291,8 +291,10 @@ var deviceCSRCapableFamilies = []string{
 // still does, which is where every one of them stands today.
 //
 // ParityGateDeviceCSR is deliberately NOT required. It is an alternative
-// custody mode, and the existing mode — relay generates, relay installs — is
-// correct as it stands, just less good. Blocking migration on it would hold
+// custody mode, and the existing mode — the control plane generates the key
+// (under the tenant's control-plane key-generation switch) and seals it to the
+// deploy job, and the relay redeems and installs it — works as it stands; a
+// device-generated CSR would keep the key on the appliance instead. Blocking migration on it would hold
 // four families in the control plane to avoid an improvement. It is reported
 // as Outstanding on the parity surface: a post-E1 enhancement (E1 itself
 // closed 2026-08-08 at the gate-capable families), not a silent omission.

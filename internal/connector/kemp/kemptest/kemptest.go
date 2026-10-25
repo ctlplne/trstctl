@@ -125,6 +125,19 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		}
 		delete(s.certs, name)
 		s.ok(w)
+	// E2: which certificate a virtual service is bound to, the readback a
+	// relay asks after a deploy.
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/access/virtual-services/") && strings.HasSuffix(r.URL.Path, "/certificate"):
+		vs := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/access/virtual-services/"), "/certificate")
+		s.mu.Lock()
+		b, ok := s.bindings[vs]
+		s.mu.Unlock()
+		if !ok {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"cert_name": b.CertName})
 	case r.Method == http.MethodPatch && strings.HasPrefix(r.URL.Path, "/access/virtual-services/") && strings.HasSuffix(r.URL.Path, "/certificate"):
 		vs := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/access/virtual-services/"), "/certificate")
 		s.bind(w, body, vs)

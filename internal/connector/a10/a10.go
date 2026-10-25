@@ -116,6 +116,43 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 	return nil
 }
 
+// Readback asks the A10 which certificate file the client-SSL template names
+// (epic E2). The template is what virtual ports reference and keeps its name
+// across deploys; the certificate file a deploy points it at carries the
+// fingerprint prefix, so the file name is the comparison key.
+func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, target string) (connector.Installed, error) {
+	token, err := c.login(ctx, sb)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("a10: %w", err)
+	}
+	defer secret.Wipe(token)
+	data, err := c.call(ctx, sb, http.MethodGet, "/axapi/v3/slb/template/client-ssl/"+url.PathEscape(target), token, nil)
+	defer secret.Wipe(data)
+	if err != nil {
+		var se *statusError
+		if errors.As(err, &se) && se.code == http.StatusNotFound {
+			return connector.Installed{}, nil
+		}
+		return connector.Installed{}, fmt.Errorf("a10: read back client-ssl template %q: %w", target, err)
+	}
+	var body struct {
+		ClientSSL struct {
+			Cert string `json:"cert"`
+		} `json:"client-ssl"`
+	}
+	if err := json.Unmarshal(data, &body); err != nil {
+		return connector.Installed{}, fmt.Errorf("a10: decode client-ssl template %q (details redacted)", target)
+	}
+	if body.ClientSSL.Cert == "" {
+		return connector.Installed{ObjectName: target}, nil
+	}
+	return connector.Installed{
+		Fingerprint: connector.FingerprintFromObjectName(body.ClientSSL.Cert),
+		ObjectName:  body.ClientSSL.Cert,
+		Bound:       true,
+	}, nil
+}
+
 // mustExistFile reports ErrNoPredecessorInstalled when the uploaded file is
 // absent. Binding a template to a file that is not there would take the virtual
 // port down rather than restore it — the opposite of what a rollback is for.

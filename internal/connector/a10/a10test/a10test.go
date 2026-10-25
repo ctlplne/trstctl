@@ -139,6 +139,20 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			delete(files, name)
 			s.ok(w, map[string]any{"file": name})
 		})
+	// E2: the certificate a client-SSL template names, the readback a relay
+	// asks after a deploy.
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/"):
+		s.requireToken(w, r, func() {
+			name, _ := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/"))
+			s.mu.Lock()
+			b, ok := s.bindings[name]
+			s.mu.Unlock()
+			if !ok {
+				http.Error(w, `{"response":{"status":"fail","err":"not found"}}`, http.StatusNotFound)
+				return
+			}
+			s.ok(w, map[string]any{"client-ssl": map[string]string{"name": name, "cert": b.CertFile, "key": b.KeyFile}})
+		})
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/"):
 		s.requireToken(w, r, func() { s.bind(w, body, strings.TrimPrefix(r.URL.Path, "/axapi/v3/slb/template/client-ssl/")) })
 	default:
