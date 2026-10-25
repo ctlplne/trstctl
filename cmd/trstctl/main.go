@@ -117,6 +117,9 @@ type rootFlags struct {
 	restorePath          string
 	fullBackupDir        string
 	fullRestoreDir       string
+	fullBackupUpload     string
+	fullBackupDownload   string
+	fullBackupFetchDir   string
 	backupKeyFile        string
 	allowPlainFullBackup bool
 	rebuild              bool
@@ -142,6 +145,9 @@ func parseRootFlags(args []string, stderr io.Writer) (rootFlags, bool, error) {
 	fs.StringVar(&flags.restorePath, "restore", "", "restore the event log from FILE, rebuild the read model, then exit")
 	fs.StringVar(&flags.fullBackupDir, "full-backup-dir", "", "write a full DR artifact directory (event log, independent PostgreSQL state, key/cert manifest), then exit")
 	fs.StringVar(&flags.fullRestoreDir, "full-restore-dir", "", "restore a full DR artifact directory, rebuild projections, import independent PostgreSQL state, then exit")
+	fs.StringVar(&flags.fullBackupUpload, "full-backup-upload", "", "upload the finished full backup set in DIR to the configured object store as backups/<directory name>/ (manifest last; an interrupted upload resumes), then exit")
+	fs.StringVar(&flags.fullBackupDownload, "full-backup-download", "", "download the full backup set NAME from the configured object store into --full-backup-download-dir and re-hash every artifact against its manifest, then exit")
+	fs.StringVar(&flags.fullBackupFetchDir, "full-backup-download-dir", "", "new or empty directory --full-backup-download fills; restore it afterwards with --full-restore-dir")
 	fs.StringVar(&flags.backupKeyFile, "backup-encryption-key-file", "", "raw key file used to encrypt/decrypt sensitive full-backup artifacts")
 	fs.BoolVar(&flags.allowPlainFullBackup, "allow-unencrypted-full-backup", false, "explicit lab override: allow sensitive full-backup artifacts to remain plaintext")
 	fs.BoolVar(&flags.rebuild, "rebuild", false, "atomically rebuild the read model from the existing event log, then exit (DR recovery)")
@@ -183,6 +189,9 @@ func runOneShotCommand(ctx context.Context, cfg *config.Config, flags rootFlags,
 	}
 	if flags.readyCheck {
 		return true, readyProbe(cfg)
+	}
+	if done, err := runObjectStoreBackupCommand(ctx, cfg, flags, stdout); done {
+		return true, err
 	}
 	if flags.backupPath != "" {
 		n, err := server.RunBackup(ctx, cfg, flags.backupPath)
@@ -439,6 +448,42 @@ func probeURL(client *http.Client, url, label string) error {
 
 // configSummary renders the effective configuration for an operator, with any
 // datastore credentials redacted so the output is safe to log.
+// runObjectStoreBackupCommand handles the two object-store backup commands:
+// uploading a finished full backup set, and fetching one into a new directory
+// with every artifact re-hashed against its manifest.
+func runObjectStoreBackupCommand(ctx context.Context, cfg *config.Config, flags rootFlags, stdout io.Writer) (bool, error) {
+	switch {
+	case flags.fullBackupUpload != "":
+		set, err := server.UploadFullBackupSet(ctx, cfg, flags.fullBackupUpload)
+		if err != nil {
+			return true, fmt.Errorf("full backup upload: %w", err)
+		}
+		_, _ = fmt.Fprintf(stdout, "uploaded %d objects (%d bytes; %d already stored by an earlier attempt) to %s\n",
+			set.Objects, set.Bytes, set.Resumed, set.Location)
+		return true, nil
+	case flags.fullBackupDownload != "":
+		if flags.fullBackupFetchDir == "" {
+			return true, errors.New("full backup download: --full-backup-download-dir names the new directory to fill")
+		}
+		report, err := server.FetchFullBackupSet(ctx, cfg, flags.fullBackupDownload, flags.fullBackupFetchDir)
+		if err != nil {
+			return true, fmt.Errorf("full backup download: %w", err)
+		}
+		for _, check := range report.Checks {
+			if !check.Verified {
+				_, _ = fmt.Fprintf(stdout, "artifact %s: %s\n", check.Name, check.Detail)
+			}
+		}
+		if !report.Verified {
+			return true, fmt.Errorf("full backup download: the set in %s does not verify against its manifest", flags.fullBackupFetchDir)
+		}
+		_, _ = fmt.Fprintf(stdout, "downloaded %s into %s; %d artifacts re-hashed against its manifest\n",
+			flags.fullBackupDownload, flags.fullBackupFetchDir, len(report.Checks))
+		return true, nil
+	}
+	return false, nil
+}
+
 func configSummary(cfg *config.Config) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "server.addr: %s\n", cfg.Server.Addr)

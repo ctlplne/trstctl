@@ -756,6 +756,10 @@ never live in the API process. What you can do end to end against the running bi
   failures this catches are silent — bit rot, a truncated copy, an artifact restored
   from the wrong directory — none of which change the manifest, and all of which are
   otherwise discovered during the restore that was supposed to save you.
+  The posture reads `TRSTCTL_BACKUP_DIRECTORY` only: a set copied to the object
+  store (`--full-backup-upload`) is verified when it is fetched back
+  (`--full-backup-download` re-hashes every artifact against its manifest), not by
+  this served check or the scheduled drill.
   Three states are kept apart because only two are actionable: no backup directory
   configured (not a fault — many deployments back up through infrastructure this
   product does not see), a configured directory that cannot be read (a real finding,

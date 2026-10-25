@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1719 annotated sites across 26 rules. Each row is
+1723 annotated sites across 26 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1141,7 +1141,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (489 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (493 sites)
 
 | Location | Reason |
 |---|---|
@@ -1341,6 +1341,10 @@ not this file.
 | `internal/backup/full_manifest_io_test.go:46` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/backup/full_manifest_io_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/backup/manifest_test.go:32` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/backup/objectstore.go:120` | a file inside the operator's own backup set directory (CWE-22) |
+| `internal/backup/objectstore.go:207` | a validated name inside the operator's new download directory (CWE-22) |
+| `internal/backup/objectstore_test.go:82` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/backup/objectstore_test.go:99` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/capability_evidence_test.go:65` | fixed in-tree proof manifest |
 | `internal/ca/external_error_redaction_test.go:62` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |

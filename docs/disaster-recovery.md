@@ -162,6 +162,36 @@ The artifact directory contains:
   encryption metadata, plaintext hashes for encrypted artifacts, and recovery
   classes for every persistent table.
 
+### Keep a copy in the object store
+
+With an [object store](configuration.md#object-store) configured, a finished set
+uploads as `backups/<directory name>/` beneath the deployment prefix, and a set
+fetched back is re-hashed against its own manifest before you restore it:
+
+```bash
+trstctl --full-backup-upload=/backups/trstctl-$(date +%F)
+# -> "uploaded <N> objects (<B> bytes; 0 already stored by an earlier attempt) to s3://..."
+trstctl --full-backup-download=trstctl-2026-10-25 \
+  --full-backup-download-dir=/restore/trstctl-2026-10-25
+# -> "downloaded ... ; <N> artifacts re-hashed against its manifest"
+trstctl --full-restore-dir=/restore/trstctl-2026-10-25
+```
+
+Every object is created once with its SHA-256, which the store verifies, and the
+manifest is uploaded last, so a set whose manifest is in the store is complete. A
+complete set is never replaced under the same name. An upload interrupted before
+its manifest resumes on the next run: objects already stored with the same bytes
+are kept, and one holding different bytes stops the upload. A download refuses a
+set without its manifest, writes only into a new or empty directory, checks each
+object against its stored checksum as it arrives, and exits non-zero unless every
+required artifact re-hashes against the manifest. A set holds every tenant's data,
+with sensitive artifacts already encrypted, so it lives under `backups/` rather
+than a tenant prefix. One artifact can be at most 5 GiB (no multipart upload). The
+served DR posture and the scheduled restore drill still read
+`TRSTCTL_BACKUP_DIRECTORY`; to drill a set kept only in the object store, fetch it
+into that directory first. Bucket replication, versioning and object lock remain
+yours to configure.
+
 Full backup uses one explicit consistency cut across both stores. Tenant mutation
 transactions hold the shared side of a PostgreSQL backup write fence before they
 append to the event log. The backup path takes the exclusive side only long enough

@@ -1798,7 +1798,9 @@ transaction as that history row.
 
 An S3-compatible object store (AWS S3, MinIO, or another service that speaks
 the S3 API) for durable artifacts: signed audit archive segments and scheduled
-report and evidence-pack artifacts when `audit.archive_object_store` is set. The
+report and evidence-pack artifacts when `audit.archive_object_store` is set, and
+full backup sets copied with `trstctl --full-backup-upload` and fetched back with
+`--full-backup-download` ([disaster recovery](disaster-recovery.md#keep-a-copy-in-the-object-store)). The
 control plane opens it at startup without a network call; `trstctl doctor`
 proves its tenant-prefix confinement with the OBJ probes
 ([doctor runbook](operations/doctor.md)).
