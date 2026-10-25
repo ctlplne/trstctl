@@ -934,4 +934,32 @@ describe("app shell accessibility and theme", () => {
     expect(await screen.findByRole("link", { name: "Alerts and delivery: 1 need attention" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /3 need attention/ })).not.toBeInTheDocument();
   });
+
+  it("caps the header alert badge at 99+ while the link names the exact count", async () => {
+    apiMock.notifications.mockResolvedValue({
+      items: Array.from({ length: 100 }, (_, index) => ({
+        id: `critical-${index}`,
+        tenant_id: "t1",
+        destination: "notification.email",
+        kind: "certificate.expiring",
+        certificate_id: `cert-${index}`,
+        subject: `service-${index}`,
+        severity: "critical",
+        status: "pending",
+        attempts: 0,
+        created_at: "2026-08-24T10:00:00Z",
+      })),
+    });
+    renderShell();
+    const alerts = await screen.findByRole("link", { name: "Alerts and delivery: 100 need attention" });
+    expect(within(alerts).getByText("99+")).toBeInTheDocument();
+  });
+
+  it("names a session without an email by its subject in the account menu", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "svc-operator", tenant_id: "t1" });
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(await screen.findByRole("button", { name: "Account and preferences" }));
+    expect(within(screen.getByRole("dialog", { name: "Account and preferences" })).getByText("svc-operator")).toBeInTheDocument();
+  });
 });

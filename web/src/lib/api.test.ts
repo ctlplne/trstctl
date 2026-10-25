@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { api, ApiError, firstCertificateIdentityRequest, setAuthenticatedBrowserTenantID, UnauthorizedError } from "@/lib/api";
+import { api, ApiError, firstCertificateIdentityRequest, identityState, setAuthenticatedBrowserTenantID, UnauthorizedError, type Identity } from "@/lib/api";
 
 // Unit tests for the typed REST client's error handling, focused on the SURFACE-007
 // 429/Retry-After path. We stub global fetch so no network is touched.
@@ -108,6 +108,13 @@ describe("api error handling (SURFACE-007)", () => {
     await expect(api.identityStatusSummary()).rejects.toThrow("Identity status summary is missing or invalid");
   });
 
+  it("refuses a missing summary, a negative total or a fractional count", async () => {
+    for (const summary of [undefined, { total: -1, by_status: {} }, { total: 2, by_status: { issued: 1.5, revoked: 0.5 } }]) {
+      mockFetch(200, JSON.stringify({ items: [], summary }));
+      await expect(api.identityStatusSummary()).rejects.toThrow("Identity status summary is missing or invalid");
+    }
+  });
+
   it("refuses a browser machine credential before fetch when /auth/me has not supplied a tenant", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
@@ -175,6 +182,15 @@ describe("api error handling (SURFACE-007)", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(500);
     expect(err.isRateLimited).toBe(false);
+  });
+});
+
+describe("identity lifecycle state", () => {
+  it("shows a pending retirement or revocation ahead of the stored status", () => {
+    expect(identityState({ id: "a", status: "deployed", terminal_pending: true, terminal_target_state: "retired" } as Identity)).toBe("retirement_pending");
+    expect(identityState({ id: "b", status: "deployed", terminal_pending: true, terminal_target_state: "revoked" } as Identity)).toBe("revocation_pending");
+    expect(identityState({ id: "c", status: "issued" } as Identity)).toBe("issued");
+    expect(identityState({ id: "d" } as Identity)).toBe("");
   });
 });
 
@@ -485,6 +501,19 @@ describe("approval request contract (AUD-77)", () => {
       intent_digest: "sha256:2",
       reason: "unsafe rollout window",
     });
+  });
+
+  it("stops when the approval queue repeats a cursor instead of paging forever", async () => {
+    mockFetchSequence([
+      {
+        status: 200,
+        body: JSON.stringify({ items: [{ id: "request-1", intent_digest: "sha256:1", status: "pending" }], next_cursor: "page-2" }),
+      },
+      { status: 200, body: JSON.stringify({ next_cursor: "page-2" }) },
+    ]);
+
+    await expect(api.approvalRequests()).rejects.toThrow("approval queue returned a repeated cursor");
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
 
   it("reads a bounded all-status approval history page with its exact cursor", async () => {

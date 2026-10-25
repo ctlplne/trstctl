@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { AuthProvider, beginLogin, useAuth } from "@/auth/AuthProvider";
+import { AuthProvider, beginKerberosLogin, beginLogin, beginNTLMLogin, beginSAMLLogin, useAuth } from "@/auth/AuthProvider";
 import { AppRoutes } from "@/App";
 import { ToastProvider } from "@/components/ToastProvider";
 import { ApiError, type Me } from "@/lib/api";
@@ -387,6 +387,34 @@ describe("auth + dashboards", () => {
     }
   });
 
+  it("starts Kerberos, NTLM and SAML sign-in on their served routes, with and without a return path", () => {
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, assign },
+    });
+
+    try {
+      beginKerberosLogin();
+      beginKerberosLogin("/certificates?tab=expiring");
+      beginNTLMLogin();
+      beginNTLMLogin("/identities");
+      beginSAMLLogin();
+      beginSAMLLogin("/secrets");
+      expect(assign.mock.calls.map(([url]) => url)).toEqual([
+        "/auth/kerberos/login",
+        "/auth/kerberos/login?return_to=%2Fcertificates%3Ftab%3Dexpiring",
+        "/auth/ntlm/login",
+        "/auth/ntlm/login?return_to=%2Fidentities",
+        "/auth/saml/login",
+        "/auth/saml/login?return_to=%2Fsecrets",
+      ]);
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
+  });
+
   it("does not let a late session response replace an explicitly started preview", async () => {
     let resolveSession: ((user: Me) => void) | undefined;
     apiMock.me.mockReturnValue(
@@ -462,6 +490,31 @@ describe("auth + dashboards", () => {
     await waitFor(() => expect(apiMock.logout).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("button", { name: /Continue with SSO/i })).toBeInTheDocument();
     expect(screen.queryByTestId("current-user")).not.toBeInTheDocument();
+  });
+
+  it("follows the identity provider's logout service after a SAML sign-out", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "user-1", tenant_id: "t1", email: "u@example.test" });
+    apiMock.logout.mockResolvedValue({ logout_url: "https://idp.example.test/slo?SAMLRequest=abc" });
+    const user = userEvent.setup();
+
+    renderAt("/");
+    await user.click(await screen.findByRole("button", { name: "Account and preferences" }));
+
+    const originalLocation = window.location;
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, assign },
+    });
+
+    try {
+      await user.click(await screen.findByRole("button", { name: "Sign out" }));
+      // The served logout already revoked the local session; the IdP session
+      // ends only when the browser follows its single-logout service.
+      await waitFor(() => expect(assign).toHaveBeenCalledWith("https://idp.example.test/slo?SAMLRequest=abc"));
+    } finally {
+      Object.defineProperty(window, "location", { configurable: true, value: originalLocation });
+    }
   });
 
   it("keeps the authenticated shell mounted and reports a failed served logout", async () => {
