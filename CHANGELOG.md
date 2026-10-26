@@ -2,6 +2,16 @@
 
 ### Added
 
+- A CA can be imported together with the private key it already has: after
+  two custodians approve an `import_ca_key` ceremony, `trstctl-cli ca
+  authorities key-offer` fetches the signer's one-time import key (HPKE with
+  the MLKEM768-P256 hybrid KEM), `wrap-key` seals the PKCS#8 key to it on the
+  operator's machine after checking it is the certificate's key, and
+  `import-key` has the signer open it, refuse it unless it matches the
+  certificate, and hold it under the ceremony's handle with CA-signing
+  constraints and dual control. The control plane relays only sealed bytes.
+  The console starts the ceremony from **Certificate authorities → Imports**
+  and hands over the import request and the commands.
 - A signer-backed CA authority's key can be revoked: two custodians approve a
   `revoke_ca` ceremony for the exact authority and reason, and `POST
   /api/v1/ca/authorities/{id}/revoke` (`trstctl-cli ca authorities revoke`, or

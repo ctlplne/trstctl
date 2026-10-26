@@ -465,7 +465,7 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root", "release_managed_ca_leaf", "revoke_ca"}},
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root", "release_managed_ca_leaf", "revoke_ca", "import_ca_key"}},
 		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(),
 		"dependent_id": uuid(), "expected_certificate_sha256": str(), "risk_accepted": {Type: "boolean"},
 		"target_certificate_pem": str(), "cross_certificate_pem": str(), "reverse_cross_certificate_pem": str(),
@@ -544,6 +544,20 @@ func componentSchemas() map[string]*Schema {
 	caAuthorityRekeyReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "ttl_seconds": {Type: "integer"}, "reason": str(),
 	}, "ceremony_id")
+	caKeyImportOfferReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "certificate_pem": str(), "parent_id": uuid(), "spec": ref("CASpec"),
+	}, "ceremony_id", "certificate_pem", "spec")
+	caKeyImportOffer := object(map[string]*Schema{
+		"ceremony_id": uuid(), "tenant_id": uuid(), "operation_id": str(),
+		"suite":               {Type: "string", Description: "The sealing scheme: HPKE base mode with MLKEM768-P256, HKDF-SHA256 and AES-256-GCM."},
+		"public_key":          {Type: "string", Format: "byte", Description: "The import key's public half, the bytes to seal the private key to."},
+		"expected_public_key": {Type: "string", Format: "byte", Description: "The certificate's PKIX public key; the private key must match it, and it is part of the sealing binding."},
+		"signer_handle":       str(),
+	}, "ceremony_id", "tenant_id", "operation_id", "suite", "public_key", "expected_public_key", "signer_handle")
+	caImportKeyReq := object(map[string]*Schema{
+		"ceremony_id": uuid(), "certificate_pem": str(), "parent_id": uuid(), "spec": ref("CASpec"),
+		"sealed_key": {Type: "string", Format: "byte", Description: "The PKCS#8 private key sealed to the offer on the operator's machine (trstctl-cli ca authorities wrap-key). Never the plaintext key."},
+	}, "ceremony_id", "certificate_pem", "spec", "sealed_key")
 	caRevocationReasons := []string{"key_compromise", "ca_compromise", "affiliation_changed", "superseded", "cessation_of_operation", "privilege_withdrawn"}
 	caAuthorityRevokeReq := object(map[string]*Schema{
 		"ceremony_id": uuid(),
@@ -7635,6 +7649,9 @@ func componentSchemas() map[string]*Schema {
 		"CAAuthorityRotationRequest":            caAuthorityRotationReq,
 		"CAAuthorityRekeyRequest":               caAuthorityRekeyReq,
 		"CAAuthorityRevokeRequest":              caAuthorityRevokeReq,
+		"CAKeyImportOfferRequest":               caKeyImportOfferReq,
+		"CAKeyImportOffer":                      caKeyImportOffer,
+		"CAImportKeyRequest":                    caImportKeyReq,
 		"CAAuthorityRevocation":                 caAuthorityRevocation,
 		"CACrossSignRequest":                    caCrossSignReq,
 		"CAOfflineCrossSignImportRequest":       caOfflineCrossSignImportReq,

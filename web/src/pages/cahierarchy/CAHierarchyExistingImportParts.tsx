@@ -2,11 +2,16 @@ import { ShieldCheck } from "lucide-react";
 import { ErrorState } from "@/components/StatePrimitives";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n/I18nProvider";
-import type { CAAuthority } from "@/lib/api";
+import type { CAAuthority, CACeremonyStartRequest } from "@/lib/api";
 import type { CAExistingImportCSR } from "@/lib/api-types.gen";
 import { KeyValue, LabeledInput, LabeledSelect, OfflineSpecFields, type OfflineCAForm } from "./CAHierarchyFormParts";
 
 export type ExistingCAForm = OfflineCAForm & { parentID: string; signerHandle: string; issuerCertificatePEM: string };
+
+// ExistingCAImportMode: a fresh signer key with a CSR for the external issuer,
+// a key the signer already holds, or the CA's existing private key sealed on
+// the operator's machine and taken into signer custody (A128).
+export type ExistingCAImportMode = "prepare" | "preprovisioned" | "keyimport";
 
 export function ExistingCAImportWorkflow({
   authorities,
@@ -24,6 +29,7 @@ export function ExistingCAImportWorkflow({
   onPrepare,
   onReadPreparation,
   onStartCeremony,
+  spec,
 }: {
   authorities: CAAuthority[];
   busy: boolean;
@@ -31,22 +37,25 @@ export function ExistingCAImportWorkflow({
   error: string | null;
   form: ExistingCAForm;
   imported: CAAuthority | null;
-  mode: "prepare" | "preprovisioned";
+  mode: ExistingCAImportMode;
   preparation: CAExistingImportCSR | null;
   onCeremonyIDChange: (value: string) => void;
   onFormChange: (patch: Partial<ExistingCAForm>) => void;
   onImport: () => void;
-  onModeChange: (mode: "prepare" | "preprovisioned") => void;
+  onModeChange: (mode: ExistingCAImportMode) => void;
   onPrepare: () => void;
   onReadPreparation: () => void;
   onStartCeremony: () => void;
+  spec: NonNullable<CACeremonyStartRequest["spec"]>;
 }) {
   const { t } = useTranslation();
   const prepared = mode === "prepare";
+  const keyImport = mode === "keyimport";
   const ready =
     form.commonName.trim() !== "" &&
-    (prepared ? form.issuerCertificatePEM.trim() !== "" : form.certificatePEM.trim() !== "" && form.signerHandle.trim() !== "");
+    (prepared ? form.issuerCertificatePEM.trim() !== "" : form.certificatePEM.trim() !== "" && (keyImport || form.signerHandle.trim() !== ""));
   const importReady =
+    !keyImport &&
     form.certificatePEM.trim() !== "" &&
     ceremonyID.trim() !== "" &&
     (prepared ? preparation?.ceremony_id === ceremonyID.trim() : form.signerHandle.trim() !== "");
@@ -86,9 +95,11 @@ export function ExistingCAImportWorkflow({
                 </Button>
               </>
             )}
-            <Button type="button" size="sm" onClick={onImport} disabled={busy || !importReady}>
-              {t("caHierarchy.existing.import")}
-            </Button>
+            {!keyImport && (
+              <Button type="button" size="sm" onClick={onImport} disabled={busy || !importReady}>
+                {t("caHierarchy.existing.import")}
+              </Button>
+            )}
           </div>
         </div>
         <div className="mt-4 grid gap-4">
@@ -96,10 +107,11 @@ export function ExistingCAImportWorkflow({
             id="existing-ca-import-mode"
             label={t("caHierarchy.existing.mode")}
             value={mode}
-            onChange={(value) => onModeChange(value as "prepare" | "preprovisioned")}
+            onChange={(value) => onModeChange(value as ExistingCAImportMode)}
           >
             <option value="prepare">{t("caHierarchy.existing.prepareMode")}</option>
             <option value="preprovisioned">{t("caHierarchy.existing.preprovisionedMode")}</option>
+            <option value="keyimport">{t("caHierarchy.existing.keyImportMode")}</option>
           </LabeledSelect>
           <OfflineSpecFields
             commonNameId="existing-ca-common-name"
@@ -155,6 +167,8 @@ export function ExistingCAImportWorkflow({
                 </div>
               )}
             </>
+          ) : keyImport ? (
+            <p className="text-sm text-muted-foreground">{t("caHierarchy.existing.keyImportHelp")}</p>
           ) : (
             <LabeledInput
               id="existing-ca-signer-handle"
@@ -185,6 +199,7 @@ export function ExistingCAImportWorkflow({
             onChange={onCeremonyIDChange}
             placeholder={t("caHierarchy.existing.placeholderCeremonyID")}
           />
+          {keyImport && ceremonyID.trim() !== "" && <KeyImportSteps ceremonyID={ceremonyID.trim()} form={form} spec={spec} />}
           {imported && (
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <KeyValue label={t("caHierarchy.offline.commonName")} value={imported.common_name} />
@@ -196,6 +211,47 @@ export function ExistingCAImportWorkflow({
           )}
         </div>
       </section>
+    </section>
+  );
+}
+
+// KeyImportSteps finishes an import_ca_key ceremony from the operator's
+// machine: the private key is sealed there, so the console hands over the
+// request body and the three commands rather than ever handling the key.
+function KeyImportSteps({ ceremonyID, form, spec }: { ceremonyID: string; form: ExistingCAForm; spec: NonNullable<CACeremonyStartRequest["spec"]> }) {
+  const { t } = useTranslation();
+  const request = {
+    ceremony_id: ceremonyID,
+    certificate_pem: form.certificatePEM.trim(),
+    ...(form.parentID.trim() ? { parent_id: form.parentID.trim() } : {}),
+    spec,
+  };
+  const commands = [
+    "trstctl-cli ca authorities key-offer -f import.json > offer.json",
+    "trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.pem --request import.json --out import-sealed.json",
+    "trstctl-cli ca authorities import-key -f import-sealed.json",
+  ];
+  function download() {
+    const blob = new Blob([JSON.stringify(request, null, 2) + "\n"], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "import.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  return (
+    <section aria-labelledby="existing-ca-key-import-steps" className="grid gap-2 rounded-control border border-border p-3">
+      <h4 id="existing-ca-key-import-steps" className="font-semibold">
+        {t("caHierarchy.existing.keyImportSteps")}
+      </h4>
+      <p className="text-sm text-muted-foreground">{t("caHierarchy.existing.keyImportStepsHelp")}</p>
+      <pre className="overflow-auto rounded-control bg-muted p-3 font-mono text-xs">{commands.join("\n")}</pre>
+      <div>
+        <Button type="button" size="sm" variant="outline" onClick={download}>
+          {t("caHierarchy.existing.keyImportDownload")}
+        </Button>
+      </div>
     </section>
   );
 }

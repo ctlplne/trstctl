@@ -43,7 +43,7 @@ import {
 } from "./cahierarchy/CAHierarchyCeremonyParts";
 import { ManagedKeyCustodyWorkspace } from "./cahierarchy/CAHierarchyCustodyParts";
 import { KeyValue, LabeledInput, LabeledSelect, MANAGED_CA_KEY_ALGORITHMS, OfflineSpecFields, type OfflineCAForm } from "./cahierarchy/CAHierarchyFormParts";
-import { ExistingCAImportWorkflow, type ExistingCAForm } from "./cahierarchy/CAHierarchyExistingImportParts";
+import { ExistingCAImportWorkflow, type ExistingCAForm, type ExistingCAImportMode } from "./cahierarchy/CAHierarchyExistingImportParts";
 import { CARekeyPanel } from "./cahierarchy/CAHierarchyRekeyParts";
 import { RetirementWorkspace } from "./cahierarchy/CAHierarchyRetirementParts";
 import { CACrossSignPanel } from "./cahierarchy/CAHierarchyCrossSignParts";
@@ -198,7 +198,7 @@ export function CAHierarchy() {
   const [offlineBusy, setOfflineBusy] = useState(false);
   const [offlineError, setOfflineError] = useState<string | null>(null);
   const [existingCAForm, setExistingCAForm] = useState<ExistingCAForm>(existingCADefaults);
-  const [existingCAMode, setExistingCAMode] = useState<"prepare" | "preprovisioned">("prepare");
+  const [existingCAMode, setExistingCAMode] = useState<ExistingCAImportMode>("prepare");
   const [existingCAPreparation, setExistingCAPreparation] = useState<CAExistingImportCSR | null>(null);
   const [existingCACeremonyID, setExistingCACeremonyID] = useState("");
   const [existingCA, setExistingCA] = useState<CAAuthority | null>(null);
@@ -547,11 +547,12 @@ export function CAHierarchy() {
 
   async function startExistingCACeremony() {
     const prepared = existingCAMode === "prepare";
+    const keyImport = existingCAMode === "keyimport";
     const request: CACeremonyStartRequest = {
-      operation: prepared ? "prepare_existing_ca" : "import_existing_ca",
+      operation: prepared ? "prepare_existing_ca" : keyImport ? "import_ca_key" : "import_existing_ca",
       threshold: 2,
       certificate_pem: (prepared ? existingCAForm.issuerCertificatePEM : existingCAForm.certificatePEM).trim(),
-      ...(!prepared ? { signer_handle: existingCAForm.signerHandle.trim() } : {}),
+      ...(!prepared && !keyImport ? { signer_handle: existingCAForm.signerHandle.trim() } : {}),
       ...(existingCAForm.parentID.trim() ? { parent_id: existingCAForm.parentID.trim() } : {}),
       spec: offlineFormSpec(existingCAForm),
     };
@@ -1074,6 +1075,7 @@ export function CAHierarchy() {
             setExistingCAForm((current) => ({ ...current, ...patch }));
           }}
           onImport={() => void importExistingCA()}
+          spec={offlineFormSpec(existingCAForm)}
           onPrepare={() => void prepareExistingImportCSR()}
           onReadPreparation={() => void readExistingImportCSR()}
           onStartCeremony={() => void startExistingCACeremony()}

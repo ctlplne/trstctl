@@ -9662,6 +9662,28 @@ export const messages = {
     defaultMessage: "Enter a reason before starting or activating the re-key ceremony.",
     description: "Re-key ceremony reason validation.",
   },
+  "caHierarchy.existing.keyImportMode": {
+    defaultMessage: "Import the CA's existing private key (sealed on your machine)",
+    description: "Existing CA import mode: take the operator's private key into signer custody.",
+  },
+  "caHierarchy.existing.keyImportHelp": {
+    defaultMessage:
+      "Two custodians approve the chain and profile. The signer then offers a one-time import key; you seal the CA's private key to it with trstctl-cli on your own machine, and only the sealed key reaches trstctl. The console never handles the key.",
+    description: "Existing CA key-import mode explanation.",
+  },
+  "caHierarchy.existing.keyImportSteps": {
+    defaultMessage: "Finish on your machine",
+    description: "Heading for the CLI steps that complete a CA key import.",
+  },
+  "caHierarchy.existing.keyImportStepsHelp": {
+    defaultMessage:
+      "After the approvals, download the import request, then run these commands where the CA's PKCS#8 private key file is. wrap-key checks the key is the certificate's before sealing it.",
+    description: "Explanation of the CLI steps that complete a CA key import.",
+  },
+  "caHierarchy.existing.keyImportDownload": {
+    defaultMessage: "Download import request",
+    description: "Button that downloads the import request JSON for a CA key import.",
+  },
   "caHierarchy.revoke.title": {
     defaultMessage: "Revoke a CA key",
     description: "CA key revocation panel heading.",

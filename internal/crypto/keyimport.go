@@ -5,6 +5,7 @@ package crypto
 import (
 	"crypto/hpke"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -131,4 +132,14 @@ func SealKeyImport(public, info, plaintext []byte) ([]byte, error) {
 func KeyImportInfo(tenantID, operationID string, expectedSPKI []byte) []byte {
 	digest := sha256.Sum256(expectedSPKI)
 	return []byte("trstctl.ca-key-import.v1\x00" + tenantID + "\x00" + operationID + "\x00" + hex.EncodeToString(digest[:]))
+}
+
+// CertificateSubjectPublicKeyInfo returns a certificate's PKIX public key: the
+// key an imported private key must match.
+func CertificateSubjectPublicKeyInfo(certDER []byte) ([]byte, error) {
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: parse certificate: %w", err)
+	}
+	return append([]byte(nil), cert.RawSubjectPublicKeyInfo...), nil
 }

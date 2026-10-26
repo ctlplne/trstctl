@@ -39,6 +39,7 @@ Purpose values are deliberately concrete:
 | `offline-root:<sha256-of-root-cert-der>:root:<sha256-of-ca-spec>` | Importing a public, self-signed offline root certificate matching `CASpec`. |
 | `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>` | Generating a signer-held CSR under the offline root, then importing the signed intermediate. |
 | `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>` | Importing an existing certificate chain, bound to the named signer-held key handle. |
+| `import-ca-key:<sha256-of-chain-der>:root:<sha256-of-ca-spec>` | Taking a CA's existing private key into signer custody, sealed off-box, and binding that chain to it. |
 | `ca-rekey-v2:<sha256-of-authority/spec/reason>` | Re-keying one active signer-backed authority with the exact reviewed profile and lifetime. |
 | `revoke-ca:<sha256-of-authority/signer-handle/certificate/reason>` | Revoking one signer-backed authority's key for the reviewed reason. |
 | `cross-sign:<ca-id>:<sha256-of-target-cert-der>` | One cross-signature from that CA over the target certificate. |
@@ -419,7 +420,8 @@ paste private-key PEM into the API or UI.
 1. **Use an already-held signer handle.** The signer holds the CA private
    key under a handle constrained to CA signing; the control plane uses only that
    handle and its public key. If the key is not already held by the signer, use
-   the preparation procedure above. The legacy existing-chain import form itself
+   the preparation procedure above for a fresh key, or the next procedure to
+   bring the CA's existing private key. This existing-chain import form itself
    does not create or import a private key.
    A handle belongs to one tenant and one approved ceremony on first use. A
    handle already claimed by another tenant or ceremony is refused before a CA
@@ -467,6 +469,58 @@ already assigned one signer handle to more than one tenant fails migration for
 custody review rather than accepting the ambiguous ownership.
 
 Leaf issuance then uses `POST /api/v1/ca/authorities/{imported-ca-id}/issue`.
+
+## Procedure: importing a CA with its existing private key
+
+Use this when the CA's private key exists today outside trstctl (an OpenSSL CA,
+another CA product, a key file) and the CA should keep its key and certificate.
+The key never crosses the control plane in the clear: the signer offers a
+one-time import key, you seal the PKCS#8 key to it on your own machine, and
+only the sealed bytes pass through trstctl. The signer opens it, refuses it
+unless it is exactly the key the certificate names (and not weak), and holds it
+under the ceremony's own signer handle with CA-signing constraints and dual
+control.
+
+1. **Export the public chain** as in the previous procedure (the imported
+   authority certificate first, then its issuer chain), and convert the private
+   key to unencrypted PKCS#8 PEM on the machine that holds it:
+   `openssl pkcs8 -topk8 -nocrypt -in ca-key.pem -out ca-key.p8.pem`.
+2. **Open the ceremony** with the chain and reviewed `CASpec` (and a registered
+   direct issuer's `parent_id` when there is one). No signer handle: the key
+   is held under the ceremony's own.
+
+   ```json
+   {"operation": "import_ca_key", "threshold": 2, "certificate_pem": "<chain>", "spec": {"common_name": "Example Imported Issuing CA", "ttl_seconds": 71280000, "signature_algorithm": "ECDSA-P256", "max_path_len": 0}}
+   ```
+
+   The `import-ca-key` purpose binds the chain, profile, and parent. In the
+   console, choose **Certificate authorities → Imports → Import the CA's existing
+   private key** and review the ceremony there.
+3. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals`.
+4. **Finish on the machine that holds the key.** Write the import request,
+   `import.json` (the same `ceremony_id`, `certificate_pem`, `spec`, and any
+   `parent_id`; the console's **Download import request** writes it), then:
+
+   ```bash
+   trstctl-cli ca authorities key-offer -f import.json > offer.json
+   trstctl-cli ca authorities wrap-key --offer offer.json --key ca-key.p8.pem --request import.json --out import-sealed.json
+   trstctl-cli ca authorities import-key -f import-sealed.json
+   ```
+
+   `key-offer` (`POST /api/v1/ca/authorities/imported/key-offer`) returns the
+   signer's import key: HPKE base mode with the MLKEM768-P256 hybrid KEM,
+   HKDF-SHA256 and AES-256-GCM, bound to your tenant, this ceremony, and the
+   certificate's public key; a repeat returns the same key until it is used.
+   `wrap-key` runs locally: it refuses a private key that is not the
+   certificate's and writes only the sealed key into the request.
+   `import-key` (`POST /api/v1/ca/authorities/imported/key`) has the signer open
+   and check the key, then binds the chain exactly as the previous procedure
+   does and consumes the ceremony. A key that is not the certificate's answers
+   422; a used ceremony answers 409.
+5. **Verify** that the authority lists as active with `possession_proof:
+   signer_challenge`, and that a leaf it issues chains to your certificate.
+   Then destroy the private key file and any other copy under your own policy:
+   trstctl cannot prove that copies outside it are gone.
 
 ## Procedure: rotating a CA
 

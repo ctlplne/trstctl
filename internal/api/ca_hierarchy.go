@@ -35,6 +35,8 @@ type CAHierarchyService interface {
 	CreateRoot(ctx context.Context, tenantID string, req CACreateRootRequest) (CAAuthority, error)
 	ImportOfflineRoot(ctx context.Context, tenantID string, req CAImportOfflineRootRequest) (CAAuthority, error)
 	ImportExisting(ctx context.Context, tenantID string, req CAImportExistingRequest) (CAAuthority, error)
+	PrepareKeyImport(ctx context.Context, tenantID string, req CAKeyImportOfferRequest) (CAKeyImportOffer, error)
+	ImportKey(ctx context.Context, tenantID string, req CAImportKeyRequest) (CAAuthority, error)
 	PrepareExistingImportCSR(ctx context.Context, tenantID string, req CAPrepareExistingImportCSRRequest) (CAExistingImportCSR, error)
 	GetExistingImportCSR(ctx context.Context, tenantID, ceremonyID string) (CAExistingImportCSR, error)
 	CreateIntermediate(ctx context.Context, tenantID string, req CACreateIntermediateRequest) (CAAuthority, error)
@@ -229,6 +231,40 @@ type CAAuthorityRekeyRequest struct {
 	CeremonyID string `json:"ceremony_id"`
 	TTLSeconds int64  `json:"ttl_seconds,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+}
+
+// CAKeyImportOfferRequest asks for the signer's one-time import key for an
+// import_ca_key ceremony that reached quorum (A128): the same chain, profile and
+// parent the ceremony approved.
+type CAKeyImportOfferRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+	ParentID       string `json:"parent_id,omitempty"`
+	Spec           CASpec `json:"spec"`
+}
+
+// CAKeyImportOffer is what an operator seals the CA's private key to, on their
+// own machine: the import key's public half under Suite, bound by TenantID,
+// OperationID and ExpectedPublicKey (the certificate's key). The signer keeps
+// the key under SignerHandle.
+type CAKeyImportOffer struct {
+	CeremonyID        string `json:"ceremony_id"`
+	TenantID          string `json:"tenant_id"`
+	OperationID       string `json:"operation_id"`
+	Suite             string `json:"suite"`
+	PublicKey         []byte `json:"public_key"`
+	ExpectedPublicKey []byte `json:"expected_public_key"`
+	SignerHandle      string `json:"signer_handle"`
+}
+
+// CAImportKeyRequest carries the sealed private key for an import_ca_key
+// ceremony, with the chain, profile and parent it approved.
+type CAImportKeyRequest struct {
+	CeremonyID     string `json:"ceremony_id"`
+	CertificatePEM string `json:"certificate_pem"`
+	ParentID       string `json:"parent_id,omitempty"`
+	Spec           CASpec `json:"spec"`
+	SealedKey      []byte `json:"sealed_key"`
 }
 
 // CAAuthorityRevokeRequest executes a revoke_ca ceremony that reached quorum
@@ -817,6 +853,50 @@ func (a *API) rekeyCAAuthority(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, rotation, nil
+	})
+}
+
+// prepareCAKeyImport offers the signer's one-time import key for an approved
+// import_ca_key ceremony (A128).
+//
+//trstctl:mutation
+func (a *API) prepareCAKeyImport(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAKeyImportOfferRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		offer, err := a.caHierarchy.PrepareKeyImport(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, offer, nil
+	})
+}
+
+// importCAKey takes a sealed CA private key into signer custody and binds the
+// approved chain to it (A128).
+//
+//trstctl:mutation
+func (a *API) importCAKey(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAImportKeyRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		authority, err := a.caHierarchy.ImportKey(ctx, tenantID, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusCreated, authority, nil
 	})
 }
 

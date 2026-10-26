@@ -182,6 +182,8 @@ func ceremonyPreviewChanges(operation string) []string {
 		return []string{"Prepare an m-of-n ceremony to trust the supplied public offline-root certificate. The offline private key stays outside trstctl."}
 	case "import_existing_ca":
 		return []string{"Prepare an m-of-n ceremony to bind the supplied public CA chain to an existing signer-held key handle."}
+	case "import_ca_key":
+		return []string{"Prepare an m-of-n ceremony to take the CA's existing private key into signer custody for the supplied public chain and profile. After quorum the signer offers a one-time import key; you seal the private key to it on your own machine, and only the sealed key reaches trstctl. No key is created or contacted by this preview."}
 	case "prepare_existing_ca":
 		return []string{"Prepare an m-of-n ceremony to create a tenant-bound signer-held CA key and public CSR for the reviewed external issuer chain. No key is created by this preview."}
 	case "create_intermediate":
@@ -227,6 +229,9 @@ func ceremonyPreviewRisks(operation string) []string {
 	}
 	if strings.Contains(operation, "offline") {
 		risks = append(risks, "Only public certificate material is accepted; private-key material is rejected at the server boundary.")
+	}
+	if operation == "import_ca_key" {
+		risks = append(risks, "The private key existed outside trstctl before this import and may still exist there; trstctl cannot prove other copies were destroyed.")
 	}
 	return risks
 }
@@ -620,6 +625,20 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 		return api.CAAuthority{}, err
 	}
 	preparedImport := strings.HasPrefix(ceremony.Purpose, "prepare-existing-ca:")
+	importedKey := strings.HasPrefix(ceremony.Purpose, "import-ca-key:")
+	if importedKey {
+		// A128: the operator's key was imported under this ceremony's own handle.
+		if req.SignerHandle != hierarchySignerHandle(req.CeremonyID) {
+			return api.CAAuthority{}, fmt.Errorf("%w: an imported CA key is held under its ceremony's signer handle", api.ErrCAHierarchyInvalid)
+		}
+		purpose, err := importCAKeyPurpose(chainDER, req.Spec, req.ParentID)
+		if err != nil {
+			return api.CAAuthority{}, err
+		}
+		if ceremony.Purpose != purpose {
+			return api.CAAuthority{}, fmt.Errorf("%w: CA chain differs from the approved chain, parent or profile", api.ErrCAHierarchyConflict)
+		}
+	}
 	var preparation store.CASignerPreparation
 	if preparedImport {
 		if len(chainDER) < 2 || req.SignerHandle != hierarchySignerHandle(req.CeremonyID) {
@@ -661,7 +680,7 @@ func (h *caHierarchyService) ImportExisting(ctx context.Context, tenantID string
 		return api.CAAuthority{}, fmt.Errorf("%w: %v", api.ErrCAHierarchyInvalid, err)
 	}
 	purpose := ceremony.Purpose
-	if !preparedImport {
+	if !preparedImport && !importedKey {
 		purpose, err = existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
 		if err != nil {
 			return api.CAAuthority{}, err
@@ -1562,6 +1581,15 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 			return "", err
 		}
 		return existingCAPurpose(chainDER, req.SignerHandle, req.Spec, req.ParentID)
+	case "import_ca_key":
+		if strings.TrimSpace(req.SignerHandle) != "" {
+			return "", fmt.Errorf("%w: import_ca_key holds the key under its ceremony's own signer handle; do not supply one", api.ErrCAHierarchyInvalid)
+		}
+		chainDER, _, err := certificateChainPEM(req.CertificatePEM)
+		if err != nil {
+			return "", err
+		}
+		return importCAKeyPurpose(chainDER, req.Spec, req.ParentID)
 	case "prepare_existing_ca":
 		if strings.TrimSpace(req.SignerHandle) != "" {
 			return "", fmt.Errorf("%w: prepare_existing_ca generates its signer handle; do not supply one", api.ErrCAHierarchyInvalid)

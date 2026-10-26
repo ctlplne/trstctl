@@ -103,6 +103,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runSecretScanStagedDiff(ctx, rest[3:], stdout, stderr)
 	}
+	if len(rest) >= 3 && hasPrefix(rest, []string{"ca", "authorities", "wrap-key"}) {
+		if commandHelpRequested(rest[3:]) {
+			caWrapKeyUsage(stdout)
+			return 0
+		}
+		return runCAWrapKey(rest[3:], stdout, stderr)
+	}
 	if len(rest) >= 3 && hasPrefix(rest, []string{"pcas", "kem", "envelope"}) {
 		if commandHelpRequested(rest[3:]) {
 			pcasKEMEnvelopeUsage(stdout)

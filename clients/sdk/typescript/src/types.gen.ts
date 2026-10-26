@@ -1426,6 +1426,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/imported/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take a sealed CA private key into signer custody and bind its approved chain */
+        post: operations["importCAKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ca/authorities/imported/key-offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Offer the signer's one-time import key for an approved import_ca_key ceremony */
+        post: operations["prepareCAKeyImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/intermediates": {
         parameters: {
             query?: never;
@@ -9820,7 +9854,7 @@ export interface components {
             changes: string[];
             normalized_spec: components["schemas"]["CASpec"];
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
             parent?: components["schemas"]["CACeremonyPlanAuthority"];
             preview_external_effects: string[];
             preview_writes: string[];
@@ -9842,7 +9876,7 @@ export interface components {
             dependent_id?: string;
             expected_certificate_sha256?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
             /** Format: uuid */
             parent_id?: string;
             reason?: string;
@@ -9933,6 +9967,19 @@ export interface components {
             signer_handle: string;
             spec: components["schemas"]["CASpec"];
         };
+        CAImportKeyRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            /** Format: uuid */
+            parent_id?: string;
+            /**
+             * Format: byte
+             * @description The PKCS#8 private key sealed to the offer on the operator's machine (trstctl-cli ca authorities wrap-key). Never the plaintext key.
+             */
+            sealed_key: string;
+            spec: components["schemas"]["CASpec"];
+        };
         CAImportOfflineIntermediateRequest: {
             /** Format: uuid */
             ceremony_id: string;
@@ -9994,6 +10041,34 @@ export interface components {
             /** Format: uuid */
             tenant_id: string;
             threshold: number;
+        };
+        CAKeyImportOffer: {
+            /** Format: uuid */
+            ceremony_id: string;
+            /**
+             * Format: byte
+             * @description The certificate's PKIX public key; the private key must match it, and it is part of the sealing binding.
+             */
+            expected_public_key: string;
+            operation_id: string;
+            /**
+             * Format: byte
+             * @description The import key's public half, the bytes to seal the private key to.
+             */
+            public_key: string;
+            signer_handle: string;
+            /** @description The sealing scheme: HPKE base mode with MLKEM768-P256, HKDF-SHA256 and AES-256-GCM. */
+            suite: string;
+            /** Format: uuid */
+            tenant_id: string;
+        };
+        CAKeyImportOfferRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            certificate_pem: string;
+            /** Format: uuid */
+            parent_id?: string;
+            spec: components["schemas"]["CASpec"];
         };
         CAOfflineCrossSignImportRequest: {
             /** Format: uuid */
@@ -22112,6 +22187,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAExistingImportCSR"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importCAKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAImportKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthority"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    prepareCAKeyImport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAKeyImportOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAKeyImportOffer"];
                 };
             };
             /** @description client error */

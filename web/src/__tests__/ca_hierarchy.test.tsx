@@ -455,6 +455,9 @@ describe("CA hierarchy and custody surface", () => {
       if (input.operation === "revoke_ca") {
         return { ...base, id: "ceremony-revoke-ca", purpose: "revoke-ca:reviewed-binding" };
       }
+      if (input.operation === "import_ca_key") {
+        return { ...base, id: "ceremony-key-import", purpose: "import-ca-key:reviewed-chain" };
+      }
       return { ...base, id: "ceremony-root-1", purpose: "create_root:Trust Root CA" };
     });
     apiMock.approveCACeremony.mockResolvedValue({
@@ -1725,6 +1728,33 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("customer-existing-ca").length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
+  }, 15_000);
+
+  it("starts a CA key import ceremony and hands the sealing to the operator's machine", async () => {
+    const user = userEvent.setup();
+    renderCAHierarchy();
+
+    await user.selectOptions(await screen.findByLabelText("Key preparation path"), "keyimport");
+    expect(screen.queryByLabelText("Signer handle")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import existing CA" })).not.toBeInTheDocument();
+    const rootPEM = "-----BEGIN CERTIFICATE-----\nEXISTINGROOT\n-----END CERTIFICATE-----";
+    await user.type(screen.getByLabelText("Existing CA chain PEM"), rootPEM);
+    await user.click(screen.getByRole("button", { name: "Review CA import ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
+
+    await waitFor(() =>
+      expect(apiMock.createCACeremony).toHaveBeenCalledWith({
+        operation: "import_ca_key",
+        threshold: 2,
+        certificate_pem: rootPEM,
+        spec: expect.objectContaining({ common_name: "Imported Existing CA" }),
+      }),
+    );
+    expect(await screen.findByDisplayValue("ceremony-key-import")).toBeInTheDocument();
+    const steps = await screen.findByRole("region", { name: "Finish on your machine" });
+    expect(within(steps).getByText(/ca authorities wrap-key --offer offer.json --key ca-key.pem/)).toBeInTheDocument();
+    expect(within(steps).getByRole("button", { name: "Download import request" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/private key/i)).not.toBeInTheDocument();
   }, 15_000);
 
   it("prepares a tenant-bound public CSR before accepting the externally signed CA chain", async () => {

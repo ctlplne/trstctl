@@ -2580,6 +2580,18 @@ CAImportExistingRequest = TypedDict(
     total=False,
 )
 
+CAImportKeyRequest = TypedDict(
+    'CAImportKeyRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'parent_id': str,
+        'sealed_key': str,
+        'spec': dict[str, Any],
+    },
+    total=False,
+)
+
 CAImportOfflineIntermediateRequest = TypedDict(
     'CAImportOfflineIntermediateRequest',
     {
@@ -2666,6 +2678,31 @@ CAKeyCeremony = TypedDict(
         'status': str,
         'tenant_id': str,
         'threshold': int,
+    },
+    total=False,
+)
+
+CAKeyImportOffer = TypedDict(
+    'CAKeyImportOffer',
+    {
+        'ceremony_id': str,
+        'expected_public_key': str,
+        'operation_id': str,
+        'public_key': str,
+        'signer_handle': str,
+        'suite': str,
+        'tenant_id': str,
+    },
+    total=False,
+)
+
+CAKeyImportOfferRequest = TypedDict(
+    'CAKeyImportOfferRequest',
+    {
+        'ceremony_id': str,
+        'certificate_pem': str,
+        'parent_id': str,
+        'spec': dict[str, Any],
     },
     total=False,
 )

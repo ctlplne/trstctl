@@ -34,6 +34,25 @@ func existingCAPurpose(chainDER [][]byte, signerHandle string, spec api.CASpec, 
 	return purpose, nil
 }
 
+// importCAKeyPurpose binds an import_ca_key ceremony to the exact public chain,
+// profile and parent of a CA whose existing private key the operator takes into
+// signer custody (A128). The key is held under the ceremony's own signer
+// handle, so the handle is not part of the purpose.
+func importCAKeyPurpose(chainDER [][]byte, spec api.CASpec, parentID string) (string, error) {
+	if len(chainDER) == 0 {
+		return "", fmt.Errorf("%w: the CA certificate chain is required", api.ErrCAHierarchyInvalid)
+	}
+	profilePurpose, err := hierarchyPurpose("create_root", "", spec)
+	if err != nil {
+		return "", err
+	}
+	purpose := "import-ca-key:" + crypto.SHA256Hex(flattenDERChain(chainDER)) + ":" + profilePurpose
+	if parentID != "" {
+		purpose += ":parent:" + parentID
+	}
+	return purpose, nil
+}
+
 func preparedExistingCAPurpose(issuerChainDER [][]byte, spec api.CASpec, parentID string) (string, error) {
 	if len(issuerChainDER) == 0 {
 		return "", fmt.Errorf("%w: issuer certificate chain is required", api.ErrCAHierarchyInvalid)

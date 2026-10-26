@@ -1748,7 +1748,7 @@ export interface CACeremonyPlanPreview {
   capability: "F48";
   changes: string[];
   normalized_spec: CASpec;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
   parent?: CACeremonyPlanAuthority;
   preview_external_effects: string[];
   preview_writes: string[];
@@ -1768,7 +1768,7 @@ export interface CACeremonyStartRequest {
   csr_pem?: string;
   dependent_id?: string;
   expected_certificate_sha256?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca" | "import_ca_key";
   parent_id?: string;
   reason?: string;
   reverse_cross_certificate_pem?: string;
@@ -1854,6 +1854,14 @@ export interface CAImportExistingRequest {
   spec: CASpec;
 }
 
+export interface CAImportKeyRequest {
+  ceremony_id: string;
+  certificate_pem: string;
+  parent_id?: string;
+  sealed_key: string;
+  spec: CASpec;
+}
+
 export interface CAImportOfflineIntermediateRequest {
   ceremony_id: string;
   certificate_pem: string;
@@ -1910,6 +1918,23 @@ export interface CAKeyCeremony {
   status: string;
   tenant_id: string;
   threshold: number;
+}
+
+export interface CAKeyImportOffer {
+  ceremony_id: string;
+  expected_public_key: string;
+  operation_id: string;
+  public_key: string;
+  signer_handle: string;
+  suite: string;
+  tenant_id: string;
+}
+
+export interface CAKeyImportOfferRequest {
+  ceremony_id: string;
+  certificate_pem: string;
+  parent_id?: string;
+  spec: CASpec;
 }
 
 export interface CAOfflineCrossSignImportRequest {

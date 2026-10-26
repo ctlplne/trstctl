@@ -5488,11 +5488,12 @@ verbs in the isolated signer: generate (root, intermediate, or a key and CSR
 for an external issuer), rotate and re-key, revoke (`POST
 /api/v1/ca/authorities/{id}/revoke` after a `revoke_ca` ceremony: the signer
 refuses every signature with the key, the authority stops issuing, and its
-certificate is revoked on a managed parent's CRL), and destroy through signed
-retirement. Importing an existing CA private key into signer custody is what
-comes next: `import_existing_ca` binds a chain to a key already held by the
-signer, and no served path yet carries an operator's key into it. The secrets
-KEK's lifecycle is still library-tier (generate-or-import → rotate → revoke →
+certificate is revoked on a managed parent's CRL), import (an `import_ca_key`
+ceremony takes a CA's existing private key into the signer, sealed on the
+operator's machine to a one-time HPKE MLKEM768-P256 import key, so the control
+plane relays only sealed bytes), and destroy through signed retirement. An
+imported key may still exist where it came from; trstctl cannot prove other
+copies were destroyed. The secrets KEK's lifecycle is still library-tier (generate-or-import → rotate → revoke →
 zeroize is implemented and end-to-end tested but reachable from no served
 verb). Break-glass
 issue/rotation/cross-sign and offline-root public re-key/cross-sign import
