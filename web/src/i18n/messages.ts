@@ -4550,6 +4550,68 @@ export const messages = {
     defaultMessage: "Executor",
     description: "C2: run table column showing the relay or control-plane executor provenance.",
   },
+  "discovery.k8sDelivery.title": {
+    defaultMessage: "In-cluster delivery",
+    description: "B15-L1: heading of the Kubernetes TLS source fields that bind the source to the agent running in the cluster.",
+  },
+  "discovery.k8sDelivery.body": {
+    defaultMessage:
+      "Bind the host-role agent running in this cluster to deliver a certificate for each TLS block. The agent generates the key inside the cluster, sends only a certificate request and writes the Secret the TLS block names. Without an agent this source only inventories what it finds.",
+    description: "B15-L1: explains in-cluster delivery on the Kubernetes TLS source form; the control plane never holds the key.",
+  },
+  "discovery.k8sDelivery.agent": {
+    defaultMessage: "Cluster agent",
+    description: "B15-L1: label of the picker for the host-role agent that delivers into the cluster.",
+  },
+  "discovery.k8sDelivery.agentHelp": {
+    defaultMessage: "An enrolled host-role agent running in this cluster, with a host exec profile that lists the namespaces it may write.",
+    description: "B15-L1: what the cluster agent must be for delivery to work.",
+  },
+  "discovery.k8sDelivery.inventoryOnly": {
+    defaultMessage: "None (inventory only)",
+    description: "B15-L1: cluster agent choice that leaves the source inventory-only.",
+  },
+  "discovery.k8sDelivery.owner": {
+    defaultMessage: "Certificate owner",
+    description: "B15-L1: label of the owner picker for identities the source creates.",
+  },
+  "discovery.k8sDelivery.ownerHelp": {
+    defaultMessage: "Owns the certificate identities this source creates, one for each TLS block.",
+    description: "B15-L1: what the owner of a delivering Kubernetes TLS source means.",
+  },
+  "discovery.k8sDelivery.chooseOwner": {
+    defaultMessage: "Choose an owner",
+    description: "B15-L1: empty choice of the owner picker; an owner is required with a cluster agent.",
+  },
+  "discovery.k8sDelivery.verifyAddress": {
+    defaultMessage: "Verify address",
+    description: "B15-L1: label of the optional host:port the agent dials to confirm the new certificate is served.",
+  },
+  "discovery.k8sDelivery.verifyAddressHelp": {
+    defaultMessage:
+      "Optional host and port the agent dials after writing the Secret to confirm the new certificate is served, such as the ingress controller's Service. Without it the agent confirms only that the Secret holds the new certificate, and trstctl does not claim the certificate is live.",
+    description: "B15-L1: what the verify address does and what happens without it.",
+  },
+  "discovery.k8sDelivery.verifyAddressPlaceholder": {
+    defaultMessage: "ingress-nginx-controller.ingress-nginx.svc:443",
+    description: "B15-L1: example verify address; a cluster Service host and port.",
+  },
+  "discovery.k8sDelivery.loadFailed": {
+    defaultMessage: "Agents or owners could not be loaded, so no cluster agent can be chosen. Reload the page to try again.",
+    description: "B15-L1: the agent or owner list for the cluster delivery fields failed to load.",
+  },
+  "discovery.source.clusterAgentShort": {
+    defaultMessage: "cluster agent {id}",
+    description: "B15-L1: execution binding suffix naming the in-cluster agent a Kubernetes TLS source delivers through.",
+  },
+  "discovery.run.delivered": {
+    defaultMessage: "{count} delivered",
+    description: "B15-L1: Kubernetes TLS resources whose Secret the in-cluster agent wrote, under a run's target count.",
+  },
+  "discovery.run.deliveryQueued": {
+    defaultMessage: "{count} queued for delivery",
+    description: "B15-L1: Kubernetes TLS resources handed to the in-cluster agent and not yet written, under a run's target count.",
+  },
   "discovery.run.targetOutcomes": {
     defaultMessage: "Target outcomes",
     description: "C2: accessible label for the per-target outcome list under a failed or partial discovery run.",
@@ -30946,7 +31008,7 @@ export const messages = {
   "lifecycle.status.notDelivered": {
     defaultMessage: "Not delivered",
     description:
-      "B15-L1: a Kubernetes TLS resource a discovery run found and could not deliver a certificate to, because the in-cluster agent that writes the Secret is not built yet.",
+      "B15-L1: a Kubernetes TLS resource a discovery run found and could not deliver a certificate to; the run states the reason, such as no in-cluster agent bound to the source.",
   },
   "identities.automation.pendingHeading": { defaultMessage: "Renewals to review or unblock", description: "Heading above due or blocked renewals." },
   "identities.automation.expires": { defaultMessage: " · expires {time}", description: "Certificate expiry in lifecycle plan." },

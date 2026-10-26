@@ -8,6 +8,7 @@ import { ErrorState, LoadingState, PermissionDeniedState } from "@/components/St
 import { StatusBadge } from "@/components/StatusBadge";
 import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type SourceActivity } from "./discovery/DiscoveryPageParts";
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
+import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
 import { RunTable } from "./discovery/DiscoveryRunTableParts";
@@ -639,6 +640,7 @@ export function Discovery() {
   const [adcsEnrollmentEndpoints, setADCSEnrollmentEndpoints] = useState("");
   const [adcsAllowPrivateEndpoint, setADCSAllowPrivateEndpoint] = useState(false);
   const [adcsPrivateEgressCIDRs, setADCSPrivateEgressCIDRs] = useState("");
+  const [kubernetesDelivery, setKubernetesDelivery] = useState<KubernetesDelivery>(emptyKubernetesDelivery);
   const [structuredRows, setStructuredRows] = useState<Record<StructuredSourceKind, StructuredRow[]>>(() => initialStructuredRows());
   const [structuredTemplates, setStructuredTemplates] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredTemplates());
   const [structuredJSONImports, setStructuredJSONImports] = useState<Record<StructuredSourceKind, string>>(() => initialStructuredJSONImports());
@@ -832,7 +834,10 @@ export function Discovery() {
                 ...(relayAgentID.trim() ? { relay_agent_id: relayAgentID.trim() } : {}),
               }
             : isStructuredSourceKind(sourceKind)
-              ? buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind])
+              ? {
+                  ...buildStructuredSourceConfig(sourceKind, structuredRows[sourceKind], structuredJSONImports[sourceKind]),
+                  ...(sourceKind === "k8s_ingress_gateway" ? kubernetesDeliveryConfig(kubernetesDelivery) : {}),
+                }
               : {};
       const request: DiscoverySourceRequest = { name: sourceName.trim(), kind: sourceKind, config };
       if (sourceKind === "api_key") {
@@ -862,6 +867,7 @@ export function Discovery() {
       setTargets("");
       setSegment("");
       setRelayAgentID("");
+      setKubernetesDelivery(emptyKubernetesDelivery);
       setADCSURL("ldaps://");
       setADCSConfigurationDN("");
       setADCSBindDN("");
@@ -1191,6 +1197,7 @@ export function Discovery() {
                 onToggleJSONImport={() => setOpenJSONImportKind((current) => (current === sourceKind ? null : sourceKind))}
               />
             )}
+            {sourceKind === "k8s_ingress_gateway" && <KubernetesDeliveryFields value={kubernetesDelivery} onChange={setKubernetesDelivery} />}
             {sourceKind === "api_key" && apiKeyPlanIsCurrent && apiKeyDraft && apiKeyPlan ? (
               <section aria-label={t("discovery.importPreview.label")} className="grid gap-4 rounded-panel border border-brand-accent/25 bg-brand-accent/5 p-4">
                 <div className="flex items-start gap-3">
@@ -3212,6 +3219,9 @@ function targetCount(source: DiscoverySource): string {
 }
 
 function relayBinding(source: DiscoverySource): string {
+  if (source.kind === "k8s_ingress_gateway" && typeof source.config.cluster_agent_id === "string") {
+    return `${translateNow("discovery.run.controlPlane")} · ${translateNow("discovery.source.clusterAgentShort", { id: shortID(source.config.cluster_agent_id) })}`;
+  }
   if (source.kind !== "network" && source.kind !== "ssh") return translateNow("discovery.run.controlPlane");
   const segment = typeof source.config.segment === "string" ? source.config.segment : translateNow("discovery.run.unbound");
   const relay = typeof source.config.relay_agent_id === "string" ? ` · ${shortID(source.config.relay_agent_id)}` : "";

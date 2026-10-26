@@ -1606,6 +1606,101 @@ describe("discovery control-plane surface", () => {
     await waitFor(() => expect(apiMock.ctMonitoring).toHaveBeenCalledTimes(2));
   });
 
+  it("B15-L1 binds a Kubernetes TLS source to the host-role agent running in the cluster", async () => {
+    const agent = (id: string, name: string, roles: Array<"host" | "network">, offboarded?: string) => ({
+      id,
+      name,
+      roles,
+      status: "active",
+      ...(offboarded ? { offboarded_at: offboarded } : {}),
+    });
+    apiMock.agents.mockResolvedValue([
+      agent("a1b2c3d4-0000-4000-8000-000000000001", "payments-cluster", ["host"]),
+      agent("a1b2c3d4-0000-4000-8000-000000000002", "dmz-relay", ["network"]),
+      agent("a1b2c3d4-0000-4000-8000-000000000003", "retired-cluster", ["host"], "2026-10-01T00:00:00Z"),
+    ]);
+    const user = userEvent.setup();
+    renderDiscovery(["/discovery?tab=sources"]);
+
+    await screen.findByRole("heading", { name: "Import sanitized observations" });
+    const sourceForm = screen.getByRole("heading", { name: "Import sanitized observations" }).closest("form") as HTMLFormElement;
+    await user.type(within(sourceForm).getByLabelText("Name"), "payments-k8s");
+    await user.selectOptions(within(sourceForm).getByLabelText("Kind"), "k8s_ingress_gateway");
+    await user.click(within(sourceForm).getByRole("button", { name: "Advanced JSON import" }));
+    fireEvent.change(within(sourceForm).getByLabelText("Kubernetes TLS JSON import"), {
+      target: {
+        value: JSON.stringify([
+          { kind: "Ingress", namespace: "payments", name: "payments-web", tls_secret_name: "payments-web-tls", hosts: ["payments.example.com"] },
+        ]),
+      },
+    });
+
+    const delivery = within(sourceForm).getByRole("group", { name: "In-cluster delivery" });
+    const agentPicker = within(delivery).getByLabelText("Cluster agent");
+    await waitFor(() => expect(within(agentPicker).getAllByRole("option")).toHaveLength(2));
+    expect(within(agentPicker).getByRole("option", { name: "None (inventory only)" })).toBeInTheDocument();
+    expect(within(agentPicker).getByRole("option", { name: /payments-cluster/ })).toBeInTheDocument();
+    expect(within(delivery).queryByLabelText(/Certificate owner/)).not.toBeInTheDocument();
+
+    await user.selectOptions(agentPicker, "a1b2c3d4-0000-4000-8000-000000000001");
+    const ownerPicker = within(delivery).getByLabelText(/Certificate owner/);
+    expect(ownerPicker).toBeRequired();
+    await user.selectOptions(ownerPicker, "owner-platform");
+    await user.type(within(delivery).getByLabelText("Verify address"), "ingress-nginx-controller.ingress-nginx.svc:443");
+    await user.click(within(sourceForm).getByRole("button", { name: "Create source" }));
+
+    expect(apiMock.createDiscoverySource).toHaveBeenCalledWith({
+      name: "payments-k8s",
+      kind: "k8s_ingress_gateway",
+      config: expect.objectContaining({
+        cluster_agent_id: "a1b2c3d4-0000-4000-8000-000000000001",
+        owner_id: "owner-platform",
+        verify_address: "ingress-nginx-controller.ingress-nginx.svc:443",
+        resources: [expect.objectContaining({ kind: "Ingress", namespace: "payments", tls_secret_name: "payments-web-tls" })],
+      }),
+    });
+  });
+
+  it("B15-L1 counts Kubernetes TLS resources queued for or delivered by the cluster agent apart from failures", async () => {
+    apiMock.discoveryRuns.mockResolvedValueOnce({
+      items: [
+        {
+          id: "run-k8s-delivery",
+          tenant_id: "tenant-1",
+          source_id: "source-k8s",
+          status: "partial",
+          dry_run: false,
+          execution: "control_plane",
+          targets: 3,
+          discovered: 3,
+          failed: 0,
+          rejected: 0,
+          blocked: 0,
+          error: "1 Kubernetes TLS resource was not delivered: this resource's identity is retired; it is not delivered again",
+          target_results: [
+            { kind: "k8s_tls_auto_issuance", target: "Gateway:edge/gw", status: "delivered" },
+            { kind: "k8s_tls_auto_issuance", target: "Ingress:payments/api", status: "delivery_queued" },
+            {
+              kind: "k8s_tls_auto_issuance",
+              target: "Ingress:payments/web",
+              status: "not_delivered",
+              error: "this resource's identity is retired; it is not delivered again",
+            },
+          ],
+          created_at: "2026-10-26T10:02:00Z",
+          completed_at: "2026-10-26T10:02:05Z",
+        },
+      ],
+    });
+    renderDiscovery(["/discovery?tab=runs"]);
+
+    const outcomes = await screen.findByRole("list", { name: "Target outcomes" });
+    expect(within(outcomes).getByText("Ingress:payments/web")).toBeInTheDocument();
+    expect(within(outcomes).queryByText("Gateway:edge/gw")).not.toBeInTheDocument();
+    expect(within(outcomes).queryByText("Ingress:payments/api")).not.toBeInTheDocument();
+    expect(screen.getByText("1 delivered · 1 queued for delivery")).toBeInTheDocument();
+  });
+
   it("B15-L1 reports each Kubernetes TLS resource as not delivered, with the reason", async () => {
     apiMock.discoveryRuns.mockResolvedValueOnce({
       items: [
@@ -1621,13 +1716,13 @@ describe("discovery control-plane surface", () => {
           failed: 0,
           rejected: 0,
           blocked: 0,
-          error: "1 Kubernetes TLS resource was not delivered: the in-cluster agent mode is not built yet",
+          error: "1 Kubernetes TLS resource was not delivered: no in-cluster agent is bound to this source",
           target_results: [
             {
               kind: "k8s_tls_auto_issuance",
               target: "Ingress:payments/web",
               status: "not_delivered",
-              error: "not delivered: an in-cluster agent writes the Secret, and that agent mode is not built yet",
+              error: "no in-cluster agent is bound to this source: set cluster_agent_id to the host-role agent running in the cluster",
             },
           ],
           created_at: "2026-10-25T10:02:00Z",
@@ -1640,11 +1735,11 @@ describe("discovery control-plane surface", () => {
     const outcomes = await screen.findByRole("list", { name: "Target outcomes" });
     expect(within(outcomes).getByText("Ingress:payments/web")).toBeInTheDocument();
     expect(within(outcomes).getByText("Not delivered")).toBeInTheDocument();
-    expect(within(outcomes).getByText(/that agent mode is not built yet/)).toBeInTheDocument();
+    expect(within(outcomes).getByText(/set cluster_agent_id to the host-role agent/)).toBeInTheDocument();
   });
 
   it("states a reason the run summary already gives once, not under every resource", async () => {
-    const reason = "trstctl delivers a Kubernetes TLS Secret through an in-cluster agent; that agent mode is not built yet";
+    const reason = "no in-cluster agent is bound to this source: set cluster_agent_id to the host-role agent running in the cluster";
     apiMock.discoveryRuns.mockResolvedValueOnce({
       items: [
         {
@@ -1675,8 +1770,8 @@ describe("discovery control-plane surface", () => {
     expect(within(outcomes).getByText("Gateway:edge/gw")).toBeInTheDocument();
     expect(within(outcomes).getByText("Ingress:payments/web")).toBeInTheDocument();
     expect(within(outcomes).getAllByText("Not delivered")).toHaveLength(2);
-    expect(within(outcomes).queryByText(/that agent mode is not built yet/)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/that agent mode is not built yet/)).toHaveLength(1);
+    expect(within(outcomes).queryByText(/set cluster_agent_id/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/set cluster_agent_id/)).toHaveLength(1);
   });
 
   it("recovers a failed run as a separate server-backed run and renders lineage after reload", async () => {

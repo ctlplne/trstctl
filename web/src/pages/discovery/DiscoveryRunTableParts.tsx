@@ -19,6 +19,21 @@ function gridControlsToolbar({ columnChooser, savedViews }: DataGridToolbarContr
   return <DataGridToolbar columnChooser={columnChooser} savedViews={savedViews} />;
 }
 
+// A Kubernetes TLS resource handed to its source's in-cluster agent is queued
+// for delivery, then delivered once the agent reports; neither is a failure.
+const deliveryStatuses = new Set(["delivery_queued", "delivered"]);
+
+function deliverySummary(run: DiscoveryRun): string | null {
+  const results = run.target_results ?? [];
+  const delivered = results.filter((result) => result.status === "delivered").length;
+  const queued = results.filter((result) => result.status === "delivery_queued").length;
+  const parts = [
+    delivered > 0 ? translateNow("discovery.run.delivered", { count: delivered }) : null,
+    queued > 0 ? translateNow("discovery.run.deliveryQueued", { count: queued }) : null,
+  ].filter((part): part is string => part !== null);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 function runExecution(run: DiscoveryRun): string {
   if (run.execution !== "relay") return translateNow("discovery.run.controlPlane");
   const relay = run.executed_by_agent_id || run.required_agent_id;
@@ -63,7 +78,16 @@ export function RunTable({
     {
       id: "targets",
       header: "Targets",
-      cell: (run) => run.targets,
+      cell: (run) => {
+        const delivery = deliverySummary(run);
+        if (!delivery) return run.targets;
+        return (
+          <div className="grid gap-0.5">
+            <span>{run.targets}</span>
+            <span className="text-xs text-muted-foreground">{delivery}</span>
+          </div>
+        );
+      },
     },
     {
       id: "discovered",
@@ -79,7 +103,7 @@ export function RunTable({
       id: "failure-detail",
       header: "Failure detail",
       cell: (run) => {
-        const unresolved = (run.target_results ?? []).filter((result) => result.status !== "succeeded");
+        const unresolved = (run.target_results ?? []).filter((result) => result.status !== "succeeded" && !deliveryStatuses.has(result.status));
         if (!run.error && unresolved.length === 0) {
           return <span className="text-muted-foreground">—</span>;
         }

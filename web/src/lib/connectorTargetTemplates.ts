@@ -64,6 +64,16 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
         reload_action: "java-tls-reload",
         ...hostVerification,
       };
+    case "k8s_secret":
+      // The in-cluster agent generates the key and writes this Secret; the
+      // server refuses the target without executor=agent.
+      return {
+        ...hostCustody,
+        namespace: "payments",
+        secret_name: "payments-web-tls",
+        verify_address: "ingress-nginx-controller.ingress-nginx.svc:443",
+        verify_server_name: "service.example.com",
+      };
     case "envoy":
       return { endpoint: "http://127.0.0.1:9901", secret_name: "server_cert" };
     case "f5":

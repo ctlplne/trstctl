@@ -16,6 +16,7 @@ const HOST_FAMILIES = [
   "iis",
   "postfix",
   "java-keystore",
+  "k8s_secret",
 ];
 const ALL = [
   ...HOST_FAMILIES,
@@ -62,6 +63,7 @@ describe("connector target templates", () => {
       config_path: "/etc/traefik/dynamic.yml",
     });
     expect(defaultTargetConfigObject("iis")).toMatchObject({ binding: "*:443:service.example.com", import_dir: "C:/trstctl/import" });
+    expect(defaultTargetConfigObject("k8s_secret")).toMatchObject({ namespace: "payments", secret_name: "payments-web-tls" });
     expect(defaultTargetConfigObject("java-keystore")).toMatchObject({
       alias: "server",
       format: "pkcs12",
