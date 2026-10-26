@@ -29,9 +29,11 @@ func TestAgentResponseAdvertisesOnlyCertificateRoleJobCapabilities(t *testing.T)
 			wantFlags: []string{"--host-exec-profile", "--host-rollback-dir"},
 		},
 		{
+			// A122: a network relay renews the appliances that generate their
+			// own key, so it advertises endpoint.renew for those families only.
 			name: "network", roles: []string{mtls.AgentRoleNetwork},
-			wantKinds:      []string{"discovery.run", "endpoint.verify", "connector.deploy"},
-			absentKinds:    []string{"endpoint.contain", "endpoint.renew"},
+			wantKinds:      []string{"discovery.run", "endpoint.verify", "connector.deploy", "endpoint.renew"},
+			absentKinds:    []string{"endpoint.contain"},
 			wantConnectors: []string{"f5"}, absentTargets: []string{"apache"},
 			absentFlags: []string{"--host-exec-profile", "--host-rollback-dir"},
 		},
@@ -67,6 +69,12 @@ func TestAgentResponseAdvertisesOnlyCertificateRoleJobCapabilities(t *testing.T)
 			for _, kind := range tc.absentKinds {
 				if _, ok := kinds[kind]; ok {
 					t.Errorf("role %v advertises unclaimable job %s", tc.roles, kind)
+				}
+			}
+			if renew, ok := kinds["endpoint.renew"]; ok && slices.Contains(tc.roles, mtls.AgentRoleNetwork) &&
+				!slices.Contains(tc.roles, mtls.AgentRoleHost) {
+				if !slices.Contains(renew.Connectors, "netscaler") || slices.Contains(renew.Connectors, "nginx") {
+					t.Errorf("a relay's endpoint.renew connectors = %v, want the appliance families only", renew.Connectors)
 				}
 			}
 			deploy := kinds["connector.deploy"]

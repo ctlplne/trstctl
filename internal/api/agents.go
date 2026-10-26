@@ -463,9 +463,13 @@ func agentReportedCapabilities(a store.Agent) []agentReportedCapabilityResponse 
 				connectors = append(connectors, name)
 			}
 		}
-		missing := append([]string(nil), kind.MissingFlags...)
-		if missing == nil {
-			missing = []string{}
+		// A host-only flag a network relay leaves unset switches nothing off
+		// for it: it is not missing (A122).
+		missing := []string{}
+		for _, flag := range kind.MissingFlags {
+			if agentFlagApplies(a.Roles, flag) {
+				missing = append(missing, flag)
+			}
 		}
 		out = append(out, agentReportedCapabilityResponse{Kind: kind.Kind, Connectors: connectors, MissingFlags: missing, Enabled: len(missing) == 0})
 	}
@@ -500,8 +504,7 @@ func agentRelayCapabilities(roles []string) []agentRelayCapabilityResponse {
 		}
 		flags := make([]string, 0, len(kind.Flags))
 		for _, flag := range kind.Flags {
-			if slices.Contains(roles, mtls.AgentRoleHost) ||
-				(flag != "--host-exec-profile" && flag != "--host-rollback-dir") {
+			if agentFlagApplies(roles, flag) {
 				flags = append(flags, flag)
 			}
 		}
@@ -512,6 +515,13 @@ func agentRelayCapabilities(roles []string) []agentRelayCapabilityResponse {
 		})
 	}
 	return out
+}
+
+// agentFlagApplies reports whether an agent flag switches anything on for an
+// agent holding roles: the host-only flags apply only to a host-role agent.
+func agentFlagApplies(roles []string, flag string) bool {
+	return slices.Contains(roles, mtls.AgentRoleHost) ||
+		(flag != "--host-exec-profile" && flag != "--host-rollback-dir")
 }
 
 func toAgentResponse(a store.Agent) agentResponse {

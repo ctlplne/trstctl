@@ -2,7 +2,10 @@
 
 package relay
 
-import "trstctl.com/trstctl/internal/crypto/mtls"
+import (
+	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+)
 
 // What this build can actually execute (epic A3, the C1a discipline).
 //
@@ -62,19 +65,23 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
-			// B2: host-generated renewal. HOST connectors only, and that is the
-			// whole point of it being a distinct kind rather than a flag on
-			// connector.deploy: the key is generated on the machine that will
-			// serve it, so a vantage that merely reaches the target cannot
-			// perform this work at all.
+			// B2: renewal with the key generated where it will be used, never
+			// in the control plane: on the host that serves it (host
+			// connectors, host role), or, for an appliance target that
+			// declared key_generation=appliance, by the appliance itself at a
+			// network relay's request (A122). The per-row role demand keeps
+			// host work on hosts and appliance work on the pinned relay.
 			//
-			// It redeems no credential, because the credential does not exist
-			// until this agent makes it. That is the one kind in this census
-			// whose material flows UP.
+			// A host renewal redeems no key: the key does not exist until this
+			// agent makes it, which makes this the one kind in the census whose
+			// material flows UP. Management credentials (a keystore password,
+			// an appliance login) are redeemed per attempt as for any job.
+			// --host-exec-profile applies to host agents only, as for
+			// connector.deploy.
 			Kind:       KindEndpointRenew,
-			Connectors: HostConnectorKinds(),
+			Connectors: append(append([]string(nil), HostConnectorKinds()...), connector.ApplianceKeyFamilies()...),
 			Flags:      []string{"--relay-claim", "--host-exec-profile"},
-			Roles:      []string{mtls.AgentRoleHost},
+			Roles:      []string{mtls.AgentRoleHost, mtls.AgentRoleNetwork},
 		},
 		{
 			// D5: the dry-run. Appliance relays resolve their management credential

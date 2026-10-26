@@ -27,7 +27,7 @@ import (
 func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish(t *testing.T) {
 	ctx := context.Background()
 	const eventType = "agent.jobs.role_refused"
-	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{"endpoint.renew"}, func(*Deps) {})
+	h := newRoleHarnessWithDeps(t, []string{mtls.AgentRoleNetwork}, []string{"endpoint.contain"}, func(*Deps) {})
 	svc, ok := h.srv.agentServiceForTest()
 	if !ok {
 		t.Fatal("agent service is not assembled")
@@ -98,9 +98,11 @@ func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish
 		return rows
 	}
 	// A network relay reaching for host work is refused and the reach recorded.
+	// (endpoint.contain stays host-only; endpoint.renew also carries appliance
+	// renewals a relay runs, A122.)
 	reach := func() {
 		t.Helper()
-		if _, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"endpoint.renew"}, Limit: 1, LeaseSeconds: 60}); err != nil {
+		if _, err := h.client.ClaimJobs(ctx, &transport.ClaimJobsRequest{Kinds: []string{"endpoint.contain"}, Limit: 1, LeaseSeconds: 60}); err != nil {
 			t.Fatalf("claim: %v", err)
 		}
 	}
@@ -126,7 +128,7 @@ func TestServedAgentAuditEventsRetryThroughTheOutboxAfterAnUnacknowledgedPublish
 		t.Fatalf("drain: %v", err)
 	}
 	got := recorded()
-	if len(got) != 1 || got[0].ID != queued.ID || !strings.Contains(string(got[0].Data), `"endpoint.renew"`) {
+	if len(got) != 1 || got[0].ID != queued.ID || !strings.Contains(string(got[0].Data), `"endpoint.contain"`) {
 		t.Fatalf("events after drain = %+v, want the queued event once under id %s", got, queued.ID)
 	}
 

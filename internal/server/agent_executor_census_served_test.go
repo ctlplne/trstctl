@@ -138,3 +138,55 @@ func jsonListEquals(value any, want []string) bool {
 	}
 	return slices.Equal(got, want)
 }
+
+// A network relay is not missing a host-only flag: --host-exec-profile and
+// --host-rollback-dir switch on host work, so a relay that reports them unset
+// still has connector.deploy and appliance renewal (A122) enabled, and its
+// renewal connectors are the appliances that generate their own key.
+func TestServedRelayIsNotReportedMissingHostOnlyFlags(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleNetwork})
+	tok := seedScopedToken(t, h.store, h.tenant, "agents:read")
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{
+		AgentID: h.agent, Version: "relay-1.0.0", Status: "active",
+		Executors: &transport.ExecutorReport{Version: "relay-1.0.0", Kinds: []transport.ExecutorKind{
+			{Kind: "connector.deploy", Connectors: []string{"netscaler", "nginx"}, MissingFlags: []string{"--host-exec-profile"}},
+			{Kind: "endpoint.renew", Connectors: []string{"nginx", "netscaler"}, MissingFlags: []string{"--host-exec-profile"}},
+		}},
+	}); err != nil {
+		t.Fatalf("heartbeat: %v", err)
+	}
+	status, body := secretsReq(t, h.servedHarness, http.MethodGet, "/api/v1/agents", tok, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list agents = %d %s", status, body)
+	}
+	var response struct {
+		Agents []struct {
+			Name     string `json:"name"`
+			Reported []struct {
+				Kind         string   `json:"kind"`
+				Connectors   []string `json:"connectors"`
+				MissingFlags []string `json:"missing_flags"`
+				Enabled      bool     `json:"enabled"`
+			} `json:"reported_capabilities"`
+		} `json:"agents"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, agent := range response.Agents {
+		if agent.Name != h.agent {
+			continue
+		}
+		for _, kind := range agent.Reported {
+			if !kind.Enabled || len(kind.MissingFlags) != 0 || !slices.Equal(kind.Connectors, []string{"netscaler"}) {
+				t.Errorf("%s for a network relay = %+v, want enabled with only the appliance connector", kind.Kind, kind)
+			}
+			found++
+		}
+	}
+	if found != 2 {
+		t.Fatalf("reported kinds for the relay = %d, want connector.deploy and endpoint.renew: %s", found, body)
+	}
+}

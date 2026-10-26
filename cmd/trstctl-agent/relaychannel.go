@@ -120,7 +120,7 @@ func (r relayChannel) ReportJobResultWithCustody(ctx context.Context, jobID int6
 	if id == nil {
 		return false, errors.New("trstctl-agent: cannot sign a job receipt before enrollment")
 	}
-	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+	if (record.Origin == custody.OriginHostAgent || record.Origin == custody.OriginAppliance) && record.GeneratedBy == "" {
 		record.GeneratedBy = id.CommonName()
 	}
 	if terminalReport(outcome) {
@@ -146,7 +146,7 @@ func (r relayChannel) ReportHostRenewResultWithCustody(ctx context.Context, jobI
 	if id == nil || r.pending == nil || r.hostRollback == nil {
 		return false, errors.New("trstctl-agent: host renewal requires durable report and rollback stores")
 	}
-	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+	if (record.Origin == custody.OriginHostAgent || record.Origin == custody.OriginAppliance) && record.GeneratedBy == "" {
 		record.GeneratedBy = id.CommonName()
 	}
 	value := reportstate.Observation{
@@ -172,7 +172,7 @@ func (r relayChannel) ReportHostRenewResultWithAdoption(ctx context.Context, job
 	if id == nil || r.pending == nil || r.hostRollback == nil {
 		return false, errors.New("trstctl-agent: host renewal requires durable report and rollback stores")
 	}
-	if record.Origin == custody.OriginHostAgent && record.GeneratedBy == "" {
+	if (record.Origin == custody.OriginHostAgent || record.Origin == custody.OriginAppliance) && record.GeneratedBy == "" {
 		record.GeneratedBy = id.CommonName()
 	}
 	value := reportstate.Observation{

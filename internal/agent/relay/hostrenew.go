@@ -59,6 +59,10 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 		report(ctx, ch, job, OutcomeFailed, "job payload is not a renewal intent")
 		return false
 	}
+	if custody.TargetGeneratesKeyOnAppliance(intent.Connector, intent.TargetConfig) {
+		// A122: the appliance generates the key; this relay only asks for it.
+		return runApplianceRenew(ctx, ch, client, job, intent)
+	}
 	if intent.ReprotectJobID != "" || intent.ReprotectPredecessorFingerprint != "" ||
 		intent.ReprotectPredecessorSPKISHA256 != "" || intent.ReprotectTTLSeconds != 0 {
 		return runHostReprotect(ctx, ch, client, profile, hostRollback, job, intent)
