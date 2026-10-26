@@ -232,6 +232,21 @@ trstctl-cli audit verify --artifact audit.ndjson --format ndjson \
   --tsa-root tsa-root.pem --anchor-cadence 1h
 ```
 
+With `--audit-jwks`, the export's anchor log is checked too: its signed head and
+an inclusion proof for every anchor record, so an anchor cut from between two the
+export holds is refused. Keep the receipt's `anchor_log.signed_head` and pass it
+back on a later export:
+
+```bash
+jq -r .anchor_log.signed_head receipt.json > anchor-log-head.jws
+trstctl-cli audit export --format ndjson --anchor_log_from 2 > later.ndjson
+trstctl-cli audit verify --artifact later.ndjson --audit-jwks audit.jwks.json \
+  --tsa-root tsa-root.pem --previous-anchor-log anchor-log-head.jws
+```
+
+`anchor_log_from` is the earlier head's `tree_size`; the export then proves the
+anchor log extends it.
+
 With `--tsa-root`, every `audit.anchored` record inside an unbroken run of
 records is re-checked and the receipt's `anchor_series` says how many anchors
 verified, how many cover only records before the window, and how many a later

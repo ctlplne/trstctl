@@ -4156,12 +4156,27 @@ func componentSchemas() map[string]*Schema {
 		"kind": auditAnchorKind, "chain_head": str(), "anchored_at": timestamp(),
 		"token": ref("AuditTimestampToken"), "detail": str(),
 	}, "kind", "chain_head", "anchored_at")
+	auditAnchorInclusion := object(map[string]*Schema{
+		"record_sequence": {Type: "integer", Description: "The audit.anchored record this proof is for."},
+		"leaf_index":      {Type: "integer"},
+		"path":            {Type: "array", Items: str(), Description: "RFC 6962 audit path, hex SHA-256 nodes."},
+	}, "record_sequence", "leaf_index", "path")
+	auditAnchorConsistency := object(map[string]*Schema{
+		"from_size": {Type: "integer"},
+		"path":      {Type: "array", Items: str(), Description: "RFC 6962 consistency proof, hex SHA-256 nodes."},
+	}, "from_size", "path")
+	auditAnchorLogProof := object(map[string]*Schema{
+		"signed_head": {Type: "string", Description: "Compact JWS (audit export key, artifact trstctl.audit-evidence/audit-anchor-log/v1) over tenant_id, tree_size, root_hash and issued_at; keep it to check a later export."},
+		"inclusions":  {Type: "array", Items: ref("AuditAnchorInclusion")},
+		"consistency": ref("AuditAnchorConsistency"),
+	}, "signed_head", "inclusions")
 	auditBundle := object(map[string]*Schema{
-		"schema_version": {Type: "integer"},
+		"schema_version": {Type: "integer", Description: "1, or 2 when anchor_log is present."},
 		"format":         {Type: "string", Enum: []string{"jws"}},
 		"bundle":         str(), // a compact JWS whose payload is the signed evidence bundle
 		"chain_head":     str(),
 		"anchor":         ref("AuditAnchor"),
+		"anchor_log":     ref("AuditAnchorLogProof"),
 	}, "schema_version", "format", "bundle", "chain_head", "anchor")
 	auditVerificationKey := object(map[string]*Schema{
 		"kty": str(), "kid": str(), "n": str(), "e": str(),
@@ -7905,6 +7920,9 @@ func componentSchemas() map[string]*Schema {
 		"KubernetesTrustRollout":             kubernetesTrustRollout,
 		"KubernetesTrustRolloutList":         kubernetesTrustRolloutList,
 		"AuditChainAnchor":                   auditAnchorItem,
+		"AuditAnchorInclusion":               auditAnchorInclusion,
+		"AuditAnchorConsistency":             auditAnchorConsistency,
+		"AuditAnchorLogProof":                auditAnchorLogProof,
 		"AuditAnchoringStatus":               auditAnchoringStatus,
 		"SecretScanRequest":                  secretScanReq,
 		"SecretScanPreview":                  secretScanPreview,

@@ -9346,6 +9346,24 @@ export interface components {
             kind: "" | "rfc3161";
             token?: components["schemas"]["AuditTimestampToken"];
         };
+        AuditAnchorConsistency: {
+            from_size: number;
+            /** @description RFC 6962 consistency proof, hex SHA-256 nodes. */
+            path: string[];
+        };
+        AuditAnchorInclusion: {
+            leaf_index: number;
+            /** @description RFC 6962 audit path, hex SHA-256 nodes. */
+            path: string[];
+            /** @description The audit.anchored record this proof is for. */
+            record_sequence: number;
+        };
+        AuditAnchorLogProof: {
+            consistency?: components["schemas"]["AuditAnchorConsistency"];
+            inclusions: components["schemas"]["AuditAnchorInclusion"][];
+            /** @description Compact JWS (audit export key, artifact trstctl.audit-evidence/audit-anchor-log/v1) over tenant_id, tree_size, root_hash and issued_at; keep it to check a later export. */
+            signed_head: string;
+        };
         AuditAnchoringStatus: {
             anchor_count: number;
             anchors: components["schemas"]["AuditChainAnchor"][];
@@ -9367,10 +9385,12 @@ export interface components {
         };
         AuditBundle: {
             anchor: components["schemas"]["AuditAnchor"];
+            anchor_log?: components["schemas"]["AuditAnchorLogProof"];
             bundle: string;
             chain_head: string;
             /** @enum {string} */
             format: "jws";
+            /** @description 1, or 2 when anchor_log is present. */
             schema_version: number;
         };
         AuditChainAnchor: {
@@ -21324,6 +21344,8 @@ export interface operations {
                 window?: string;
                 /** @description export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query. */
                 format?: string;
+                /** @description export only: the tree size of an anchor log head kept from an earlier export; the export then proves the tenant's anchor log extends it */
+                anchor_log_from?: number;
             };
             header?: never;
             path?: never;
@@ -21385,6 +21407,8 @@ export interface operations {
                 window?: string;
                 /** @description export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query. */
                 format?: string;
+                /** @description export only: the tree size of an anchor log head kept from an earlier export; the export then proves the tenant's anchor log extends it */
+                anchor_log_from?: number;
             };
             header?: never;
             path?: never;

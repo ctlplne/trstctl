@@ -13,6 +13,13 @@
   be covered within the cadence; the receipt reports the series as
   `anchor_series`. `GET /api/v1/audit/anchors` (`trstctl-cli audit anchors`,
   Audit console) shows the cadence, state and recent anchors.
+- Each tenant's anchors are kept in an RFC 6962 anchor log. Audit exports carry
+  a head of that log signed with the audit export key (JWS envelopes move to
+  schema 2 when they carry it; stream trailers gain `anchor_log`) and an
+  inclusion proof for every anchor record they hold; `?anchor_log_from=<size>`
+  adds a consistency proof from an earlier head. `trstctl-cli audit verify`
+  checks them with `--audit-jwks` and, with `--previous-anchor-log`, proves the
+  log only grew since a head kept from an earlier receipt.
 
 - A TrustBundle can also be distributed as an Opaque Secret in each target
   namespace (`spec.target.secret`; outside the agent's namespace this needs

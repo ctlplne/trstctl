@@ -303,6 +303,8 @@ const (
 	ArtifactPQCCampaignClosure = "trstctl.audit-evidence/pqc-campaign-closure/v1"
 	ArtifactCryptoReadiness    = "trstctl.audit-evidence/crypto-readiness-export/v1"
 	ArtifactRestoreDrill       = "trstctl.audit-evidence/restore-drill/v1"
+	// ArtifactAuditAnchorLog signs a tenant's audit anchor log tree head.
+	ArtifactAuditAnchorLog = "trstctl.audit-evidence/audit-anchor-log/v1"
 )
 
 // GenerateRSASigningKey generates a 2048-bit RSA signing key tagged with kid.

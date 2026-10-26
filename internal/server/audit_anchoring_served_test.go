@@ -121,4 +121,54 @@ func TestServedContinuousAnchorVerifiesOfflineFromAnExport(t *testing.T) {
 	if !result.AnchorVerified || result.AnchorSeries == nil || result.AnchorSeries.Anchors != 1 || result.AnchorSeries.Verified != 1 {
 		t.Fatalf("receipt = %+v series %+v", result, result.AnchorSeries)
 	}
+	// A148: the export carries the tenant's anchor log; a later export taken
+	// with anchor_log_from proves the log grew from the head kept now.
+	if result.AnchorLog == nil || !result.AnchorLog.Checked || result.AnchorLog.Proven != 1 || result.AnchorLog.TreeSize != 1 {
+		t.Fatalf("anchor log receipt = %+v", result.AnchorLog)
+	}
+	earlier := result.AnchorLog.SignedHead
+
+	position, chainErr = h.srv.audit.ChainHead(ctx, servedTestTenant)
+	if chainErr != nil {
+		t.Fatal(chainErr)
+	}
+	second, err := auditanchor.AnchorHead(ctx, auditTimestamper{srv: h.srv}, position.Head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = json.Marshal(auditanchor.AnchoredEvent{ThroughSequence: position.Sequence, CadenceSeconds: 3600, Anchor: second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.log.Append(ctx, events.Event{
+		ID: "served-anchor-2", Type: auditanchor.EventTypeAnchored, TenantID: servedTestTenant,
+		SchemaVersion: auditanchor.AnchoredEventSchemaVersion, Data: data,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := projections.New(h.store).Project(ctx, h.log); err != nil {
+		t.Fatal(err)
+	}
+	later := get("/api/v1/audit/export?format=ndjson&anchor_log_from=1")
+	result, err = auditanchor.VerifyArtifact(later, auditanchor.VerificationOptions{
+		Format: auditanchor.FormatNDJSON, AuditKeys: keys, TSARootDER: block.Bytes,
+		Series: auditanchor.SeriesPolicy{Cadence: time.Hour}, PreviousAnchorLog: earlier,
+	})
+	if err != nil {
+		t.Fatalf("offline verification of the later export: %v", err)
+	}
+	if result.AnchorLog == nil || !result.AnchorLog.ConsistentWithPrevious || result.AnchorLog.TreeSize != 2 || result.AnchorLog.Proven != 2 ||
+		result.AnchorSeries == nil || result.AnchorSeries.Verified != 2 {
+		t.Fatalf("later receipt anchor log %+v series %+v", result.AnchorLog, result.AnchorSeries)
+	}
+	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/v1/audit/export?format=jws&anchor_log_from=9", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := readAllClose(resp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("anchor_log_from beyond the log = %d: %s", resp.StatusCode, body)
+	}
 }

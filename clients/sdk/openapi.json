@@ -4907,6 +4907,71 @@
         ],
         "type": "object"
       },
+      "AuditAnchorConsistency": {
+        "properties": {
+          "from_size": {
+            "type": "integer"
+          },
+          "path": {
+            "description": "RFC 6962 consistency proof, hex SHA-256 nodes.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "from_size",
+          "path"
+        ],
+        "type": "object"
+      },
+      "AuditAnchorInclusion": {
+        "properties": {
+          "leaf_index": {
+            "type": "integer"
+          },
+          "path": {
+            "description": "RFC 6962 audit path, hex SHA-256 nodes.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "record_sequence": {
+            "description": "The audit.anchored record this proof is for.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_sequence",
+          "leaf_index",
+          "path"
+        ],
+        "type": "object"
+      },
+      "AuditAnchorLogProof": {
+        "properties": {
+          "consistency": {
+            "$ref": "#/components/schemas/AuditAnchorConsistency"
+          },
+          "inclusions": {
+            "items": {
+              "$ref": "#/components/schemas/AuditAnchorInclusion"
+            },
+            "type": "array"
+          },
+          "signed_head": {
+            "description": "Compact JWS (audit export key, artifact trstctl.audit-evidence/audit-anchor-log/v1) over tenant_id, tree_size, root_hash and issued_at; keep it to check a later export.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signed_head",
+          "inclusions"
+        ],
+        "type": "object"
+      },
       "AuditAnchoringStatus": {
         "properties": {
           "anchor_count": {
@@ -4976,6 +5041,9 @@
           "anchor": {
             "$ref": "#/components/schemas/AuditAnchor"
           },
+          "anchor_log": {
+            "$ref": "#/components/schemas/AuditAnchorLogProof"
+          },
           "bundle": {
             "type": "string"
           },
@@ -4989,6 +5057,7 @@
             "type": "string"
           },
           "schema_version": {
+            "description": "1, or 2 when anchor_log is present.",
             "type": "integer"
           }
         },
@@ -43356,6 +43425,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "export only: the tree size of an anchor log head kept from an earlier export; the export then proves the tenant's anchor log extends it",
+            "in": "query",
+            "name": "anchor_log_from",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -43492,6 +43569,14 @@
             "name": "format",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "description": "export only: the tree size of an anchor log head kept from an earlier export; the export then proves the tenant's anchor log extends it",
+            "in": "query",
+            "name": "anchor_log_from",
+            "schema": {
+              "type": "integer"
             }
           }
         ],

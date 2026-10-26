@@ -17,6 +17,10 @@ import (
 
 const EvidenceEnvelopeSchemaVersion = 1
 
+// EvidenceEnvelopeAnchorLogSchemaVersion is the envelope schema that carries
+// the tenant's anchor log proof (A148).
+const EvidenceEnvelopeAnchorLogSchemaVersion = 2
+
 // EvidenceEnvelope is the browser/download representation of a signed audit
 // export. The JWS, its recomputed chain head, and its external timestamp travel
 // as one JSON document. A saved file therefore retains the proof after HTTP
@@ -27,6 +31,22 @@ type EvidenceEnvelope struct {
 	Bundle        string `json:"bundle"`
 	ChainHead     string `json:"chain_head"`
 	Anchor        Anchor `json:"anchor"`
+	// AnchorLog proves the export's anchor records against the tenant's
+	// anchor log; present only in schema 2.
+	AnchorLog *AnchorLogProof `json:"anchor_log,omitempty"`
+}
+
+// NewEvidenceEnvelope builds the saved JWS evidence document, choosing the
+// schema by whether it carries an anchor log.
+func NewEvidenceEnvelope(bundle, chainHead string, anchor Anchor, anchorLog *AnchorLogProof) EvidenceEnvelope {
+	envelope := EvidenceEnvelope{
+		SchemaVersion: EvidenceEnvelopeSchemaVersion, Format: FormatJWS,
+		Bundle: bundle, ChainHead: chainHead, Anchor: anchor, AnchorLog: anchorLog,
+	}
+	if anchorLog != nil {
+		envelope.SchemaVersion = EvidenceEnvelopeAnchorLogSchemaVersion
+	}
+	return envelope
 }
 
 // VerifyEvidenceEnvelope performs the complete offline check: strict envelope
@@ -53,7 +73,10 @@ func verifySignedEvidenceEnvelope(raw []byte, keys *jose.JWKSet) (audit.Bundle, 
 	if err := decodeExactJSON(raw, &envelope); err != nil {
 		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: decode evidence envelope: %w", err)
 	}
-	if envelope.SchemaVersion != EvidenceEnvelopeSchemaVersion {
+	switch {
+	case envelope.SchemaVersion == EvidenceEnvelopeSchemaVersion && envelope.AnchorLog == nil:
+	case envelope.SchemaVersion == EvidenceEnvelopeAnchorLogSchemaVersion && envelope.AnchorLog != nil:
+	default:
 		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: unsupported evidence envelope schema %d", envelope.SchemaVersion)
 	}
 	if envelope.Format != FormatJWS || strings.TrimSpace(envelope.Bundle) == "" || strings.TrimSpace(envelope.ChainHead) == "" {

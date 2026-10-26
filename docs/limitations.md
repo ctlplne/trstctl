@@ -1501,8 +1501,19 @@ never live in the API process. What you can do end to end against the running bi
   an independent time or complete tenant history. `--require-anchor`, a supplied
   TSA root, or a positive maximum anchor delay refuses unanchored evidence.
   Timestamp failures never fall back to plain verification, and unsigned record
-  streams still require TSA trust. Translog
-  inclusion proofs (`internal/translog`) are not wired into this path.
+  streams still require TSA trust. Each tenant's continuous anchors are also
+  appended, in order, to an RFC 6962 anchor log (`internal/translog`): every
+  export carries a head of that log signed with the audit export key (its own
+  artifact domain) and an inclusion proof for each anchor record it holds, and
+  `trstctl-cli audit verify --audit-jwks ...` recomputes each leaf from the
+  anchor record, refuses an export from which an anchor between two it holds
+  was cut (the log's entries would skip), and, given `--previous-anchor-log`
+  with the head kept from an earlier receipt and an export taken with
+  `anchor_log_from=<that size>`, proves the log only grew in between. Its
+  limits: the head is signed by the deployment's own audit key, so a split view
+  is caught only by an auditor who keeps and compares heads — there is no
+  external witness or gossip; and the newest anchors a lagging projection has
+  not logged yet are reported as an unlogged tail, not refused.
 - Signed invoice evidence (L2): `GET /api/v1/provider/usage-evidence` (`trstctl
   usage evidence`, Platform console panel) serves a per-customer, per-period
   document that states its own completeness and carries THREE attestation

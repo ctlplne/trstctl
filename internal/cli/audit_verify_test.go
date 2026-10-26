@@ -259,7 +259,8 @@ func TestAuditVerifyAnchorCadenceFlags(t *testing.T) {
 		code := cli.Run(t.Context(), append([]string{"audit", "verify"}, args...), cli.Env{}, strings.NewReader(""), &stdout, &stderr)
 		return code, stdout.String(), stderr.String()
 	}
-	if code, out, _ := run("--help"); code != 0 || !strings.Contains(out, "--anchor-cadence") || !strings.Contains(out, "anchor_series") {
+	if code, out, _ := run("--help"); code != 0 || !strings.Contains(out, "--anchor-cadence") || !strings.Contains(out, "anchor_series") ||
+		!strings.Contains(out, "--previous-anchor-log") || !strings.Contains(out, "anchor_log_from") {
 		t.Fatalf("help exit=%d:\n%s", code, out)
 	}
 	for name, args := range map[string][]string{
@@ -267,6 +268,10 @@ func TestAuditVerifyAnchorCadenceFlags(t *testing.T) {
 		"negative cadence":           {"--artifact", "-", "--tsa-root", "root.pem", "--anchor-cadence", "-1h"},
 		"negative skew":              {"--artifact", "-", "--tsa-root", "root.pem", "--anchor-skew", "-1m"},
 		"cadence on a retention":     {"--artifact", "-", "--format", "retention-jws", "--audit-jwks", "keys.json", "--anchor-cadence", "1h"},
+		// A148: an earlier anchor log head is checked with the audit keys and
+		// has no meaning for a retention archive.
+		"earlier head without keys":   {"--artifact", "-", "--tsa-root", "root.pem", "--previous-anchor-log", "head.jws"},
+		"earlier head on a retention": {"--artifact", "-", "--format", "retention-jws", "--audit-jwks", "keys.json", "--previous-anchor-log", "head.jws"},
 	} {
 		if code, _, stderr := run(args...); code != 2 || stderr == "" {
 			t.Fatalf("%s: exit=%d stderr=%q", name, code, stderr)

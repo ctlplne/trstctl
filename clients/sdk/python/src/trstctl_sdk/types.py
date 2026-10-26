@@ -1661,6 +1661,35 @@ AuditAnchor = TypedDict(
     total=False,
 )
 
+AuditAnchorConsistency = TypedDict(
+    'AuditAnchorConsistency',
+    {
+        'from_size': int,
+        'path': list[str],
+    },
+    total=False,
+)
+
+AuditAnchorInclusion = TypedDict(
+    'AuditAnchorInclusion',
+    {
+        'leaf_index': int,
+        'path': list[str],
+        'record_sequence': int,
+    },
+    total=False,
+)
+
+AuditAnchorLogProof = TypedDict(
+    'AuditAnchorLogProof',
+    {
+        'consistency': dict[str, Any],
+        'inclusions': list[dict[str, Any]],
+        'signed_head': str,
+    },
+    total=False,
+)
+
 AuditAnchoringStatus = TypedDict(
     'AuditAnchoringStatus',
     {
@@ -1689,6 +1718,7 @@ AuditBundle = TypedDict(
     'AuditBundle',
     {
         'anchor': dict[str, Any],
+        'anchor_log': dict[str, Any],
         'bundle': str,
         'chain_head': str,
         'format': str,

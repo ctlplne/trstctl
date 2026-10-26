@@ -441,7 +441,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"profiles", "approvals", "approve"}, Method: "POST", Path: "/api/v1/profiles/approvals/{id}/approvals", Body: bodyOptionalFile, Summary: "Approve a parked profile create/edit as a distinct reviewer; quorum applies the queued spec"},
 
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window"}, Summary: "Query the audit log"},
-	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window", "format"}, Summary: "Export a signed audit bundle or record stream"},
+	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window", "format", "anchor_log_from"}, Summary: "Export a signed audit bundle or record stream"},
 	{Name: []string{"audit", "verification-keys"}, Method: "GET", Path: "/api/v1/audit/verification-keys", Summary: "Download and pin public keys for offline audit verification"},
 	{Name: []string{"audit", "anchors"}, Method: "GET", Path: "/api/v1/audit/anchors", Query: []string{"limit"}, Summary: "Show continuous audit anchoring and the tenant's recent anchors"},
 	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},

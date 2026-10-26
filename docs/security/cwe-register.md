@@ -1373,7 +1373,7 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:79` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
-| `internal/cli/audit_verify.go:176` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
+| `internal/cli/audit_verify.go:190` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/ca_key_wrap.go:66` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap.go:85` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap.go:100` | operator-named local file (CWE-22) |

@@ -76,7 +76,18 @@ catch is a record withheld for less than one cadence plus the clock tolerance
 erasure that changed the records it covers is reported as superseded by that
 erasure rather than verified. `GET /api/v1/audit/anchors` (`trstctl-cli audit
 anchors`, Audit console) shows the cadence, the state and the tenant's recent
-anchors. Hardware-notary checkpoints remain a separate roadmap control.
+anchors.
+
+**Anchor log.** The anchors are also kept, per tenant and in order, in an
+RFC 6962 Merkle log. Every export carries a head of that log signed with the
+audit export key and an inclusion proof for each anchor record it holds; with
+`--audit-jwks` the verifier checks them, so an anchor cut from between two that
+an export holds is caught. Keep the receipt's `anchor_log.signed_head`: a later
+export taken with `anchor_log_from=<its tree_size>` and verified with
+`--previous-anchor-log` proves the log only grew in between, so anchors you
+already saw cannot have been rewritten. The head is the deployment's own
+statement; comparing heads across time (or across auditors) is what detects a
+split view. Hardware-notary checkpoints remain a separate roadmap control.
 
 The shipped workflow is `trstctl-cli audit verification-keys` while connected,
 followed by `trstctl-cli audit verify --artifact <saved-file> --audit-jwks

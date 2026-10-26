@@ -51,6 +51,7 @@ func auditQueryParams() []param {
 		{name: "limit", typ: "integer", desc: "maximum records to return"},
 		{name: "window", typ: "string", desc: "earliest (default) or latest matching records after tenant and query filters, before the result limit"},
 		{name: "format", typ: "string", desc: "export encoding: jws (default, signed bundle; 512 KiB serialized payload maximum), ndjson, csv, splunk-hec, sentinel. Oversized JWS downloads return 413 audit_export_too_large; use a record stream or a smaller query."},
+		{name: "anchor_log_from", typ: "integer", desc: "export only: the tree size of an anchor log head kept from an earlier export; the export then proves the tenant's anchor log extends it"},
 	}
 }
 
@@ -168,6 +169,11 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, err.Error()))
 		return
 	}
+	logFrom, err := anchorLogFrom(r)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 
 	if format == auditanchor.FormatJWS {
 		signed, bundle, err := a.audit.ExportDownload(r.Context(), q)
@@ -181,14 +187,16 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, err)
 			return
 		}
+		anchorLog, err := a.auditAnchorLogProof(r.Context(), tenantID, bundle.Records, logFrom)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
 		anchor, anchorErr := a.anchorAuditExport(r, bundle.ChainHead)
 		if anchorErr != nil && anchor.Detail == "" {
 			anchor.Detail = "this export could not be externally anchored"
 		}
-		a.writeJSON(w, http.StatusOK, auditanchor.EvidenceEnvelope{
-			SchemaVersion: auditanchor.EvidenceEnvelopeSchemaVersion,
-			Format:        format, Bundle: signed, ChainHead: bundle.ChainHead, Anchor: anchor,
-		})
+		a.writeJSON(w, http.StatusOK, auditanchor.NewEvidenceEnvelope(signed, bundle.ChainHead, anchor, anchorLog))
 		return
 	}
 
@@ -203,6 +211,11 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// The archived prefix is part of the proof. Re-sealing from genesis here
 	// would emit a trailer naming one seed and rows hashed from another.
 	head := auditchain.SealFrom(prevHash, recs)
+	anchorLog, err := a.auditAnchorLogProof(r.Context(), tenantID, recs, logFrom)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
 	// Best effort, and honest about it: an export from a deployment with no TSA
 	// is unanchored, says so in its own payload, and is still worth having.
 	// Failing the export instead would leave an operator with nothing.
@@ -223,6 +236,7 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// code it no longer has access to.
 	_ = auditanchor.WriteRecordStream(w, format, auditanchor.RecordStream{
 		Records: recs, PrevHash: prevHash, Head: head, Anchor: anchor, FullChain: audit.FullChain(q, recs),
+		AnchorLog: anchorLog,
 	})
 }
 

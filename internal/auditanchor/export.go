@@ -121,6 +121,9 @@ type RecordStream struct {
 	// tenant's full chain (audit.FullChain), so anchors over that chain can be
 	// re-checked inside them.
 	FullChain bool
+	// AnchorLog proves the stream's anchor records against the tenant's
+	// anchor log (A148).
+	AnchorLog *AnchorLogProof
 }
 
 // chainFull is the trailer's mark for a stream that continues the tenant's
@@ -128,7 +131,7 @@ type RecordStream struct {
 const chainFull = "tenant"
 
 func (s RecordStream) trailer() trailer {
-	t := trailer{Kind: "chain_trailer", PrevHash: s.PrevHash, ChainHead: s.Head, Count: len(s.Records), Anchor: s.Anchor}
+	t := trailer{Kind: "chain_trailer", PrevHash: s.PrevHash, ChainHead: s.Head, Count: len(s.Records), Anchor: s.Anchor, AnchorLog: s.AnchorLog}
 	if s.FullChain {
 		t.Chain = chainFull
 	}
@@ -241,6 +244,9 @@ type trailer struct {
 	// Chain is "tenant" when the records carry the hashes they have in the
 	// tenant's full chain; absent, the stream is a chain of its own.
 	Chain string `json:"chain,omitempty"`
+	// AnchorLog proves the stream's anchor records against the tenant's
+	// anchor log (A148).
+	AnchorLog *AnchorLogProof `json:"anchor_log,omitempty"`
 }
 
 func writeTrailer(enc *json.Encoder, proof trailer) error {

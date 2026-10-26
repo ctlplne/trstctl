@@ -1199,6 +1199,23 @@ export interface AuditAnchor {
   token?: AuditTimestampToken;
 }
 
+export interface AuditAnchorConsistency {
+  from_size: number;
+  path: string[];
+}
+
+export interface AuditAnchorInclusion {
+  leaf_index: number;
+  path: string[];
+  record_sequence: number;
+}
+
+export interface AuditAnchorLogProof {
+  consistency?: AuditAnchorConsistency;
+  inclusions: AuditAnchorInclusion[];
+  signed_head: string;
+}
+
 export interface AuditAnchoringStatus {
   anchor_count: number;
   anchors: AuditChainAnchor[];
@@ -1217,6 +1234,7 @@ export interface AuditArchivedPrefix {
 
 export interface AuditBundle {
   anchor: AuditAnchor;
+  anchor_log?: AuditAnchorLogProof;
   bundle: string;
   chain_head: string;
   format: "jws";
