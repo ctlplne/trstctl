@@ -261,29 +261,48 @@ func TestChaosDiskFullStoreFinalizeKeepsLeaseRecoverable(t *testing.T) {
 		TenantID: tenantA, Destination: "webhook", IdempotencyKey: "chaos-disk-full", Payload: []byte(`{}`),
 	})
 
+	// A full disk refuses the write itself (SQLSTATE 53100, disk_full). Refuse
+	// exactly the finalize write that marks this row delivered; the claim and
+	// handoff writes before it succeed, as on a disk that filled mid-delivery.
+	// Closing the store from the handler is not this fault: delivery holds a
+	// tenant-service session from that store, so a pool close would wait on the
+	// very delivery that called it.
+	if _, err := s.SystemPool().Exec(ctx, `CREATE FUNCTION chaos_disk_full_finalize() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.status = 'delivered' AND NEW.idempotency_key = 'chaos-disk-full' THEN RAISE EXCEPTION 'could not extend file: No space left on device' USING ERRCODE = 'disk_full'; END IF; RETURN NEW; END $$;
+        CREATE TRIGGER chaos_disk_full_finalize BEFORE UPDATE ON outbox FOR EACH ROW EXECUTE FUNCTION chaos_disk_full_finalize()`); err != nil {
+		t.Fatal(err)
+	}
+	diskFull := true
+	freeDisk := func() {
+		if !diskFull {
+			return
+		}
+		diskFull = false
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := s.SystemPool().Exec(cleanupCtx, `DROP TRIGGER IF EXISTS chaos_disk_full_finalize ON outbox; DROP FUNCTION IF EXISTS chaos_disk_full_finalize()`); err != nil {
+			t.Error(err)
+		}
+	}
+	t.Cleanup(freeDisk)
+
 	n, err := ob.Dispatch(ctx, orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
-		s.Close() // finalize cannot write its success marker
 		return nil
 	}))
 	if err == nil {
-		t.Fatal("Dispatch succeeded even though the store closed before delivery finalization")
+		t.Fatal("Dispatch succeeded even though the store refused the delivery finalization")
+	}
+	if got := store.SQLState(err); got != "53100" {
+		t.Fatalf("Dispatch error = %v (SQLSTATE %q), want the injected disk_full refusal", err, got)
 	}
 	if n != 1 {
 		t.Fatalf("Dispatch processed %d rows, want 1 before the finalize fault", n)
 	}
 
-	recovered, err := store.Open(ctx, testDSN)
-	if err != nil {
-		t.Fatalf("reopen store after finalize fault: %v", err)
-	}
-	t.Cleanup(func() { recovered.Close() })
-	if err := recovered.Migrate(ctx); err != nil {
-		t.Fatalf("migrate reopened store: %v", err)
-	}
+	freeDisk()
 	time.Sleep(25 * time.Millisecond) // let the failed worker lease expire
 
 	delivered := 0
-	ob2 := orchestrator.NewOutbox(recovered, orchestrator.WithLeaseTTL(10*time.Millisecond), orchestrator.WithWorkerID("chaos-recovery"))
+	ob2 := orchestrator.NewOutbox(s, orchestrator.WithLeaseTTL(10*time.Millisecond), orchestrator.WithWorkerID("chaos-recovery"))
 	n, err = ob2.Dispatch(ctx, orchestrator.HandlerFunc(func(_ context.Context, m orchestrator.Message) error {
 		delivered++
 		if m.IdempotencyKey != "chaos-disk-full" {
