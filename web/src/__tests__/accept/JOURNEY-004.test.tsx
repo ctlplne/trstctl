@@ -188,14 +188,15 @@ describe("JOURNEY-004 full persona journey smoke", () => {
     expect(new Set(applicable.flatMap((cell) => cell.acceptance))).toEqual(new Set(["JOURNEY-001", "JOURNEY-002", "JOURNEY-003", "JOURNEY-004"]));
   });
 
-  it("browser-drives every UI route named by the matrix through the authenticated shell", async () => {
-    for (const route of journeySmokeUiRoutes) {
-      cleanup();
-      clearApiCalls();
-      renderAt(route.path);
-      expect(await screen.findByRole("heading", { name: route.heading })).toBeInTheDocument();
-      expect(apiMock.me).toHaveBeenCalled();
-    }
+  // One test per route: React holds a lazily loaded page behind its Suspense
+  // fallback for up to 300 ms before revealing it, so driving all of them inside
+  // one test would spend the whole default timeout on that wait alone.
+  it.each(journeySmokeUiRoutes)("browser-drives $path, named by the matrix, through the authenticated shell", async (route) => {
+    cleanup();
+    clearApiCalls();
+    renderAt(route.path);
+    expect(await screen.findByRole("heading", { name: route.heading })).toBeInTheDocument();
+    expect(apiMock.me).toHaveBeenCalled();
   });
 
   it("takes agent issuance to the broker journey with preview, issue and durable readback", () => {

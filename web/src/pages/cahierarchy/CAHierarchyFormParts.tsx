@@ -59,7 +59,7 @@ export function LabeledInput({
   required?: boolean;
   placeholder?: string;
   onChange: (value: string) => void;
-  inputRef?: RefObject<HTMLInputElement>;
+  inputRef?: RefObject<HTMLInputElement | null>;
 }) {
   return (
     <div className="grid gap-2">

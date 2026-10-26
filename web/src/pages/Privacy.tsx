@@ -941,7 +941,7 @@ function PrivacyDisclosurePanel({
   title,
 }: {
   children: ReactNode;
-  detailsRef?: RefObject<HTMLDetailsElement>;
+  detailsRef?: RefObject<HTMLDetailsElement | null>;
   onToggle: (open: boolean) => void;
   open: boolean;
   title: string;

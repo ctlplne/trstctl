@@ -12,7 +12,7 @@ export type DetailDrawerProps = {
   children: ReactNode;
   actions?: ReactNode;
   onClose: () => void;
-  returnFocusRef?: RefObject<HTMLElement>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   className?: string;
 };
 

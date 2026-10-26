@@ -54,7 +54,7 @@ export function NativeSecretCreateForm({
   preview: SecretStoreCreatePreview | null;
   previewError: string | null;
   previewStale: boolean;
-  nameRef: RefObject<HTMLInputElement>;
+  nameRef: RefObject<HTMLInputElement | null>;
   onNameChange: (value: string) => void;
   onValueChange: (value: string) => void;
   onOwnerChange: (value: string) => void;

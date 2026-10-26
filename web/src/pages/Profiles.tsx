@@ -706,7 +706,7 @@ function ProfileRestoreDialog({
   preview: ProfileRestorePreview;
   busy: boolean;
   error: string | null;
-  returnFocusRef: RefObject<HTMLElement>;
+  returnFocusRef: RefObject<HTMLElement | null>;
   onClose: () => void;
   onConfirm: () => void;
 }) {

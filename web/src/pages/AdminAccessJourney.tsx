@@ -1220,7 +1220,7 @@ function PAMFormDialog({
   pending: PAMApprovalRequest | null;
   created: PAMSession | null;
   copied: boolean;
-  returnFocusRef: React.RefObject<HTMLButtonElement>;
+  returnFocusRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onRequest: (form: PAMSessionFormState) => Promise<void>;
   onRetry: () => Promise<void>;

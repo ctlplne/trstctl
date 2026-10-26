@@ -409,7 +409,7 @@ function OperationWorkList({
   ariaLabel: string;
   rows: OperationRow[];
   busyKey: string | null;
-  firstFailedReviewRef?: RefObject<HTMLButtonElement>;
+  firstFailedReviewRef?: RefObject<HTMLButtonElement | null>;
   onApprove: (row: Extract<OperationRow, { type: "approval" }>) => void;
   onReject: (row: Extract<OperationRow, { type: "approval" }>) => void;
   onOpen: (row: OperationRow) => void;

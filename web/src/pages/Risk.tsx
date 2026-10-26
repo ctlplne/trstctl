@@ -465,7 +465,7 @@ function ContextualRiskPanel({
   error: string | null;
   reviewedID: string | null;
   onReview: (credentialID: string) => void;
-  topReviewRef: RefObject<HTMLButtonElement>;
+  topReviewRef: RefObject<HTMLButtonElement | null>;
 }) {
   const { t } = useTranslation();
   const topPriorities = priorities?.priorities?.slice(0, 5) ?? [];

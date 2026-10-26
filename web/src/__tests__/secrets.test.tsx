@@ -2234,8 +2234,11 @@ describe("secrets surface", () => {
     cleanup();
     renderSecrets("/secrets/sync");
     expect(await screen.findByRole("heading", { name: "Secret sync and platform integrations" })).toBeInTheDocument();
-    const syncForm = within(screen.getByRole("form", { name: "Sync stored secret" }));
-    expect(syncForm.getByLabelText("Secret name")).toHaveValue("app/db/password");
+    // The section heading renders outside the lazy workflow's Suspense boundary,
+    // and the secret name arrives with the stored-secret list. Wait for the
+    // form and for its prefilled value instead of assuming both came with the heading.
+    const syncForm = within(await screen.findByRole("form", { name: "Sync stored secret" }));
+    await waitFor(() => expect(syncForm.getByLabelText("Secret name")).toHaveValue("app/db/password"));
     await user.selectOptions(syncForm.getByLabelText("Target"), "github-actions");
     await user.type(syncForm.getByLabelText("Name at destination"), "Secret/payments-db/password");
     await user.click(syncForm.getByRole("button", { name: /review sync/i }));

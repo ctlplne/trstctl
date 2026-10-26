@@ -18,8 +18,8 @@ export type DialogProps = {
   titleId: string;
   descriptionId?: string;
   role?: "dialog" | "alertdialog";
-  returnFocusRef?: RefObject<HTMLElement>;
-  initialFocusRef?: RefObject<HTMLElement>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
+  initialFocusRef?: RefObject<HTMLElement | null>;
   className?: string;
   overlayClassName?: string;
   panelClassName?: string;

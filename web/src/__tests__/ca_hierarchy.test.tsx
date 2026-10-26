@@ -791,7 +791,9 @@ describe("CA hierarchy and custody surface", () => {
       }),
     );
     await waitFor(() => expect(apiMock.caAuthorities).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true");
+    // The tab follows the URL's search params, and the router applies that
+    // navigation as a transition after the create handler returns.
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true"));
     expect(document.getElementById("ca-panel-overview")).not.toHaveClass("hidden");
     expect(await screen.findByRole("table", { name: "Served CA authorities" })).toHaveTextContent("Trust Root CA");
   });

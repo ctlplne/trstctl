@@ -185,7 +185,10 @@ describe("route 027 impact-first graph design", () => {
     const operate = screen.getByTestId("page-depth-operate");
     expect(within(operate).getAllByRole("button")).toHaveLength(1);
     const explore = within(operate).getByRole("button", { name: "Explore impact" });
-    expect(explore).toBeEnabled();
+    // The default credential is chosen by an effect after the graph loads. Until
+    // it runs, the browser already shows the only option in the select, so the
+    // select's value is not proof that the page state holds the selection.
+    await waitFor(() => expect(explore).toBeEnabled());
 
     const map = screen.getByText("Relationship map and filters", { exact: true }).closest("details");
     const evidence = screen.getByText("Graph edges, sources, confidence, and blast-radius export", { exact: true }).closest("details");

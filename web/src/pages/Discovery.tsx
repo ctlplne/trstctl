@@ -1961,7 +1961,7 @@ function SourceTable({
   busy: string | null;
   onStart: (sourceID: string, dryRun?: boolean) => void;
   activity: Map<string, SourceActivity>;
-  firstRunButtonRef?: RefObject<HTMLButtonElement>;
+  firstRunButtonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const columns: Array<DataGridColumn<DiscoverySource>> = [
     {

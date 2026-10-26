@@ -35,7 +35,7 @@ interface ActionCommand {
 export interface CommandPaletteProps {
   open: boolean;
   onClose: () => void;
-  returnFocusRef?: RefObject<HTMLElement>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   user?: Me | null;
 }
 

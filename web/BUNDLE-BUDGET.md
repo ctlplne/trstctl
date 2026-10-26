@@ -1,5 +1,20 @@
 # Console bundle budget decisions
 
+## Current decision — 2026-10-25
+
+The owner raised the complete startup import graph ceiling from **245 kB to
+350 kB** so the console can move to React 19. React 19's runtime adds about
+19 kB to what a browser loads before the first page: on the same console source
+the startup graph measured 244,223 Brotli bytes with React 18.3.1 and 263,564
+with React 19.3.1 (+19,341 bytes), nearly all of it in the entry chunk (66.11 kB
+to 84.98 kB). The largest page chunk and all-JavaScript ceilings are unchanged at
+**30 kB** and **1,000 kB**; React 19 measured 29.91 kB and 808.82 kB against them.
+
+The 245 kB figure this replaces was never recorded here. On 2026-10-24 the SSH
+access page's revocation-list panel put the startup graph 213 bytes over the
+240 kB ceiling, and that change raised the limit to 245 kB in `package.json`
+without updating this document.
+
 ## CA import replay — 2026-10-18
 
 The authenticated navigation shell now loads after the browser resolves a
@@ -10,7 +25,7 @@ the largest page and all-JavaScript limits remain 30 kB and 1,000 kB.
 The route and CA hierarchy tests verify that the deferred shell and import
 controls still render.
 
-## Current decision — 2026-10-08
+## Decision — 2026-10-08
 
 The owner raised the all-JavaScript ceiling from **700 kB to 1,000 kB**. That
 measure includes JavaScript for pages the browser fetches only when an operator

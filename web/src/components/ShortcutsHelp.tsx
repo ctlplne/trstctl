@@ -6,7 +6,7 @@ import { translateNow } from "@/i18n/I18nProvider";
 export interface ShortcutsHelpProps {
   open: boolean;
   onClose: () => void;
-  returnFocusRef?: RefObject<HTMLElement>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 const shortcuts = [

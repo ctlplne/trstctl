@@ -58,7 +58,7 @@ import { CapabilityNavStatus, CapabilityRouteNotice, CapabilityToolSummary } fro
 const CommandPalette = lazy(() => import("@/components/CommandPalette").then((module) => ({ default: module.CommandPalette })));
 const ShortcutsHelp = lazy(() => import("@/components/ShortcutsHelp").then((module) => ({ default: module.ShortcutsHelp })));
 
-function OverlayLoading({ onCancel, returnFocusRef }: { onCancel: () => void; returnFocusRef: RefObject<HTMLElement> }) {
+function OverlayLoading({ onCancel, returnFocusRef }: { onCancel: () => void; returnFocusRef: RefObject<HTMLElement | null> }) {
   const { t } = useTranslation();
   useEffect(() => {
     const returnTarget = returnFocusRef.current ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
@@ -448,7 +448,7 @@ function routeLabel(pathname: string, t: (key: MessageKey) => string): string {
  * Browser full-page loads do this for free; client-side routing does not, so a
  * keyboard or screen-reader user would otherwise stay parked on the activated
  * nav link with no context change. */
-function useRouteFocus(mainRef: RefObject<HTMLElement>, t: I18nContextValue["t"]): string {
+function useRouteFocus(mainRef: RefObject<HTMLElement | null>, t: I18nContextValue["t"]): string {
   const location = useLocation();
   const [announcement, setAnnouncement] = useState("");
   const isFirstRender = useRef(true);

@@ -472,7 +472,8 @@ describe("operational console surface", () => {
 
     renderAt("/profiles");
     expect(await screen.findByRole("region", { name: "Certificate rules" })).toHaveClass("min-w-0", "grid-cols-1");
-    expect(screen.getByRole("region", { name: "Certificate rule versions" })).toHaveClass("min-w-0", "grid-cols-1");
+    // The page region renders with a loading state; the versions grid appears only once the rule list arrives.
+    expect(await screen.findByRole("region", { name: "Certificate rule versions" })).toHaveClass("min-w-0", "grid-cols-1");
     expect(screen.getByRole("group", { name: "Scrollable columns for Certificate rule versions" })).toHaveClass("min-w-0", "max-w-full");
     await user.click(await screen.findByRole("button", { name: "View server version 1" }));
     await user.click(screen.getByRole("button", { name: /Diff version/i }));
