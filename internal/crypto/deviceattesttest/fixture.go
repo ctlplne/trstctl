@@ -228,8 +228,20 @@ func (i *TPMIdentity) RootPEM() []byte {
 }
 
 // CredentialJSON returns a WebAuthn credential creation response carrying a
-// valid TPM 2.0 attestation over challenge.
+// valid TPM 2.0 attestation over challenge, for a key the TPM generated and
+// will not release.
 func (i *TPMIdentity) CredentialJSON(challenge []byte) ([]byte, error) {
+	return i.credentialJSON(challenge, true)
+}
+
+// DuplicableCredentialJSON is CredentialJSON for a key the TPM certifies but
+// may release: fixedTPM and fixedParent are clear, so the attestation is valid
+// and the key can still be duplicated to another TPM.
+func (i *TPMIdentity) DuplicableCredentialJSON(challenge []byte) ([]byte, error) {
+	return i.credentialJSON(challenge, false)
+}
+
+func (i *TPMIdentity) credentialJSON(challenge []byte, deviceBound bool) ([]byte, error) {
 	clientDataJSON, err := json.Marshal(map[string]any{
 		"type":        "webauthn.create",
 		"challenge":   base64.RawURLEncoding.EncodeToString(challenge),
@@ -269,8 +281,8 @@ func (i *TPMIdentity) CredentialJSON(challenge []byte) ([]byte, error) {
 		NameAlg: tpm2.TPMAlgSHA256,
 		ObjectAttributes: tpm2.TPMAObject{
 			SignEncrypt:         true,
-			FixedTPM:            true,
-			FixedParent:         true,
+			FixedTPM:            deviceBound,
+			FixedParent:         deviceBound,
 			SensitiveDataOrigin: true,
 			UserWithAuth:        true,
 		},

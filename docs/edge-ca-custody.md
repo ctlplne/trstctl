@@ -87,7 +87,11 @@ TPM credential as a 0600 file. It refuses a mismatch; there is no software
 attestation fallback. The mint request carries the CSR as base64 DER,
 `attestation_credential_json` as base64 of that JSON file, and
 `key_provider: "tpm2"`. The control plane separately checks the installed
-root and binds the attested key digest to the CSR public-key digest. The
+root and binds the attested key digest to the CSR public-key digest. It also
+reads the attributes the TPM certified for that key: unless the TPM generated it
+(`sensitiveDataOrigin`) and will release it neither to another TPM (`fixedTPM`)
+nor under another parent (`fixedParent`), the key is not device-bound and the
+mint is refused. Keys the agent creates have all three. The
 certificate authority selected for minting must permit a subordinate CA. Review
 `edge-mint.json` and send it through the native CLI with a fresh idempotency key:
 

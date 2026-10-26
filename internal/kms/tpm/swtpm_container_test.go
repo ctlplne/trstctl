@@ -49,6 +49,10 @@ func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
 		"export TPM2TOOLS_TCTI=swtpm:path=/tmp/swtpm.sock",
 		"tpm2_readpublic -c \"$handle\" -f pem -o /tmp/edge-public.pem",
 		"grep -q 'BEGIN PUBLIC KEY' /tmp/edge-public.pem",
+		// The served attestation parser against TPM2_Certify from the same swtpm,
+		// including the device-bound attribute check (A131).
+		"CGO_ENABLED=0 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test ./internal/crypto/deviceattest -run TestSwtpmEdgeTPMCertifiesTheActualCSRKey -count=1 -v | tee /tmp/swtpm-attest-test.txt",
+		"grep -q SWTPM_EDGE_CERTIFY_OK /tmp/swtpm-attest-test.txt",
 	}, "\n")
 	args := []string{
 		"run", "--rm", "-e", "TRSTCTL_SWTPM_INNER=1",
@@ -61,6 +65,9 @@ func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "SWTPM_EDGE_CA_OK") {
 		t.Fatalf("swtpm edge CA journey did not report success:\n%s", out)
+	}
+	if !strings.Contains(string(out), "SWTPM_EDGE_CERTIFY_OK") {
+		t.Fatalf("swtpm attestation journey did not report success:\n%s", out)
 	}
 }
 

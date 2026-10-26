@@ -193,6 +193,11 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 			"%w: the attested key is not the CSR's key; a TPM vouching for a different key "+
 				"vouches for nothing here", api.ErrEdgeDelegationRefused)
 	}
+	if provider == "tpm2" && !attested.DeviceBound {
+		return api.EdgeDelegation{}, fmt.Errorf(
+			"%w: the attested TPM key could leave the TPM (fixedTPM, fixedParent and sensitiveDataOrigin "+
+				"are not all set), so it is not device-bound custody", api.ErrEdgeDelegationRefused)
+	}
 
 	ca, err := s.store.GetCAAuthority(ctx, tenantID, caID)
 	if err != nil {

@@ -73,6 +73,11 @@ func TestSwtpmEdgeTPMCertifiesTheActualCSRKey(t *testing.T) {
 	if string(verified.PublicKeySHA256) != string(csrDigest) {
 		t.Fatal("TPM certified a different key from the edge CSR")
 	}
+	// A131: a key the TPM generated as a fixedTPM/fixedParent object is
+	// reported device-bound from the attributes the TPM itself certified.
+	if !verified.DeviceBound {
+		t.Fatal("the real TPM certification did not report a device-bound key")
+	}
 	otherChallenge := trstcrypto.EdgeAttestationChallenge("tenant-a", "segment-b", csrDER)
 	if _, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(credential, otherChallenge, [][]byte{rootPEM}, []int64{-7}, time.Now().UTC()); err == nil {
 		t.Fatal("attestation replayed into another segment")

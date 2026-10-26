@@ -11,6 +11,7 @@ import (
 	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
+	"github.com/google/go-tpm/tpm2"
 )
 
 const maxDeviceAttestationBytes = 1 << 20
@@ -32,6 +34,12 @@ type TPMDeviceAttestationResult struct {
 	PublicKeySHA256              []byte
 	AttestationCertificateSHA256 []byte
 	Algorithm                    int64
+	// DeviceBound reports that the attested object's own attributes, which
+	// the TPM certified, say the TPM generated the key (sensitiveDataOrigin)
+	// and will release it neither to another TPM (fixedTPM) nor under another
+	// parent (fixedParent). A valid attestation without them proves a TPM
+	// object, not a key that cannot leave the device.
+	DeviceBound bool
 }
 
 // ParseAndVerifyTPMDeviceAttestation verifies one TPM WebAuthn attestation. The
@@ -90,6 +98,12 @@ func ParseAndVerifyTPMDeviceAttestation(
 	if err := parsed.Response.AttestationObject.VerifyAttestation(clientHash[:], nil); err != nil {
 		return TPMDeviceAttestationResult{}, fmt.Errorf("crypto: verify TPM attestation statement: %w", err)
 	}
+	// VerifyAttestation has bound pubArea to the signed certInfo and to the
+	// credential key, so its attributes are the certified object's own.
+	deviceBound, err := tpmAttestedObjectIsDeviceBound(parsed.Response.AttestationObject.AttStatement["pubArea"])
+	if err != nil {
+		return TPMDeviceAttestationResult{}, err
+	}
 
 	certificates, err := tpmAttestationCertificates(parsed.Response.AttestationObject.AttStatement["x5c"])
 	if err != nil {
@@ -124,7 +138,80 @@ func ParseAndVerifyTPMDeviceAttestation(
 		PublicKeySHA256:              append([]byte(nil), publicKeyDigest[:]...),
 		AttestationCertificateSHA256: append([]byte(nil), certificateDigest[:]...),
 		Algorithm:                    keyHeader.Algorithm,
+		DeviceBound:                  deviceBound,
 	}, nil
+}
+
+// tpmAttestedObjectIsDeviceBound reads the object attributes from the attested
+// TPMT_PUBLIC area.
+func tpmAttestedObjectIsDeviceBound(value any) (bool, error) {
+	raw, ok := value.([]byte)
+	if !ok || len(raw) == 0 {
+		return false, errors.New("crypto: TPM attestation pubArea is missing")
+	}
+	public, err := tpm2.Unmarshal[tpm2.TPMTPublic](raw)
+	if err != nil {
+		return false, fmt.Errorf("crypto: parse TPM attestation pubArea: %w", err)
+	}
+	attributes := public.ObjectAttributes
+	return attributes.FixedTPM && attributes.FixedParent && attributes.SensitiveDataOrigin, nil
+}
+
+// tpmCOSEAlgorithms is every credential algorithm a TPM attestation policy can
+// admit. Offline re-verification accepts any of them: the policy that admitted
+// the attestation was stricter, and what is re-checked is its signature.
+var tpmCOSEAlgorithms = []int64{-7, -35, -36, -37, -38, -39, -257, -258, -259}
+
+// TPMCustodyEvidence is the retained proof behind one device-bound custody
+// claim: the TPM attestation exactly as the device sent it, the binding whose
+// SHA-256 is the challenge it signed, and when it was first verified.
+type TPMCustodyEvidence struct {
+	Credential []byte
+	Binding    []byte
+	VerifiedAt time.Time
+}
+
+// VerifyTPMCustodyEvidence re-checks a retained device-bound custody claim for
+// one certificate, offline: the attestation verifies under trustedRootsPEM at
+// the time it was first verified, over SHA-256(binding); the binding's
+// csr_key_sha256 and the attested key are both the certificate's key; and the
+// TPM generated that key and will not release it.
+func VerifyTPMCustodyEvidence(
+	evidence TPMCustodyEvidence,
+	certificateDER []byte,
+	trustedRootsPEM [][]byte,
+) (TPMDeviceAttestationResult, error) {
+	if len(evidence.Binding) == 0 || len(evidence.Binding) > maxDeviceAttestationBytes || evidence.VerifiedAt.IsZero() {
+		return TPMDeviceAttestationResult{}, errors.New("crypto: TPM custody evidence is incomplete")
+	}
+	certificate, err := x509.ParseCertificate(certificateDER)
+	if err != nil {
+		return TPMDeviceAttestationResult{}, fmt.Errorf("crypto: parse certificate for custody evidence: %w", err)
+	}
+	keyDigest := sha256.Sum256(certificate.RawSubjectPublicKeyInfo)
+	var binding struct {
+		CSRKeySHA256 string `json:"csr_key_sha256"`
+	}
+	if err := json.Unmarshal(evidence.Binding, &binding); err != nil {
+		return TPMDeviceAttestationResult{}, fmt.Errorf("crypto: decode TPM custody binding: %w", err)
+	}
+	if binding.CSRKeySHA256 != base64.RawURLEncoding.EncodeToString(keyDigest[:]) {
+		return TPMDeviceAttestationResult{}, errors.New("crypto: TPM custody binding names a different key than the certificate's")
+	}
+	challenge := sha256.Sum256(evidence.Binding)
+	result, err := ParseAndVerifyTPMDeviceAttestation(
+		evidence.Credential, challenge[:], trustedRootsPEM, tpmCOSEAlgorithms, evidence.VerifiedAt,
+	)
+	if err != nil {
+		return TPMDeviceAttestationResult{}, err
+	}
+	if subtle.ConstantTimeCompare(result.PublicKeySHA256, keyDigest[:]) != 1 {
+		return TPMDeviceAttestationResult{}, errors.New("crypto: the TPM attested a different key than the certificate's")
+	}
+	if !result.DeviceBound {
+		return TPMDeviceAttestationResult{}, errors.New("crypto: the attested TPM key is not device-bound (fixedTPM, fixedParent and sensitiveDataOrigin are not all set)")
+	}
+	return result, nil
 }
 
 // CSRPublicKeySHA256 verifies a PKCS#10 request and returns the stable SPKI

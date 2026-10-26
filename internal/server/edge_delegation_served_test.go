@@ -150,6 +150,16 @@ func TestServedEdgeDelegationEndToEnd(t *testing.T) {
 			"license delegating a different one — that gap would let a software key ride any "+
 			"hardware attestation on the host.", code, body)
 	}
+	// A131: a TPM key the attestation shows could be duplicated to another TPM
+	// is not device-bound custody, so the TPM2 lane refuses it.
+	duplicable, err := identity.DuplicableCredentialJSON(challenge)
+	if err != nil {
+		t.Fatalf("duplicable credential: %v", err)
+	}
+	code, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/edge/delegations", operator, "edge-mint-duplicable", mintBody(segment.ID, duplicable))
+	if code != http.StatusForbidden || !strings.Contains(string(body), "not device-bound") {
+		t.Fatalf("duplicable TPM key mint = %d body=%s; want 403 naming the missing device binding", code, body)
+	}
 	// A valid host TPM is not permission to hide an EXPORTABLE software CA key.
 	// The provider is policy-bound first; the default policy allows only TPM2.
 	softwareMint := mintBody(segment.ID, mismatchedCredential)

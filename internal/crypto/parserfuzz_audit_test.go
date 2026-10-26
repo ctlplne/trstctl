@@ -104,6 +104,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 	})
 	requireFuzzFuncByName(t, "deviceattest", map[string]string{
 		"FuzzParseAndVerifyTPMDeviceAttestation": "ACME device-attest-01 WebAuthn/CBOR/COSE/TPM envelope (deviceattest/tpm.go)",
+		"FuzzVerifyTPMCustodyEvidence":           "retained device-bound custody evidence re-verified offline (deviceattest/tpm.go)",
 	})
 
 	// The cloud instance-identity attesters parse the same untrusted CMS family at
