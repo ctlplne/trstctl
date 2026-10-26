@@ -39,6 +39,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/sshdiscovery"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/buildinfo"
+	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/mtls"
@@ -68,6 +69,7 @@ func main() {
 	allowLoopbackEnrollment := flag.Bool("allow-insecure-loopback-enrollment", false, "allow bootstrap over plain HTTP only when --enroll-url is a loopback address; the resolved address is rechecked before every dial")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
 	relayCABundle := flag.String("relay-ca-bundle", "", "optional PEM CA bundle for private HTTPS appliance APIs reached by this network relay; adds to OS roots, does not change control-plane trust")
+	connectorIsolation := flag.String("connector-isolation", connector.IsolationWASM, "where this agent runs the shipped connector families: wasm (each operation in a fresh instance of the embedded connector module, reaching only its capability-gated sandbox) or in_process")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
 	serverName := flag.String("server-name", "", "expected control-plane server name (defaults to --name)")
 	commonName := flag.String("name", "", "this agent's identity (client-cert common name)")
@@ -226,6 +228,10 @@ func main() {
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: unexpected command or argument; use --help for usage")
+		os.Exit(2)
+	}
+	if err := applyConnectorIsolation(*connectorIsolation); err != nil {
+		fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 		os.Exit(2)
 	}
 	if err := installAgentDistrust(*distrustFile); err != nil {
@@ -413,7 +419,8 @@ func main() {
 
 	o := agentOptions{
 		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle, relayCABundle: *relayCABundle,
-		tokenFile: *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
+		connectorIsolation: *connectorIsolation,
+		tokenFile:          *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
 		allowInsecureDevBootstrapTokenArg: *allowInlineToken,
 		allowInsecureLoopbackEnrollment:   *allowLoopbackEnrollment,
@@ -527,6 +534,7 @@ func checkedTPMPersistentHandleBase(value uint) (uint32, error) {
 
 type agentOptions struct {
 	enrollURL, inlineToken, tokenFile, caBundle, relayCABundle, serverAddr, serverName, commonName, keyPath, certPath string
+	connectorIsolation                                                                                                string
 	rotateEvery                                                                                                       time.Duration
 	allowInsecureDevBootstrapTokenArg                                                                                 bool
 	allowInsecureLoopbackEnrollment                                                                                   bool

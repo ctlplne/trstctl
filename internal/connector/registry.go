@@ -90,6 +90,13 @@ type Registry struct {
 	isolation string
 }
 
+// The operator-facing isolation settings (connectors.isolation on the control
+// plane, --connector-isolation on an agent).
+const (
+	IsolationWASM          = "wasm"
+	IsolationInProcessFlag = "in_process"
+)
+
 // How a process runs the connector families it registered.
 const (
 	// IsolationWASMSandbox: each operation runs in a fresh instance of the

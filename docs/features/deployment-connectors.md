@@ -47,8 +47,10 @@ the family's grant to the attempt's operations exactly as for an in-process
 connector, and the instance's memory is wiped when the operation ends. The
 connector catalog reports `isolation: wasm_sandbox` for these families.
 `connectors.isolation: in_process` runs them as trusted code in the control plane
-instead. Families an enrolled host agent or network relay executes still run in
-that agent's process.
+instead. Enrolled host agents and network relays run the families they execute in
+the same sandbox by default (`trstctl-agent --connector-isolation`); an agent does
+not report its choice, so the catalog makes no isolation claim for agent-executed
+families.
 
 Delivery is reliable and journaled: the orchestrator writes a `connector.deploy`
 message in the *same transaction* as the state change that requested deployment, so a

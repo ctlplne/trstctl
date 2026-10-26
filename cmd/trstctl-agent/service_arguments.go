@@ -2,7 +2,11 @@
 
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"trstctl.com/trstctl/internal/connector"
+)
 
 // serviceArguments are the flags the Windows service is launched with so that,
 // when the SCM starts it, it reproduces this configuration and runs the loop.
@@ -62,6 +66,11 @@ func serviceArguments(o agentOptions) []string {
 			// when restart durability is supposed to prove it.
 			args = append(args, "--host-rollback-dir", o.hostRollbackDir)
 		}
+	}
+	if o.connectorIsolation != "" && o.connectorIsolation != connector.IsolationWASM {
+		// An operator who chose in-process connectors keeps that choice
+		// across an SCM restart.
+		args = append(args, "--connector-isolation", o.connectorIsolation)
 	}
 	if o.relayClaim {
 		args = append(args, "--relay-claim")

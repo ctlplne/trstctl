@@ -78,18 +78,17 @@ defenses.
   recorded as `breakglass.issued` audit events
   ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
-- **Plugin trust model & blast radius.** The shipped connector families the
-  control plane executes run in the WASM sandbox by default
-  (`connectors.isolation: wasm`): each operation runs in a fresh wazero
-  instance of the embedded, digest-pinned connector module, with no ambient
-  capabilities, no DB pool or signer handle, and only the sandbox operations
-  its grant permits, which the host performs. A defective or malicious
-  connector's blast radius is that grant and the credential it was handed
-  for that one operation. The shipped CA integrations, and the families an
-  enrolled host agent or network relay executes, still run as trusted
-  in-process Go code; their blast radius is the executing process — on the
-  control plane, the PostgreSQL connection pool (still RLS-scoped per
-  tenant), the signer *client* handle (which can request signatures over the
+- **Plugin trust model & blast radius.** The shipped connector families run
+  in the WASM sandbox by default, on the control plane (`connectors.isolation:
+  wasm`) and on enrolled agents (`trstctl-agent --connector-isolation`): each
+  operation runs in a fresh wazero instance of the embedded, digest-pinned
+  connector module, with no ambient capabilities, no DB pool or signer
+  handle, and only the sandbox operations its grant permits, which the host
+  performs. A defective or malicious connector's blast radius is that grant
+  and the credential it was handed for that one operation. The shipped CA
+  integrations still run as trusted in-process Go code; their blast radius
+  is the executing process — on the control plane, the PostgreSQL connection
+  pool (still RLS-scoped per tenant), the signer *client* handle (which can request signatures over the
   peer-authenticated UDS channel), and credential material in flight — never
   the CA private key itself, which stays in the separate signer process.
   Mitigations there: code review, the conformance suite, the connector SDK's

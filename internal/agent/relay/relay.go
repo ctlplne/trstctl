@@ -33,20 +33,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/connector/a10"
-	"trstctl.com/trstctl/internal/connector/acm"
-	"trstctl.com/trstctl/internal/connector/azurekv"
-	"trstctl.com/trstctl/internal/connector/cisco"
-	"trstctl.com/trstctl/internal/connector/envoy"
-	"trstctl.com/trstctl/internal/connector/f5"
-	"trstctl.com/trstctl/internal/connector/fortigate"
-	"trstctl.com/trstctl/internal/connector/gcpcm"
-	"trstctl.com/trstctl/internal/connector/kemp"
-	"trstctl.com/trstctl/internal/connector/netscaler"
-	"trstctl.com/trstctl/internal/connector/paloalto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
@@ -385,99 +373,16 @@ func RollbackExecutableKinds() []string {
 	return out
 }
 
-// buildRelayConnector constructs the named appliance connector from the target's
-// routing fields and the credential the relay redeemed for this attempt. It
-// mirrors the control plane's factory for the same seven kinds — same
+// buildRelayConnector constructs the named appliance or cloud connector from the
+// target's routing fields and the credentials the relay redeemed for this
+// attempt. It builds through the control plane's constructor census — same
 // constructors, same options — because they are the same implementations; only
-// the host differs.
+// the host differs. Unless the agent runs connectors in process, the connector
+// runs in the WASM connector sandbox.
 func buildRelayConnector(name string, target TargetConfig, material Material) (connector.Connector, error) {
-	// require pulls a redeemed value by reference name. A missing reference is a
-	// refusal, never an empty credential: deploying with no password would
-	// either fail confusingly or, worse, succeed against an unauthenticated
-	// appliance.
-	require := func(ref, what string) ([]byte, error) {
-		ref = strings.TrimSpace(ref)
-		if ref == "" {
-			return nil, fmt.Errorf("relay: %s connector needs a %s reference", name, what)
-		}
-		value, ok := material[ref]
-		if !ok || len(value) == 0 {
-			return nil, fmt.Errorf("relay: %s was not redeemed for this attempt", what)
-		}
-		return value, nil
-	}
-
 	switch name {
-	case "f5":
-		password, err := require(target.PasswordRef, "f5 password")
-		if err != nil {
-			return nil, err
-		}
-		options := []f5.Option{f5.WithBasicAuthBytes(target.Username, password)}
-		if target.ObjectName != "" {
-			options = append(options, f5.WithName(target.ObjectName))
-		}
-		active := f5.New(target.Endpoint, target.ClientSSLProfile, options...)
-		if strings.TrimSpace(target.PeerEndpoint) == "" {
-			return active, nil
-		}
-		// HA pair: the standby shares the synced admin credential (E1). Both
-		// peers must converge, so the relay drives an HAPair over them.
-		peerOptions := []f5.Option{f5.WithBasicAuthBytes(target.Username, password)}
-		peerName := target.ObjectName
-		if target.PeerObjectName != "" {
-			peerName = target.PeerObjectName
-		}
-		if peerName != "" {
-			peerOptions = append(peerOptions, f5.WithName(peerName))
-		}
-		peer := f5.New(target.PeerEndpoint, target.ClientSSLProfile, peerOptions...)
-		return f5.NewHAPair(active, peer), nil
-	case "netscaler":
-		password, err := require(target.PasswordRef, "netscaler password")
-		if err != nil {
-			return nil, err
-		}
-		var options []netscaler.Option
-		if target.FileLocation != "" {
-			options = append(options, netscaler.WithFileLocation(target.FileLocation))
-		}
-		return netscaler.New(target.Endpoint, target.Username, password, options...), nil
-	case "a10":
-		password, err := require(target.PasswordRef, "a10 password")
-		if err != nil {
-			return nil, err
-		}
-		return a10.New(target.Endpoint, target.Username, password), nil
-	case "kemp":
-		token, err := require(target.TokenRef, "kemp token")
-		if err != nil {
-			return nil, err
-		}
-		return kemp.New(target.Endpoint, token), nil
-	case "cisco":
-		password, err := require(target.PasswordRef, "cisco password")
-		if err != nil {
-			return nil, err
-		}
-		if err := cisco.ValidateISETarget(target.NodeHostname, target.CertificateRoles); err != nil {
-			return nil, err
-		}
-		var options []cisco.Option
-		if strings.TrimSpace(target.NodeHostname) != "" {
-			options = append(options, cisco.WithISENode(target.NodeHostname, target.CertificateRoles))
-		}
-		return cisco.New(target.Endpoint, target.Username, password, options...), nil
-	case "fortigate":
-		token, err := require(target.TokenRef, "fortigate token")
-		if err != nil {
-			return nil, err
-		}
-		bind, err := fortigate.ParseBindTo(target.BindTo)
-		if err != nil {
-			return nil, err
-		}
-		return fortigate.New(target.Endpoint, token, fortigate.WithBindTo(bind)), nil
+	case "f5", "netscaler", "a10", "kemp", "cisco", "fortigate", "paloalto",
+		"aws-acm", "azure-keyvault", "gcp-certificate-manager":
 	case "envoy":
 		// A61: only reached for a target that declared the relay as its
 		// executor; the host agent keeps the co-resident loopback path.
@@ -487,63 +392,10 @@ func buildRelayConnector(name string, target TargetConfig, material Material) (c
 		if strings.TrimSpace(target.SecretName) == "" {
 			return nil, errors.New("relay: envoy target config carries no secret_name")
 		}
-		return envoy.New(target.Endpoint, target.SecretName), nil
-	case "aws-acm":
-		// The relay mirrors the control plane's cloud constructors (A59):
-		// same packages, same options, credentials redeemed by reference.
-		secretKey, err := require(target.SecretAccessKeyRef, "AWS secret access key")
-		if err != nil {
-			return nil, err
-		}
-		creds := acm.Credentials{AccessKeyID: target.AccessKeyID, SecretAccessKey: secretKey}
-		if strings.TrimSpace(target.SessionTokenRef) != "" {
-			sessionToken, err := require(target.SessionTokenRef, "AWS session token")
-			if err != nil {
-				return nil, err
-			}
-			creds.SessionToken = sessionToken
-		}
-		return acm.New(target.Region, creds, acm.WithEndpoint(target.Endpoint)), nil
-	case "azure-keyvault":
-		token, err := require(target.BearerTokenRef, "Azure bearer token")
-		if err != nil {
-			return nil, err
-		}
-		var options []azurekv.Option
-		if target.APIVersion != "" {
-			options = append(options, azurekv.WithAPIVersion(target.APIVersion))
-		}
-		return azurekv.New(target.Endpoint, azurekv.StaticToken(token), options...), nil
-	case "gcp-certificate-manager":
-		token, err := require(target.BearerTokenRef, "GCP bearer token")
-		if err != nil {
-			return nil, err
-		}
-		entry, err := gcpcm.ParseCertificateMapEntry(target.CertificateMapEntry)
-		if err != nil {
-			return nil, err
-		}
-		options := []gcpcm.Option{gcpcm.WithEndpoint(target.Endpoint)}
-		if entry.Map != "" {
-			options = append(options, gcpcm.WithCertificateMapEntry(entry))
-		}
-		if target.PollInterval != "" {
-			interval, err := time.ParseDuration(target.PollInterval)
-			if err != nil || interval <= 0 {
-				return nil, errors.New("relay: invalid GCP poll_interval")
-			}
-			options = append(options, gcpcm.WithPollInterval(interval))
-		}
-		return gcpcm.New(target.Project, target.Location, gcpcm.StaticToken(token), options...), nil
-	case "paloalto":
-		apiKey, err := require(target.APIKeyRef, "palo alto api key")
-		if err != nil {
-			return nil, err
-		}
-		return paloalto.New(target.Endpoint, apiKey, paloalto.WithSSLTLSProfile(target.SSLTLSProfile, target.CommitAdmin)), nil
 	default:
 		return nil, fmt.Errorf("relay: connector %q is not relay-executable", name)
 	}
+	return buildShipped(name, relayTarget(target), material)
 }
 
 // AdoptMaterial moves redeemed values into locked, zeroized buffers (AN-8) and

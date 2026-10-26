@@ -17,20 +17,9 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/connector/apache"
-	"trstctl.com/trstctl/internal/connector/caddy"
-	"trstctl.com/trstctl/internal/connector/elasticsearch"
-	"trstctl.com/trstctl/internal/connector/envoy"
-	"trstctl.com/trstctl/internal/connector/haproxy"
-	"trstctl.com/trstctl/internal/connector/iis"
 	"trstctl.com/trstctl/internal/connector/javakeystore"
 	"trstctl.com/trstctl/internal/connector/mysql"
-	"trstctl.com/trstctl/internal/connector/nginx"
-	"trstctl.com/trstctl/internal/connector/postfix"
-	"trstctl.com/trstctl/internal/connector/postgresql"
-	"trstctl.com/trstctl/internal/connector/rabbitmq"
 	"trstctl.com/trstctl/internal/connector/tomcat"
-	"trstctl.com/trstctl/internal/connector/traefik"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 )
@@ -660,80 +649,34 @@ func nonemptyHost(value, fallback string) string {
 	return strings.TrimSpace(value)
 }
 
-// buildHostConnector constructs the named file/exec connector. It mirrors the
-// control plane's factory for the same thirteen kinds — same constructors, same
-// options — because they are the same implementations.
+// buildHostConnector constructs the named file/exec connector through the
+// control plane's constructor census — same constructors, same options —
+// because they are the same implementations. Unless the agent runs connectors
+// in process, the connector runs in the WASM connector sandbox.
 func buildHostConnector(name string, target HostTargetConfig, material Material) (connector.Connector, error) {
 	switch name {
-	case "nginx":
-		return nginx.New(target.CertPath, target.KeyPath), nil
-	case "apache":
-		return apache.New(target.CertPath, target.KeyPath), nil
-	case "caddy":
-		return caddy.New(target.CertPath, target.KeyPath), nil
+	case "nginx", "apache", "caddy", "postgresql", "mysql", "rabbitmq", "elasticsearch",
+		"tomcat", "haproxy", "postfix", "iis":
 	case "traefik":
 		if strings.TrimSpace(target.ConfigPath) == "" {
 			return nil, errors.New("relay: traefik target needs config_path so its file provider can be notified after credential changes")
 		}
-		return traefik.New(target.CertPath, target.KeyPath,
-			traefik.WithDynamicConfigPath(target.ConfigPath)), nil
-	case "postgresql":
-		return postgresql.New(target.CertPath, target.KeyPath), nil
-	case "mysql":
-		return mysql.New(target.CertPath, target.KeyPath), nil
-	case "rabbitmq":
-		return rabbitmq.New(target.CertPath, target.KeyPath), nil
-	case "elasticsearch":
-		return elasticsearch.New(target.CertPath, target.KeyPath), nil
 	case "envoy":
 		if err := validateCoResidentEnvoyEndpoint(target.Endpoint); err != nil {
 			return nil, err
 		}
-		return envoy.New(target.Endpoint, target.SecretName), nil
-	case "tomcat":
-		return tomcat.New(target.CertPath, target.KeyPath), nil
-	case "haproxy":
-		return haproxy.New(target.CRTPath, target.ConfigPath), nil
-	case "postfix":
-		return postfix.New(postfix.Config{
-			Postfix: postfix.ServiceConfig{CertPath: target.PostfixCertPath, KeyPath: target.PostfixKeyPath},
-			Dovecot: postfix.ServiceConfig{CertPath: target.DovecotCertPath, KeyPath: target.DovecotKeyPath},
-		}), nil
-	case "iis":
-		var options []iis.Option
-		if target.Store != "" {
-			options = append(options, iis.WithStore(target.Store))
-		}
-		if target.AppID != "" {
-			options = append(options, iis.WithAppID(target.AppID))
-		}
-		if target.ImportDir != "" {
-			options = append(options, iis.WithImportDir(target.ImportDir))
-		}
-		return iis.New(target.Binding, options...), nil
 	case "java-keystore":
 		ref := strings.TrimSpace(target.KeystorePasswordRef)
 		if ref == "" {
 			return nil, errors.New("relay: java-keystore target needs a keystore password reference")
 		}
-		password, ok := material[ref]
-		if !ok || len(password) == 0 {
+		if password, ok := material[ref]; !ok || len(password) == 0 {
 			return nil, errors.New("relay: the java keystore password was not redeemed for this attempt")
 		}
-		var options []javakeystore.Option
-		if target.Format != "" {
-			options = append(options, javakeystore.WithFormat(javakeystore.Format(target.Format)))
-		}
-		options = append(options, javakeystore.WithReloadAction(target.ReloadAction))
-		built := javakeystore.New(target.KeystorePath, password, target.Alias, options...)
-		if err := built.Validate(); err != nil {
-			built.Close()
-			return nil, err
-		}
-		return built, nil
 	default:
 		return nil, fmt.Errorf("relay: connector %q is not host-executable", name)
 	}
+	return buildShipped(name, hostTarget(target), material)
 }
 
 func validateCoResidentEnvoyEndpoint(raw string) error {

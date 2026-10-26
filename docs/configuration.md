@@ -2538,6 +2538,15 @@ issuer/response bytes, or OCSP request. The older `--crl-cache-*` flags remain f
 single CRL; pair them with `--revocation-cache-segment` so their heartbeat has an
 operator-defined segment identity.
 
+An agent runs the shipped connector families it executes — host connectors on
+its own machine, appliance and cloud connectors as a network relay — in the WASM
+connector sandbox by default: each deploy, readback, rollback, takedown, dry run
+or appliance-key operation runs in a fresh instance of the embedded, digest-pinned
+connector module, whose only effects are the operations its grant allows, performed
+by the agent through the host profile or the relay's HTTP client.
+`--connector-isolation=in_process` runs them as trusted code in the agent process
+instead; a Windows service keeps the choice across SCM restarts.
+
 For host connector execution, `trstctl-agent --host-exec-profile <file>` also
 initializes an encrypted two-generation predecessor ledger. Set
 `--host-rollback-dir <absolute-directory>` to choose its durable location; when

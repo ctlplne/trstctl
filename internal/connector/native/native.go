@@ -102,6 +102,12 @@ type Target struct {
 	// Vantage lets an envoy target declare "network" so a relay drives a
 	// remote SDS endpoint instead of the co-resident host agent (A61).
 	Vantage string `json:"vantage,omitempty"`
+
+	// PeerEndpoint names the standby BIG-IP of an F5 HA pair a network relay
+	// drives (epic E1); PeerObjectName overrides the crypto object base name
+	// on the peer. The control plane's closed schema does not accept them.
+	PeerEndpoint   string `json:"peer_endpoint,omitempty"`
+	PeerObjectName string `json:"peer_object_name,omitempty"`
 }
 
 func fields(names ...string) map[string]bool {
@@ -315,6 +321,11 @@ func buildLocal(family string, target Target) (connector.Connector, bool) {
 			Dovecot: postfix.ServiceConfig{CertPath: target.DovecotCertPath, KeyPath: target.DovecotKeyPath},
 		}), true
 	case "traefik":
+		// A host agent's traefik target names the file provider's dynamic
+		// configuration so traefik is notified after a credential change.
+		if strings.TrimSpace(target.ConfigPath) != "" {
+			return traefik.New(target.CertPath, target.KeyPath, traefik.WithDynamicConfigPath(target.ConfigPath)), true
+		}
 		return traefik.New(target.CertPath, target.KeyPath), true
 	case "postgresql":
 		return postgresql.New(target.CertPath, target.KeyPath), true
@@ -359,7 +370,21 @@ func buildAppliance(family string, target Target, require Require) (connector.Co
 		if target.ObjectName != "" {
 			options = append(options, f5.WithName(target.ObjectName))
 		}
-		return f5.New(target.Endpoint, target.ClientSSLProfile, options...), nil
+		active := f5.New(target.Endpoint, target.ClientSSLProfile, options...)
+		if strings.TrimSpace(target.PeerEndpoint) == "" {
+			return active, nil
+		}
+		// HA pair: the standby shares the synced admin credential (E1), and
+		// both peers must converge.
+		peerOptions := []f5.Option{f5.WithBasicAuthBytes(target.Username, password)}
+		peerName := target.ObjectName
+		if target.PeerObjectName != "" {
+			peerName = target.PeerObjectName
+		}
+		if peerName != "" {
+			peerOptions = append(peerOptions, f5.WithName(peerName))
+		}
+		return f5.NewHAPair(active, f5.New(target.PeerEndpoint, target.ClientSSLProfile, peerOptions...)), nil
 	case "netscaler":
 		password, err := credential(require, target.PasswordRef, "netscaler password")
 		if err != nil {
@@ -379,6 +404,9 @@ func buildAppliance(family string, target Target, require Require) (connector.Co
 	case "cisco":
 		password, err := credential(require, target.PasswordRef, "cisco password")
 		if err != nil {
+			return nil, err
+		}
+		if err := cisco.ValidateISETarget(target.NodeHostname, target.CertificateRoles); err != nil {
 			return nil, err
 		}
 		var options []cisco.Option

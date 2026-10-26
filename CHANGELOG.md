@@ -10,6 +10,10 @@
   its grant permits, and whose memory is wiped afterwards. Every family is
   proven to behave identically in and out of the sandbox. The connector catalog
   reports each family's `isolation`. `in_process` keeps the previous behaviour.
+- Enrolled host agents and network relays run the shipped connector families in
+  the same WASM sandbox by default (`trstctl-agent --connector-isolation`,
+  `in_process` to opt out). The relay builds every family through the control
+  plane's constructor census, so a relay-built connector is the same connector.
 - `POST /api/v1/ai/query` plans questions beyond certificate expiry: certificate
   questions combining expiry windows, expired, status, issuer, key algorithm,
   subject or SAN name, owner and no-owner clauses (as a list or an exact count),
