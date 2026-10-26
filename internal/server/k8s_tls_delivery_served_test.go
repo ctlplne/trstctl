@@ -204,3 +204,31 @@ func TestServedKubernetesTLSRunRefusesAnAgentThatCannotDeliver(t *testing.T) {
 		t.Fatalf("%d renewal jobs queued for an agent that cannot deliver", len(jobs))
 	}
 }
+
+// A Kubernetes Secret target is delivered only by the agent inside the cluster,
+// which generates the key there. Saved without executor=agent it would route
+// through control-plane key generation and ship a key into the cluster, so the
+// target is refused with what to set instead.
+func TestServedKubernetesSecretTargetRequiresTheClusterAgentToGenerateTheKey(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{})
+	tok := seedScopedToken(t, h.store, h.tenant, "connectors:write", "connectors:read")
+	agent := store.Agent{ID: uuid.NewString(), TenantID: h.tenant, Name: "cluster-agent", Status: "active", Roles: []string{"host"}}
+	if err := h.store.UpsertAgent(t.Context(), agent); err != nil {
+		t.Fatal(err)
+	}
+	create := func(cfg map[string]any) (int, []byte) {
+		t.Helper()
+		return secretsReq(t, h, http.MethodPost, "/api/v1/connectors/targets", tok, map[string]any{
+			"name": "payments-web-tls", "connector": "k8s_secret", "config": cfg, "enabled": true,
+		})
+	}
+	cfg := map[string]any{"namespace": "payments", "secret_name": "web-tls", "required_agent_id": agent.ID}
+	status, body := create(cfg)
+	if status != http.StatusUnprocessableEntity || !strings.Contains(string(body), `executor`) {
+		t.Fatalf("k8s_secret target without executor=agent = %d %s, want 422 naming the executor", status, body)
+	}
+	cfg["executor"] = "agent"
+	if status, body := create(cfg); status != http.StatusCreated {
+		t.Fatalf("k8s_secret target with executor=agent = %d %s", status, body)
+	}
+}

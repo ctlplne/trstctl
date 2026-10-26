@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/custody"
 )
 
 // ValidateHostTargetAssignment checks tenant ownership and the displayed role
@@ -23,6 +24,12 @@ func (s *Store) ValidateHostTargetAssignment(ctx context.Context, tenantID, fami
 	}
 	if vantage, known := connector.EffectiveTargetVantage(family, config); !known || vantage != connector.VantageHostAgent {
 		return "", nil
+	}
+	// The agent inside the cluster generates a Kubernetes Secret's key. Without
+	// the marker the target would route through control-plane key generation
+	// and ship a key into the cluster.
+	if family == "k8s_secret" && !custody.TargetExecutorIsAgent(config) {
+		return "", fmt.Errorf(`a k8s_secret destination is delivered by the agent inside the cluster, which generates the key there: set "executor": "agent" in its configuration; no work was queued`)
 	}
 	id, err := connector.TargetHostAgentID(config)
 	if err != nil {
