@@ -4162,36 +4162,34 @@ denial, injection-inert + secret-redacted, MCP list+invoke).
 
 ### Secrets and identity frameworks
 
-**Transit keys are sealed at rest; multi-replica sharing is still open.** The
-transit (encryption-as-a-service) keyring is persisted KEK-sealed under
-`transit.keyring_dir`: AEAD, HMAC, and signing key material is sealed with the
-deployment KEK, written atomically, and re-locked into protected memory on load
-(AN-8). A checkpoint runs after every create and rotate, so a restart between
-minting a key and the next flush cannot lose it, and a failed checkpoint fails
-the mutation rather than handing back a key that disappears later: the
-unpersisted key (or the unpersisted new version) is rolled back out of the
-in-memory ring and its material wiped, so nothing can encrypt under it and a
-retry succeeds instead of reporting that the key already exists.
+**Transit keys are sealed at rest and shared by every replica.** Each tenant's
+transit (encryption-as-a-service) keyring is one sealed row in PostgreSQL: AEAD,
+HMAC, and signing key material is sealed under the tenant's key domain (the
+deployment KEK for a tenant that has not migrated), and re-locked into protected
+memory on load (AN-8). A create or rotate is saved before it is reported, over the
+revision the replica last read, so two replicas changing one tenant's keys at once
+cannot overwrite each other: the replica that loses the save catches up and applies
+its change again. A failed save fails the mutation rather than handing back a key
+that disappears later: the unsaved key (or new version) is rolled back out of the
+in-memory ring and its material wiped, so nothing can encrypt under it and a retry
+succeeds. A replica loads a tenant's row the first time the tenant is used and
+reloads it when an operation names a key or version it does not hold, so a key
+created or rotated on one replica works on every other.
 
-Two properties bound what this gives you:
+Three properties bound what this gives you:
 
-- **Persistence requires a KEK.** With no deployment KEK (or no configured
-  directory) the keyring stays in memory only and keys do not survive a restart,
-  exactly as before. Key material is sealed at rest or it is not written at all —
-  there is no plaintext fallback. The directory is set with `transit.keyring_dir`
-  in the config file or `TRSTCTL_TRANSIT_KEYRING_DIR` in the environment, and the
-  effective value is echoed by `-check-config` as `transit.keyring_dir`; it is
-  empty by default, so durability is an explicit operator decision.
-- **A keyring that cannot be opened refuses to start.** If the sealed file exists
-  but the KEK cannot open it, the control plane fails to start rather than coming
-  up with an empty keyring: starting anyway would mint fresh keys and silently
-  turn every existing ciphertext into garbage.
-
-Still open: **a multi-replica deployment does not share the keyring.** Each
-replica seals its own file, so a decrypt routed to a replica that did not serve
-the encrypt still fails. Sharing the keyring across replicas — and event-sourcing
-the create/rotate lifecycle facts alongside the sealed material — is tracked as
-follow-up work.
+- **Persistence requires key protection.** With no deployment KEK the keyring
+  stays in memory only and keys do not survive a restart. Key material is sealed
+  at rest or it is not written at all; there is no plaintext fallback.
+- **`transit.keyring_dir` is now an import source.** A keyring an earlier version
+  checkpointed there is copied into the shared keyring at startup for each tenant
+  that has no row yet; the file is left as the operator's copy, and a file that
+  cannot be opened still refuses the start.
+- **A keyring that cannot be opened fails the operation.** A row the tenant's key
+  domain cannot open (a sealed tenant, a lost KEK) fails each transit operation for
+  that tenant instead of minting fresh keys over it. The create and rotate
+  lifecycle facts are audit events; the key bytes are deliberately not
+  event-sourced, so the table restores from the PostgreSQL backup.
 
 **Private-egress allowlist entries must be exact network prefixes.** Every
 `allow_private_cidrs` / `private_egress_cidrs` surface (connectors, Rekor
@@ -4495,8 +4493,7 @@ wire for stock clients, records `kmip.object.created`, `kmip.object.revoke`,
 and `kmip.object.destroyed`, and zeroizes in-memory key material on
 rekey/destroy/shutdown. Appliance-specific templates and tenant self-service
 listener management remain deliberate product-scope boundaries. Production
-Transit remains conditional on a protected keyring directory and deployment
-KEK; the KMIP listener additionally remains conditional on its licensed runtime,
+Transit durability remains conditional on the deployment KEK; the KMIP listener additionally remains conditional on its licensed runtime,
 one tenant binding, and configured mTLS trust.
 
 ## Authorization policy gates and ABAC overlays: served by the binary

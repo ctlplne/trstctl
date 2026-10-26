@@ -619,10 +619,14 @@ Ciphertexts are versioned (`trv:<version>:...`) so rotation can rewrap old data 
 newest version. Requests are tenant-bound and idempotent, auth-gated by `keys:write`
 for creation/rotation/encrypt/decrypt/rewrap/HMAC/sign and `keys:read` for verify.
 Plaintext and associated data live in wipeable `[]byte` buffers zeroized after the
-response is written. When `transit.keyring_dir` and the deployment KEK are configured,
-every create/rotate atomically checkpoints an opaque sealed keyring and startup restores
-it before serving; a missing or unreadable original KEK fails startup instead of silently
-replacing the keys. There is deliberately no browser upload/import path for key material.
+response is written. With the deployment KEK configured, each tenant's keyring is one
+sealed row in PostgreSQL that every replica shares: every create/rotate is saved before
+it is reported, a replica that lacks a key or version reloads the row, and a key
+created or rotated on one replica works on all of them and after a restart. A keyring
+an earlier version checkpointed to `transit.keyring_dir` is imported once at startup;
+a row or file the original KEK cannot open fails the operation or the start instead of
+silently replacing the keys. There is deliberately no browser upload/import path for
+key material.
 Events —
 `transit.key.created`, `transit.key.rotated`, `transit.encrypt`, `transit.rewrap`,
 `transit.hmac`, `transit.sign` — give audit evidence without logging key bytes or
@@ -658,8 +662,9 @@ If a create, rotate, encrypt, rewrap, HMAC, or sign response is uncertain, do no
 invent a replacement key or changed request. Keep the original inputs and
 `Idempotency-Key`, read `transit status`, the key's version history, and the filtered
 `transit.*` audit receipts, then replay the byte-identical request with the same key.
-For a restore failure, repair the original KEK or sealed-keyring mount and restart;
-never delete or overwrite the sealed file just to make the process start.
+For a restore failure, repair the original KEK, tenant key domain or database and
+restart; never delete or overwrite the sealed keyring row or file just to make the
+process start.
 
 For legacy gear, the binary can also mount an opt-in KMIP listener:
 

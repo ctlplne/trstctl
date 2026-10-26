@@ -2,6 +2,11 @@
 
 ### Added
 
+- Transit keys are shared by every replica: each tenant's keyring is a sealed
+  row in PostgreSQL, saved before a create or rotate is reported and reloaded
+  when a replica lacks a key or version, so a key made on one replica works on
+  all of them and after a restart. A keyring an earlier version kept in
+  `transit.keyring_dir` is imported at startup, and the file is left in place.
 - Authority agreement can observe a KMIP server: an authority entry with a
   `kmip` source block reads object metadata over KMIP 1.4 with a client
   certificate (Locate, Get Attributes, and certificate values; never key
