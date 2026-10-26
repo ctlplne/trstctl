@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1728 annotated sites across 26 rules. Each row is
+1729 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1978,6 +1978,12 @@ not this file.
 | `internal/server/secrets_sync_served_test.go:1101` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1172` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1282` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+
+### G709 — CWE-502 Deserialization of untrusted data (taint) (1 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/connector/paloalto/paloaltotest/paloaltotest.go:560` | test double: the op command decodes into a fixed struct, and encoding/xml resolves no external entities (CWE-502) |
 
 ### G710 — CWE-601 Open redirect (taint) (4 sites)
 

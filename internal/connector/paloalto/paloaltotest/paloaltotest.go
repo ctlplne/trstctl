@@ -557,7 +557,7 @@ type generateCommand struct {
 // firewall makes an ECDSA P-256 key and a CSR under a new object name (A122).
 func (s *Server) generate(w http.ResponseWriter, cmd string) {
 	var in generateCommand
-	if err := xml.Unmarshal([]byte(cmd), &in); err != nil || in.Generate == nil {
+	if err := xml.Unmarshal([]byte(cmd), &in); err != nil || in.Generate == nil { // #nosec G709 -- test double: the op command decodes into a fixed struct, and encoding/xml resolves no external entities (CWE-502)
 		writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="17"><msg>invalid op command</msg></response>`)
 		return
 	}

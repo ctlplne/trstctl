@@ -72,6 +72,7 @@ CWE_BY_RULE = {
     "G703": ("CWE-22", "Path traversal (taint)"),
     "G704": ("CWE-918", "Server-side request forgery (taint)"),
     "G705": ("CWE-79", "Cross-site scripting (taint)"),
+    "G709": ("CWE-502", "Deserialization of untrusted data (taint)"),
     "G710": ("CWE-601", "Open redirect (taint)"),
 }
 
