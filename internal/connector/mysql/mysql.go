@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path"
 
 	"trstctl.com/trstctl/internal/connector"
@@ -89,7 +89,7 @@ func readExisting(sb connector.Sandbox, file string) ([]byte, bool, error) {
 	if err == nil {
 		return b, true, nil
 	}
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil, false, nil
 	}
 	return nil, false, err

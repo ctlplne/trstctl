@@ -4677,20 +4677,29 @@ self-test already asserts the module when required. See
 
 This is a deliberate, documented trust boundary, not an accident.
 
-- Shipped first-party CA and connector integrations run as trusted in-process
-  Go code; they are not sandboxed through the WASM host. Their blast radius
-  if one is defective is the control plane's address space: the database
-  connection pool (confined to the tenant by per-tenant database isolation)
-  and the signer client handle (it can request signatures), but not the CA
-  private key, which stays in the separate signer process. They are
-  mitigated by code review, the conformance suite, the connector SDK's
-  capability-scoped sandbox facade, and per-subsystem bounded worker lanes.
+- Shipped connector families the control plane executes run in the WASM
+  sandbox by default (`connectors.isolation: wasm`): the binary embeds one
+  digest-pinned first-party connector module, and every connector operation
+  runs in a fresh wazero instance of it whose only effects are the sandbox
+  operations its grant permits, performed by the host; the instance's memory
+  is wiped afterwards. Every family is proven to behave identically in and
+  out of the sandbox (same effects, same errors, same optional operations).
+  `in_process` remains available. The shipped CA integrations, and the
+  families an enrolled host agent or network relay executes, still run as
+  trusted in-process Go code. Their blast radius if one is defective is the
+  executing process — on the control plane, the database connection pool
+  (confined to the tenant by per-tenant database isolation) and the signer
+  client handle (it can request signatures), but not the CA private key,
+  which stays in the separate signer process. They are mitigated by code
+  review, the conformance suite, the connector SDK's capability-scoped
+  sandbox facade, and per-subsystem bounded worker lanes.
 - The WASM plugin host (wazero) is real and is the isolation boundary for
   third-party plugins. A loaded plugin has no ambient capabilities and only
   the host functions its grant permits; the host holds no database pool or
   signer handle; and a deliberately misbehaving plugin is proven contained
-  by test. Migrating the first-party integrations onto it is future work.
-  See the [plugin trust model](security/threat-model.md).
+  by test. The control plane's connector families now run on it (above);
+  moving the agent-executed families and the CA integrations onto it is what
+  comes next. See the [plugin trust model](security/threat-model.md).
 - Plugin extensibility is served by the binary. The WASM plugin host is
   wired into the served control plane: when `plugins.enabled` the running
   binary loads operator-supplied CA plugins from `plugins.ca_dir` and
@@ -4703,9 +4712,9 @@ This is a deliberate, documented trust boundary, not an accident.
   per-tenant database isolation, recorded as immutable events, on the
   plugin's own bounded worker lane. The plugin runs in its own wazero runtime
   with no database pool or signer handle, an operation outside its grant is
-  denied at runtime, and the surface is off by default. The shipped
-  first-party CA/connector integrations still run as trusted in-process Go
-  (see above); migrating those built-ins onto the host remains future work.
+  denied at runtime, and the surface is off by default. The control plane's
+  built-in connector families run in the same kind of sandbox (see above);
+  the CA integrations and agent-executed families still run in process.
 - Served plugins are signature/provenance-verified. The served loader admits
   a `.wasm` module only after its detached Ed25519 signature verifies
   (through the single isolated cryptography path) against the

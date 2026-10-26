@@ -223,6 +223,7 @@ variables below.
 | `TRSTCTL_CONNECTORS_HTTP_TIMEOUT` | `15s` | HTTP timeout applied to connector calls, for example the `right_size` PATCH/GET cycle. Must be a positive Go duration. |
 | `TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS` | unset | Comma-separated CIDRs explicitly granted to connector HTTP endpoints that resolve to a private address. |
 | `TRSTCTL_CONNECTORS_ALLOW_INSECURE_HTTP` | `false` | Loopback-only development escape hatch permitting an `http://` connector endpoint (for example a local `right_size` emulator); it cannot authorize plaintext to a non-loopback host. |
+| `TRSTCTL_CONNECTORS_ISOLATION` | `wasm` | Where the control plane runs the shipped connector families: `wasm` runs every connector operation in a fresh instance of the embedded connector module inside the WASM sandbox, where its only effects are the operations its grant allows; `in_process` runs them as trusted code in the control-plane process. |
 
 The **tenant-bound structured bindings** — `connectors.local_profiles` (local
 execution profiles), `connectors.right_size` (tenant-to-endpoint bindings), and every

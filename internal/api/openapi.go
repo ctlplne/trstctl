@@ -2946,6 +2946,8 @@ func componentSchemas() map[string]*Schema {
 		// declared grant was read from.
 		"executor":     {Type: "string", Enum: []string{"host_agent", "network_relay", "control_plane", "none"}},
 		"grant_source": {Type: "string", Enum: []string{"registry", "shipped", "none"}},
+		// A153: how the executor runs the family's code.
+		"isolation": {Type: "string", Enum: []string{"wasm_sandbox", "in_process"}},
 		// A3: where this connector's deploy work executes, from the live census.
 		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
 		// A122: whether the family's appliance can generate the key and send

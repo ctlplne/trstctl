@@ -2769,6 +2769,7 @@ export interface ConnectorCatalogItem {
   executes_rollback?: boolean;
   executor?: "host_agent" | "network_relay" | "control_plane" | "none";
   grant_source?: "registry" | "shipped" | "none";
+  isolation?: "wasm_sandbox" | "in_process";
   kind: string;
   name: string;
   native: boolean;

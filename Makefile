@@ -674,6 +674,12 @@ sca: ## Software-composition analysis across all dependency surfaces (Go + npm +
 .PHONY: supply-chain
 supply-chain: sbom sca dependency-freshness ## Full supply-chain pass: module SBOM, SCA, and dependency freshness SLO
 
+.PHONY: connector-wasm
+connector-wasm: ## Rebuild the embedded first-party connector module (run after changing a connector family)
+	@mkdir -p $(BIN_DIR)
+	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 go build -buildmode=c-shared -trimpath -buildvcs=false -ldflags='-s -w' -o $(BIN_DIR)/connector-module.wasm ./internal/connector/wasm/module
+	go run ./internal/connector/wasm/host/gen $(BIN_DIR)/connector-module.wasm
+
 .PHONY: generate
 generate: ## Regenerate code from .proto (needs protoc + protoc-gen-go + protoc-gen-go-grpc)
 	protoc -I . \

@@ -2976,6 +2976,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_CONNECTORS_HTTP_TIMEOUT", &c.Connectors.HTTPTimeout)
 	setCSV(getenv, "TRSTCTL_CONNECTORS_ALLOW_PRIVATE_CIDRS", &c.Connectors.AllowPrivateCIDRs)
 	setBool(getenv, "TRSTCTL_CONNECTORS_ALLOW_INSECURE_HTTP", &c.Connectors.AllowInsecureHTTP)
+	setString(getenv, "TRSTCTL_CONNECTORS_ISOLATION", &c.Connectors.Isolation)
 	setNotificationEnv(getenv, &c.Notifications)
 	applyCodeSigningEnv(getenv, &c.CodeSigning)
 	applyProviderEnv(getenv, &c.Provider)

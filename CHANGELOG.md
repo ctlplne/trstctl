@@ -2,6 +2,14 @@
 
 ### Added
 
+- The control plane runs the shipped connector families in the WASM sandbox by
+  default (`connectors.isolation: wasm`, `TRSTCTL_CONNECTORS_ISOLATION`). The
+  binary embeds one digest-pinned first-party connector module; each deploy,
+  readback, rollback, takedown, preview, TLS-posture or appliance-key operation
+  runs in a fresh wazero instance whose only effects are the sandbox operations
+  its grant permits, and whose memory is wiped afterwards. Every family is
+  proven to behave identically in and out of the sandbox. The connector catalog
+  reports each family's `isolation`. `in_process` keeps the previous behaviour.
 - `POST /api/v1/ai/query` plans questions beyond certificate expiry: certificate
   questions combining expiry windows, expired, status, issuer, key algorithm,
   subject or SAN name, owner and no-owner clauses (as a list or an exact count),

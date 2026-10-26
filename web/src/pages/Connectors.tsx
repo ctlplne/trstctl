@@ -939,6 +939,13 @@ export function Connectors() {
                             ) : (
                               <span className="text-status-warning">{t("connectors.catalog.executorNone")}</span>
                             )}
+                            {/* A153: how the executor runs this family's code. */}
+                            {connector.isolation === "wasm_sandbox" && (
+                              <span className="mt-1 block text-xs text-status-success">{t("connectors.catalog.isolation.wasm_sandbox")}</span>
+                            )}
+                            {connector.isolation === "in_process" && (
+                              <span className="mt-1 block text-xs text-muted-foreground">{t("connectors.catalog.isolation.in_process")}</span>
+                            )}
                           </td>
                           {/* A75: the declared sandbox grant, from the live registry or
                           the binary's shipped census, never from the description. */}

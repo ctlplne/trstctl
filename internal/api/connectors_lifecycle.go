@@ -80,6 +80,12 @@ type connectorCatalogItem struct {
 	// a target for it cannot deploy until the family is enabled or a relay
 	// reports carrying a plugin by that name.
 	Executor string `json:"executor"`
+	// Isolation says how the executor runs this family's code (A153):
+	// wasm_sandbox (a fresh instance of the embedded connector module per
+	// operation, reaching only the family's capability-gated sandbox) or
+	// in_process (trusted code in the executing process). Empty when nothing in
+	// this estate executes the family.
+	Isolation string `json:"isolation,omitempty"`
 	// ReplaySafety is the audited redelivery contract: "reconciled" when the
 	// receiver converges on retry, "at-most-once" otherwise. It fails closed
 	// to at-most-once for anything unregistered.
@@ -1841,9 +1847,23 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 			}
 		}
 		item.Executor = connectorExecutorFor(item.TargetVantage, item.Native)
+		item.Isolation = connectorIsolationFor(item.Executor, a.connectorRegistry.IsolationFor(item.Name))
 		out = append(out, item)
 	}
 	return out
+}
+
+// connectorIsolationFor says how the executor runs a family. The control plane
+// reports its own registry's declaration; host agents and relays still run
+// their families in process.
+func connectorIsolationFor(executor, registered string) string {
+	switch executor {
+	case "control_plane":
+		return registered
+	case "host_agent", "network_relay":
+		return connector.IsolationInProcess
+	}
+	return ""
 }
 
 // connectorExecutorFor names who performs a family's deploys (A74). A host or

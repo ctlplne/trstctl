@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1766 annotated sites across 27 rules. Each row is
+1773 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -190,7 +190,7 @@ not this file.
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config.go:2858` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:3615` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3616` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -474,7 +474,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (270 sites)
+### G115 — CWE-190 Integer overflow or wraparound (271 sites)
 
 | Location | Reason |
 |---|---|
@@ -503,6 +503,7 @@ not this file.
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:53` | test call sites pass a bounded literal ACE set (CWE-190). |
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:69` | ParseUint bounds revision to 8 bits and the test SID grammar caps sub-authorities at 255 (CWE-190). |
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:71` | ParseUint bounds authority to 48 bits and this loop emits one byte at a time (CWE-190). |
+| `internal/connector/wasm/host/host.go:142` | a wasm32 address, bounded by math.MaxUint32 just above (CWE-190). |
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:286` | test-support package compiled only into test binaries (CWE-190) |
 | `internal/crypto/ctlog/ctlogtest/ctlogtest.go:303` | test-support package compiled only into test binaries (CWE-190) |
@@ -855,7 +856,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (197 sites)
+### G204 — CWE-78 OS command injection (198 sites)
 
 | Location | Reason |
 |---|---|
@@ -934,6 +935,7 @@ not this file.
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cli_test.go:2616` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:404` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/wasm/host/host_test.go:44` | fixed toolchain and package; output confined to the temp dir (CWE-78). |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:117` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
@@ -1161,7 +1163,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (507 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (510 sites)
 
 | Location | Reason |
 |---|---|
@@ -1392,13 +1394,16 @@ not this file.
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/config/config.go:2952` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:4210` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4229` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4211` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4230` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:127` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:280` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:372` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
+| `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
+| `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
+| `internal/connector/wasm/host/host_test.go:293` | this repository's own connector sources (CWE-22). |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/mtls/agent.go:214` | operator-configured certificate/key path from deployment config (CWE-22) |
@@ -1673,7 +1678,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (99 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (101 sites)
 
 | Location | Reason |
 |---|---|
@@ -1719,6 +1724,8 @@ not this file.
 | `internal/cli/cli_test.go:2646` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:159` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
+| `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
 | `internal/crypto/external_kms_test.go:90` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/mtls/agent.go:205` | certificate chain PEM is public material; the key is written 0600 separately (CWE-276) |
 | `internal/crypto/mtls/signer.go:209` | writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276) |
@@ -1890,7 +1897,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (95 sites)
+### G703 — CWE-22 Path traversal (taint) (98 sites)
 
 | Location | Reason |
 |---|---|
@@ -1923,8 +1930,11 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:4210` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4229` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4211` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4230` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
+| `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
+| `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/protocols/acme/certbot_client_test.go:275` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |

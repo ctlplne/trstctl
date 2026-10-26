@@ -38,6 +38,23 @@ type Connectors struct {
 	AllowInsecureHTTP bool                             `json:"allow_insecure_http,omitempty"`
 	LocalProfiles     map[string]LocalConnectorProfile `json:"local_profiles,omitempty"`
 	RightSize         []ConnectorRightSizeBinding      `json:"right_size,omitempty"`
+	// Isolation says where the shipped connector families run: "wasm" (the
+	// default) runs each operation in a fresh instance of the embedded connector
+	// module inside the WASM sandbox, reaching only its capability-gated
+	// sandbox; "in_process" runs them as trusted code in the control plane.
+	Isolation string `json:"isolation,omitempty"`
+}
+
+// Connector isolation modes.
+const (
+	ConnectorIsolationWASM      = "wasm"
+	ConnectorIsolationInProcess = "in_process"
+)
+
+// SandboxedConnectors reports whether the shipped connector families run in
+// the WASM sandbox.
+func (c Connectors) SandboxedConnectors() bool {
+	return strings.TrimSpace(c.Isolation) != ConnectorIsolationInProcess
 }
 
 // ConnectorRightSizeBinding maps one tenant's remediation connector name to an
@@ -126,6 +143,11 @@ func validateConnectors(c Connectors) []error {
 	}
 	if _, err := c.HTTPTimeoutDuration(); err != nil {
 		errs = append(errs, err)
+	}
+	switch strings.TrimSpace(c.Isolation) {
+	case "", ConnectorIsolationWASM, ConnectorIsolationInProcess:
+	default:
+		errs = append(errs, fmt.Errorf("connectors.isolation must be %q or %q, not %q", ConnectorIsolationWASM, ConnectorIsolationInProcess, c.Isolation))
 	}
 	for _, raw := range c.AllowPrivateCIDRs {
 		if _, err := netsec.ParseEgressAllowPrefix(raw); err != nil {

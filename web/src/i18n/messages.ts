@@ -31800,6 +31800,14 @@ export const messages = {
     defaultMessage: "This control plane",
     description: "Executor value: this process's connector registry runs this family.",
   },
+  "connectors.catalog.isolation.wasm_sandbox": {
+    defaultMessage: "Runs in the WASM connector sandbox: only the sandbox grant beside it",
+    description: "Isolation note under the executor: each operation runs in a fresh sandboxed module instance that reaches only its granted operations.",
+  },
+  "connectors.catalog.isolation.in_process": {
+    defaultMessage: "Runs as trusted code in the executing process",
+    description: "Isolation note under the executor: the family's code runs inside the control plane or agent process.",
+  },
   "connectors.catalog.executorNone": {
     defaultMessage: "Nothing in this estate executes it yet: enable the family on the control plane or enroll a relay carrying a plugin by this name.",
     description: "Executor value when a catalog row is listed for its description only.",

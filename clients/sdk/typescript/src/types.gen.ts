@@ -11146,6 +11146,8 @@ export interface components {
             executor?: "host_agent" | "network_relay" | "control_plane" | "none";
             /** @enum {string} */
             grant_source?: "registry" | "shipped" | "none";
+            /** @enum {string} */
+            isolation?: "wasm_sandbox" | "in_process";
             kind: string;
             name: string;
             native: boolean;

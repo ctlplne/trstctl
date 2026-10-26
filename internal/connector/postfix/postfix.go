@@ -12,8 +12,9 @@ package postfix
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path"
 	"path/filepath"
 	"strings"
@@ -230,7 +231,7 @@ func readStates(sb connector.Sandbox, files []desiredFile) (map[string]fileState
 			out[f.path] = fileState{path: f.path, data: b, had: true}
 			continue
 		}
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			out[f.path] = fileState{path: f.path}
 			continue
 		}

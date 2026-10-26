@@ -11394,6 +11394,13 @@
             ],
             "type": "string"
           },
+          "isolation": {
+            "enum": [
+              "wasm_sandbox",
+              "in_process"
+            ],
+            "type": "string"
+          },
           "kind": {
             "type": "string"
           },

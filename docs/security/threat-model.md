@@ -78,18 +78,22 @@ defenses.
   recorded as `breakglass.issued` audit events
   ([limitations](../limitations.md),
   [incident response](../runbooks/incident-response.md)).
-- **Plugin trust model & blast radius.** The shipped first-party CA and
-  connector integrations run as trusted in-process Go code, not in the WASM
-  sandbox, so their blast radius if one is defective or malicious is the
-  control plane's own address space: the PostgreSQL connection pool (still
-  RLS-scoped per tenant), the signer *client* handle (which can request
-  signatures over the peer-authenticated UDS channel), and credential
-  material in flight — never the CA private key itself, which stays in the
-  separate signer process. Mitigations: code review, the conformance suite,
-  the connector SDK's capability-scoped `Sandbox` facade, and bounded
-  per-subsystem lanes. WASM isolation (wazero) — no ambient capabilities, no
-  DB pool or signer handle, contained by test — is reserved for third-party
-  plugins; moving first-party integrations into that sandbox is future work
+- **Plugin trust model & blast radius.** The shipped connector families the
+  control plane executes run in the WASM sandbox by default
+  (`connectors.isolation: wasm`): each operation runs in a fresh wazero
+  instance of the embedded, digest-pinned connector module, with no ambient
+  capabilities, no DB pool or signer handle, and only the sandbox operations
+  its grant permits, which the host performs. A defective or malicious
+  connector's blast radius is that grant and the credential it was handed
+  for that one operation. The shipped CA integrations, and the families an
+  enrolled host agent or network relay executes, still run as trusted
+  in-process Go code; their blast radius is the executing process — on the
+  control plane, the PostgreSQL connection pool (still RLS-scoped per
+  tenant), the signer *client* handle (which can request signatures over the
+  peer-authenticated UDS channel), and credential material in flight — never
+  the CA private key itself, which stays in the separate signer process.
+  Mitigations there: code review, the conformance suite, the connector SDK's
+  capability-scoped `Sandbox` facade, and bounded per-subsystem lanes
   ([limitations](../limitations.md)).
 - Host & operator security. trstctl assumes a reasonably trusted host, with
   custodians/operators protecting their own credentials.

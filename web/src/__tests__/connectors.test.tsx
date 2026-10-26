@@ -544,6 +544,30 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByText("execution remains in the control plane")).toBeInTheDocument();
   });
 
+  it("says whether each family runs in the WASM connector sandbox or in process", async () => {
+    apiMock.connectorCatalog.mockResolvedValueOnce({
+      items: [
+        {
+          name: "f5",
+          kind: "appliance",
+          delivery_mode: "native",
+          rollback: "re-bind",
+          executor: "control_plane",
+          isolation: "wasm_sandbox",
+          capabilities: ["net.dial"],
+          grant_source: "registry",
+        },
+        { name: "nginx", kind: "host", delivery_mode: "native", rollback: "file", executor: "host_agent", isolation: "in_process" },
+      ],
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Connector capabilities and plugin evidence", { exact: true }));
+    expect(await screen.findByText("Runs in the WASM connector sandbox: only the sandbox grant beside it")).toBeInTheDocument();
+    expect(screen.getByText("Runs as trusted code in the executing process")).toBeInTheDocument();
+  });
+
   it("guides a stale endpoint review without inventing a pending approval", async () => {
     const user = userEvent.setup();
     const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();

@@ -3849,6 +3849,7 @@ ConnectorCatalogItem = TypedDict(
         'executes_rollback': bool,
         'executor': str,
         'grant_source': str,
+        'isolation': str,
         'kind': str,
         'name': str,
         'native': bool,

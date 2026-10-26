@@ -37,6 +37,19 @@ trstctl's WASM plugins: a connector declares the narrow capabilities it needs â€
 the sandbox checks every operation against that grant, denying anything outside it
 with `ErrDenied`.
 
+On the control plane the shipped families also run in the WASM sandbox by default
+(`connectors.isolation: wasm`). The binary embeds one first-party connector module,
+built from the same source and pinned by its SHA-256; every deploy, readback,
+rollback, takedown, preview, TLS-posture or appliance-key operation runs in a fresh
+wazero instance of it. Inside, the connector has no filesystem, socket, process or
+database access: each of its sandbox operations crosses to the host, which applies
+the family's grant to the attempt's operations exactly as for an in-process
+connector, and the instance's memory is wiped when the operation ends. The
+connector catalog reports `isolation: wasm_sandbox` for these families.
+`connectors.isolation: in_process` runs them as trusted code in the control plane
+instead. Families an enrolled host agent or network relay executes still run in
+that agent's process.
+
 Delivery is reliable and journaled: the orchestrator writes a `connector.deploy`
 message in the *same transaction* as the state change that requested deployment, so a
 crash can't drop it. Before sealing the credential-bearing payload it stamps the row

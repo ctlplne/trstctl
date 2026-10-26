@@ -22,7 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"io/fs"
 	"path"
 	"strings"
 
@@ -175,7 +175,7 @@ func (c *Connector) Deploy(_ context.Context, sb connector.Sandbox, dep connecto
 	var previous []byte
 	if c.reloadAction != "" {
 		previous, err = sb.ReadFile(c.keystorePath)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("java-keystore: read predecessor before reload: %w", err)
 		}
 		defer secret.Wipe(previous)

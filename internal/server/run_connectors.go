@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/native"
+	connectorwasm "trstctl.com/trstctl/internal/connector/wasm/host"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
@@ -33,6 +34,9 @@ type nativeConnectorRuntime struct {
 	crypto     tenantseal.Access
 	httpClient *http.Client
 	guard      *egress.Guard
+	// sandbox returns the WASM runtime the connector families run in; nil when
+	// connectors.isolation is in_process.
+	sandbox func() (*connectorwasm.Runtime, error)
 }
 
 // connectorRegistryFromConfig is the only production constructor registry for
@@ -49,6 +53,17 @@ func connectorRegistryFromConfig(cfg config.Connectors, st *store.Store, kek sea
 	}
 	runtime := nativeConnectorRuntime{cfg: cfg, store: st, kek: kek, crypto: access, httpClient: client, guard: guard}
 	registry := connector.NewRegistry()
+	isolation := connector.IsolationInProcess
+	if cfg.SandboxedConnectors() {
+		runtime.sandbox = connectorwasm.Builtin
+		isolation = connector.IsolationWASMSandbox
+		// Compile the embedded module now, off the startup path, so the first
+		// delivery does not pay for it.
+		go func() { _, _ = connectorwasm.Builtin() }()
+	}
+	if err := registry.DeclareIsolation(isolation); err != nil {
+		return nil, err
+	}
 	for _, raw := range cfg.Enabled {
 		name := strings.TrimSpace(raw)
 		factory, err := nativeConnectorFactory(runtime, name)
@@ -220,12 +235,19 @@ func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name str
 		return nil, nil, nil, err
 	}
 	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
-	built, destroy, err := native.Build(name, target, lease.requirer(ctx))
+	credentials := map[string][]byte{}
+	built, destroy, err := native.Build(name, target, lease.requirer(ctx, credentials))
 	if err != nil {
 		lease.Close()
 		return nil, nil, nil, err
 	}
-	return built, ops, connectorAttemptCleanup(built, lease, destroy...), nil
+	cleanup := connectorAttemptCleanup(built, lease, destroy...)
+	bound, err := r.bind(built, name, target, credentials)
+	if err != nil {
+		cleanup()
+		return nil, nil, nil, err
+	}
+	return bound, ops, cleanup, nil
 }
 
 func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name string, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
@@ -234,13 +256,34 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 		return nil, nil, nil, err
 	}
 	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
-	built, destroy, err := native.Build(name, target, lease.requirer(ctx))
+	credentials := map[string][]byte{}
+	built, destroy, err := native.Build(name, target, lease.requirer(ctx, credentials))
 	if err != nil {
 		lease.Close()
 		return nil, nil, nil, err
 	}
 	cleanup := connectorAttemptCleanup(built, lease, destroy...)
-	return built, connector.NewHTTPOps(httpConnectorClient(r, target.Endpoint)), cleanup, nil
+	bound, err := r.bind(built, name, target, credentials)
+	if err != nil {
+		cleanup()
+		return nil, nil, nil, err
+	}
+	return bound, connector.NewHTTPOps(httpConnectorClient(r, target.Endpoint)), cleanup, nil
+}
+
+// bind runs built's family in the WASM sandbox when connectors are isolated
+// (the default): every operation executes in a fresh module instance whose only
+// effects are the Sandbox operations it asks for, gated here by the family's
+// grant over this attempt's Ops. in_process keeps the host-built connector.
+func (r nativeConnectorRuntime) bind(built connector.Connector, name string, target native.Target, credentials map[string][]byte) (connector.Connector, error) {
+	if r.sandbox == nil {
+		return built, nil
+	}
+	rt, err := r.sandbox()
+	if err != nil {
+		return nil, fmt.Errorf("connector: the connector sandbox is unavailable (set connectors.isolation to %q to run connectors in process): %w", config.ConnectorIsolationInProcess, err)
+	}
+	return rt.Bind(built, name, target, credentials)
 }
 
 func validatedHTTPConnectorTarget(cfg config.Connectors, name string, raw json.RawMessage) (native.Target, error) {
@@ -338,9 +381,17 @@ func (l *connectorCredentialLease) require(ctx context.Context, ref string) ([]b
 }
 
 // requirer adapts the lease to native.Require: each reference is resolved from
-// the tenant's secret store and owned by the lease until Close.
-func (l *connectorCredentialLease) requirer(ctx context.Context) native.Require {
-	return func(ref, _ string) ([]byte, error) { return l.require(ctx, ref) }
+// the tenant's secret store and owned by the lease until Close. Each resolved
+// value is also recorded by reference, so a sandboxed connector receives
+// exactly the credentials its family asked for.
+func (l *connectorCredentialLease) requirer(ctx context.Context, record map[string][]byte) native.Require {
+	return func(ref, _ string) ([]byte, error) {
+		value, err := l.require(ctx, ref)
+		if err == nil {
+			record[ref] = value
+		}
+		return value, err
+	}
 }
 
 func (l *connectorCredentialLease) Close() {

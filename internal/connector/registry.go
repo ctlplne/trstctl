@@ -85,6 +85,43 @@ type Registry struct {
 	replaySafety map[string]ReplaySafety
 	tlsPosture   map[string]bool
 	vantage      map[string]TargetVantage
+	// isolation is how this process runs the families it registered (A153):
+	// IsolationWASMSandbox or IsolationInProcess; empty until declared.
+	isolation string
+}
+
+// How a process runs the connector families it registered.
+const (
+	// IsolationWASMSandbox: each operation runs in a fresh instance of the
+	// embedded connector module, reaching only its capability-gated sandbox.
+	IsolationWASMSandbox = "wasm_sandbox"
+	// IsolationInProcess: the families run as trusted code in this process.
+	IsolationInProcess = "in_process"
+)
+
+// DeclareIsolation records how this process runs its registered families.
+func (r *Registry) DeclareIsolation(isolation string) error {
+	if r == nil || (isolation != IsolationWASMSandbox && isolation != IsolationInProcess) {
+		return fmt.Errorf("connector: unknown isolation %q", isolation)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.isolation = isolation
+	return nil
+}
+
+// IsolationFor reports how this process runs name, or "" when it does not run
+// it or never declared.
+func (r *Registry) IsolationFor(name string) string {
+	if r == nil {
+		return ""
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.connectors[name] == nil && r.factories[name] == nil {
+		return ""
+	}
+	return r.isolation
 }
 
 // ReplaySafety describes the receiver guarantee a connector offers across the
