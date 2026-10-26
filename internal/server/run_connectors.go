@@ -14,34 +14,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
-	"trstctl.com/trstctl/internal/connector/a10"
-	"trstctl.com/trstctl/internal/connector/acm"
-	"trstctl.com/trstctl/internal/connector/apache"
-	"trstctl.com/trstctl/internal/connector/azurekv"
-	"trstctl.com/trstctl/internal/connector/caddy"
-	"trstctl.com/trstctl/internal/connector/cisco"
-	"trstctl.com/trstctl/internal/connector/elasticsearch"
-	"trstctl.com/trstctl/internal/connector/envoy"
-	"trstctl.com/trstctl/internal/connector/f5"
-	"trstctl.com/trstctl/internal/connector/fortigate"
-	"trstctl.com/trstctl/internal/connector/gcpcm"
-	"trstctl.com/trstctl/internal/connector/haproxy"
-	"trstctl.com/trstctl/internal/connector/iis"
-	"trstctl.com/trstctl/internal/connector/javakeystore"
-	"trstctl.com/trstctl/internal/connector/kemp"
-	"trstctl.com/trstctl/internal/connector/mysql"
-	"trstctl.com/trstctl/internal/connector/netscaler"
-	"trstctl.com/trstctl/internal/connector/nginx"
-	"trstctl.com/trstctl/internal/connector/paloalto"
-	"trstctl.com/trstctl/internal/connector/postfix"
-	"trstctl.com/trstctl/internal/connector/postgresql"
-	"trstctl.com/trstctl/internal/connector/rabbitmq"
-	"trstctl.com/trstctl/internal/connector/tomcat"
-	"trstctl.com/trstctl/internal/connector/traefik"
+	"trstctl.com/trstctl/internal/connector/native"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/egress"
@@ -219,67 +195,8 @@ func nativeConnectorFactory(r nativeConnectorRuntime, name string) (connector.Fa
 	}
 }
 
-type nativeTargetConfig struct {
-	Profile string `json:"profile,omitempty"`
-
-	CertPath   string `json:"cert_path,omitempty"`
-	KeyPath    string `json:"key_path,omitempty"`
-	CRTPath    string `json:"crt_path,omitempty"`
-	ConfigPath string `json:"config_path,omitempty"`
-
-	PostfixCertPath string `json:"postfix_cert_path,omitempty"`
-	PostfixKeyPath  string `json:"postfix_key_path,omitempty"`
-	DovecotCertPath string `json:"dovecot_cert_path,omitempty"`
-	DovecotKeyPath  string `json:"dovecot_key_path,omitempty"`
-
-	Binding   string `json:"binding,omitempty"`
-	Store     string `json:"store,omitempty"`
-	AppID     string `json:"app_id,omitempty"`
-	ImportDir string `json:"import_dir,omitempty"`
-
-	KeystorePath        string `json:"keystore_path,omitempty"`
-	KeystorePasswordRef string `json:"keystore_password_ref,omitempty"`
-	Alias               string `json:"alias,omitempty"`
-	Format              string `json:"format,omitempty"`
-	ReloadAction        string `json:"reload_action,omitempty"`
-
-	Endpoint         string `json:"endpoint,omitempty"`
-	SecretName       string `json:"secret_name,omitempty"`
-	Username         string `json:"username,omitempty"`
-	PasswordRef      string `json:"password_ref,omitempty"`
-	TokenRef         string `json:"token_ref,omitempty"`
-	APIKeyRef        string `json:"api_key_ref,omitempty"`
-	ObjectName       string `json:"object_name,omitempty"`
-	ClientSSLProfile string `json:"client_ssl_profile,omitempty"`
-	FileLocation     string `json:"file_location,omitempty"`
-	BindTo           string `json:"bind_to,omitempty"`
-	SSLTLSProfile    string `json:"ssl_tls_profile,omitempty"`
-	CommitAdmin      string `json:"commit_admin,omitempty"`
-	// NodeHostname and CertificateRoles select the cisco connector's ISE mode
-	// (A122): role-bound, fingerprint-named system certificates.
-	NodeHostname     string   `json:"node_hostname,omitempty"`
-	CertificateRoles []string `json:"certificate_roles,omitempty"`
-
-	Region             string `json:"region,omitempty"`
-	AccessKeyID        string `json:"access_key_id,omitempty"`
-	SecretAccessKeyRef string `json:"secret_access_key_ref,omitempty"`
-	SessionTokenRef    string `json:"session_token_ref,omitempty"`
-	Project            string `json:"project,omitempty"`
-	Location           string `json:"location,omitempty"`
-	BearerTokenRef     string `json:"bearer_token_ref,omitempty"`
-	APIVersion         string `json:"api_version,omitempty"`
-	PollInterval       string `json:"poll_interval,omitempty"`
-	// CertificateMapEntry ("map/entry") makes gcp-certificate-manager deploys
-	// fingerprint-named and bound, which is what makes the target
-	// rollback-capable (A58).
-	CertificateMapEntry string `json:"certificate_map_entry,omitempty"`
-	// Vantage lets an envoy target declare "network" so a relay drives a
-	// remote SDS endpoint instead of the co-resident host agent (A61).
-	Vantage string `json:"vantage,omitempty"`
-}
-
 func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name string, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
-	target, err := decodeNativeTarget(name, payload.TargetConfig)
+	target, err := native.DecodeTarget(name, payload.TargetConfig)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -303,69 +220,12 @@ func buildLocalConnector(r nativeConnectorRuntime, ctx context.Context, name str
 		return nil, nil, nil, err
 	}
 	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
-	var built connector.Connector
-	switch name {
-	case "nginx":
-		built = nginx.New(target.CertPath, target.KeyPath)
-	case "apache":
-		built = apache.New(target.CertPath, target.KeyPath)
-	case "caddy":
-		built = caddy.New(target.CertPath, target.KeyPath)
-	case "iis":
-		options := []iis.Option{}
-		if target.Store != "" {
-			options = append(options, iis.WithStore(target.Store))
-		}
-		if target.AppID != "" {
-			options = append(options, iis.WithAppID(target.AppID))
-		}
-		if target.ImportDir != "" {
-			options = append(options, iis.WithImportDir(target.ImportDir))
-		}
-		built = iis.New(target.Binding, options...)
-	case "haproxy":
-		built = haproxy.New(target.CRTPath, target.ConfigPath)
-	case "postfix":
-		built = postfix.New(postfix.Config{
-			Postfix: postfix.ServiceConfig{CertPath: target.PostfixCertPath, KeyPath: target.PostfixKeyPath},
-			Dovecot: postfix.ServiceConfig{CertPath: target.DovecotCertPath, KeyPath: target.DovecotKeyPath},
-		})
-	case "traefik":
-		built = traefik.New(target.CertPath, target.KeyPath)
-	case "java-keystore":
-		password, err := lease.require(ctx, target.KeystorePasswordRef)
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, fmt.Errorf("connector: java keystore password: %w", err)
-		}
-		options := []javakeystore.Option{}
-		if target.Format != "" {
-			options = append(options, javakeystore.WithFormat(javakeystore.Format(target.Format)))
-		}
-		options = append(options, javakeystore.WithReloadAction(target.ReloadAction))
-		java := javakeystore.New(target.KeystorePath, password, target.Alias, options...)
-		if err := java.Validate(); err != nil {
-			java.Close()
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		built = java
-	case "postgresql":
-		built = postgresql.New(target.CertPath, target.KeyPath)
-	case "mysql":
-		built = mysql.New(target.CertPath, target.KeyPath)
-	case "rabbitmq":
-		built = rabbitmq.New(target.CertPath, target.KeyPath)
-	case "elasticsearch":
-		built = elasticsearch.New(target.CertPath, target.KeyPath)
-	case "tomcat":
-		built = tomcat.New(target.CertPath, target.KeyPath)
-	}
-	if built == nil {
+	built, destroy, err := native.Build(name, target, lease.requirer(ctx))
+	if err != nil {
 		lease.Close()
-		return nil, nil, nil, fmt.Errorf("connector: no local constructor for %q", name)
+		return nil, nil, nil, err
 	}
-	return built, ops, connectorAttemptCleanup(built, lease), nil
+	return built, ops, connectorAttemptCleanup(built, lease, destroy...), nil
 }
 
 func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name string, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
@@ -374,180 +234,22 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 		return nil, nil, nil, err
 	}
 	lease := &connectorCredentialLease{store: r.store, kek: r.kek, crypto: r.crypto, tenantID: payload.TenantID}
-	var (
-		built   connector.Connector
-		destroy []interface{ Destroy() }
-	)
-	require := func(ref, label string) ([]byte, error) {
-		value, err := lease.require(ctx, ref)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", label, err)
-		}
-		return value, nil
-	}
-	switch name {
-	case "envoy":
-		built = envoy.New(target.Endpoint, target.SecretName)
-	case "a10":
-		password, err := require(target.PasswordRef, "a10 password")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		built = a10.New(target.Endpoint, target.Username, password)
-	case "f5":
-		password, err := require(target.PasswordRef, "f5 password")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		options := []f5.Option{f5.WithBasicAuthBytes(target.Username, password)}
-		if target.ObjectName != "" {
-			options = append(options, f5.WithName(target.ObjectName))
-		}
-		built = f5.New(target.Endpoint, target.ClientSSLProfile, options...)
-	case "netscaler":
-		password, err := require(target.PasswordRef, "netscaler password")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		options := []netscaler.Option{}
-		if target.FileLocation != "" {
-			options = append(options, netscaler.WithFileLocation(target.FileLocation))
-		}
-		built = netscaler.New(target.Endpoint, target.Username, password, options...)
-	case "kemp":
-		token, err := require(target.TokenRef, "kemp token")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		built = kemp.New(target.Endpoint, token)
-	case "cisco":
-		password, err := require(target.PasswordRef, "cisco password")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		var options []cisco.Option
-		if strings.TrimSpace(target.NodeHostname) != "" {
-			options = append(options, cisco.WithISENode(target.NodeHostname, target.CertificateRoles))
-		}
-		built = cisco.New(target.Endpoint, target.Username, password, options...)
-	case "fortigate":
-		token, err := require(target.TokenRef, "fortigate token")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		bind, err := fortigate.ParseBindTo(target.BindTo)
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		built = fortigate.New(target.Endpoint, token, fortigate.WithBindTo(bind))
-	case "paloalto":
-		apiKey, err := require(target.APIKeyRef, "palo alto API key")
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-		built = paloalto.New(target.Endpoint, apiKey, paloalto.WithSSLTLSProfile(target.SSLTLSProfile, target.CommitAdmin))
-	case "aws-acm", "azure-keyvault", "gcp-certificate-manager":
-		var err error
-		built, destroy, err = buildCloudHTTPConnector(name, target, require)
-		if err != nil {
-			lease.Close()
-			return nil, nil, nil, err
-		}
-	}
-	if built == nil {
+	built, destroy, err := native.Build(name, target, lease.requirer(ctx))
+	if err != nil {
 		lease.Close()
-		return nil, nil, nil, fmt.Errorf("connector: no HTTP constructor for %q", name)
+		return nil, nil, nil, err
 	}
 	cleanup := connectorAttemptCleanup(built, lease, destroy...)
 	return built, connector.NewHTTPOps(httpConnectorClient(r, target.Endpoint)), cleanup, nil
 }
 
-// buildCloudHTTPConnector constructs the cloud certificate-store connectors
-// (AWS ACM, Azure Key Vault, GCP Certificate Manager) from the validated
-// target and the leased credential references. It is the cloud stage of
-// buildHTTPConnector, split out so the startup hotspot guard keeps the
-// appliance and cloud wiring separately reviewable; the caller owns the
-// credential lease and closes it on any error returned here.
-func buildCloudHTTPConnector(name string, target nativeTargetConfig, require func(ref, label string) ([]byte, error)) (connector.Connector, []interface{ Destroy() }, error) {
-	var (
-		built   connector.Connector
-		destroy []interface{ Destroy() }
-	)
-	switch name {
-	case "aws-acm":
-		accessSecret, err := require(target.SecretAccessKeyRef, "AWS secret access key")
-		if err != nil {
-			return nil, nil, err
-		}
-		var session []byte
-		if target.SessionTokenRef != "" {
-			session, err = require(target.SessionTokenRef, "AWS session token")
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		built = acm.New(target.Region, acm.Credentials{
-			AccessKeyID: target.AccessKeyID, SecretAccessKey: accessSecret, SessionToken: session,
-		}, acm.WithEndpoint(target.Endpoint))
-	case "azure-keyvault":
-		token, err := require(target.BearerTokenRef, "Azure bearer token")
-		if err != nil {
-			return nil, nil, err
-		}
-		provider := azurekv.StaticToken(token)
-		if d, ok := provider.(interface{ Destroy() }); ok {
-			destroy = append(destroy, d)
-		}
-		options := []azurekv.Option{}
-		if target.APIVersion != "" {
-			options = append(options, azurekv.WithAPIVersion(target.APIVersion))
-		}
-		built = azurekv.New(target.Endpoint, provider, options...)
-	case "gcp-certificate-manager":
-		token, err := require(target.BearerTokenRef, "GCP bearer token")
-		if err != nil {
-			return nil, nil, err
-		}
-		provider := gcpcm.StaticToken(token)
-		if d, ok := provider.(interface{ Destroy() }); ok {
-			destroy = append(destroy, d)
-		}
-		options := []gcpcm.Option{gcpcm.WithEndpoint(target.Endpoint)}
-		if entry, err := gcpcm.ParseCertificateMapEntry(target.CertificateMapEntry); err != nil {
-			return nil, nil, err
-		} else if entry.Map != "" {
-			options = append(options, gcpcm.WithCertificateMapEntry(entry))
-		}
-		if target.PollInterval != "" {
-			interval, err := time.ParseDuration(target.PollInterval)
-			if err != nil || interval <= 0 {
-				return nil, nil, fmt.Errorf("connector: invalid GCP poll_interval")
-			}
-			options = append(options, gcpcm.WithPollInterval(interval))
-		}
-		built = gcpcm.New(target.Project, target.Location, provider, options...)
-	}
-	if built == nil {
-		return nil, nil, fmt.Errorf("connector: no cloud constructor for %q", name)
-	}
-	return built, destroy, nil
-}
-
-func validatedHTTPConnectorTarget(cfg config.Connectors, name string, raw json.RawMessage) (nativeTargetConfig, error) {
-	target, err := decodeNativeTarget(name, raw)
+func validatedHTTPConnectorTarget(cfg config.Connectors, name string, raw json.RawMessage) (native.Target, error) {
+	target, err := native.DecodeTarget(name, raw)
 	if err != nil {
-		return nativeTargetConfig{}, err
+		return native.Target{}, err
 	}
 	if err := validateConnectorEndpoint(target.Endpoint, cfg); err != nil {
-		return nativeTargetConfig{}, err
+		return native.Target{}, err
 	}
 	return target, nil
 }
@@ -635,6 +337,12 @@ func (l *connectorCredentialLease) require(ctx context.Context, ref string) ([]b
 	return buffer.Bytes(), nil
 }
 
+// requirer adapts the lease to native.Require: each reference is resolved from
+// the tenant's secret store and owned by the lease until Close.
+func (l *connectorCredentialLease) requirer(ctx context.Context) native.Require {
+	return func(ref, _ string) ([]byte, error) { return l.require(ctx, ref) }
+}
+
 func (l *connectorCredentialLease) Close() {
 	if l == nil {
 		return
@@ -683,144 +391,4 @@ func connectorAttemptCleanup(built connector.Connector, lease *connectorCredenti
 		}
 		lease.Close()
 	}
-}
-
-func decodeNativeTarget(name string, raw json.RawMessage) (nativeTargetConfig, error) {
-	var object map[string]json.RawMessage
-	if len(raw) == 0 || json.Unmarshal(raw, &object) != nil || object == nil {
-		return nativeTargetConfig{}, fmt.Errorf("connector: %s target_config must be a JSON object", name)
-	}
-	allowed := nativeTargetFields[name]
-	for field := range object {
-		if !allowed[field] {
-			return nativeTargetConfig{}, fmt.Errorf("connector: %s target_config field %q is not allowed", name, field)
-		}
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	var target nativeTargetConfig
-	if err := decoder.Decode(&target); err != nil {
-		return nativeTargetConfig{}, fmt.Errorf("connector: decode %s target_config: %w", name, err)
-	}
-	if err := validateNativeTarget(name, target); err != nil {
-		return nativeTargetConfig{}, err
-	}
-	return target, nil
-}
-
-func fields(names ...string) map[string]bool {
-	out := make(map[string]bool, len(names))
-	for _, name := range names {
-		out[name] = true
-	}
-	return out
-}
-
-var nativeTargetFields = map[string]map[string]bool{
-	"nginx":                   fields("profile", "cert_path", "key_path"),
-	"apache":                  fields("profile", "cert_path", "key_path"),
-	"caddy":                   fields("profile", "cert_path", "key_path"),
-	"iis":                     fields("profile", "binding", "store", "app_id", "import_dir"),
-	"haproxy":                 fields("profile", "crt_path", "config_path"),
-	"postfix":                 fields("profile", "postfix_cert_path", "postfix_key_path", "dovecot_cert_path", "dovecot_key_path"),
-	"traefik":                 fields("profile", "cert_path", "key_path"),
-	"java-keystore":           fields("profile", "keystore_path", "keystore_password_ref", "alias", "format", "reload_action"),
-	"postgresql":              fields("profile", "cert_path", "key_path"),
-	"mysql":                   fields("profile", "cert_path", "key_path"),
-	"rabbitmq":                fields("profile", "cert_path", "key_path"),
-	"elasticsearch":           fields("profile", "cert_path", "key_path"),
-	"tomcat":                  fields("profile", "cert_path", "key_path"),
-	"envoy":                   fields("endpoint", "secret_name", "vantage"),
-	"a10":                     fields("endpoint", "username", "password_ref"),
-	"f5":                      fields("endpoint", "client_ssl_profile", "object_name", "username", "password_ref"),
-	"netscaler":               fields("endpoint", "username", "password_ref", "file_location"),
-	"kemp":                    fields("endpoint", "token_ref"),
-	"cisco":                   fields("endpoint", "username", "password_ref", "node_hostname", "certificate_roles"),
-	"fortigate":               fields("endpoint", "token_ref"),
-	"paloalto":                fields("endpoint", "api_key_ref"),
-	"aws-acm":                 fields("endpoint", "region", "access_key_id", "secret_access_key_ref", "session_token_ref"),
-	"azure-keyvault":          fields("endpoint", "bearer_token_ref", "api_version"),
-	"gcp-certificate-manager": fields("endpoint", "project", "location", "bearer_token_ref", "poll_interval", "certificate_map_entry"),
-}
-
-func validateNativeTarget(name string, target nativeTargetConfig) error {
-	require := func(values ...string) bool {
-		for _, value := range values {
-			if strings.TrimSpace(value) == "" {
-				return false
-			}
-		}
-		return true
-	}
-	switch name {
-	case "nginx", "apache", "caddy", "traefik", "postgresql", "mysql", "rabbitmq", "elasticsearch", "tomcat":
-		if !require(target.Profile, target.CertPath, target.KeyPath) {
-			return fmt.Errorf("connector: %s requires profile, cert_path, and key_path", name)
-		}
-	case "iis":
-		if !require(target.Profile, target.Binding, target.ImportDir) {
-			return fmt.Errorf("connector: iis requires profile, binding, and import_dir")
-		}
-	case "haproxy":
-		if !require(target.Profile, target.CRTPath, target.ConfigPath) {
-			return fmt.Errorf("connector: haproxy requires profile, crt_path, and config_path")
-		}
-	case "postfix":
-		if !require(target.Profile, target.PostfixCertPath, target.PostfixKeyPath, target.DovecotCertPath, target.DovecotKeyPath) {
-			return fmt.Errorf("connector: postfix requires profile and both services' cert/key paths")
-		}
-	case "java-keystore":
-		if !require(target.Profile, target.KeystorePath, target.KeystorePasswordRef, target.Alias) || (target.Format != "" && target.Format != "jks" && target.Format != "pkcs12") {
-			return fmt.Errorf("connector: java-keystore requires profile/path/password_ref/alias and a valid format")
-		}
-		if err := javakeystore.ValidateReloadAction(target.ReloadAction); err != nil {
-			return err
-		}
-	case "envoy":
-		if !require(target.Endpoint, target.SecretName) {
-			return fmt.Errorf("connector: envoy requires endpoint and secret_name")
-		}
-		if v := strings.ToLower(strings.TrimSpace(target.Vantage)); v != "" && v != connector.VantageNetworkDeclaration {
-			return fmt.Errorf("connector: envoy vantage must be empty (co-resident host agent) or %q", connector.VantageNetworkDeclaration)
-		}
-	case "a10", "cisco", "netscaler":
-		if !require(target.Endpoint, target.Username, target.PasswordRef) {
-			return fmt.Errorf("connector: %s requires endpoint, username, and password_ref", name)
-		}
-		if name == "cisco" {
-			if err := cisco.ValidateISETarget(target.NodeHostname, target.CertificateRoles); err != nil {
-				return err
-			}
-		}
-	case "f5":
-		if !require(target.Endpoint, target.ClientSSLProfile, target.Username, target.PasswordRef) {
-			return fmt.Errorf("connector: f5 requires endpoint, client_ssl_profile, username, and password_ref")
-		}
-	case "kemp", "fortigate":
-		if !require(target.Endpoint, target.TokenRef) {
-			return fmt.Errorf("connector: %s requires endpoint and token_ref", name)
-		}
-	case "paloalto":
-		if !require(target.Endpoint, target.APIKeyRef) {
-			return fmt.Errorf("connector: paloalto requires endpoint and api_key_ref")
-		}
-	case "aws-acm":
-		if !require(target.Endpoint, target.Region, target.AccessKeyID, target.SecretAccessKeyRef) {
-			return fmt.Errorf("connector: aws-acm requires endpoint, region, access_key_id, and secret_access_key_ref")
-		}
-	case "azure-keyvault":
-		if !require(target.Endpoint, target.BearerTokenRef) {
-			return fmt.Errorf("connector: azure-keyvault requires endpoint and bearer_token_ref")
-		}
-	case "gcp-certificate-manager":
-		if !require(target.Endpoint, target.Project, target.Location, target.BearerTokenRef) {
-			return fmt.Errorf("connector: gcp-certificate-manager requires endpoint/project/location/bearer_token_ref")
-		}
-		if _, err := gcpcm.ParseCertificateMapEntry(target.CertificateMapEntry); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("connector: unknown target schema %q", name)
-	}
-	return nil
 }

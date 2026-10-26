@@ -228,7 +228,7 @@ func TestReadmeCapabilityInventoryCountsMatchCode(t *testing.T) {
 	}
 	connectors := 0
 	for _, entry := range connectorEntries {
-		if entry.IsDir() && entry.Name() != "example" {
+		if entry.IsDir() && connectorFamilyDir(entry.Name()) {
 			connectors++
 		}
 	}

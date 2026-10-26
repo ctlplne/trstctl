@@ -290,17 +290,6 @@ func proveNativeFixedHTTPState(t *testing.T, conn connector.Connector) {
 	}
 }
 
-func TestDecodeNativeTargetRejectsUnknownAndInlineSecretFields(t *testing.T) {
-	for _, raw := range []json.RawMessage{
-		json.RawMessage(`{"endpoint":"https://example.com","username":"admin","password":"inline"}`),
-		json.RawMessage(`{"endpoint":"https://example.com","username":"admin","password_ref":"secret://a","typo":true}`),
-	} {
-		if _, err := decodeNativeTarget("a10", raw); err == nil {
-			t.Fatalf("decodeNativeTarget accepted closed-schema violation: %s", raw)
-		}
-	}
-}
-
 func TestValidateConnectorEndpointRestrictsInsecureHTTPToLoopback(t *testing.T) {
 	cfg := config.Connectors{AllowInsecureHTTP: true, AllowPrivateCIDRs: []string{"127.0.0.0/8", "10.0.0.0/8"}}
 	if err := validateConnectorEndpoint("http://127.0.0.1:18080", cfg); err != nil {

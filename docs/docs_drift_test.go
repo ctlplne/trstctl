@@ -84,6 +84,14 @@ func TestTSAWireFormatDocMatchesCode(t *testing.T) {
 	}
 }
 
+// connectorFamilyDir reports whether a directory under internal/connector is a
+// connector family. The `example` sample, the `native` constructor census and
+// the `wasm` sandbox runtime live beside the families but are not deployment
+// targets.
+func connectorFamilyDir(name string) bool {
+	return name != "example" && name != "native" && name != "wasm"
+}
+
 // TestConnectorCountMatchesCode is the DOCS-004 reality-test: the documented
 // deployment-connector count must equal the number of real connector packages under
 // internal/connector/ (excluding the `example` sample). The audit caught
@@ -97,7 +105,7 @@ func TestConnectorCountMatchesCode(t *testing.T) {
 	}
 	var real []string
 	for _, e := range entries {
-		if !e.IsDir() || e.Name() == "example" {
+		if !e.IsDir() || !connectorFamilyDir(e.Name()) {
 			continue
 		}
 		real = append(real, e.Name())

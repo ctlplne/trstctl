@@ -900,7 +900,7 @@ not this file.
 | `docs/claim_applications_test.go:67` | test runs the repository's own committed generator against tempdir fixtures it just wrote itself (CWE-78) |
 | `docs/cwe_register_test.go:18` | test runs the repo's own committed generator (CWE-78) |
 | `docs/cwe_register_test.go:40` | test runs the repo's own committed generator against a tempdir fixture (CWE-78) |
-| `docs/docs_drift_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `docs/docs_drift_test.go:192` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_failure_test.go:59` | fixed timeout regression over an owned Python child (CWE-78) |
 | `docs/lint_failure_test.go:232` | fixed local Make target in an owned test fixture (CWE-78) |
 | `docs/lint_gate_test.go:25` | test executes a fixed local tool or fixture it built itself (CWE-78) |
