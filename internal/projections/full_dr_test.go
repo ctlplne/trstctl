@@ -817,6 +817,8 @@ func seedRecoveredFromPostgresTables(
 			// record of what agents reported and what was refused.
 			{`INSERT INTO agent_job_receipts (tenant_id, job_id, attempt, agent, kind, outcome, state, reason, signer_fingerprint, statement, signature, observed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{tenantA, int64(4242), 1, "edge-relay-1", "connector.deploy", "executed", "verified", "", "full-dr-signer-fp", "full-dr-statement", "ZnVsbC1kci1zaWduYXR1cmU=", now}},
 			{`INSERT INTO agent_job_attempt_bindings (tenant_id, job_id, attempt, agent_id, destination) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(4242), 1, "b9445160-dbc6-48fa-9c13-f078943486a9", "connector.deploy"}},
+			{`INSERT INTO agent_job_appliance_references (tenant_id, job_id, reference, recorded_attempt, recorded_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(4242), "full-dr-ise-csr-id", 1, now}},
+			{`INSERT INTO transit_keyrings (tenant_id, sealed, revision, updated_at) VALUES ($1, $2, $3, $4)`, []any{tenantA, []byte("full-dr-sealed-transit-keyring"), int64(1), now}},
 			// C3: declared segments. Operator declarations that no replay
 			// rebuilds — a restore that lost them would silently discard real
 			// operator work and make an estate look unmeasured.
