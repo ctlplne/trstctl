@@ -1176,7 +1176,7 @@ export function Connectors() {
                     <p className="mt-1 max-w-4xl text-caption text-muted-foreground">{translateNow("source.endpoint.key.custody.help.b2cus00002")}</p>
                     <p className="mt-2 text-caption text-muted-foreground">
                       {translateNow("source.endpoint.key.custody.summary.b2cus00003", {
-                        value1: String(keyCustody.summary.host_generated),
+                        value1: String(keyCustody.summary.host_generated + (keyCustody.summary.appliance_generated ?? 0)),
                         value2: String(keyCustody.summary.targets),
                         value3: String(keyCustody.summary.migrated_percent),
                       })}
@@ -1200,7 +1200,9 @@ export function Connectors() {
                             <td className="font-mono text-xs">{row.name}</td>
                             <td className="text-xs text-muted-foreground">{row.connector}</td>
                             <td>
-                              {row.executor === "agent" ? (
+                              {row.origin === "appliance" ? (
+                                <span className="font-medium text-status-success">{translateNow("connectors.keyCustody.originAppliance")}</span>
+                              ) : row.executor === "agent" ? (
                                 <span className="font-medium text-status-success">{translateNow("source.key.origin.host.agent.b2cus00008")}</span>
                               ) : (
                                 /* Deliberately NOT styled as an error. A control-plane

@@ -2266,7 +2266,7 @@ func componentSchemas() map[string]*Schema {
 	endpointKeyCustody := object(map[string]*Schema{
 		"target_id": str(), "name": str(), "connector": str(),
 		"executor":                      {Type: "string", Enum: []string{"agent", "control_plane"}},
-		"origin":                        {Type: "string", Enum: []string{"host_agent", "control_plane"}},
+		"origin":                        {Type: "string", Enum: []string{"host_agent", "appliance", "control_plane"}},
 		"key_bytes_leave_control_plane": {Type: "boolean"},
 		"enabled":                       {Type: "boolean"},
 		"detail":                        str(),
@@ -2276,7 +2276,7 @@ func componentSchemas() map[string]*Schema {
 	}, "target_id", "name", "connector", "executor", "origin",
 		"key_bytes_leave_control_plane", "enabled", "detail")
 	endpointCustodySummary := object(map[string]*Schema{
-		"targets": {Type: "integer"}, "host_generated": {Type: "integer"},
+		"targets": {Type: "integer"}, "host_generated": {Type: "integer"}, "appliance_generated": {Type: "integer"},
 		"control_plane_generated": {Type: "integer"}, "migrated_percent": {Type: "integer"},
 	}, "targets", "host_generated", "control_plane_generated", "migrated_percent")
 	endpointKeyCustodyList := object(map[string]*Schema{

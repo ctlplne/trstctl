@@ -22,6 +22,10 @@ func (s *Store) ValidateHostTargetAssignment(ctx context.Context, tenantID, fami
 	if _, _, err := connector.TargetVantageOverride(family, config); err != nil {
 		return "", err
 	}
+	// A122: so is a declared key generation mode.
+	if err := custody.ValidateKeyGeneration(family, config); err != nil {
+		return "", err
+	}
 	if vantage, known := connector.EffectiveTargetVantage(family, config); !known || vantage != connector.VantageHostAgent {
 		return "", nil
 	}

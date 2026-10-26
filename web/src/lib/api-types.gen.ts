@@ -3714,6 +3714,7 @@ export interface EndpointContainmentRequest {
 }
 
 export interface EndpointCustodySummary {
+  appliance_generated?: number;
   control_plane_generated: number;
   host_generated: number;
   migrated_percent: number;
@@ -3738,7 +3739,7 @@ export interface EndpointKeyCustody {
   last_executed_by_agent?: string;
   last_executed_outcome?: string;
   name: string;
-  origin: "host_agent" | "control_plane";
+  origin: "host_agent" | "appliance" | "control_plane";
   target_id: string;
 }
 

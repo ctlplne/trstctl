@@ -15387,6 +15387,9 @@
       },
       "EndpointCustodySummary": {
         "properties": {
+          "appliance_generated": {
+            "type": "integer"
+          },
           "control_plane_generated": {
             "type": "integer"
           },
@@ -15474,6 +15477,7 @@
           "origin": {
             "enum": [
               "host_agent",
+              "appliance",
               "control_plane"
             ],
             "type": "string"
@@ -51096,7 +51100,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "List where each deployment target's private key is generated: host agent or control plane",
+        "summary": "List where each deployment target's private key is generated: host agent, appliance or control plane",
         "x-trstctl-permission": "certs:read"
       }
     },

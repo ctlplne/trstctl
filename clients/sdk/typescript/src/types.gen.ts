@@ -2990,7 +2990,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List where each deployment target's private key is generated: host agent or control plane */
+        /** List where each deployment target's private key is generated: host agent, appliance or control plane */
         get: operations["listEndpointKeyCustody"];
         put?: never;
         post?: never;
@@ -11944,6 +11944,7 @@ export interface components {
             target_revision: string;
         };
         EndpointCustodySummary: {
+            appliance_generated?: number;
             control_plane_generated: number;
             host_generated: number;
             migrated_percent: number;
@@ -11970,7 +11971,7 @@ export interface components {
             last_executed_outcome?: string;
             name: string;
             /** @enum {string} */
-            origin: "host_agent" | "control_plane";
+            origin: "host_agent" | "appliance" | "control_plane";
             target_id: string;
         };
         EndpointKeyCustodyList: {

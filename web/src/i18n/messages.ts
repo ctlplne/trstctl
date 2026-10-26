@@ -19316,12 +19316,12 @@ export const messages = {
   },
   "source.endpoint.key.custody.help.b2cus00002": {
     defaultMessage:
-      "For each deployment target, whose process generates the private key. A target marked executor=agent has its key generated on the host that serves it, and this control plane refuses to send key material there at all. Every other target uses the control-plane path, which works \u2014 it is the migration remaining, not a defect.",
+      "For each deployment target, whose process generates the private key. A target marked executor=agent has its key generated on the host that serves it, and this control plane refuses to send key material there at all. An appliance target marked key_generation=appliance has its appliance generate the key and send only a CSR. Every other target uses the control-plane path, which works \u2014 it is the migration remaining, not a defect.",
     description: "B2: explains what this section answers and that the legacy path is not a fault.",
   },
   "source.endpoint.key.custody.summary.b2cus00003": {
-    defaultMessage: "{value1} of {value2} targets generate keys on the host ({value3}%).",
-    description: "B2: migration headline over the custody table.",
+    defaultMessage: "{value1} of {value2} targets generate keys where they are served, on the host or the appliance ({value3}%).",
+    description: "B2/A122: migration headline over the custody table; host- and appliance-generated targets both count.",
   },
   "source.endpoint.key.custody.caption.b2cus00004": {
     defaultMessage: "Deployment targets and where their private keys are generated",
@@ -19342,6 +19342,10 @@ export const messages = {
   "source.key.origin.host.agent.b2cus00008": {
     defaultMessage: "Host agent",
     description: "B2: the key is generated on the host that serves it.",
+  },
+  "connectors.keyCustody.originAppliance": {
+    defaultMessage: "Appliance",
+    description: "A122: the key is generated on the appliance through its management API; only a CSR leaves it.",
   },
   "source.key.origin.control.plane.b2cus00009": {
     defaultMessage: "Control plane",

@@ -5122,6 +5122,7 @@ EndpointContainmentRequest = TypedDict(
 EndpointCustodySummary = TypedDict(
     'EndpointCustodySummary',
     {
+        'appliance_generated': int,
         'control_plane_generated': int,
         'host_generated': int,
         'migrated_percent': int,
