@@ -180,6 +180,11 @@ var RecoveredFromPostgresBackup = []string{
 	// rebuild that lost it would silently revert every tenant to the shared
 	// default.
 	"tenant_silos",
+	// A125: the sealed transit keyrings every replica shares. Independent
+	// state by design: key bytes are never event-sourced, so a log replay
+	// cannot rebuild them, and losing them would leave every transit
+	// ciphertext undecryptable.
+	"transit_keyrings",
 	// L2: provider-plane billing meters. RecoveredFromPostgresBackup, NOT a log
 	// projection — usage is counted from live activity, never replayed from the
 	// event log, so a rebuild cannot reconstruct it. Losing these to a
