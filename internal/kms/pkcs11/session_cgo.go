@@ -31,6 +31,9 @@ type ModuleConfig struct {
 
 type moduleSession struct {
 	mu      sync.Mutex
+	module  *sharedModule
+	path    string
+	slot    uint
 	ctx     *p11.Ctx
 	session p11.SessionHandle
 	label   string
@@ -41,6 +44,23 @@ type moduleSession struct {
 var _ Session = (*moduleSession)(nil)
 var _ LifecycleSession = (*moduleSession)(nil)
 var _ OperationSession = (*moduleSession)(nil)
+var _ SecretKeySession = (*moduleSession)(nil)
+
+// sharedModules keeps one loaded, initialized context per module path.
+// PKCS#11 initializes a library once per process and holds a token's login for
+// the whole process, so a second session on the same module (managed keys and
+// tenant KEK custody in one signer) reuses the first one's context: only the
+// last session on a token logs out, and only the last on the module finalizes.
+var sharedModules = struct {
+	sync.Mutex
+	byPath map[string]*sharedModule
+}{byPath: make(map[string]*sharedModule)}
+
+type sharedModule struct {
+	ctx      *p11.Ctx
+	sessions int
+	slots    map[uint]int
+}
 
 type objectPair struct {
 	public   p11.ObjectHandle
@@ -63,38 +83,57 @@ func OpenModuleSession(cfg ModuleConfig) (Session, error) {
 	if len(cfg.UserPIN) == 0 {
 		return nil, errors.New("pkcs11: user PIN is required")
 	}
-	ctx := p11.New(cfg.ModulePath)
-	if ctx == nil {
-		return nil, fmt.Errorf("pkcs11: load module %q", cfg.ModulePath)
+	sharedModules.Lock()
+	defer sharedModules.Unlock()
+	module := sharedModules.byPath[cfg.ModulePath]
+	loaded := module == nil
+	if loaded {
+		ctx := p11.New(cfg.ModulePath)
+		if ctx == nil {
+			return nil, fmt.Errorf("pkcs11: load module %q", cfg.ModulePath)
+		}
+		if err := ctx.Initialize(); err != nil {
+			ctx.Destroy()
+			return nil, fmt.Errorf("pkcs11: initialize module: %w", err)
+		}
+		module = &sharedModule{ctx: ctx, slots: make(map[uint]int)}
 	}
-	if err := ctx.Initialize(); err != nil {
-		ctx.Destroy()
-		return nil, fmt.Errorf("pkcs11: initialize module: %w", err)
+	// unload undoes only what this call did: a module another session is
+	// using stays initialized.
+	unload := func() {
+		if loaded {
+			_ = module.ctx.Finalize()
+			module.ctx.Destroy()
+		}
 	}
+	ctx := module.ctx
 	slot, err := findTokenSlot(ctx, cfg.TokenLabel)
 	if err != nil {
-		_ = ctx.Finalize()
-		ctx.Destroy()
+		unload()
 		return nil, err
 	}
 	sh, err := ctx.OpenSession(slot, p11.CKF_SERIAL_SESSION|p11.CKF_RW_SESSION)
 	if err != nil {
-		_ = ctx.Finalize()
-		ctx.Destroy()
+		unload()
 		return nil, fmt.Errorf("pkcs11: open session: %w", err)
 	}
 	pin := string(cfg.UserPIN)
 	if err := ctx.Login(sh, p11.CKU_USER, pin); err != nil && !isPKCS11Error(err, p11.CKR_USER_ALREADY_LOGGED_IN) {
 		_ = ctx.CloseSession(sh)
-		_ = ctx.Finalize()
-		ctx.Destroy()
+		unload()
 		return nil, fmt.Errorf("pkcs11: login user: %w", err)
 	}
 	label := cfg.KeyLabelPrefix
 	if label == "" {
 		label = "trstctl-pkcs11"
 	}
+	module.sessions++
+	module.slots[slot]++
+	sharedModules.byPath[cfg.ModulePath] = module
 	return &moduleSession{
+		module:  module,
+		path:    cfg.ModulePath,
+		slot:    slot,
 		ctx:     ctx,
 		session: sh,
 		label:   label,
@@ -473,6 +512,8 @@ type pkixAlgorithmIdentifier struct {
 	Parameters asn1.RawValue `asn1:"optional"`
 }
 
+// Close ends this session. The token's login and the module's initialization
+// are process-wide, so they end only with the last session that uses them.
 func (s *moduleSession) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -480,17 +521,27 @@ func (s *moduleSession) Close() error {
 		return nil
 	}
 	s.closed = true
+	sharedModules.Lock()
+	defer sharedModules.Unlock()
 	var err error
-	if logoutErr := s.ctx.Logout(s.session); logoutErr != nil && !isPKCS11Error(logoutErr, p11.CKR_USER_NOT_LOGGED_IN) {
-		err = errors.Join(err, fmt.Errorf("pkcs11: logout: %w", logoutErr))
+	s.module.slots[s.slot]--
+	if s.module.slots[s.slot] == 0 {
+		delete(s.module.slots, s.slot)
+		if logoutErr := s.ctx.Logout(s.session); logoutErr != nil && !isPKCS11Error(logoutErr, p11.CKR_USER_NOT_LOGGED_IN) {
+			err = errors.Join(err, fmt.Errorf("pkcs11: logout: %w", logoutErr))
+		}
 	}
 	if closeErr := s.ctx.CloseSession(s.session); closeErr != nil {
 		err = errors.Join(err, fmt.Errorf("pkcs11: close session: %w", closeErr))
 	}
-	if finalizeErr := s.ctx.Finalize(); finalizeErr != nil {
-		err = errors.Join(err, fmt.Errorf("pkcs11: finalize module: %w", finalizeErr))
+	s.module.sessions--
+	if s.module.sessions == 0 {
+		delete(sharedModules.byPath, s.path)
+		if finalizeErr := s.ctx.Finalize(); finalizeErr != nil {
+			err = errors.Join(err, fmt.Errorf("pkcs11: finalize module: %w", finalizeErr))
+		}
+		s.ctx.Destroy()
 	}
-	s.ctx.Destroy()
 	s.handles = nil
 	return err
 }

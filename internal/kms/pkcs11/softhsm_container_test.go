@@ -79,6 +79,74 @@ func TestPKCS11SoftHSMContainerGenerateSign(t *testing.T) {
 	}
 }
 
+// A123: the AES-GCM seal and open the signer uses to keep tenant domain KEKs
+// wrapped, against keys an operator provisions with pkcs11-tool: a sensitive,
+// never-extractable AES-256 key is used, an extractable key and an AES-128
+// key are refused, and a second session shares the module.
+func TestPKCS11SoftHSMContainerSealsUnderAnAESKey(t *testing.T) {
+	if os.Getenv("TRSTCTL_SOFTHSM_INNER") == "1" {
+		t.Skip("outer SoftHSM container harness is skipped inside the container")
+	}
+	requireDockerForSoftHSM(t)
+
+	repoRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatalf("repo root: %v", err)
+	}
+	goModCache := hostGoModCache(t)
+	image := "trstctl-softhsm-go:aud-26-edge-custody"
+	if out, err := softHSMDockerOutput(t, softHSMDockerProbeTimeout, "image", "inspect", image); err != nil {
+		if buildOut, buildErr := softHSMDockerOutput(t, softHSMDockerBuildTimeout, "build", "-t", image, filepath.Join("testdata", "softhsm")); buildErr != nil {
+			t.Fatalf("build SoftHSM test image after inspect failed (%v, %s): %v\n%s", err, out, buildErr, buildOut)
+		}
+	}
+
+	script := strings.Join([]string{
+		"set -euo pipefail",
+		"export PATH=/usr/local/go/bin:$PATH",
+		"mkdir -p /tmp/softhsm/tokens /tmp/gocache",
+		"cat >/tmp/softhsm/softhsm2.conf <<'EOF'",
+		"directories.tokendir = /tmp/softhsm/tokens",
+		"objectstore.backend = file",
+		"log.level = ERROR",
+		"slots.removable = false",
+		"EOF",
+		"export SOFTHSM2_CONF=/tmp/softhsm/softhsm2.conf",
+		"softhsm2-util --init-token --free --label trstctl-a123 --so-pin 123456 --pin 987654",
+		"export TRSTCTL_SOFTHSM_MODULE=\"$(find /usr/lib -name libsofthsm2.so | head -n 1)\"",
+		"test -n \"$TRSTCTL_SOFTHSM_MODULE\"",
+		"keygen() { pkcs11-tool --module \"$TRSTCTL_SOFTHSM_MODULE\" --token-label trstctl-a123 --login --pin 987654 --keygen \"$@\" >/dev/null 2>&1; }",
+		"keygen --key-type AES:32 --label trstctl-tenant-kek-a --sensitive",
+		"keygen --key-type AES:32 --label trstctl-tenant-kek-extractable --sensitive --extractable",
+		"keygen --key-type AES:16 --label trstctl-tenant-kek-aes128 --sensitive",
+		"pkcs11-tool --module \"$TRSTCTL_SOFTHSM_MODULE\" --token-label trstctl-a123 --login --pin 987654 --list-objects --type secrkey 2>/dev/null >/tmp/secret-objects.txt",
+		"grep -A 4 'label: *trstctl-tenant-kek-a$' /tmp/secret-objects.txt | grep -qi 'never extractable'",
+		"export TRSTCTL_SOFTHSM_TOKEN_LABEL=trstctl-a123",
+		"export TRSTCTL_SOFTHSM_USER_PIN=987654",
+		"export TRSTCTL_SOFTHSM_AES_KEYS=1",
+		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./internal/kms/pkcs11 -run 'TestSoftHSMSealsAndOpensUnderAnAESKey|TestSoftHSMSecondSessionSharesTheModule' -count=1 -v",
+	}, "\n")
+
+	args := []string{
+		"run", "--rm",
+		"-e", "TRSTCTL_SOFTHSM_INNER=1",
+		"-v", repoRoot + ":/work:ro",
+		"-v", goModCache + ":/gomodcache:ro",
+		"-w", "/work",
+		image,
+		"bash", "-lc", script,
+	}
+	out, err := softHSMDockerOutput(t, softHSMDockerRunTimeout, args...)
+	if err != nil {
+		t.Fatalf("SoftHSM AES-GCM integration failed: %v\n%s", err, out)
+	}
+	for _, marker := range []string{"SOFTHSM_AES_GCM_OK", "SOFTHSM_SHARED_MODULE_OK"} {
+		if !strings.Contains(string(out), marker) {
+			t.Fatalf("SoftHSM AES-GCM integration did not report %s:\n%s", marker, out)
+		}
+	}
+}
+
 func hostGoModCache(t *testing.T) string {
 	t.Helper()
 	out, err := exec.Command("go", "env", "GOMODCACHE").Output()

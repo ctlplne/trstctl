@@ -934,7 +934,7 @@ not this file.
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
 | `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
-| `internal/kms/pkcs11/softhsm_container_test.go:116` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/kms/pkcs11/softhsm_container_test.go:184` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:94` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/perf/live.go:755` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/perf/live.go:919` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |

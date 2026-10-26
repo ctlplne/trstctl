@@ -13,6 +13,7 @@
 package pkcs11
 
 import (
+	"errors"
 	"fmt"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -34,6 +35,32 @@ type Session interface {
 	// Close releases the session (a real impl would C_CloseSession / C_Finalize).
 	Close() error
 }
+
+// SecretKeySession is the optional token-side seam for an AES key the token
+// holds and never releases. It seals and opens short values, such as a tenant
+// domain KEK the signer keeps wrapped (A123), with AES-256-GCM under the key
+// whose CKA_LABEL is label. The operator provisions the key; nothing here
+// creates one, and a key that is extractable or not sensitive is refused.
+type SecretKeySession interface {
+	// SealWithKey encrypts plaintext under the labeled key, binding aad, and
+	// returns iv || ciphertext || tag.
+	SealWithKey(label string, plaintext, aad []byte) ([]byte, error)
+	// OpenWithKey reverses SealWithKey. A value that does not authenticate
+	// under the key and aad is ErrSealedValueInvalid.
+	OpenWithKey(label string, sealed, aad []byte) ([]byte, error)
+}
+
+var (
+	// ErrSecretKeyNotFound means the token holds no AES key with the label.
+	ErrSecretKeyNotFound = errors.New("pkcs11: the token holds no AES key with that label")
+	// ErrSecretKeyPolicy means the labeled key is not a sensitive,
+	// non-extractable AES-256 key allowed to encrypt and decrypt.
+	ErrSecretKeyPolicy = errors.New("pkcs11: the labeled key is not a sensitive, non-extractable AES-256 key that may encrypt and decrypt")
+	// ErrSealedValueInvalid means a sealed value did not authenticate under the
+	// key and its associated data: a wrong key, a wrong binding, or tampering,
+	// which cannot be told apart.
+	ErrSealedValueInvalid = errors.New("pkcs11: the sealed value does not authenticate under the key")
+)
 
 // Backend is a PKCS#11 crypto.Backend. It holds a single logged-in token session and
 // generates keys on that token; the private material never leaves the HSM.
