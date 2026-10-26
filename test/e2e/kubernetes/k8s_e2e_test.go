@@ -125,6 +125,72 @@ func TestSecretDestinationWritesToCluster(t *testing.T) {
 	}
 }
 
+// TestKubernetesSecretDeliveryReplacesInPlaceAndReadsBack: the in-cluster
+// delivery path (k8s_secret) creates the TLS Secret an Ingress names, then
+// replaces its certificate and key in place on renewal, keeping the labels and
+// annotations other controllers set, and each write reads back exactly the
+// certificate it wrote — all with the agent's least-privilege service account.
+func TestKubernetesSecretDeliveryReplacesInPlaceAndReadsBack(t *testing.T) {
+	client, raw, ns := cluster(t)
+	ctx := context.Background()
+	name := fmt.Sprintf("trstctl-e2e-delivery-%d", time.Now().UnixNano())
+	t.Cleanup(func() { raw(http.MethodDelete, "/api/v1/namespaces/"+ns+"/secrets/"+name, nil) })
+	dest := k8s.NewSecretDestination(client, ns, name)
+
+	first, err := dest.InstallAndRead(ctx, destination.Credential{CertPEM: []byte("E2E-CERT-1"), KeyPEM: []byte("E2E-KEY-1")})
+	if err != nil {
+		t.Fatalf("first InstallAndRead: %v", err)
+	}
+	if string(first.CertPEM) != "E2E-CERT-1" || first.UID == "" || first.Namespace != ns || first.Name != name {
+		t.Fatalf("first readback = %+v", first)
+	}
+
+	// Another controller labels and annotates the Secret between renewals.
+	path := "/api/v1/namespaces/" + ns + "/secrets/" + name
+	st, body := raw(http.MethodGet, path, nil)
+	var current map[string]any
+	if st != http.StatusOK || json.Unmarshal(body, &current) != nil {
+		t.Fatalf("GET secret before annotating: status %d", st)
+	}
+	meta, _ := current["metadata"].(map[string]any)
+	meta["labels"] = map[string]any{"app.kubernetes.io/part-of": "payments"}
+	meta["annotations"] = map[string]any{"example.test/reloader": "web"}
+	if st, body := raw(http.MethodPut, path, current); st != http.StatusOK {
+		t.Fatalf("annotate secret: status %d: %s", st, body)
+	}
+
+	second, err := dest.InstallAndRead(ctx, destination.Credential{CertPEM: []byte("E2E-CERT-2"), KeyPEM: []byte("E2E-KEY-2")})
+	if err != nil {
+		t.Fatalf("second InstallAndRead: %v", err)
+	}
+	if string(second.CertPEM) != "E2E-CERT-2" || second.UID != first.UID || second.ResourceVersion == first.ResourceVersion {
+		t.Fatalf("second readback = %+v, want the same Secret (uid %s) holding the new certificate", second, first.UID)
+	}
+
+	st, body = raw(http.MethodGet, path, nil)
+	if st != http.StatusOK {
+		t.Fatalf("GET secret: status %d", st)
+	}
+	var obj struct {
+		Type     string `json:"type"`
+		Metadata struct {
+			Labels      map[string]string `json:"labels"`
+			Annotations map[string]string `json:"annotations"`
+		} `json:"metadata"`
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(body, &obj); err != nil {
+		t.Fatal(err)
+	}
+	key, _ := base64.StdEncoding.DecodeString(obj.Data["tls.key"])
+	if obj.Type != "kubernetes.io/tls" || string(key) != "E2E-KEY-2" {
+		t.Errorf("secret type %q with tls.key %q, want kubernetes.io/tls holding the renewed key", obj.Type, key)
+	}
+	if obj.Metadata.Labels["app.kubernetes.io/part-of"] != "payments" || obj.Metadata.Annotations["example.test/reloader"] != "web" {
+		t.Errorf("renewal dropped another controller's metadata: labels %v annotations %v", obj.Metadata.Labels, obj.Metadata.Annotations)
+	}
+}
+
 // TestCertManagerBridgeInCluster: a separately approved cert-manager
 // CertificateRequest is signed by the bridge and its status goes Ready.
 func TestCertManagerBridgeInCluster(t *testing.T) {
