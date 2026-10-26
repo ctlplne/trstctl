@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1730 annotated sites across 27 rules. Each row is
+1737 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -846,7 +846,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (193 sites)
+### G204 — CWE-78 OS command injection (196 sites)
 
 | Location | Reason |
 |---|---|
@@ -963,6 +963,9 @@ not this file.
 | `internal/protocols/ssh/krl_binary_test.go:289` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/krl_binary_test.go:293` | fixed reference tool and task-owned test files (CWE-78) |
 | `internal/protocols/ssh/ssh_test.go:66` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/reconcile/kmipsource_pykmip_test.go:43` | fixed docker subcommands with test-owned arguments (CWE-78) |
+| `internal/reconcile/kmipsource_pykmip_test.go:97` | removes the test's own container (CWE-78) |
+| `internal/reconcile/kmipsource_pykmip_test.go:102` | fixed seeding script inside the test's own container (CWE-78) |
 | `internal/rpverify/verifier_test.go:369` | fixed argv, no user input (CWE-78) |
 | `internal/secretscan/gitdiff.go:169` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/gitdiff_test.go:93` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1146,7 +1149,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (493 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (494 sites)
 
 | Location | Reason |
 |---|---|
@@ -1443,6 +1446,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:233` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/protocols/ssh/krl_binary_test.go:315` | test-owned file under t.TempDir |
+| `internal/reconcile/kmipsource_pykmip_test.go:63` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/reconcile/vaultsource.go:411` | operator-configured token file from the reviewed config (CWE-22) |
 | `internal/reportarchive/archive.go:250` | fixed reports path under operator archive root; both path IDs and digest are validated UUID/SHA-256 components. |
 | `internal/reportarchive/archive.go:269` | directory is constructed under the operator archive root and checked as a private real directory. |
@@ -1644,7 +1648,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (96 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (99 sites)
 
 | Location | Reason |
 |---|---|
@@ -1703,6 +1707,9 @@ not this file.
 | `internal/projections/discovery_store_test.go:96` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:225` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/protocols/ssh/ssh_test.go:63` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/reconcile/kmipsource_pykmip_test.go:67` | test-named files in the test's temp dir, readable by the container's server user (CWE-22, CWE-276) |
+| `internal/reconcile/kmipsource_pykmip_test.go:80` | a public certificate (CWE-276) |
+| `internal/reconcile/kmipsource_pykmip_test.go:90` | test server configuration (CWE-276) |
 | `internal/secrets/vault_test.go:147` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/secrets/vault_test.go:180` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/secretscan/gitleaks_options_test.go:72` | executable is an isolated test fixture |
@@ -1856,7 +1863,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1229` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:898` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (92 sites)
+### G703 — CWE-22 Path traversal (taint) (93 sites)
 
 | Location | Reason |
 |---|---|
@@ -1901,6 +1908,7 @@ not this file.
 | `internal/protocols/scep/sscep_client_test.go:134` | test path inside its own tempdir/checkout (CWE-22) |
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:205` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/reconcile/kmipsource_pykmip_test.go:67` | test-named files in the test's temp dir, readable by the container's server user (CWE-22, CWE-276) |
 | `internal/secretscan/gitleaks.go:406` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
 | `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
