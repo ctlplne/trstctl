@@ -22,7 +22,7 @@ const identityRevocationBinding = `(
     OR EXISTS (SELECT 1 FROM outbox j
      WHERE j.tenant_id=$1 AND j.destination IN ('ca.issue','ca.renew','endpoint.renew')
       AND convert_from(j.payload,'UTF8')::jsonb->>'identity_id'=$2::text
-      AND ((j.destination='endpoint.renew' AND j.required_agent_role='host'
+      AND ((j.destination='endpoint.renew' AND j.required_agent_role IN ('host','network')
        AND certificates.issuance_idempotency_key LIKE 'agentcsr:' || j.id::text || ':%')
        OR (j.destination='ca.issue' AND certificates.issuance_idempotency_key='issue:' || j.idempotency_key)
        OR (j.destination='ca.renew' AND certificates.issuance_idempotency_key='renew:' || j.idempotency_key)))

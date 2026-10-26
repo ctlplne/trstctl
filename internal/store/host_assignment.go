@@ -22,9 +22,16 @@ func (s *Store) ValidateHostTargetAssignment(ctx context.Context, tenantID, fami
 	if _, _, err := connector.TargetVantageOverride(family, config); err != nil {
 		return "", err
 	}
-	// A122: so is a declared key generation mode.
+	// A122: so is a declared key generation mode. An appliance that generates
+	// its own key is asked by one named network relay: its renewal job is
+	// exact-agent work like a host's.
 	if err := custody.ValidateKeyGeneration(family, config); err != nil {
 		return "", err
+	}
+	if custody.TargetGeneratesKeyOnAppliance(family, config) {
+		if _, err := s.ValidateRelayTargetAssignment(ctx, tenantID, family, config); err != nil {
+			return "", fmt.Errorf("a destination whose appliance generates its key is renewed through one network relay: %w", err)
+		}
 	}
 	if vantage, known := connector.EffectiveTargetVantage(family, config); !known || vantage != connector.VantageHostAgent {
 		return "", nil

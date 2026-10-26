@@ -5341,7 +5341,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if strings.TrimSpace(pl.Fingerprint) == "" || strings.TrimSpace(pl.Agent) == "" ||
 			pl.JobID <= 0 || pl.Attempt <= 0 || !record.Complete() ||
-			record.Origin != custody.OriginHostAgent || record.GeneratedBy != pl.Agent ||
+			(record.Origin != custody.OriginHostAgent && record.Origin != custody.OriginAppliance) || record.GeneratedBy != pl.Agent ||
 			!custody.ValidOrigin(record.Origin) || !custody.ValidStorage(record.Storage) ||
 			!custody.ValidExportability(record.Exportable) ||
 			strings.TrimSpace(pl.ReceiptStatement) == "" || strings.TrimSpace(pl.ReceiptSignature) == "" ||
@@ -5551,7 +5551,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				!bytes.Equal(publicDER, pl.CertificateDER) || info.IsCA ||
 				(!pl.MigrationExactAuthority && pl.KeyOrigin != string(custody.OriginRequester)) ||
 				(pl.MigrationExactAuthority && pl.KeyOrigin != string(custody.OriginRequester) &&
-					pl.KeyOrigin != string(custody.OriginHostAgent) && pl.KeyOrigin != string(custody.OriginControlPlane)) ||
+					pl.KeyOrigin != string(custody.OriginHostAgent) && pl.KeyOrigin != string(custody.OriginAppliance) &&
+					pl.KeyOrigin != string(custody.OriginControlPlane)) ||
 				(pl.RotationRouted != (pl.RequestedCAID != "" && pl.RequestedCAID != pl.CAID)) ||
 				(pl.MigrationExactAuthority && pl.RotationRouted) {
 				return fmt.Errorf("projections: managed CA leaf inventory differs from signed public evidence")

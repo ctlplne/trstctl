@@ -295,7 +295,8 @@ func (h *caHierarchyService) issueLeafForExactAuthority(
 	if len(csrDER) == 0 || ttl <= 0 {
 		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: CSR and positive TTL are required", api.ErrCAHierarchyInvalid)
 	}
-	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent && keyOrigin != custody.OriginControlPlane {
+	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent &&
+		keyOrigin != custody.OriginAppliance && keyOrigin != custody.OriginControlPlane {
 		return crypto.IssuedLeaf{}, nil, "", fmt.Errorf("%w: exact-authority issuance requires a known subject-key origin", api.ErrCAHierarchyInvalid)
 	}
 	if err := refuseCompromisedCSRKey(ctx, h.store, tenantID, csrDER); err != nil {

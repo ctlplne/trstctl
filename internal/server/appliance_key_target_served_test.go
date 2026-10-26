@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // A122: an appliance destination declares key_generation=appliance to have the
@@ -25,8 +28,13 @@ func TestServedApplianceKeyGenerationIsCheckedWhenTheDestinationIsSaved(t *testi
 		})
 		return status, string(body)
 	}
+	// The appliance is asked for its key by one named network relay.
+	relayAgent := store.Agent{ID: uuid.NewString(), TenantID: h.tenant, Name: "dmz-relay", Status: "active", Roles: []string{"network"}}
+	if err := h.store.UpsertAgent(t.Context(), relayAgent); err != nil {
+		t.Fatal(err)
+	}
 	netscaler := map[string]any{"endpoint": "https://ns.example.test", "username": "nsroot",
-		"password_ref": "secret://connectors/ns", "key_generation": "appliance"}
+		"password_ref": "secret://connectors/ns", "key_generation": "appliance", "required_agent_id": relayAgent.ID}
 	if status, body := create("netscaler", netscaler); status != http.StatusCreated {
 		t.Fatalf("NetScaler destination generating its key on the appliance = %d %s", status, body)
 	}

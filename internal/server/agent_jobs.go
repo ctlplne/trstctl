@@ -1408,12 +1408,16 @@ func (a *agentService) validateCertificateCustodyReceipt(ctx context.Context, in
 	if err := decodeStrictJSON(payload, &intent); err != nil {
 		return "certificate custody cannot be matched to the renewal connector"
 	}
+	origin := agentCSRKeyOrigin(intent)
 	expected, err := relay.HostRenewCustody(intent.Connector, info.CommonName)
+	if origin == custody.OriginAppliance {
+		expected, err = relay.ApplianceRenewCustody(info.CommonName), nil
+	}
 	if err != nil || *req.Custody != expected {
 		return "certificate custody differs from the renewal connector and authenticated agent"
 	}
 	cert, err := a.store.GetCertificateByFingerprint(ctx, info.TenantID, req.CredentialFingerprint)
-	if err != nil || cert.KeyOrigin != string(custody.OriginHostAgent) ||
+	if err != nil || cert.KeyOrigin != string(origin) ||
 		cert.KeyGeneratedBy != info.CommonName ||
 		!hostCSRKeyMatchesClaim(cert.IssuanceIdempotencyKey, req.JobID, req.Attempt) {
 		return "certificate custody names no certificate issued for this renewal attempt"

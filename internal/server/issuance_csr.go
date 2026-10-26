@@ -217,8 +217,8 @@ func (d *issuanceDispatcher) mintServedLeafFromCSRForSelectionAtTTLWithPurpose(
 	keyOrigin custody.KeyOrigin, ttl time.Duration,
 	binding *store.OperationApprovalIssuanceBinding, caReprotect bool,
 ) (issuedLeafMaterial, error) {
-	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent {
-		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a known requester or host-agent key origin")
+	if keyOrigin != custody.OriginRequester && keyOrigin != custody.OriginHostAgent && keyOrigin != custody.OriginAppliance {
+		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a known requester, host-agent or appliance key origin")
 	}
 	if ttl <= 0 {
 		return issuedLeafMaterial{}, errors.New("server: CSR-first issuance requires a positive TTL")

@@ -125,7 +125,12 @@ func hostExecutedTarget(ctx context.Context, st *store.Store, tenantID string, i
 			"server: cannot determine the executor for deployment target %s, so this renewal "+
 				"will not fall back to control-plane key generation: %w", targetID, err)
 	}
-	if !configured.Enabled || !custody.TargetGeneratesKeyOnHost(configured.Type, configured.Config) {
+	// A122: an appliance target that declared key_generation=appliance is
+	// agent-executed in the same sense: its appliance generates the key at a
+	// relay's request and the control plane mints nothing.
+	onHost := custody.TargetGeneratesKeyOnHost(configured.Type, configured.Config)
+	onAppliance := custody.TargetGeneratesKeyOnAppliance(configured.Type, configured.Config)
+	if !configured.Enabled || (!onHost && !onAppliance) {
 		return store.DeploymentTarget{}, false, nil
 	}
 	return configured, true, nil
@@ -151,7 +156,15 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 	if d.outbox == nil {
 		return fmt.Errorf("server: cannot queue host-generated renewal for %s: the outbox is not configured", ident.ID)
 	}
+	// A host renewal goes to the exact host agent; an appliance renewal to
+	// the exact network relay the target pins, which asks the appliance for
+	// the key (A122).
+	requiredAgentRole := mtls.AgentRoleHost
 	requiredAgentID, err := d.store.ValidateHostTargetAssignment(ctx, tenantID, target.Type, target.Config)
+	if err == nil && custody.TargetGeneratesKeyOnAppliance(target.Type, target.Config) {
+		requiredAgentRole = mtls.AgentRoleNetwork
+		requiredAgentID, err = d.store.ValidateRelayTargetAssignment(ctx, tenantID, target.Type, target.Config)
+	}
 	if err != nil {
 		return err
 	}
@@ -211,7 +224,7 @@ func (d *issuanceDispatcher) enqueueHostRenewal(
 			IdempotencyKey:    idempotencyKey,
 			Payload:           payload,
 			EffectLane:        agentJobKindEndpointRenew + ":identity:" + ident.ID,
-			RequiredAgentRole: mtls.AgentRoleHost,
+			RequiredAgentRole: requiredAgentRole,
 			RequiredAgentID:   requiredAgentID,
 		})
 		return err
@@ -233,6 +246,16 @@ func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 	if d.log == nil {
 		return
 	}
+	custodyName, detail := string(custody.OriginHostAgent),
+		"this target is marked executor=agent, so the renewal was handed to a host agent "+
+			"that will generate the subject key on the machine serving it; the control plane "+
+			"minted nothing and holds no private key for this renewal"
+	if custody.TargetGeneratesKeyOnAppliance(target.Type, target.Config) {
+		custodyName, detail = string(custody.OriginAppliance),
+			"this target is marked key_generation=appliance, so the renewal was handed to the network relay "+
+				"pinned to it, which asks the appliance to generate the subject key; the control plane "+
+				"minted nothing and holds no private key for this renewal"
+	}
 	body, err := json.Marshal(struct {
 		IdentityID  string   `json:"identity_id"`
 		TargetID    string   `json:"target_id"`
@@ -244,10 +267,8 @@ func (d *issuanceDispatcher) recordAgentRenewalDispatch(
 		Detail      string   `json:"detail"`
 	}{
 		IdentityID: ident.ID, TargetID: target.ID, TargetName: target.Name,
-		Connector: target.Type, DNSNames: dnsNames, IPAddresses: ipAddresses, Custody: "host_agent",
-		Detail: "this target is marked executor=agent, so the renewal was handed to a host agent " +
-			"that will generate the subject key on the machine serving it; the control plane " +
-			"minted nothing and holds no private key for this renewal",
+		Connector: target.Type, DNSNames: dnsNames, IPAddresses: ipAddresses, Custody: custodyName,
+		Detail: detail,
 	})
 	if err != nil {
 		return

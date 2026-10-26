@@ -85,7 +85,7 @@ func (s *Store) CancelConnectorTargetWorkTx(ctx context.Context, tx pgx.Tx, tena
 		   FROM outbox
 		  WHERE tenant_id = $1
 		    AND (effect_lane = $2
-		      OR (destination = 'endpoint.renew' AND required_agent_role = 'host'
+		      OR (destination = 'endpoint.renew' AND required_agent_role IN ('host', 'network')
 		          AND convert_from(payload, 'UTF8')::jsonb ->> 'target_id' = $4))
 		    AND status IN ('pending', 'processing')
 		    AND delivered_at IS NULL

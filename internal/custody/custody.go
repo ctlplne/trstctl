@@ -213,7 +213,7 @@ func (r Record) Complete() bool {
 		r.Exportable == ExportabilityUnrecorded || !ValidExportability(r.Exportable) {
 		return false
 	}
-	return r.Origin != OriginHostAgent || strings.TrimSpace(r.GeneratedBy) != ""
+	return (r.Origin != OriginHostAgent && r.Origin != OriginAppliance) || strings.TrimSpace(r.GeneratedBy) != ""
 }
 
 // MissingFields names every unanswered part using the stable JSON vocabulary.

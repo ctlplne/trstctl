@@ -182,12 +182,13 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 		}
 		var material issuedLeafMaterial
 		var err error
+		origin := agentCSRKeyOrigin(intent)
 		if intent.ReprotectJobID != "" {
 			material, err = d.mintServedLeafFromCSRForReprotectAtTTL(ctx, tenantID, ident, selection,
 				idemKey, csrPEM, custody.OriginHostAgent, time.Duration(hostPlan.TTLSeconds)*time.Second, hostProfileBinding)
 		} else {
 			material, err = d.mintServedLeafFromCSRForSelection(
-				ctx, tenantID, ident, selection, idemKey, csrPEM, custody.OriginHostAgent, intent.Issuance,
+				ctx, tenantID, ident, selection, idemKey, csrPEM, origin, intent.Issuance,
 			)
 		}
 		if err != nil {
@@ -219,13 +220,23 @@ func (d *issuanceDispatcher) signAgentSubjectCSRUnderFence(
 	}, nil
 }
 
+// agentCSRKeyOrigin is where the key behind an agent's CSR was generated: on
+// the appliance for a target that declared key_generation=appliance, else on
+// the host agent's machine.
+func agentCSRKeyOrigin(intent RelayDeployIntent) custody.KeyOrigin {
+	if custody.TargetGeneratesKeyOnAppliance(intent.Connector, intent.TargetConfig) {
+		return custody.OriginAppliance
+	}
+	return custody.OriginHostAgent
+}
+
 func (d *issuanceDispatcher) recordAgentCSRMaterial(ctx context.Context, tenantID, agentName, idemKey string,
 	intent RelayDeployIntent, material issuedLeafMaterial) ([]byte, error) {
 	cert := material.Certificate
 	cert.IssuanceIdempotencyKey = idemKey
-	// Keep the host origin recorded by the shared CSR path, and add the
-	// agent identity that actually generated the subject key.
-	cert.KeyOrigin = string(custody.OriginHostAgent)
+	// Keep the origin recorded by the shared CSR path (the host, or the
+	// appliance a relay asked, A122), and add the agent that requested it.
+	cert.KeyOrigin = string(agentCSRKeyOrigin(intent))
 	cert.KeyGeneratedBy = agentName
 	if intent.ReprotectJobID != "" {
 		// The predecessor remains active until the signed report proves the
