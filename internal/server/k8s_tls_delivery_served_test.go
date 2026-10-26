@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -230,5 +231,64 @@ func TestServedKubernetesSecretTargetRequiresTheClusterAgentToGenerateTheKey(t *
 	cfg["executor"] = "agent"
 	if status, body := create(cfg); status != http.StatusCreated {
 		t.Fatalf("k8s_secret target with executor=agent = %d %s", status, body)
+	}
+}
+
+// With ownership attestation enforced, as it is by default, a resource whose
+// owner has not attested is not delivered, with the ownership reason, and
+// nothing reaches the agent; once the owner attests, the next run queues it.
+func TestServedKubernetesTLSRunWaitsForAnAttestedOwner(t *testing.T) {
+	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
+		d.OwnershipAttestationCadence = 90 * 24 * time.Hour
+	})
+	ctx := t.Context()
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "owners:write")
+	agent := store.Agent{ID: uuid.NewString(), TenantID: h.tenant, Name: "cluster-agent", Status: "active", Roles: []string{"host"}}
+	if err := h.store.UpsertAgent(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners", tok, map[string]any{
+		"kind": "team", "name": "Payments Team", "email": "payments@example.test",
+		"application_id": "payments", "environment": "production",
+	})
+	var owner struct {
+		ID string `json:"id"`
+	}
+	if status != http.StatusCreated || json.Unmarshal(body, &owner) != nil || owner.ID == "" {
+		t.Fatalf("create owner = %d %s", status, body)
+	}
+	sourceID := createKubernetesTLSSource(t, h, tok, map[string]any{
+		"cluster_agent_id": agent.ID, "owner_id": owner.ID,
+		"resources": []map[string]any{{"kind": "Ingress", "namespace": "payments", "name": "web",
+			"tls_secret_name": "web-tls", "hosts": []string{"web.example.test"}}},
+	})
+
+	run := runKubernetesTLSSource(t, h, tok, sourceID)
+	if run.Status != "partial" || len(run.TargetResults) != 1 || run.TargetResults[0].Status != "not_delivered" {
+		t.Fatalf("run = %+v, want the resource not delivered for the owner's ownership readiness", run)
+	}
+	// The reason says what to do, about which owner, in the operator's terms.
+	reason := run.TargetResults[0].Error + " " + run.Error
+	for _, want := range []string{"owner " + owner.ID, "has not attested", "trstctl-cli owners attest " + owner.ID, "run the source again"} {
+		if !strings.Contains(reason, want) {
+			t.Fatalf("not-delivered reason %q does not say %q", reason, want)
+		}
+	}
+	if strings.Contains(reason, "store:") || strings.Contains(reason, "ownership_attestation_is_missing_or_stale") {
+		t.Fatalf("not-delivered reason %q leaks an internal error", reason)
+	}
+	if jobs := queuedClusterRenewals(t, h); len(jobs) != 0 {
+		t.Fatalf("%d renewal jobs queued for an unattested owner", len(jobs))
+	}
+
+	if status, body := secretsReq(t, h, http.MethodPost, "/api/v1/owners/"+owner.ID+"/attest", tok, nil); status != http.StatusOK {
+		t.Fatalf("attest owner = %d %s", status, body)
+	}
+	run = runKubernetesTLSSource(t, h, tok, sourceID)
+	if run.Status != "succeeded" || len(run.TargetResults) != 1 || run.TargetResults[0].Status != "delivery_queued" {
+		t.Fatalf("run after attestation = %+v, want the resource queued for delivery", run)
+	}
+	if jobs := queuedClusterRenewals(t, h); len(jobs) != 1 {
+		t.Fatalf("%d renewal jobs after attestation, want 1", len(jobs))
 	}
 }

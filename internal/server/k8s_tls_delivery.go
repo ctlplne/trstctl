@@ -130,6 +130,10 @@ func (d *issuanceDispatcher) deliverKubernetesTLSResource(ctx context.Context, t
 	case orchestrator.StateRequested:
 		if err := d.orch.TransitionWithIdempotency(ctx, tenantID, ident.ID, orchestrator.StateIssued,
 			"Kubernetes TLS delivery for "+f.Ref, "k8s-tls-issue:"+src.ID+":"+f.Ref); err != nil {
+			var notReady *store.OwnershipNotReadyError
+			if errors.As(err, &notReady) {
+				return kubernetesTLSNotDelivered, kubernetesTLSOwnershipReason(notReady.Reason, delivery.OwnerID), nil
+			}
 			return kubernetesTLSNotDelivered, "issuance was refused: " + err.Error(), nil
 		}
 		return kubernetesTLSDeliveryQueued, "", nil
@@ -139,6 +143,23 @@ func (d *issuanceDispatcher) deliverKubernetesTLSResource(ctx context.Context, t
 		return kubernetesTLSDelivered, "", nil
 	default:
 		return kubernetesTLSNotDelivered, fmt.Sprintf("this resource's identity is %s; it is not delivered again", state), nil
+	}
+}
+
+// kubernetesTLSOwnershipReason says what to do when the owner is not ready for
+// these certificates to reach deployment. The gate is resolved before any work
+// is queued, so the agent has generated nothing yet.
+func kubernetesTLSOwnershipReason(code, ownerID string) string {
+	switch code {
+	case "owner_application_model_is_incomplete":
+		return "owner " + ownerID + " has no application ID or environment, which attesting ownership requires: complete " +
+			"the owner, attest it (trstctl-cli owners attest " + ownerID + "), then run the source again"
+	case "owner_application_model_changed_after_attestation":
+		return "owner " + ownerID + " changed after it attested ownership: attest it again (trstctl-cli owners attest " +
+			ownerID + "), then run the source again"
+	default:
+		return "owner " + ownerID + " has not attested ownership, or its attestation is older than the attestation cadence: " +
+			"attest it (trstctl-cli owners attest " + ownerID + ") or record an ownership exception, then run the source again"
 	}
 }
 

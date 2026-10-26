@@ -965,7 +965,11 @@ ledger, so keep the agent's `--key` and `--host-rollback-dir` on persistent stor
 
 A `k8s_ingress_gateway` discovery source bound to the agent creates these
 destinations for you, one per TLS block; see
-[Discovery and inventory](discovery-and-inventory.md).
+[Discovery and inventory](discovery-and-inventory.md). As for any host-executed
+first issuance, the source's owner must be ready for deployment (a current
+ownership attestation, or an ownership exception) before the agent gets any work;
+until then each resource is reported not delivered, naming the owner and how to
+attest it.
 
 ### Activate Tomcat PEM certificates
 
