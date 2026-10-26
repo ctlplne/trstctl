@@ -9081,6 +9081,9 @@ export interface TransitKeyRequest {
 
 export interface TransitKeyVersion {
   current: boolean;
+  fact_id?: string;
+  recorded: boolean;
+  recorded_at?: string;
   version: number;
 }
 

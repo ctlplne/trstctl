@@ -1867,6 +1867,10 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 		if err := s.transit.SetSharedPersistence(d.Store, sealer); err != nil {
 			return nil, fmt.Errorf("server: shared transit keyring: %w", err)
 		}
+		// A126: each create and rotate is a lifecycle fact in the event log,
+		// recorded after its material is saved and projected for the
+		// versions listing.
+		s.transit.SetFactRecorder(transitFactRecorder{log: d.Log, store: d.Store, projector: projections.New(d.Store)})
 		if file := transitpkg.NewStore(d.TransitKeyringDir, d.KEK); file != nil {
 			importCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			imported, err := transitpkg.ImportFileKeyring(importCtx, file, d.Store, sealer)

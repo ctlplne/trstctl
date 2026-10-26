@@ -227,7 +227,8 @@ func (s *Service) saveLocked(ctx context.Context, p *sharedPersistence, tenantID
 
 // mutateShared applies a create or rotate to the tenant's ring caught up to
 // the stored revision and saves it; when another replica saved first, the
-// change is undone, the ring caught up again and the change reapplied.
+// change is undone, the ring caught up again and the change reapplied. An
+// apply that changes nothing returns a nil undo, and nothing is saved.
 func (s *Service) mutateShared(ctx context.Context, p *sharedPersistence, tenantID string, apply func(*Keyring) (undo func(), err error)) error {
 	k := s.ring(tenantID)
 	ts := p.sync(tenantID)
@@ -241,6 +242,9 @@ func (s *Service) mutateShared(ctx context.Context, p *sharedPersistence, tenant
 		undo, err := apply(k)
 		if err != nil {
 			return err
+		}
+		if undo == nil {
+			return nil
 		}
 		saved, err := s.saveLocked(ctx, p, tenantID, ts, k)
 		if err != nil {
@@ -286,6 +290,7 @@ func (k *Keyring) catchUp(keys map[string]persistedKey) error {
 			k.keys[name] = restored
 			continue
 		}
+		nk.adoptFacts(p.Facts)
 		if p.Latest == nk.latest {
 			wipePersistedKey(p)
 			continue
@@ -339,7 +344,7 @@ func validPersistedKey(p persistedKey) error {
 	if versions != p.Latest+1 {
 		return fmt.Errorf("%d stored versions for latest %d", versions-1, p.Latest)
 	}
-	return nil
+	return validFacts(p.Facts, p.Latest)
 }
 
 func wipeKeyBytes(keys [][]byte) {

@@ -28,8 +28,8 @@ import (
 // Key BYTES are sealed on disk rather than event-sourced. That is deliberate and
 // matches internal/signing/keystore.go: an event log is replayable, exportable
 // and auditable by design, which is precisely what secret material must not be.
-// The lifecycle FACTS — a key was created, a key was rotated — are audited
-// through the auditor the keyring already holds.
+// The lifecycle FACTS — a key was created, a key was rotated — are events under
+// each version's fact ID, saved here beside the version's material (facts.go).
 
 const (
 	transitStateFile   = "transit-keyring.sealed"
@@ -49,6 +49,9 @@ type persistedKey struct {
 	// SignPKCS8 holds each signing version as PKCS#8 DER. LockedSigner is not
 	// serializable, so the key is exported once here and re-locked on load.
 	SignPKCS8 [][]byte `json:"sign_pkcs8,omitempty"`
+	// Facts holds each version's lifecycle fact ID (A126), index 0 unused; a
+	// keyring saved before facts existed has none.
+	Facts []string `json:"facts,omitempty"`
 }
 
 type persistedState struct {
@@ -299,6 +302,12 @@ func (k *Keyring) export() (map[string]persistedKey, error) {
 	out := make(map[string]persistedKey, len(k.keys))
 	for name, nk := range k.keys {
 		p := persistedKey{Kind: nk.kind, Latest: nk.latest}
+		if nk.hasFacts() {
+			p.Facts = append([]string(nil), nk.facts...)
+			for len(p.Facts) < nk.latest+1 {
+				p.Facts = append(p.Facts, "")
+			}
+		}
 		// Deep-copy AEAD/HMAC key bytes rather than aliasing the live ring
 		// slices. Aliasing let a concurrent failed-checkpoint rollback wipe
 		// (discardUnpersistedKey/Version) zero the very bytes another Save was
@@ -349,7 +358,7 @@ func (k *Keyring) restore(keys map[string]persistedKey) error {
 
 // restoreKey rebuilds one named key from its persisted form.
 func restoreKey(name string, p persistedKey) (*namedKey, error) {
-	nk := &namedKey{kind: p.Kind, latest: p.Latest}
+	nk := &namedKey{kind: p.Kind, latest: p.Latest, facts: append([]string(nil), p.Facts...)}
 	// The AEAD/HMAC buffers BECOME the live ring keys (the slice headers are
 	// copied, the key bytes are shared), so they must not be wiped here.
 	// Only the PKCS#8 DER is a transient copy: LockedKeyFromPKCS8 moves it

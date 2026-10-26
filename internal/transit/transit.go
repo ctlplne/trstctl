@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
@@ -57,6 +58,9 @@ type Service struct {
 	// shared, when set, keeps each tenant's keyring as a sealed row every
 	// replica shares (A125), in place of persist.
 	shared *sharedPersistence
+	// facts, when set, records each create and rotate as a lifecycle fact in
+	// the event log (A126).
+	facts FactRecorder
 }
 
 // SetPersist installs the checkpoint invoked after a key is created or rotated.
@@ -86,10 +90,15 @@ type KeyInfo struct {
 
 // KeyVersionInfo is non-secret lifecycle metadata for one retained version.
 // Current marks the version new operations use; old versions remain available
-// so ciphertext created before a rotation can still be decrypted.
+// so ciphertext created before a rotation can still be decrypted. FactID names
+// the version's lifecycle fact in the event log (empty for a version saved
+// before facts existed and not yet reconciled); Recorded says the log holds it.
 type KeyVersionInfo struct {
-	Version int
-	Current bool
+	Version    int
+	Current    bool
+	FactID     string
+	Recorded   bool
+	RecordedAt time.Time
 }
 
 type namedKey struct {
@@ -97,6 +106,7 @@ type namedKey struct {
 	aead   [][]byte               // version (1-based) -> 32-byte key
 	hmac   [][]byte               // version -> 32-byte key
 	sign   []*crypto.LockedSigner // version -> signer
+	facts  []string               // version -> lifecycle fact ID (A126)
 	latest int
 }
 
@@ -142,6 +152,7 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 		if err != nil {
 			return KeyInfo{}, err
 		}
+		s.afterSave(ctx, tenantID, s.ring(tenantID), name, EventKeyCreated)
 		return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
 	}
 	k := s.ring(tenantID)
@@ -157,6 +168,7 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 		k.discardUnpersistedKey(name)
 		return KeyInfo{}, fmt.Errorf("transit: persist keyring after create: %w", err)
 	}
+	s.afterSave(ctx, tenantID, k, name, EventKeyCreated)
 	return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
 }
 
@@ -179,25 +191,50 @@ func (s *Service) ListKeys(ctx context.Context, tenantID string) ([]KeyInfo, err
 	return k.ListKeys(), nil
 }
 
-// ListKeyVersions returns the complete metadata-only history for one tenant key.
+// ListKeyVersions returns the complete metadata-only history for one tenant
+// key, with whether the event log records each version's lifecycle fact.
 func (s *Service) ListKeyVersions(ctx context.Context, tenantID, name string) (Kind, []KeyVersionInfo, error) {
+	var k *Keyring
 	if p := s.sharedState(); p != nil {
-		k, err := s.readShared(ctx, p, tenantID)
-		if err != nil {
+		var err error
+		if k, err = s.readShared(ctx, p, tenantID); err != nil {
 			return "", nil, err
 		}
-		if k == nil {
-			return "", nil, fmt.Errorf("transit: unknown key %q", name)
-		}
-		return k.ListKeyVersions(name)
+	} else {
+		s.mu.Lock()
+		k = s.rings[tenantID]
+		s.mu.Unlock()
 	}
-	s.mu.Lock()
-	k := s.rings[tenantID]
-	s.mu.Unlock()
 	if k == nil {
 		return "", nil, fmt.Errorf("transit: unknown key %q", name)
 	}
-	return k.ListKeyVersions(name)
+	kind, versions, err := k.ListKeyVersions(name)
+	if err != nil {
+		return "", nil, err
+	}
+	rec := s.factRecorder()
+	if rec == nil {
+		return kind, versions, nil
+	}
+	ids := make([]string, 0, len(versions))
+	for _, v := range versions {
+		if v.FactID != "" {
+			ids = append(ids, v.FactID)
+		}
+	}
+	if len(ids) == 0 {
+		return kind, versions, nil
+	}
+	recorded, err := rec.Recorded(ctx, tenantID, ids)
+	if err != nil {
+		return "", nil, fmt.Errorf("transit: read recorded facts: %w", err)
+	}
+	for i := range versions {
+		if at, ok := recorded[versions[i].FactID]; ok && versions[i].FactID != "" {
+			versions[i].Recorded, versions[i].RecordedAt = true, at
+		}
+	}
+	return kind, versions, nil
 }
 
 // Rotate adds a new version to a tenant-scoped key.
@@ -221,6 +258,7 @@ func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, e
 		if err != nil {
 			return KeyInfo{}, err
 		}
+		s.afterSave(ctx, tenantID, s.ring(tenantID), name, EventKeyRotated)
 		return info, nil
 	}
 	k := s.ring(tenantID)
@@ -238,6 +276,7 @@ func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, e
 		k.discardUnpersistedVersion(name, version)
 		return KeyInfo{}, fmt.Errorf("transit: persist keyring after rotate: %w", err)
 	}
+	s.afterSave(ctx, tenantID, k, name, EventKeyRotated)
 	return KeyInfo{Name: name, Kind: kind, Version: version}, nil
 }
 
@@ -326,7 +365,11 @@ func (k *Keyring) CreateKey(ctx context.Context, name string, kind Kind) error {
 	if _, ok := k.keys[name]; ok {
 		return fmt.Errorf("transit: key %q exists", name)
 	}
-	nk := &namedKey{kind: kind, latest: 1}
+	factID, err := newFactID()
+	if err != nil {
+		return err
+	}
+	nk := &namedKey{kind: kind, latest: 1, facts: []string{"", factID}}
 	switch kind {
 	case KindAEAD:
 		key, err := crypto.RandomBytes(32)
@@ -350,7 +393,6 @@ func (k *Keyring) CreateKey(ctx context.Context, name string, kind Kind) error {
 		return fmt.Errorf("transit: unknown kind %q", kind)
 	}
 	k.keys[name] = nk
-	k.event(ctx, "transit.key.created", name)
 	return nil
 }
 
@@ -409,6 +451,9 @@ func (k *Keyring) discardUnpersistedVersion(name string, version int) {
 			nk.sign = nk.sign[:version]
 		}
 	}
+	if len(nk.facts) == version+1 {
+		nk.facts = nk.facts[:version]
+	}
 	nk.latest--
 }
 
@@ -447,7 +492,11 @@ func (k *Keyring) ListKeyVersions(name string) (Kind, []KeyVersionInfo, error) {
 	}
 	versions := make([]KeyVersionInfo, 0, nk.latest)
 	for version := 1; version <= nk.latest; version++ {
-		versions = append(versions, KeyVersionInfo{Version: version, Current: version == nk.latest})
+		info := KeyVersionInfo{Version: version, Current: version == nk.latest}
+		if version < len(nk.facts) {
+			info.FactID = nk.facts[version]
+		}
+		versions = append(versions, info)
 	}
 	return nk.kind, versions, nil
 }
@@ -459,6 +508,10 @@ func (k *Keyring) Rotate(ctx context.Context, name string) (int, error) {
 	nk, ok := k.keys[name]
 	if !ok {
 		return 0, missf("transit: unknown key %q", name)
+	}
+	factID, err := newFactID()
+	if err != nil {
+		return 0, err
 	}
 	switch nk.kind {
 	case KindAEAD:
@@ -480,8 +533,9 @@ func (k *Keyring) Rotate(ctx context.Context, name string) (int, error) {
 		}
 		nk.sign = append(nk.sign, s)
 	}
+	nk.padFacts()
+	nk.facts = append(nk.facts, factID)
 	nk.latest++
-	k.event(ctx, "transit.key.rotated", name)
 	return nk.latest, nil
 }
 

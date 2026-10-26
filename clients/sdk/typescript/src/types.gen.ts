@@ -17753,6 +17753,12 @@ export interface components {
         };
         TransitKeyVersion: {
             current: boolean;
+            /** @description ID of the event that records this version's create or rotate fact (A126). Absent for a version saved before facts existed and not yet reconciled. */
+            fact_id?: string;
+            /** @description The event log records this version's lifecycle fact. */
+            recorded: boolean;
+            /** Format: date-time */
+            recorded_at?: string;
             version: number;
         };
         TransitKeyVersionList: {

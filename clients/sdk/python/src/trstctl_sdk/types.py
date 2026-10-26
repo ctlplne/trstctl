@@ -12485,6 +12485,9 @@ TransitKeyVersion = TypedDict(
     'TransitKeyVersion',
     {
         'current': bool,
+        'fact_id': str,
+        'recorded': bool,
+        'recorded_at': str,
         'version': int,
     },
     total=False,

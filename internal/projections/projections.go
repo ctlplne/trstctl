@@ -47,6 +47,7 @@ import (
 	"trstctl.com/trstctl/internal/sshkrlreceipt"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/ticketintake"
+	"trstctl.com/trstctl/internal/transit"
 )
 
 // Event types for the served domain (AN-2). Every served mutation emits one of
@@ -335,6 +336,11 @@ const (
 	EventTenantKeyDomainUnsealRequested     = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed            = "tenant.key_domain.unsealed"
 	EventRestoreDrillRecorded               = "backup.restore_drill.recorded"
+	// A126: transit lifecycle facts. Schema 1 was an audit record naming only
+	// the key and projects nothing; schema 2 is the fact (key, kind, version)
+	// under the fact ID the transit service saved with the version's material.
+	EventTransitKeyCreated = transit.EventKeyCreated
+	EventTransitKeyRotated = transit.EventKeyRotated
 
 	// initialIdentityStatus is the lifecycle status a newly-created identity
 	// holds until a transition moves it (matches the identities.status column
@@ -4594,6 +4600,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantKeyDomainSealed:                    {1: true},
 	EventTenantKeyDomainUnsealRequested:           {1: true},
 	EventTenantKeyDomainUnsealed:                  {1: true},
+	EventTransitKeyCreated:                        {1: true, transit.FactSchemaVersion: true},
+	EventTransitKeyRotated:                        {1: true, transit.FactSchemaVersion: true},
 }
 
 func init() {
@@ -7922,6 +7930,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CampaignID: pl.CampaignID, SignedJWS: pl.SignedJWS, PublicJWKS: pl.PublicJWKS,
 			ClosedBy: pl.ClosedBy, ClosedAt: closedAt,
 		})
+	case EventTransitKeyCreated, EventTransitKeyRotated:
+		return p.applyTransitKeyFactTx(ctx, tx, e)
 	case EventTenantKeyDomainMigrationStarted,
 		EventTenantKeyDomainMigrationProgressed,
 		EventTenantKeyDomainMigrationCompleted,

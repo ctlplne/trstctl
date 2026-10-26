@@ -67,6 +67,11 @@ func WithTransitPosture(provider TransitPostureProvider) Option {
 type transitKeyVersionResponse struct {
 	Version int  `json:"version"`
 	Current bool `json:"current"`
+	// FactID names the event that records this version's create or rotate
+	// fact (A126); Recorded says the event log holds it.
+	FactID     string     `json:"fact_id,omitempty"`
+	Recorded   bool       `json:"recorded"`
+	RecordedAt *time.Time `json:"recorded_at,omitempty"`
 }
 
 type transitKeyVersionListResponse struct {
@@ -254,7 +259,15 @@ func (a *API) listTransitKeyVersions(w http.ResponseWriter, r *http.Request) {
 	}
 	items := make([]transitKeyVersionResponse, 0, len(versions))
 	for _, version := range versions {
-		items = append(items, transitKeyVersionResponse{Version: version.Version, Current: version.Current})
+		item := transitKeyVersionResponse{
+			Version: version.Version, Current: version.Current,
+			FactID: version.FactID, Recorded: version.Recorded,
+		}
+		if version.Recorded {
+			at := version.RecordedAt.UTC()
+			item.RecordedAt = &at
+		}
+		items = append(items, item)
 	}
 	a.writeJSON(w, http.StatusOK, transitKeyVersionListResponse{Name: name, Kind: string(kind), Versions: items})
 }

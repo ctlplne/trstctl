@@ -295,6 +295,8 @@ var TenantScopedTables = []string{
 	"credentials",
 	// A125: the tenant's sealed transit keyring leaves with the tenant.
 	"transit_keyrings",
+	// A126: and the projection of its lifecycle facts.
+	"transit_key_facts",
 	"certificate_profiles",
 	"secret_sync_workload_identity_sources",
 	"workload_attester_trust_sources",

@@ -605,6 +605,15 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/risk_accepted", opaque), catalogPrivacyRule("/revocation_event_id", opaque),
 			catalogPrivacyRule("/revocation_sequence", opaque)),
 	})
+	// A126: transit lifecycle facts. The key name may carry a subject, as in
+	// schema 1; the kind and version are opaque metadata.
+	for _, eventType := range []string{"transit.key.created", "transit.key.rotated"} {
+		catalog = append(catalog, productionPrivacyEventPolicy{
+			ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: eventType, SchemaVersion: 2},
+			Policy: catalogPrivacyPolicy(catalogPrivacyPayloadShape(`{"key":"","kind":"aead","version":1}`, catalogPrivacyShapeOptions{}),
+				catalogPrivacyRule("/key", token), catalogPrivacyRule("/kind", opaque), catalogPrivacyRule("/version", opaque)),
+		})
+	}
 	catalog = append(catalog, productionPrivacyEventPolicy{
 		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "vault.compat.mount.enabled", SchemaVersion: 2},
 		Policy: catalogPrivacyPolicy(catalogPrivacyPayloadShape(

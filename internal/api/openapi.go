@@ -6644,7 +6644,10 @@ func componentSchemas() map[string]*Schema {
 	}, "items")
 	transitKeyVersion := object(map[string]*Schema{
 		"version": {Type: "integer"}, "current": {Type: "boolean"},
-	}, "version", "current")
+		"fact_id":     {Type: "string", Description: "ID of the event that records this version's create or rotate fact (A126). Absent for a version saved before facts existed and not yet reconciled."},
+		"recorded":    {Type: "boolean", Description: "The event log records this version's lifecycle fact."},
+		"recorded_at": timestamp(),
+	}, "version", "current", "recorded")
 	transitKeyVersionList := object(map[string]*Schema{
 		"name": str(), "kind": str(), "versions": {Type: "array", Items: ref("TransitKeyVersion")},
 	}, "name", "kind", "versions")

@@ -1493,6 +1493,9 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// eMudhra, Part 4: batch GCD over each tenant's RSA keys. Without this
 			// line the shared-prime check would be library code no deployment runs.
 			startRuntimeWorker(workCtx, srv.RunWeakKeyAudit),
+			// A126: records the transit lifecycle facts a failed append or
+			// a keyring saved before facts left out of the event log.
+			startRuntimeWorker(workCtx, srv.RunTransitFactReconcile),
 			startRuntimeWorker(workCtx, srv.RunLicensedBackgroundWorkers),
 		}
 		<-workCtx.Done()

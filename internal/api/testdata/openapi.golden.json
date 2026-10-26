@@ -37444,13 +37444,26 @@
           "current": {
             "type": "boolean"
           },
+          "fact_id": {
+            "description": "ID of the event that records this version's create or rotate fact (A126). Absent for a version saved before facts existed and not yet reconciled.",
+            "type": "string"
+          },
+          "recorded": {
+            "description": "The event log records this version's lifecycle fact.",
+            "type": "boolean"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "version": {
             "type": "integer"
           }
         },
         "required": [
           "version",
-          "current"
+          "current",
+          "recorded"
         ],
         "type": "object"
       },
