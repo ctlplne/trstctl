@@ -124,6 +124,7 @@ func rebindBindingMissing(family string, config json.RawMessage) string {
 		SSLTLSProfile       string `json:"ssl_tls_profile"`
 		CommitAdmin         string `json:"commit_admin"`
 		CertificateMapEntry string `json:"certificate_map_entry"`
+		NodeHostname        string `json:"node_hostname"`
 	}
 	_ = json.Unmarshal(config, &fields)
 	switch family {
@@ -138,6 +139,10 @@ func rebindBindingMissing(family string, config json.RawMessage) string {
 	case "paloalto":
 		if strings.TrimSpace(fields.SSLTLSProfile) == "" || strings.TrimSpace(fields.CommitAdmin) == "" {
 			return "this paloalto target names no ssl_tls_profile with commit_admin; its imports land in place under the target name and leave no predecessor to re-bind"
+		}
+	case "cisco":
+		if strings.TrimSpace(fields.NodeHostname) == "" {
+			return "this cisco target names no node_hostname with certificate_roles; its imports land in place under the target name and leave no predecessor to re-bind"
 		}
 	}
 	return ""

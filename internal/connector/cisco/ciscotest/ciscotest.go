@@ -68,6 +68,11 @@ type Server struct {
 	refusals   []Refusal
 	failStatus int
 	failBody   []byte
+
+	// ISE OpenAPI model (ise.go): the node served and its system store.
+	node   string
+	system []*SystemCertificate
+	nextID int
 }
 
 // New starts a fake appliance that accepts the given Basic credentials.
@@ -80,6 +85,7 @@ func New(user string, password []byte) *Server {
 		user:     user,
 		pass:     append([]byte(nil), password...),
 		imported: map[string]Credential{},
+		node:     "ise-01",
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -155,6 +161,17 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	// learns nothing about the request schema.
 	if !s.authOK(r) {
 		s.refuse(w, r, http.StatusUnauthorized, "authentication failed")
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v1/certs/") {
+		if status, body, failing := s.takeFailure(); failing {
+			s.record(Refusal{Method: r.Method, Path: r.URL.Path, Status: status, Reason: "injected device failure"})
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_, _ = w.Write(body)
+			return
+		}
+		s.handleISE(w, r)
 		return
 	}
 	if r.URL.Path != importPath {

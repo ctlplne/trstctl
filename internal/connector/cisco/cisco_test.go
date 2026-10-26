@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -319,28 +320,16 @@ func TestCiscoConformance(t *testing.T) {
 	}
 }
 
-// The cisco family is absent from the rollback census, and that must stay a
-// deliberate statement rather than an oversight.
-//
-// The connector's only management call is the certificate import, which carries
-// the private key in its body. There is no call that addresses an
-// already-installed certificate — no bind, no trustpoint re-point — so the only
-// way to "roll back" would be to upload the predecessor again, and after B1 the
-// control plane does not hold that key. A Rollback method here would either fail
-// every time or lie; the census saying "no" is the honest answer, and this test
-// fails if someone flips it without adding the API surface that would make it
-// true.
-func TestCiscoIsNotAdvertisedAsRollbackCapable(t *testing.T) {
-	if connector.CanRollback("cisco") {
-		t.Fatal("the census claims cisco can roll back; its management API exposes only a " +
-			"key-bearing import, so a re-bind is not expressible and the claim would " +
-			"strand an operator mid-incident")
+// A122 (owner decision 2026-10-26): cisco re-binds only for a target that
+// names its ISE node and certificate roles. The legacy import still addresses
+// no installed certificate, so a target without a node must keep answering
+// "not configured" rather than reporting a listener restored.
+func TestCiscoRebindsOnlyForAnISETarget(t *testing.T) {
+	if !connector.CanRollback("cisco") || !connector.CanReadback("cisco") {
+		t.Fatal("the censuses do not list cisco, though an ISE target re-binds and reads back")
 	}
 	var c connector.Connector = newConnector(t, "https://ise.example", []byte(pass))
-	if _, ok := c.(connector.Rollbacker); ok {
-		t.Fatal("cisco implements Rollbacker without an API that can re-bind an installed certificate")
-	}
-	if _, err := connector.RunRollback(context.Background(), c, connector.NewHTTPOps(http.DefaultClient), connector.Rollback{Target: name}); err == nil {
-		t.Fatal("RunRollback returned nil for cisco; an operator would read that as a listener restored")
+	if _, err := connector.RunRollback(context.Background(), c, connector.NewHTTPOps(http.DefaultClient), connector.Rollback{Target: name}); !errors.Is(err, connector.ErrRollbackNotConfigured) {
+		t.Fatalf("RunRollback for a legacy cisco target = %v, want ErrRollbackNotConfigured", err)
 	}
 }

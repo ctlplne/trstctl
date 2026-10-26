@@ -53,6 +53,10 @@ type Connector struct {
 	host    string // host[:port] of baseURL, for the net.dial grant
 	user    string
 	pass    []byte // management password (AN-8: []byte, wiped by Close)
+	// node and roles select ISE mode (ise.go): the ISE node a deploy binds on
+	// and the certificate roles it binds. Empty keeps the legacy import.
+	node  string
+	roles []string
 }
 
 var _ connector.Connector = (*Connector)(nil)
@@ -110,6 +114,9 @@ func (c *Connector) Capabilities() pluginhost.Grant {
 // management API's import endpoint with HTTP Basic auth; a 2xx is success, a
 // non-2xx fails with the response body — never the password.
 func (c *Connector) Deploy(ctx context.Context, sb connector.Sandbox, dep connector.Deployment) error {
+	if c.node != "" {
+		return c.deployISE(ctx, sb, dep)
+	}
 	name := dep.Target
 	if name == "" {
 		name = defaultName

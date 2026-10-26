@@ -56,13 +56,11 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// A122: a single BIG-IP generates its own key and CSR, so the
 		// device-generated CSR gate is met (an HA pair keeps sealed keys).
 		"f5": {migrated: true, disposition: ParityDispositionMigrated},
-		// Device-proven and relay-proven, but they cannot be asked what they
-		// hold or told to put back what they held. Migrating them would remove
-		// the control plane's fallback without providing the recovery path that
-		// justifies removing it.
-		"cisco": {migrated: false, retained: true, disposition: ParityDispositionArchitectureException,
-			missing:     []ParityGate{ParityGateRollback, ParityGateReadback},
-			outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// A122 (owner decision 2026-10-26): a cisco target that names its ISE
+		// node and certificate roles re-binds and reads back, so cisco
+		// migrated like fortigate and paloalto; a target without a node keeps
+		// the legacy import and reports both as not configured.
+		"cisco": {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
 		// FortiGate and PAN-OS migrated once a target can name the binding to
 		// move (A44): bind_to re-points a FortiOS setting, ssl_tls_profile with
 		// a partial commit re-points a PAN-OS SSL/TLS service profile, and the

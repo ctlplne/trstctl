@@ -29,7 +29,7 @@ const hostVerification = {
 
 const hostCustody = { executor: "agent", required_agent_role: "host" };
 
-export function defaultTargetConfigObject(connector: string): Record<string, string> {
+export function defaultTargetConfigObject(connector: string): Record<string, string | string[]> {
   const name = connector.trim().toLowerCase();
   const filePath = HOST_FILE_PATHS[name];
   if (filePath) {
@@ -85,8 +85,18 @@ export function defaultTargetConfigObject(connector: string): Record<string, str
       };
     case "netscaler":
     case "a10":
-    case "cisco":
       return { endpoint: `https://${name}.example.com`, username: "trstctl", password_ref: `secret://connectors/${name}-password` };
+    case "cisco":
+      // The ISE node a deploy binds on and the roles its certificate serves
+      // make the destination rollback- and readback-capable; without them a
+      // deploy imports in place.
+      return {
+        endpoint: "https://ise.example.com",
+        username: "trstctl",
+        password_ref: "secret://connectors/cisco-password",
+        node_hostname: "ise-01",
+        certificate_roles: ["eap"],
+      };
     case "kemp":
       return { endpoint: `https://${name}.example.com`, token_ref: `secret://connectors/${name}-token` };
     case "fortigate":

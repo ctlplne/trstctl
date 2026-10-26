@@ -45,9 +45,11 @@ func TestE1ScopeEveryAcceptedFamilyHasOneTruthfulDisposition(t *testing.T) {
 		}
 	}
 
-	// A59: GCP Certificate Manager migrated; ACM and Key Vault joined cisco as
-	// retained exceptions; Envoy, PostgreSQL and MySQL remain host-local work.
-	if counts[ParityDispositionMigrated] != 7 || counts[ParityDispositionArchitectureException] != 3 || counts[ParityDispositionUnimplemented] != 3 {
-		t.Errorf("E1 disposition counts = %v, want migrated=7 architecture_exception=3 unimplemented=3", counts)
+	// A59: GCP Certificate Manager migrated; ACM and Key Vault are retained
+	// exceptions; Envoy, PostgreSQL and MySQL remain host-local work. A122
+	// (owner decision 2026-10-26): cisco migrated once an ISE target became
+	// re-bindable and readable.
+	if counts[ParityDispositionMigrated] != 8 || counts[ParityDispositionArchitectureException] != 2 || counts[ParityDispositionUnimplemented] != 3 {
+		t.Errorf("E1 disposition counts = %v, want migrated=8 architecture_exception=2 unimplemented=3", counts)
 	}
 }

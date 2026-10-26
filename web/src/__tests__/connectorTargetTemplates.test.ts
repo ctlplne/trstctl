@@ -37,9 +37,12 @@ const ALL = [
 describe("connector target templates", () => {
   it("emits valid JSON for every connector family", () => {
     for (const name of ALL) {
-      const parsed = JSON.parse(defaultTargetConfig(name)) as Record<string, string>;
+      const parsed = JSON.parse(defaultTargetConfig(name)) as Record<string, unknown>;
       expect(Object.keys(parsed).length).toBeGreaterThan(0);
-      for (const value of Object.values(parsed)) expect(typeof value).toBe("string");
+      for (const value of Object.values(parsed)) {
+        const strings = Array.isArray(value) ? value : [value];
+        for (const item of strings) expect(typeof item).toBe("string");
+      }
     }
   });
 
@@ -76,7 +79,7 @@ describe("connector target templates", () => {
   it("never seeds a secret value, only references", () => {
     for (const name of ALL) {
       for (const [key, value] of Object.entries(defaultTargetConfigObject(name))) {
-        if (key.endsWith("_ref")) expect(value.startsWith("secret://")).toBe(true);
+        if (key.endsWith("_ref")) expect(typeof value === "string" && value.startsWith("secret://")).toBe(true);
         expect(["password", "token", "api_key", "secret_access_key"]).not.toContain(key);
       }
     }
@@ -86,5 +89,11 @@ describe("connector target templates", () => {
     expect(defaultTargetConfigObject("f5")).toMatchObject({ client_ssl_profile: "clientssl-service", password_ref: "secret://connectors/f5-password" });
     expect(defaultTargetConfigObject("aws-acm")).toMatchObject({ region: "us-east-1", secret_access_key_ref: "secret://connectors/aws-secret-access-key" });
     expect(defaultTargetConfigObject("f5").executor).toBeUndefined();
+  });
+});
+
+describe("cisco template", () => {
+  it("seeds the ISE node and certificate roles that make the destination re-bindable", () => {
+    expect(defaultTargetConfigObject("cisco")).toMatchObject({ node_hostname: "ise-01", certificate_roles: ["eap"] });
   });
 });

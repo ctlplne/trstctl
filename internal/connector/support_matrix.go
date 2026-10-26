@@ -104,15 +104,25 @@ var supportMatrix = []SupportRow{
 		},
 	},
 	{
-		Family:      "cisco",
-		APIContract: "Cisco management certificate-import API (HTTP Basic, JSON)",
+		Family: "cisco",
+		APIContract: "Cisco ISE OpenAPI system certificates (import, per-node list, role update) for targets " +
+			"with node_hostname and certificate_roles; the legacy certificate-import call (HTTP Basic, JSON) otherwise",
 		ProvenOperations: []string{
-			"deploy: import certificate and key under a named entry",
+			"deploy (node_hostname and certificate_roles): import the certificate and key as a system certificate " +
+				"on the node under a fingerprint-derived friendly name, bound to the named roles; the predecessor " +
+				"stays in the node's system store",
+			"rollback: move the roles back to a previously imported fingerprint-named system certificate, uploading " +
+				"nothing (targets with node_hostname only)",
+			"readback: report the system certificate serving the target's roles on the node, and whether it serves " +
+				"all of them (targets with node_hostname only)",
+			"deploy (legacy): import certificate and key under a named entry",
 		},
 		KnownLimits: []string{
-			"no rollback: the API's only certificate call both uploads and installs, with no way " +
-				"to address an already-installed object, so a re-bind is not expressible",
-			"the device's own trustpoint lifecycle is not driven; the connector imports and stops",
+			"a target without node_hostname imports in place under the target name; its rollback and readback are " +
+				"refused as not configured rather than reported done",
+			"an ISE role belongs to one system certificate per node, so a deploy or rollback takes the role from the " +
+				"certificate that held it, and moving the Admin role restarts that node's application server",
+			"system certificates accumulate on the node, one per deploy, and nothing removes them",
 		},
 	},
 	{

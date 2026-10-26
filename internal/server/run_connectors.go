@@ -255,6 +255,10 @@ type nativeTargetConfig struct {
 	BindTo           string `json:"bind_to,omitempty"`
 	SSLTLSProfile    string `json:"ssl_tls_profile,omitempty"`
 	CommitAdmin      string `json:"commit_admin,omitempty"`
+	// NodeHostname and CertificateRoles select the cisco connector's ISE mode
+	// (A122): role-bound, fingerprint-named system certificates.
+	NodeHostname     string   `json:"node_hostname,omitempty"`
+	CertificateRoles []string `json:"certificate_roles,omitempty"`
 
 	Region             string `json:"region,omitempty"`
 	AccessKeyID        string `json:"access_key_id,omitempty"`
@@ -426,7 +430,11 @@ func buildHTTPConnector(r nativeConnectorRuntime, ctx context.Context, name stri
 			lease.Close()
 			return nil, nil, nil, err
 		}
-		built = cisco.New(target.Endpoint, target.Username, password)
+		var options []cisco.Option
+		if strings.TrimSpace(target.NodeHostname) != "" {
+			options = append(options, cisco.WithISENode(target.NodeHostname, target.CertificateRoles))
+		}
+		built = cisco.New(target.Endpoint, target.Username, password, options...)
 	case "fortigate":
 		token, err := require(target.TokenRef, "fortigate token")
 		if err != nil {
@@ -727,7 +735,7 @@ var nativeTargetFields = map[string]map[string]bool{
 	"f5":                      fields("endpoint", "client_ssl_profile", "object_name", "username", "password_ref"),
 	"netscaler":               fields("endpoint", "username", "password_ref", "file_location"),
 	"kemp":                    fields("endpoint", "token_ref"),
-	"cisco":                   fields("endpoint", "username", "password_ref"),
+	"cisco":                   fields("endpoint", "username", "password_ref", "node_hostname", "certificate_roles"),
 	"fortigate":               fields("endpoint", "token_ref"),
 	"paloalto":                fields("endpoint", "api_key_ref"),
 	"aws-acm":                 fields("endpoint", "region", "access_key_id", "secret_access_key_ref", "session_token_ref"),
@@ -778,6 +786,11 @@ func validateNativeTarget(name string, target nativeTargetConfig) error {
 	case "a10", "cisco", "netscaler":
 		if !require(target.Endpoint, target.Username, target.PasswordRef) {
 			return fmt.Errorf("connector: %s requires endpoint, username, and password_ref", name)
+		}
+		if name == "cisco" {
+			if err := cisco.ValidateISETarget(target.NodeHostname, target.CertificateRoles); err != nil {
+				return err
+			}
 		}
 	case "f5":
 		if !require(target.Endpoint, target.ClientSSLProfile, target.Username, target.PasswordRef) {

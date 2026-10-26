@@ -301,8 +301,10 @@ func TestServedRollbackRefusalsNameTheProviderReason(t *testing.T) {
 	if status, body := rollback(akv); status != http.StatusConflict || !jsonContains(t, body, "serves the newest") {
 		t.Fatalf("azure-keyvault rollback = %d %s", status, body)
 	}
+	// A122: a cisco target re-binds once it names its ISE node and roles; one
+	// without them says which fields it lacks.
 	cisco := create("a58-ios", "cisco", map[string]any{"endpoint": "https://ios.example.test", "username": "trstctl", "password_ref": "secret://connectors/ios"})
-	if model, reason := readinessReason(cisco); model != "none" || !strings.Contains(reason, "uploads and installs the credential together") {
+	if model, reason := readinessReason(cisco); model != "re-bind" || !strings.Contains(reason, "names no node_hostname") {
 		t.Fatalf("cisco readiness = %q %q", model, reason)
 	}
 	plain := create("a58-plain", "gcp-certificate-manager", map[string]any{

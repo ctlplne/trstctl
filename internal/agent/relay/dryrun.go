@@ -246,11 +246,19 @@ func wouldMutate(connectorName string, target TargetConfig) []string {
 			"upload the certificate and key into " + location,
 			"update the sslcertkey binding for " + object,
 		}
-	case "a10", "cisco":
+	case "a10":
 		return []string{
 			"upload the certificate and key to the device's certificate store",
 			"rebind " + object + " to the new certificate",
 		}
+	case "cisco":
+		if node := strings.TrimSpace(target.NodeHostname); node != "" {
+			return []string{
+				"import the certificate and key as an ISE system certificate on " + node,
+				"move the " + strings.Join(target.CertificateRoles, ", ") + " roles to it; the previous certificate stays for rollback",
+			}
+		}
+		return []string{"import the certificate and key under " + object}
 	case "kemp":
 		return []string{"replace the certificate on virtual service " + object}
 	case "fortigate":

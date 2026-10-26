@@ -248,7 +248,7 @@ not this file.
 | `internal/connector/acm/acm_test.go:20` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/azurekv/token_test.go:20` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/azurekv/token_test.go:63` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/connector/cisco/cisco_test.go:21` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/connector/cisco/cisco_test.go:22` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/cisco/ciscotest/ciscotest_test.go:16` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/gcpcm/gcpcm_test.go:18` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/connector/kemp/kemp_test.go:65` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |

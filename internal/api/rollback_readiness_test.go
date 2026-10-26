@@ -17,8 +17,9 @@ func TestRollbackReadinessMirrorsTheRollbackRouteRefusals(t *testing.T) {
 		ready  bool
 		reason string
 	}{
-		"family without rollback":                        {rollbackReadinessInputs{Family: "cisco"}, "none", false, "no executable rollback"},
-		"cisco says why":                                 {rollbackReadinessInputs{Family: "cisco"}, "none", false, "uploads and installs the credential together"},
+		"family without rollback":                        {rollbackReadinessInputs{Family: "aws-acm"}, "none", false, "no executable rollback"},
+		"cisco without an ISE node":                      {rollbackReadinessInputs{Family: "cisco", Rebind: true, Config: []byte(`{"endpoint":"https://ise"}`)}, "re-bind", false, "names no node_hostname"},
+		"cisco with an ISE node and no identity":         {rollbackReadinessInputs{Family: "cisco", Rebind: true, Config: []byte(`{"node_hostname":"ise-01","certificate_roles":["eap"]}`)}, "re-bind", false, "no identity is bound"},
 		"aws-acm says why":                               {rollbackReadinessInputs{Family: "aws-acm"}, "none", false, "keeps no previous version"},
 		"azure-keyvault says why":                        {rollbackReadinessInputs{Family: "azure-keyvault"}, "none", false, "serves the newest"},
 		"plugin family says why":                         {rollbackReadinessInputs{Family: "acme-corp-wasm"}, "none", false, "no rollback entrypoint"},

@@ -147,6 +147,11 @@ type TargetConfig struct {
 	BindTo        string `json:"bind_to,omitempty"`
 	SSLTLSProfile string `json:"ssl_tls_profile,omitempty"`
 	CommitAdmin   string `json:"commit_admin,omitempty"`
+	// NodeHostname and CertificateRoles (cisco) name the ISE node a deploy
+	// binds on and the certificate roles it binds, which makes the target
+	// rollback- and readback-capable (A122). Empty keeps the legacy import.
+	NodeHostname     string   `json:"node_hostname,omitempty"`
+	CertificateRoles []string `json:"certificate_roles,omitempty"`
 	// PeerEndpoint names the standby BIG-IP of an F5 HA pair (epic E1). When
 	// set, the relay deploys, rolls back, and reads back BOTH peers, because an
 	// F5 pair keeps its certificate objects in separate stores — updating only
@@ -455,7 +460,14 @@ func buildRelayConnector(name string, target TargetConfig, material Material) (c
 		if err != nil {
 			return nil, err
 		}
-		return cisco.New(target.Endpoint, target.Username, password), nil
+		if err := cisco.ValidateISETarget(target.NodeHostname, target.CertificateRoles); err != nil {
+			return nil, err
+		}
+		var options []cisco.Option
+		if strings.TrimSpace(target.NodeHostname) != "" {
+			options = append(options, cisco.WithISENode(target.NodeHostname, target.CertificateRoles))
+		}
+		return cisco.New(target.Endpoint, target.Username, password, options...), nil
 	case "fortigate":
 		token, err := require(target.TokenRef, "fortigate token")
 		if err != nil {

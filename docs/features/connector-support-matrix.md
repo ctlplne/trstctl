@@ -23,7 +23,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 | `a10` | A10 Thunder aXAPI v3 | `migrated` | yes (re-bind) | no |
 | `aws-acm` | AWS Certificate Manager ImportCertificate (AWS JSON 1.1, SigV4) | `architecture_exception` | no | no |
 | `azure-keyvault` | Azure Key Vault Certificates REST import API v7.4 | `architecture_exception` | no | no |
-| `cisco` | Cisco management certificate-import API (HTTP Basic, JSON) | `architecture_exception` | no | no |
+| `cisco` | Cisco ISE OpenAPI system certificates (import, per-node list, role update) for targets with node_hostname and certificate_roles; the legacy certificate-import call (HTTP Basic, JSON) otherwise | `migrated` | yes (re-bind) | no |
 | `envoy` | Envoy SDS management HTTP resource (v3 Secret payload) | `unimplemented` | yes (host restore) | no |
 | `f5` | F5 BIG-IP iControl REST | `migrated` | yes (re-bind) | no |
 | `fortigate` | FortiOS CMDB REST (vpn.certificate/local, system/global, vpn.ssl/settings) | `migrated` | yes (re-bind) | no |
@@ -84,18 +84,22 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 ## cisco
 
-**API/local contract:** Cisco management certificate-import API (HTTP Basic, JSON)
+**API/local contract:** Cisco ISE OpenAPI system certificates (import, per-node list, role update) for targets with node_hostname and certificate_roles; the legacy certificate-import call (HTTP Basic, JSON) otherwise
 
-**E1 disposition:** `architecture_exception`
+**E1 disposition:** `migrated`
 
 **Exercised against a faithful management-API double:**
 
-- deploy: import certificate and key under a named entry
+- deploy (node_hostname and certificate_roles): import the certificate and key as a system certificate on the node under a fingerprint-derived friendly name, bound to the named roles; the predecessor stays in the node's system store
+- rollback: move the roles back to a previously imported fingerprint-named system certificate, uploading nothing (targets with node_hostname only)
+- readback: report the system certificate serving the target's roles on the node, and whether it serves all of them (targets with node_hostname only)
+- deploy (legacy): import certificate and key under a named entry
 
 **Known limits:**
 
-- no rollback: the API's only certificate call both uploads and installs, with no way to address an already-installed object, so a re-bind is not expressible
-- the device's own trustpoint lifecycle is not driven; the connector imports and stops
+- a target without node_hostname imports in place under the target name; its rollback and readback are refused as not configured rather than reported done
+- an ISE role belongs to one system certificate per node, so a deploy or rollback takes the role from the certificate that held it, and moving the Admin role restarts that node's application server
+- system certificates accumulate on the node, one per deploy, and nothing removes them
 
 ## envoy
 

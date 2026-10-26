@@ -90,6 +90,9 @@ var readbackCapableFamilies = []string{
 	// ErrReadbackNotConfigured rather than a clean readback (A44).
 	"fortigate",
 	"paloalto",
+	// cisco answers for targets that name an ISE node and certificate roles:
+	// the node's system store says which certificate serves them (A122).
+	"cisco",
 	// gcp-certificate-manager answers for targets that name a certificate map
 	// entry: the entry says which certificate it serves (A58).
 	"gcp-certificate-manager",

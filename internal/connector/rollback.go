@@ -182,6 +182,13 @@ var rollbackCapableFamilies = []string{
 	// ErrRollbackNotConfigured rather than success (A44).
 	"fortigate",
 	"paloalto",
+	// cisco re-binds only when the target names its ISE node and certificate
+	// roles (node_hostname, certificate_roles): deploys then import
+	// fingerprint-named system certificates and rollback moves the roles back.
+	// A target without a node keeps the legacy import, which addresses no
+	// installed object, and its Rollback answers ErrRollbackNotConfigured
+	// (A122, owner decision 2026-10-26).
+	"cisco",
 	// gcp-certificate-manager re-binds only when the target names a
 	// certificate map entry (certificate_map_entry): deploys then create
 	// fingerprint-named Certificate resources and point the entry at them, so
@@ -201,8 +208,6 @@ func RollbackUnsupportedReason(name string) string {
 		return ""
 	}
 	switch name {
-	case "cisco":
-		return "Cisco's API exposes one call that uploads and installs the credential together, with no way to address an already-installed object, so there is no re-bind; re-uploading the predecessor key would need a key the control plane no longer holds"
 	case "aws-acm":
 		return "AWS Certificate Manager re-imports in place under one certificate ARN and keeps no previous version, so the predecessor leaves the account on renewal; restoring it would mean re-uploading its key, which the control plane no longer holds. Re-pointing a load balancer or distribution at another ARN is outside this connector"
 	case "azure-keyvault":

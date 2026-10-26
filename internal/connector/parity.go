@@ -173,7 +173,8 @@ const (
 // installed object (re-check on new PAN-OS / FortiOS / IOS-XE majors) — at
 // which point it must pass the same gates as everyone else, not skip them.
 var cpRetainedFamilies = []string{
-	"cisco",
+	// cisco left this census when an ISE target became re-bindable and
+	// readable (A122, owner decision 2026-10-26).
 	// ACM re-imports in place under one ARN with no previous version; Key
 	// Vault serves the newest version by name with no call that makes an
 	// older one current. Neither API can express a re-bind or a readback, so
@@ -198,10 +199,6 @@ func CPRetained(family string) bool {
 // retainedScopeNotes are the operator-facing sentences for the retained
 // families, each naming the API property that keeps E1 open for it.
 var retainedScopeNotes = map[string]string{
-	"cisco": "open architecture exception: control-plane execution remains because this " +
-		"device's management API imports a certificate by name with no separately addressable " +
-		"installed object, so relay rollback and readback are not expressible; this family keeps E1 " +
-		"open and its support-matrix row records the limitation",
 	"aws-acm": "open architecture exception: an enrolled network relay executes ACM imports, but " +
 		"the control-plane path remains because ACM re-imports in place under one certificate ARN " +
 		"and keeps no previous version, so relay rollback and readback are not expressible; this " +

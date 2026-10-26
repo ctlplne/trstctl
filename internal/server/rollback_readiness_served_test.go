@@ -5,6 +5,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 
 	"trstctl.com/trstctl/internal/config"
@@ -72,8 +73,15 @@ func TestServedConnectorTargetReportsRollbackReadiness(t *testing.T) {
 	if model, ready, reason := readiness(fortigate); model != "re-bind" || ready || reason == "" {
 		t.Fatalf("fortigate target without bind_to = %q %v %q; want not ready naming the binding", model, ready, reason)
 	}
+	// A122: a cisco target without its ISE node is a re-bind model that is
+	// not ready and says why; one with the node and roles waits for an identity.
 	cisco := create("a46-cisco", "cisco", map[string]any{"endpoint": "https://ios.example.test", "username": "trstctl", "password_ref": "secret://connectors/ios"})
-	if model, ready, _ := readiness(cisco); model != "none" || ready {
-		t.Fatalf("cisco target = %q %v; want no rollback model", model, ready)
+	if model, ready, reason := readiness(cisco); model != "re-bind" || ready || !strings.Contains(reason, "node_hostname") {
+		t.Fatalf("cisco target without an ISE node = %q %v %q; want not ready naming node_hostname", model, ready, reason)
+	}
+	ise := create("a46-ise", "cisco", map[string]any{"endpoint": "https://ise.example.test", "username": "trstctl",
+		"password_ref": "secret://connectors/ise", "node_hostname": "ise-01", "certificate_roles": []string{"eap"}})
+	if model, ready, reason := readiness(ise); model != "re-bind" || ready || strings.Contains(reason, "node_hostname") {
+		t.Fatalf("cisco ISE target = %q %v %q; want re-bind waiting for an identity", model, ready, reason)
 	}
 }
