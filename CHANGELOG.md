@@ -191,7 +191,8 @@
   certificate identity per TLS block and queues the first issuance to that agent,
   which generates the key inside the cluster, sends only a CSR, writes the TLS
   Secret and reads it back; the certificate records `key_storage=kubernetes_secret`.
-  Resources report `delivery_queued`, then `delivered`. A source without an agent
+  Resources report `delivery_queued`, then `delivered`, or `not_delivered` with the
+  agent's own reason while a failed attempt is retried. A source without an agent
   still reports each resource `not_delivered` with the reason. A `k8s_secret`
   destination saved without `executor=agent` is refused.
 - The outbound clients that used Go's default client with no timeout at all

@@ -12,7 +12,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/config"
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -290,5 +294,80 @@ func TestServedKubernetesTLSRunWaitsForAnAttestedOwner(t *testing.T) {
 	}
 	if jobs := queuedClusterRenewals(t, h); len(jobs) != 1 {
 		t.Fatalf("%d renewal jobs after attestation, want 1", len(jobs))
+	}
+}
+
+// The run reports what the cluster agent signed. An attempt the agent reports
+// failed is not delivered, in the receipt's words, even while the job is
+// retried; once a later attempt delivers and verifies, the resource is
+// delivered.
+func TestServedKubernetesTLSRunReportsTheClusterAgentsSignedOutcome(t *testing.T) {
+	ctx := t.Context()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
+	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write")
+	if _, err := h.client.Heartbeat(ctx, &transport.HeartbeatRequest{AgentID: h.agent, Version: "cluster-agent-test", Status: "active"}); err != nil {
+		t.Fatal(err)
+	}
+	agentID := agentRowID(h.tenant, h.agent)
+	owner, err := h.srv.orch.CreateOwner(ctx, h.tenant, string(store.OwnerTeam), "Payments Team", "payments@example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceID := createKubernetesTLSSource(t, h.servedHarness, tok, map[string]any{
+		"cluster_agent_id": agentID, "owner_id": owner.ID,
+		"verify_address": "ingress-nginx-controller.ingress-nginx.svc:443",
+		"resources": []map[string]any{{"kind": "Ingress", "namespace": "payments", "name": "web",
+			"tls_secret_name": "web-tls", "hosts": []string{"web.example.test"}}},
+	})
+	statusOf := func(want string) kubernetesTLSRun {
+		t.Helper()
+		run := runKubernetesTLSSource(t, h.servedHarness, tok, sourceID)
+		if len(run.TargetResults) != 1 || run.TargetResults[0].Status != want {
+			t.Fatalf("run = %+v, want the resource %s", run, want)
+		}
+		return run
+	}
+	statusOf("delivery_queued")
+
+	// The agent refuses before generating any key.
+	job := claimOneRenewal(t, ctx, h)
+	refusal := `this agent's profile does not allow writing Secrets in namespace "payments"`
+	if accepted, err := h.client.ReportJobResult(ctx, h.report(t, job.JobID, job.Attempt, transport.JobOutcomeFailed, refusal, "")); err != nil || !accepted.Accepted {
+		t.Fatalf("failed report = %+v, %v", accepted, err)
+	}
+	run := statusOf("not_delivered")
+	if run.Status != "partial" || !strings.Contains(run.TargetResults[0].Error+" "+run.Error, refusal) {
+		t.Fatalf("run = %+v, want the agent's refusal as the reason", run)
+	}
+
+	// The retried job generates the key in the cluster, writes and verifies.
+	if _, err := h.store.SystemPool().Exec(ctx, `UPDATE outbox SET agent_next_attempt_at = now() WHERE id = $1`, job.JobID); err != nil {
+		t.Fatal(err)
+	}
+	job = claimOneRenewal(t, ctx, h)
+	key, err := crypto.GenerateHostSubjectKey("web.example.test", []string{"web.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	issued, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: job.JobID, Attempt: job.Attempt, CSRDER: key.CSRDER})
+	if err != nil {
+		t.Fatalf("sign the cluster agent's CSR: %v", err)
+	}
+	detail, digest := simulatedHostVerification(t, h, job, issued.Fingerprint, transport.JobOutcomeVerified)
+	id := h.identity.Identity()
+	report, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, custody.Record{
+			Origin: custody.OriginHostAgent, Storage: custody.StorageKubernetesSecret,
+			Exportable: custody.Exportable, GeneratedBy: id.CommonName(),
+		}, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted, err := h.client.ReportJobResult(ctx, report); err != nil || !accepted.Accepted {
+		t.Fatalf("verified report = %+v, %v", accepted, err)
+	}
+	if run := statusOf("delivered"); run.Status != "succeeded" {
+		t.Fatalf("run = %+v, want succeeded once the agent delivered", run)
 	}
 }

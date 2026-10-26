@@ -15,6 +15,7 @@ import (
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/discovery/k8stls"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/servedstatus"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -138,12 +139,43 @@ func (d *issuanceDispatcher) deliverKubernetesTLSResource(ctx context.Context, t
 		}
 		return kubernetesTLSDeliveryQueued, "", nil
 	case orchestrator.StateIssued, orchestrator.StateRenewing, orchestrator.StateRenewalFailed:
-		return kubernetesTLSDeliveryQueued, "", nil
+		return d.kubernetesTLSDeliveryProgress(ctx, tenantID, ident.ID)
 	case orchestrator.StateDeployed:
 		return kubernetesTLSDelivered, "", nil
 	default:
 		return kubernetesTLSNotDelivered, fmt.Sprintf("this resource's identity is %s; it is not delivered again", state), nil
 	}
+}
+
+// kubernetesTLSDeliveryProgress reports a resource whose certificate is on its
+// way to the cluster from the agent's own signed receipts, newest first. With
+// none yet the delivery is queued. A delivered or verified receipt means the
+// Secret holds a certificate the agent wrote, as during a renewal. A failed one
+// is not delivered, in the receipt's words, even while the job is retried:
+// queued would claim progress the agent says it has not made.
+func (d *issuanceDispatcher) kubernetesTLSDeliveryProgress(ctx context.Context, tenantID, identityID string) (status, reason string, err error) {
+	// Verification and rollback receipts interleave with deploys; a short
+	// window always reaches the newest deploy receipt.
+	receipts, err := d.store.ListConnectorDeliveryReceiptsNewestPage(ctx, tenantID, identityID, "", store.ZeroUUID, nil, 20)
+	if err != nil {
+		return "", "", err
+	}
+	for _, receipt := range receipts {
+		if receipt.Destination != "connector.deploy" {
+			continue
+		}
+		switch receipt.Status {
+		case servedstatus.ConnectorDelivered, servedstatus.ConnectorVerified:
+			return kubernetesTLSDelivered, "", nil
+		case servedstatus.ConnectorFailed:
+			return kubernetesTLSNotDelivered, receipt.Detail, nil
+		case servedstatus.ConnectorVerifyFailed:
+			return kubernetesTLSNotDelivered, "the cluster agent wrote the Secret, but the listener at verify_address " +
+				"did not serve the new certificate", nil
+		}
+		break
+	}
+	return kubernetesTLSDeliveryQueued, "", nil
 }
 
 // kubernetesTLSOwnershipReason says what to do when the owner is not ready for
