@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -63,15 +64,16 @@ import (
 func HostConnectorKinds() []string {
 	return []string{
 		"apache", "caddy", "elasticsearch", "envoy", "haproxy", "iis", "java-keystore",
-		"mysql", "nginx", "postfix", "postgresql", "rabbitmq", "tomcat", "traefik",
+		KubernetesSecretConnector, "mysql", "nginx", "postfix", "postgresql", "rabbitmq", "tomcat", "traefik",
 	}
 }
 
 // RequiresHostExecProfile reports whether this connector writes local files or
 // runs allowlisted commands. Envoy is host-vantage too, but uses only the
-// co-resident HTTP SDS endpoint and needs no filesystem/exec grant.
+// co-resident HTTP SDS endpoint and needs no filesystem/exec grant; k8s_secret
+// writes through the cluster API, bounded by the profile's namespace allowlist.
 func RequiresHostExecProfile(name string) bool {
-	return ExecutesOnHost(name) && name != "envoy"
+	return ExecutesOnHost(name) && name != "envoy" && name != KubernetesSecretConnector
 }
 
 // ExecutesOnHost reports whether this build can execute the named connector on
@@ -108,6 +110,16 @@ type HostProfile struct {
 	// Containments grant an exact target one local listener and one stop action.
 	// This mapping is loaded only from the host operator's profile file.
 	Containments []HostContainment `json:"containments,omitempty"`
+	// KubernetesSecrets is a cluster agent's grant: the namespaces it may write
+	// kubernetes.io/tls Secrets in. A cluster agent's profile may name these and
+	// no host roots at all.
+	KubernetesSecrets *HostKubernetesSecrets `json:"kubernetes_secrets,omitempty"`
+}
+
+// HostKubernetesSecrets names the namespaces an in-cluster agent may write
+// TLS Secrets in.
+type HostKubernetesSecrets struct {
+	Namespaces []string `json:"namespaces"`
 }
 
 type HostContainment struct {
@@ -142,8 +154,28 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	if err := json.Unmarshal(raw, &profile); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: decode host profile: %w", err)
 	}
+	var namespaces []string
+	if profile.KubernetesSecrets != nil {
+		for _, namespace := range profile.KubernetesSecrets.Namespaces {
+			namespace = strings.TrimSpace(namespace)
+			if !kubernetesNamespaceName(namespace) {
+				return connector.LocalOpsConfig{}, fmt.Errorf("relay: host profile namespace %q is not a Kubernetes namespace name", namespace)
+			}
+			if !slices.Contains(namespaces, namespace) {
+				namespaces = append(namespaces, namespace)
+			}
+		}
+	}
+	if len(profile.AllowedRoots) == 0 && len(namespaces) == 0 {
+		return connector.LocalOpsConfig{}, errors.New("relay: host profile names no allowed roots and no Kubernetes namespaces; a profile that permits nothing is safer than one that permits everything, so this is refused rather than defaulted")
+	}
 	if len(profile.AllowedRoots) == 0 {
-		return connector.LocalOpsConfig{}, errors.New("relay: host profile names no allowed roots; a profile that permits nothing is safer than one that permits everything, so this is refused rather than defaulted")
+		// A cluster agent writes Secrets through the API and touches no host
+		// files, so it carries no roots, commands or listener containments.
+		if len(profile.Actions) > 0 || len(profile.Containments) > 0 {
+			return connector.LocalOpsConfig{}, errors.New("relay: a host profile with actions or containments must name the allowed roots they act in")
+		}
+		return connector.LocalOpsConfig{KubernetesSecretNamespaces: namespaces, TLSProbeOpenSSL: profile.TLSProbeOpenSSL}, nil
 	}
 	if profile.TLSProbeOpenSSL != "" {
 		if err := tlsprobe.ValidateOpenSSLExecutable(profile.TLSProbeOpenSSL); err != nil {
@@ -173,7 +205,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 		})
 	}
 	configured := connector.LocalOpsConfig{AllowedRoots: profile.AllowedRoots, Actions: actions,
-		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL}
+		Containments: containments, TLSProbeOpenSSL: profile.TLSProbeOpenSSL, KubernetesSecretNamespaces: namespaces}
 	if _, err := connector.NewLocalOps(configured); err != nil {
 		return connector.LocalOpsConfig{}, fmt.Errorf("relay: invalid host profile: %w", err)
 	}
@@ -191,6 +223,8 @@ type HostTargetConfig struct {
 	ConfigPath string `json:"config_path,omitempty"`
 	Endpoint   string `json:"endpoint,omitempty"`
 	SecretName string `json:"secret_name,omitempty"`
+	// Namespace is the Kubernetes namespace of a k8s_secret target's Secret.
+	Namespace string `json:"namespace,omitempty"`
 
 	// IIS.
 	Binding   string `json:"binding,omitempty"`
@@ -236,6 +270,10 @@ func ExecuteOnHost(
 	keyPEM, ok := material["credential.key_pem"]
 	if !ok || len(keyPEM) == 0 {
 		return connector.Stats{}, errors.New("relay: redeemed material carries no private key")
+	}
+
+	if intent.Connector == KubernetesSecretConnector {
+		return installKubernetesSecret(ctx, profile, intent, servingCertPEM, keyPEM)
 	}
 
 	var target HostTargetConfig
@@ -321,6 +359,9 @@ func DryRunOnHost(
 		Name: "connector", Status: StepOK,
 		Detail: "this host agent carries an executor for " + intent.Connector,
 	})
+	if intent.Connector == KubernetesSecretConnector {
+		return dryRunKubernetesSecret(ctx, profile, intent, plan), nil
+	}
 
 	var target HostTargetConfig
 	if len(intent.TargetConfig) > 0 {
@@ -521,6 +562,12 @@ func hostPreflightActions(name string, target HostTargetConfig) ([]connector.Loc
 		return nil, nil
 	case "envoy":
 		if err := require(field("endpoint", target.Endpoint), field("secret_name", target.SecretName)); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	case KubernetesSecretConnector:
+		// The cluster API is the only effect; there is no host command to run.
+		if err := require(field("namespace", target.Namespace), field("secret_name", target.SecretName)); err != nil {
 			return nil, err
 		}
 		return nil, nil

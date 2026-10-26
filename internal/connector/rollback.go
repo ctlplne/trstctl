@@ -215,7 +215,7 @@ func RollbackUnsupportedReason(name string) string {
 // device; hosts restore bytes that never went back to the control plane.
 var hostRollbackCapableFamilies = []string{
 	"apache", "caddy", "elasticsearch", "envoy", "haproxy", "iis", "java-keystore",
-	"mysql", "nginx", "postfix", "postgresql", "rabbitmq", "tomcat", "traefik",
+	"k8s_secret", "mysql", "nginx", "postfix", "postgresql", "rabbitmq", "tomcat", "traefik",
 }
 
 // RollbackCapableConnectors reports which connector families can roll back by

@@ -267,7 +267,7 @@ func RunOnceWithRoles(
 		return 0, errors.New("relay: no channel")
 	}
 	kinds := ClaimableKinds()
-	if len(hostProfile.AllowedRoots) == 0 && hostRollback != nil && !slices.Contains(roles, mtls.AgentRoleNetwork) {
+	if !ProfileGrantsHostWork(hostProfile) && hostRollback != nil && !slices.Contains(roles, mtls.AgentRoleNetwork) {
 		// A host with no exec profile may still manage its co-resident Envoy
 		// posture. Do not claim file/exec work it cannot perform — but it
 		// still answers its post-upgrade self-check (A71).

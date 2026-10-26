@@ -61,6 +61,11 @@ type LocalOpsConfig struct {
 	// its local TLS listener and an exact stop action. Job payloads cannot add
 	// or override these bindings.
 	Containments []LocalContainment
+	// KubernetesSecretNamespaces lists the namespaces an in-cluster agent may
+	// write kubernetes.io/tls Secrets in (the k8s_secret target). Like the roots
+	// and actions it comes only from the operator's profile; a target or job
+	// payload cannot widen it.
+	KubernetesSecretNamespaces []string
 }
 
 // LocalContainment is the host operator's authority to stop one target after

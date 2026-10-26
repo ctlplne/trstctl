@@ -38,10 +38,56 @@ func (d *SecretDestination) itemPath() string {
 	return d.collectionPath() + "/" + d.name
 }
 
+// SecretReadback is what the cluster holds after a write: the Secret's
+// identity and the certificate in its tls.crt. It carries no key bytes.
+type SecretReadback struct {
+	Namespace       string
+	Name            string
+	UID             string
+	ResourceVersion string
+	CertPEM         []byte
+}
+
 // Install writes the credential into the Secret. It is idempotent: if the
 // Secret exists it is updated (carrying the resourceVersion for optimistic
-// concurrency), otherwise it is created.
+// concurrency, and keeping its labels and annotations), otherwise it is created.
 func (d *SecretDestination) Install(ctx context.Context, cred destination.Credential) error {
+	return d.write(ctx, cred)
+}
+
+// InstallAndRead writes the credential as Install does and then reads the
+// Secret back, so the caller can compare what the cluster stores with what it
+// wrote instead of trusting that an accepted write took effect.
+func (d *SecretDestination) InstallAndRead(ctx context.Context, cred destination.Credential) (SecretReadback, error) {
+	if err := d.write(ctx, cred); err != nil {
+		return SecretReadback{}, err
+	}
+	status, body, err := d.client.request(ctx, http.MethodGet, d.itemPath(), nil)
+	if err != nil {
+		return SecretReadback{}, err
+	}
+	if status != http.StatusOK {
+		return SecretReadback{}, fmt.Errorf("k8s: read back secret %s/%s: status %d", d.namespace, d.name, status)
+	}
+	var obj struct {
+		Metadata struct {
+			UID             string `json:"uid"`
+			ResourceVersion string `json:"resourceVersion"`
+		} `json:"metadata"`
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return SecretReadback{}, fmt.Errorf("k8s: decode secret %s/%s: %w", d.namespace, d.name, err)
+	}
+	certPEM, err := base64.StdEncoding.DecodeString(obj.Data["tls.crt"])
+	if err != nil {
+		return SecretReadback{}, fmt.Errorf("k8s: secret %s/%s tls.crt is not base64", d.namespace, d.name)
+	}
+	return SecretReadback{Namespace: d.namespace, Name: d.name, UID: obj.Metadata.UID,
+		ResourceVersion: obj.Metadata.ResourceVersion, CertPEM: certPEM}, nil
+}
+
+func (d *SecretDestination) write(ctx context.Context, cred destination.Credential) error {
 	if len(cred.CertPEM) == 0 {
 		return errors.New("k8s: nothing to install (empty certificate)")
 	}
@@ -56,8 +102,17 @@ func (d *SecretDestination) Install(ctx context.Context, cred destination.Creden
 		return err
 	}
 	if status == http.StatusOK {
-		if rv := resourceVersion(body); rv != "" {
-			meta["resourceVersion"] = rv
+		existing := existingMetadata(body)
+		if existing.ResourceVersion != "" {
+			meta["resourceVersion"] = existing.ResourceVersion
+		}
+		// Other tools label and annotate the Secret an Ingress names; an update
+		// replaces the object, so carry those forward instead of dropping them.
+		if len(existing.Labels) > 0 {
+			meta["labels"] = existing.Labels
+		}
+		if len(existing.Annotations) > 0 {
+			meta["annotations"] = existing.Annotations
 		}
 		return d.put(ctx, secretObject(meta, data))
 	}
@@ -101,14 +156,27 @@ func secretObject(meta map[string]any, data map[string]string) map[string]any {
 	}
 }
 
-func resourceVersion(body []byte) string {
+type secretMetadata struct {
+	ResourceVersion string            `json:"resourceVersion"`
+	Labels          map[string]string `json:"labels"`
+	Annotations     map[string]string `json:"annotations"`
+}
+
+func existingMetadata(body []byte) secretMetadata {
 	var obj struct {
-		Metadata struct {
-			ResourceVersion string `json:"resourceVersion"`
-		} `json:"metadata"`
+		Metadata secretMetadata `json:"metadata"`
 	}
 	if err := json.Unmarshal(body, &obj); err != nil {
-		return ""
+		return secretMetadata{}
 	}
-	return obj.Metadata.ResourceVersion
+	return obj.Metadata
+}
+
+func resourceVersion(body []byte) string { return existingMetadata(body).ResourceVersion }
+
+// Status reads the Secret without changing it and returns the API server's
+// HTTP status: 200 when it exists, 404 when a write would create it.
+func (d *SecretDestination) Status(ctx context.Context) (int, error) {
+	status, _, err := d.client.request(ctx, http.MethodGet, d.itemPath(), nil)
+	return status, err
 }

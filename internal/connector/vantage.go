@@ -25,7 +25,7 @@ func ShippedTargetVantage(name string) (TargetVantage, bool) {
 	switch name {
 	case "nginx", "apache", "caddy", "iis", "haproxy", "postfix", "traefik",
 		"java-keystore", "postgresql", "mysql", "rabbitmq", "elasticsearch",
-		"tomcat", "envoy":
+		"tomcat", "envoy", "k8s_secret":
 		return VantageHostAgent, true
 	default:
 		return VantageControlPlane, false

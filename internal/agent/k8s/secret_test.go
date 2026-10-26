@@ -65,6 +65,7 @@ func (f *fakeAPIServer) handler(t *testing.T) http.Handler {
 				return
 			}
 			meta["resourceVersion"] = "1"
+			meta["uid"] = "uid-" + n
 			f.secrets[n] = obj
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(obj)
@@ -74,6 +75,14 @@ func (f *fakeAPIServer) handler(t *testing.T) http.Handler {
 			if err := json.Unmarshal(body, &obj); err != nil {
 				http.Error(w, "bad json", http.StatusBadRequest)
 				return
+			}
+			// Like the API server, an update keeps the object's uid.
+			if meta, ok := obj["metadata"].(map[string]any); ok {
+				if old, exists := f.secrets[name]; exists {
+					if oldMeta, ok := old["metadata"].(map[string]any); ok {
+						meta["uid"] = oldMeta["uid"]
+					}
+				}
 			}
 			f.secrets[name] = obj
 			_ = json.NewEncoder(w).Encode(obj)
@@ -170,6 +179,51 @@ func TestSecretDestinationUpdatesExisting(t *testing.T) {
 	meta := obj["metadata"].(map[string]any)
 	if meta["resourceVersion"] != "7" {
 		t.Errorf("update did not carry the resourceVersion (got %v) — optimistic concurrency lost", meta["resourceVersion"])
+	}
+}
+
+// An in-cluster delivery writes over a Secret an Ingress or Gateway already
+// names. The write keeps the labels and annotations other tools put there, and
+// it returns what the cluster now holds — uid, resourceVersion and tls.crt —
+// so the caller can prove the certificate it installed is the one stored.
+func TestSecretDestinationKeepsMetadataAndReadsBack(t *testing.T) {
+	api := newFakeAPIServer()
+	api.secrets["web-tls"] = map[string]any{
+		"apiVersion": "v1", "kind": "Secret", "type": "kubernetes.io/tls",
+		"metadata": map[string]any{
+			"name": "web-tls", "namespace": "payments", "resourceVersion": "7", "uid": "uid-web-tls",
+			"labels":      map[string]any{"app.kubernetes.io/name": "web"},
+			"annotations": map[string]any{"example.test/owner": "payments-team"},
+		},
+		"data": map[string]any{"tls.crt": base64.StdEncoding.EncodeToString([]byte("OLD")), "tls.key": base64.StdEncoding.EncodeToString([]byte("OLD"))},
+	}
+	srv := httptest.NewServer(api.handler(t))
+	defer srv.Close()
+
+	client := k8s.New(srv.URL, "tok", "payments", srv.Client())
+	dest := k8s.NewSecretDestination(client, "payments", "web-tls")
+	readback, err := dest.InstallAndRead(context.Background(), destination.Credential{CertPEM: []byte("NEW-CERT"), KeyPEM: []byte("NEW-KEY")})
+	if err != nil {
+		t.Fatalf("InstallAndRead: %v", err)
+	}
+	if readback.Namespace != "payments" || readback.Name != "web-tls" || readback.UID != "uid-web-tls" ||
+		readback.ResourceVersion != "7" || string(readback.CertPEM) != "NEW-CERT" {
+		t.Fatalf("readback = %+v", readback)
+	}
+	meta := api.stored(t, "web-tls")["metadata"].(map[string]any)
+	labels, _ := meta["labels"].(map[string]any)
+	annotations, _ := meta["annotations"].(map[string]any)
+	if labels["app.kubernetes.io/name"] != "web" || annotations["example.test/owner"] != "payments-team" {
+		t.Fatalf("update dropped the Secret's labels or annotations: %+v", meta)
+	}
+
+	created, err := k8s.NewSecretDestination(client, "payments", "api-tls").InstallAndRead(context.Background(),
+		destination.Credential{CertPEM: []byte("API-CERT"), KeyPEM: []byte("API-KEY")})
+	if err != nil {
+		t.Fatalf("InstallAndRead (create): %v", err)
+	}
+	if created.UID != "uid-api-tls" || created.ResourceVersion != "1" || string(created.CertPEM) != "API-CERT" {
+		t.Fatalf("created readback = %+v", created)
 	}
 }
 

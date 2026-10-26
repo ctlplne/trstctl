@@ -101,6 +101,13 @@ func runHostRenew(ctx context.Context, ch Channel, client *http.Client, profile 
 			"this agent has no host exec profile configured for file and reload deploys")
 		return false
 	}
+	if intent.Connector == KubernetesSecretConnector {
+		// The operator's namespace allowlist is checked before a key exists.
+		if _, _, err := kubernetesSecretTarget(profile, intent); err != nil {
+			report(ctx, ch, job, OutcomeFailed, strings.TrimPrefix(err.Error(), "relay: "))
+			return false
+		}
+	}
 	// Go's TLS client cannot authenticate a pure ML-DSA server leaf. Require
 	// the operator-pinned native probe before taking custody of the predecessor
 	// or changing the listener; otherwise a real successful deploy is reported
@@ -357,6 +364,9 @@ func HostRenewCustody(connectorName, generatedBy string) (custody.Record, error)
 		record.Exportable = custody.NonExportable
 	case "envoy":
 		record.Storage = custody.StorageService
+		record.Exportable = custody.Exportable
+	case KubernetesSecretConnector:
+		record.Storage = custody.StorageKubernetesSecret
 		record.Exportable = custody.Exportable
 	default:
 		record.Storage = custody.StorageFile

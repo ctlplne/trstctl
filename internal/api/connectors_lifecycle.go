@@ -460,6 +460,7 @@ var servedConnectorCatalog = []connectorCatalogItem{
 	{Name: "rabbitmq", Kind: "messaging", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous broker certificate/key files"},
 	{Name: "elasticsearch", Kind: "search", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous watched HTTP TLS files"},
 	{Name: "tomcat", Kind: "application-server", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous connector certificate/key files"},
+	{Name: "k8s_secret", Kind: "kubernetes", DeliveryMode: "in-cluster agent; the key is generated in the cluster", Rollback: "restore the previous certificate and key into the Secret from the agent's encrypted predecessor ledger"},
 	{Name: "f5", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "swap virtual server back to previous cert/key object"},
 	{Name: "netscaler", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "bind previous certKey to the service group"},
 	{Name: "a10", Kind: "appliance", DeliveryMode: "native registry, signed plugin, or receipt", Rollback: "restore previous client-SSL template certificate/key binding"},

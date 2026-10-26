@@ -11,7 +11,7 @@ func TestEveryHostConnectorHasAPreflightPlan(t *testing.T) {
 	target := HostTargetConfig{ // #nosec G101 -- KeystorePasswordRef is a secret-store locator, not credential material (CWE-798).
 		CertPath: "/srv/trstctl/tls/site.crt", KeyPath: "/srv/trstctl/tls/site.key",
 		CRTPath: "/srv/trstctl/tls/site.pem", ConfigPath: "/srv/trstctl/haproxy.cfg",
-		Endpoint: "http://127.0.0.1:9901", SecretName: "edge-cert",
+		Endpoint: "http://127.0.0.1:9901", SecretName: "edge-cert", Namespace: "payments",
 		Binding: "0.0.0.0:443", Store: "MY", AppID: "{00000000-0000-0000-0000-000000000001}",
 		ImportDir:       "/srv/trstctl/iis-import",
 		PostfixCertPath: "/srv/trstctl/postfix/server.crt", PostfixKeyPath: "/srv/trstctl/postfix/server.key",

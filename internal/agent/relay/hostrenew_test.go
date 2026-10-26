@@ -35,6 +35,7 @@ type renewChannel struct {
 	chainPEM  []byte
 	fpr       string
 	signCalls int
+	custody   []custody.Record
 }
 
 func (r *renewChannel) SignJobCSR(_ context.Context, _ int64, _ int, csrDER []byte) ([]byte, []byte, string, error) {
@@ -47,7 +48,8 @@ func (r *renewChannel) SignJobCSR(_ context.Context, _ int64, _ int, csrDER []by
 }
 
 func (r *renewChannel) ReportJobResultWithCustody(ctx context.Context, jobID int64, attempt int,
-	outcome, detail, evidence, _ string, _ custody.Record) (bool, error) {
+	outcome, detail, evidence, _ string, record custody.Record) (bool, error) {
+	r.custody = append(r.custody, record)
 	return r.ReportJobResult(ctx, jobID, attempt, outcome, detail, evidence)
 }
 
@@ -373,6 +375,10 @@ func TestEveryHostRenewalConnectorHasCompleteTruthfulCustodyAUD25(t *testing.T) 
 		case "envoy":
 			if record.Storage != custody.StorageService || record.Exportable != custody.Exportable {
 				t.Errorf("Envoy SDS custody = %+v", record)
+			}
+		case "k8s_secret":
+			if record.Storage != custody.StorageKubernetesSecret || record.Exportable != custody.Exportable {
+				t.Errorf("Kubernetes Secret custody = %+v", record)
 			}
 		default:
 			if record.Storage != custody.StorageFile || record.Exportable != custody.Exportable {

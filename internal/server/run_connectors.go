@@ -207,6 +207,13 @@ func nativeConnectorFactory(r nativeConnectorRuntime, name string) (connector.Fa
 		return func(ctx context.Context, payload connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
 			return buildHTTPConnector(r, ctx, name, payload)
 		}, nil
+	case "k8s_secret":
+		// Agent-only: the in-cluster agent generates the key and writes the
+		// Secret. Host-vantage deploys are refused before registry lookup, so the
+		// control plane never builds one; enabling it admits the targets.
+		return func(context.Context, connector.DeployPayload) (connector.Connector, connector.Ops, func(), error) {
+			return nil, nil, nil, errors.New("connector: k8s_secret executes only on the in-cluster agent")
+		}, nil
 	default:
 		return nil, fmt.Errorf("connector: unsupported production connector %q", name)
 	}

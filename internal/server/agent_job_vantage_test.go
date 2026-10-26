@@ -34,12 +34,12 @@ func TestClaimRoleGateMatchesShippedAgentJobs(t *testing.T) {
 // fail-closed default, so this test exists to make "we forgot to classify it"
 // a build-time conversation instead of a silently control-plane-bound connector.
 func TestVantageCensusCoversEveryShippedConnector(t *testing.T) {
-	// The full production set, from nativeConnectorFactory's two arms.
+	// The full production set, from nativeConnectorFactory's arms.
 	shipped := []string{
 		"nginx", "apache", "caddy", "iis", "haproxy", "postfix", "traefik",
 		"java-keystore", "postgresql", "mysql", "rabbitmq", "elasticsearch", "tomcat",
 		"envoy", "f5", "netscaler", "a10", "kemp", "cisco", "fortigate",
-		"paloalto", "aws-acm", "azure-keyvault", "gcp-certificate-manager",
+		"paloalto", "aws-acm", "azure-keyvault", "gcp-certificate-manager", "k8s_secret",
 	}
 	explicit := map[string]connector.TargetVantage{
 		// Host services: the connector mutates the machine's files and reloads
@@ -54,6 +54,9 @@ func TestVantageCensusCoversEveryShippedConnector(t *testing.T) {
 		// envoy is HTTP-driven but its admin/SDS surface binds loopback in the
 		// deployments we ship for — transport does not decide vantage.
 		"envoy": connector.VantageHostAgent,
+		// The in-cluster agent writes the Secret an Ingress or Gateway names; the
+		// key is generated in the cluster it serves.
+		"k8s_secret": connector.VantageHostAgent,
 		// Appliances that cannot host an agent: relay work.
 		"f5": connector.VantageNetworkRelay, "netscaler": connector.VantageNetworkRelay,
 		"a10": connector.VantageNetworkRelay, "kemp": connector.VantageNetworkRelay,

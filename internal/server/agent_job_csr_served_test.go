@@ -38,6 +38,14 @@ import (
 // seedRenewalJob queues an endpoint.renew job bound to the given names.
 func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey string, names []string, verifyAddress ...string) {
 	t.Helper()
+	seedRenewalJobForConnector(t, ctx, h, "nginx", nil, idemKey, names, verifyAddress...)
+}
+
+// seedRenewalJobForConnector is seedRenewalJob for a named host connector and
+// target configuration.
+func seedRenewalJobForConnector(t *testing.T, ctx context.Context, h *roleHarness, connectorName string, targetConfig json.RawMessage,
+	idemKey string, names []string, verifyAddress ...string) {
+	t.Helper()
 	// A real identity, because the CSR is issued AGAINST one: the certificate
 	// this produces is recorded on the identity's own history, which is what
 	// makes the custody column mean something to an operator reading it later.
@@ -55,11 +63,12 @@ func seedRenewalJob(t *testing.T, ctx context.Context, h *roleHarness, idemKey s
 	// identity stays requested; the test-only queue seed below does not prove
 	// deployment or the end-to-end lifecycle scheduler's job creation.
 	intent := RelayDeployIntent{
-		Connector:         "nginx",
+		Connector:         connectorName,
 		Target:            "edge-1",
 		IdentityID:        identity.ID,
 		SubjectCommonName: names[0],
 		SubjectDNSNames:   names,
+		TargetConfig:      targetConfig,
 	}
 	if len(verifyAddress) != 0 {
 		intent.TargetID = identity.ID
@@ -386,6 +395,59 @@ func TestServedHostRenewalReceiptRequiresAndBindsCustodyAUD25(t *testing.T) {
 		t.Fatalf("replay custody attestation: %v", err)
 	}
 	assertCustody("exact duplicate")
+}
+
+// A key the in-cluster agent generated and wrote into a Kubernetes Secret is
+// recorded as held by that Secret: the only custody a k8s_secret renewal
+// accepts, signed by the agent that generated the key.
+func TestServedKubernetesSecretRenewalRecordsKubernetesSecretCustody(t *testing.T) {
+	ctx := context.Background()
+	h := newRoleHarness(t, []string{mtls.AgentRoleHost}, agentJobKindEndpointRenew)
+	seedRenewalJobForConnector(t, ctx, h, "k8s_secret", json.RawMessage(`{"namespace":"payments","secret_name":"web-tls"}`),
+		"renew:k8s-secret", []string{"web.example.test"}, "web.example.test:443")
+	job := claimOneRenewal(t, ctx, h)
+
+	key, err := crypto.GenerateHostSubjectKey("web.example.test", []string{"web.example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer key.Destroy()
+	issued, err := h.client.SignJobCSR(ctx, &transport.SignJobCSRRequest{JobID: job.JobID, Attempt: job.Attempt, CSRDER: key.CSRDER})
+	if err != nil {
+		t.Fatalf("sign the cluster agent's CSR: %v", err)
+	}
+	detail, digest := simulatedHostVerification(t, h, job, issued.Fingerprint, transport.JobOutcomeVerified)
+	id := h.identity.Identity()
+	record := custody.Record{
+		Origin: custody.OriginHostAgent, Storage: custody.StorageFile,
+		Exportable: custody.Exportable, GeneratedBy: id.CommonName(),
+	}
+	asFile, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, record, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.client.ReportJobResult(ctx, asFile); err == nil || !strings.Contains(err.Error(), "differs") {
+		t.Fatalf("k8s_secret renewal reported as a host file = %v, want a custody refusal", err)
+	}
+	record.Storage = custody.StorageKubernetesSecret
+	valid, err := transport.SignedReportWithCustody(id, id.TenantID(), id.CommonName(), job.JobID, job.Attempt,
+		transport.JobOutcomeVerified, detail, digest, issued.Fingerprint, record, time.Now().UTC().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accepted, err := h.client.ReportJobResult(ctx, valid); err != nil || !accepted.Accepted {
+		t.Fatalf("Kubernetes Secret custody receipt = %+v, err=%v", accepted, err)
+	}
+	cert, err := h.store.GetCertificateByFingerprint(ctx, h.tenant, issued.Fingerprint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cert.KeyOrigin != string(custody.OriginHostAgent) || cert.KeyStorage != string(custody.StorageKubernetesSecret) ||
+		cert.KeyExportable != string(custody.Exportable) || cert.KeyGeneratedBy != id.CommonName() {
+		t.Fatalf("projected custody = origin=%q storage=%q exportable=%q generated_by=%q",
+			cert.KeyOrigin, cert.KeyStorage, cert.KeyExportable, cert.KeyGeneratedBy)
+	}
 }
 
 // The name-widening attack via NON-DNS identifiers (epic B2).

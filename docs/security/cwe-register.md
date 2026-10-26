@@ -923,7 +923,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cli_test.go:2616` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:399` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:404` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
 | `internal/crypto/pfx/alias_test.go:117` | stock JDK import uses disposable test paths and a password file, never a shell or secret argv (CWE-78). |
@@ -1284,7 +1284,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:143` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending.go:261` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
-| `internal/agent/relay/hostexec.go:137` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:149` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
@@ -1371,8 +1371,8 @@ not this file.
 | `internal/config/config.go:4125` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:127` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
-| `internal/connector/localops.go:275` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:367` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:280` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
+| `internal/connector/localops.go:372` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |

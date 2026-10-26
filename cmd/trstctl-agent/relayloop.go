@@ -62,8 +62,8 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 			fmt.Fprintln(os.Stderr, "trstctl-agent: file and reload deploys will not be claimed on this host")
 		} else {
 			hostProfile = loaded
-			fmt.Printf("trstctl-agent: host exec profile loaded (%d allowed roots, %d permitted commands)\n",
-				len(hostProfile.AllowedRoots), len(hostProfile.Actions))
+			fmt.Printf("trstctl-agent: host exec profile loaded (%d allowed roots, %d permitted commands, %d Kubernetes namespaces)\n",
+				len(hostProfile.AllowedRoots), len(hostProfile.Actions), len(hostProfile.KubernetesSecretNamespaces))
 		}
 	}
 	roles := a.Roles()
@@ -79,7 +79,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 	// A host agent with a profile claims file/reload work; a relay claims
 	// appliance work; an agent granted both claims both. Only an agent that can
 	// do neither is refused, and told which grant it is missing.
-	if hasHost && len(hostProfile.AllowedRoots) > 0 {
+	if hasHost && relay.ProfileGrantsHostWork(hostProfile) {
 		fmt.Printf("trstctl-agent: host connector execution enabled for %v\n", relay.HostConnectorKinds())
 		return time.NewTimer(o.relayPollEvery),
 			relayChannel{c: transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())), id: a.Identity, leaseSeconds: int(relayLeaseFor(o.relayPollEvery).Seconds())},
