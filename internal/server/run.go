@@ -654,24 +654,47 @@ func buildRunSecurityGuardDeps(ctx context.Context, cfg *config.Config, st *stor
 	return runSecurityGuardDeps{auditKey: auditKey, rateLimiter: rateLimiter}, nil
 }
 
+// runLifecycleWindows is the retention, maintenance and lifecycle-window stage of
+// buildRunDeps: static configuration, validated before any credential-owning
+// constructor runs.
+type runLifecycleWindows struct {
+	auditRetention              time.Duration
+	privacyRetentionEnabled     bool
+	privacyRetentionInterval    time.Duration
+	privacyRetentionPolicy      privacy.RetentionPolicy
+	renewBefore, alertBefore    time.Duration
+	maintenanceWindows          lifecycle.WindowSet
+	ownershipAttestationCadence time.Duration
+}
+
+func buildRunLifecycleWindows(cfg *config.Config) (runLifecycleWindows, error) {
+	var w runLifecycleWindows
+	var err error
+	w.auditRetention, w.privacyRetentionEnabled, w.privacyRetentionInterval, w.privacyRetentionPolicy, w.renewBefore, w.alertBefore, err = runRetentionAndLifecycleWindows(cfg)
+	maintenanceWindows, windowErr := runMaintenanceWindows(cfg)
+	if windowErr != nil {
+		return runLifecycleWindows{}, windowErr
+	}
+	if err != nil {
+		return runLifecycleWindows{}, err
+	}
+	w.maintenanceWindows = maintenanceWindows
+	if w.ownershipAttestationCadence, err = ownershipAttestationCadenceFromConfig(cfg.Lifecycle); err != nil {
+		return runLifecycleWindows{}, err
+	}
+	return w, nil
+}
+
 func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log *events.Log, signer runSigner, sec runSecrets, logger *slog.Logger, egressGuard *egress.Guard, suppliedAuditKey ...*jose.SigningKey) (_ Deps, err error) {
 	securityGuards, err := buildRunSecurityGuardDeps(ctx, cfg, st, signer, suppliedAuditKey)
 	if err != nil {
 		return Deps{}, err
 	}
-	retention, privacyRetentionEnabled, privacyRetentionInterval, privacyRetentionPolicy, renewBefore, alertBefore, err := runRetentionAndLifecycleWindows(cfg)
-	maintenanceWindows, windowErr := runMaintenanceWindows(cfg)
-	if windowErr != nil {
-		return Deps{}, windowErr
-	}
+	windows, err := buildRunLifecycleWindows(cfg)
 	if err != nil {
 		return Deps{}, err
 	}
 	leafValidity, pluginCfg, aiModel, aiModelStatus, machineAuthMethods, err := runLeafPluginAndModelConfig(cfg, egressGuard)
-	if err != nil {
-		return Deps{}, err
-	}
-	ownershipAttestationCadence, err := ownershipAttestationCadenceFromConfig(cfg.Lifecycle)
 	if err != nil {
 		return Deps{}, err
 	}
@@ -746,15 +769,15 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		BreakglassIssuer: breakglassIssuer, BreakglassCeremonies: breakglassCeremonies,
 		BreakglassRotation: breakglassRotation, BreakglassReconciler: breakglassReconciler,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
-		AuditSigningKey: securityGuards.auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
+		AuditSigningKey: securityGuards.auditKey, AuditRetention: windows.auditRetention, AuditArchiveDir: cfg.Audit.ArchiveDir,
 		AuditAnchorInterval:     auditAnchorIntervalFromConfig(cfg),
-		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
-		PrivacyRetentionPolicy:       privacyRetentionPolicy,
-		LifecycleRenewBefore:         renewBefore,
-		MaintenanceWindows:           maintenanceWindows,
-		LifecycleAlertBefore:         alertBefore,
+		PrivacyRetentionEnabled: windows.privacyRetentionEnabled, PrivacyRetentionInterval: windows.privacyRetentionInterval,
+		PrivacyRetentionPolicy:       windows.privacyRetentionPolicy,
+		LifecycleRenewBefore:         windows.renewBefore,
+		MaintenanceWindows:           windows.maintenanceWindows,
+		LifecycleAlertBefore:         windows.alertBefore,
 		LifecycleLeafValidity:        leafValidity,
-		OwnershipAttestationCadence:  ownershipAttestationCadence,
+		OwnershipAttestationCadence:  windows.ownershipAttestationCadence,
 		NotificationChannels:         notificationChannels,
 		notificationChannelOwner:     notificationOwner,
 		CodeSigning:                  codeSigning,
