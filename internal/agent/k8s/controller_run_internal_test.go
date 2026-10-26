@@ -173,7 +173,8 @@ func TestRunDistributesTrustBundlesFromWatchEvents(t *testing.T) {
 }
 
 // A137: an invalid bundle is reported failed and not retried on a timer; it
-// is reconsidered when it changes.
+// is reconsidered when it changes. Nothing is distributed, and the bundle
+// itself says why: Ready=False with reason DistributionFailed (A139).
 func TestRunReportsAnInvalidTrustBundleWithoutRetrying(t *testing.T) {
 	f := startRunFixture(t)
 	f.api.seed(resTrustBundles, runTrustBundle("bad", "-----BEGIN PRIVATE KEY-----\nS0VZ\n-----END PRIVATE KEY-----\n", "apps"))
@@ -182,13 +183,35 @@ func TestRunReportsAnInvalidTrustBundleWithoutRetrying(t *testing.T) {
 		return ok && !report.TrustBundles.Complete && report.TrustBundles.FailureCode == "reconcile_failed" &&
 			len(report.TrustBundles.Resources) == 1 && report.TrustBundles.Resources[0].State == "failed"
 	})
-	if f.api.writeCount(http.MethodPost, resConfigMaps) != 0 || f.api.writeCount(http.MethodPut, resTrustBundles) != 0 {
-		t.Fatalf("an invalid bundle was written: %v", f.api.writes)
+	if f.api.writeCount(http.MethodPost, resConfigMaps) != 0 {
+		t.Fatalf("an invalid bundle was distributed: %v", f.api.writes)
+	}
+	eventually(t, "the invalid bundle reads Ready=False with the reason", func() bool {
+		obj, _ := f.api.get(resTrustBundles, "", "bad")
+		return trustBundleReadyReason(obj) == "False/DistributionFailed"
+	})
+	if writes := f.api.writeCount(http.MethodPut, resTrustBundles); writes > 1 {
+		t.Fatalf("an invalid bundle's status was rewritten %d times without a change", writes)
 	}
 	f.api.mutate(resTrustBundles, "", "bad", func(obj map[string]any) {
 		obj["spec"].(map[string]any)["caBundlePEM"] = string(f.ca.BundlePEM())
 	})
 	eventually(t, "the corrected bundle is distributed", func() bool { return configMapBundle(f, "apps", "bad-ca") != "" })
+}
+
+// trustBundleReadyReason is a TrustBundle's Ready condition as "status/reason".
+func trustBundleReadyReason(obj map[string]any) string {
+	status, _ := obj["status"].(map[string]any)
+	conditions, _ := status["conditions"].([]any)
+	for _, raw := range conditions {
+		condition, _ := raw.(map[string]any)
+		if condition["type"] == "Ready" {
+			s, _ := condition["status"].(string)
+			reason, _ := condition["reason"].(string)
+			return s + "/" + reason
+		}
+	}
+	return ""
 }
 
 // A144: an approved native CSR is signed from its watch event, including one

@@ -1070,8 +1070,13 @@ func TestIssuerControllerRejectsPrivateKeyInTrustBundleCAPK8S07(t *testing.T) {
 	if len(api.configMaps) != 0 {
 		t.Fatalf("private-key bundle wrote ConfigMaps: %+v", api.configMaps)
 	}
-	if api.trustBundleStatus["bad-roots"] != nil {
-		t.Fatalf("private-key bundle was marked ready: %+v", api.trustBundleStatus["bad-roots"])
+	// A139: the bundle says why it was not distributed, and never reads ready.
+	if ready, _ := readyCondition(t, api.trustBundleStatus["bad-roots"]); ready != "False" {
+		t.Fatalf("private-key bundle Ready = %q, want False: %+v", ready, api.trustBundleStatus["bad-roots"])
+	}
+	status, _ := api.trustBundleStatus["bad-roots"]["status"].(map[string]any)
+	if conditions, _ := status["conditions"].([]any); len(conditions) != 1 || conditions[0].(map[string]any)["reason"] != "DistributionFailed" {
+		t.Fatalf("private-key bundle status = %+v, want one DistributionFailed condition", status)
 	}
 	if result.TrustBundleComplete || result.TrustBundleFailureCode != "reconcile_failed" || len(result.TrustBundlePosture) != 1 || result.TrustBundlePosture[0].State != "failed" {
 		t.Fatalf("failed TrustBundle posture = %+v complete=%v code=%q", result.TrustBundlePosture, result.TrustBundleComplete, result.TrustBundleFailureCode)
