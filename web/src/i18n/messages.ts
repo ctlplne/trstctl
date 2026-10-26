@@ -4585,11 +4585,11 @@ export const messages = {
   },
   "discovery.k8sDelivery.verifyAddress": {
     defaultMessage: "Verify address",
-    description: "B15-L1: label of the optional host:port the agent dials to confirm the new certificate is served.",
+    description: "B15-L1: label of the optional host:port the agent dials to confirm the listener presents the new certificate.",
   },
   "discovery.k8sDelivery.verifyAddressHelp": {
     defaultMessage:
-      "Optional host and port the agent dials after writing the Secret to confirm the new certificate is served, such as the ingress controller's Service. Without it the agent confirms only that the Secret holds the new certificate, and trstctl does not claim the certificate is live.",
+      "Optional host and port the agent dials after writing the Secret to confirm the listener presents the new certificate, such as the ingress controller's Service. Without it the agent confirms only that the Secret holds the new certificate, and trstctl does not claim the certificate is live.",
     description: "B15-L1: what the verify address does and what happens without it.",
   },
   "discovery.k8sDelivery.verifyAddressPlaceholder": {
@@ -19320,7 +19320,7 @@ export const messages = {
     description: "B2: explains what this section answers and that the legacy path is not a fault.",
   },
   "source.endpoint.key.custody.summary.b2cus00003": {
-    defaultMessage: "{value1} of {value2} targets generate keys where they are served, on the host or the appliance ({value3}%).",
+    defaultMessage: "{value1} of {value2} targets generate keys on the host or appliance that uses them ({value3}%).",
     description: "B2/A122: migration headline over the custody table; host- and appliance-generated targets both count.",
   },
   "source.endpoint.key.custody.caption.b2cus00004": {

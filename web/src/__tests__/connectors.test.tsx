@@ -340,7 +340,7 @@ describe("connector deployment disclosure surface", () => {
     expect(within(row("edge-vip")).queryByText("Host agent")).not.toBeInTheDocument();
     expect(within(row("web-01")).getByText("Host agent")).toBeInTheDocument();
     expect(within(row("kemp-vip")).getByText("Control plane")).toBeInTheDocument();
-    expect(screen.getByText("2 of 3 targets generate keys where they are served, on the host or the appliance (66%).")).toBeInTheDocument();
+    expect(screen.getByText("2 of 3 targets generate keys on the host or appliance that uses them (66%).")).toBeInTheDocument();
   });
 
   it("shows receipt activity timestamps beside each delivery", async () => {
