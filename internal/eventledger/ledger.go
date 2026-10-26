@@ -38,6 +38,7 @@ import "sort"
 const (
 	EventCertificateRecorded                      = "certificate.recorded"
 	EventCertificateCustodyAttested               = "certificate.custody.attested"
+	EventCertificateCustodyDeviceAttested         = "certificate.custody.device_attested"
 	EventCertificateRevoked                       = "certificate.revoked"
 	EventCertificateSubjectKeyCompromised         = "certificate.subject_key.compromised"
 	EventCertificateSuperseded                    = "certificate.superseded"
@@ -208,6 +209,7 @@ var ledger = []FeatureEvent{
 	// F1 — Certificate inventory.
 	{"F1", "Certificate inventory", "ingest", "ingestCertificate", []string{EventCertificateRecorded}},
 	{"B5", "Certificate key custody", "attest", "agent job receipt", []string{EventCertificateCustodyAttested}},
+	{"B5", "Certificate key custody", "device_attest", "ACME device-attest-01 finalize", []string{EventCertificateCustodyDeviceAttested}},
 	// F47 — X.509 revocation infrastructure (served revocation of an inventoried cert).
 	{"F47", "X.509 revocation infrastructure", "revoke", "transitionIdentity", []string{EventCertificateRevoked}},
 	{"F47", "X.509 revocation infrastructure", "record_compromised_key", "transitionIdentity", []string{EventCertificateSubjectKeyCompromised}},

@@ -17,6 +17,7 @@ import (
 var projectionEventConstants = map[string]string{
 	projections.EventCertificateRecorded:                      "EventCertificateRecorded",
 	projections.EventCertificateCustodyAttested:               "EventCertificateCustodyAttested",
+	projections.EventCertificateCustodyDeviceAttested:         "EventCertificateCustodyDeviceAttested",
 	projections.EventCertificateRevoked:                       "EventCertificateRevoked",
 	projections.EventCertificateSubjectKeyCompromised:         "EventCertificateSubjectKeyCompromised",
 	projections.EventCertificateSuperseded:                    "EventCertificateSuperseded",

@@ -48,6 +48,25 @@ type IssueRequest struct {
 	// (A121). The service itself never generates a subject key; empty leaves
 	// custody unrecorded.
 	KeyOrigin string
+
+	// DeviceAttestation is a verified TPM attestation that the CSR's key was
+	// generated in, and cannot leave, the requesting device (ACME
+	// device-attest-01). An issuer that records custody records it as a
+	// device-bound claim with this evidence; nil records none.
+	DeviceAttestation *DeviceAttestation
+}
+
+// DeviceAttestation is the retained proof behind a device-bound custody claim:
+// the attestation exactly as the device sent it, the binding whose SHA-256 is
+// the challenge it signed, and the facts verified when it was accepted.
+type DeviceAttestation struct {
+	Format                       string
+	Credential                   []byte
+	Binding                      []byte
+	PublicKeySHA256              []byte
+	AttestationCertificateSHA256 []byte
+	TrustedRootsSHA256           []byte
+	VerifiedAt                   time.Time
 }
 
 // Certificate is an issued certificate (the leaf followed by its chain, PEM).

@@ -286,7 +286,7 @@ exhaustive subcommand list:
 | `cbom`                            | Cryptographic bill of materials: effect-free plan review, bounded scan, inventory (`preview` · `scan` · `assets`)                                                                                                                                                                                                   |
 | `pqc pilots`                      | Staged post-quantum handshake pilots with a canary halt and a signer-signed readiness report (`create` · `list` · `get`)
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
-| `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke, recovery of a historical PKI-secret leaf (`ingest` · `list` · `get` · `health` · `bulk-revoke` · `inventory-pki-secret`)                                                                                                                                                                                                |
+| `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke, recovery of a historical PKI-secret leaf, device-bound key evidence and its offline check (`ingest` · `list` · `get` · `health` · `bulk-revoke` · `inventory-pki-secret` · `key-attestation` · `verify-key-attestation`)                                                                                                |
 | `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `preview` · `sign` · `keyless-preview` · `keyless`)                                                                                                                                                                               |
 | `compliance`                      | Compliance/inventory reporting, signed schedule runs, exact artifact download, recovery, and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules preview/create/list/pause/resume/runs` · `report-runs get/download/requeue` · `evidence-pack`)                                                                                                                                                                           |
 | `connector target`                | Deployment connector targets: create, bind, test, deploy, roll back, exact host containment, and combined CA/host key-compromise response (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback` · `contain-preview` · `contain`) |
@@ -794,6 +794,11 @@ cat > revoke.json <<'JSON'
 {"ceremony_id":"<revoke-ceremony-id>","reason":"key_compromise"}
 JSON
 trstctl-cli ca authorities revoke <ca-authority-id> -f revoke.json
+
+# Re-check a certificate's device-bound custody claim offline: fetch the
+# evidence once, then verify it anywhere against TPM roots you choose.
+trstctl-cli certificates key-attestation <certificate-id> > evidence.json
+trstctl-cli certificates verify-key-attestation --evidence evidence.json --roots tpm-roots.pem
 
 # Rotate this tenant's domain key to a new generation under its current
 # wrapper, or move it onto another configured wrapper. Every stored data key

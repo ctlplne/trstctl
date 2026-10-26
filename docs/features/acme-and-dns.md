@@ -191,7 +191,12 @@ and TPM/WebAuthn proof, then records the attested public-key digest in its
 event-sourced order state. The proof binds tenant, account, order, challenge,
 token, nonce, identifier, CSR key, and timestamp; replay, cross-order,
 cross-tenant, stale, untrusted-root, and CSR-key substitutions fail closed.
-Finalization must use the same attested key. The parser is the reviewed
+Finalization must use the same attested key. When the TPM certified that key
+as one it generated and will not release (`sensitiveDataOrigin`, `fixedTPM`,
+`fixedParent`), the issued certificate records device-bound custody and keeps
+the attestation, which anyone can re-check offline against TPM roots they choose
+(`trstctl-cli certificates key-attestation`, then `verify-key-attestation`; see
+[Key custody](../custody.md#device-bound-claims-a-tpm-signed)). The parser is the reviewed
 BSD-3-Clause `go-webauthn` implementation routed through `internal/crypto`;
 trstctl does not hand-roll ASN.1, CBOR, COSE, TPM, or X.509 parsers. Operator
 roots are local inputs: there is no manufacturer metadata fetch and no other

@@ -188,6 +188,7 @@ import type {
   Certificate as GenCertificate,
   CertificateHealthDashboard as GenCertificateHealthDashboard,
   CertificateIngest,
+  CertificateKeyAttestation,
   CertificateList,
   CloudSecretManagerIntegration,
   CodeSigningIdentity,
@@ -699,6 +700,7 @@ export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, Cry
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileRunNow, CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
 export type { ControlPlaneKeygen, ControlPlaneKeygenInput } from "./api-types.gen";
+export type { CertificateKeyAttestation } from "./api-types.gen";
 
 /** A95: the customer's Provider-access policy. */
 export interface ProviderAccessPolicy {
@@ -1941,6 +1943,8 @@ export interface Api {
   /** I4/AUD-49: queue one network relay to re-check the exact failed target. */
   proveEnrollmentDiagnosticFixed(id: string): Promise<EnrollmentDiagnosticVerification>;
   getCertificate(id: string): Promise<Certificate>;
+  /** A131: a certificate's device-bound custody evidence, complete for offline re-verification. */
+  certificateKeyAttestation(id: string): Promise<CertificateKeyAttestation>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
   createOwner(input: OwnerRequest): Promise<Owner>;
@@ -2630,6 +2634,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
+  certificateKeyAttestation: (id) => req<CertificateKeyAttestation>(`/api/v1/certificates/${encodeURIComponent(id)}/key-attestation`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: allOwners,
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),

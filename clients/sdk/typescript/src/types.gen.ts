@@ -2005,6 +2005,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/{id}/key-attestation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a certificate's device-bound custody evidence for offline re-verification */
+        get: operations["getCertificateKeyAttestation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-signing/identities": {
         parameters: {
             query?: never;
@@ -10582,6 +10599,35 @@ export interface components {
             owner_id?: string;
             pem: string;
             source?: string;
+        };
+        CertificateKeyAttestation: {
+            /** Format: byte */
+            attestation_certificate_sha256: string;
+            /**
+             * Format: byte
+             * @description The canonical binding whose SHA-256 is the challenge the attestation signed.
+             */
+            binding: string;
+            /** Format: uuid */
+            certificate_id: string;
+            certificate_pem: string;
+            /**
+             * Format: byte
+             * @description The device's WebAuthn TPM attestation, exactly as verified.
+             */
+            credential: string;
+            fingerprint: string;
+            /** @enum {string} */
+            format: "tpm-webauthn";
+            /** Format: byte */
+            public_key_sha256: string;
+            /** @enum {string} */
+            source: "acme_device_attest";
+            /** Format: byte */
+            trusted_roots_sha256: string;
+            /** Format: date-time */
+            verified_at: string;
+            verify: string;
         };
         CertificateKeyObservation: {
             agent: string;
@@ -23756,6 +23802,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCertificateKeyAttestation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateKeyAttestation"];
                 };
             };
             /** @description client error */

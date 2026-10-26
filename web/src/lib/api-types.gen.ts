@@ -2402,6 +2402,21 @@ export interface CertificateIngest {
   source?: string;
 }
 
+export interface CertificateKeyAttestation {
+  attestation_certificate_sha256: string;
+  binding: string;
+  certificate_id: string;
+  certificate_pem: string;
+  credential: string;
+  fingerprint: string;
+  format: "tpm-webauthn";
+  public_key_sha256: string;
+  source: "acme_device_attest";
+  trusted_roots_sha256: string;
+  verified_at: string;
+  verify: string;
+}
+
 export interface CertificateKeyObservation {
   agent: string;
   encrypted: boolean;

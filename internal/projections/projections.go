@@ -163,6 +163,9 @@ const (
 	EventIdentityRetired            = "identity.retired"
 	EventCertificateRecorded        = "certificate.recorded"
 	EventCertificateCustodyAttested = "certificate.custody.attested"
+	// EventCertificateCustodyDeviceAttested records a device-bound custody
+	// claim proven at issuance by the TPM that holds the key (A131).
+	EventCertificateCustodyDeviceAttested = "certificate.custody.device_attested"
 	// CertificateApprovalEventSchemaVersion adds both the exact one-shot
 	// approval and the privacy-stable command binding recomputed from the issued
 	// certificate. Version 1 remains replayable for ordinary inventory and
@@ -1155,6 +1158,28 @@ type CertificateCustodyAttested struct {
 	ReceiptSignature         string `json:"receipt_signature"`
 	ReceiptSignerFingerprint string `json:"receipt_signer_fingerprint"`
 }
+
+// CertificateCustodyDeviceAttested is the payload of
+// certificate.custody.device_attested: at issuance, the TPM holding the
+// certificate's key attested it as a key the TPM generated and will not
+// release. Credential and Binding are the evidence exactly as verified, so
+// the claim can be re-checked offline against the operator's TPM roots.
+type CertificateCustodyDeviceAttested struct {
+	Fingerprint                  string    `json:"fingerprint"`
+	Source                       string    `json:"source"`
+	Format                       string    `json:"format"`
+	KeyGeneratedBy               string    `json:"key_generated_by"`
+	Credential                   []byte    `json:"credential"`
+	Binding                      []byte    `json:"binding"`
+	PublicKeySHA256              []byte    `json:"public_key_sha256"`
+	AttestationCertificateSHA256 []byte    `json:"attestation_certificate_sha256"`
+	TrustedRootsSHA256           []byte    `json:"trusted_roots_sha256"`
+	VerifiedAt                   time.Time `json:"verified_at"`
+}
+
+// CertificateDeviceAttestationSourceACME is the only source of device-bound
+// claims today: an ACME device-attest-01 order.
+const CertificateDeviceAttestationSourceACME = "acme_device_attest"
 
 // CertificateApprovalEventID is the only target-event identity allowed to
 // spend one approved certificate command. It is derived from the request and
@@ -4476,6 +4501,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventIdentityRetired:                          {1: true, LifecycleEventSchemaVersion: true, LifecycleSideEffectEventSchemaVersion: true, LifecycleApprovalEventSchemaVersion: true},
 	EventCertificateRecorded:                      {1: true, CertificateApprovalEventSchemaVersion: true, CertificateValidityEventSchemaVersion: true, CertificateObservationEventSchemaVersion: true},
 	EventCertificateCustodyAttested:               {1: true},
+	EventCertificateCustodyDeviceAttested:         {1: true},
 	EventCertificateRevoked:                       {1: true},
 	EventCertificateSubjectKeyCompromised:         {1: true},
 	EventKeyCompromiseCAEffectCompleted:           {1: true},
@@ -5395,6 +5421,24 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return errors.New("projections: certificate custody attestation is incomplete")
 		}
 		return p.store.ApplyCertificateCustodyAttestedTx(ctx, tx, e.TenantID, pl.Fingerprint, record)
+	case EventCertificateCustodyDeviceAttested:
+		var pl CertificateCustodyDeviceAttested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if strings.TrimSpace(pl.Fingerprint) == "" || pl.Source != CertificateDeviceAttestationSourceACME ||
+			pl.Format != "tpm-webauthn" || strings.TrimSpace(pl.KeyGeneratedBy) == "" ||
+			len(pl.Credential) == 0 || len(pl.Binding) == 0 || len(pl.PublicKeySHA256) != 32 ||
+			len(pl.AttestationCertificateSHA256) != 32 || len(pl.TrustedRootsSHA256) != 32 || pl.VerifiedAt.IsZero() {
+			return errors.New("projections: certificate device attestation is incomplete")
+		}
+		return p.store.ApplyCertificateDeviceCustodyTx(ctx, tx, e.TenantID, pl.Fingerprint, pl.KeyGeneratedBy,
+			store.CertificateKeyAttestation{
+				EventID: e.ID, Source: pl.Source, Format: pl.Format,
+				Credential: pl.Credential, Binding: pl.Binding, PublicKeySHA256: pl.PublicKeySHA256,
+				AttestationCertificateSHA256: pl.AttestationCertificateSHA256,
+				TrustedRootsSHA256:           pl.TrustedRootsSHA256, VerifiedAt: pl.VerifiedAt,
+			})
 	case EventCertificateRevoked:
 		var pl CertificateRevoked
 		if err := decode(e, &pl); err != nil {

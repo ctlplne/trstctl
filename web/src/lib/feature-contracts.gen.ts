@@ -119,10 +119,13 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: listCertificates",
             "OpenAPI operationId: getCertificateHealth",
             "OpenAPI operationId: getCertificate",
+            "OpenAPI operationId: getCertificateKeyAttestation",
             "CLI command: certificates ingest",
             "CLI command: certificates list",
             "CLI command: certificates health",
-            "CLI command: certificates get"
+            "CLI command: certificates get",
+            "CLI command: certificates key-attestation",
+            "CLI command: certificates verify-key-attestation"
           ]
         }
       },

@@ -3344,6 +3344,25 @@ CertificateIngest = TypedDict(
     total=False,
 )
 
+CertificateKeyAttestation = TypedDict(
+    'CertificateKeyAttestation',
+    {
+        'attestation_certificate_sha256': str,
+        'binding': str,
+        'certificate_id': str,
+        'certificate_pem': str,
+        'credential': str,
+        'fingerprint': str,
+        'format': str,
+        'public_key_sha256': str,
+        'source': str,
+        'trusted_roots_sha256': str,
+        'verified_at': str,
+        'verify': str,
+    },
+    total=False,
+)
+
 CertificateKeyObservation = TypedDict(
     'CertificateKeyObservation',
     {

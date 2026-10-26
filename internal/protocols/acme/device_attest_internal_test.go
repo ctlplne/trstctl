@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/crypto/deviceattesttest"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -234,6 +235,121 @@ func TestDeviceAttestTPMFinalizeRejectsDifferentCSR(t *testing.T) {
 	srv.finalize(finalizeRec, finalizeReq, &jose.ACMEMessage{Payload: finalizePayload}, acct)
 	if finalizeRec.Code != http.StatusBadRequest || !strings.Contains(finalizeRec.Body.String(), "attested key") {
 		t.Fatalf("mismatched finalize status = %d body=%s, want badCSR attested-key rejection", finalizeRec.Code, finalizeRec.Body.String())
+	}
+}
+
+// deviceAttestCapturingCA records what finalize hands the issuing CA.
+type deviceAttestCapturingCA struct {
+	ca.CA
+	requests []ca.IssueRequest
+}
+
+func (c *deviceAttestCapturingCA) Issue(ctx context.Context, req ca.IssueRequest) (ca.Certificate, error) {
+	c.requests = append(c.requests, req)
+	return c.CA.Issue(ctx, req)
+}
+
+// A131: a device-bound attested key's evidence is event-sourced with the
+// challenge validation, survives replay, and reaches the issuing CA on
+// finalize, where it re-verifies offline against the issued certificate. A
+// valid attestation of a key the TPM could release validates the challenge
+// but carries no device-bound evidence.
+func TestDeviceAttestTPMCarriesDeviceBoundEvidenceToTheIssuer(t *testing.T) {
+	now := time.Date(2026, time.July, 28, 12, 0, 0, 0, time.UTC)
+	identity, err := deviceattesttest.NewTPMIdentity(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtin, err := ca.NewBuiltin("trstctl device-attest evidence CA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture := &deviceAttestCapturingCA{CA: builtin}
+	srv, acct, order, az, ch := newDeviceAttestServer(t, identity.RootPEM(), now)
+	srv.ca = capture
+	msg := deviceAttestMessage(t, srv, acct, order, az, ch, identity, identity.CSRDER(), now, "nonce-evidence")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "http://ca.test/acme/chal/"+ch.id, nil)
+	req.SetPathValue("id", ch.id)
+	srv.acceptChallenge(rec, req, msg, acct)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("valid device attestation = %d: %s", rec.Code, rec.Body.String())
+	}
+	evidence := order.deviceAttestation
+	if evidence == nil || evidence.Format != deviceAttestationFormatTPM || !evidence.VerifiedAt.Equal(now) ||
+		len(evidence.Credential) == 0 || len(evidence.TrustedRootsSHA256) != 32 {
+		t.Fatalf("retained evidence = %+v", evidence)
+	}
+	csrDigest, err := deviceattest.CSRPublicKeySHA256(identity.CSRDER())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(evidence.Binding), base64.RawURLEncoding.EncodeToString(csrDigest)) {
+		t.Fatalf("retained binding does not name the CSR key: %s", evidence.Binding)
+	}
+
+	replayed := New(nil, AcceptAll{}).WithDeviceAttestationPolicy(srv.deviceAttestationPolicy)
+	if _, err := replayed.WithStateLog(context.Background(), srv.stateTenantID,
+		&deviceAttestEventLog{replay: append([]events.Event(nil), srv.stateLog.(*deviceAttestEventLog).events...)}); err != nil {
+		t.Fatalf("replay ACME state: %v", err)
+	}
+	if got := replayed.orders[order.id]; got == nil || got.deviceAttestation == nil ||
+		string(got.deviceAttestation.Credential) != string(evidence.Credential) ||
+		string(got.deviceAttestation.Binding) != string(evidence.Binding) {
+		t.Fatal("device-bound evidence did not survive state replay")
+	}
+
+	finalizePayload, err := json.Marshal(map[string]string{"csr": base64.RawURLEncoding.EncodeToString(identity.CSRDER())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalizeRec := httptest.NewRecorder()
+	finalizeReq := httptest.NewRequest(http.MethodPost, "http://ca.test/acme/order/"+order.id+"/finalize", nil)
+	finalizeReq.SetPathValue("id", order.id)
+	srv.finalize(finalizeRec, finalizeReq, &jose.ACMEMessage{Payload: finalizePayload}, acct)
+	if finalizeRec.Code != http.StatusOK {
+		t.Fatalf("finalize = %d body=%s", finalizeRec.Code, finalizeRec.Body.String())
+	}
+	if len(capture.requests) != 1 || capture.requests[0].DeviceAttestation == nil {
+		t.Fatalf("issuing CA requests = %+v, want one carrying the device attestation", capture.requests)
+	}
+	given := capture.requests[0].DeviceAttestation
+	certificatePEM := srv.certs[order.certID]
+	if _, err := deviceattest.VerifyTPMCustodyEvidence(deviceattest.TPMCustodyEvidence{
+		Credential: given.Credential, Binding: given.Binding, VerifiedAt: given.VerifiedAt,
+	}, certificatePEM, [][]byte{identity.RootPEM()}); err != nil {
+		t.Fatalf("evidence handed to the CA does not re-verify against the issued certificate: %v", err)
+	}
+
+	duplicableSrv, duplicableAcct, duplicableOrder, duplicableAz, duplicableCh := newDeviceAttestServer(t, identity.RootPEM(), now)
+	duplicableMsg := deviceAttestMessage(t, duplicableSrv, duplicableAcct, duplicableOrder, duplicableAz, duplicableCh, identity, identity.CSRDER(), now, "nonce-duplicable")
+	var response DeviceAttestationResponse
+	if err := json.Unmarshal(duplicableMsg.Payload, &response); err != nil {
+		t.Fatal(err)
+	}
+	challenge, err := deviceAttestationBinding(DeviceAttestationBinding{
+		TenantID: duplicableSrv.stateTenantID, AccountURL: duplicableAcct.url, OrderID: duplicableOrder.id,
+		ChallengeID: duplicableCh.id, Token: duplicableCh.token, Nonce: "nonce-duplicable",
+		Identifier: duplicableAz.domain, CSRKeySHA256: csrDigest, IssuedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Attestation, err = identity.DuplicableCredentialJSON(challenge); err != nil {
+		t.Fatal(err)
+	}
+	if duplicableMsg.Payload, err = json.Marshal(response); err != nil {
+		t.Fatal(err)
+	}
+	duplicableRec := httptest.NewRecorder()
+	duplicableReq := httptest.NewRequest(http.MethodPost, "http://ca.test/acme/chal/"+duplicableCh.id, nil)
+	duplicableReq.SetPathValue("id", duplicableCh.id)
+	duplicableSrv.acceptChallenge(duplicableRec, duplicableReq, duplicableMsg, duplicableAcct)
+	if duplicableRec.Code != http.StatusOK || duplicableOrder.attestedKeySHA256 == "" {
+		t.Fatalf("valid attestation of a duplicable key = %d: %s", duplicableRec.Code, duplicableRec.Body.String())
+	}
+	if duplicableOrder.deviceAttestation != nil {
+		t.Fatal("a key the TPM could release was given device-bound evidence")
 	}
 }
 

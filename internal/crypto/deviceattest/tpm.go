@@ -172,17 +172,28 @@ type TPMCustodyEvidence struct {
 }
 
 // VerifyTPMCustodyEvidence re-checks a retained device-bound custody claim for
-// one certificate, offline: the attestation verifies under trustedRootsPEM at
-// the time it was first verified, over SHA-256(binding); the binding's
-// csr_key_sha256 and the attested key are both the certificate's key; and the
-// TPM generated that key and will not release it.
+// one certificate (DER, or PEM whose first block is that certificate),
+// offline: the attestation verifies under trustedRootsPEM at the time it was
+// first verified, over SHA-256(binding); the binding's csr_key_sha256 and the
+// attested key are both the certificate's key; and the TPM generated that key
+// and will not release it.
 func VerifyTPMCustodyEvidence(
 	evidence TPMCustodyEvidence,
-	certificateDER []byte,
+	certificateBytes []byte,
 	trustedRootsPEM [][]byte,
 ) (TPMDeviceAttestationResult, error) {
 	if len(evidence.Binding) == 0 || len(evidence.Binding) > maxDeviceAttestationBytes || evidence.VerifiedAt.IsZero() {
 		return TPMDeviceAttestationResult{}, errors.New("crypto: TPM custody evidence is incomplete")
+	}
+	if len(certificateBytes) > maxDeviceAttestationBytes {
+		return TPMDeviceAttestationResult{}, errors.New("crypto: certificate for custody evidence is too large")
+	}
+	certificateDER := certificateBytes
+	if block, _ := pem.Decode(certificateBytes); block != nil {
+		if block.Type != "CERTIFICATE" {
+			return TPMDeviceAttestationResult{}, fmt.Errorf("crypto: custody evidence PEM block is %q, not CERTIFICATE", block.Type)
+		}
+		certificateDER = block.Bytes
 	}
 	certificate, err := x509.ParseCertificate(certificateDER)
 	if err != nil {

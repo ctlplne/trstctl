@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/events"
@@ -72,6 +73,37 @@ type acmeOrderState struct {
 	Profile           string    `json:"profile,omitempty"`
 	AttestedKeySHA256 string    `json:"attested_key_sha256,omitempty"`
 	CreatedAt         time.Time `json:"created_at"`
+	// DeviceAttestation is the evidence of a device-bound attested key, kept
+	// so the issued certificate can carry it (A131).
+	DeviceAttestation *acmeDeviceAttestationState `json:"device_attestation,omitempty"`
+}
+
+// acmeDeviceAttestationState is the retained evidence behind a device-bound
+// key: the attestation exactly as the device sent it and the canonical binding
+// whose SHA-256 it signed.
+type acmeDeviceAttestationState struct {
+	Format                       string    `json:"format"`
+	Credential                   []byte    `json:"credential"`
+	Binding                      []byte    `json:"binding"`
+	PublicKeySHA256              []byte    `json:"public_key_sha256"`
+	AttestationCertificateSHA256 []byte    `json:"attestation_certificate_sha256"`
+	TrustedRootsSHA256           []byte    `json:"trusted_roots_sha256"`
+	VerifiedAt                   time.Time `json:"verified_at"`
+}
+
+// issueEvidence is the evidence in the shape the issuing CA takes.
+func (a *acmeDeviceAttestationState) issueEvidence() *ca.DeviceAttestation {
+	if a == nil {
+		return nil
+	}
+	return &ca.DeviceAttestation{
+		Format: a.Format, Credential: append([]byte(nil), a.Credential...),
+		Binding:                      append([]byte(nil), a.Binding...),
+		PublicKeySHA256:              append([]byte(nil), a.PublicKeySHA256...),
+		AttestationCertificateSHA256: append([]byte(nil), a.AttestationCertificateSHA256...),
+		TrustedRootsSHA256:           append([]byte(nil), a.TrustedRootsSHA256...),
+		VerifiedAt:                   a.VerifiedAt,
+	}
 }
 
 type acmeAuthorizationState struct {
@@ -105,6 +137,8 @@ type acmeChallengeValidatedEvent struct {
 	AuthzStatus       string `json:"authz_status"`
 	OrderStatus       string `json:"order_status,omitempty"`
 	AttestedKeySHA256 string `json:"attested_key_sha256,omitempty"`
+	// DeviceAttestation is present when the attested key is device-bound.
+	DeviceAttestation *acmeDeviceAttestationState `json:"device_attestation,omitempty"`
 }
 
 type acmeIssuedState struct {
@@ -299,6 +333,7 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		certID:            payload.Order.CertID,
 		replaces:          payload.Order.Replaces,
 		attestedKeySHA256: payload.Order.AttestedKeySHA256,
+		deviceAttestation: payload.Order.DeviceAttestation,
 		createdAt:         payload.Order.CreatedAt,
 	}
 	if o.status == "" {
@@ -361,6 +396,9 @@ func (s *Server) applyChallengeValidatedEventLocked(payload acmeChallengeValidat
 			o.status = payload.OrderStatus
 			if payload.AttestedKeySHA256 != "" {
 				o.attestedKeySHA256 = payload.AttestedKeySHA256
+			}
+			if payload.DeviceAttestation != nil {
+				o.deviceAttestation = payload.DeviceAttestation
 			}
 		}
 	}
@@ -442,6 +480,7 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 			Replaces:          o.replaces,
 			Profile:           o.profile,
 			AttestedKeySHA256: o.attestedKeySHA256,
+			DeviceAttestation: o.deviceAttestation,
 			CreatedAt:         o.createdAt,
 		},
 	}

@@ -9158,6 +9158,19 @@ export const messages = {
     defaultMessage: "a rule this console does not name yet",
     description: "Fallback for a derivation rule without its own sentence.",
   },
+  "certificateCockpit.detail.keyAttested": {
+    defaultMessage:
+      "The device's TPM attested at issuance that it generated this key and will not release it. Check that claim yourself with trstctl-cli certificates verify-key-attestation and your own TPM roots.",
+    description: "Certificate detail note for a device-bound custody claim the TPM attested.",
+  },
+  "certificateCockpit.detail.keyAttestationDownload": {
+    defaultMessage: "Download the attestation evidence",
+    description: "Download a certificate's device-bound custody evidence.",
+  },
+  "certificateCockpit.detail.keyAttestationFailed": {
+    defaultMessage: "The attestation evidence could not be downloaded.",
+    description: "Error when a certificate's device-bound custody evidence cannot be downloaded.",
+  },
   "certificateCockpit.detail.keyObservations": {
     defaultMessage: "Matching key seen on hosts",
     description: "Certificate detail label for private-key files host agents reported (A121).",

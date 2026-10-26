@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -25,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/profile"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/protocols/est"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
@@ -86,6 +88,26 @@ type protocolIssuer struct {
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
 	afterIssueSideEffects func(context.Context) error
+}
+
+// attestDeviceCustody records the device-bound custody claim an attested
+// protocol issuance proved. The generator named is the TPM attestation key,
+// by its certificate's digest, since that key's certificate identifies the TPM.
+func (p *protocolIssuer) attestDeviceCustody(ctx context.Context, tenantID, fingerprint string, evidence *ca.DeviceAttestation) error {
+	if p.orch == nil {
+		return errProtocolIssuanceUnavailable
+	}
+	return p.orch.AttestCertificateDeviceCustody(ctx, tenantID, projections.CertificateCustodyDeviceAttested{
+		Fingerprint: fingerprint, Source: projections.CertificateDeviceAttestationSourceACME,
+		Format:                       evidence.Format,
+		KeyGeneratedBy:               "tpm-ak:sha256:" + hex.EncodeToString(evidence.AttestationCertificateSHA256),
+		Credential:                   evidence.Credential,
+		Binding:                      evidence.Binding,
+		PublicKeySHA256:              evidence.PublicKeySHA256,
+		AttestationCertificateSHA256: evidence.AttestationCertificateSHA256,
+		TrustedRootsSHA256:           evidence.TrustedRootsSHA256,
+		VerifiedAt:                   evidence.VerifiedAt,
+	})
 }
 
 // errProtocolIssuanceUnavailable is returned when the served path has no issuing CA
@@ -457,6 +479,14 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	info, err := certinfo.Inspect(leafDER)
 	if err != nil {
 		return ca.Certificate{}, err
+	}
+	if req.DeviceAttestation != nil {
+		// A131: the order's key was attested device-bound; the certificate's
+		// custody becomes that claim, with its evidence. A retried finalize
+		// reaches here with the same issuance and replays the same claim.
+		if err := a.issuer.attestDeviceCustody(ctx, tenant, info.SHA256Fingerprint, req.DeviceAttestation); err != nil {
+			return ca.Certificate{}, err
+		}
 	}
 	if len(a.caCertDER) == 0 {
 		return ca.Certificate{}, errors.New("server: ACME certificate chain has no served issuer")

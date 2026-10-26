@@ -1608,6 +1608,30 @@ func (o *Orchestrator) AttestCertificateCustody(ctx context.Context, tenantID st
 	return err
 }
 
+// CertificateDeviceCustodyEventID gives one certificate's device-bound custody
+// claim a retry-stable identity.
+func CertificateDeviceCustodyEventID(tenantID, fingerprint string) string {
+	return uuid.NewSHA1(uuid.NameSpaceOID, []byte(
+		"certificate-device-custody\x00"+tenantID+"\x00"+fingerprint)).String()
+}
+
+// AttestCertificateDeviceCustody records a certificate's device-bound custody
+// claim with the attestation that proves it (A131). A retry with the same
+// evidence replays; different evidence for the same certificate is an
+// idempotency conflict.
+func (o *Orchestrator) AttestCertificateDeviceCustody(ctx context.Context, tenantID string,
+	in projections.CertificateCustodyDeviceAttested) error {
+	payload, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	_, err = o.emitPreparedExact(ctx, events.Event{
+		ID:   CertificateDeviceCustodyEventID(tenantID, in.Fingerprint),
+		Type: projections.EventCertificateCustodyDeviceAttested, TenantID: tenantID, Data: payload,
+	})
+	return err
+}
+
 // RecordCertificateWithApproval records an approval-gated certificate and
 // consumes the exact immutable authority in the same tenant transaction as the
 // certificate projection. Its event and inventory IDs are deterministic from

@@ -3744,6 +3744,16 @@ func componentSchemas() map[string]*Schema {
 		"sealed_results": {Type: "integer"}, "pending_results": {Type: "integer"},
 		"indeterminate_results": {Type: "integer"}, "failure": str(), "recovery": str(),
 	}, "state", "fleet_ready", "sealed_only_floor", "raw_v0_remaining", "legacy_dynamic_remaining", "sealed_results", "pending_results", "indeterminate_results", "recovery")
+	certificateKeyAttestation := object(map[string]*Schema{
+		"certificate_id": uuid(), "fingerprint": str(),
+		"source":            {Type: "string", Enum: []string{"acme_device_attest"}},
+		"format":            {Type: "string", Enum: []string{"tpm-webauthn"}},
+		"credential":        {Type: "string", Format: "byte", Description: "The device's WebAuthn TPM attestation, exactly as verified."},
+		"binding":           {Type: "string", Format: "byte", Description: "The canonical binding whose SHA-256 is the challenge the attestation signed."},
+		"public_key_sha256": {Type: "string", Format: "byte"}, "attestation_certificate_sha256": {Type: "string", Format: "byte"},
+		"trusted_roots_sha256": {Type: "string", Format: "byte"}, "verified_at": timestamp(),
+		"certificate_pem": str(), "verify": str(),
+	}, "certificate_id", "fingerprint", "source", "format", "credential", "binding", "public_key_sha256", "attestation_certificate_sha256", "trusted_roots_sha256", "verified_at", "certificate_pem", "verify")
 	tenantKeyDomainMigrateRequest := object(map[string]*Schema{
 		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}},
 		"wrapper_id":   str(),
@@ -7326,6 +7336,7 @@ func componentSchemas() map[string]*Schema {
 		"SSHHostTrustView":                         sshHostTrustView,
 		"SystemDependency":                         systemDependency,
 		"IdempotencyResultProtectionReadout":       idempotencyResultProtection,
+		"CertificateKeyAttestation":                certificateKeyAttestation,
 		"TenantKeyDomainMigrateRequest":            tenantKeyDomainMigrateRequest,
 		"TenantKeyDomainRotateRequest":             tenantKeyDomainRotateRequest,
 		"TenantKeyDomainSealReceipt":               tenantKeyDomainSealReceipt,

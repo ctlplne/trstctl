@@ -714,6 +714,22 @@ function CertificateWorkspace() {
     }
   }
 
+  // A131: the device-bound claim's evidence, saved for offline re-verification
+  // with trstctl-cli certificates verify-key-attestation.
+  async function downloadKeyAttestation(id: string) {
+    try {
+      const evidence = await api.certificateKeyAttestation(id);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(evidence, null, 2)], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `key-attestation-${id}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ kind: "error", title: t("certificateCockpit.detail.keyAttestationFailed") });
+    }
+  }
+
   async function submitIngest(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIngestError(null);
@@ -1500,6 +1516,16 @@ function CertificateWorkspace() {
                   // as reassurance is exactly what an auditor should not be
                   // handed.
                   <dd className="mt-1 text-xs text-muted-foreground">{translateNow("source.custody.unrecorded.b5cust0002")}</dd>
+                ) : null}
+                {detail.key_origin === "device" ? (
+                  // A131: a claim the device's TPM signed at issuance, which
+                  // anyone can re-check offline against roots they choose.
+                  <dd className="mt-1 text-xs text-muted-foreground">
+                    {t("certificateCockpit.detail.keyAttested")}{" "}
+                    <button type="button" className="text-primary underline" onClick={() => void downloadKeyAttestation(detail.id)}>
+                      {t("certificateCockpit.detail.keyAttestationDownload")}
+                    </button>
+                  </dd>
                 ) : null}
                 {detail.key_origin_derivation ? (
                   // Owner decision 2026-10-24: an origin derived from the

@@ -230,6 +230,7 @@ type order struct {
 	replaces          string // ARI: the certificate identifier this order renews (RFC 9773)
 	profile           string // A55/A56: the selected certificate profile; "" is the mount default
 	attestedKeySHA256 string
+	deviceAttestation *acmeDeviceAttestationState // A131: evidence of a device-bound attested key
 	createdAt         time.Time
 }
 
@@ -1293,11 +1294,11 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 		return
 	}
 
-	var attestedKeyDigest []byte
+	var attested deviceAttestationOutcome
 	var cleanup func(context.Context) error
 	if ch.typ == ChallengeDeviceAttest01 {
 		var err error
-		attestedKeyDigest, err = s.validateDeviceAttestation(r.Context(), msg, acct, ch, az, o)
+		attested, err = s.validateDeviceAttestation(r.Context(), msg, acct, ch, az, o)
 		if err != nil {
 			s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
 			return
@@ -1359,8 +1360,9 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 		}
 	}
 	event := challengeValidatedEventFrom(ch, az, o, orderStatus)
-	if len(attestedKeyDigest) > 0 {
-		event.AttestedKeySHA256 = base64.RawURLEncoding.EncodeToString(attestedKeyDigest)
+	if len(attested.keyDigest) > 0 {
+		event.AttestedKeySHA256 = base64.RawURLEncoding.EncodeToString(attested.keyDigest)
+		event.DeviceAttestation = attested.evidence
 	}
 	if err := s.appendStateEventLocked(r.Context(), acmeEventChallengeValidated, event); err != nil {
 		s.mu.Unlock()
@@ -1372,6 +1374,9 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 	if o := s.orders[az.orderID]; o != nil {
 		if event.AttestedKeySHA256 != "" {
 			o.attestedKeySHA256 = event.AttestedKeySHA256
+		}
+		if event.DeviceAttestation != nil {
+			o.deviceAttestation = event.DeviceAttestation
 		}
 		if s.allAuthzValid(o) {
 			o.status = statusReady
@@ -1527,6 +1532,9 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		ProviderIdempotencyKey: o.issuanceKey,
 		// A55/A56: the profile the order selected; empty keeps the mount default.
 		ProfileName: o.profile, Protocol: "acme",
+		// A131: a device-bound attested key becomes a device-bound custody
+		// claim on the certificate, with this evidence.
+		DeviceAttestation: o.deviceAttestation.issueEvidence(),
 	})
 	if err != nil {
 		if detail := crypto.SubjectKeyRefusalDetail(err); detail != "" {

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1747 annotated sites across 27 rules. Each row is
+1750 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -290,7 +290,7 @@ not this file.
 | `internal/perf/perf_test.go:242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/projections/projections.go:295` | an event type name, not a credential (CWE-798) |
+| `internal/projections/projections.go:298` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_integrations.go:226` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
@@ -569,10 +569,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6166` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6183` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6196` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6224` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6210` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6227` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6240` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6268` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1150,7 +1150,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (501 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (504 sites)
 
 | Location | Reason |
 |---|---|
@@ -1367,8 +1367,11 @@ not this file.
 | `internal/cli/ca_key_wrap.go:85` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap.go:100` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/cli/cli.go:205` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `internal/cli/cli.go:563` | operator-passed local file argument on their own command line (CWE-22) |
+| `internal/cli/certificate_key_attestation.go:71` | operator-named local file (CWE-22) |
+| `internal/cli/certificate_key_attestation.go:81` | operator-named local file (CWE-22) |
+| `internal/cli/certificate_key_attestation.go:87` | operator-named local file (CWE-22) |
+| `internal/cli/cli.go:212` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `internal/cli/cli.go:570` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:2158` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
@@ -1818,7 +1821,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
-| `internal/cli/cli.go:571` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
+| `internal/cli/cli.go:578` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/sshkeys/property_test.go:100` | deterministic property-test stream, not security randomness (CWE-338) |

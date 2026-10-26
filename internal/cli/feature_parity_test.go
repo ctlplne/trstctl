@@ -336,8 +336,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A128's `ca authorities revoke` raised it to 585, and `ca authorities
 	// key-offer|wrap-key|import-key` to 588, mapped onto F48.
 	// A129's `platform tenant-key-domain rotate` raised it to 589, mapped onto F40.
-	if len(out) != 589 {
-		t.Fatalf("CLI commands = %d, want 589", len(out))
+	// A131's `certificates key-attestation|verify-key-attestation` raised it to
+	// 591, mapped onto the certificate inventory row.
+	if len(out) != 591 {
+		t.Fatalf("CLI commands = %d, want 591", len(out))
 	}
 	return out
 }

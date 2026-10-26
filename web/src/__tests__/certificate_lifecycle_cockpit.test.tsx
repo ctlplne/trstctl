@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     certificatePage: vi.fn(),
     getCertificate: vi.fn(),
+    certificateKeyAttestation: vi.fn(),
     certificateHealth: vi.fn(),
     crlDistributions: vi.fn(),
     revocationHealth: vi.fn(),
@@ -893,6 +894,46 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getByText(/derived after the fact/)).toBeInTheDocument();
     expect(within(detail).getByText(/an ACME, EST, SCEP or CMP enrollment signed the client's own CSR/)).toBeInTheDocument();
     expect(within(detail).getByText(/Proving event: evt-acme-0701/)).toBeInTheDocument();
+  });
+
+  it("names a device-bound claim the TPM signed and downloads its evidence for offline checking (A131)", async () => {
+    const certificate = {
+      id: "device-bound-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=host-01.devices.example",
+      sans: ["host-01.devices.example"],
+      issuer: "CN=trstctl Issuing CA",
+      status: "active",
+      fingerprint: "fp-device",
+      source: "protocol:acme",
+      not_before: "2026-07-01T00:00:00Z",
+      not_after: "2027-07-01T00:00:00Z",
+      key_origin: "device",
+      key_storage: "device_bound",
+      key_exportable: "non_exportable",
+      key_generated_by: "tpm-ak:sha256:abcd",
+      custody_summary: "The private key was generated on the device and cannot leave it.",
+    };
+    const evidence = { certificate_id: "device-bound-cert", format: "tpm-webauthn", credential: "e30=", binding: "e30=" };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    apiMock.certificateKeyAttestation.mockResolvedValue(evidence);
+    const createObjectURL = vi.fn(() => "blob:key-attestation");
+    const revokeObjectURL = vi.fn();
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /host-01\.devices\.example/ });
+    fireEvent.click(within(row).getByRole("button", { name: "View" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText(/The device's TPM attested at issuance/)).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "Download the attestation evidence" }));
+    await vi.waitFor(() => expect(apiMock.certificateKeyAttestation).toHaveBeenCalledWith("device-bound-cert"));
+    await vi.waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:key-attestation");
+    click.mockRestore();
   });
 
   it("updates a short-lived deadline when expiry passes while the page stays open", async () => {

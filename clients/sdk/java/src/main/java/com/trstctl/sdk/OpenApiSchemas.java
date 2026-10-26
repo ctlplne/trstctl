@@ -248,6 +248,7 @@ public final class OpenApiSchemas {
       "CertificateHealthItem",
       "CertificateHealthSummary",
       "CertificateIngest",
+      "CertificateKeyAttestation",
       "CertificateKeyObservation",
       "CertificateList",
       "CertificateProfileSpec",

@@ -9836,6 +9836,76 @@
         ],
         "type": "object"
       },
+      "CertificateKeyAttestation": {
+        "properties": {
+          "attestation_certificate_sha256": {
+            "format": "byte",
+            "type": "string"
+          },
+          "binding": {
+            "description": "The canonical binding whose SHA-256 is the challenge the attestation signed.",
+            "format": "byte",
+            "type": "string"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "certificate_pem": {
+            "type": "string"
+          },
+          "credential": {
+            "description": "The device's WebAuthn TPM attestation, exactly as verified.",
+            "format": "byte",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "tpm-webauthn"
+            ],
+            "type": "string"
+          },
+          "public_key_sha256": {
+            "format": "byte",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "acme_device_attest"
+            ],
+            "type": "string"
+          },
+          "trusted_roots_sha256": {
+            "format": "byte",
+            "type": "string"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verify": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "fingerprint",
+          "source",
+          "format",
+          "credential",
+          "binding",
+          "public_key_sha256",
+          "attestation_certificate_sha256",
+          "trusted_roots_sha256",
+          "verified_at",
+          "certificate_pem",
+          "verify"
+        ],
+        "type": "object"
+      },
       "CertificateKeyObservation": {
         "properties": {
           "agent": {
@@ -47058,6 +47128,64 @@
           }
         ],
         "summary": "Get an inventoried certificate",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/certificates/{id}/key-attestation": {
+      "get": {
+        "operationId": "getCertificateKeyAttestation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateKeyAttestation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a certificate's device-bound custody evidence for offline re-verification",
         "x-trstctl-permission": "certs:read"
       }
     },

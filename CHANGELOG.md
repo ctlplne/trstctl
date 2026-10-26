@@ -2,6 +2,15 @@
 
 ### Added
 
+- Certificates can carry a device-bound custody claim the device's TPM signed.
+  When an ACME `device-attest-01` attestation certifies a key the TPM generated
+  and will not release (`sensitiveDataOrigin`, `fixedTPM`, `fixedParent`), the
+  certificate records custody `device` / `device_bound` / `non_exportable` and
+  keeps the attestation; `GET /api/v1/certificates/{id}/key-attestation` (console
+  download, `trstctl-cli certificates key-attestation`) returns it, and
+  `trstctl-cli certificates verify-key-attestation` re-checks it offline against
+  TPM roots you choose. The edge sub-CA's TPM lane now refuses an attested key
+  the TPM could release.
 - A tenant's key domain can be rotated: `POST
   /api/v1/platform/tenant-key-domain/rotate` (console tenant custody panel,
   `trstctl-cli platform tenant-key-domain rotate`) makes a new generation of

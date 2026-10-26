@@ -5748,9 +5748,16 @@ witness their issuance and has no basis for a claim about it. Both read as
 **not recorded**, which is deliberately a different value from any custody
 claim rather than a default that quietly resembles the good one. And what is
 recorded is the control plane's own account of what it did; it is evidence, not
-an attestation, and it is not signed by the hardware that holds the key. A
-device-bound custody claim you can verify cryptographically is a different and
-larger piece of work.
+an attestation. A certificate issued through ACME `device-attest-01` can also
+carry a claim the hardware signed: when the device's TPM certifies its key as
+one it generated and will not release (`sensitiveDataOrigin`, `fixedTPM`,
+`fixedParent`), the certificate records custody `device` / `device_bound` /
+`non_exportable` and keeps the attestation and its binding, and anyone can
+re-check it offline against TPM roots they choose (`trstctl-cli certificates
+key-attestation` then `verify-key-attestation`; see [Key custody](custody.md)).
+It is proven against fixture attestations and swtpm's TPM2_Certify; proof on a
+hardware TPM needs one. Host agents that generate endpoint keys in their own TPM,
+so agent-executed targets carry the same claim, are what comes next.
 
 Recording it per certificate also made a fourth control-plane keygen path
 visible that the kind-level table had not named: automated renewal of an
