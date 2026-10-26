@@ -29,6 +29,18 @@ import (
 // leaf, so the preview must exclude it with a warning, and refuse outright when
 // the served leaf's own CA is gone, before any irreversible command.
 func TestKeyCompromisePreviewExcludesPredecessorOfDestroyedCA(t *testing.T) {
+	keyCompromisePreviewExcludesRetiredPredecessor(t, "destroyed")
+}
+
+// A128: a superseded predecessor under a revoked CA key is excluded the same
+// way, and the preview refuses when the served leaf's own CA key is revoked.
+func TestKeyCompromisePreviewExcludesPredecessorOfRevokedCA(t *testing.T) {
+	keyCompromisePreviewExcludesRetiredPredecessor(t, "revoked")
+}
+
+// keyCompromisePreviewExcludesRetiredPredecessor retires each issuing CA's key
+// the way named by how: "destroyed" by signed retirement, or "revoked".
+func keyCompromisePreviewExcludesRetiredPredecessor(t *testing.T, how string) {
 	var mu sync.Mutex
 	destroyed := map[string]bool{}
 	h := newServedHarness(t, config.Protocols{}, withAgentChannel, func(d *Deps) {
@@ -201,6 +213,20 @@ func TestKeyCompromisePreviewExcludesPredecessorOfDestroyedCA(t *testing.T) {
 		t.Fatalf("seed host deploy evidence: %v", err)
 	}
 
+	retire := func(caID string) {
+		t.Helper()
+		if how == "destroyed" {
+			mu.Lock()
+			destroyed[h.tenant+"/"+caID] = true
+			mu.Unlock()
+			return
+		}
+		if err := h.store.WithTenant(ctx, h.tenant, func(tx pgx.Tx) error {
+			return h.store.ApplyCAAuthorityRevokedTx(ctx, tx, h.tenant, caID, "key_compromise", time.Now())
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	preview := func() (int, map[string]any) {
 		t.Helper()
 		code, raw := doBearer(t, h.ts, http.MethodPost, "/api/v1/identities/"+identity.ID+"/compromise/preview", operator, "", map[string]any{"target_id": target.ID})
@@ -229,39 +255,35 @@ func TestKeyCompromisePreviewExcludesPredecessorOfDestroyedCA(t *testing.T) {
 	}
 	liveFingerprint, _ := body["preview_fingerprint"].(string)
 
-	mu.Lock()
-	destroyed[h.tenant+"/"+predecessorCA.ID] = true
-	mu.Unlock()
+	retire(predecessorCA.ID)
 	code, body = preview()
 	if code != http.StatusOK || body["ready"] != true {
-		t.Fatalf("preview after predecessor CA destruction = %d %v", code, body)
+		t.Fatalf("preview after the predecessor CA key was %s = %d %v", how, code, body)
 	}
 	if got := ids(body["certificates"]); len(got) != 1 || got[0] != served.ID {
 		t.Fatalf("revocable certificates = %v, want only the served leaf %s", got, served.ID)
 	}
 	excluded, _ := body["excluded_certificates"].([]any)
 	if len(excluded) != 1 {
-		t.Fatalf("excluded certificates = %v, want the destroyed-CA predecessor", body["excluded_certificates"])
+		t.Fatalf("excluded certificates = %v, want the %s-CA predecessor", body["excluded_certificates"], how)
 	}
 	row, _ := excluded[0].(map[string]any)
 	reason, _ := row["reason"].(string)
-	if row["id"] != predecessor.ID || row["certificate_status"] != "superseded" || !strings.Contains(reason, "destroyed") {
+	if row["id"] != predecessor.ID || row["certificate_status"] != "superseded" || !strings.Contains(reason, how) {
 		t.Fatalf("excluded predecessor row = %v", row)
 	}
 	warnings, _ := body["warnings"].([]any)
-	if len(warnings) != 1 || !strings.Contains(warnings[0].(string), "destroyed") {
+	if len(warnings) != 1 || !strings.Contains(warnings[0].(string), how) {
 		t.Fatalf("preview warnings = %v", body["warnings"])
 	}
 	if fp, _ := body["preview_fingerprint"].(string); fp == "" || fp == liveFingerprint {
 		t.Fatal("excluding a predecessor must change the reviewed preview fingerprint")
 	}
 
-	mu.Lock()
-	destroyed[h.tenant+"/"+successorCA.ID] = true
-	mu.Unlock()
+	retire(successorCA.ID)
 	code, body = preview()
 	detail, _ := body["detail"].(string)
-	if code != http.StatusConflict || !strings.Contains(detail, "destroyed") {
-		t.Fatalf("preview with the served leaf's CA destroyed = %d %v; want 409 refusal", code, body)
+	if code != http.StatusConflict || !strings.Contains(detail, how) {
+		t.Fatalf("preview with the served leaf's CA key %s = %d %v; want 409 refusal", how, code, body)
 	}
 }

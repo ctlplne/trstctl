@@ -2,6 +2,15 @@
 
 ### Added
 
+- A signer-backed CA authority's key can be revoked: two custodians approve a
+  `revoke_ca` ceremony for the exact authority and reason, and `POST
+  /api/v1/ca/authorities/{id}/revoke` (`trstctl-cli ca authorities revoke`, or
+  **Certificate authorities → Lifecycle → Revoke a CA key**) executes it. The
+  isolated signer refuses every signature with the key from then on, in every
+  signer process sharing its keystore; the authority stops issuing; its
+  certificate is revoked on a managed parent's CRL; and the response carries
+  the signer's own readback. A leaf of a revoked authority is reported as not
+  revocable on that authority's CRL, and the periodic CRL refresh skips it.
 - The managed-key production-assembly proof has an arm64 profile:
   `make dod-gate-arm64` runs it on a native arm64 host against the release's
   `linux/arm64` control plane and cgo HSM signer, with the same custody substrate

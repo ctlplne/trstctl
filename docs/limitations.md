@@ -5483,10 +5483,18 @@ for that production-assembly proof. The rest of the wiring census is proved on
 `linux/amd64`; extending the arm64 profile beyond managed-key custody is what
 comes next.
 
-Still library-tier (reachable from no served verb yet): the in-process key
-lifecycle for the local CA/issuing signing key and the secrets KEK
-(generate-or-import → rotate → revoke → zeroize is implemented and
-end-to-end tested but not yet exposed as its own served route). Break-glass
+The signer-held CA/issuing key's lifecycle is served through ceremony-gated
+verbs in the isolated signer: generate (root, intermediate, or a key and CSR
+for an external issuer), rotate and re-key, revoke (`POST
+/api/v1/ca/authorities/{id}/revoke` after a `revoke_ca` ceremony: the signer
+refuses every signature with the key, the authority stops issuing, and its
+certificate is revoked on a managed parent's CRL), and destroy through signed
+retirement. Importing an existing CA private key into signer custody is what
+comes next: `import_existing_ca` binds a chain to a key already held by the
+signer, and no served path yet carries an operator's key into it. The secrets
+KEK's lifecycle is still library-tier (generate-or-import → rotate → revoke →
+zeroize is implemented and end-to-end tested but reachable from no served
+verb). Break-glass
 issue/rotation/cross-sign and offline-root public re-key/cross-sign import
 have served, ceremony-gated verbs; reconciliation remains served at
 `POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still

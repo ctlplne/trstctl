@@ -2279,6 +2279,8 @@ CAAuthority = TypedDict(
         'permitted_dns_names': list[str],
         'possession_proof': str,
         'replaces_id': str,
+        'revocation_reason': str,
+        'revoked_at': str,
         'serial': str,
         'signer_handle': str,
         'status': str,
@@ -2319,6 +2321,30 @@ CAAuthorityRekeyRequest = TypedDict(
         'ceremony_id': str,
         'reason': str,
         'ttl_seconds': int,
+    },
+    total=False,
+)
+
+CAAuthorityRevocation = TypedDict(
+    'CAAuthorityRevocation',
+    {
+        'authority': dict[str, Any],
+        'ceremony_id': str,
+        'follow_up': list[str],
+        'parent_id': str,
+        'reason': str,
+        'revoked_at': str,
+        'revoked_on_parent_crl': bool,
+        'signer_revoked': bool,
+    },
+    total=False,
+)
+
+CAAuthorityRevokeRequest = TypedDict(
+    'CAAuthorityRevokeRequest',
+    {
+        'ceremony_id': str,
+        'reason': str,
     },
     total=False,
 )

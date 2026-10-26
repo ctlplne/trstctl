@@ -29,6 +29,12 @@ var ErrCertificateRevocationUnsupported = errors.New(projections.CertificateRevo
 // leaf can only be distrusted at relying parties, never revoked.
 var ErrCertificateAuthorityKeyDestroyed = fmt.Errorf("%w: the issuing CA key was destroyed by signed retirement; nothing can publish its revocation", ErrCertificateRevocationUnsupported)
 
+// ErrCertificateAuthorityKeyRevoked means the leaf's managed issuing CA had its
+// key administratively revoked (A128). The key signs no CRL or OCSP response
+// any more; revoking the CA's own certificate at its issuer is what makes its
+// leaves stop validating, so a per-leaf revocation is unsupported.
+var ErrCertificateAuthorityKeyRevoked = fmt.Errorf("%w: the issuing CA's key is revoked and signs no revocation list; its own certificate's revocation covers this leaf", ErrCertificateRevocationUnsupported)
+
 // ExternalCertificateAuthorityPrefix distinguishes a verified external registry
 // binding from the UUID of a locally served CA ledger. It is never tenant input.
 const ExternalCertificateAuthorityPrefix = "external:"

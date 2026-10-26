@@ -142,6 +142,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"ca", "authorities", "rotate-preview"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/rotate/preview", Body: bodyFile, Summary: "Review an exact zero-downtime CA rotation without changing authority state"},
 	{Name: []string{"ca", "authorities", "rotate"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/rotate", Body: bodyFile, Summary: "Activate zero-downtime CA rotation to a signer-backed successor"},
 	{Name: []string{"ca", "authorities", "rekey"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/rekey", Body: bodyFile, Summary: "Re-key a signer-backed private CA authority after ceremony quorum"},
+	{Name: []string{"ca", "authorities", "revoke"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/revoke", Body: bodyFile, Summary: "Revoke a signer-backed CA authority's key after ceremony quorum"},
 	{Name: []string{"ca", "authorities", "cross-sign"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/cross-sign", Body: bodyFile, Summary: "Cross-sign a CA certificate with a signer-backed authority"},
 	{Name: []string{"ca", "cross-signs", "get"}, Method: "GET", Path: "/api/v1/ca/cross-signs/{id}", Summary: "Read a durable CA cross-certificate by ceremony ID"},
 	{Name: []string{"ca", "authorities", "import-offline-cross-sign"}, Method: "POST", Path: "/api/v1/ca/authorities/{id}/offline-cross-signs", Body: bodyFile, Summary: "Verify and import an offline-root cross-certificate"},

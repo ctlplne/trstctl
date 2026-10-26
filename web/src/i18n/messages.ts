@@ -9662,6 +9662,111 @@ export const messages = {
     defaultMessage: "Enter a reason before starting or activating the re-key ceremony.",
     description: "Re-key ceremony reason validation.",
   },
+  "caHierarchy.revoke.title": {
+    defaultMessage: "Revoke a CA key",
+    description: "CA key revocation panel heading.",
+  },
+  "caHierarchy.revoke.body": {
+    defaultMessage:
+      "Revoking stops an authority signing anything: the isolated signer refuses its key, the authority stops issuing, and under a managed parent its certificate joins the parent's CRL. Two custodians approve the exact authority and reason first, and the revocation is permanent.",
+    description: "CA key revocation panel explanation.",
+  },
+  "caHierarchy.revoke.formTitle": {
+    defaultMessage: "Revocation",
+    description: "CA key revocation form heading.",
+  },
+  "caHierarchy.revoke.authority": {
+    defaultMessage: "Authority to revoke",
+    description: "CA key revocation authority select label.",
+  },
+  "caHierarchy.revoke.chooseAuthority": {
+    defaultMessage: "Select an authority",
+    description: "CA key revocation authority placeholder option.",
+  },
+  "caHierarchy.revoke.reason": {
+    defaultMessage: "Revocation reason",
+    description: "CA key revocation reason select label.",
+  },
+  "caHierarchy.revoke.ceremony": {
+    defaultMessage: "Revocation ceremony ID",
+    description: "CA key revocation ceremony ID input label.",
+  },
+  "caHierarchy.revoke.start": {
+    defaultMessage: "Start revoke ceremony",
+    description: "Button that opens review of a revoke_ca ceremony.",
+  },
+  "caHierarchy.revoke.execute": {
+    defaultMessage: "Revoke CA key",
+    description: "Button that executes an approved revoke_ca ceremony.",
+  },
+  "caHierarchy.revoke.selectAuthority": {
+    defaultMessage: "Choose an active or superseded signer-backed authority before starting a revocation review.",
+    description: "CA key revocation authority validation.",
+  },
+  "caHierarchy.revoke.failed": {
+    defaultMessage: "Could not revoke the CA key",
+    description: "CA key revocation failure title.",
+  },
+  "caHierarchy.revoke.loading": {
+    defaultMessage: "Loading CA key revocation",
+    description: "Loading state for the CA key revocation panel.",
+  },
+  "caHierarchy.revoke.none": {
+    defaultMessage: "No signer-backed authority can be revoked. An offline authority's key is outside trstctl: revoke its certificate where its issuer lives.",
+    description: "Empty state for CA key revocation.",
+  },
+  "caHierarchy.revoke.reasonKeyCompromise": {
+    defaultMessage: "Key compromise",
+    description: "CRL reason keyCompromise.",
+  },
+  "caHierarchy.revoke.reasonCACompromise": {
+    defaultMessage: "CA compromise",
+    description: "CRL reason cACompromise.",
+  },
+  "caHierarchy.revoke.reasonAffiliationChanged": {
+    defaultMessage: "Affiliation changed",
+    description: "CRL reason affiliationChanged.",
+  },
+  "caHierarchy.revoke.reasonSuperseded": {
+    defaultMessage: "Superseded",
+    description: "CRL reason superseded.",
+  },
+  "caHierarchy.revoke.reasonCessation": {
+    defaultMessage: "Cessation of operation",
+    description: "CRL reason cessationOfOperation.",
+  },
+  "caHierarchy.revoke.reasonPrivilegeWithdrawn": {
+    defaultMessage: "Privilege withdrawn",
+    description: "CRL reason privilegeWithdrawn.",
+  },
+  "caHierarchy.revoke.resultStatus": {
+    defaultMessage: "Authority",
+    description: "CA key revocation result: authority and status.",
+  },
+  "caHierarchy.revoke.resultSigner": {
+    defaultMessage: "Signer reports the key revoked",
+    description: "CA key revocation result: the signer's own readback.",
+  },
+  "caHierarchy.revoke.resultParentCRL": {
+    defaultMessage: "On the parent's CRL",
+    description: "CA key revocation result: revoked on a managed parent's CRL.",
+  },
+  "caHierarchy.revoke.resultAt": {
+    defaultMessage: "Revoked at",
+    description: "CA key revocation result: revocation time.",
+  },
+  "caHierarchy.revoke.followUp": {
+    defaultMessage: "What remains for you",
+    description: "CA key revocation follow-up list heading.",
+  },
+  "caHierarchy.revoke.yes": {
+    defaultMessage: "Yes",
+    description: "Affirmative value in the revocation result.",
+  },
+  "caHierarchy.revoke.no": {
+    defaultMessage: "No",
+    description: "Negative value in the revocation result.",
+  },
   "caHierarchy.preview.authority": { defaultMessage: "Existing authority", description: "Label for the tenant-scoped authority referenced by the ceremony." },
   "caHierarchy.preview.fingerprint": { defaultMessage: "Request fingerprint", description: "Label for the exact non-secret CA ceremony request digest." },
   "caHierarchy.preview.changes": { defaultMessage: "What this prepares", description: "Heading for the later CA change authorized by the ceremony." },

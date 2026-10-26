@@ -465,7 +465,7 @@ func componentSchemas() map[string]*Schema {
 		"signature_algorithm":   str(),
 	}, "common_name")
 	caCeremonyStartReq := object(map[string]*Schema{
-		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root", "release_managed_ca_leaf"}},
+		"operation": {Type: "string", Enum: []string{"create_root", "import_offline_root", "import_existing_ca", "prepare_existing_ca", "create_intermediate", "create_offline_intermediate", "issue_intermediate_csr", "rekey_ca", "cross_sign_ca", "import_offline_cross_sign", "rekey_offline_root", "release_managed_ca_leaf", "revoke_ca"}},
 		"parent_id": uuid(), "authority_id": uuid(), "csr_pem": str(), "certificate_pem": str(),
 		"dependent_id": uuid(), "expected_certificate_sha256": str(), "risk_accepted": {Type: "boolean"},
 		"target_certificate_pem": str(), "cross_certificate_pem": str(), "reverse_cross_certificate_pem": str(),
@@ -544,6 +544,11 @@ func componentSchemas() map[string]*Schema {
 	caAuthorityRekeyReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "ttl_seconds": {Type: "integer"}, "reason": str(),
 	}, "ceremony_id")
+	caRevocationReasons := []string{"key_compromise", "ca_compromise", "affiliation_changed", "superseded", "cessation_of_operation", "privilege_withdrawn"}
+	caAuthorityRevokeReq := object(map[string]*Schema{
+		"ceremony_id": uuid(),
+		"reason":      {Type: "string", Enum: caRevocationReasons, Description: "The revocation reason the revoke_ca ceremony approved."},
+	}, "ceremony_id", "reason")
 	caCrossSignReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "certificate_pem": str(),
 	}, "ceremony_id", "certificate_pem")
@@ -841,7 +846,19 @@ func componentSchemas() map[string]*Schema {
 		"horizon":             ref("CAAuthorityHorizon"),
 		"possession_proof": {Type: "string", Enum: []string{"self_signature", "signer_challenge", "offline_signature", "not_proven"},
 			Description: "How possession of the authority's key was established by the call that created or imported it. Present on that call's response and in the creation event; listings omit it."},
+		"revoked_at":        timestamp(),
+		"revocation_reason": {Type: "string", Enum: caRevocationReasons, Description: "Why the authority's key was revoked; set with status revoked."},
 	}, "id", "tenant_id", "common_name", "kind", "status", "certificate_pem", "signer_handle", "serial", "max_path_len", "created_at")
+	caAuthorityRevocation := object(map[string]*Schema{
+		"authority":             ref("CAAuthority"),
+		"reason":                {Type: "string", Enum: caRevocationReasons},
+		"revoked_at":            timestamp(),
+		"signer_revoked":        {Type: "boolean", Description: "The isolated signer itself reports the authority's key revoked."},
+		"parent_id":             uuid(),
+		"revoked_on_parent_crl": {Type: "boolean", Description: "The authority's certificate was revoked on its managed parent's CRL."},
+		"ceremony_id":           uuid(),
+		"follow_up":             {Type: "array", Items: str()},
+	}, "authority", "reason", "revoked_at", "signer_revoked", "revoked_on_parent_crl", "ceremony_id", "follow_up")
 	caAuthorityRotationIssuer := object(map[string]*Schema{
 		"authority_id": uuid(), "role": str(), "status": str(), "issue_path": str(),
 	}, "authority_id", "role", "status", "issue_path")
@@ -3380,7 +3397,7 @@ func componentSchemas() map[string]*Schema {
 	keyCompromiseExcludedCertificate := object(map[string]*Schema{
 		"id": uuid(), "fingerprint": str(), "serial": str(), "issuer": str(),
 		"certificate_status": {Type: "string", Enum: []string{"active", "superseded", "revoked"}},
-		"reason":             {Type: "string", Description: "Why this bound leaf is not sent to any CA: today only a superseded predecessor whose managed issuing CA key was destroyed by signed retirement."},
+		"reason":             {Type: "string", Description: "Why this bound leaf is not sent to any CA: a superseded predecessor whose managed issuing CA key was destroyed by signed retirement or revoked."},
 	}, "id", "fingerprint", "serial", "issuer", "certificate_status", "reason")
 	keyCompromisePlan := object(map[string]*Schema{
 		"capability": str(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
@@ -7617,6 +7634,8 @@ func componentSchemas() map[string]*Schema {
 		"CAIssueIntermediateRequest":            caIssueIntermediateReq,
 		"CAAuthorityRotationRequest":            caAuthorityRotationReq,
 		"CAAuthorityRekeyRequest":               caAuthorityRekeyReq,
+		"CAAuthorityRevokeRequest":              caAuthorityRevokeReq,
+		"CAAuthorityRevocation":                 caAuthorityRevocation,
 		"CACrossSignRequest":                    caCrossSignReq,
 		"CAOfflineCrossSignImportRequest":       caOfflineCrossSignImportReq,
 		"CAOfflineRootRekeyRequest":             caOfflineRootRekeyReq,

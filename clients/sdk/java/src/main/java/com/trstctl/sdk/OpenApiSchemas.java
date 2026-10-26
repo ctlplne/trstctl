@@ -174,6 +174,8 @@ public final class OpenApiSchemas {
       "CAAuthorityHorizon",
       "CAAuthorityList",
       "CAAuthorityRekeyRequest",
+      "CAAuthorityRevocation",
+      "CAAuthorityRevokeRequest",
       "CAAuthorityRotation",
       "CAAuthorityRotationIssuer",
       "CAAuthorityRotationPlanPreview",

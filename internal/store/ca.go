@@ -35,6 +35,10 @@ type CAAuthority struct {
 	EKUs              []string
 	ReplacesID        *string
 	CreatedAt         time.Time
+	// RevokedAt and RevocationReason are set when the authority's key was
+	// administratively revoked (status 'revoked').
+	RevokedAt        *time.Time
+	RevocationReason string
 }
 
 // InsertCAAuthority inserts a CA authority with a server-generated id, returning
@@ -82,7 +86,7 @@ func (s *Store) InsertCAAuthorityTx(ctx context.Context, tx pgx.Tx, c CAAuthorit
 func scanCAAuthority(row pgx.Row, c *CAAuthority) error {
 	return row.Scan(&c.ID, &c.TenantID, &c.ParentID, &c.CommonName, &c.Kind, &c.Status,
 		&c.CertificatePEM, &c.SignerHandle, &c.Serial, &c.NotAfter, &c.MaxPathLen, &c.PermittedDNSNames, &c.EKUs,
-		&c.ReplacesID, &c.CreatedAt)
+		&c.ReplacesID, &c.CreatedAt, &c.RevokedAt, &c.RevocationReason)
 }
 
 // GetCAAuthority loads a CA authority in its tenant context.
@@ -91,7 +95,8 @@ func (s *Store) GetCAAuthority(ctx context.Context, tenantID, id string) (CAAuth
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCAAuthority(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
-			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at,
+			        revoked_at, COALESCE(revocation_reason, '')
 			   FROM ca_authorities WHERE tenant_id = $1 AND id = $2`, tenantID, id), &c)
 	})
 	return c, err
@@ -106,7 +111,8 @@ func (s *Store) GetCAAuthorityBySignerHandle(ctx context.Context, tenantID, hand
 		return scanCAAuthority(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
 			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len,
-			        permitted_dns_names, ekus, replaces_id::text, created_at
+			        permitted_dns_names, ekus, replaces_id::text, created_at,
+			        revoked_at, COALESCE(revocation_reason, '')
 			   FROM ca_authorities
 			  WHERE tenant_id = $1 AND signer_handle = $2`, tenantID, handle), &c)
 	})
@@ -131,7 +137,8 @@ func (s *Store) GetCAAuthorityForUpdateTx(ctx context.Context, tx pgx.Tx, tenant
 	var c CAAuthority
 	err := scanCAAuthority(tx.QueryRow(ctx,
 		`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
-		        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+		        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at,
+			        revoked_at, COALESCE(revocation_reason, '')
 		   FROM ca_authorities WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, id), &c)
 	return c, err
 }
@@ -142,7 +149,8 @@ func (s *Store) ListCAAuthorities(ctx context.Context, tenantID string) ([]CAAut
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
-			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at,
+			        revoked_at, COALESCE(revocation_reason, '')
 			   FROM ca_authorities WHERE tenant_id = $1 ORDER BY created_at, id`, tenantID)
 		if err != nil {
 			return err
@@ -163,7 +171,9 @@ func (s *Store) ListCAAuthorities(ctx context.Context, tenantID string) ([]CAAut
 // ManagedCAAuthoritiesWithIssuedCerts returns only signer-backed authorities
 // with a serial ledger in this tenant. A superseded authority remains included:
 // its predecessor CRL must stay fresh until its issued leaves are no longer
-// relied upon. Both joined tables carry the tenant predicate under RLS.
+// relied upon. A revoked authority is excluded: its key signs nothing, so its
+// CRL cannot be refreshed, and its own certificate's revocation covers its
+// leaves. Both joined tables carry the tenant predicate under RLS.
 func (s *Store) ManagedCAAuthoritiesWithIssuedCerts(ctx context.Context, tenantID string) ([]string, error) {
 	var ids []string
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
@@ -173,6 +183,7 @@ func (s *Store) ManagedCAAuthoritiesWithIssuedCerts(ctx context.Context, tenantI
 			  ON issued.tenant_id = authority.tenant_id AND issued.ca_id = authority.id
 			WHERE authority.tenant_id = $1 AND issued.tenant_id = $1
 			  AND NULLIF(authority.signer_handle, '') IS NOT NULL
+			  AND authority.status <> 'revoked'
 			ORDER BY 1`, tenantID)
 		if err != nil {
 			return err
@@ -198,7 +209,8 @@ func (s *Store) FindActiveCAAuthoritySuccessor(ctx context.Context, tenantID, re
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		return scanCAAuthority(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, parent_id::text, common_name, kind, status,
-			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at
+			        certificate_pem, COALESCE(signer_handle, ''), serial, not_after, max_path_len, permitted_dns_names, ekus, replaces_id::text, created_at,
+			        revoked_at, COALESCE(revocation_reason, '')
 			   FROM ca_authorities
 			  WHERE tenant_id = $1 AND replaces_id = $2 AND status = 'active'
 			  ORDER BY created_at DESC, id DESC
@@ -244,6 +256,26 @@ func (s *Store) ApplyCAAuthorityRotatedTx(ctx context.Context, tx pgx.Tx, tenant
 		    SET replaces_id = $2
 		  WHERE tenant_id = $1 AND id = $3`,
 		tenantID, predecessorID, successorID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return pgx.ErrNoRows
+	}
+	return nil
+}
+
+// ApplyCAAuthorityRevokedTx projects ca.authority.revoked: the authority stops
+// issuing (every issue path requires status 'active') and records when the
+// signer revoked its key and why. A replay keeps the first revocation.
+func (s *Store) ApplyCAAuthorityRevokedTx(ctx context.Context, tx pgx.Tx, tenantID, authorityID, reason string, revokedAt time.Time) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE ca_authorities
+		    SET status = 'revoked',
+		        revoked_at = COALESCE(revoked_at, $3),
+		        revocation_reason = COALESCE(revocation_reason, $4)
+		  WHERE tenant_id = $1 AND id = $2`,
+		tenantID, authorityID, revokedAt.UTC(), reason)
 	if err != nil {
 		return err
 	}

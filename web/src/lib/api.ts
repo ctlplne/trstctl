@@ -154,6 +154,8 @@ import type {
   CAAuthority,
   CAAuthorityList,
   CAAuthorityRekeyRequest,
+  CAAuthorityRevocation,
+  CAAuthorityRevokeRequest,
   CAAuthorityRotation,
   CAAuthorityRotationPlanPreview,
   CAAuthorityRotationRequest,
@@ -1043,6 +1045,8 @@ export type {
   BulkRevokeResult,
   CAAuthority,
   CAAuthorityList,
+  CAAuthorityRevocation,
+  CAAuthorityRevokeRequest,
   CAAuthorityRotation,
   CAAuthorityRotationPlanPreview,
   CAAuthorityRotationRequest,
@@ -2106,6 +2110,7 @@ export interface Api {
   previewCAAuthorityRotation(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotationPlanPreview>;
   rotateCAAuthority(id: string, input: CAAuthorityRotationRequest): Promise<CAAuthorityRotation>;
   rekeyCAAuthority(id: string, input: CAAuthorityRekeyRequest): Promise<CAAuthorityRotation>;
+  revokeCAAuthority(id: string, input: CAAuthorityRevokeRequest): Promise<CAAuthorityRevocation>;
   rekeyOfflineRoot(id: string, input: CAOfflineRootRekeyRequest): Promise<CAOfflineRootRekey>;
   getOfflineRootRekeyReceipt(ceremonyID: string): Promise<CAOfflineRootRekey>;
   crossSignCAAuthority(id: string, input: CACrossSignRequest): Promise<CACrossSign>;
@@ -2874,6 +2879,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewCAAuthorityRotation: (id, input) => postRead<CAAuthorityRotationPlanPreview>(`/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate/preview`, input),
   rotateCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rotate`, input),
   rekeyCAAuthority: (id, input) => mutate<CAAuthorityRotation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/rekey`, input),
+  revokeCAAuthority: (id, input) => mutate<CAAuthorityRevocation>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/revoke`, input),
   rekeyOfflineRoot: (id, input) => mutate<CAOfflineRootRekey>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/offline-rekey`, input),
   getOfflineRootRekeyReceipt: (ceremonyID) => req<CAOfflineRootRekey>(`/api/v1/ca/offline-rekeys/${encodeURIComponent(ceremonyID)}`),
   crossSignCAAuthority: (id, input) => mutate<CACrossSign>("POST", `/api/v1/ca/authorities/${encodeURIComponent(id)}/cross-sign`, input),

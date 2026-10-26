@@ -42,6 +42,8 @@ type keyCompromiseExcludedCertificate struct {
 
 const keyCompromiseDestroyedPredecessorReason = "issuing CA key destroyed by signed retirement; this superseded predecessor cannot be revoked anywhere and is not part of this command"
 
+const keyCompromiseRevokedPredecessorReason = "issuing CA key revoked; this superseded predecessor cannot be revoked on that CA's CRL, the revocation of the CA's own certificate covers it, and it is not part of this command"
+
 type keyCompromisePlan struct {
 	Capability           string                             `json:"capability"`
 	Ready                bool                               `json:"ready"`
@@ -146,16 +148,25 @@ func (a *API) keyCompromisePlan(ctx context.Context, tenantID, identityID, targe
 	excluded := []keyCompromiseExcludedCertificate{}
 	for _, cert := range certs {
 		authority, err := a.certRevocationAuthority(ctx, cert)
-		if errors.Is(err, orchestrator.ErrCertificateAuthorityKeyDestroyed) {
-			// A superseded predecessor under a destroyed CA can only be
-			// distrusted, never revoked. Excluding it keeps the live successor
-			// containable; the served leaf itself under a destroyed CA is refused.
+		destroyedCA := errors.Is(err, orchestrator.ErrCertificateAuthorityKeyDestroyed)
+		revokedCA := errors.Is(err, orchestrator.ErrCertificateAuthorityKeyRevoked)
+		if destroyedCA || revokedCA {
+			// A superseded predecessor under a destroyed or revoked CA key
+			// cannot be revoked on that CA's CRL. Excluding it keeps the live
+			// successor containable; the served leaf itself is refused.
 			if cert.Status == "superseded" && !strings.EqualFold(cert.Fingerprint, target.ExpectedFingerprint) {
+				reason := keyCompromiseDestroyedPredecessorReason
+				if revokedCA {
+					reason = keyCompromiseRevokedPredecessorReason
+				}
 				excluded = append(excluded, keyCompromiseExcludedCertificate{
 					ID: cert.ID, Fingerprint: cert.Fingerprint, Serial: cert.Serial,
-					Issuer: cert.Issuer, Status: cert.Status, Reason: keyCompromiseDestroyedPredecessorReason,
+					Issuer: cert.Issuer, Status: cert.Status, Reason: reason,
 				})
 				continue
+			}
+			if revokedCA {
+				return keyCompromisePlan{}, errStatus(http.StatusConflict, "the served leaf's issuing CA key is revoked, so it signs no revocation; the revocation of that CA's own certificate covers the leaf. Replace the leaf under a live CA before any irreversible command")
 			}
 			return keyCompromisePlan{}, errStatus(http.StatusConflict, "the served leaf's issuing CA key was destroyed by signed retirement, so nothing can publish its revocation; replace the leaf under a live CA and distrust the retired CA at relying parties before any irreversible command")
 		}
@@ -167,11 +178,22 @@ func (a *API) keyCompromisePlan(ctx context.Context, tenantID, identityID, targe
 		})
 	}
 	if len(reviewed) == 0 {
-		return keyCompromisePlan{}, errStatus(http.StatusConflict, "every certificate bound to this identity was issued by a CA whose key was destroyed; nothing can publish a revocation for them")
+		return keyCompromisePlan{}, errStatus(http.StatusConflict, "every certificate bound to this identity was issued by a CA whose key was destroyed or revoked; nothing can publish a revocation for them")
 	}
 	warnings := []string{}
-	if len(excluded) > 0 {
-		warnings = append(warnings, fmt.Sprintf("%d superseded predecessor certificate(s) were issued by a CA whose key was destroyed by signed retirement. This command cannot revoke them; relying parties that still trust that retired CA must remove it from their trust stores.", len(excluded)))
+	destroyedCount, revokedCount := 0, 0
+	for _, item := range excluded {
+		if item.Reason == keyCompromiseRevokedPredecessorReason {
+			revokedCount++
+		} else {
+			destroyedCount++
+		}
+	}
+	if destroyedCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d superseded predecessor certificate(s) were issued by a CA whose key was destroyed by signed retirement. This command cannot revoke them; relying parties that still trust that retired CA must remove it from their trust stores.", destroyedCount))
+	}
+	if revokedCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d superseded predecessor certificate(s) were issued by a CA whose key is revoked. This command cannot revoke them on that CA's CRL; the revocation of the CA's own certificate covers them.", revokedCount))
 	}
 	material, err := json.Marshal(struct {
 		Domain       string                             `json:"domain"`

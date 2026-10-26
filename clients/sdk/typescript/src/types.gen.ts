@@ -1613,6 +1613,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a signer-backed CA authority's key after ceremony quorum */
+        post: operations["revokeCAAuthority"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/{id}/rotate": {
         parameters: {
             query?: never;
@@ -9686,6 +9703,13 @@ export interface components {
             possession_proof?: "self_signature" | "signer_challenge" | "offline_signature" | "not_proven";
             /** Format: uuid */
             replaces_id?: string;
+            /**
+             * @description Why the authority's key was revoked; set with status revoked.
+             * @enum {string}
+             */
+            revocation_reason?: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
+            /** Format: date-time */
+            revoked_at?: string;
             serial: string;
             signer_handle: string;
             status: string;
@@ -9715,6 +9739,31 @@ export interface components {
             ceremony_id: string;
             reason?: string;
             ttl_seconds?: number;
+        };
+        CAAuthorityRevocation: {
+            authority: components["schemas"]["CAAuthority"];
+            /** Format: uuid */
+            ceremony_id: string;
+            follow_up: string[];
+            /** Format: uuid */
+            parent_id?: string;
+            /** @enum {string} */
+            reason: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
+            /** Format: date-time */
+            revoked_at: string;
+            /** @description The authority's certificate was revoked on its managed parent's CRL. */
+            revoked_on_parent_crl: boolean;
+            /** @description The isolated signer itself reports the authority's key revoked. */
+            signer_revoked: boolean;
+        };
+        CAAuthorityRevokeRequest: {
+            /** Format: uuid */
+            ceremony_id: string;
+            /**
+             * @description The revocation reason the revoke_ca ceremony approved.
+             * @enum {string}
+             */
+            reason: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
         };
         CAAuthorityRotation: {
             active_issue_path: string;
@@ -9771,7 +9820,7 @@ export interface components {
             changes: string[];
             normalized_spec: components["schemas"]["CASpec"];
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
             parent?: components["schemas"]["CACeremonyPlanAuthority"];
             preview_external_effects: string[];
             preview_writes: string[];
@@ -9793,7 +9842,7 @@ export interface components {
             dependent_id?: string;
             expected_certificate_sha256?: string;
             /** @enum {string} */
-            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
+            operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
             /** Format: uuid */
             parent_id?: string;
             reason?: string;
@@ -12944,7 +12993,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             issuer: string;
-            /** @description Why this bound leaf is not sent to any CA: today only a superseded predecessor whose managed issuing CA key was destroyed by signed retirement. */
+            /** @description Why this bound leaf is not sent to any CA: a superseded predecessor whose managed issuing CA key was destroyed by signed retirement or revoked. */
             reason: string;
             serial: string;
         };
@@ -22574,6 +22623,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAAuthorityRotation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeCAAuthority: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAAuthorityRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CAAuthorityRevocation"];
                 };
             };
             /** @description client error */

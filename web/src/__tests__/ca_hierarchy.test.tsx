@@ -33,6 +33,7 @@ const { apiMock } = vi.hoisted(() => ({
     previewCAAuthorityRotation: vi.fn(),
     rotateCAAuthority: vi.fn(),
     rekeyCAAuthority: vi.fn(),
+    revokeCAAuthority: vi.fn(),
     rekeyOfflineRoot: vi.fn(),
     getOfflineRootRekeyReceipt: vi.fn(),
     managedKeyCustody: vi.fn(),
@@ -450,6 +451,9 @@ describe("CA hierarchy and custody surface", () => {
       }
       if (input.operation === "rekey_ca") {
         return { ...base, id: "ceremony-rekey-ca", purpose: "ca-rekey-v2:reviewed-plan-hash" };
+      }
+      if (input.operation === "revoke_ca") {
+        return { ...base, id: "ceremony-revoke-ca", purpose: "revoke-ca:reviewed-binding" };
       }
       return { ...base, id: "ceremony-root-1", purpose: "create_root:Trust Root CA" };
     });
@@ -1097,6 +1101,60 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-imported/issue").length).toBeGreaterThan(0);
     expect(screen.getAllByText("/api/v1/ca/authorities/ca-existing-successor/issue").length).toBeGreaterThan(0);
   }, 15_000);
+
+  it("revokes a CA key after a reviewed revoke_ca ceremony and shows the signer's readback", async () => {
+    const user = userEvent.setup();
+    const authority = {
+      id: "ca-revoke-target",
+      tenant_id: "tenant-1",
+      kind: "intermediate",
+      status: "active",
+      common_name: "Compromised Issuing CA",
+      signer_handle: "ca-hierarchy-ceremony-issuing",
+      certificate_pem: "",
+      serial: "0a",
+      max_path_len: 0,
+      permitted_dns_names: ["example.test"],
+      extended_key_usages: ["serverAuth"],
+      created_at: "2026-06-26T14:00:00Z",
+    };
+    apiMock.caAuthorities.mockResolvedValue({ items: [authority] });
+    apiMock.revokeCAAuthority.mockResolvedValue({
+      authority: { ...authority, status: "revoked", revoked_at: "2026-10-26T12:00:00Z", revocation_reason: "ca_compromise" },
+      reason: "ca_compromise",
+      revoked_at: "2026-10-26T12:00:00Z",
+      signer_revoked: true,
+      parent_id: "ca-root",
+      revoked_on_parent_crl: true,
+      ceremony_id: "ceremony-revoke-ca",
+      follow_up: ["Reissue the certificates this authority issued from another active authority."],
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=lifecycle");
+
+    await screen.findByRole("heading", { name: "Revoke a CA key" });
+    expect(screen.getByRole("button", { name: "Revoke CA key" })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText("Authority to revoke"), "ca-revoke-target");
+    await user.selectOptions(screen.getByLabelText("Revocation reason"), "ca_compromise");
+    await user.click(screen.getByRole("button", { name: "Start revoke ceremony" }));
+    await user.click(within(await screen.findByRole("dialog", { name: "Review CA ceremony" })).getByRole("button", { name: "Start reviewed ceremony" }));
+    await waitFor(() =>
+      expect(apiMock.createCACeremony).toHaveBeenCalledWith({
+        operation: "revoke_ca",
+        authority_id: "ca-revoke-target",
+        reason: "ca_compromise",
+        threshold: 2,
+      }),
+    );
+    expect(await screen.findByDisplayValue("ceremony-revoke-ca")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Revoke CA key" }));
+    await waitFor(() =>
+      expect(apiMock.revokeCAAuthority).toHaveBeenCalledWith("ca-revoke-target", { ceremony_id: "ceremony-revoke-ca", reason: "ca_compromise" }),
+    );
+    expect(await screen.findByText("Compromised Issuing CA (revoked)")).toBeInTheDocument();
+    expect(screen.getByText("Signer reports the key revoked")).toBeInTheDocument();
+    expect(screen.getByText("Reissue the certificates this authority issued from another active authority.")).toBeInTheDocument();
+  }, 10000);
 
   it("starts a CA re-key ceremony and activates fresh CA material", async () => {
     const user = userEvent.setup();

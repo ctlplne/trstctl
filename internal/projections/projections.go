@@ -189,6 +189,9 @@ const (
 	EventCAAuthorityImported                 = caevent.EventCAAuthorityImported
 	EventCAAuthorityRotated                  = "ca.authority.rotated"
 	EventCAAuthorityRekeyed                  = caevent.EventCAAuthorityRekeyed
+	// EventCAAuthorityRevoked records the administrative revocation of a
+	// signer-backed CA authority's key (A128).
+	EventCAAuthorityRevoked                  = "ca.authority.revoked"
 	EventCAAuthorityHorizonAlerted           = "ca.authority.horizon_alerted"
 	EventCAIntermediateCreated               = caevent.EventCAIntermediateCreated
 	EventCAIntermediateCSRSignRequested      = "ca.intermediate_csr.sign_requested"
@@ -1961,6 +1964,24 @@ type CAAuthorityRotated struct {
 	Reason          string `json:"reason,omitempty"`
 	IssuePath       string `json:"issue_path,omitempty"`
 	ActiveIssuePath string `json:"active_issue_path,omitempty"`
+}
+
+// CAAuthorityRevoked is the payload of ca.authority.revoked: a revoke_ca
+// ceremony's execution. The signer revoked the authority's key, the authority
+// stops issuing, and under a managed parent its certificate joins the parent's
+// revocation list.
+type CAAuthorityRevoked struct {
+	ID                 string    `json:"id"`
+	SignerHandle       string    `json:"signer_handle"`
+	Serial             string    `json:"serial"`
+	Reason             string    `json:"reason"`
+	ReasonCode         int       `json:"reason_code"`
+	CeremonyID         string    `json:"ceremony_id"`
+	ApprovalEventIDs   []string  `json:"approval_event_ids"`
+	SignerOperationID  string    `json:"signer_operation_id"`
+	RevokedAt          time.Time `json:"revoked_at"`
+	ParentID           string    `json:"parent_id,omitempty"`
+	RevokedOnParentCRL bool      `json:"revoked_on_parent_crl,omitempty"`
 }
 
 // CAAuthorityRekeyed is the payload of ca.authority.rekeyed. It carries the full
@@ -4462,6 +4483,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCAEndEntityIssued:                        {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CAEndEntityInventorySchemaVersion: true},
 	EventCAAuthorityRotated:                       {1: true},
 	EventCAAuthorityRekeyed:                       {1: true},
+	EventCAAuthorityRevoked:                       {1: true},
 	EventCAAuthorityHorizonAlerted:                {1: true, CAAuthorityHorizonAlertEventSchemaVersion: true},
 	EventCACrossSigned:                            {1: true},
 	EventBreakglassIssued:                         {1: true, BreakglassReconcileEventSchemaVersion: true, BreakglassOfflineEvidenceEventSchemaVersion: true},
@@ -5704,6 +5726,25 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return fmt.Errorf("projections: %s requires predecessor_ca_id and successor_ca_id", e.Type)
 		}
 		return p.store.ApplyCAAuthorityRotatedTx(ctx, tx, e.TenantID, pl.PredecessorCAID, pl.SuccessorCAID)
+	case EventCAAuthorityRevoked:
+		var pl CAAuthorityRevoked
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		if pl.ID == "" || pl.SignerHandle == "" || pl.Reason == "" || pl.CeremonyID == "" || pl.RevokedAt.IsZero() ||
+			!cryptoboundary.ValidCRLReasonCode(pl.ReasonCode) || (pl.RevokedOnParentCRL && (pl.ParentID == "" || pl.Serial == "")) {
+			return fmt.Errorf("projections: %s requires the authority, signer handle, reason, ceremony and revocation time", e.Type)
+		}
+		if err := p.store.ApplyCAAuthorityRevokedTx(ctx, tx, e.TenantID, pl.ID, pl.Reason, pl.RevokedAt); err != nil {
+			return err
+		}
+		if err := p.store.ApplyKeyCeremonyCompletedTx(ctx, tx, e.TenantID, pl.CeremonyID, e.Time); err != nil {
+			return err
+		}
+		if pl.RevokedOnParentCRL {
+			return p.store.RevokeIssuedCertTx(ctx, tx, e.TenantID, pl.ParentID, pl.Serial, pl.ReasonCode, pl.RevokedAt)
+		}
+		return nil
 	case EventCAAuthorityRekeyed:
 		var pl CAAuthorityRekeyed
 		if err := decode(e, &pl); err != nil {

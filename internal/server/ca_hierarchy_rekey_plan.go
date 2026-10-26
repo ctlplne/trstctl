@@ -29,6 +29,23 @@ func rekeyAuthoritySpec(ca store.CAAuthority, ttlSeconds int64) api.CASpec {
 // profile, the requested lifetime, and the operator's reason. Preview and
 // start share this validation so the displayed plan is the executed plan.
 func (h *caHierarchyService) ceremonyPurposeAndSpec(ctx context.Context, tenantID string, req api.CACeremonyStartRequest) (string, api.CASpec, error) {
+	if req.Operation == "revoke_ca" {
+		if strings.TrimSpace(req.AuthorityID) == "" {
+			return "", api.CASpec{}, fmt.Errorf("%w: authority_id is required for revoke_ca", api.ErrCAHierarchyInvalid)
+		}
+		if _, err := caRevocationReasonCode(strings.TrimSpace(req.Reason)); err != nil {
+			return "", api.CASpec{}, err
+		}
+		authority, err := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.AuthorityID))
+		if err != nil {
+			return "", api.CASpec{}, err
+		}
+		if err := validateAuthorityRevocation(authority); err != nil {
+			return "", api.CASpec{}, err
+		}
+		purpose, err := revokeCAPurpose(authority, strings.TrimSpace(req.Reason))
+		return purpose, api.CASpec{}, err
+	}
 	if req.Operation == "release_managed_ca_leaf" {
 		if req.Threshold < 2 {
 			return "", api.CASpec{}, fmt.Errorf("%w: release requires at least two distinct custodians", api.ErrCAHierarchyInvalid)

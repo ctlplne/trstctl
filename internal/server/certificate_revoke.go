@@ -111,6 +111,9 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 			} else if destroyed {
 				return "", orchestrator.ErrCertificateAuthorityKeyDestroyed
 			}
+			if authority.Status == "revoked" {
+				return "", orchestrator.ErrCertificateAuthorityKeyRevoked
+			}
 			return origin.CAID, nil
 		}
 		if found && event.Type == projections.EventCAEndEntityIssued && event.SchemaVersion == projections.CAEndEntityInventorySchemaVersion {
@@ -145,6 +148,9 @@ func (s *Server) certificateRevocationAuthority(ctx context.Context, certificate
 				return "", err
 			} else if destroyed {
 				return "", orchestrator.ErrCertificateAuthorityKeyDestroyed
+			}
+			if authority.Status == "revoked" {
+				return "", orchestrator.ErrCertificateAuthorityKeyRevoked
 			}
 			return origin.CAID, nil
 		}
@@ -194,7 +200,7 @@ func (s *Server) recoveredLeafRevocationAuthority(ctx context.Context, certifica
 
 // managedLeafRevocationAuthority returns the managed CA that signed der and
 // whose ledger holds serial, refusing a CA without a signer, a leaf it did not
-// sign, a serial it never minted, and a CA whose key was destroyed.
+// sign, a serial it never minted, and a CA whose key was destroyed or revoked.
 func (s *Server) managedLeafRevocationAuthority(ctx context.Context, tenantID, caID string, der []byte, serial string) (string, error) {
 	authority, err := s.store.GetCAAuthority(ctx, tenantID, caID)
 	if store.IsNotFound(err) || (err == nil && authority.SignerHandle == "") {
@@ -216,6 +222,9 @@ func (s *Server) managedLeafRevocationAuthority(ctx context.Context, tenantID, c
 		return "", err
 	} else if destroyed {
 		return "", orchestrator.ErrCertificateAuthorityKeyDestroyed
+	}
+	if authority.Status == "revoked" {
+		return "", orchestrator.ErrCertificateAuthorityKeyRevoked
 	}
 	return caID, nil
 }

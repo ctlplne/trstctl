@@ -40,6 +40,7 @@ Purpose values are deliberately concrete:
 | `offline-intermediate:<parent-ca-id>:<sha256-of-ca-spec>` | Generating a signer-held CSR under the offline root, then importing the signed intermediate. |
 | `import-existing-ca:<signer-handle>:<sha256-of-chain-der>:root:<sha256-of-ca-spec>` | Importing an existing certificate chain, bound to the named signer-held key handle. |
 | `ca-rekey-v2:<sha256-of-authority/spec/reason>` | Re-keying one active signer-backed authority with the exact reviewed profile and lifetime. |
+| `revoke-ca:<sha256-of-authority/signer-handle/certificate/reason>` | Revoking one signer-backed authority's key for the reviewed reason. |
 | `cross-sign:<ca-id>:<sha256-of-target-cert-der>` | One cross-signature from that CA over the target certificate. |
 | `offline-root-rekey:<sha256-of-authority/successor/both-cross-certs/reason/spec>` | Importing an offline-root successor plus both direction-specific cross-certificates; private keys stay on the disconnected systems. |
 | `offline-cross-sign:<sha256-of-authority/target/cross-cert>` | Importing an already-produced offline-root cross-certificate for a target. |
@@ -571,6 +572,56 @@ verifies their public successor and cross-certificates.
    `superseded`; and records `replaces_id` on the successor.
 4. Verify: both the predecessor and successor issue URLs return chains signed by
    the new successor CA.
+
+## Procedure: revoking a signer-backed CA's key
+
+Revoke an authority's key when it is compromised or must stop signing for any
+other reason. Revocation is permanent. The isolated signer keeps the key, so
+its public half stays readable and a signed retirement can still destroy it
+later, but it signs nothing again: no certificate, CRL, or OCSP response. An
+offline authority's key is outside trstctl; revoke its certificate where its
+issuer lives.
+
+1. Pick the authority (status `active` or `superseded`, with a signer handle)
+   and a reason: `key_compromise`, `ca_compromise`, `affiliation_changed`,
+   `superseded`, `cessation_of_operation`, or `privilege_withdrawn`. Preview
+   with `POST /api/v1/ca/ceremonies/preview`, then start the ceremony with
+   `POST /api/v1/ca/ceremonies`:
+
+   ```json
+   {"operation": "revoke_ca", "authority_id": "<ca-authority-id>", "reason": "key_compromise", "threshold": 2}
+   ```
+
+   The preview names the authority and reason and lists what the revocation
+   does and what it cannot do. The `revoke-ca` purpose binds the authority ID,
+   its signer handle, its certificate, and the reason.
+2. **Collect approvals** at `POST /api/v1/ca/ceremonies/{id}/approvals`.
+3. Execute with `POST /api/v1/ca/authorities/{id}/revoke` (or
+   `trstctl-cli ca authorities revoke <id> -f revoke.json`):
+
+   ```json
+   {"ceremony_id": "<revoke-ceremony-id>", "reason": "key_compromise"}
+   ```
+
+   A different reason than the ceremony approved is refused with 409. The
+   server asks the signer to revoke the key, reads the signer's own answer
+   back, appends `ca.authority.revoked`, and marks the authority `revoked`
+   with `revoked_at` and `revocation_reason`. When the authority is an
+   intermediate under a signer-backed parent in this tenant, its certificate
+   is revoked on the parent's CRL in the same step. The response carries
+   `signer_revoked`, `revoked_on_parent_crl`, and `follow_up`: what remains
+   for you.
+4. Verify: `GET /api/v1/ca/authorities` lists the authority as `revoked`; an
+   issue request to it answers 409; the parent's published CRL
+   (`/crl/<tenant>/authorities/<parent-id>`) lists its serial. Reissue what it
+   issued from another active authority. For a root, remove its certificate
+   from every trust store that holds it: a root has no issuer to revoke it.
+
+After revocation the authority's last CRL stays until its next-update time and
+is not refreshed again, and a single leaf it issued can no longer be revoked
+on its CRL (the bulk revoke reports that leaf as failed): the revocation of the
+authority's own certificate is what covers its leaves. Every signer process
+sharing the keystore refuses the key, and a restarted signer keeps refusing it.
 
 ## Procedure: re-keying an offline root
 

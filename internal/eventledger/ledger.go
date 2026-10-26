@@ -48,6 +48,7 @@ const (
 	EventCAAuthorityImported                      = "ca.authority.imported"
 	EventCAAuthorityRotated                       = "ca.authority.rotated"
 	EventCAAuthorityRekeyed                       = "ca.authority.rekeyed"
+	EventCAAuthorityRevoked                       = "ca.authority.revoked"
 	EventCACrossSigned                            = "ca.cross_signed"
 	EventCAIntermediateCreated                    = "ca.intermediate.created"
 	EventCAIntermediateCSRIssued                  = "ca.intermediate_csr.issued"
@@ -294,6 +295,7 @@ var ledger = []FeatureEvent{
 	{"F48", "Private/enterprise CA hierarchy management", "issue_leaf", "issueHierarchyLeaf", []string{EventCAEndEntityIssued}},
 	{"F48", "Private/enterprise CA hierarchy management", "rotate_authority", "rotateCAAuthority", []string{EventCAAuthorityRotated}},
 	{"F48", "Private/enterprise CA hierarchy management", "rekey_authority", "rekeyCAAuthority", []string{EventCAAuthorityRekeyed}},
+	{"F48", "Private/enterprise CA hierarchy management", "revoke_authority", "revokeCAAuthority", []string{EventCAAuthorityRevoked}},
 	{"F48", "Private/enterprise CA hierarchy management", "cross_sign_authority", "crossSignCAAuthority", []string{EventCACrossSigned}},
 	{"F48", "Private/enterprise CA hierarchy management", "import_offline_cross_sign", "importOfflineRootCrossSign", []string{EventCACrossSigned}},
 	{"F48", "Private/enterprise CA hierarchy management", "rekey_offline_root", "rekeyOfflineRoot", []string{EventCAAuthorityRekeyed}},

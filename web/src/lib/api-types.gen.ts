@@ -1647,6 +1647,8 @@ export interface CAAuthority {
   permitted_dns_names?: string[];
   possession_proof?: "self_signature" | "signer_challenge" | "offline_signature" | "not_proven";
   replaces_id?: string;
+  revocation_reason?: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
+  revoked_at?: string;
   serial: string;
   signer_handle: string;
   status: string;
@@ -1675,6 +1677,22 @@ export interface CAAuthorityRekeyRequest {
   ceremony_id: string;
   reason?: string;
   ttl_seconds?: number;
+}
+
+export interface CAAuthorityRevocation {
+  authority: CAAuthority;
+  ceremony_id: string;
+  follow_up: string[];
+  parent_id?: string;
+  reason: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
+  revoked_at: string;
+  revoked_on_parent_crl: boolean;
+  signer_revoked: boolean;
+}
+
+export interface CAAuthorityRevokeRequest {
+  ceremony_id: string;
+  reason: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
 }
 
 export interface CAAuthorityRotation {
@@ -1730,7 +1748,7 @@ export interface CACeremonyPlanPreview {
   capability: "F48";
   changes: string[];
   normalized_spec: CASpec;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
   parent?: CACeremonyPlanAuthority;
   preview_external_effects: string[];
   preview_writes: string[];
@@ -1750,7 +1768,7 @@ export interface CACeremonyStartRequest {
   csr_pem?: string;
   dependent_id?: string;
   expected_certificate_sha256?: string;
-  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf";
+  operation: "create_root" | "import_offline_root" | "import_existing_ca" | "prepare_existing_ca" | "create_intermediate" | "create_offline_intermediate" | "issue_intermediate_csr" | "rekey_ca" | "cross_sign_ca" | "import_offline_cross_sign" | "rekey_offline_root" | "release_managed_ca_leaf" | "revoke_ca";
   parent_id?: string;
   reason?: string;
   reverse_cross_certificate_pem?: string;

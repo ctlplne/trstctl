@@ -45,6 +45,7 @@ type CAHierarchyService interface {
 	PreviewRotation(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotationPlanPreview, error)
 	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
 	RekeyAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRekeyRequest) (CAAuthorityRotation, error)
+	RevokeAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRevokeRequest) (CAAuthorityRevocation, error)
 	CrossSignAuthority(ctx context.Context, tenantID, caID string, req CACrossSignRequest) (CACrossSign, error)
 	GetCrossSignReceipt(ctx context.Context, tenantID, ceremonyID string) (CACrossSign, error)
 	ImportOfflineRootCrossSign(ctx context.Context, tenantID, caID string, req CAOfflineCrossSignImportRequest) (CACrossSign, error)
@@ -230,6 +231,28 @@ type CAAuthorityRekeyRequest struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
+// CAAuthorityRevokeRequest executes a revoke_ca ceremony that reached quorum
+// (A128). The reason must be the one the ceremony approved.
+type CAAuthorityRevokeRequest struct {
+	CeremonyID string `json:"ceremony_id"`
+	Reason     string `json:"reason"`
+}
+
+// CAAuthorityRevocation is the result of revoking an authority's key: the
+// authority as now recorded, the revocation, whether the signer itself reports
+// the key revoked, and whether the authority's certificate was revoked on a
+// managed parent's CRL. FollowUp names what remains outside trstctl's reach.
+type CAAuthorityRevocation struct {
+	Authority          CAAuthority `json:"authority"`
+	Reason             string      `json:"reason"`
+	RevokedAt          time.Time   `json:"revoked_at"`
+	SignerRevoked      bool        `json:"signer_revoked"`
+	ParentID           *string     `json:"parent_id,omitempty"`
+	RevokedOnParentCRL bool        `json:"revoked_on_parent_crl"`
+	CeremonyID         string      `json:"ceremony_id"`
+	FollowUp           []string    `json:"follow_up"`
+}
+
 type CACrossSignRequest struct {
 	CeremonyID     string `json:"ceremony_id"`
 	CertificatePEM string `json:"certificate_pem"`
@@ -318,6 +341,10 @@ type CAAuthority struct {
 	// CAPossession* values. That call's response and the creation event
 	// carry it; listings omit it.
 	PossessionProof string `json:"possession_proof,omitempty"`
+	// RevokedAt and RevocationReason are set once the authority's key was
+	// administratively revoked (status "revoked").
+	RevokedAt        *time.Time `json:"revoked_at,omitempty"`
+	RevocationReason string     `json:"revocation_reason,omitempty"`
 }
 
 // How possession of a CA key was established when an authority was created
@@ -790,6 +817,29 @@ func (a *API) rekeyCAAuthority(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusCreated, rotation, nil
+	})
+}
+
+// revokeCAAuthority revokes a signer-backed authority's key after a revoke_ca
+// ceremony reached quorum (A128).
+//
+//trstctl:mutation
+func (a *API) revokeCAAuthority(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	id := r.PathValue("id")
+	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.caHierarchy == nil {
+			return 0, nil, ErrCAHierarchyUnavailable
+		}
+		var req CAAuthorityRevokeRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		result, err := a.caHierarchy.RevokeAuthority(ctx, tenantID, id, req)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, result, nil
 	})
 }
 

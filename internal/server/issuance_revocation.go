@@ -75,15 +75,21 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 			origin := origins[cert.Fingerprint]
 			if origin.ExternalID == "" && cert.Status == "superseded" {
 				// A superseded predecessor whose managed CA key was destroyed by
-				// signed retirement cannot be revoked anywhere. The reviewed
-				// preview excluded it; failing the whole command here would block
-				// the live successor's publication for a leaf nothing can sign for.
+				// signed retirement or revoked cannot be revoked on that CA's CRL.
+				// The reviewed preview excluded it; failing the whole command here
+				// would block the live successor's publication for a leaf nothing
+				// can sign for.
 				destroyed, err := caKeyDestroyed(ctx, d.caKeyRetirementState, m.TenantID, origin.CAID)
 				if err != nil {
 					memberErrors = append(memberErrors, err)
 					continue
 				}
-				if destroyed {
+				revoked, err := d.caKeyRevoked(ctx, m.TenantID, origin.CAID)
+				if err != nil {
+					memberErrors = append(memberErrors, err)
+					continue
+				}
+				if destroyed || revoked {
 					skipped++
 					continue
 				}
@@ -284,4 +290,20 @@ func (d *issuanceDispatcher) revokeExternalCertificate(ctx context.Context, tena
 		return fmt.Errorf("server: external certificate revocation not confirmed: %s", externalCAUpstreamDetail(err))
 	}
 	return nil
+}
+
+// caKeyRevoked reports whether a managed CA authority's key was
+// administratively revoked (A128). An unknown or external authority is not.
+func (d *issuanceDispatcher) caKeyRevoked(ctx context.Context, tenantID, caID string) (bool, error) {
+	if caID == "" || d.store == nil {
+		return false, nil
+	}
+	authority, err := d.store.GetCAAuthority(ctx, tenantID, caID)
+	if store.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return authority.Status == "revoked", nil
 }

@@ -333,8 +333,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// show|set`, owner decision 2026-10-24) raised it to 583, mapped onto F4.
 	// The on-demand revocation endpoint probe (`revocation health probe`)
 	// raised it to 584, mapped onto the revocation center row.
-	if len(out) != 584 {
-		t.Fatalf("CLI commands = %d, want 584", len(out))
+	// A128's `ca authorities revoke` raised it to 585, mapped onto F48.
+	if len(out) != 585 {
+		t.Fatalf("CLI commands = %d, want 585", len(out))
 	}
 	return out
 }

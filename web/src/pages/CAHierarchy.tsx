@@ -102,6 +102,7 @@ const caWorkspaceTabIDs: readonly CAWorkspaceTab[] = ["overview", "authorities",
 const CAOfflineCrossSignPanel = lazy(() =>
   import("./cahierarchy/CAHierarchyOfflineCrossSignParts").then((parts) => ({ default: parts.CAOfflineCrossSignPanel })),
 );
+const CARevokePanel = lazy(() => import("./cahierarchy/CAHierarchyRevokeParts").then((parts) => ({ default: parts.CARevokePanel })));
 
 function caWorkspaceTabFromSearchParam(value: string | null): CAWorkspaceTab {
   return caWorkspaceTabIDs.includes(value as CAWorkspaceTab) ? (value as CAWorkspaceTab) : "overview";
@@ -914,6 +915,11 @@ export function CAHierarchy() {
       {tab === "lifecycle" && (
         <Suspense fallback={<LoadingState>{t("caHierarchy.offlineCross.loading")}</LoadingState>}>
           <CAOfflineCrossSignPanel authorities={authorities} />
+        </Suspense>
+      )}
+      {tab === "lifecycle" && (
+        <Suspense fallback={<LoadingState>{t("caHierarchy.revoke.loading")}</LoadingState>}>
+          <CARevokePanel authorities={authorities} openCeremonyReview={openCeremonyReview} onRevoked={() => void load()} />
         </Suspense>
       )}
 

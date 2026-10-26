@@ -767,6 +767,20 @@ cat > prepared-ca-import.json <<'JSON'
 JSON
 trstctl-cli ca authorities import-existing -f prepared-ca-import.json
 
+# Revoke a signer-backed authority's key: two custodians approve the exact
+# authority and reason, then the revoke command executes it. Permanent.
+cat > revoke-ceremony.json <<'JSON'
+{"operation":"revoke_ca","authority_id":"<ca-authority-id>","reason":"key_compromise","threshold":2}
+JSON
+trstctl-cli ca ceremonies preview -f revoke-ceremony.json
+trstctl-cli ca ceremonies start -f revoke-ceremony.json
+trstctl-cli ca ceremonies approve <revoke-ceremony-id>
+trstctl-cli ca ceremonies approve <revoke-ceremony-id>
+cat > revoke.json <<'JSON'
+{"ceremony_id":"<revoke-ceremony-id>","reason":"key_compromise"}
+JSON
+trstctl-cli ca authorities revoke <ca-authority-id> -f revoke.json
+
 cat > offline-intermediate-ceremony.json <<'JSON'
 {"operation":"create_offline_intermediate","parent_id":"<offline-root-authority-id>","threshold":2,"spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}
 JSON

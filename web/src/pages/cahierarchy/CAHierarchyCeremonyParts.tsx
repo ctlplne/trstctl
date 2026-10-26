@@ -214,6 +214,9 @@ export function CACeremonyReviewDialog({
   const titleId = "ca-ceremony-review-heading";
   const descriptionId = "ca-ceremony-review-description";
   const authority = preview.authority ?? preview.parent;
+  // A release or a key revocation acts on an existing authority: it has no CA
+  // specification to show.
+  const specless = Boolean(preview.release_review) || preview.operation === "revoke_ca";
   return (
     <Dialog
       open
@@ -252,7 +255,7 @@ export function CACeremonyReviewDialog({
             value={t("caHierarchy.preview.approvalCount", { count: String(preview.approval_threshold) })}
           />
           <ReviewValue label={t("caHierarchy.preview.permission")} value={preview.required_permission} />
-          {!preview.release_review && <ReviewValue label={t("caHierarchy.preview.commonName")} value={preview.normalized_spec.common_name} />}
+          {!specless && <ReviewValue label={t("caHierarchy.preview.commonName")} value={preview.normalized_spec.common_name} />}
           {preview.release_review && (
             <>
               <ReviewValue label={t("caHierarchy.release.certificate")} value={preview.release_review.certificate_id} />
@@ -283,7 +286,7 @@ export function CACeremonyReviewDialog({
           </div>
         </dl>
 
-        {!preview.release_review && (
+        {!specless && (
           <section className="border-t border-border pt-4">
             <h3 className="font-semibold">{t("caHierarchy.preview.exactSpec")}</h3>
             <pre className="mt-2 max-h-48 overflow-auto rounded-control bg-muted p-3 text-xs">{JSON.stringify(preview.normalized_spec, null, 2)}</pre>

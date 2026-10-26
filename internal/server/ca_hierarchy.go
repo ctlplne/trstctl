@@ -127,6 +127,9 @@ func (h *caHierarchyService) PreviewCeremony(ctx context.Context, tenantID strin
 	if req.Operation == "rekey_ca" {
 		preview.Changes = append(preview.Changes, "Re-key reason: "+strings.TrimSpace(req.Reason))
 	}
+	if req.Operation == "revoke_ca" {
+		preview.Changes = append(preview.Changes, "Revocation reason: "+strings.TrimSpace(req.Reason))
+	}
 	if req.ParentID != "" {
 		parent, loadErr := h.store.GetCAAuthority(ctx, tenantID, strings.TrimSpace(req.ParentID))
 		if loadErr != nil {
@@ -197,12 +200,21 @@ func ceremonyPreviewChanges(operation string) []string {
 		return []string{"Prepare an m-of-n ceremony to activate the supplied offline-root successor and its bidirectional public cross-signatures."}
 	case "release_managed_ca_leaf":
 		return []string{"Prepare a two-custodian disposition of the exact expired managed CA leaf, its original mint event and the operator's explicit external-use risk decision. The preview writes nothing."}
+	case "revoke_ca":
+		return []string{"Prepare an m-of-n ceremony to revoke the reviewed authority's key for the reviewed reason. Executing it makes the isolated signer refuse every signature with that key, stops the authority issuing, and revokes its certificate on a managed parent's CRL. The preview writes nothing and contacts no signer."}
 	default:
 		return []string{"Prepare the reviewed CA hierarchy ceremony without creating a ceremony, key, certificate, or external request during preview."}
 	}
 }
 
 func ceremonyPreviewRisks(operation string) []string {
+	if operation == "revoke_ca" {
+		return []string{
+			"Revocation is permanent: the key signs no certificate, CRL or OCSP response again, and its last published CRL stays until its next-update time.",
+			"Certificates this authority issued stop validating only where relying parties check its parent's CRL; a root has no issuer, so it must be removed from trust stores.",
+			"The server will require distinct custodian approvals and revalidate the exact authority, certificate, signer handle and reason before execution.",
+		}
+	}
 	if operation == "release_managed_ca_leaf" {
 		return []string{
 			"The requester held this leaf's private key. Expiry and a local inventory record cannot prove it was never used outside this deployment.",
@@ -220,6 +232,13 @@ func ceremonyPreviewRisks(operation string) []string {
 }
 
 func ceremonyPreviewVerification(operation string) []string {
+	if operation == "revoke_ca" {
+		return []string{
+			"Confirm the authority, its status and the reason match the intended revocation before opening the ceremony.",
+			"After execution, verify the authority reads revoked, the signer reports its key revoked, and a managed parent's CRL lists its serial.",
+			"Reissue what the authority issued from another active authority.",
+		}
+	}
 	if operation == "release_managed_ca_leaf" {
 		return []string{
 			"Match the exact certificate ID, public DER digest, original mint event, CA key and explicit external-use risk decision before opening the ceremony.",
@@ -1562,6 +1581,8 @@ func hierarchyPurposeFromStartRequest(req api.CACeremonyStartRequest) (string, e
 		return externalIntermediateCSRPurpose(req.ParentID, csrDER, req.Spec)
 	case "rekey_ca":
 		return "", fmt.Errorf("%w: rekey_ca requires authority-backed plan validation", api.ErrCAHierarchyInvalid)
+	case "revoke_ca":
+		return "", fmt.Errorf("%w: revoke_ca requires authority-backed plan validation", api.ErrCAHierarchyInvalid)
 	case "cross_sign_ca":
 		targetDER, _, err := singleCertificatePEM(req.TargetCertificatePEM)
 		if err != nil {
@@ -1882,6 +1903,7 @@ func authorityResponse(c store.CAAuthority) api.CAAuthority {
 		Kind: c.Kind, Status: c.Status, CertificatePEM: c.CertificatePEM, SignerHandle: c.SignerHandle,
 		Serial: c.Serial, NotAfter: c.NotAfter, MaxPathLen: c.MaxPathLen,
 		PermittedDNSNames: c.PermittedDNSNames, ExtendedKeyUsages: c.EKUs, ReplacesID: c.ReplacesID, CreatedAt: c.CreatedAt,
+		RevokedAt: c.RevokedAt, RevocationReason: c.RevocationReason,
 	}
 	if der, err := firstCertDER(c.CertificatePEM); err == nil {
 		out.KeyAlgorithm = crypto.CertificateKeyAlgorithmLabel(der)

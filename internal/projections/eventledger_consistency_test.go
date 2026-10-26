@@ -28,6 +28,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventCAAuthorityImported:                      "EventCAAuthorityImported",
 	projections.EventCAAuthorityRotated:                       "EventCAAuthorityRotated",
 	projections.EventCAAuthorityRekeyed:                       "EventCAAuthorityRekeyed",
+	projections.EventCAAuthorityRevoked:                       "EventCAAuthorityRevoked",
 	projections.EventCACrossSigned:                            "EventCACrossSigned",
 	projections.EventCAIntermediateCreated:                    "EventCAIntermediateCreated",
 	projections.EventCAIntermediateCSRIssued:                  "EventCAIntermediateCSRIssued",

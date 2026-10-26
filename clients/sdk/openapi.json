@@ -6782,6 +6782,22 @@
             "format": "uuid",
             "type": "string"
           },
+          "revocation_reason": {
+            "description": "Why the authority's key was revoked; set with status revoked.",
+            "enum": [
+              "key_compromise",
+              "ca_compromise",
+              "affiliation_changed",
+              "superseded",
+              "cessation_of_operation",
+              "privilege_withdrawn"
+            ],
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "serial": {
             "type": "string"
           },
@@ -6896,6 +6912,85 @@
         },
         "required": [
           "ceremony_id"
+        ],
+        "type": "object"
+      },
+      "CAAuthorityRevocation": {
+        "properties": {
+          "authority": {
+            "$ref": "#/components/schemas/CAAuthority"
+          },
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "follow_up": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "parent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "key_compromise",
+              "ca_compromise",
+              "affiliation_changed",
+              "superseded",
+              "cessation_of_operation",
+              "privilege_withdrawn"
+            ],
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_on_parent_crl": {
+            "description": "The authority's certificate was revoked on its managed parent's CRL.",
+            "type": "boolean"
+          },
+          "signer_revoked": {
+            "description": "The isolated signer itself reports the authority's key revoked.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authority",
+          "reason",
+          "revoked_at",
+          "signer_revoked",
+          "revoked_on_parent_crl",
+          "ceremony_id",
+          "follow_up"
+        ],
+        "type": "object"
+      },
+      "CAAuthorityRevokeRequest": {
+        "properties": {
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "description": "The revocation reason the revoke_ca ceremony approved.",
+            "enum": [
+              "key_compromise",
+              "ca_compromise",
+              "affiliation_changed",
+              "superseded",
+              "cessation_of_operation",
+              "privilege_withdrawn"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "ceremony_id",
+          "reason"
         ],
         "type": "object"
       },
@@ -7122,7 +7217,8 @@
               "cross_sign_ca",
               "import_offline_cross_sign",
               "rekey_offline_root",
-              "release_managed_ca_leaf"
+              "release_managed_ca_leaf",
+              "revoke_ca"
             ],
             "type": "string"
           },
@@ -7224,7 +7320,8 @@
               "cross_sign_ca",
               "import_offline_cross_sign",
               "rekey_offline_root",
-              "release_managed_ca_leaf"
+              "release_managed_ca_leaf",
+              "revoke_ca"
             ],
             "type": "string"
           },
@@ -19233,7 +19330,7 @@
             "type": "string"
           },
           "reason": {
-            "description": "Why this bound leaf is not sent to any CA: today only a superseded predecessor whose managed issuing CA key was destroyed by signed retirement.",
+            "description": "Why this bound leaf is not sent to any CA: a superseded predecessor whose managed issuing CA key was destroyed by signed retirement or revoked.",
             "type": "string"
           },
           "serial": {
@@ -45320,6 +45417,83 @@
           }
         ],
         "summary": "Re-key a signer-backed CA authority after ceremony quorum",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/revoke": {
+      "post": {
+        "operationId": "revokeCAAuthority",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAAuthorityRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CAAuthorityRevocation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a signer-backed CA authority's key after ceremony quorum",
         "x-trstctl-permission": "issuers:write"
       }
     },
