@@ -182,3 +182,43 @@ func TestManagedKeySignerExplicitLoopbackClientConnects(t *testing.T) {
 		t.Fatalf("loopback dial error = %v, want connection failure after passing transport policy", err)
 	}
 }
+
+// A123: the signer-local tenant KEK file is strict. An inline PIN, an unknown
+// field, a second document, a missing token, an empty or repeated wrapper
+// table are refused before any module is loaded; a well-formed file reaches
+// the module, here a path that does not exist.
+func TestTenantKEKOptionRefusesMalformedConfig(t *testing.T) {
+	dir := t.TempDir()
+	pinFile := filepath.Join(dir, "pin")
+	if err := os.WriteFile(pinFile, []byte("987654\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	token := `"pkcs11":{"module_path":"` + filepath.Join(dir, "no-such-module.so") + `","token_label":"trstctl","user_pin_file":"` + pinFile + `"}`
+	wrappers := `"wrappers":[{"id":"hsm-a","key_label":"tenant-kek-a"}]`
+	write := func(body string) string {
+		t.Helper()
+		path := filepath.Join(dir, "tenant-kek.json")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	for name, body := range map[string]string{
+		"inline PIN":       `{"pkcs11":{"module_path":"/m.so","token_label":"t","user_pin":"OTg3NjU0"},` + wrappers + `}`,
+		"unknown field":    `{` + token + `,` + wrappers + `,"cache_keys":true}`,
+		"second document":  `{` + token + `,` + wrappers + `}{}`,
+		"no module":        `{"pkcs11":{"token_label":"t","user_pin_file":"` + pinFile + `"},` + wrappers + `}`,
+		"no wrappers":      `{` + token + `,"wrappers":[]}`,
+		"repeated wrapper": `{` + token + `,"wrappers":[{"id":"hsm-a","key_label":"a"},{"id":"hsm-a","key_label":"b"}]}`,
+	} {
+		if _, err := TenantKEKOption(write(body)); err == nil {
+			t.Errorf("%s: the tenant KEK config was accepted", name)
+		} else if strings.Contains(err.Error(), "no-such-module") {
+			t.Errorf("%s: refused only at module load: %v", name, err)
+		}
+	}
+	_, err := TenantKEKOption(write(`{` + token + `,` + wrappers + `}`))
+	if err == nil || !strings.Contains(err.Error(), "module") {
+		t.Fatalf("a well-formed config with a missing module = %v, want a module load failure", err)
+	}
+}

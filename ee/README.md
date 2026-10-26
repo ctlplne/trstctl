@@ -55,6 +55,11 @@ location does not place the implemented features behind a commercial license.
 - `ee/managedkeys`: BYOK/HSM managed-key lifecycle. Core keeps only the API and
   server interfaces; the tagged attach seam supplies the implementation only
   when `FeatureBYOK` is licensed.
+- `ee/tenantkek`: tenant domain KEK custody in the isolated signer. The signer
+  keeps each tenant's domain KEK wrapped by an operator HSM AES key over PKCS#11
+  and wraps and unwraps the tenant's data keys itself; core keeps the signer
+  RPCs and the container format, and the signer's tagged attach seam supplies
+  the custody only when `FeatureBYOK` is licensed.
 - `ee/governance`: Enterprise compliance evidence packs and governance-policy
   source. Core keeps audit export, privacy redaction/retention, OPA policy, and
   the server/API seams; the tagged attach seam supplies compliance reports under

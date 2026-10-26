@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-trstctl-EE
 
 // Package signerwiring owns the Enterprise-only construction of cloud KMS and
-// hardware managed-key providers inside the isolated signer process. It is
-// reached only through cmd/trstctl-signer's tagged EE attach seam after the BYOK
+// hardware managed-key providers inside the isolated signer process, and of the
+// HSM-backed tenant domain KEK custody (TenantKEKOption, A123). It is reached
+// only through cmd/trstctl-signer's tagged EE attach seam after the BYOK
 // license check. This package starts no server and imports no SQL or event bus.
 package signerwiring
 

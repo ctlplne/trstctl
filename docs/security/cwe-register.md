@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1737 annotated sites across 27 rules. Each row is
+1739 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -781,7 +781,7 @@ not this file.
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:384` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:430` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -846,7 +846,7 @@ not this file.
 | `ee/whitelabel/email.go:99` | scheme and host validated above; https only (CWE-79) |
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 
-### G204 — CWE-78 OS command injection (196 sites)
+### G204 — CWE-78 OS command injection (197 sites)
 
 | Location | Reason |
 |---|---|
@@ -906,6 +906,7 @@ not this file.
 | `ee/enterpriseauth/auth_ldap_served_test.go:187` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/ldap_writeback_test.go:89` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/ntlm.go:112` | operator-pinned absolute helper path from deployment configuration, validated at startup (CWE-78) |
+| `ee/managedkeys/signerwiring/softhsm_container_test.go:82` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:178` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
@@ -1149,7 +1150,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (494 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (495 sites)
 
 | Location | Reason |
 |---|---|
@@ -1268,7 +1269,8 @@ not this file.
 | `ee/auditcompliance/retention.go:56` | the archive path built above under the operator's archive dir (CWE-22) |
 | `ee/auditcompliance/retention_test.go:357` | glob is restricted to this test's private temporary archive directory. |
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
-| `ee/managedkeys/signerwiring/wiring.go:109` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
+| `ee/managedkeys/signerwiring/tenantkek.go:37` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
+| `ee/managedkeys/signerwiring/wiring.go:110` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:53` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/destination/destination_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1535,7 +1537,7 @@ not this file.
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
 | `internal/signing/ceremony_test.go:129` | the test's own temporary journal directory (CWE-22) |
 | `internal/signing/design_test.go:30` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/signing/design_test.go:136` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/gated_destruction_journal.go:252` | exact signer-owned journal path. |
 | `internal/signing/hardening_contract_test.go:55` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore.go:346` | the signer's own keystore/journal directory from its config (CWE-22) |

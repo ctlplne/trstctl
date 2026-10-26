@@ -20,3 +20,12 @@ func appendManagedKeyOptions(opts []signing.ServerOption, _ *license.Manager, co
 	}
 	return opts, nil
 }
+
+// appendTenantKEKOptions is inert in the core-only artifact: HSM-backed tenant
+// KEK custody is an Enterprise capability.
+func appendTenantKEKOptions(opts []signing.ServerOption, _ *license.Manager, configPath string) ([]signing.ServerOption, error) {
+	if configPath != "" {
+		return opts, fmt.Errorf("--tenant-kek-config is unavailable in the trstctl_core signer")
+	}
+	return opts, nil
+}

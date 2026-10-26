@@ -117,6 +117,7 @@ func TestSignerHasNoHTTPServerCall(t *testing.T) {
 		filepath.Join(sourceDir(t)), // internal/signing
 		filepath.Join(sourceDir(t), "..", "..", "cmd", "trstctl-signer"),
 		filepath.Join(sourceDir(t), "..", "..", "ee", "managedkeys", "signerwiring"),
+		filepath.Join(sourceDir(t), "..", "..", "ee", "tenantkek"),
 	}
 	needles := []string{
 		"http.Serve(",
