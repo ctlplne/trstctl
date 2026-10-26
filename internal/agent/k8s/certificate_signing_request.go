@@ -43,26 +43,36 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 	signed := 0
 	posture := make([]PostureResource, 0, len(list.Items))
 	for _, csr := range list.Items {
-		config, backed, bindingReason := c.csrIssuerConfig(csr, issuers, clusterIssuers)
-		current := kubernetesCSRPosture(csr, backed, bindingReason)
-		if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !backed {
-			posture = append(posture, current)
-			continue
-		}
-		updated, err := c.signKubernetesCSR(ctx, csr, config)
+		didSign, current, err := c.syncKubernetesCSR(ctx, csr, issuers, clusterIssuers)
+		posture = append(posture, current)
 		if err != nil {
-			posture = append(posture, failedPosture(current))
 			return signed, posture, err
 		}
-		signed++
-		// Use the API server's update response, not the pre-reconcile list
-		// object. In particular, resourceVersion must describe the exact object
-		// whose status.certificate was persisted.
-		current = kubernetesCSRPosture(updated, true, "")
-		current.State, current.Reason = "ready", "signed"
-		posture = append(posture, current)
+		if didSign {
+			signed++
+		}
 	}
 	return signed, posture, nil
+}
+
+// syncKubernetesCSR signs one approved, unfinished CSR whose signerName maps
+// to a ready trstctl issuer, and returns its posture either way.
+func (c *IssuerController) syncKubernetesCSR(ctx context.Context, csr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (bool, PostureResource, error) {
+	config, backed, bindingReason := c.csrIssuerConfig(csr, issuers, clusterIssuers)
+	current := kubernetesCSRPosture(csr, backed, bindingReason)
+	if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !backed {
+		return false, current, nil
+	}
+	updated, err := c.signKubernetesCSR(ctx, csr, config)
+	if err != nil {
+		return false, failedPosture(current), err
+	}
+	// Use the API server's update response, not the pre-reconcile list
+	// object. In particular, resourceVersion must describe the exact object
+	// whose status.certificate was persisted.
+	current = kubernetesCSRPosture(updated, true, "")
+	current.State, current.Reason = "ready", "signed"
+	return true, current, nil
 }
 
 func (c *IssuerController) csrIssuerConfig(csr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool, string) {

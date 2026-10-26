@@ -8,6 +8,22 @@ including the kind-based CI path. Deploy the agent first with
 it is running and you need to wire in one of these integrations or reproduce the
 e2e/kind test locally.
 
+## How the controller runs
+
+With `--cert-manager-controller` the agent runs one controller for every path
+below. It watches its resources through the Kubernetes API — trstctl `Issuer`,
+`ClusterIssuer`, `Certificate` and `TrustBundle` objects, cert-manager
+`CertificateRequest`s, native `CertificateSigningRequest`s, and the ConfigMaps
+it distributed — and a work queue converges each object as its watch event
+arrives, so an approved request is signed and a changed bundle is copied within
+about a second. It also re-checks every object every `--k8s-resync` (default
+ten minutes) for what no watch reports, such as a deleted certificate Secret,
+and sends its posture report after each burst of changes and every
+`--reconcile-every` (default thirty seconds). cert-manager is optional: without
+its CRDs the other paths run and the cert-manager posture is complete and
+empty. The DaemonSet's pods elect one controller through a
+`coordination.k8s.io` Lease; a pod that loses the lease stops its watches.
+
 ## cert-manager external issuer
 
 Install the CRDs and create a trstctl `ClusterIssuer`:
@@ -71,7 +87,7 @@ never a private key. A `Ready=True` Issuer proves that its configuration matches
 the operator endpoint; the issued CertificateRequest and Secret prove that the
 network, token, and CA can actually complete issuance.
 
-After each reconcile, the enrolled agent sends a metadata-only report over its
+After each burst of changes, and on its heartbeat, the enrolled agent sends a metadata-only report over its
 authenticated agent connection. `GET /api/v1/kubernetes/cert-manager-certificate-requests`
 shows the current `CertificateRequest` UID, parent `Certificate` UID, state, and
 SHA-256 fingerprint of the issued leaf. The agent verifies the request signature
@@ -249,7 +265,11 @@ spec:
 ```
 
 The agent creates or updates `ConfigMap/platform-ca-bundle` in `apps` and
-`payments`, setting `data["ca-bundle.pem"]` to the public CA bundle. It does not
+`payments`, setting `data["ca-bundle.pem"]` to the public CA bundle. In a
+ConfigMap that already exists it changes only that key, its own labels and the
+`trstctl.com/bundle-sha256` annotation, keeping any other keys, and it writes
+nothing when a copy already holds the bundle. It watches the copies too, so an
+edited or deleted one is put back within about a second. It does not
 copy private keys, bearer tokens, or workload credentials into the ConfigMap. Use
 `trstctl-cli kubernetes trust-bundles` or
 `GET /api/v1/kubernetes/trust-bundles` to inspect the served CAP-K8S-07 posture,
@@ -287,12 +307,23 @@ after the Kubernetes Secret write, and never sent to the control plane. The
 served controller test proves the path: `Certificate` -> local CSR -> trstctl
 signer -> `Secret` -> `Certificate.status.conditions[Ready=True]`.
 
+The agent renews the certificate with a new key two thirds of the way through
+the validity it had when issued. `status.notBefore` and `status.notAfter` record
+the issued validity, `status.renewalTime` when the replacement is due, and
+`status.specHash` the spec it was issued for: a changed spec (another name, key
+algorithm or Secret) is reissued at once, and a deleted Secret is reissued at
+the next re-check. The issuer's `ttlSeconds` and the CA profile bound the
+lifetime; without either, a certificate lasts 24 hours and is renewed after
+about 16.
+
 ## End-to-end test
 
 `test/e2e/kubernetes` exercises the secret destination, the legacy raw
-`CertificateRequest` bridge, and the full cert-manager
-`Certificate` -> trstctl `ClusterIssuer` -> `Secret` flow against a real API
-server. The unit acceptance suite also exercises the trstctl-native
+`CertificateRequest` bridge, the full cert-manager
+`Certificate` -> trstctl `ClusterIssuer` -> `Secret` flow, and the event-driven
+controller (with its re-check ten minutes away: a TrustBundle copied and a
+deleted copy restored, an approved native CSR signed, a trstctl `Certificate`
+issued and renewed) against a real API server. The unit acceptance suite also exercises the trstctl-native
 `Certificate` -> local CSR -> `Secret` flow and the native Kubernetes
 `CertificateSigningRequest` -> status.certificate flow plus `TrustBundle` ->
 namespace ConfigMap distribution through the same controller. CI runs the kind path with cert-manager installed (the

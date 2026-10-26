@@ -156,7 +156,17 @@ func manifestDocuments(t *testing.T, path string) []map[string]any {
 // each definition to be established.
 func applyOperatorCRDs(k kubeAPI) {
 	k.t.Helper()
-	for _, crd := range manifestDocuments(k.t, filepath.Join("..", "..", "..", "deploy", "operator", "crd.yaml")) {
+	applyCRDFile(k, filepath.Join("..", "..", "..", "deploy", "operator", "crd.yaml"))
+}
+
+// applyCRDFile installs or updates every CustomResourceDefinition in path and
+// waits for each to be established.
+func applyCRDFile(k kubeAPI, path string) {
+	k.t.Helper()
+	for _, crd := range manifestDocuments(k.t, path) {
+		if crd["kind"] != "CustomResourceDefinition" {
+			continue
+		}
 		name, _ := at(crd, "metadata", "name").(string)
 		path := "/apis/apiextensions.k8s.io/v1/customresourcedefinitions/" + name
 		if st, _ := k.do(http.MethodGet, path, "", nil); st == http.StatusNotFound {

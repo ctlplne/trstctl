@@ -43,6 +43,9 @@ type Client struct {
 	namespace  string
 	clusterID  string
 	httpClient *http.Client
+	// stream carries long-lived watch streams: the same trust on its own
+	// connections, without the whole-exchange timeout that would cut them.
+	stream *http.Client
 }
 
 // New returns a client for base (the API server URL) authenticating with token,
@@ -53,7 +56,14 @@ func New(base, token, namespace string, httpClient *http.Client) *Client {
 		httpClient = netsec.HardenedClient(30 * time.Second)
 	}
 	base = strings.TrimRight(base, "/")
-	return &Client{base: base, token: token, namespace: namespace, clusterID: "sha256:" + crypto.SHA256Hex([]byte(base)), httpClient: httpClient}
+	transport := httpClient.Transport
+	if t, ok := transport.(*http.Transport); ok {
+		transport = t.Clone()
+	}
+	return &Client{
+		base: base, token: token, namespace: namespace, clusterID: "sha256:" + crypto.SHA256Hex([]byte(base)),
+		httpClient: httpClient, stream: netsec.ClientFor(transport, 0, httpClient.CheckRedirect),
+	}
 }
 
 // InCluster builds a client from the standard in-cluster service-account mount

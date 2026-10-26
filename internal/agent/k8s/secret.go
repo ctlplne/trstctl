@@ -172,8 +172,6 @@ func existingMetadata(body []byte) secretMetadata {
 	return obj.Metadata
 }
 
-func resourceVersion(body []byte) string { return existingMetadata(body).ResourceVersion }
-
 // Status reads the Secret without changing it and returns the API server's
 // HTTP status: 200 when it exists, 404 when a write would create it.
 func (d *SecretDestination) Status(ctx context.Context) (int, error) {

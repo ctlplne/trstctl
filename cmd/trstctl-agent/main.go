@@ -122,7 +122,8 @@ func main() {
 	cmController := flag.Bool("cert-manager-controller", false, "run the trstctl Issuer/ClusterIssuer/Certificate Kubernetes controller")
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
 	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
-	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles")
+	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles, and the Kubernetes controller's posture heartbeat")
+	k8sResync := flag.Duration("k8s-resync", 10*time.Minute, "how often the Kubernetes controller re-checks every object, beyond what its watches report")
 	prepareIdentityDirPath := flag.String("prepare-identity-dir", "", "prepare a Kubernetes hostPath identity directory, then exit")
 	prepareIdentityUID := flag.Int("prepare-identity-uid", 65532, "uid that should own --prepare-identity-dir")
 	prepareIdentityGID := flag.Int("prepare-identity-gid", 65532, "gid that should own --prepare-identity-dir")
@@ -492,7 +493,7 @@ func main() {
 		kopts := k8sOptions{
 			secret: *k8sSecret, issuer: *cmIssuer, group: *cmGroup,
 			controller: *cmController, signerURL: *bridgeSignerURL, signerTokenFile: *bridgeSignerTokenFile,
-			reconcileEvery: *reconcileEvery,
+			reconcileEvery: *reconcileEvery, resync: *k8sResync,
 		}
 		run = func(ctx context.Context, o agentOptions) error { return runKubernetes(ctx, o, kopts) }
 	}

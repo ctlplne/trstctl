@@ -43,41 +43,57 @@ func (c *IssuerController) reconcileTrustBundles(ctx context.Context) (int, []Po
 	writes := 0
 	posture := make([]PostureResource, 0, len(list.Items))
 	for _, bundle := range list.Items {
-		current := trustBundlePosture(bundle)
-		n, hash, err := c.distributeTrustBundle(ctx, bundle)
+		n, current, err := c.syncTrustBundle(ctx, bundle)
+		posture = append(posture, current)
 		if err != nil {
-			posture = append(posture, failedPosture(current))
 			return writes, posture, err
-		}
-		if n == 0 {
-			posture = append(posture, current)
-			continue
 		}
 		writes += n
-		current.PublicHash = hash
-		updated, err := c.markTrustBundleReady(ctx, bundle, n, hash)
-		if err != nil {
-			posture = append(posture, failedPosture(current))
-			return writes, posture, err
-		}
-		// Bind posture to the API server's post-status-update object so the
-		// reported resourceVersion is the one independently readable from the
-		// cluster after reconciliation.
-		current = trustBundlePosture(updated)
-		current.State, current.Reason, current.PublicHash = "ready", "distributed", hash
-		posture = append(posture, current)
 	}
 	return writes, posture, nil
 }
 
-func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[string]any) (int, string, error) {
+// syncTrustBundle converges one bundle: every target ConfigMap holds it and
+// its status reports it. Nothing is written when both already agree, so a
+// watch on these objects does not wake the controller with its own writes. It
+// returns how many ConfigMaps it wrote and the bundle's posture.
+func (c *IssuerController) syncTrustBundle(ctx context.Context, bundle map[string]any) (int, PostureResource, error) {
+	current := trustBundlePosture(bundle)
+	n, targets, hash, err := c.distributeTrustBundle(ctx, bundle)
+	if err != nil {
+		return n, failedPosture(current), err
+	}
+	if trustBundleStatusCurrent(bundle, targets, hash) {
+		if n == 0 {
+			return 0, current, nil
+		}
+		current.State, current.Reason, current.PublicHash = "ready", "distributed", hash
+		return n, current, nil
+	}
+	current.PublicHash = hash
+	updated, err := c.markTrustBundleReady(ctx, bundle, targets, hash)
+	if err != nil {
+		return n, failedPosture(current), err
+	}
+	// Bind posture to the API server's post-status-update object so the
+	// reported resourceVersion is the one independently readable from the
+	// cluster after reconciliation.
+	current = trustBundlePosture(updated)
+	current.State, current.Reason, current.PublicHash = "ready", "distributed", hash
+	return n, current, nil
+}
+
+// distributeTrustBundle writes the bundle to every target namespace that does
+// not already hold it, returning how many it wrote, how many targets there
+// are, and the bundle's hash.
+func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[string]any) (int, int, string, error) {
 	name := objectName(obj)
 	if name == "" {
-		return 0, "", fmt.Errorf("k8s: trstctl TrustBundle missing metadata.name")
+		return 0, 0, "", fmt.Errorf("k8s: trstctl TrustBundle missing metadata.name")
 	}
 	spec, _ := obj["spec"].(map[string]any)
 	if spec == nil {
-		return 0, "", fmt.Errorf("k8s: trstctl TrustBundle %s missing spec", name)
+		return 0, 0, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s missing spec", name))
 	}
 	target, _ := spec["target"].(map[string]any)
 	configMapName := nativeString(target, "configMapName")
@@ -90,20 +106,48 @@ func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[st
 	}
 	namespaces := nativeStringList(target["namespaces"])
 	if len(namespaces) == 0 {
-		return 0, "", fmt.Errorf("k8s: trstctl TrustBundle %s missing spec.target.namespaces", name)
+		return 0, 0, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s missing spec.target.namespaces", name))
 	}
 	bundlePEM, hash, err := trustBundlePEM(spec)
 	if err != nil {
-		return 0, "", fmt.Errorf("k8s: trstctl TrustBundle %s: %w", name, err)
+		return 0, 0, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s: %w", name, err))
 	}
 
+	written := 0
 	for _, namespace := range namespaces {
 		dest := configMapDestination{client: c.client, namespace: namespace, name: configMapName, bundleName: name}
-		if err := dest.Install(ctx, key, bundlePEM, hash); err != nil {
-			return 0, "", err
+		wrote, err := dest.Install(ctx, key, bundlePEM, hash)
+		if err != nil {
+			return written, len(namespaces), "", err
+		}
+		if wrote {
+			written++
 		}
 	}
-	return len(namespaces), hash, nil
+	return written, len(namespaces), hash, nil
+}
+
+// trustBundleStatusCurrent reports whether the status already records this
+// distribution, so it need not be written again.
+func trustBundleStatusCurrent(obj map[string]any, targets int, hash string) bool {
+	status, _ := obj["status"].(map[string]any)
+	if stringField(status, "bundleSHA256") != hash {
+		return false
+	}
+	if recorded, _ := status["targets"].(float64); int(recorded) != targets {
+		if recordedInt, ok := status["targets"].(int); !ok || recordedInt != targets {
+			return false
+		}
+	}
+	conds, _ := status["conditions"].([]any)
+	want := trustBundleReadyCondition(targets)
+	for _, raw := range conds {
+		cond, _ := raw.(map[string]any)
+		if cond["type"] == "Ready" {
+			return cond["status"] == want["status"] && cond["reason"] == want["reason"] && cond["message"] == want["message"]
+		}
+	}
+	return false
 }
 
 func trustBundlePEM(spec map[string]any) (string, string, error) {
@@ -149,8 +193,47 @@ type configMapDestination struct {
 	bundleName string
 }
 
-func (d configMapDestination) Install(ctx context.Context, key, bundlePEM, hash string) error {
-	data := map[string]string{key: bundlePEM}
+// Install makes the ConfigMap hold the bundle under key, reporting whether it
+// wrote. An existing ConfigMap keeps its other keys, labels and annotations; it
+// is not rewritten when it already holds this bundle.
+func (d configMapDestination) Install(ctx context.Context, key, bundlePEM, hash string) (bool, error) {
+	status, body, err := d.client.request(ctx, http.MethodGet, configMapItemPath(d.namespace, d.name), nil)
+	if err != nil {
+		return false, err
+	}
+	if status == http.StatusOK {
+		var live map[string]any
+		if err := json.Unmarshal(body, &live); err != nil {
+			return false, fmt.Errorf("k8s: decode configmap %s/%s: %w", d.namespace, d.name, err)
+		}
+		meta, _ := live["metadata"].(map[string]any)
+		if meta == nil {
+			meta = map[string]any{}
+		}
+		labels, _ := meta["labels"].(map[string]any)
+		annotations, _ := meta["annotations"].(map[string]any)
+		data, _ := live["data"].(map[string]any)
+		if data[key] == bundlePEM && labels["app.kubernetes.io/managed-by"] == "trstctl-agent" &&
+			labels["trstctl.com/trust-bundle"] == d.bundleName && annotations["trstctl.com/bundle-sha256"] == hash {
+			return false, nil
+		}
+		if labels == nil {
+			labels = map[string]any{}
+		}
+		if annotations == nil {
+			annotations = map[string]any{}
+		}
+		if data == nil {
+			data = map[string]any{}
+		}
+		labels["app.kubernetes.io/managed-by"] = "trstctl-agent"
+		labels["trstctl.com/trust-bundle"] = d.bundleName
+		annotations["trstctl.com/bundle-sha256"] = hash
+		data[key] = bundlePEM
+		meta["labels"], meta["annotations"] = labels, annotations
+		live["metadata"], live["data"] = meta, data
+		return true, d.put(ctx, live)
+	}
 	meta := map[string]any{
 		"name":      d.name,
 		"namespace": d.namespace,
@@ -162,28 +245,18 @@ func (d configMapDestination) Install(ctx context.Context, key, bundlePEM, hash 
 			"trstctl.com/bundle-sha256": hash,
 		},
 	}
-
-	status, body, err := d.client.request(ctx, http.MethodGet, configMapItemPath(d.namespace, d.name), nil)
+	st, rb, err := d.client.request(ctx, http.MethodPost, configMapCollectionPath(d.namespace), configMapObject(meta, map[string]string{key: bundlePEM}))
 	if err != nil {
-		return err
-	}
-	if status == http.StatusOK {
-		if rv := resourceVersion(body); rv != "" {
-			meta["resourceVersion"] = rv
-		}
-		return d.put(ctx, configMapObject(meta, data))
-	}
-	st, rb, err := d.client.request(ctx, http.MethodPost, configMapCollectionPath(d.namespace), configMapObject(meta, data))
-	if err != nil {
-		return err
+		return false, err
 	}
 	if st == http.StatusConflict {
-		return d.put(ctx, configMapObject(meta, data))
+		// Created meanwhile: converge against what is there now.
+		return d.Install(ctx, key, bundlePEM, hash)
 	}
 	if st/100 != 2 {
-		return fmt.Errorf("k8s: create configmap %s/%s: status %d: %s", d.namespace, d.name, st, string(rb))
+		return false, fmt.Errorf("k8s: create configmap %s/%s: status %d: %s", d.namespace, d.name, st, string(rb))
 	}
-	return nil
+	return true, nil
 }
 
 func (d configMapDestination) put(ctx context.Context, obj map[string]any) error {
@@ -231,13 +304,17 @@ func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[str
 	return updated, nil
 }
 
-func upsertTrustBundleReady(existing any, targets int) []any {
-	ready := map[string]any{
+func trustBundleReadyCondition(targets int) map[string]any {
+	return map[string]any{
 		"type":    "Ready",
 		"status":  "True",
 		"reason":  "Distributed",
 		"message": fmt.Sprintf("trstctl TrustBundle distributed to %d namespace targets", targets),
 	}
+}
+
+func upsertTrustBundleReady(existing any, targets int) []any {
+	ready := trustBundleReadyCondition(targets)
 	conds, _ := existing.([]any)
 	for i, c := range conds {
 		if m, ok := c.(map[string]any); ok && m["type"] == "Ready" {

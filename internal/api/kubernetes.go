@@ -144,11 +144,11 @@ type KubernetesTrustBundleDistribution struct {
 // the same posture rows the summary is built from.
 
 var kubernetesCSRControllerFlow = []string{
-	"the in-cluster agent controller lists and watches certificates.k8s.io/v1 CertificateSigningRequests",
+	"the in-cluster agent controller lists and watches certificates.k8s.io/v1 CertificateSigningRequests, converging each one as its watch event arrives",
 	"it selects unfinished, Approved CSRs whose spec.signerName maps to an installed trstctl Issuer or ClusterIssuer",
 	"spec.request travels OUTBOUND to the control plane's issuance URL; the certificate travels back (CSR up, certificate down)",
 	"the signed chain is patched into status.certificate and the CSR conditions are updated",
-	"after each reconcile the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
+	"after each burst of changes, and on its heartbeat, the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
 }
 
 var kubernetesArchitectureControls = []string{
@@ -172,11 +172,11 @@ var kubernetesCSRResiduals = []string{
 }
 
 var kubernetesTrustBundleFlow = []string{
-	"the in-cluster agent controller lists trstctl.com/v1alpha1 TrustBundle resources",
-	"for each bundle it writes spec.caBundlePEM into a ConfigMap (spec.target.configMapName, default the bundle name; key spec.target.key, default ca-bundle.pem) in every namespace of spec.target.namespaces",
-	"writes are content-hash compared, so an unchanged bundle rewrites nothing",
-	"status.targets, status.bundleSHA256 and the Ready condition are updated on the TrustBundle",
-	"after each reconcile the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
+	"the in-cluster agent controller lists and watches trstctl.com/v1alpha1 TrustBundle resources and the ConfigMaps it distributed",
+	"for each bundle it writes spec.caBundlePEM into a ConfigMap (spec.target.configMapName, default the bundle name; key spec.target.key, default ca-bundle.pem) in every namespace of spec.target.namespaces, keeping a ConfigMap's other keys",
+	"writes are content-compared, so an unchanged bundle rewrites nothing, and an edited or deleted copy is put back",
+	"status.targets, status.bundleSHA256 and the Ready condition are updated on the TrustBundle when they change",
+	"after each burst of changes, and on its heartbeat, the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
 }
 
 var kubernetesTrustBundleEvidenceRefs = []string{

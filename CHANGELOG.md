@@ -2,6 +2,15 @@
 
 ### Added
 
+- The Kubernetes agent's controller is event-driven: it lists and watches its
+  issuers, trstctl Certificates, TrustBundles, cert-manager
+  CertificateRequests, native CertificateSigningRequests and the ConfigMaps it
+  distributed, and a work queue converges each object as its event arrives
+  (about a second instead of the next poll), with a full re-check every
+  `--k8s-resync` (default ten minutes). trstctl Certificates are renewed with a
+  new key two thirds of the way through their validity and reissued when their
+  spec changes or their Secret is deleted; `status.notBefore`, `notAfter`,
+  `renewalTime` and `specHash` record it.
 - The Kubernetes Operator manages the control plane's network surface the way
   the Helm chart renders it: a Service (`spec.service`), a default-deny
   NetworkPolicy (`spec.networkPolicy`) and an optional Ingress
@@ -217,6 +226,11 @@
 
 ### Fixed
 
+- The Kubernetes agent no longer stops its controller pass on a cluster without
+  cert-manager (native CSRs and TrustBundles were never reconciled there), no
+  longer rewrites every TrustBundle ConfigMap and status on every pass, keeps a
+  ConfigMap's other keys when it updates the bundle, and renews trstctl
+  Certificates, which it used to issue once and leave to expire.
 - The Kubernetes Operator could not create a control plane on a real cluster:
   its owner references lacked the `uid` the API server requires. Its pods now
   also run as the image's non-root user with that group owning mounted

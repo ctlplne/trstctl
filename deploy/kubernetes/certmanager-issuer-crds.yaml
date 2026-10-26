@@ -177,6 +177,9 @@ spec:
         - name: Issuer
           type: string
           jsonPath: .spec.issuerRef.name
+        - name: Renewal
+          type: string
+          jsonPath: .status.renewalTime
       schema:
         openAPIV3Schema:
           type: object
@@ -240,6 +243,18 @@ spec:
               properties:
                 secretName:
                   type: string
+                notBefore:
+                  type: string
+                  description: Start of the issued certificate's validity (RFC 3339).
+                notAfter:
+                  type: string
+                  description: End of the issued certificate's validity (RFC 3339).
+                renewalTime:
+                  type: string
+                  description: When the controller issues a replacement, two thirds of the way through the validity left at issuance (RFC 3339).
+                specHash:
+                  type: string
+                  description: SHA-256 of the spec the certificate was issued for; a changed spec is reissued.
                 conditions:
                   type: array
                   items:

@@ -4871,7 +4871,10 @@ This is a deliberate, documented trust boundary, not an accident.
     posture route `GET /api/v1/kubernetes/trust-bundles`, CLI command
     `trstctl-cli kubernetes trust-bundles`, and Workloads console disclose
     the CRD, RBAC, ConfigMap target, and residuals: the controller is
-    poll-based, multi-cluster rollout still means applying the same
+    event-driven — it watches its TrustBundles and the ConfigMaps it wrote,
+    converges a change or a deleted copy within about a second, and writes
+    nothing when a copy already holds the bundle — multi-cluster rollout still
+    means applying the same
     CRD/object to each enrolled cluster, and Secret/projected-volume/CSI
     trust distribution modes are not claimed.
   - The SSH CA is served at `/ssh/...` (`protocols.ssh.enabled`): cert
@@ -6334,8 +6337,19 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   and Ready status; native Kubernetes CSR support is proven by a
   controller test that writes `status.certificate` while preserving
   `Approved` only after Kubernetes approval (native CSRs do not define a
-  Ready condition). It is still a small poll-based controller rather than
-  an informer/work-queue controller. Because the agent runs as a DaemonSet,
+  Ready condition). It is an informer/work-queue controller: each resource
+  is listed and then watched (following bookmarks and relisting when the
+  server expires a version), and a de-duplicating, backed-off work queue
+  converges one object per key as its event arrives, with a full re-check
+  every `--k8s-resync` (default ten minutes) for what no watch reports. The
+  kind job proves it with the agent's own service account and the re-check
+  ten minutes away: a TrustBundle copied within half a second, a deleted copy restored, an
+  approved CSR signed, a trstctl `Certificate` issued and renewed. trstctl
+  `Certificate`s are renewed with a new key two thirds of the way through the
+  validity they had when issued (`status.renewalTime`), and reissued when
+  their spec changes or their Secret is deleted. cert-manager is optional:
+  without its CRDs the native CSR and TrustBundle paths run. Because the
+  agent runs as a DaemonSet,
   the cluster-scoped controller elects a single reconciler through a
   `coordination.k8s.io` **Lease** (`trstctl-agent-issuer-controller`, 30s
   duration, identity from the pod's `POD_NAME`): one pod reconciles, the

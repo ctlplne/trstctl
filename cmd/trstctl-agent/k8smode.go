@@ -28,6 +28,7 @@ type k8sOptions struct {
 	signerURL       string // control-plane issuance URL the bridge forwards CSRs to
 	signerTokenFile string // file containing the API token for the signer URL
 	reconcileEvery  time.Duration
+	resync          time.Duration // the controller's full re-check beyond its watches
 }
 
 func (k k8sOptions) validateIssuerConfig() error {
@@ -49,6 +50,9 @@ func (k k8sOptions) validateIssuerConfig() error {
 	}
 	if k.reconcileEvery <= 0 {
 		return fmt.Errorf("cert-manager reconcile interval must be positive")
+	}
+	if k.controller && k.resync < 0 {
+		return fmt.Errorf("the Kubernetes controller resync interval must not be negative")
 	}
 	return nil
 }
@@ -142,7 +146,6 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 		<-ctx.Done()
 		return nil
 	}
-	var postureClient *transport.AgentClient
 	if issuerController != nil {
 		creds, err := a.Credentials()
 		if err != nil {
@@ -153,59 +156,18 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 			return fmt.Errorf("connect Kubernetes posture channel: %w", err)
 		}
 		defer func() { _ = conn.Close() }()
-		postureClient = transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))
+		postureClient := transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version()))
+		return runKubernetesController(ctx, client, issuerController, postureClient, k)
 	}
-	// Leader election for the cluster-scoped controller. The agent is a
-	// DaemonSet, so without this every node reconciles the same
-	// Issuer/ClusterIssuer/TrustBundle objects. Signing and status writes are
-	// idempotent, so this is about not multiplying API-server work and audit
-	// noise by the node count. A follower idles and takes over within one
-	// lease duration if the holder dies. The namespaced cert-manager bridge
-	// is unaffected. Absent RBAC for leases, we log once and reconcile
-	// anyway: losing the controller entirely would be worse than duplicating
-	// idempotent work.
-	var lease *k8s.Lease
-	if issuerController != nil {
-		lease = k8s.NewLease(client, k8sControllerLeaseName, k.leaseIdentity())
-	}
-	leaseWarned := false
 
 	ticker := time.NewTicker(k.reconcileEvery)
 	defer ticker.Stop()
 	reconcile := func() {
-		if lease != nil {
-			leading, err := lease.Acquire(ctx)
-			if err != nil {
-				if !leaseWarned {
-					fmt.Fprintln(os.Stderr, "trstctl-agent: leader election unavailable, reconciling without it:", err)
-					leaseWarned = true
-				}
-			} else if !leading {
-				return
-			}
-		}
-		total := 0
-		if bridge != nil {
-			n, err := bridge.Reconcile(ctx, client.Namespace())
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager bridge reconcile:", err)
-			} else {
-				total += n
-			}
-		}
-		if issuerController != nil {
-			result, reconcileErr := issuerController.Reconcile(ctx, client.Namespace())
-			total += result.SignedRequests + result.NativeCertificatesIssued + result.KubernetesCSRsSigned
-			report := result.PostureReport(client.ClusterID(), k.reconcileEvery)
-			if _, err := postureClient.ReportKubernetesPosture(ctx, transportKubernetesPostureReport(report)); err != nil {
-				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes posture report:", err)
-			}
-			if reconcileErr != nil {
-				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes issuer-controller reconcile:", reconcileErr)
-			}
-		}
-		if total > 0 {
-			fmt.Printf("trstctl-agent: reconciled %d Kubernetes certificate request(s)\n", total)
+		n, err := bridge.Reconcile(ctx, client.Namespace())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent: cert-manager bridge reconcile:", err)
+		} else if n > 0 {
+			fmt.Printf("trstctl-agent: reconciled %d Kubernetes certificate request(s)\n", n)
 		}
 	}
 	reconcile()
@@ -215,6 +177,74 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 			return nil
 		case <-ticker.C:
 			reconcile()
+		}
+	}
+}
+
+// runKubernetesController runs the cluster-scoped controller event-driven:
+// informers watch its resources and a work queue converges each object as it
+// changes, re-checking everything every k.resync and reporting posture after
+// each burst of changes and every k.reconcileEvery.
+//
+// The agent is a DaemonSet, so the controller first wins a coordination.k8s.io
+// Lease: without it every node would reconcile the same Issuer/ClusterIssuer/
+// TrustBundle objects. Signing and status writes are idempotent, so this is
+// about not multiplying API-server work and audit noise by the node count. A
+// follower idles and takes over within one lease duration if the holder dies,
+// and a holder that loses the lease stops its watches. Absent RBAC for leases,
+// it logs once and runs anyway: losing the controller entirely would be worse
+// than duplicating idempotent work.
+func runKubernetesController(ctx context.Context, client *k8s.Client, controller *k8s.IssuerController, postureClient *transport.AgentClient, k k8sOptions) error {
+	opts := k8s.RunOptions{
+		ClusterID: client.ClusterID(), ReportEvery: k.reconcileEvery, Resync: k.resync,
+		Report: func(ctx context.Context, report k8s.ControllerPostureReport) {
+			if _, err := postureClient.ReportKubernetesPosture(ctx, transportKubernetesPostureReport(report)); err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes posture report:", err)
+			}
+		},
+	}
+	lease := k8s.NewLease(client, k8sControllerLeaseName, k.leaseIdentity())
+	leaseWarned := false
+	var stop context.CancelFunc
+	var stopped chan struct{}
+	halt := func() {
+		if stop != nil {
+			stop()
+			<-stopped
+			stop, stopped = nil, nil
+		}
+	}
+	defer halt()
+	renew := time.NewTicker(k8s.LeaseRenewInterval)
+	defer renew.Stop()
+	for {
+		leading, err := lease.Acquire(ctx)
+		if err != nil {
+			if !leaseWarned {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: leader election unavailable, reconciling without it:", err)
+				leaseWarned = true
+			}
+			leading = true
+		}
+		switch {
+		case leading && stop == nil:
+			runCtx, cancel := context.WithCancel(ctx)
+			stop, stopped = cancel, make(chan struct{})
+			go func(done chan struct{}) {
+				defer close(done)
+				if err := controller.Run(runCtx, opts); err != nil {
+					fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes controller:", err)
+				}
+			}(stopped)
+			fmt.Println("trstctl-agent: leading the Kubernetes controller")
+		case !leading && stop != nil:
+			halt()
+			fmt.Println("trstctl-agent: lost the Kubernetes controller lease; following")
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-renew.C:
 		}
 	}
 }

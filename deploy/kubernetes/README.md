@@ -137,8 +137,10 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
    set `Approved=True` (a namespaced `Issuer` can sign only in its own namespace),
    signs approved native Kubernetes
    `CertificateSigningRequest`s, fulfills trstctl-native `Certificate` resources
-   into their requested TLS Secrets, and writes status back to the owning
-   resource.
+   into their requested TLS Secrets and renews them, distributes `TrustBundle`s,
+   and writes status back to the owning resource. It watches these resources
+   and converges each as it changes, re-checking everything every
+   `--k8s-resync` (default ten minutes).
 
 Do not combine `--cert-manager-controller` with the older
 `--cert-manager-issuer` fixed-name bridge. The bridge does not read Issuer

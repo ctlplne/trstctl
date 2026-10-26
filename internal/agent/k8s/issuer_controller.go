@@ -176,8 +176,14 @@ func (c *IssuerController) reconcileIssuerResources(ctx context.Context, collect
 	if err := json.Unmarshal(body, &list); err != nil {
 		return nil, fmt.Errorf("k8s: decode trstctl %s list: %w", kind, err)
 	}
-	out := make(map[string]issuerConfig, len(list.Items))
-	for _, obj := range list.Items {
+	return c.syncIssuerResources(ctx, list.Items, collectionPath, kind)
+}
+
+// syncIssuerResources marks each issuer Ready or not with its reason (writing
+// only when that changes) and returns the usable issuers' configuration by key.
+func (c *IssuerController) syncIssuerResources(ctx context.Context, items []map[string]any, collectionPath, kind string) (map[string]issuerConfig, error) {
+	out := make(map[string]issuerConfig, len(items))
+	for _, obj := range items {
 		name := objectName(obj)
 		if name == "" {
 			continue
@@ -267,6 +273,11 @@ func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, iss
 	if err != nil {
 		return 0, nil, err
 	}
+	if st == http.StatusNotFound {
+		// cert-manager is not installed, so there is nothing of its to sign;
+		// native CSRs and trust bundles do not depend on it.
+		return 0, nil, nil
+	}
 	if st/100 != 2 {
 		return 0, nil, fmt.Errorf("k8s: list certificaterequests: status %d: %s", st, string(body))
 	}
@@ -277,31 +288,45 @@ func (c *IssuerController) reconcileCertificateRequests(ctx context.Context, iss
 		return 0, nil, fmt.Errorf("k8s: decode certificaterequest list: %w", err)
 	}
 
-	bridge := &Bridge{client: c.client, signer: c.signer, issuerGroup: c.group}
 	signed := 0
 	posture := make([]PostureResource, 0, len(list.Items))
 	for _, cr := range list.Items {
-		requestNamespace := objectNamespace(cr)
-		if requestNamespace == "" {
-			continue // refuse an object with no namespace instead of misrouting its status
+		didSign, current, err := c.syncCertificateRequest(ctx, cr, issuers, clusterIssuers)
+		if current.Name != "" {
+			posture = append(posture, current)
 		}
-		config, backed := c.requestIssuerConfig(cr, issuers, clusterIssuers)
-		current := certManagerRequestPosture(cr, backed, c.group)
-		if isFinished(cr) || !isApproved(cr) || !backed {
-			if current.Name != "" {
-				posture = append(posture, current)
-			}
-			continue
-		}
-		updated, err := bridge.fulfilWithCapResult(ctx, requestNamespace, cr, config.ttlCap)
 		if err != nil {
-			posture = append(posture, failedPosture(current))
 			return signed, posture, err
 		}
-		posture = append(posture, certManagerRequestPosture(updated, true, c.group))
-		signed++
+		if didSign {
+			signed++
+		}
 	}
 	return signed, posture, nil
+}
+
+// syncCertificateRequest signs one approved, unfinished cert-manager
+// CertificateRequest whose issuerRef names a ready trstctl issuer. Its posture
+// has no name when the request names another issuer group.
+func (c *IssuerController) syncCertificateRequest(ctx context.Context, cr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (bool, PostureResource, error) {
+	requestNamespace := objectNamespace(cr)
+	if requestNamespace == "" {
+		return false, PostureResource{}, nil // refuse an object with no namespace instead of misrouting its status
+	}
+	config, backed := c.requestIssuerConfig(cr, issuers, clusterIssuers)
+	current := certManagerRequestPosture(cr, backed, c.group)
+	if isFinished(cr) || !isApproved(cr) || !backed {
+		return false, current, nil
+	}
+	bridge := &Bridge{client: c.client, signer: c.signer, issuerGroup: c.group}
+	updated, err := bridge.fulfilWithCapResult(ctx, requestNamespace, cr, config.ttlCap)
+	if err != nil {
+		if current.Name == "" {
+			return false, current, err
+		}
+		return false, failedPosture(current), err
+	}
+	return true, certManagerRequestPosture(updated, true, c.group), nil
 }
 
 func (c *IssuerController) requestIssuerConfig(cr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (issuerConfig, bool) {
