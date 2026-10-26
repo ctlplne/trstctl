@@ -246,7 +246,10 @@ Every table carries a `tenant_id` and has [row-level security](../glossary.md) t
 all rows when the tenant context is unset (fail-closed). `WithTenant` drops to the
 non-superuser role and sets the tenant for the transaction, so every query is confined
 automatically — and a custom build check _fails the build_ if any repository query omits
-the tenant filter. A single-company deployment runs one tenant.
+the tenant filter. A single-company deployment runs one tenant. Each tenant can
+also keep its encryption under its own key domain, which it can migrate into,
+seal, unseal, and rotate without touching other tenants (see
+[secrets](secrets.md#how-every-secret-is-encrypted-at-rest)).
 
 ### Managed offering / SaaS provider plane (CAP-MODEL-02)
 

@@ -307,7 +307,9 @@ func (i *evidenceIndex) tenantCustodyRefs(requireValidationRefs bool) []Evidence
 	for _, rec := range orderedRecords(i.byType,
 		"tenant.key_domain.migration_started", "tenant.key_domain.migration_progressed", "tenant.key_domain.migration_completed",
 		"tenant.key_domain.migration_failed", "tenant.key_domain.seal_requested", "tenant.key_domain.seal_failed",
-		"tenant.key_domain.sealed", "tenant.key_domain.unseal_requested", "tenant.key_domain.unsealed") {
+		"tenant.key_domain.sealed", "tenant.key_domain.unseal_requested", "tenant.key_domain.unsealed",
+		"tenant.key_domain.rotation_started", "tenant.key_domain.rotation_progressed",
+		"tenant.key_domain.rotation_completed", "tenant.key_domain.rotation_failed") {
 		var candidate custody
 		if json.Unmarshal(rec.Data, &candidate) == nil {
 			latest = rec

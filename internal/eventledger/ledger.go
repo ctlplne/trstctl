@@ -179,6 +179,10 @@ const (
 	EventTenantKeyDomainSealed              = "tenant.key_domain.sealed"
 	EventTenantKeyDomainUnsealRequested     = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed            = "tenant.key_domain.unsealed"
+	EventTenantKeyDomainRotationStarted     = "tenant.key_domain.rotation_started"
+	EventTenantKeyDomainRotationProgressed  = "tenant.key_domain.rotation_progressed"
+	EventTenantKeyDomainRotationCompleted   = "tenant.key_domain.rotation_completed"
+	EventTenantKeyDomainRotationFailed      = "tenant.key_domain.rotation_failed"
 	EventApprovalRequested                  = "approval.requested"
 	EventApprovalDecisionRecorded           = "approval.decision.recorded"
 	EventApprovalStatusChanged              = "approval.request.status_changed"
@@ -362,6 +366,12 @@ var ledger = []FeatureEvent{
 	{"F40", "Multi-tenant deployment topology", "unseal_key_domain", "unsealTenantKeyDomain", []string{
 		EventTenantKeyDomainUnsealRequested,
 		EventTenantKeyDomainUnsealed,
+	}},
+	{"F40", "Multi-tenant deployment topology", "rotate_key_domain", "rotateTenantKeyDomain", []string{
+		EventTenantKeyDomainRotationStarted,
+		EventTenantKeyDomainRotationProgressed,
+		EventTenantKeyDomainRotationCompleted,
+		EventTenantKeyDomainRotationFailed,
 	}},
 
 	// F33 — Just-in-time privileged access sessions.

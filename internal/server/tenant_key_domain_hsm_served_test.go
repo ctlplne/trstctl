@@ -122,9 +122,10 @@ func (c *hsmCustodyDouble) UnwrapDataKey(_ context.Context, id string, wrapped, 
 // A123 (owner decision 2026-10-26) through the default-binary composition: a
 // tenant migrates to a pkcs11 wrapper the signer holds. The database keeps only
 // the HSM-wrapped domain KEK, every tenant data key is wrapped and unwrapped by
-// the signer, seal and unseal work as for a local wrapper, and when the signer
-// loses the HSM key the tenant fails closed as wrapper_unavailable instead of
-// falling back to the deployment KEK.
+// the signer, seal and unseal work as for a local wrapper, a rotation onto a
+// second HSM key moves the tenant off the first one (A129), and when the signer
+// loses the HSM key the tenant is under it fails closed as wrapper_unavailable
+// instead of falling back to the deployment KEK.
 func TestServedTenantKeyDomainLivesInTheSignerUnderAnHSMKey(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
@@ -142,13 +143,17 @@ func TestServedTenantKeyDomainLivesInTheSignerUnderAnHSMKey(t *testing.T) {
 	cfg.Signer.AuthSecretFile = filepath.Join(root, "sign-auth.bin")
 	cfg.Signer.KeyStoreDir = filepath.Join(root, "signer-keys")
 	cfg.CA.CertFile = filepath.Join(root, "issuing-ca.crt")
-	cfg.Secrets.TenantSealPKCS11Wrappers = []config.TenantSealPKCS11Wrapper{{ID: "hsm-a"}}
+	cfg.Secrets.TenantSealPKCS11Wrappers = []config.TenantSealPKCS11Wrapper{{ID: "hsm-a"}, {ID: "hsm-b"}}
 
 	hsmKey, err := crypto.RandomBytes(32)
 	if err != nil {
 		t.Fatal(err)
 	}
-	custody := &hsmCustodyDouble{keys: map[string][]byte{"hsm-a": hsmKey}}
+	hsmKeyB, err := crypto.RandomBytes(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	custody := &hsmCustodyDouble{keys: map[string][]byte{"hsm-a": hsmKey, "hsm-b": hsmKeyB}}
 	authz, err := signing.LoadOrCreateAuthorizer(filepath.Join(root, "signer-auth.bin"))
 	if err != nil {
 		t.Fatal(err)
@@ -266,8 +271,24 @@ func TestServedTenantKeyDomainLivesInTheSignerUnderAnHSMKey(t *testing.T) {
 		t.Fatalf("unsealed tenant read = %d body=%s", owners.Code, owners.Body.String())
 	}
 
+	rotate := servedTenantSealRequest(t, srv, token, http.MethodPost, "/api/v1/platform/tenant-key-domain/rotate",
+		"tenant-hsm-rotate", []byte(`{"wrapper_kind":"pkcs11","wrapper_id":"hsm-b"}`))
+	if rotate.Code != http.StatusOK || !strings.Contains(rotate.Body.String(), `"wrapper_id":"hsm-b"`) ||
+		!strings.Contains(rotate.Body.String(), `"generation":2`) {
+		t.Fatalf("rotate onto the second HSM key = %d body=%s", rotate.Code, rotate.Body.String())
+	}
+	if creates, _, _, _ := custody.calls(); creates != 2 {
+		t.Fatalf("the signer created %d domain KEKs after the rotation, want 2", creates)
+	}
 	custody.mu.Lock()
 	delete(custody.keys, "hsm-a")
+	custody.mu.Unlock()
+	if owners := servedTenantSealRequest(t, srv, token, http.MethodGet, "/api/v1/owners", "", nil); owners.Code != http.StatusOK || !strings.Contains(owners.Body.String(), "hsm-protected-owner") {
+		t.Fatalf("a tenant rotated onto hsm-b still needed hsm-a = %d body=%s", owners.Code, owners.Body.String())
+	}
+
+	custody.mu.Lock()
+	delete(custody.keys, "hsm-b")
 	custody.mu.Unlock()
 	failed := servedTenantSealRequest(t, srv, token, http.MethodGet, "/api/v1/owners", "", nil)
 	if failed.Code == http.StatusOK || !strings.Contains(failed.Body.String(), "wrapper_unavailable") || strings.Contains(failed.Body.String(), "hsm-protected-owner") {

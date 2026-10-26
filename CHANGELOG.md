@@ -2,6 +2,14 @@
 
 ### Added
 
+- A tenant's key domain can be rotated: `POST
+  /api/v1/platform/tenant-key-domain/rotate` (console tenant custody panel,
+  `trstctl-cli platform tenant-key-domain rotate`) makes a new generation of
+  the tenant's domain KEK under the same or another configured wrapper,
+  re-wraps every stored data key and the tenant's event history without
+  decrypting a payload, and promotes the new generation. Both generations stay
+  readable until then, and a failed rotation resumes with the same target.
+  Copies taken before a rotation still open with the previous generation.
 - A CA can be imported together with the private key it already has: after
   two custodians approve an `import_ca_key` ceremony, `trstctl-cli ca
   authorities key-offer` fetches the signer's one-time import key (HPKE with

@@ -298,8 +298,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// revocation center row.
 	// A128's CA key revocation raised it to 531, and its CA key import offer
 	// and import to 533, mapped onto F48.
-	if len(out) != 533 {
-		t.Fatalf("OpenAPI operationIds = %d, want 533", len(out))
+	// A129's tenant key-domain rotation raised it to 534, mapped onto F40.
+	if len(out) != 534 {
+		t.Fatalf("OpenAPI operationIds = %d, want 534", len(out))
 	}
 	return out
 }

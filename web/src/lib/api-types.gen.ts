@@ -8939,6 +8939,11 @@ export interface TenantKeyDomainMigrateRequest {
   wrapper_kind?: "local_file" | "pkcs11";
 }
 
+export interface TenantKeyDomainRotateRequest {
+  wrapper_id?: string;
+  wrapper_kind?: "local_file" | "pkcs11";
+}
+
 export interface TenantKeyDomainSealReceipt {
   accepted: boolean;
   operation_id: string;
@@ -8958,6 +8963,9 @@ export interface TenantKeyDomainStatus {
   legacy_history_exposure: string;
   local_wrapper_zero_egress: boolean;
   migration_stage?: string;
+  next_generation?: number;
+  next_wrapper_id?: string;
+  next_wrapper_kind?: string;
   operation_id?: string;
   operation_kind?: string;
   operation_status?: string;
@@ -8967,6 +8975,7 @@ export interface TenantKeyDomainStatus {
   recovery: string;
   remote_wrapper_state: string;
   retryable: boolean;
+  rotated_at?: string;
   served: boolean;
   state: string;
   wrapper_id?: string;

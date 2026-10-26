@@ -50,6 +50,18 @@ and path so a sealed blob can't be moved elsewhere. The KEK loads at startup fro
 `TRSTCTL_SECRETS_KEK_FILE` (0600), stays transient, and is zeroized. Rotating
 protection means re-wrapping small DEKs, not all your data.
 
+A tenant can also move off the deployment KEK into its own **tenant key
+domain**: a domain KEK kept under an operator wrapper (a local wrapper file, or
+an HSM key the isolated signer holds), so sealing one tenant never touches
+another. The console's tenant custody panel and `trstctl-cli platform
+tenant-key-domain` serve its lifecycle: migrate (create the domain KEK and
+re-wrap the tenant's data), seal and unseal (a reversible revoke), and rotate (a
+new generation of the domain KEK, under the same or another wrapper, with every
+stored DEK and the tenant's event history re-wrapped and both generations
+readable until the switch). Rotation re-wraps DEKs, not payloads, so backups,
+archives, and exports taken before it still open with the previous generation
+through its wrapper. See [configuration](../configuration.md#rotating-a-tenant-domain-key).
+
 ### The native secret store (F63)
 
 A served, tenant-isolated key-value store for application secrets: `POST

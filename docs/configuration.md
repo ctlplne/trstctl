@@ -1584,6 +1584,27 @@ refuses ptrace). It is proven against SoftHSM; proof against a hardware HSM
 needs hardware. What comes next: one non-extractable HSM key per tenant, so the
 tenant's KEK is itself an HSM object and data-key wraps run inside the HSM.
 
+### Rotating a tenant domain key
+
+A migrated tenant rotates its domain key from the console's tenant custody
+panel, or with `trstctl-cli platform tenant-key-domain rotate` (no body keeps
+the current wrapper; `-f rotate.json` with
+`{"wrapper_kind":"pkcs11","wrapper_id":"hsm-b"}` moves the key onto another
+configured wrapper, local or HSM). The rotation makes a new domain key, the next
+generation, then re-wraps every data key the tenant holds in PostgreSQL and in
+its event history from the old generation to the new one without decrypting a
+payload, and promotes the new generation. While it runs, new data is sealed
+under the new generation and both generations stay readable; a failure leaves
+the tenant `rotating` with the error shown, and a retry resumes with the same
+target wrapper. Keep both wrappers configured until the rotation completes. A
+seal cannot start during a rotation.
+
+A rotation re-wraps data keys; it does not re-encrypt payloads. Backups,
+archives, and exports taken before the rotation still open with the previous
+generation through its wrapper, and that generation's wrapped key stays in the
+tenant's event history. To retire a generation everywhere, rotate onto another
+wrapper and then retire the old wrapper's key or file.
+
 Dynamic-secret providers and outbound sync targets use structured JSON/YAML because
 each entry is bound to exactly one tenant. Authority-bearing values are references,
 not inline strings: `file:/absolute/path` loads an operator-owned `0600` file, while

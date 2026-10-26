@@ -390,6 +390,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"platform", "tenant-key-domain", "migrate"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/migrate", Body: bodyFile, Summary: "Migrate this tenant to an independently wrapped cryptographic domain"},
 	{Name: []string{"platform", "tenant-key-domain", "seal"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/seal", Body: bodyNone, Summary: "Queue a bounded-worker seal for this tenant's cryptographic domain"},
 	{Name: []string{"platform", "tenant-key-domain", "unseal"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/unseal", Body: bodyNone, Summary: "Unseal this tenant through its configured operator wrapper"},
+	{Name: []string{"platform", "tenant-key-domain", "rotate"}, Method: "POST", Path: "/api/v1/platform/tenant-key-domain/rotate", Body: bodyOptionalFile, Summary: "Rotate this tenant's domain key to a new generation (optional body names another wrapper)"},
 	{Name: []string{"support", "enterprise"}, Method: "GET", Path: "/api/v1/support/enterprise", Summary: "Show enterprise support, SLA, and services posture"},
 	{Name: []string{"managed-offering", "status"}, Method: "GET", Path: "/api/v1/managed-offering/status", Summary: "Show managed offering and provider-plane posture"},
 	{Name: []string{"managed-offering", "tenants", "provision"}, Method: "POST", Path: "/api/v1/managed-offering/tenants", Body: bodyFile, Summary: "Provision a hosted tenant in the managed offering"},

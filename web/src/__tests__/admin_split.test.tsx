@@ -31,6 +31,7 @@ const { apiMock } = vi.hoisted(() => ({
     migrateTenantKeyDomain: vi.fn(),
     sealTenantKeyDomain: vi.fn(),
     unsealTenantKeyDomain: vi.fn(),
+    rotateTenantKeyDomain: vi.fn(),
     activeActiveIssuance: vi.fn(),
     platformDistribution: vi.fn(),
   },
@@ -570,6 +571,80 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(await screen.findByText("The signer, under an HSM key")).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /A local wrapper file/ })).toBeDisabled();
     expect(screen.getByRole("radio", { name: /An HSM key the signer holds/ })).toBeChecked();
+    expect(await axe(view.container)).toHaveNoViolations();
+  });
+
+  it("resumes an interrupted key rotation and rotates again from the wrapper the key is under", async () => {
+    apiMock.me.mockResolvedValue({
+      subject: "custody-operator",
+      tenant_id: "t1",
+      email: "custody@example.test",
+      permissions: ["keys:read", "keys:write"],
+    });
+    const interrupted = {
+      served: true,
+      protection_mode: "tenant_domain",
+      state: "rotating",
+      generation: 2,
+      next_generation: 3,
+      next_wrapper_kind: "local_file",
+      next_wrapper_id: "tenant-a-custody-next",
+      wrapper_id: "tenant-a-custody",
+      wrapper_kind: "local_file",
+      operation_kind: "rotate",
+      operation_status: "failed",
+      progress_completed: 12,
+      progress_total: 13,
+      retryable: true,
+      failure: "tenant hot-history rewrite failed",
+      failure_code: "hot_history_rewrite_failed",
+      legacy_history_exposure: "external_archives_possible",
+      last_transition_type: "tenant.key_domain.rotation_failed",
+      last_transition_evidence_refs: [],
+      local_wrapper_zero_egress: true,
+      remote_wrapper_state: "disabled_in_core_local_custody",
+      recovery: "The rotation stopped before the new generation took over, and both generations stay readable.",
+    };
+    const resumed = {
+      ...interrupted,
+      state: "unsealed",
+      generation: 3,
+      next_generation: undefined,
+      next_wrapper_kind: undefined,
+      next_wrapper_id: undefined,
+      wrapper_id: "tenant-a-custody-next",
+      operation_status: "completed",
+      progress_completed: 13,
+      retryable: false,
+      failure: undefined,
+      failure_code: undefined,
+      rotated_at: "2026-10-26T13:00:00Z",
+      last_transition_type: "tenant.key_domain.rotation_completed",
+      recovery: "Tenant-domain protection is available on the rotated generation.",
+    };
+    apiMock.tenantKeyDomain.mockReset();
+    apiMock.tenantKeyDomain.mockResolvedValue(interrupted);
+    apiMock.rotateTenantKeyDomain.mockReset();
+    apiMock.rotateTenantKeyDomain.mockResolvedValueOnce(resumed).mockResolvedValueOnce({ ...resumed, generation: 4 });
+
+    const user = userEvent.setup();
+    const view = renderAt("/admin/system");
+    await user.click(await screen.findByRole("button", { name: "Fix first issue" }));
+    expect(await screen.findByText("Rotating key")).toBeInTheDocument();
+    expect(screen.getByText("Generation 2, moving to 3")).toBeInTheDocument();
+    expect(screen.getByText("Rotation progress")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rotate key" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Resume rotation" }));
+    await waitFor(() => expect(apiMock.rotateTenantKeyDomain).toHaveBeenCalledWith(undefined));
+    expect(await screen.findByText("Tenant key rotated to generation 3.")).toBeInTheDocument();
+    expect(screen.getByText("Generation 3")).toBeInTheDocument();
+    expect(screen.queryByText("Never rotated")).not.toBeInTheDocument();
+
+    const rotateForm = screen.getByRole("form", { name: "Rotate the tenant key" });
+    expect(within(rotateForm).getByRole("textbox", { name: /Configured local wrapper ID/ })).toHaveValue("tenant-a-custody-next");
+    await user.click(within(rotateForm).getByRole("button", { name: "Rotate key" }));
+    await waitFor(() => expect(apiMock.rotateTenantKeyDomain).toHaveBeenLastCalledWith({ wrapper_kind: "local_file", wrapper_id: "tenant-a-custody-next" }));
+    expect(await screen.findByText("Tenant key rotated to generation 4.")).toBeInTheDocument();
     expect(await axe(view.container)).toHaveNoViolations();
   });
 

@@ -7733,6 +7733,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: migrateTenantKeyDomain",
             "OpenAPI operationId: sealTenantKeyDomain",
             "OpenAPI operationId: unsealTenantKeyDomain",
+            "OpenAPI operationId: rotateTenantKeyDomain",
             "CLI command: owners list",
             "CLI command: certificates list",
             "CLI command: secrets store list",
@@ -7744,6 +7745,7 @@ export const canonicalCapabilities = [
             "CLI command: platform tenant-key-domain migrate",
             "CLI command: platform tenant-key-domain seal",
             "CLI command: platform tenant-key-domain unseal",
+            "CLI command: platform tenant-key-domain rotate",
             "CLI command: usage evidence"
           ]
         }

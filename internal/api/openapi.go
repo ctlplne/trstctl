@@ -3748,6 +3748,10 @@ func componentSchemas() map[string]*Schema {
 		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}},
 		"wrapper_id":   str(),
 	}, "wrapper_id")
+	tenantKeyDomainRotateRequest := object(map[string]*Schema{
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}, Description: "Omit with wrapper_id to keep the current wrapper."},
+		"wrapper_id":   str(),
+	})
 	tenantKeyDomainSealReceipt := object(map[string]*Schema{
 		"accepted": {Type: "boolean"}, "operation_id": uuid(),
 		"state": str(), "status_url": str(),
@@ -3756,6 +3760,8 @@ func componentSchemas() map[string]*Schema {
 		"served": {Type: "boolean"}, "protection_mode": str(), "state": str(),
 		"domain_id": uuid(), "generation": {Type: "integer"},
 		"wrapper_kind": str(), "wrapper_id": str(), "operation_id": uuid(),
+		"next_generation":   {Type: "integer", Description: "The generation a running rotation moves to; absent outside a rotation."},
+		"next_wrapper_kind": str(), "next_wrapper_id": str(), "rotated_at": timestamp(),
 		"operation_kind": str(), "operation_status": str(), "migration_stage": str(),
 		"progress_completed": {Type: "integer"}, "progress_total": {Type: "integer"},
 		"retryable": {Type: "boolean"}, "failure_code": str(), "failure": str(),
@@ -7321,6 +7327,7 @@ func componentSchemas() map[string]*Schema {
 		"SystemDependency":                         systemDependency,
 		"IdempotencyResultProtectionReadout":       idempotencyResultProtection,
 		"TenantKeyDomainMigrateRequest":            tenantKeyDomainMigrateRequest,
+		"TenantKeyDomainRotateRequest":             tenantKeyDomainRotateRequest,
 		"TenantKeyDomainSealReceipt":               tenantKeyDomainSealReceipt,
 		"TenantKeyDomainStatus":                    tenantKeyDomainStatus,
 		"SystemReadout":                            systemReadout,

@@ -12293,6 +12293,15 @@ TenantKeyDomainMigrateRequest = TypedDict(
     total=False,
 )
 
+TenantKeyDomainRotateRequest = TypedDict(
+    'TenantKeyDomainRotateRequest',
+    {
+        'wrapper_id': str,
+        'wrapper_kind': str,
+    },
+    total=False,
+)
+
 TenantKeyDomainSealReceipt = TypedDict(
     'TenantKeyDomainSealReceipt',
     {
@@ -12318,6 +12327,9 @@ TenantKeyDomainStatus = TypedDict(
         'legacy_history_exposure': str,
         'local_wrapper_zero_egress': bool,
         'migration_stage': str,
+        'next_generation': int,
+        'next_wrapper_id': str,
+        'next_wrapper_kind': str,
         'operation_id': str,
         'operation_kind': str,
         'operation_status': str,
@@ -12327,6 +12339,7 @@ TenantKeyDomainStatus = TypedDict(
         'recovery': str,
         'remote_wrapper_state': str,
         'retryable': bool,
+        'rotated_at': str,
         'served': bool,
         'state': str,
         'wrapper_id': str,

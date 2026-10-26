@@ -36964,6 +36964,22 @@
         ],
         "type": "object"
       },
+      "TenantKeyDomainRotateRequest": {
+        "properties": {
+          "wrapper_id": {
+            "type": "string"
+          },
+          "wrapper_kind": {
+            "description": "Omit with wrapper_id to keep the current wrapper.",
+            "enum": [
+              "local_file",
+              "pkcs11"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "TenantKeyDomainSealReceipt": {
         "properties": {
           "accepted": {
@@ -37028,6 +37044,16 @@
           "migration_stage": {
             "type": "string"
           },
+          "next_generation": {
+            "description": "The generation a running rotation moves to; absent outside a rotation.",
+            "type": "integer"
+          },
+          "next_wrapper_id": {
+            "type": "string"
+          },
+          "next_wrapper_kind": {
+            "type": "string"
+          },
           "operation_id": {
             "format": "uuid",
             "type": "string"
@@ -37055,6 +37081,10 @@
           },
           "retryable": {
             "type": "boolean"
+          },
+          "rotated_at": {
+            "format": "date-time",
+            "type": "string"
           },
           "served": {
             "type": "boolean"
@@ -61693,6 +61723,74 @@
           }
         ],
         "summary": "Migrate this tenant into an independently wrapped cryptographic domain",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/platform/tenant-key-domain/rotate": {
+      "post": {
+        "operationId": "rotateTenantKeyDomain",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantKeyDomainRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenantKeyDomainStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rotate this tenant's domain key to a new generation under the same or another configured wrapper",
         "x-trstctl-permission": "keys:write"
       }
     },

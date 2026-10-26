@@ -3642,7 +3642,8 @@ than sending an operator looking for a credential that was never there.
   tenant's data keys itself; the control plane persists only the wrapped KEK
   and never holds the KEK. Each data-key wrap or unwrap is one signer call that
   opens the KEK from its wrapped form inside the signer and destroys it after.
-  Seal, unseal and the history rewrap work as they do for a local wrapper, and a
+  Seal, unseal, rotation (including onto another HSM key) and the history
+  rewrap work as they do for a local wrapper, and a
   lost HSM key fails only that tenant closed (`wrapper_unavailable`), never
   falling back to the deployment KEK. It runs in the cgo signer (the
   `signer-hsm` image) under the BYOK license and is proven against SoftHSM in a
@@ -5493,9 +5494,15 @@ ceremony takes a CA's existing private key into the signer, sealed on the
 operator's machine to a one-time HPKE MLKEM768-P256 import key, so the control
 plane relays only sealed bytes), and destroy through signed retirement. An
 imported key may still exist where it came from; trstctl cannot prove other
-copies were destroyed. The secrets KEK's lifecycle is still library-tier (generate-or-import → rotate → revoke →
-zeroize is implemented and end-to-end tested but reachable from no served
-verb). Break-glass
+copies were destroyed. Each tenant's secrets KEK, its tenant key domain, has
+served lifecycle verbs too: generate (migrate into the domain), rotate (`POST
+/api/v1/platform/tenant-key-domain/rotate` moves the domain to a new generation
+under the same or another configured wrapper, re-wrapping every stored data key
+and the tenant's event history), and a reversible revoke as seal and unseal.
+Rotation re-wraps data keys, not payloads, so backups, archives, and exports
+taken before it still open with the previous generation. Destroying a tenant's
+key (crypto-shred) and importing an operator-supplied tenant KEK are what comes
+next. Break-glass
 issue/rotation/cross-sign and offline-root public re-key/cross-sign import
 have served, ceremony-gated verbs; reconciliation remains served at
 `POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still

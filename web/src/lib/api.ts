@@ -530,6 +530,7 @@ import type {
   ShareValue,
   SystemReadout,
   TenantKeyDomainMigrateRequest,
+  TenantKeyDomainRotateRequest,
   TenantKeyDomainSealReceipt,
   TenantKeyDomainStatus,
   SSHAttestedUserCert,
@@ -1356,6 +1357,7 @@ export type {
   ShareValue,
   SystemReadout,
   TenantKeyDomainMigrateRequest,
+  TenantKeyDomainRotateRequest,
   TenantKeyDomainSealReceipt,
   TenantKeyDomainStatus,
   SSHAttestedUserCert,
@@ -1835,6 +1837,8 @@ export interface Api {
   migrateTenantKeyDomain(input: TenantKeyDomainMigrateRequest): Promise<TenantKeyDomainStatus>;
   sealTenantKeyDomain(): Promise<TenantKeyDomainSealReceipt>;
   unsealTenantKeyDomain(): Promise<TenantKeyDomainStatus>;
+  /** A129: rotate the tenant domain key; an empty input keeps the current wrapper. */
+  rotateTenantKeyDomain(input?: TenantKeyDomainRotateRequest): Promise<TenantKeyDomainStatus>;
   activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
   provisionManagedTenant(
     input: ManagedTenantProvisionRequest,
@@ -2560,6 +2564,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   migrateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/migrate", input),
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),
   unsealTenantKeyDomain: () => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/unseal"),
+  rotateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/rotate", input ?? {}),
   activeActiveIssuance: () => req<ActiveActiveIssuancePlan>("/api/v1/scale/ha-issuance"),
   provisionManagedTenant: (input, idempotencyKey = newIdempotencyKey(), expectedPrincipal) =>
     req<ManagedTenant>("/api/v1/managed-offering/tenants", {

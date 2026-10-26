@@ -21625,7 +21625,7 @@
             "priority": 13,
             "served_state": "served",
             "backend_status": "served RLS, tenancy, managed-provider tenant provisioning, and enterprise support/SLA posture",
-            "current_frontend_mapping": "Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper or signer-held HSM migration, asynchronous seal, terminal-failure recovery, and unseal; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
+            "current_frontend_mapping": "Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper or signer-held HSM migration, asynchronous seal, terminal-failure recovery, unseal, and key rotation to a new generation under the same or another wrapper; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
             "target_gui_mapping": "Tenant context UI with current tenant, provider-plane status, enterprise support/SLA/professional-services posture, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits.",
             "acceptance_test": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning and CAP-MODEL-04 is served by enterprise support/SLA/professional-services posture; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
             "source_docs": [
@@ -21645,7 +21645,7 @@
                 "web/src/pages/Platform.tsx"
             ],
             "status": "closed",
-            "notes": "Closed by route-level feature-map evidence, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. I-aa8623a3 adds tenant-scoped key-domain status, local-wrapper migration, seal, and unseal operations to the default binary. Seal first persists a stable accepted result, then a dedicated bounded outbox worker proves that result completed before taking the cross-replica exclusive fence and making tenant crypto unavailable; an exact retry reconstructs the byte-identical accepted receipt without opening sealed result bytes. Exhausted seal delivery emits a sanitized immutable failure, restores the proven tenant-only crypto posture, and tells the operator to retry with a new idempotency identity while the old identity keeps replaying its original receipt. UI evidence: Admin System at /admin/system calls the served tenant-key-domain routes, presents loading/error/legacy/partial/queued/failed/sealed states, requires an accessible confirmation before seal, and exposes recovery and unseal actions according to the operator's keys:write permission. The historical /platform route redirects to the split admin routes.",
+            "notes": "Closed by route-level feature-map evidence, COMPETE-006, and COMPETE-016. Test evidence: internal/server/managed_offering_served_test.go proves CAP-MODEL-02 provider-plane status, provider-license-gated hosted tenant creation, tenant.registered event metadata, projection into the tenant read model, and idempotent replay. internal/server/enterprise_support_served_test.go proves CAP-MODEL-04 by serving the enterprise support posture, support tiers, P1/P2/P3 SLA targets, professional-services packages, license mode, and contract boundary. I-aa8623a3 adds tenant-scoped key-domain status, local-wrapper migration, seal, and unseal operations to the default binary. Rotation moves the domain to a new generation (a new domain KEK under the same or another configured wrapper), re-wraps every hot-state container and the tenant event history without opening payloads, keeps both generations readable until the promotion commits, and resumes after a failure; internal/store/tenant_key_domain_rotation_integration_test.go and internal/server/tenant_key_domain_rotation_served_test.go prove it. Seal first persists a stable accepted result, then a dedicated bounded outbox worker proves that result completed before taking the cross-replica exclusive fence and making tenant crypto unavailable; an exact retry reconstructs the byte-identical accepted receipt without opening sealed result bytes. Exhausted seal delivery emits a sanitized immutable failure, restores the proven tenant-only crypto posture, and tells the operator to retry with a new idempotency identity while the old identity keeps replaying its original receipt. UI evidence: Admin System at /admin/system calls the served tenant-key-domain routes, presents loading/error/legacy/partial/queued/failed/sealed states, requires an accessible confirmation before seal, and exposes recovery and unseal actions according to the operator's keys:write permission. The historical /platform route redirects to the split admin routes.",
             "api_surface": [
                 "listOwners",
                 "listCertificates",
@@ -21657,7 +21657,8 @@
                 "getTenantKeyDomain",
                 "migrateTenantKeyDomain",
                 "sealTenantKeyDomain",
-                "unsealTenantKeyDomain"
+                "unsealTenantKeyDomain",
+                "rotateTenantKeyDomain"
             ],
             "api_na": "",
             "cli_surface": [
@@ -21672,6 +21673,7 @@
                 "platform tenant-key-domain migrate",
                 "platform tenant-key-domain seal",
                 "platform tenant-key-domain unseal",
+                "platform tenant-key-domain rotate",
                 "usage evidence"
             ],
             "cli_na": "",
@@ -21687,7 +21689,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper or signer-held HSM migration, asynchronous seal, terminal-failure recovery, and unseal; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
+                        "current_frontend_mapping: Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper or signer-held HSM migration, asynchronous seal, terminal-failure recovery, unseal, and key rotation to a new generation under the same or another wrapper; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
                         "target_gui_mapping: Tenant context UI with current tenant, provider-plane status, enterprise support/SLA/professional-services posture, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits."
                     ],
                     "refs": [
@@ -21710,7 +21712,8 @@
                         "CLI command: platform tenant-key-domain status",
                         "CLI command: platform tenant-key-domain migrate",
                         "CLI command: platform tenant-key-domain seal",
-                        "CLI command: platform tenant-key-domain unseal"
+                        "CLI command: platform tenant-key-domain unseal",
+                        "CLI command: platform tenant-key-domain rotate"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -21729,7 +21732,8 @@
                         "OpenAPI operationId: getTenantKeyDomain",
                         "OpenAPI operationId: migrateTenantKeyDomain",
                         "OpenAPI operationId: sealTenantKeyDomain",
-                        "OpenAPI operationId: unsealTenantKeyDomain"
+                        "OpenAPI operationId: unsealTenantKeyDomain",
+                        "OpenAPI operationId: rotateTenantKeyDomain"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -21744,7 +21748,7 @@
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
                         "TestServedManagedOfferingCAPMODEL02EndToEnd is a named acceptance test executed by the CI make test package set.",
-                        "admin_split.test.tsx proves the tenant custody operator journey from legacy state through migration, confirmed asynchronous seal, sealed state, and unseal, plus the terminal-failure recovery path."
+                        "admin_split.test.tsx proves the tenant custody operator journey from legacy state through migration, confirmed asynchronous seal, sealed state, and unseal, plus the terminal-failure recovery path and key rotation."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -21897,6 +21901,7 @@
                             "OpenAPI operationId: migrateTenantKeyDomain",
                             "OpenAPI operationId: sealTenantKeyDomain",
                             "OpenAPI operationId: unsealTenantKeyDomain",
+                            "OpenAPI operationId: rotateTenantKeyDomain",
                             "CLI command: owners list",
                             "CLI command: certificates list",
                             "CLI command: secrets store list",
@@ -21908,6 +21913,7 @@
                             "CLI command: platform tenant-key-domain migrate",
                             "CLI command: platform tenant-key-domain seal",
                             "CLI command: platform tenant-key-domain unseal",
+                            "CLI command: platform tenant-key-domain rotate",
                             "CLI command: usage evidence"
                         ]
                     }

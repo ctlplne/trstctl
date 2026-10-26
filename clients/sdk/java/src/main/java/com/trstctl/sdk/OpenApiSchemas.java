@@ -854,6 +854,7 @@ public final class OpenApiSchemas {
       "TSAQualification",
       "TSAQualificationCheck",
       "TenantKeyDomainMigrateRequest",
+      "TenantKeyDomainRotateRequest",
       "TenantKeyDomainSealReceipt",
       "TenantKeyDomainStatus",
       "TenantWriteFence",

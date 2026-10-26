@@ -5251,6 +5251,7 @@ export const messages = {
   "platform.tenantSeal.stateSealing": { defaultMessage: "Sealing", description: "Tenant key-domain sealing state." },
   "platform.tenantSeal.stateSealed": { defaultMessage: "Cryptographically sealed", description: "Sealed tenant key-domain state." },
   "platform.tenantSeal.stateUnsealing": { defaultMessage: "Unsealing", description: "Tenant key-domain unsealing state." },
+  "platform.tenantSeal.stateRotating": { defaultMessage: "Rotating key", description: "Tenant key-domain state while the key moves to a new generation." },
   "platform.tenantSeal.stateWrapperUnavailable": { defaultMessage: "Wrapper unavailable", description: "Tenant wrapper unavailable state." },
   "platform.tenantSeal.stateWrongWrapper": { defaultMessage: "Wrapper rejected", description: "Wrong tenant wrapper state." },
   "platform.tenantSeal.stateCorrupt": { defaultMessage: "Custody record corrupt", description: "Corrupt tenant key-domain state." },
@@ -5262,6 +5263,15 @@ export const messages = {
     defaultMessage: "{completed}/{total}",
     description: "Tenant key-domain completed and total migration count.",
   },
+  "platform.tenantSeal.rotationProgress": { defaultMessage: "Rotation progress", description: "Tenant key-domain rotation progress label." },
+  "platform.tenantSeal.generation": { defaultMessage: "Key generation", description: "Tenant key-domain key generation label." },
+  "platform.tenantSeal.generationValue": { defaultMessage: "Generation {generation}", description: "Tenant key-domain current key generation." },
+  "platform.tenantSeal.generationRotating": {
+    defaultMessage: "Generation {generation}, moving to {next}",
+    description: "Tenant key-domain key generation while a rotation runs.",
+  },
+  "platform.tenantSeal.rotatedAt": { defaultMessage: "Last rotated", description: "When the tenant key-domain key last rotated." },
+  "platform.tenantSeal.neverRotated": { defaultMessage: "Never rotated", description: "Tenant key-domain key that has not rotated." },
   "platform.tenantSeal.legacyExposure": { defaultMessage: "Legacy history exposure", description: "Tenant key-domain legacy history label." },
   "platform.tenantSeal.zeroEgress": { defaultMessage: "Local wrapper makes zero egress", description: "Local wrapper no-egress label." },
   "platform.tenantSeal.lastTransition": { defaultMessage: "Last immutable transition", description: "Tenant key-domain last event label." },
@@ -5315,6 +5325,18 @@ export const messages = {
   "platform.tenantSeal.seal": { defaultMessage: "Seal tenant crypto", description: "Tenant key-domain seal action." },
   "platform.tenantSeal.retrySeal": { defaultMessage: "Retry seal with a new request", description: "Tenant key-domain retry action after terminal failure." },
   "platform.tenantSeal.unseal": { defaultMessage: "Unseal tenant crypto", description: "Tenant key-domain unseal action." },
+  "platform.tenantSeal.rotateHeading": { defaultMessage: "Rotate the tenant key", description: "Tenant key-domain rotation form heading." },
+  "platform.tenantSeal.rotateHelp": {
+    defaultMessage:
+      "Rotation makes a new tenant key under this wrapper or another one and re-wraps every stored data key and the tenant's event history without decrypting them. Backups, archives, and exports taken before the rotation still open with the previous key.",
+    description: "What a tenant key-domain rotation changes and what it leaves.",
+  },
+  "platform.tenantSeal.rotateWrapperHelp": {
+    defaultMessage: "Keep the current wrapper, or name another configured one to move the tenant key onto it.",
+    description: "Wrapper choice for a tenant key-domain rotation.",
+  },
+  "platform.tenantSeal.rotate": { defaultMessage: "Rotate key", description: "Tenant key-domain rotation action." },
+  "platform.tenantSeal.resumeRotation": { defaultMessage: "Resume rotation", description: "Resume an interrupted tenant key-domain rotation." },
   "platform.tenantSeal.readOnly": {
     defaultMessage: "You can inspect custody evidence, but keys:write is required for lifecycle changes.",
     description: "Read-only tenant custody permission guidance.",
@@ -5325,6 +5347,10 @@ export const messages = {
     description: "Tenant seal accepted notice.",
   },
   "platform.tenantSeal.noticeUnsealed": { defaultMessage: "Tenant cryptographic access is available again.", description: "Tenant unseal success notice." },
+  "platform.tenantSeal.noticeRotated": {
+    defaultMessage: "Tenant key rotated to generation {generation}.",
+    description: "Tenant key-domain rotation success notice.",
+  },
   "platform.tenantSeal.confirmHeading": { defaultMessage: "Seal this tenant's cryptographic domain?", description: "Tenant seal confirmation heading." },
   "platform.tenantSeal.confirmDescription": {
     defaultMessage:

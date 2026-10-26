@@ -318,6 +318,7 @@ exhaustive subcommand list:
 | `owners`                          | Owner CRUD, event-backed contextual/bulk assignment, application-model readiness, explicit attestation, expiring identity exceptions, and NHI attribution (`create` · `list` · `get` · `update` · `delete` · `assign` · `attest` · `exceptions list/grant/revoke` · `attribution`)                                  |
 | `platform`                        | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                                                                                                                                                                               |
 | `platform`                        | Running build, uptime, signer topology, and spine reachability (`system`)                                                                                                                                                                                                                                           |
+| `platform`                        | Tenant cryptographic custody: status, migration into a tenant key domain, seal, unseal, and key rotation (`tenant-key-domain status/migrate/seal/unseal/rotate`)                                                                                                                                                    |
 | `policy`                          | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)                                                                                                                                                                  |
 | `privacy`                         | Subject erasure, retention runs, archive-erasure attestations, export, personal-data catalog (`erasures` · `retention` · `archives` · `export` · `catalog`)                                                                                                                                                         |
 | `profiles`                        | Certificate profile versions and append-only recovery (`create` · `list` · `get-version` · `restore-preview` · `restore`)                                                                                                                                                                                           |
@@ -793,6 +794,16 @@ cat > revoke.json <<'JSON'
 {"ceremony_id":"<revoke-ceremony-id>","reason":"key_compromise"}
 JSON
 trstctl-cli ca authorities revoke <ca-authority-id> -f revoke.json
+
+# Rotate this tenant's domain key to a new generation under its current
+# wrapper, or move it onto another configured wrapper. Every stored data key
+# and the tenant's event history are re-wrapped; payloads are not decrypted.
+trstctl-cli platform tenant-key-domain rotate
+cat > rotate.json <<'JSON'
+{"wrapper_kind":"pkcs11","wrapper_id":"hsm-b"}
+JSON
+trstctl-cli platform tenant-key-domain rotate -f rotate.json
+trstctl-cli platform tenant-key-domain status
 
 cat > offline-intermediate-ceremony.json <<'JSON'
 {"operation":"create_offline_intermediate","parent_id":"<offline-root-authority-id>","threshold":2,"spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}

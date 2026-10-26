@@ -11,6 +11,64 @@ import type { StatusTone } from "@/lib/statusVocab";
 
 type TenantWrapperKind = "local_file" | "pkcs11";
 
+// The wrapper kind and ID a migration or rotation targets. A migration that has
+// started resumes only with the kind it began with (lockedKind).
+function TenantWrapperFields({
+  idPrefix,
+  kind,
+  onKind,
+  wrapperID,
+  onWrapperID,
+  lockedKind,
+  help,
+}: {
+  idPrefix: string;
+  kind: TenantWrapperKind;
+  onKind: (kind: TenantWrapperKind) => void;
+  wrapperID: string;
+  onWrapperID: (id: string) => void;
+  lockedKind?: string;
+  help: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <fieldset className="grid gap-2 text-sm sm:col-span-2">
+        <legend className="font-medium">{t("platform.tenantSeal.wrapperKind")}</legend>
+        {(["local_file", "pkcs11"] as const).map((option) => (
+          <label key={option} className="flex items-start gap-2">
+            <input
+              type="radio"
+              name={`${idPrefix}-wrapper-kind`}
+              value={option}
+              checked={kind === option}
+              disabled={Boolean(lockedKind) && lockedKind !== option}
+              onChange={() => onKind(option)}
+              className="mt-1"
+            />
+            <span>{option === "pkcs11" ? t("platform.tenantSeal.wrapperKindPKCS11") : t("platform.tenantSeal.wrapperKindLocal")}</span>
+          </label>
+        ))}
+      </fieldset>
+      <label className="grid gap-1 text-sm" htmlFor={`${idPrefix}-wrapper-id`}>
+        <span className="font-medium">{kind === "pkcs11" ? t("platform.tenantSeal.wrapperIDPKCS11") : t("platform.tenantSeal.wrapperID")}</span>
+        <input
+          id={`${idPrefix}-wrapper-id`}
+          className="min-h-10 rounded-control border border-border bg-background px-3 py-2"
+          value={wrapperID}
+          onChange={(event) => onWrapperID(event.target.value)}
+          required
+          autoComplete="off"
+          aria-describedby={`${idPrefix}-wrapper-help`}
+        />
+        <span id={`${idPrefix}-wrapper-help`} className="text-xs text-muted-foreground">
+          {help}
+        </span>
+      </label>
+    </>
+  );
+}
+
 export function IdempotencyResultProtectionPanel({
   readout,
   loading,
@@ -126,7 +184,7 @@ export function IdempotencyResultProtectionPanel({
 }
 
 export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
-  const { t } = useTranslation();
+  const { t, formatDateTime } = useTranslation();
   const [status, setStatus] = useState<TenantKeyDomainStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -224,6 +282,33 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
     }
   }
 
+  // A129: without a target the server resumes the running rotation (or keeps
+  // the current wrapper when none is running).
+  async function rotate(target?: { wrapper_kind: TenantWrapperKind; wrapper_id: string }) {
+    setBusy(true);
+    setRequestFailed(false);
+    setNotice(null);
+    try {
+      const next = await api.rotateTenantKeyDomain(target);
+      setStatus(next);
+      // The next rotation starts from the wrapper the key is under now.
+      setWrapperID(next.wrapper_id ?? "");
+      if (next.wrapper_kind === "local_file" || next.wrapper_kind === "pkcs11") setWrapperKind(next.wrapper_kind);
+      setNotice(t("platform.tenantSeal.noticeRotated", { generation: next.generation ?? 0 }));
+    } catch {
+      setRequestFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startRotation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const exactWrapperID = wrapperID.trim();
+    if (!exactWrapperID) return;
+    void rotate({ wrapper_kind: wrapperKind, wrapper_id: exactWrapperID });
+  }
+
   const labels: Record<string, string> = {
     legacy: t("platform.tenantSeal.stateLegacy"),
     migrating: t("platform.tenantSeal.stateMigrating"),
@@ -233,6 +318,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
     sealing: t("platform.tenantSeal.stateSealing"),
     sealed: t("platform.tenantSeal.stateSealed"),
     unsealing: t("platform.tenantSeal.stateUnsealing"),
+    rotating: t("platform.tenantSeal.stateRotating"),
     wrapper_unavailable: t("platform.tenantSeal.stateWrapperUnavailable"),
     wrong_wrapper: t("platform.tenantSeal.stateWrongWrapper"),
     corrupt: t("platform.tenantSeal.stateCorrupt"),
@@ -245,7 +331,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
       ? "critical"
       : status?.state === "unsealed"
         ? "success"
-        : status?.state === "partial" || status?.state === "seal_queued" || status?.state === "migrating"
+        : status?.state === "partial" || status?.state === "seal_queued" || status?.state === "migrating" || status?.state === "rotating"
           ? "warning"
           : status?.state === "sealed"
             ? "observe"
@@ -255,6 +341,10 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
     status?.state === "unsealed" ||
     (status?.state === "partial" && (status.operation_status === "completed" || (status.operation_kind === "seal" && status.operation_status === "failed")));
   const canUnseal = status?.state === "sealed";
+  // Rotation starts from the same available states a seal does; a rotation that
+  // stopped resumes with its own target.
+  const canRotate = canSeal;
+  const canResumeRotation = status?.state === "rotating";
 
   return (
     <section className="ui-panel p-comfortable" aria-labelledby="tenant-key-domain-heading">
@@ -308,6 +398,20 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
               <dd className="font-mono text-xs">{status.wrapper_id || t("platform.tenantSeal.notConfigured")}</dd>
             </div>
             <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.generation")}</dt>
+              <dd>
+                {!status.generation
+                  ? t("platform.tenantSeal.notConfigured")
+                  : status.next_generation
+                    ? t("platform.tenantSeal.generationRotating", { generation: status.generation, next: status.next_generation })
+                    : t("platform.tenantSeal.generationValue", { generation: status.generation })}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.rotatedAt")}</dt>
+              <dd>{status.rotated_at ? formatDateTime(status.rotated_at) : t("platform.tenantSeal.neverRotated")}</dd>
+            </div>
+            <div>
               <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.keyHeldBy")}</dt>
               <dd>
                 {status.remote_wrapper_state === "signer_hsm"
@@ -318,7 +422,9 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
               </dd>
             </div>
             <div>
-              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.progress")}</dt>
+              <dt className="font-medium text-muted-foreground">
+                {status.operation_kind === "rotate" ? t("platform.tenantSeal.rotationProgress") : t("platform.tenantSeal.progress")}
+              </dt>
               <dd>
                 {status.progress_total > 0
                   ? t("platform.tenantSeal.progressValue", {
@@ -360,41 +466,45 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
 
           {canWrite && canMigrate ? (
             <form className="grid gap-3 rounded-control border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={migrate}>
-              <fieldset className="grid gap-2 text-sm sm:col-span-2">
-                <legend className="font-medium">{t("platform.tenantSeal.wrapperKind")}</legend>
-                {(["local_file", "pkcs11"] as const).map((kind) => (
-                  <label key={kind} className="flex items-start gap-2">
-                    <input
-                      type="radio"
-                      name="tenant-key-domain-wrapper-kind"
-                      value={kind}
-                      checked={wrapperKind === kind}
-                      disabled={Boolean(status.wrapper_kind) && status.wrapper_kind !== kind}
-                      onChange={() => setWrapperKind(kind)}
-                      className="mt-1"
-                    />
-                    <span>{kind === "pkcs11" ? t("platform.tenantSeal.wrapperKindPKCS11") : t("platform.tenantSeal.wrapperKindLocal")}</span>
-                  </label>
-                ))}
-              </fieldset>
-              <label className="grid gap-1 text-sm" htmlFor="tenant-key-domain-wrapper-id">
-                <span className="font-medium">{wrapperKind === "pkcs11" ? t("platform.tenantSeal.wrapperIDPKCS11") : t("platform.tenantSeal.wrapperID")}</span>
-                <input
-                  id="tenant-key-domain-wrapper-id"
-                  className="min-h-10 rounded-control border border-border bg-background px-3 py-2"
-                  value={wrapperID}
-                  onChange={(event) => setWrapperID(event.target.value)}
-                  required
-                  autoComplete="off"
-                  aria-describedby="tenant-key-domain-wrapper-help"
-                />
-                <span id="tenant-key-domain-wrapper-help" className="text-xs text-muted-foreground">
-                  {wrapperKind === "pkcs11" ? t("platform.tenantSeal.wrapperHelpPKCS11") : t("platform.tenantSeal.wrapperHelp")}
-                </span>
-              </label>
+              <TenantWrapperFields
+                idPrefix="tenant-key-domain"
+                kind={wrapperKind}
+                onKind={setWrapperKind}
+                wrapperID={wrapperID}
+                onWrapperID={setWrapperID}
+                lockedKind={status.wrapper_kind}
+                help={wrapperKind === "pkcs11" ? t("platform.tenantSeal.wrapperHelpPKCS11") : t("platform.tenantSeal.wrapperHelp")}
+              />
               <Button type="submit" disabled={busy || !wrapperID.trim()}>
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <KeyRound className="h-4 w-4" aria-hidden="true" />}
                 {t("platform.tenantSeal.migrate")}
+              </Button>
+            </form>
+          ) : null}
+
+          {canWrite && canRotate ? (
+            <form
+              className="grid gap-3 rounded-control border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+              onSubmit={startRotation}
+              aria-labelledby="tenant-key-domain-rotate-heading"
+            >
+              <div className="grid gap-1 text-sm sm:col-span-2">
+                <h3 id="tenant-key-domain-rotate-heading" className="font-semibold">
+                  {t("platform.tenantSeal.rotateHeading")}
+                </h3>
+                <p className="text-muted-foreground">{t("platform.tenantSeal.rotateHelp")}</p>
+              </div>
+              <TenantWrapperFields
+                idPrefix="tenant-key-domain-rotate"
+                kind={wrapperKind}
+                onKind={setWrapperKind}
+                wrapperID={wrapperID}
+                onWrapperID={setWrapperID}
+                help={t("platform.tenantSeal.rotateWrapperHelp")}
+              />
+              <Button type="submit" disabled={busy || !wrapperID.trim()}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+                {t("platform.tenantSeal.rotate")}
               </Button>
             </form>
           ) : null}
@@ -404,6 +514,12 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
               <Button type="button" variant="destructive" onClick={() => setSealConfirmOpen(true)} disabled={busy}>
                 <KeyRound className="h-4 w-4" aria-hidden="true" />
                 {status.operation_kind === "seal" && status.operation_status === "failed" ? t("platform.tenantSeal.retrySeal") : t("platform.tenantSeal.seal")}
+              </Button>
+            ) : null}
+            {canWrite && canResumeRotation ? (
+              <Button type="button" onClick={() => void rotate()} disabled={busy}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+                {t("platform.tenantSeal.resumeRotation")}
               </Button>
             ) : null}
             {canWrite && canUnseal ? (

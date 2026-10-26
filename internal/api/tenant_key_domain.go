@@ -29,9 +29,17 @@ type TenantKeyDomainLifecycle interface {
 	CompleteSeal(context.Context, string, string) (store.TenantKeyDomain, error)
 	FailSeal(context.Context, string, string) (store.TenantKeyDomain, error)
 	Unseal(context.Context, string) (store.TenantKeyDomain, error)
+	Rotate(context.Context, string, tenantseal.WrapperRef) (store.TenantKeyDomain, error)
 }
 
 type tenantKeyDomainMigrateRequest struct {
+	WrapperKind string `json:"wrapper_kind"`
+	WrapperID   string `json:"wrapper_id"`
+}
+
+// tenantKeyDomainRotateRequest names the wrapper the next generation goes
+// under; an empty body keeps the current wrapper.
+type tenantKeyDomainRotateRequest struct {
 	WrapperKind string `json:"wrapper_kind"`
 	WrapperID   string `json:"wrapper_id"`
 }
@@ -57,6 +65,10 @@ type TenantKeyDomainStatus struct {
 	Generation                int64      `json:"generation,omitempty"`
 	WrapperKind               string     `json:"wrapper_kind,omitempty"`
 	WrapperID                 string     `json:"wrapper_id,omitempty"`
+	NextGeneration            int64      `json:"next_generation,omitempty"`
+	NextWrapperKind           string     `json:"next_wrapper_kind,omitempty"`
+	NextWrapperID             string     `json:"next_wrapper_id,omitempty"`
+	RotatedAt                 *time.Time `json:"rotated_at,omitempty"`
 	OperationID               string     `json:"operation_id,omitempty"`
 	OperationKind             string     `json:"operation_kind,omitempty"`
 	OperationStatus           string     `json:"operation_status,omitempty"`
@@ -126,6 +138,31 @@ func (a *API) migrateTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
 		domain, err := a.tenantKeyDomains.Migrate(ctx, tenantID, tenantseal.WrapperRef{
 			Kind: req.WrapperKind, ID: req.WrapperID,
 		})
+		if err != nil {
+			return 0, nil, mapTenantKeyDomainError(err)
+		}
+		return http.StatusOK, tenantKeyDomainStatusFromStore(domain), nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) rotateTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
+	a.mutateDurable(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		if a.tenantKeyDomains == nil {
+			return 0, nil, errStatus(http.StatusServiceUnavailable, "tenant key-domain lifecycle is not configured")
+		}
+		var req tenantKeyDomainRotateRequest
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		ref := tenantseal.WrapperRef{Kind: strings.TrimSpace(req.WrapperKind), ID: strings.TrimSpace(req.WrapperID)}
+		if ref.Kind == "" && ref.ID != "" {
+			ref.Kind = tenantseal.WrapperKindLocalFile
+		}
+		if ref.Kind != "" && ((ref.Kind != tenantseal.WrapperKindLocalFile && ref.Kind != tenantseal.WrapperKindPKCS11) || ref.ID == "") {
+			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file or pkcs11 with a wrapper_id, or omit both to keep the current wrapper")
+		}
+		domain, err := a.tenantKeyDomains.Rotate(ctx, tenantID, ref)
 		if err != nil {
 			return 0, nil, mapTenantKeyDomainError(err)
 		}
@@ -275,6 +312,8 @@ func tenantKeyDomainStatusFromStore(domain store.TenantKeyDomain) TenantKeyDomai
 		Served: true, ProtectionMode: domain.ProtectionMode, State: domain.State,
 		DomainID: domain.DomainID, Generation: domain.Generation,
 		WrapperKind: domain.WrapperKind, WrapperID: domain.WrapperID,
+		NextGeneration: domain.NextGeneration, NextWrapperKind: domain.NextWrapperKind,
+		NextWrapperID: domain.NextWrapperID, RotatedAt: domain.RotatedAt,
 		OperationID: operationID, OperationKind: domain.OperationKind,
 		OperationStatus: domain.OperationStatus, MigrationStage: domain.MigrationStage,
 		ProgressCompleted: domain.ProgressCompleted, ProgressTotal: domain.ProgressTotal,
@@ -334,6 +373,10 @@ func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
 		domain.OperationStatus == store.TenantKeyOperationFailed {
 		return "The seal did not commit and tenant crypto remains available. Fix the worker failure, then retry with a new Idempotency-Key; the exhausted key continues replaying its original accepted receipt."
 	}
+	if domain.OperationKind == store.TenantKeyOperationRotate &&
+		domain.OperationStatus == store.TenantKeyOperationCompleted {
+		return "Tenant-domain protection is available on the rotated generation. Backups, archives, and exports taken before the rotation still open with the previous generation through its wrapper; retire them, or that wrapper's key, to end that exposure."
+	}
 	switch domain.State {
 	case store.TenantKeyDomainStateMigrating:
 		return "Migration is resumable. Retry with the same wrapper kind and ID after the current operation stops progressing."
@@ -342,6 +385,11 @@ func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
 			return "Fix the reported custody or history prerequisite, then retry migration with the same wrapper kind and ID."
 		}
 		return "Hot state is tenant-domain protected. Retire or re-encrypt pre-migration archives, exports, and backups before asserting no legacy exposure."
+	case store.TenantKeyDomainStateRotating:
+		if domain.OperationStatus == store.TenantKeyOperationFailed {
+			return "The rotation stopped before the new generation took over, and both generations stay readable. Fix the reported custody or history prerequisite, then retry the rotation; it resumes with the same target wrapper."
+		}
+		return "The rotation is resumable and both generations stay readable. Retry it with the same target wrapper if it stops progressing."
 	case store.TenantKeyDomainStateSealQueued:
 		return "The seal request is durable. The bounded worker will commit it only after the accepted idempotency result is complete; poll this tenant-scoped status."
 	case store.TenantKeyDomainStateSealed:

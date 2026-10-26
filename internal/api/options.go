@@ -72,6 +72,10 @@ func tenantCryptoExemptOperation(operationID string) bool {
 	switch operationID {
 	case "getPlatformSystem", "listCapabilities",
 		"getTenantKeyDomain", "migrateTenantKeyDomain", "sealTenantKeyDomain", "unsealTenantKeyDomain",
+		// Rotation takes the tenant's exclusive key-domain fence and the history
+		// rewrite fences itself; under the route's shared fence it would wait on
+		// its own request until PostgreSQL killed the outer transaction.
+		"rotateTenantKeyDomain",
 		// These two privacy mutations do not read or return secret values. They
 		// acquire their own deployment history/recovery fences and may run longer
 		// than PostgreSQL's idle-transaction bound. Holding the route-wide shared

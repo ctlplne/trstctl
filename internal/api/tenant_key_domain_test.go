@@ -25,11 +25,14 @@ type fakeTenantKeyDomainLifecycle struct {
 	migrateErr       error
 	unsealErr        error
 	requestSealErr   error
+	rotateErr        error
 	migrateCalls     int
 	unsealCalls      int
 	requestSealCalls int
+	rotateCalls      int
 	tenantIDs        []string
 	refs             []tenantseal.WrapperRef
+	rotateRefs       []tenantseal.WrapperRef
 	sealKeys         []string
 	sealBindings     []string
 }
@@ -69,6 +72,13 @@ func (f *fakeTenantKeyDomainLifecycle) Unseal(_ context.Context, tenantID string
 	f.unsealCalls++
 	f.tenantIDs = append(f.tenantIDs, tenantID)
 	return f.domain, f.unsealErr
+}
+
+func (f *fakeTenantKeyDomainLifecycle) Rotate(_ context.Context, tenantID string, ref tenantseal.WrapperRef) (store.TenantKeyDomain, error) {
+	f.rotateCalls++
+	f.tenantIDs = append(f.tenantIDs, tenantID)
+	f.rotateRefs = append(f.rotateRefs, ref)
+	return f.domain, f.rotateErr
 }
 
 func TestTenantKeyDomainStatusReportsLegacyAndSanitizesFailures(t *testing.T) {
@@ -311,5 +321,76 @@ func TestTenantKeyDomainMigratesToASignerHeldHSMWrapper(t *testing.T) {
 	}
 	if !strings.Contains(status.Recovery, "HSM key") || strings.Contains(status.Recovery, "local wrapper file") {
 		t.Fatalf("pkcs11 wrapper-unavailable recovery = %q", status.Recovery)
+	}
+}
+
+// A129: rotation keeps the current wrapper when the body is empty, moves to a
+// named wrapper when one is given, replays one Idempotency-Key once, refuses an
+// unknown wrapper kind, and reports the promoted generation and the conflict
+// status as public statuses.
+func TestTenantKeyDomainRotateKeepsOrMovesTheWrapperAndReplaysOnce(t *testing.T) {
+	operationID := "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+	rotatedAt := time.Date(2026, 10, 26, 13, 0, 0, 0, time.UTC)
+	service := &fakeTenantKeyDomainLifecycle{domain: store.TenantKeyDomain{
+		TenantID: connectorTenantA, DomainID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		Generation: 2, ProtectionMode: store.TenantKeyProtectionTenantDomain,
+		State:       store.TenantKeyDomainStateUnsealed,
+		WrapperKind: tenantseal.WrapperKindLocalFile, WrapperID: "tenant-a-wrapper",
+		OperationID: &operationID, OperationKind: store.TenantKeyOperationRotate,
+		OperationStatus:   store.TenantKeyOperationCompleted,
+		ProgressCompleted: 13, ProgressTotal: 13, RotatedAt: &rotatedAt,
+		LegacyHistoryExposure: store.TenantKeyLegacyExternalArchivesPossible,
+	}}
+	handler := api.New(nil, orchestrator.NewMemoryIdempotency(), nil,
+		api.WithInsecureHeaderResolver(), api.WithTenantKeyDomainLifecycle(service))
+
+	for range 2 {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, tenantDomainRequest(
+			http.MethodPost, "/api/v1/platform/tenant-key-domain/rotate", nil, "tenant-rotate-1",
+		))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("rotate status = %d body=%s", rec.Code, rec.Body.String())
+		}
+		var status api.TenantKeyDomainStatus
+		if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+			t.Fatal(err)
+		}
+		if status.Generation != 2 || status.OperationKind != store.TenantKeyOperationRotate ||
+			status.RotatedAt == nil || !status.RotatedAt.Equal(rotatedAt) || status.NextGeneration != 0 ||
+			!strings.Contains(status.Recovery, "previous generation") {
+			t.Fatalf("rotate response = %+v", status)
+		}
+	}
+	if service.rotateCalls != 1 || len(service.rotateRefs) != 1 || service.rotateRefs[0] != (tenantseal.WrapperRef{}) {
+		t.Fatalf("same Idempotency-Key rotated %d times with refs %+v, want once with the current wrapper", service.rotateCalls, service.rotateRefs)
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, tenantDomainRequest(
+		http.MethodPost, "/api/v1/platform/tenant-key-domain/rotate",
+		[]byte(`{"wrapper_kind":"pkcs11","wrapper_id":"hsm-a"}`), "tenant-rotate-hsm",
+	))
+	if rec.Code != http.StatusOK || service.rotateRefs[len(service.rotateRefs)-1] != (tenantseal.WrapperRef{Kind: tenantseal.WrapperKindPKCS11, ID: "hsm-a"}) {
+		t.Fatalf("rotate onto pkcs11 = %d refs=%+v body=%s", rec.Code, service.rotateRefs, rec.Body.String())
+	}
+
+	calls := service.rotateCalls
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, tenantDomainRequest(
+		http.MethodPost, "/api/v1/platform/tenant-key-domain/rotate",
+		[]byte(`{"wrapper_kind":"remote","wrapper_id":"kms-a"}`), "tenant-rotate-remote",
+	))
+	if rec.Code != http.StatusBadRequest || service.rotateCalls != calls {
+		t.Fatalf("rotate onto a remote wrapper = %d calls=%d body=%s", rec.Code, service.rotateCalls, rec.Body.String())
+	}
+
+	service.rotateErr = tenantseal.ErrLifecycleConflict
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, tenantDomainRequest(
+		http.MethodPost, "/api/v1/platform/tenant-key-domain/rotate", nil, "tenant-rotate-conflict",
+	))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("rotate in a conflicting state = %d body=%s", rec.Code, rec.Body.String())
 	}
 }

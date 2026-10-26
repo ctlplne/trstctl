@@ -101,13 +101,15 @@ projection receipt can still recover incrementally from the retained issuance
 without another signature.
 
 The served privacy-erasure path rebinds existing receipts inside its verified
-generation preparation transaction. Generic tenant-key-domain rewrapping has a
-different limit: it refuses a changed certificate-dependent envelope until a
-recovery-safe bridge for the actual old/new pair exists. This includes an encoded
-CSL container in a certificate ownership reason. Hot PostgreSQL migration stages
-may already have run before that history refusal, so the operation remains failed
-and retryable, not a completed migration. The refusal preserves the original
-history; it does not establish full support for migrating that input.
+generation preparation transaction. Generic tenant-key-domain rewrapping
+(migration and key rotation) has a different limit: it refuses a changed
+certificate-dependent envelope until a recovery-safe bridge for the actual
+old/new pair exists. This includes an encoded CSL container in a certificate
+ownership reason. Hot PostgreSQL stages may already have run before that history
+refusal, so the operation remains failed and retryable, not a completed migration
+or rotation; a rotation in that state keeps both key generations readable. The
+refusal preserves the original history; it does not establish full support for
+rewrapping that input.
 
 ## The backup set
 
@@ -124,8 +126,8 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | **PostgreSQL independent state and restore receivers** | The read model is rebuildable from the log, but **independently retained operational state** lives here: API tokens, bootstrap tokens, spent single-use MDM SCEP challenge nonce hashes, CT config/checkpoints, CA lifecycle records, approvals, sealed credentials, stored secret rows, outstanding one-time secret-share rows, policy bindings, federation peer import cursors, queued outbox work, durable scheduled-rotation tick/cursor authority and due-edge commands, and durable privacy-erasure idempotency evidence. The paired artifact also carries logical audit checkpoints so restore can prove every hidden tenant prefix still exists in the event artifact before mutation; `audit.archived` v2 can reconstruct those checkpoint rows during an event-only projection rebuild. | `trstctl --full-backup-dir=/backups/trstctl-YYYY-MM-DD` writes `postgres-state.jsonl` with one manifest-covered row stream for every table in `RecoveredFromPostgresBackup`. |
 | **Audit export signing key** | So pre-restore signed evidence bundles still verify (R2.1). | The key is a purpose-constrained `audit-export` handle inside the signer's sealed key store, captured with that store below. `TRSTCTL_AUDIT_SIGNING_KEY_FILE` names only the one-time legacy PEM migration path; new backups do not copy a separate plaintext key artifact. |
 | **KEK** (key-encryption key) | The root of trust for everything sealed at rest: stored credentials (R3.1) **and** the signer's CA key (R3.2). Without it, sealed material cannot be opened. | Copy `TRSTCTL_SECRETS_KEK_FILE` to secure storage, separately from the sealed data it protects. |
-| **Tenant-domain HSM wrapper keys** | The AES-256 keys on the HSM that wrap the domain KEKs of tenants migrated to a `pkcs11` wrapper. The database backup holds only the HSM-wrapped domain KEK. | Back up each key with the HSM's own backup or cloning, keep the signer's tenant KEK file (wrapper ID to key label) with the deployment configuration, and restore both before restoring such a tenant; a missing key fails only that tenant closed. |
-| **Tenant-domain wrapper files** | Independently custodied roots that can unseal opted-in tenant domains without granting authority over neighboring domains. They are intentionally not captured inside the application backup they protect. | Back up every file named by `secrets.tenant_seal_local_wrappers` under separate operator custody. Restore the exact wrapper ID-to-file mapping before starting a tenant-domain restore; missing or wrong material fails only that tenant closed and never falls back to the deployment KEK. |
+| **Tenant-domain HSM wrapper keys** | The AES-256 keys on the HSM that wrap the domain KEKs of tenants migrated to a `pkcs11` wrapper. The database backup holds only the HSM-wrapped domain KEK. | Back up each key with the HSM's own backup or cloning, keep the signer's tenant KEK file (wrapper ID to key label) with the deployment configuration, and restore both before restoring such a tenant; a missing key fails only that tenant closed. A tenant rotated off a key still needs that key to restore a backup taken before the rotation, so keep it as long as such backups. |
+| **Tenant-domain wrapper files** | Independently custodied roots that can unseal opted-in tenant domains without granting authority over neighboring domains. They are intentionally not captured inside the application backup they protect. | Back up every file named by `secrets.tenant_seal_local_wrappers` under separate operator custody. Restore the exact wrapper ID-to-file mapping before starting a tenant-domain restore; missing or wrong material fails only that tenant closed and never falls back to the deployment KEK. A backup taken before a tenant key rotation opens with the wrapper the tenant was under then, so keep a retired wrapper file as long as such backups. |
 | **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles. Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
 | **Signer key store** | The issuing CA and audit-evidence private keys, **sealed at rest** (R3.2/AUD-63), plus the atomic PCAS spent-token claim directories. Restoring the whole tree preserves both key identities and single-use refusals. | The full backup encrypts the signer's key-store directory (`--keystore`) file-by-file and hashes the encrypted tree in `manifest.json`; the KEK is still restored separately. Do not restore only the `.key` files. |
 | **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | The full backup captures `TRSTCTL_CA_CERT_FILE`. |

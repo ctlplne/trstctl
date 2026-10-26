@@ -5455,6 +5455,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenant-key-domain/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate this tenant's domain key to a new generation under the same or another configured wrapper */
+        post: operations["rotateTenantKeyDomain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenant-key-domain/seal": {
         parameters: {
             query?: never;
@@ -17691,6 +17708,14 @@ export interface components {
             /** @enum {string} */
             wrapper_kind?: "local_file" | "pkcs11";
         };
+        TenantKeyDomainRotateRequest: {
+            wrapper_id?: string;
+            /**
+             * @description Omit with wrapper_id to keep the current wrapper.
+             * @enum {string}
+             */
+            wrapper_kind?: "local_file" | "pkcs11";
+        };
         TenantKeyDomainSealReceipt: {
             accepted: boolean;
             /** Format: uuid */
@@ -17712,6 +17737,10 @@ export interface components {
             legacy_history_exposure: string;
             local_wrapper_zero_egress: boolean;
             migration_stage?: string;
+            /** @description The generation a running rotation moves to; absent outside a rotation. */
+            next_generation?: number;
+            next_wrapper_id?: string;
+            next_wrapper_kind?: string;
             /** Format: uuid */
             operation_id?: string;
             operation_kind?: string;
@@ -17722,6 +17751,8 @@ export interface components {
             recovery: string;
             remote_wrapper_state: string;
             retryable: boolean;
+            /** Format: date-time */
+            rotated_at?: string;
             served: boolean;
             state: string;
             wrapper_id?: string;
@@ -33754,6 +33785,51 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TenantKeyDomainMigrateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantKeyDomainStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateTenantKeyDomain: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantKeyDomainRotateRequest"];
             };
         };
         responses: {
