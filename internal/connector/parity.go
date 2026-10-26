@@ -262,10 +262,11 @@ var haPeerSyncFamilies = []string{
 // deviceCSRCapableFamilies are appliances whose management API can generate a
 // key on the device and return a CSR.
 //
-// This is a capability of the DEVICE, not of this repository: every family here
-// supports it and none of them is wired for it yet. The list exists so the
-// parity surface can say "supported by the appliance, not implemented here"
-// rather than staying silent, which would read as "not applicable".
+// This is a capability of the DEVICE, not of this repository. The families this
+// repository has wired for it are the applianceKeyFamilies census (A122); the
+// list exists so the parity surface can say "supported by the appliance, not
+// implemented here" for the rest rather than staying silent, which would read
+// as "not applicable".
 var deviceCSRCapableFamilies = []string{
 	"f5",
 	"netscaler",
@@ -343,10 +344,10 @@ func haPeerSyncBuilt(family string) bool {
 
 // gateMet answers one gate from the census that owns it.
 //
-// ParityGateDeviceCSR has no census because nothing implements it; it answers
-// false, and the day it is built this switch is where the census it grows gets
-// consulted. ParityGateHAPeerSync gained exactly such a census (haPeerSyncFamilies)
-// when F5's HAPair was built.
+// ParityGateDeviceCSR is answered by the applianceKeyFamilies census (A122),
+// which a test checks against the connectors that implement
+// ApplianceKeyGenerator. ParityGateHAPeerSync has its own census
+// (haPeerSyncFamilies) from when F5's HAPair was built.
 func gateMet(family string, gate ParityGate) bool {
 	switch gate {
 	case ParityGateDeviceProof:
@@ -383,7 +384,7 @@ func gateMet(family string, gate ParityGate) bool {
 		// fails if either is left behind, so this cannot drift into a claim.
 		return haPeerSyncBuilt(family)
 	case ParityGateDeviceCSR:
-		return false
+		return ApplianceKeyFamily(family)
 	default:
 		// An unknown gate is not met. Failing closed here means adding a gate
 		// constant without teaching this function about it blocks migration

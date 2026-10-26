@@ -6,19 +6,26 @@
 // later calls must present, logout invalidates it), the systemfile upload, and
 // the sslcertkey rebind — recording the uploaded files and the certkey binding
 // so a test can assert the renewed certificate landed and went live. No crypto/*
-// (AN-3): file contents are base64 PEM, decoded as plain bytes.
+// (AN-3): file contents are base64 PEM, decoded as plain bytes. Keys the
+// appliance generates itself (A122) are made through internal/crypto, held
+// only here, and never written to a readable file.
 package netscalertest
 
 import (
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // Binding is the cert/key file pair an SSL certkey points at.
@@ -38,9 +45,12 @@ type Server struct {
 	files    map[string][]byte // filename -> decoded content
 	bindings map[string]Binding
 	vservers map[string][]string // certkey -> SSL vservers bound to it
-	logins   int
-	logouts  int
-	nextTok  int
+	// deviceKeys are keys the appliance generated (A122): key file -> key.
+	deviceKeys     map[string]*crypto.LockedSigner
+	deviceKeyReads int
+	logins         int
+	logouts        int
+	nextTok        int
 }
 
 // New starts a fake NetScaler that accepts the given NITRO credentials.
@@ -51,6 +61,8 @@ func New(user, pass string) *Server {
 		files:    map[string][]byte{},
 		bindings: map[string]Binding{},
 		vservers: map[string][]string{},
+
+		deviceKeys: map[string]*crypto.LockedSigner{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -62,8 +74,32 @@ func (s *Server) URL() string { return s.srv.URL }
 // Client returns an HTTP client for the fake appliance.
 func (s *Server) Client() *http.Client { return s.srv.Client() }
 
-// Close shuts the server down.
-func (s *Server) Close() { s.srv.Close() }
+// Close shuts the server down and destroys the keys the appliance generated.
+func (s *Server) Close() {
+	s.srv.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for name, key := range s.deviceKeys {
+		key.Destroy()
+		delete(s.deviceKeys, name)
+	}
+}
+
+// DeviceKey reports whether the appliance generated a key into keyFile.
+func (s *Server) DeviceKey(keyFile string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.deviceKeys[keyFile]
+	return ok
+}
+
+// DeviceKeyReads counts reads of a key file the appliance generated. A client
+// that keeps keys on the appliance never makes one.
+func (s *Server) DeviceKeyReads() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deviceKeyReads
+}
 
 // File returns the content uploaded under filename.
 func (s *Server) File(name string) ([]byte, bool) {
@@ -140,13 +176,24 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/nitro/v1/config/systemfile" && r.Method == http.MethodGet:
 		name := fileNameFromArgs(r.URL.RawQuery)
 		s.mu.Lock()
-		_, exists := s.files[name]
+		content, exists := s.files[name]
+		if _, device := s.deviceKeys[name]; device {
+			s.deviceKeyReads++
+		}
 		s.mu.Unlock()
 		if !exists {
 			http.Error(w, `{"message":"file not found"}`, http.StatusNotFound)
 			return
 		}
-		s.ok(w)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"errorcode": 0, "message": "Done", "systemfile": []map[string]string{{
+			"filename": name, "filecontent": base64.StdEncoding.EncodeToString(content), "fileencoding": "BASE64",
+		}}})
+	// A122: the appliance generates a key into a file, then a CSR from it.
+	case r.URL.Path == "/nitro/v1/config/sslecdsakey" && r.Method == http.MethodPost && r.URL.RawQuery == "action=create":
+		s.requireSession(w, r, func() { s.createKey(w, body) })
+	case r.URL.Path == "/nitro/v1/config/sslcertreq" && r.Method == http.MethodPost && r.URL.RawQuery == "action=create":
+		s.requireSession(w, r, func() { s.createCertReq(w, body) })
 	// A43: deleting a system file. NITRO refuses while a certkey references it.
 	case r.URL.Path == "/nitro/v1/config/systemfile" && r.Method == http.MethodDelete:
 		s.requireSession(w, r, func() {
@@ -272,8 +319,91 @@ func (s *Server) sslcertkey(w http.ResponseWriter, body []byte) {
 		return
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if key, device := s.deviceKeys[in.Sslcertkey.Key]; device {
+		// The appliance refuses a certificate whose public key is not the
+		// key file's.
+		info, err := certinfo.Inspect(s.files[in.Sslcertkey.Cert])
+		if err != nil || info.SPKISHA256 != crypto.SHA256Hex(key.Public().DER) {
+			s.fail(w, http.StatusBadRequest, 1814, "certificate does not match the private key")
+			return
+		}
+	}
 	s.bindings[in.Sslcertkey.Certkey] = Binding{Cert: in.Sslcertkey.Cert, Key: in.Sslcertkey.Key}
-	s.mu.Unlock()
+	s.ok(w)
+}
+
+func (s *Server) createKey(w http.ResponseWriter, body []byte) {
+	var in struct {
+		Sslecdsakey struct {
+			Keyfile string `json:"keyfile"`
+			Curve   string `json:"curve"`
+		} `json:"sslecdsakey"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil || in.Sslecdsakey.Keyfile == "" || in.Sslecdsakey.Curve != "P_256" {
+		s.fail(w, http.StatusBadRequest, 1096, "keyfile and curve P_256 are required")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.files[in.Sslecdsakey.Keyfile]; exists {
+		s.fail(w, http.StatusConflict, 1642, "file already exists")
+		return
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, 1, "key generation failed")
+		return
+	}
+	s.deviceKeys[in.Sslecdsakey.Keyfile] = key
+	// The file exists on the appliance; this double never hands out its bytes.
+	s.files[in.Sslecdsakey.Keyfile] = []byte("appliance-held ECDSA P-256 key")
+	s.ok(w)
+}
+
+func (s *Server) createCertReq(w http.ResponseWriter, body []byte) {
+	var in struct {
+		Sslcertreq struct {
+			Reqfile        string `json:"reqfile"`
+			Keyfile        string `json:"keyfile"`
+			Commonname     string `json:"commonname"`
+			Subjectaltname string `json:"subjectaltname"`
+		} `json:"sslcertreq"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil || in.Sslcertreq.Reqfile == "" || in.Sslcertreq.Keyfile == "" {
+		s.fail(w, http.StatusBadRequest, 1096, "reqfile and keyfile are required")
+		return
+	}
+	tmpl := crypto.CertificateRequestTemplate{CommonName: in.Sslcertreq.Commonname}
+	for _, name := range strings.Fields(in.Sslcertreq.Subjectaltname) {
+		switch {
+		case strings.HasPrefix(name, "DNS:"):
+			tmpl.DNSNames = append(tmpl.DNSNames, strings.TrimPrefix(name, "DNS:"))
+		case strings.HasPrefix(name, "IP:"):
+			ip := net.ParseIP(strings.TrimPrefix(name, "IP:"))
+			if ip == nil {
+				s.fail(w, http.StatusBadRequest, 1096, "subjectaltname IP is invalid")
+				return
+			}
+			tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
+		default:
+			s.fail(w, http.StatusBadRequest, 1096, "subjectaltname entries are DNS: or IP:")
+			return
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key, ok := s.deviceKeys[in.Sslcertreq.Keyfile]
+	if !ok {
+		s.fail(w, http.StatusBadRequest, 1540, "key file not found")
+		return
+	}
+	csrDER, err := crypto.CreateCertificateRequest(tmpl, key)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, 1096, "CSR could not be created")
+		return
+	}
+	s.files[in.Sslcertreq.Reqfile] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 	s.ok(w)
 }
 
