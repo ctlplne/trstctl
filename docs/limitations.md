@@ -742,13 +742,22 @@ never live in the API process. What you can do end to end against the running bi
   making the family migrated, since SDS cannot express a re-bind or readback.
   Their rows name those facts instead of disappearing from the denominator. The executor census remains a separate fail-closed list: publishing
   an E1 row does not let an agent claim work it cannot construct.
-  Device-generated CSR is reported as outstanding on the five families whose
-  device APIs support it — a separate custody enhancement, not a migration gate:
-  in the current mode the control plane generates the key (under the tenant's
-  control-plane key-generation switch), seals it to the deploy job, and the relay
-  redeems it and installs it; a device-generated CSR would keep the key on the
-  appliance and off the control plane. That mode works as it stands, and holding
-  families back to avoid an improvement was the worse trade. Readback answers for
+  Device-generated CSRs are a custody choice, not a migration gate. An F5 BIG-IP
+  (a single device), NetScaler, A10 or PAN-OS destination (with an SSL/TLS service
+  profile) can declare `key_generation=appliance` and pin a network relay: the
+  appliance generates the key and a CSR, the control plane signs the CSR, and the
+  key never leaves the appliance. Otherwise the control plane generates the key
+  (under the tenant's control-plane key-generation switch), seals it to the deploy
+  job, and the relay redeems and installs it. The appliance operations are proven
+  against the management-API doubles, not hardware, and the PAN-OS certificate
+  generate and CSR export shapes need a firewall to confirm; each renewal's key
+  object stays on the appliance and nothing prunes them yet; a PAN-OS renewal picked
+  up again after its certificate import stops instead of finishing. Cisco ISE comes
+  next: ISE assigns its own CSR IDs, so a renewal needs a way to find its request
+  again, and binding needs the ISE node and the services the certificate is for,
+  which no destination field carries yet. Until then a Cisco destination keeps
+  control-plane keys, and the parity surface reports its device-generated CSR as
+  outstanding. Readback answers for
   every migrated family: kemp, netscaler and a10 were listed as readback-capable
   before their connectors could read back, so their relay deploys reported an
   appliance that "did not answer"; the census is now checked against the code

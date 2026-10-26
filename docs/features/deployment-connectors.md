@@ -971,6 +971,52 @@ ownership attestation, or an ownership exception) before the agent gets any work
 until then each resource is reported not delivered, naming the owner and how to
 attest it.
 
+### Have the appliance generate its key
+
+An F5 BIG-IP (a single device), NetScaler, A10 Thunder or PAN-OS firewall can make
+the private key itself and send only a certificate request. Declare
+`"key_generation": "appliance"` on the destination and name the network relay that
+reaches the appliance in `required_agent_id`; the destination dialog in Connectors
+offers both as a choice. At each renewal that relay asks the appliance for an ECDSA
+P-256 key and a CSR in an object named for the renewal job
+(`trstctl-<first eight characters of the destination ID>-j<job>`), has the control
+plane sign the CSR, and installs the certificate against the key the appliance
+already holds. No key crosses the relay or the control plane, and none is sealed to
+a deploy job. Custody records `key_origin=appliance` and `key_storage=appliance`,
+exportable, because these are software keys an appliance administrator can export.
+
+```json
+{
+  "endpoint": "https://ns.example.com",
+  "username": "trstctl",
+  "password_ref": "secret://connectors/netscaler-password",
+  "key_generation": "appliance",
+  "required_agent_id": "<the network relay's UUID>"
+}
+```
+
+- **F5:** a single BIG-IP only. Each peer of an HA pair keeps its own crypto
+  objects and would make a different key for one certificate, so a destination
+  with `peer_endpoint` is refused; keep control-plane keys there, which reach both
+  peers.
+- **PAN-OS:** the destination needs `ssl_tls_profile` and `commit_admin`. The
+  firewall's certificate object keeps its job name, the profile is set to it in a
+  partial commit, and readback exports the certificate the profile names (never its
+  key) to fingerprint it.
+- **NetScaler and A10:** the key file and the CSR file sit side by side on the
+  appliance, and the certkey or client-SSL template binds the certificate to that
+  key file.
+
+Readback works as it does for sealed keys. A rollback binds the predecessor
+certificate back with the key the appliance made for it, found from the
+predecessor's renewal job; it never reads the key, and a predecessor whose key
+object is gone is refused rather than bound to another key. A renewal the relay
+picks up again after losing it asks the appliance for the same object and gets the
+same CSR back, so one renewal never leaves two keys. PAN-OS keeps no CSR once the
+certificate for it is imported, so a PAN-OS renewal picked up after that import
+stops and says so; check the firewall and start a new renewal. A Cisco destination
+keeps control-plane keys.
+
 ### Activate Tomcat PEM certificates
 
 The `tomcat` destination writes the certificate and key paths already referenced
@@ -1194,6 +1240,10 @@ recorded.
   the safety net, not a bug, if a connector seems to do nothing.
 - Appliance connectors need reachable management endpoints and import-only
   credentials.
+- **Appliance-generated keys:** each renewal leaves its job-named key object (and,
+  except on PAN-OS, its CSR) on the appliance, so predecessors stay available for
+  rollback; nothing prunes them yet. The appliance operations are proven against
+  the management-API doubles, not hardware.
 - Idempotency is keyed on the fingerprint: redeploying the same certificate is a safe
   no-op, but a connector must converge to the same state.
 

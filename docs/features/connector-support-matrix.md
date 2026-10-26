@@ -44,6 +44,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 - deploy: upload certificate and key, then bind to the client-SSL template
 - rollback: re-bind the template to a previously installed certificate
+- appliance key (key_generation=appliance): pki create makes an ECDSA P-256 key file and a CSR file named for the renewal job, the signed certificate is uploaded and bound to the template with that key, and a rollback re-binds a predecessor with its own key file, which is never read
 
 **Known limits:**
 
@@ -126,9 +127,11 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 - rollback: re-bind the profile to a previously installed crypto object
 - readback: report the certificate the Client SSL profile is bound to
 - HA-peer sync: deploy, rollback, and readback reach BOTH peers when a peer endpoint is configured — a pair whose certificate stores do not replicate is treated as one target, and a readback reports serving only when both peers are bound to the deployed certificate
+- appliance key (key_generation=appliance, single BIG-IP): the BIG-IP generates an ECDSA P-256 key and CSR named for the renewal job, the signed certificate is installed and the Client SSL profile bound to it with that key, and a rollback re-binds a predecessor with its own key
 
 **Known limits:**
 
+- an HA pair keeps control-plane keys: each BIG-IP keeps its own crypto objects, so each peer would generate a different key for one certificate
 - the HA peer shares the pair's synced admin credential; a pair with per-peer credentials is not modeled
 - partition (folder) routing is not modeled beyond the default
 
@@ -210,6 +213,7 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 
 - deploy: upload, create the certkey, and bind it to the SSL virtual server
 - rollback: re-bind the virtual server to a previously created certkey
+- appliance key (key_generation=appliance): the NetScaler generates an ECDSA P-256 key file and a CSR named for the renewal job, the certkey binds the signed certificate to that key, and a rollback re-binds a predecessor with its own key file, which is never read
 
 **Known limits:**
 
@@ -226,11 +230,13 @@ that we implement the named contract and exercise the listed calls. Run a dry-ru
 - deploy: import the certificate and the private key as separate calls, in order; with ssl_tls_profile the objects are fingerprint-named, the shared SSL/TLS service profile is set to the new certificate and a partial commit scoped to commit_admin pushes only that administrator's changes
 - rollback: set the SSL/TLS service profile back to a previously imported fingerprint-named certificate and partial-commit it (targets with ssl_tls_profile only)
 - readback: report the certificate the SSL/TLS service profile is set to (targets with ssl_tls_profile only)
+- appliance key (key_generation=appliance, targets with ssl_tls_profile): the firewall generates an ECDSA P-256 key and a CSR for an external authority in a certificate object named for the renewal job, the signed certificate is imported into it and the profile set to it in a partial commit; readback exports the bound certificate, never its key, and a rollback sets the profile back to a predecessor's object after checking it holds that certificate
 
 **Known limits:**
 
 - a target without ssl_tls_profile imports in place under the target name and issues no commit, leaving the candidate configuration to the operator's own commit policy; its rollback is refused as not configured rather than reported done
 - the partial commit is scoped to commit_admin; other administrators' staged changes are never pushed, and a profile outside the shared location is not modeled
+- PAN-OS keeps no CSR once the certificate for it is imported, so an appliance-key renewal reclaimed after that import stops and says so instead of requesting a second signature
 
 ## postgresql
 
