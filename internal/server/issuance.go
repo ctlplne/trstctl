@@ -564,7 +564,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	idemKey := "issue:" + m.IdempotencyKey
 	// Idempotent on the outbox key: a redelivery returns the recorded result
 	// without minting again (AN-5 ↔ AN-6).
-	_, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
+	result, err := d.idem.Do(ctx, m.TenantID, idemKey, func(ctx context.Context) ([]byte, error) {
 		if shouldRecoverIssuedCertificate(m.Attempts) {
 			recovered, err := recoverCertificatesByIssuanceKey(ctx, d.store, d.log, m.TenantID, idemKey)
 			if err != nil {
@@ -619,7 +619,7 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 				return nil, err
 			}
 			d.recordAgentRenewalDispatch(ctx, m.TenantID, ident, target, []string{ident.Name}, nil, nil, nil)
-			return []byte("first issuance dispatched to host agent"), nil
+			return []byte(hostFirstIssuanceDispatched), nil
 		}
 
 		material, err := d.mintServedLeafForTrigger(ctx, m.TenantID, ident, p, endpointBindingIssueKey(p, m))
@@ -649,11 +649,21 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 	if err != nil {
 		return err
 	}
-	if err := d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID); err != nil {
-		return err
+	// The CRL covers certificates this tenant has issued. A hand-off to a host
+	// agent has issued none yet: the agent's CSR is signed later, and the CRL
+	// freshness pass covers that certificate. Ensuring one now would fail in a
+	// tenant with no platform certificate and retry the hand-off forever.
+	if string(result) != hostFirstIssuanceDispatched {
+		if err := d.ensureIdentityCRL(ctx, m.TenantID, p.IdentityID); err != nil {
+			return err
+		}
 	}
 	return d.orch.CompleteIssuanceRequestForIdentity(ctx, m.TenantID, p.IdentityID, strings.TrimPrefix(m.IdempotencyKey, "transition:"))
 }
+
+// hostFirstIssuanceDispatched is the recorded result of a first issuance the
+// control plane handed to a host agent instead of minting.
+const hostFirstIssuanceDispatched = "first issuance dispatched to host agent"
 
 // shouldRecoverIssuedCertificate distinguishes a new durable outbox claim from
 // a redelivery that could be closing the append-before-idempotency crash gap.
