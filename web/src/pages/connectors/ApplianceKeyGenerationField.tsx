@@ -40,6 +40,12 @@ export function ApplianceKeyGenerationField({
     note = t("connectors.keyGeneration.paloaltoProfile");
   } else if (onAppliance && connector === "f5" && configText(parsed?.peer_endpoint)) {
     note = t("connectors.keyGeneration.f5Pair");
+  } else if (
+    onAppliance &&
+    connector === "cisco" &&
+    (!configText(parsed?.node_hostname) || !Array.isArray(parsed?.certificate_roles) || parsed.certificate_roles.length === 0)
+  ) {
+    note = t("connectors.keyGeneration.ciscoNode");
   }
   return (
     <div className="grid gap-2">

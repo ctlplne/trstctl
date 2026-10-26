@@ -54,4 +54,10 @@ describe("appliance key generation", () => {
     render(<Editor connector="f5" initial='{"endpoint":"https://a.example.com","peer_endpoint":"https://b.example.com","key_generation":"appliance"}' />);
     expect(await screen.findByText(/HA pair cannot make its key/)).toBeInTheDocument();
   });
+
+  it("names what a Cisco ISE node needs before the server refuses it", async () => {
+    page.mockReset().mockResolvedValue({ agents: [] });
+    render(<Editor connector="cisco" initial='{"endpoint":"https://ise.example.com","key_generation":"appliance"}' />);
+    expect(await screen.findByText(/node_hostname and certificate_roles/)).toBeInTheDocument();
+  });
 });

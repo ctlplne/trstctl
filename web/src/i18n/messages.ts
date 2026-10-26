@@ -17692,6 +17692,10 @@ export const messages = {
     defaultMessage: "A Palo Alto firewall makes its own key only when ssl_tls_profile and commit_admin are set in the configuration.",
     description: "What a Palo Alto destination needs before its firewall can make its key.",
   },
+  "connectors.keyGeneration.ciscoNode": {
+    defaultMessage: "A Cisco ISE node makes its own key only when node_hostname and certificate_roles are set in the configuration.",
+    description: "What a Cisco ISE destination needs before the node can make its key.",
+  },
   "connectors.keyGeneration.f5Pair": {
     defaultMessage:
       "An F5 HA pair cannot make its key on the appliance, because each peer would hold a different key. Remove peer_endpoint, or keep control-plane keys.",
