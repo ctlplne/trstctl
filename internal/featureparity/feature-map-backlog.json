@@ -3536,7 +3536,12 @@
                 "issueExternalCA",
                 "getKubernetesCSRSupport",
                 "getKubernetesCertManagerRequests",
-                "getKubernetesTrustBundleDistribution"
+                "getKubernetesTrustBundleDistribution",
+                "startKubernetesTrustRollout",
+                "listKubernetesTrustRollouts",
+                "getKubernetesTrustRollout",
+                "pauseKubernetesTrustRollout",
+                "resumeKubernetesTrustRollout"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3556,7 +3561,12 @@
                 "external-cas issue",
                 "kubernetes csr",
                 "kubernetes cert-manager-requests",
-                "kubernetes trust-bundles"
+                "kubernetes trust-bundles",
+                "kubernetes trust-rollouts start",
+                "kubernetes trust-rollouts list",
+                "kubernetes trust-rollouts get",
+                "kubernetes trust-rollouts pause",
+                "kubernetes trust-rollouts resume"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -3621,7 +3631,12 @@
                         "CLI command: external-cas issue",
                         "CLI command: issuance-requests preview",
                         "CLI command: kubernetes csr",
-                        "CLI command: kubernetes trust-bundles"
+                        "CLI command: kubernetes trust-bundles",
+                        "CLI command: kubernetes trust-rollouts start",
+                        "CLI command: kubernetes trust-rollouts list",
+                        "CLI command: kubernetes trust-rollouts get",
+                        "CLI command: kubernetes trust-rollouts pause",
+                        "CLI command: kubernetes trust-rollouts resume"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -3640,7 +3655,12 @@
                         "OpenAPI operationId: issueExternalCA",
                         "OpenAPI operationId: previewIssuanceRequest",
                         "OpenAPI operationId: getKubernetesCSRSupport",
-                        "OpenAPI operationId: getKubernetesTrustBundleDistribution"
+                        "OpenAPI operationId: getKubernetesTrustBundleDistribution",
+                        "OpenAPI operationId: startKubernetesTrustRollout",
+                        "OpenAPI operationId: listKubernetesTrustRollouts",
+                        "OpenAPI operationId: getKubernetesTrustRollout",
+                        "OpenAPI operationId: pauseKubernetesTrustRollout",
+                        "OpenAPI operationId: resumeKubernetesTrustRollout"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -3691,6 +3711,7 @@
                         "feature authz manifest maps getKubernetesCSRSupport and getKubernetesTrustBundleDistribution to certs:read and OpenAPI publishes x-trstctl-permission for the read-only posture routes.",
                         "Kubernetes ClusterRole grants certificates.k8s.io CertificateSigningRequest get/list/watch plus status update/patch only; the agent does not approve CSRs.",
                         "Kubernetes ClusterRole grants trustbundles get/list/watch plus trustbundles/status update/patch and ConfigMap get/list/watch/create/update/patch for CA-bundle distribution.",
+                        "feature authz manifest maps listKubernetesTrustRollouts and getKubernetesTrustRollout to certs:read and startKubernetesTrustRollout, pauseKubernetesTrustRollout and resumeKubernetesTrustRollout to certs:write; the agent ClusterRole adds trustbundles create/update/patch so a cluster can apply a rolled-out bundle, and --k8s-trust-rollouts=false keeps rollouts out.",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [
@@ -3706,6 +3727,7 @@
                     "evidence": [
                         "mutating served surface requires audit/event evidence: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction, issueExternalCA",
                         "issueExternalCA routes through ca.IssuanceService, which records the ca.issue outbox row under the inner external-CA idempotency key.",
+                        "startKubernetesTrustRollout, pauseKubernetesTrustRollout and resumeKubernetesTrustRollout emit kubernetes.trust_rollout.started/paused/resumed under deterministic event ids; each cluster's verification is projected from that cluster's own kubernetes.controller.posture_reported event.",
                         "getKubernetesCSRSupport and getKubernetesTrustBundleDistribution are read-only posture disclosures; native CSR signing reuses the existing idempotent issue path and TrustBundle distribution is a cluster-local controller write to ConfigMap/status resources, not a new browser-side mutation."
                     ],
                     "refs": [
@@ -3847,6 +3869,11 @@
                             "OpenAPI operationId: previewIssuanceRequest",
                             "OpenAPI operationId: getKubernetesCSRSupport",
                             "OpenAPI operationId: getKubernetesTrustBundleDistribution",
+                            "OpenAPI operationId: startKubernetesTrustRollout",
+                            "OpenAPI operationId: listKubernetesTrustRollouts",
+                            "OpenAPI operationId: getKubernetesTrustRollout",
+                            "OpenAPI operationId: pauseKubernetesTrustRollout",
+                            "OpenAPI operationId: resumeKubernetesTrustRollout",
                             "CLI command: issuers create",
                             "CLI command: issuers capabilities",
                             "CLI command: issuers list",
@@ -3858,7 +3885,12 @@
                             "CLI command: external-cas issue",
                             "CLI command: issuance-requests preview",
                             "CLI command: kubernetes csr",
-                            "CLI command: kubernetes trust-bundles"
+                            "CLI command: kubernetes trust-bundles",
+                            "CLI command: kubernetes trust-rollouts start",
+                            "CLI command: kubernetes trust-rollouts list",
+                            "CLI command: kubernetes trust-rollouts get",
+                            "CLI command: kubernetes trust-rollouts pause",
+                            "CLI command: kubernetes trust-rollouts resume"
                         ]
                     }
                 },

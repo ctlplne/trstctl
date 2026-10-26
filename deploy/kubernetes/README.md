@@ -140,7 +140,9 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
    into their requested TLS Secrets and renews them, distributes `TrustBundle`s,
    and writes status back to the owning resource. It watches these resources
    and converges each as it changes, re-checking everything every
-   `--k8s-resync` (default ten minutes).
+   `--k8s-resync` (default ten minutes). It also applies the TrustBundles the
+   control plane rolls out to this cluster (public CA certificates only; turn
+   that off with `--k8s-trust-rollouts=false`).
 
 Do not combine `--cert-manager-controller` with the older
 `--cert-manager-issuer` fixed-name bridge. The bridge does not read Issuer

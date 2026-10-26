@@ -4901,6 +4901,46 @@ export interface KubernetesTrustBundleDistribution {
   summary?: KubernetesPostureSummary;
 }
 
+export interface KubernetesTrustRollout {
+  bundle_sha256: string;
+  ca_bundle_pem: string;
+  clusters: KubernetesTrustRolloutCluster[];
+  config_map_name: string;
+  created_at: string;
+  id: string;
+  key: string;
+  name: string;
+  namespaces: string[];
+  state: "running" | "paused" | "completed" | "superseded";
+  updated_at: string;
+  verified_clusters: number;
+}
+
+export interface KubernetesTrustRolloutCluster {
+  canary: boolean;
+  cluster_id: string;
+  dispatched_at?: string;
+  observed_hash?: string;
+  position: number;
+  reason?: string;
+  report_id?: string;
+  state: "waiting" | "dispatched" | "verified" | "failed";
+  verified_at?: string;
+}
+
+export interface KubernetesTrustRolloutList {
+  items: KubernetesTrustRollout[];
+}
+
+export interface KubernetesTrustRolloutRequest {
+  ca_bundle_pem: string;
+  clusters: string[];
+  config_map_name?: string;
+  key?: string;
+  name: string;
+  namespaces: string[];
+}
+
 export interface LifecycleAutomationControl {
   action: "start" | "pause" | "resume" | "retry" | "cancel" | "rollback";
   detail: string;

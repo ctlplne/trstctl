@@ -202,6 +202,7 @@ type API struct {
 	kubernetesCSRPosture               KubernetesPostureReader
 	kubernetesCMPosture                KubernetesPostureReader
 	kubernetesTrustPosture             KubernetesPostureReader
+	kubernetesTrustRollouts            KubernetesTrustRolloutStore
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -337,6 +338,7 @@ type config struct {
 	kubernetesCSRPosture        KubernetesPostureReader
 	kubernetesCMPosture         KubernetesPostureReader
 	kubernetesTrustPosture      KubernetesPostureReader
+	kubernetesTrustRollouts     KubernetesTrustRolloutStore
 	featureObserver             func(feature, action, outcome string, seconds float64)
 	ownershipAttestationCadence time.Duration
 }
@@ -664,6 +666,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		kubernetesCSRPosture:        cfg.kubernetesCSRPosture,
 		kubernetesCMPosture:         cfg.kubernetesCMPosture,
 		kubernetesTrustPosture:      cfg.kubernetesTrustPosture,
+		kubernetesTrustRollouts:     cfg.kubernetesTrustRollouts,
 	}
 	a.bindLifecyclePolicy()
 	if a.auth != nil {
@@ -1209,6 +1212,11 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/kubernetes/certificate-signing-requests", opID: "getKubernetesCSRSupport", summary: "Get native Kubernetes CertificateSigningRequest support", handler: a.getKubernetesCSRSupport, resSchema: "KubernetesCSRSupport", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/kubernetes/cert-manager-certificate-requests", opID: "getKubernetesCertManagerRequests", summary: "Get authenticated cert-manager CertificateRequest observations", handler: a.getKubernetesCertManagerRequests, resSchema: "KubernetesCertManagerRequests", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/kubernetes/trust-bundles", opID: "getKubernetesTrustBundleDistribution", summary: "Get Kubernetes trust-bundle distribution support", handler: a.getKubernetesTrustBundleDistribution, resSchema: "KubernetesTrustBundleDistribution", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/kubernetes/trust-rollouts", opID: "startKubernetesTrustRollout", summary: "Roll a TrustBundle out to reported clusters, canary first", handler: a.startKubernetesTrustRollout, reqSchema: "KubernetesTrustRolloutRequest", resSchema: "KubernetesTrustRollout", successCode: "201", mutation: true, perm: authz.CertsWrite},
+		{method: "GET", path: "/api/v1/kubernetes/trust-rollouts", opID: "listKubernetesTrustRollouts", summary: "List multi-cluster TrustBundle rollouts", handler: a.listKubernetesTrustRollouts, resSchema: "KubernetesTrustRolloutList", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/kubernetes/trust-rollouts/{id}", opID: "getKubernetesTrustRollout", summary: "Get one TrustBundle rollout and each cluster's verified state", handler: a.getKubernetesTrustRollout, pathParams: idPath, resSchema: "KubernetesTrustRollout", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/kubernetes/trust-rollouts/{id}/pause", opID: "pauseKubernetesTrustRollout", summary: "Pause a TrustBundle rollout before its canary gate", handler: a.pauseKubernetesTrustRollout, pathParams: idPath, resSchema: "KubernetesTrustRollout", successCode: "200", mutation: true, perm: authz.CertsWrite},
+		{method: "POST", path: "/api/v1/kubernetes/trust-rollouts/{id}/resume", opID: "resumeKubernetesTrustRollout", summary: "Resume a paused TrustBundle rollout", handler: a.resumeKubernetesTrustRollout, pathParams: idPath, resSchema: "KubernetesTrustRollout", successCode: "200", mutation: true, perm: authz.CertsWrite},
 		{method: "POST", path: "/api/v1/workloads/attester-trust-sources", opID: "createWorkloadAttesterTrustSource", summary: "Create a tenant workload attester trust source", handler: a.createWorkloadAttesterTrustSource, reqSchema: "WorkloadAttesterTrustSourceRequest", resSchema: "WorkloadAttesterTrustSource", successCode: "201", mutation: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/workloads/attester-trust-sources", opID: "listWorkloadAttesterTrustSources", summary: "List tenant workload attester trust sources", handler: a.listWorkloadAttesterTrustSources, resSchema: "WorkloadAttesterTrustSourceList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/workloads/attester-trust-sources/{id}", opID: "getWorkloadAttesterTrustSource", summary: "Get a tenant workload attester trust source", handler: a.getWorkloadAttesterTrustSource, pathParams: idPath, resSchema: "WorkloadAttesterTrustSource", successCode: "200", perm: authz.CertsRead},

@@ -4164,6 +4164,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kubernetes/trust-rollouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List multi-cluster TrustBundle rollouts */
+        get: operations["listKubernetesTrustRollouts"];
+        put?: never;
+        /** Roll a TrustBundle out to reported clusters, canary first */
+        post: operations["startKubernetesTrustRollout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/trust-rollouts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one TrustBundle rollout and each cluster's verified state */
+        get: operations["getKubernetesTrustRollout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/trust-rollouts/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause a TrustBundle rollout before its canary gate */
+        post: operations["pauseKubernetesTrustRollout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kubernetes/trust-rollouts/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a paused TrustBundle rollout */
+        post: operations["resumeKubernetesTrustRollout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lifecycle/automation-plan": {
         parameters: {
             query?: never;
@@ -13329,6 +13398,59 @@ export interface components {
             served: boolean;
             status_fields: string[];
             summary?: components["schemas"]["KubernetesPostureSummary"];
+        };
+        KubernetesTrustRollout: {
+            bundle_sha256: string;
+            ca_bundle_pem: string;
+            clusters: components["schemas"]["KubernetesTrustRolloutCluster"][];
+            config_map_name: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            key: string;
+            name: string;
+            namespaces: string[];
+            /** @enum {string} */
+            state: "running" | "paused" | "completed" | "superseded";
+            /** Format: date-time */
+            updated_at: string;
+            verified_clusters: number;
+        };
+        KubernetesTrustRolloutCluster: {
+            canary: boolean;
+            cluster_id: string;
+            /** Format: date-time */
+            dispatched_at?: string;
+            observed_hash?: string;
+            position: number;
+            reason?: string;
+            /** @description The posture report that verified or failed the cluster. */
+            report_id?: string;
+            /**
+             * @description verified means the cluster's own controller reported the bundle distributed with bundle_sha256.
+             * @enum {string}
+             */
+            state: "waiting" | "dispatched" | "verified" | "failed";
+            /** Format: date-time */
+            verified_at?: string;
+        };
+        KubernetesTrustRolloutList: {
+            items: components["schemas"]["KubernetesTrustRollout"][];
+        };
+        KubernetesTrustRolloutRequest: {
+            /** @description Public PEM CA certificates only; any other PEM block is refused. */
+            ca_bundle_pem: string;
+            /** @description Cluster ids that have reported Kubernetes controller posture, in rollout order; the first is the canary and the rest wait for it to be verified. */
+            clusters: string[];
+            /** @description ConfigMap written in every target namespace; defaults to the name. */
+            config_map_name?: string;
+            /** @description ConfigMap data key; defaults to ca-bundle.pem. */
+            key?: string;
+            /** @description The TrustBundle object name each cluster's controller creates or updates. */
+            name: string;
+            /** @description Namespaces that receive the ConfigMap in each cluster. */
+            namespaces: string[];
         };
         LifecycleAutomationControl: {
             /** @enum {string} */
@@ -29944,6 +30066,215 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KubernetesTrustBundleDistribution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listKubernetesTrustRollouts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesTrustRolloutList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startKubernetesTrustRollout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KubernetesTrustRolloutRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesTrustRollout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getKubernetesTrustRollout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesTrustRollout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    pauseKubernetesTrustRollout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesTrustRollout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resumeKubernetesTrustRollout: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KubernetesTrustRollout"];
                 };
             };
             /** @description client error */

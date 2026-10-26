@@ -738,7 +738,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		PAM:                       pamFromConfig(cfg.PAM),
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         outbound.telemetryReporter,
-		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesCertManagerPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st)},
+		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesCertManagerPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st), kubernetesTrustRolloutsFromConfig(st)},
 		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), HierarchyRevocationBaseURL: cfg.CA.HierarchyRevocationBaseURL, CAHierarchyRequireRevocationPointers: cfg.CA.GovernanceModeValue() == config.GovernanceRegulated, CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
@@ -1055,6 +1055,15 @@ func kubernetesTrustBundlePostureFromConfig(st *store.Store) api.Option {
 		return api.WithKubernetesTrustBundlePosture(nil)
 	}
 	return api.WithKubernetesTrustBundlePosture(st)
+}
+
+// kubernetesTrustRolloutsFromConfig attaches multi-cluster TrustBundle
+// rollouts (A138) to the projected store, the same explicit edge.
+func kubernetesTrustRolloutsFromConfig(st *store.Store) api.Option {
+	if st == nil {
+		return api.WithKubernetesTrustRollouts(nil)
+	}
+	return api.WithKubernetesTrustRollouts(st)
 }
 
 // evalProtocolProfileFromConfig resolves the explicit shipped eval preset at the

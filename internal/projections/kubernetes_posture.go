@@ -108,6 +108,12 @@ func (p *Projector) applyKubernetesPostureTx(ctx context.Context, tx pgx.Tx, e e
 		}); err != nil {
 			return true, err
 		}
+		if section.capability == store.KubernetesPostureTrustBundles {
+			// A138: the cluster's own report is what verifies a rollout there.
+			if err := p.store.ObserveKubernetesTrustRolloutsTx(ctx, tx, e.TenantID, payload.ClusterID, payload.ReportID, resources, e.Time, e.Sequence); err != nil {
+				return true, err
+			}
+		}
 		if section.capability == store.KubernetesPostureCertManagerRequests {
 			for _, resource := range section.posture.Resources {
 				if resource.State != "ready" {

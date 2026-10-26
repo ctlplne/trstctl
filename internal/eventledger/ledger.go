@@ -109,6 +109,9 @@ const (
 	EventIdentityCreated                          = "identity.created"
 	EventIdentityIssued                           = "identity.issued"
 	EventFirstIssuanceRetryRequested              = "issuance.retry_requested"
+	EventKubernetesTrustRolloutStarted            = "kubernetes.trust_rollout.started"
+	EventKubernetesTrustRolloutPaused             = "kubernetes.trust_rollout.paused"
+	EventKubernetesTrustRolloutResumed            = "kubernetes.trust_rollout.resumed"
 	EventIdentityDeployed                         = "identity.deployed"
 	EventIdentityUndeployed                       = "identity.undeployed"
 	EventIdentityRenewing                         = "identity.renewing"
@@ -275,6 +278,9 @@ var ledger = []FeatureEvent{
 	// identity.* event; the ledger lists them under their owning feature.
 	{"F4", "CA-agnostic outbound issuance", "issue", "transitionIdentity", []string{EventIdentityIssued}},
 	{"F4", "CA-agnostic outbound issuance", "retry_issuance", "retryFirstIssuance", []string{EventFirstIssuanceRetryRequested}},
+	{"F4", "CA-agnostic outbound issuance", "start_kubernetes_trust_rollout", "startKubernetesTrustRollout", []string{EventKubernetesTrustRolloutStarted}},
+	{"F4", "CA-agnostic outbound issuance", "pause_kubernetes_trust_rollout", "pauseKubernetesTrustRollout", []string{EventKubernetesTrustRolloutPaused}},
+	{"F4", "CA-agnostic outbound issuance", "resume_kubernetes_trust_rollout", "resumeKubernetesTrustRollout", []string{EventKubernetesTrustRolloutResumed}},
 	{"F6", "Lifecycle automation", "create_identity", "createIdentity", []string{EventIdentityCreated}},
 	{"F6", "Lifecycle automation", "deploy", "transitionIdentity", []string{EventIdentityDeployed}},
 	{"F6", "Lifecycle automation", "rollback", "verifiedHostRollback", []string{EventIdentityUndeployed}},

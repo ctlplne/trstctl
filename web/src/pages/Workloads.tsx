@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Ban, Network, Plus, RefreshCw, RotateCw, ServerOff, ShieldAlert, Trash2, Waypoints } from "lucide-react";
 import { ErrorState, LoadingState, UnavailableState } from "@/components/StatePrimitives";
@@ -15,6 +15,7 @@ import { EphemeralCredentialWorkflow } from "@/pages/workloads/EphemeralCredenti
 import { AttestedSVIDWorkflow } from "@/pages/workloads/AttestedSVIDWorkflow";
 import { BrokerIdentityWorkflow } from "@/pages/workloads/BrokerIdentityWorkflow";
 import { KubernetesControllerState, kubernetesControllerBadgeValue } from "@/pages/workloads/KubernetesControllerState";
+const KubernetesTrustRolloutsPanel = lazy(() => import("@/pages/workloads/KubernetesTrustRolloutsPanel"));
 import {
   api,
   type Agent,
@@ -783,6 +784,13 @@ export function Workloads() {
             </div>
           </section>
 
+          <Suspense fallback={<LoadingState>{t("workloads.trustRollouts.loading")}</LoadingState>}>
+            <KubernetesTrustRolloutsPanel
+              knownClusters={[
+                ...new Set([...(trustBundleSupport?.controllers ?? []), ...(csrSupport?.controllers ?? [])].map((controller) => controller.cluster_id)),
+              ].sort()}
+            />
+          </Suspense>
           <section aria-labelledby="kubernetes-trust-bundle-heading" className="grid gap-3 border-y border-border py-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

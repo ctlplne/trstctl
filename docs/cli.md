@@ -1211,6 +1211,16 @@ trstctl-cli kubernetes csr
 # Inspect Kubernetes TrustBundle CRD, ConfigMap distribution, status fields, and RBAC.
 trstctl-cli kubernetes trust-bundles
 
+# Roll one public CA bundle out to the clusters whose controllers report here,
+# canary first; each cluster is verified by its own controller's report.
+jq -n --rawfile pem roots.pem '{name:"platform-roots", ca_bundle_pem:$pem,
+  namespaces:["apps","payments"], clusters:["sha256:<canary cluster id>","sha256:<next cluster id>"]}' \
+  | trstctl-cli kubernetes trust-rollouts start -f -
+trstctl-cli kubernetes trust-rollouts list
+trstctl-cli kubernetes trust-rollouts get <rollout-id>
+trstctl-cli kubernetes trust-rollouts pause <rollout-id>
+trstctl-cli kubernetes trust-rollouts resume <rollout-id>
+
 # Run a Gitleaks code scan from CI and record redacted findings in discovery/graph.
 cat > secret-scan.json <<'JSON'
 {"path":"."}

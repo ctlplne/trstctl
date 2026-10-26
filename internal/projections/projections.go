@@ -4534,6 +4534,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
 	EventKubernetesControllerPostureReported:      {1: true},
+	EventKubernetesTrustRolloutStarted:            {1: true},
+	EventKubernetesTrustRolloutPaused:             {1: true},
+	EventKubernetesTrustRolloutResumed:            {1: true},
 	EventProfileCreated:                           {1: true, 2: true},
 	EventProfileUpdated:                           {1: true, 2: true},
 	EventProfileEditApprovalRequested:             {1: true},
@@ -4804,6 +4807,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyKubernetesPostureTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyKubernetesTrustRolloutTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {

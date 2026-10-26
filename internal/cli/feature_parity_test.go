@@ -338,8 +338,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A129's `platform tenant-key-domain rotate` raised it to 589, mapped onto F40.
 	// A131's `certificates key-attestation|verify-key-attestation` raised it to
 	// 591, mapped onto the certificate inventory row.
-	if len(out) != 591 {
-		t.Fatalf("CLI commands = %d, want 591", len(out))
+	// A138's `kubernetes trust-rollouts start|list|get|pause|resume` raised it
+	// to 596, mapped onto F4.
+	if len(out) != 596 {
+		t.Fatalf("CLI commands = %d, want 596", len(out))
 	}
 	return out
 }

@@ -6759,6 +6759,62 @@ KubernetesTrustBundleDistribution = TypedDict(
     total=False,
 )
 
+KubernetesTrustRollout = TypedDict(
+    'KubernetesTrustRollout',
+    {
+        'bundle_sha256': str,
+        'ca_bundle_pem': str,
+        'clusters': list[dict[str, Any]],
+        'config_map_name': str,
+        'created_at': str,
+        'id': str,
+        'key': str,
+        'name': str,
+        'namespaces': list[str],
+        'state': str,
+        'updated_at': str,
+        'verified_clusters': int,
+    },
+    total=False,
+)
+
+KubernetesTrustRolloutCluster = TypedDict(
+    'KubernetesTrustRolloutCluster',
+    {
+        'canary': bool,
+        'cluster_id': str,
+        'dispatched_at': str,
+        'observed_hash': str,
+        'position': int,
+        'reason': str,
+        'report_id': str,
+        'state': str,
+        'verified_at': str,
+    },
+    total=False,
+)
+
+KubernetesTrustRolloutList = TypedDict(
+    'KubernetesTrustRolloutList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+KubernetesTrustRolloutRequest = TypedDict(
+    'KubernetesTrustRolloutRequest',
+    {
+        'ca_bundle_pem': str,
+        'clusters': list[str],
+        'config_map_name': str,
+        'key': str,
+        'name': str,
+        'namespaces': list[str],
+    },
+    total=False,
+)
+
 LifecycleAutomationControl = TypedDict(
     'LifecycleAutomationControl',
     {

@@ -293,7 +293,9 @@ certificates gated on TPM, cloud, Kubernetes, or GitHub attestation; dynamic/eph
 leases with TTL policy and renew/revoke controls; AI-agent broker
 identities scoped to allowed actions and a TTL; and attester trust-source
 create/rotate/revoke/delete. It also shows served Kubernetes CSR and
-trust-bundle-distribution posture, read-only. Open **Kubernetes controller
+trust-bundle-distribution posture, and rolls one CA bundle out to the clusters
+that report here, canary first: each rollout lists every cluster's state and
+the report that verified it, with pause and resume. Open **Kubernetes controller
 evidence** to see the last reported controller pass, ready/pending/failed
 object counts, each observed object's state and reason, and the public bundle
 hash. An absent, stale, or failed report does not appear active. The panel
@@ -301,7 +303,7 @@ refreshes while the tab is visible and has a manual refresh control. Raw key
 material never reaches the browser. Backed by `/api/v1/workloads/attested-issuance`,
 `/api/v1/workloads/attester-trust-sources`, `/api/v1/secrets/leases`,
 `/api/v1/broker/agent-identities`, `/api/v1/kubernetes/certificate-signing-requests`,
-and `/api/v1/kubernetes/trust-bundles`.
+`/api/v1/kubernetes/trust-bundles`, and `/api/v1/kubernetes/trust-rollouts`.
 
 ### Profiles (`/profiles`)
 

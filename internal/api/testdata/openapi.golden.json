@@ -20301,6 +20301,179 @@
         ],
         "type": "object"
       },
+      "KubernetesTrustRollout": {
+        "properties": {
+          "bundle_sha256": {
+            "type": "string"
+          },
+          "ca_bundle_pem": {
+            "type": "string"
+          },
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesTrustRolloutCluster"
+            },
+            "type": "array"
+          },
+          "config_map_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespaces": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "paused",
+              "completed",
+              "superseded"
+            ],
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verified_clusters": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "ca_bundle_pem",
+          "bundle_sha256",
+          "config_map_name",
+          "key",
+          "namespaces",
+          "state",
+          "verified_clusters",
+          "created_at",
+          "updated_at",
+          "clusters"
+        ],
+        "type": "object"
+      },
+      "KubernetesTrustRolloutCluster": {
+        "properties": {
+          "canary": {
+            "type": "boolean"
+          },
+          "cluster_id": {
+            "type": "string"
+          },
+          "dispatched_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observed_hash": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "report_id": {
+            "description": "The posture report that verified or failed the cluster.",
+            "type": "string"
+          },
+          "state": {
+            "description": "verified means the cluster's own controller reported the bundle distributed with bundle_sha256.",
+            "enum": [
+              "waiting",
+              "dispatched",
+              "verified",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "cluster_id",
+          "position",
+          "canary",
+          "state"
+        ],
+        "type": "object"
+      },
+      "KubernetesTrustRolloutList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KubernetesTrustRollout"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "KubernetesTrustRolloutRequest": {
+        "properties": {
+          "ca_bundle_pem": {
+            "description": "Public PEM CA certificates only; any other PEM block is refused.",
+            "type": "string"
+          },
+          "clusters": {
+            "description": "Cluster ids that have reported Kubernetes controller posture, in rollout order; the first is the canary and the rest wait for it to be verified.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "config_map_name": {
+            "description": "ConfigMap written in every target namespace; defaults to the name.",
+            "type": "string"
+          },
+          "key": {
+            "description": "ConfigMap data key; defaults to ca-bundle.pem.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The TrustBundle object name each cluster's controller creates or updates.",
+            "type": "string"
+          },
+          "namespaces": {
+            "description": "Namespaces that receive the ConfigMap in each cluster.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "ca_bundle_pem",
+          "namespaces",
+          "clusters"
+        ],
+        "type": "object"
+      },
       "LifecycleAutomationControl": {
         "properties": {
           "action": {
@@ -56257,6 +56430,311 @@
         ],
         "summary": "Get Kubernetes trust-bundle distribution support",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/kubernetes/trust-rollouts": {
+      "get": {
+        "operationId": "listKubernetesTrustRollouts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesTrustRolloutList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List multi-cluster TrustBundle rollouts",
+        "x-trstctl-permission": "certs:read"
+      },
+      "post": {
+        "operationId": "startKubernetesTrustRollout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KubernetesTrustRolloutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesTrustRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Roll a TrustBundle out to reported clusters, canary first",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/kubernetes/trust-rollouts/{id}": {
+      "get": {
+        "operationId": "getKubernetesTrustRollout",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesTrustRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get one TrustBundle rollout and each cluster's verified state",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/kubernetes/trust-rollouts/{id}/pause": {
+      "post": {
+        "operationId": "pauseKubernetesTrustRollout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesTrustRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Pause a TrustBundle rollout before its canary gate",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/kubernetes/trust-rollouts/{id}/resume": {
+      "post": {
+        "operationId": "resumeKubernetesTrustRollout",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesTrustRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Resume a paused TrustBundle rollout",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/lifecycle/automation-plan": {

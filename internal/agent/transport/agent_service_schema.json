@@ -443,6 +443,11 @@
           "go_type": "int64",
           "name": "recorded_at_unix",
           "presence": "required"
+        },
+        {
+          "go_type": "[]transport.KubernetesDesiredTrustBundle",
+          "name": "desired_trust_bundles",
+          "presence": "optional"
         }
       ]
     },

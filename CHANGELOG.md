@@ -2,6 +2,15 @@
 
 ### Added
 
+- A TrustBundle can be rolled out from the control plane to several clusters,
+  canary first: `POST /api/v1/kubernetes/trust-rollouts` (`trstctl-cli
+  kubernetes trust-rollouts start|list|get|pause|resume`, Workloads console).
+  Each cluster's agent receives the bundle in the answer to its posture report,
+  applies it as a TrustBundle it owns (never one someone else created), and
+  distributes it; a cluster reads verified only when its own controller
+  reports the bundle distributed with the rollout's SHA-256, and the other
+  clusters wait for the canary. The agent ClusterRole gains TrustBundle
+  create/update/patch; `--k8s-trust-rollouts=false` keeps rollouts out.
 - The Kubernetes agent's controller is event-driven: it lists and watches its
   issuers, trstctl Certificates, TrustBundles, cert-manager
   CertificateRequests, native CertificateSigningRequests and the ConfigMaps it

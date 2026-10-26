@@ -46,6 +46,21 @@ type KubernetesPostureResponse struct {
 	TenantID       string `json:"tenant_id"`
 	ReportID       string `json:"report_id"`
 	RecordedAtUnix int64  `json:"recorded_at_unix"`
+	// DesiredTrustBundles are the TrustBundles the control plane is rolling
+	// out to the reporting cluster (A138). An older server sends none.
+	DesiredTrustBundles []KubernetesDesiredTrustBundle `json:"desired_trust_bundles,omitempty"`
+}
+
+// KubernetesDesiredTrustBundle is one TrustBundle a cluster's controller should
+// hold: public CA certificates only, and where to distribute them.
+type KubernetesDesiredTrustBundle struct {
+	RolloutID     string   `json:"rollout_id"`
+	Name          string   `json:"name"`
+	CABundlePEM   string   `json:"ca_bundle_pem"`
+	BundleSHA256  string   `json:"bundle_sha256"`
+	ConfigMapName string   `json:"config_map_name"`
+	Key           string   `json:"key"`
+	Namespaces    []string `json:"namespaces"`
 }
 
 // KubernetesPostureServiceServer is an optional extension implemented by the

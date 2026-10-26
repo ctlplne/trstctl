@@ -301,8 +301,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A129's tenant key-domain rotation raised it to 534, mapped onto F40.
 	// A131's certificate key-attestation evidence raised it to 535, mapped onto
 	// the certificate inventory row.
-	if len(out) != 535 {
-		t.Fatalf("OpenAPI operationIds = %d, want 535", len(out))
+	// A138's multi-cluster TrustBundle rollouts (start, list, get, pause,
+	// resume) raised it to 540, mapped onto F4.
+	if len(out) != 540 {
+		t.Fatalf("OpenAPI operationIds = %d, want 540", len(out))
 	}
 	return out
 }

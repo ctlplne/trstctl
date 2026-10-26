@@ -205,6 +205,7 @@ func newServedHarnessWithEventOptions(t *testing.T, protocols config.Protocols, 
 		APIOptions: []api.Option{
 			api.WithKubernetesCSRPosture(st),
 			api.WithKubernetesTrustBundlePosture(st),
+			api.WithKubernetesTrustRollouts(st),
 		},
 	}
 	for _, o := range opts {

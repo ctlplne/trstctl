@@ -275,6 +275,40 @@ copy private keys, bearer tokens, or workload credentials into the ConfigMap. Us
 `GET /api/v1/kubernetes/trust-bundles` to inspect the served CAP-K8S-07 posture,
 required RBAC, status fields, and residuals.
 
+## Rolling a TrustBundle out to several clusters
+
+Instead of applying the same TrustBundle in each cluster, roll it out from the
+control plane to the clusters whose controllers report there. Pick the clusters
+by the ids their reports carry (`trstctl-cli kubernetes trust-bundles` lists the
+reporting controllers); the first is the canary:
+
+```sh
+jq -n --rawfile pem roots.pem '{name:"platform-roots", ca_bundle_pem:$pem,
+  namespaces:["apps","payments"], clusters:["sha256:<canary>","sha256:<next>"]}' \
+  | trstctl-cli kubernetes trust-rollouts start -f -
+```
+
+The control plane accepts public CERTIFICATE blocks only and records the
+bundle's SHA-256. The canary's agent receives the bundle in the answer to its
+next posture report, creates or updates `TrustBundle/platform-roots` as an
+object it owns (label `app.kubernetes.io/managed-by: trstctl-agent`, annotation
+`trstctl.com/rollout-id`), and its controller distributes it as above. The
+canary reads verified only when its own controller reports the bundle
+distributed with that hash; then the other clusters receive it, and the
+rollout completes when each has reported the same. A failure is shown with
+its reason and holds the rest back while the canary has not verified. Pause a
+rollout to hold the canary gate, and resume it to continue. Starting a new
+rollout of the same name replaces the earlier one cluster by cluster: a
+cluster keeps the bundle it has until the new rollout reaches it.
+
+The agent never changes a TrustBundle of that name that someone else created;
+the rollout then waits on that cluster. To keep rollouts out of a cluster, run
+its agent with `--k8s-trust-rollouts=false` and remove the TrustBundle
+create/update/patch verbs from its ClusterRole. `GET
+/api/v1/kubernetes/trust-rollouts/{id}`, `trstctl-cli kubernetes trust-rollouts
+get`, and the Workloads console show each cluster's state and the report that
+verified it.
+
 ## trstctl native Certificate API
 
 If you do not want cert-manager to own the workload object, create a trstctl

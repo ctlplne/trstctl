@@ -21652,6 +21652,107 @@ export const messages = {
     defaultMessage: "Public content hash",
     description: "Hash of a public Kubernetes CSR or CA bundle, never secret material.",
   },
+  "workloads.trustRollouts.namePlaceholder": {
+    defaultMessage: "platform-roots",
+    description: "Example TrustBundle name.",
+  },
+  "workloads.trustRollouts.namespacesPlaceholder": {
+    defaultMessage: "apps, payments",
+    description: "Example namespaces for a rollout.",
+  },
+  "workloads.trustRollouts.hash": {
+    defaultMessage: "sha256:{hash}",
+    description: "The SHA-256 of the rolled-out CA bundle.",
+  },
+  "workloads.trustRollouts.heading": {
+    defaultMessage: "Roll out a trust bundle to clusters",
+    description: "Heading for multi-cluster TrustBundle rollouts on the Workloads page.",
+  },
+  "workloads.trustRollouts.description": {
+    defaultMessage:
+      "Send one public CA bundle to several clusters, canary first. Each cluster's agent applies it as a TrustBundle, and a cluster shows verified only after its own controller reports the bundle distributed with this hash.",
+    description: "Description of multi-cluster TrustBundle rollouts.",
+  },
+  "workloads.trustRollouts.errorTitle": {
+    defaultMessage: "Trust-bundle rollout failed",
+    description: "Error title for a failed TrustBundle rollout action.",
+  },
+  "workloads.trustRollouts.failed": {
+    defaultMessage: "The rollout request failed.",
+    description: "Fallback error for a failed TrustBundle rollout action.",
+  },
+  "workloads.trustRollouts.loadFailed": {
+    defaultMessage: "Rollouts could not be loaded.",
+    description: "Fallback error when TrustBundle rollouts cannot be listed.",
+  },
+  "workloads.trustRollouts.loading": {
+    defaultMessage: "Loading rollouts…",
+    description: "Loading state for TrustBundle rollouts.",
+  },
+  "workloads.trustRollouts.empty": {
+    defaultMessage: "No trust-bundle rollouts yet.",
+    description: "Empty state for TrustBundle rollouts.",
+  },
+  "workloads.trustRollouts.verifiedCount": {
+    defaultMessage: "{verified} of {total} clusters verified",
+    description: "How many clusters of a rollout are verified.",
+  },
+  "workloads.trustRollouts.pause": {
+    defaultMessage: "Pause",
+    description: "Button that pauses a TrustBundle rollout.",
+  },
+  "workloads.trustRollouts.resume": {
+    defaultMessage: "Resume",
+    description: "Button that resumes a paused TrustBundle rollout.",
+  },
+  "workloads.trustRollouts.target": {
+    defaultMessage: "ConfigMap {configMap}, key {key}, in {namespaces}",
+    description: "Where a rolled-out TrustBundle is distributed in each cluster.",
+  },
+  "workloads.trustRollouts.canary": {
+    defaultMessage: "canary",
+    description: "Marks the first cluster of a rollout, which goes before the others.",
+  },
+  "workloads.trustRollouts.report": {
+    defaultMessage: "report {report}",
+    description: "The posture report that verified or failed a cluster.",
+  },
+  "workloads.trustRollouts.startHeading": {
+    defaultMessage: "Start a rollout",
+    description: "Heading for the form that starts a TrustBundle rollout.",
+  },
+  "workloads.trustRollouts.name": {
+    defaultMessage: "TrustBundle name",
+    description: "Label for the TrustBundle object name in each cluster.",
+  },
+  "workloads.trustRollouts.bundle": {
+    defaultMessage: "CA certificates (PEM)",
+    description: "Label for the public CA bundle to roll out.",
+  },
+  "workloads.trustRollouts.bundleHelp": {
+    defaultMessage: "Public CERTIFICATE blocks only; anything else is refused.",
+    description: "Help text for the CA bundle field.",
+  },
+  "workloads.trustRollouts.namespaces": {
+    defaultMessage: "Namespaces",
+    description: "Label for the namespaces that receive the bundle in each cluster.",
+  },
+  "workloads.trustRollouts.clusters": {
+    defaultMessage: "Clusters (the first selected is the canary)",
+    description: "Label for the clusters a rollout targets.",
+  },
+  "workloads.trustRollouts.noClusters": {
+    defaultMessage: "No cluster has reported Kubernetes controller posture yet. Run the agent with --cert-manager-controller in each cluster first.",
+    description: "Shown when no cluster can be targeted.",
+  },
+  "workloads.trustRollouts.start": {
+    defaultMessage: "Start rollout",
+    description: "Button that starts a TrustBundle rollout.",
+  },
+  "workloads.trustRollouts.starting": {
+    defaultMessage: "Starting…",
+    description: "Busy label while a TrustBundle rollout starts.",
+  },
   "workloads.trustBundles.heading": {
     defaultMessage: "Kubernetes trust-bundle distribution",
     description: "Heading for Kubernetes trust-bundle distribution posture on the Workloads page.",

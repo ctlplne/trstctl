@@ -134,6 +134,9 @@ var TenantScopedTables = []string{
 	"managed_key_operations",
 	"kubernetes_controller_posture",
 	"kubernetes_certificate_provenance",
+	// A138: rollout clusters reference their rollout.
+	"kubernetes_trust_rollout_clusters",
+	"kubernetes_trust_rollouts",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

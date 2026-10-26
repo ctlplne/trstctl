@@ -176,6 +176,16 @@ and Ready=True. `GET /api/v1/kubernetes/trust-bundles`,
 `trstctl-cli kubernetes trust-bundles`, and the Workloads console disclose the CRD,
 RBAC, ConfigMap target, and residuals.
 
+One bundle can also be rolled out from the control plane to every cluster whose
+controller reports here (`POST /api/v1/kubernetes/trust-rollouts`,
+`trstctl-cli kubernetes trust-rollouts start`, or the Workloads console). The
+first cluster is the canary and the rest wait for it. Each cluster's agent
+receives the bundle in the answer to its posture report, applies it as a
+TrustBundle it owns, and distributes it. A cluster reads verified only when its
+own controller reports the bundle distributed with the rollout's SHA-256. A
+rollout can be paused before the canary gate; a newer rollout of the same name
+replaces it cluster by cluster.
+
 ### Running your own CA hierarchy (F48)
 
 trstctl can *be* your private PKI: a root CA, intermediates beneath it, end-entity

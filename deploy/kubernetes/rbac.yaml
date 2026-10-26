@@ -107,6 +107,13 @@ rules:
   - apiGroups: ["trstctl.com"]
     resources: ["issuers", "clusterissuers", "certificates", "trustbundles"]
     verbs: ["get", "list", "watch"]
+  # A TrustBundle the control plane rolls out to this cluster (public CA
+  # certificates only) is created or updated by the agent. It never changes one
+  # it did not create; run the agent with --k8s-trust-rollouts=false and drop
+  # these verbs to keep rollouts out of a cluster.
+  - apiGroups: ["trstctl.com"]
+    resources: ["trustbundles"]
+    verbs: ["create", "update", "patch"]
   - apiGroups: ["trstctl.com"]
     resources: ["issuers/status", "clusterissuers/status", "certificates/status", "trustbundles/status"]
     verbs: ["update", "patch"]

@@ -1353,6 +1353,11 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: previewIssuanceRequest",
             "OpenAPI operationId: getKubernetesCSRSupport",
             "OpenAPI operationId: getKubernetesTrustBundleDistribution",
+            "OpenAPI operationId: startKubernetesTrustRollout",
+            "OpenAPI operationId: listKubernetesTrustRollouts",
+            "OpenAPI operationId: getKubernetesTrustRollout",
+            "OpenAPI operationId: pauseKubernetesTrustRollout",
+            "OpenAPI operationId: resumeKubernetesTrustRollout",
             "CLI command: issuers create",
             "CLI command: issuers capabilities",
             "CLI command: issuers list",
@@ -1364,7 +1369,12 @@ export const canonicalCapabilities = [
             "CLI command: external-cas issue",
             "CLI command: issuance-requests preview",
             "CLI command: kubernetes csr",
-            "CLI command: kubernetes trust-bundles"
+            "CLI command: kubernetes trust-bundles",
+            "CLI command: kubernetes trust-rollouts start",
+            "CLI command: kubernetes trust-rollouts list",
+            "CLI command: kubernetes trust-rollouts get",
+            "CLI command: kubernetes trust-rollouts pause",
+            "CLI command: kubernetes trust-rollouts resume"
           ]
         }
       },

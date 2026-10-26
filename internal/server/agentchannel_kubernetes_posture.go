@@ -91,6 +91,18 @@ func (a *agentService) ReportKubernetesPosture(ctx context.Context, req *transpo
 	if err := json.Unmarshal(encoded, &response); err != nil {
 		return nil, status.Error(codes.Internal, "decode Kubernetes posture report receipt")
 	}
+	// A138: what the cluster should hold now. Read after the receipt, never
+	// cached with it, so a replayed report still learns the current rollouts.
+	desired, err := a.store.DesiredKubernetesTrustBundles(ctx, info.TenantID, report.ClusterID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "read Kubernetes trust rollouts: %v", err)
+	}
+	for _, bundle := range desired {
+		response.DesiredTrustBundles = append(response.DesiredTrustBundles, transport.KubernetesDesiredTrustBundle{
+			RolloutID: bundle.RolloutID, Name: bundle.Name, CABundlePEM: bundle.CABundlePEM, BundleSHA256: bundle.BundleSHA256,
+			ConfigMapName: bundle.ConfigMapName, Key: bundle.BundleKey, Namespaces: bundle.Namespaces,
+		})
+	}
 	return &response, nil
 }
 

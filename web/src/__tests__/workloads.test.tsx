@@ -17,6 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     kubernetesCSRSupport: vi.fn(),
     kubernetesCertManagerRequests: vi.fn(),
     kubernetesTrustBundles: vi.fn(),
+    kubernetesTrustRollouts: vi.fn(),
     rotationRuns: vi.fn(),
     sshFleet: vi.fn(),
     sshStatus: vi.fn(),
@@ -76,6 +77,7 @@ describe("workload identity disclosure surface", () => {
       ],
     });
     apiMock.kubernetesTrustBundles.mockReset().mockResolvedValue(kubernetesTrustBundleFixture());
+    apiMock.kubernetesTrustRollouts.mockReset().mockResolvedValue({ items: [] });
     apiMock.workloadAttesterTrustSources.mockReset().mockResolvedValue({ items: [] });
     apiMock.revokeWorkloadAttesterTrustSource.mockReset();
     apiMock.agents.mockReset().mockResolvedValue([

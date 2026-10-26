@@ -124,6 +124,7 @@ func main() {
 	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles, and the Kubernetes controller's posture heartbeat")
 	k8sResync := flag.Duration("k8s-resync", 10*time.Minute, "how often the Kubernetes controller re-checks every object, beyond what its watches report")
+	k8sTrustRollouts := flag.Bool("k8s-trust-rollouts", true, "apply the TrustBundles the control plane rolls out to this cluster (public CA certificates only)")
 	prepareIdentityDirPath := flag.String("prepare-identity-dir", "", "prepare a Kubernetes hostPath identity directory, then exit")
 	prepareIdentityUID := flag.Int("prepare-identity-uid", 65532, "uid that should own --prepare-identity-dir")
 	prepareIdentityGID := flag.Int("prepare-identity-gid", 65532, "gid that should own --prepare-identity-dir")
@@ -493,7 +494,7 @@ func main() {
 		kopts := k8sOptions{
 			secret: *k8sSecret, issuer: *cmIssuer, group: *cmGroup,
 			controller: *cmController, signerURL: *bridgeSignerURL, signerTokenFile: *bridgeSignerTokenFile,
-			reconcileEvery: *reconcileEvery, resync: *k8sResync,
+			reconcileEvery: *reconcileEvery, resync: *k8sResync, trustRollouts: *k8sTrustRollouts,
 		}
 		run = func(ctx context.Context, o agentOptions) error { return runKubernetes(ctx, o, kopts) }
 	}

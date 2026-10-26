@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/k8s"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
@@ -170,5 +172,26 @@ func TestIssuerControllerRunsFromWatchEvents(t *testing.T) {
 	waitFor("the Certificate was renewed before it expired", 12*time.Second, func() bool {
 		current := issued()
 		return current != "" && current != first
+	})
+
+	// A138: a TrustBundle the control plane rolls out to this cluster is
+	// created with the agent's own service account (rbac.yaml) and then
+	// distributed by the running controller.
+	rolledName := "trstctl-rollout-" + suffix
+	rolledConfigMap := "/api/v1/namespaces/" + ns + "/configmaps/" + rolledName
+	t.Cleanup(func() {
+		k.do(http.MethodDelete, "/apis/trstctl.com/v1alpha1/trustbundles/"+rolledName, "", nil)
+		k.do(http.MethodDelete, rolledConfigMap, "", nil)
+	})
+	normalized := strings.TrimSpace(bundle) + "\n"
+	if n, err := controller.ApplyDesiredTrustBundles(context.Background(), []k8s.DesiredTrustBundle{{
+		RolloutID: "33333333-3333-4333-8333-333333333333", Name: rolledName, CABundlePEM: normalized, BundleSHA256: crypto.SHA256Hex([]byte(normalized)),
+		ConfigMapName: rolledName, Key: "ca-bundle.pem", Namespaces: []string{ns},
+	}}); err != nil || n != 1 {
+		t.Fatalf("apply the rolled-out TrustBundle as the agent: %d, %v", n, err)
+	}
+	waitFor("the rolled-out TrustBundle was distributed", 10*time.Second, func() bool {
+		st, obj := k.do(http.MethodGet, rolledConfigMap, "", nil)
+		return st == http.StatusOK && at(obj, "data", "ca-bundle.pem") == normalized
 	})
 }

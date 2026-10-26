@@ -29,6 +29,7 @@ type k8sOptions struct {
 	signerTokenFile string // file containing the API token for the signer URL
 	reconcileEvery  time.Duration
 	resync          time.Duration // the controller's full re-check beyond its watches
+	trustRollouts   bool          // apply TrustBundles the control plane rolls out here
 }
 
 func (k k8sOptions) validateIssuerConfig() error {
@@ -198,8 +199,28 @@ func runKubernetesController(ctx context.Context, client *k8s.Client, controller
 	opts := k8s.RunOptions{
 		ClusterID: client.ClusterID(), ReportEvery: k.reconcileEvery, Resync: k.resync,
 		Report: func(ctx context.Context, report k8s.ControllerPostureReport) {
-			if _, err := postureClient.ReportKubernetesPosture(ctx, transportKubernetesPostureReport(report)); err != nil {
+			response, err := postureClient.ReportKubernetesPosture(ctx, transportKubernetesPostureReport(report))
+			if err != nil {
 				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes posture report:", err)
+				return
+			}
+			// The control plane answers with the TrustBundles it is rolling
+			// out to this cluster; the controller's watch distributes them and
+			// the next report proves them.
+			if !k.trustRollouts || len(response.DesiredTrustBundles) == 0 {
+				return
+			}
+			desired := make([]k8s.DesiredTrustBundle, 0, len(response.DesiredTrustBundles))
+			for _, bundle := range response.DesiredTrustBundles {
+				desired = append(desired, k8s.DesiredTrustBundle{
+					RolloutID: bundle.RolloutID, Name: bundle.Name, CABundlePEM: bundle.CABundlePEM, BundleSHA256: bundle.BundleSHA256,
+					ConfigMapName: bundle.ConfigMapName, Key: bundle.Key, Namespaces: bundle.Namespaces,
+				})
+			}
+			if n, err := controller.ApplyDesiredTrustBundles(ctx, desired); err != nil {
+				fmt.Fprintln(os.Stderr, "trstctl-agent: Kubernetes trust rollout:", err)
+			} else if n > 0 {
+				fmt.Printf("trstctl-agent: applied %d rolled-out TrustBundle(s)\n", n)
 			}
 		},
 	}

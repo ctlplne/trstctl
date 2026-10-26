@@ -336,6 +336,9 @@ import type {
   KubernetesCertManagerRequests,
   KubernetesSecretOperator,
   KubernetesTrustBundleDistribution,
+  KubernetesTrustRollout,
+  KubernetesTrustRolloutList,
+  KubernetesTrustRolloutRequest,
   MachineAuthMethod,
   MachineAuthMethodList,
   MachineAuthMethodOverride,
@@ -1198,6 +1201,9 @@ export type {
   KubernetesCertManagerRequests,
   KubernetesSecretOperator,
   KubernetesTrustBundleDistribution,
+  KubernetesTrustRollout,
+  KubernetesTrustRolloutList,
+  KubernetesTrustRolloutRequest,
   MachineAuthMethod,
   MachineAuthMethodList,
   MachineAuthMethodOverride,
@@ -2374,6 +2380,10 @@ export interface Api {
   kubernetesCSRSupport(): Promise<KubernetesCSRSupport>;
   kubernetesCertManagerRequests(): Promise<KubernetesCertManagerRequests>;
   kubernetesTrustBundles(): Promise<KubernetesTrustBundleDistribution>;
+  kubernetesTrustRollouts(): Promise<KubernetesTrustRolloutList>;
+  startKubernetesTrustRollout(input: KubernetesTrustRolloutRequest): Promise<KubernetesTrustRollout>;
+  pauseKubernetesTrustRollout(id: string): Promise<KubernetesTrustRollout>;
+  resumeKubernetesTrustRollout(id: string): Promise<KubernetesTrustRollout>;
   kubernetesSecretOperator(): Promise<KubernetesSecretOperator>;
   secretWorkloadInjection(): Promise<SecretWorkloadInjection>;
   unvaultedSecrets(): Promise<UnvaultedSecretPosture>;
@@ -3182,6 +3192,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   kubernetesCSRSupport: () => req<KubernetesCSRSupport>("/api/v1/kubernetes/certificate-signing-requests"),
   kubernetesCertManagerRequests: () => req<KubernetesCertManagerRequests>("/api/v1/kubernetes/cert-manager-certificate-requests"),
   kubernetesTrustBundles: () => req<KubernetesTrustBundleDistribution>("/api/v1/kubernetes/trust-bundles"),
+  kubernetesTrustRollouts: () => req<KubernetesTrustRolloutList>("/api/v1/kubernetes/trust-rollouts"),
+  startKubernetesTrustRollout: (input) => mutate<KubernetesTrustRollout>("POST", "/api/v1/kubernetes/trust-rollouts", input),
+  pauseKubernetesTrustRollout: (id) => mutate<KubernetesTrustRollout>("POST", `/api/v1/kubernetes/trust-rollouts/${encodeURIComponent(id)}/pause`),
+  resumeKubernetesTrustRollout: (id) => mutate<KubernetesTrustRollout>("POST", `/api/v1/kubernetes/trust-rollouts/${encodeURIComponent(id)}/resume`),
   kubernetesSecretOperator: () => req<KubernetesSecretOperator>("/api/v1/secrets/kubernetes-operator"),
   secretWorkloadInjection: () => req<SecretWorkloadInjection>("/api/v1/secrets/workload-injection"),
   unvaultedSecrets: () => req<UnvaultedSecretPosture>("/api/v1/secrets/unvaulted"),

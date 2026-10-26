@@ -345,3 +345,64 @@ func TestReconcileWithoutCertManagerSignsCSRsAndDistributesBundles(t *testing.T)
 		t.Fatalf("converged bundle posture = %+v", posture)
 	}
 }
+
+// A138: a TrustBundle the control plane rolls out here is created as the
+// agent's own object (and then distributed by the watch-driven controller), a
+// repeat changes nothing, a changed bundle updates it, someone else's object of
+// the same name is left alone, and a bundle that does not match its hash is
+// refused.
+func TestApplyDesiredTrustBundlesCreatesUpdatesAndRefuses(t *testing.T) {
+	f := startRunFixture(t)
+	srv := httptest.NewServer(f.api.handler())
+	defer srv.Close()
+	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
+		return nil, nil
+	}), DefaultIssuerGroup, runSignerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, hash, err := trustBundlePEM(map[string]any{"caBundlePEM": string(f.ca.BundlePEM())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := DesiredTrustBundle{
+		RolloutID: "11111111-1111-4111-8111-111111111111", Name: "platform-roots", CABundlePEM: bundle, BundleSHA256: hash,
+		ConfigMapName: "platform-roots", Key: "ca-bundle.pem", Namespaces: []string{"apps"},
+	}
+	ctx := context.Background()
+	if n, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{desired}); err != nil || n != 1 {
+		t.Fatalf("first apply = %d, %v", n, err)
+	}
+	obj, ok := f.api.get(resTrustBundles, "", "platform-roots")
+	if !ok || fakeMeta(obj)["labels"].(map[string]any)["app.kubernetes.io/managed-by"] != "trstctl-agent" ||
+		fakeMeta(obj)["annotations"].(map[string]any)[trustRolloutAnnotation] != desired.RolloutID {
+		t.Fatalf("applied TrustBundle = %v", obj)
+	}
+	eventually(t, "the running controller distributes the rolled-out bundle", func() bool {
+		return configMapBundle(f, "apps", "platform-roots") == bundle
+	})
+	if n, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{desired}); err != nil || n != 0 {
+		t.Fatalf("repeat apply = %d, %v", n, err)
+	}
+	moved := desired
+	moved.RolloutID, moved.Namespaces = "22222222-2222-4222-8222-222222222222", []string{"apps", "payments"}
+	if n, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{moved}); err != nil || n != 1 {
+		t.Fatalf("changed apply = %d, %v", n, err)
+	}
+	eventually(t, "the new namespace receives the bundle", func() bool { return configMapBundle(f, "payments", "platform-roots") == bundle })
+
+	f.api.seed(resTrustBundles, map[string]any{"metadata": map[string]any{"name": "someone-elses"}, "spec": map[string]any{"caBundlePEM": bundle}})
+	foreign := desired
+	foreign.Name = "someone-elses"
+	if _, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{foreign}); err == nil || !strings.Contains(err.Error(), "not created by the agent") {
+		t.Fatalf("apply over a foreign TrustBundle = %v", err)
+	}
+	mismatched := desired
+	mismatched.Name, mismatched.BundleSHA256 = "mismatched", strings.Repeat("0", 64)
+	if _, err := controller.ApplyDesiredTrustBundles(ctx, []DesiredTrustBundle{mismatched}); err == nil {
+		t.Fatal("a bundle that does not match its hash was applied")
+	}
+	if _, exists := f.api.get(resTrustBundles, "", "mismatched"); exists {
+		t.Fatal("a mismatched bundle was written")
+	}
+}

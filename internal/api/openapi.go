@@ -6573,6 +6573,32 @@ func componentSchemas() map[string]*Schema {
 		"controllers":              {Type: "array", Items: ref("KubernetesPostureController")},
 		"objects":                  {Type: "array", Items: ref("KubernetesPostureObject")},
 	}, "capability", "served", "generated_at", "api_group", "api_version", "resource", "distribution_targets", "controller_flow", "rbac_rules", "status_fields", "architecture_controls", "evidence_refs", "residuals", "recommended_next_actions")
+	kubernetesTrustRolloutRequest := object(map[string]*Schema{
+		"name":            {Type: "string", Description: "The TrustBundle object name each cluster's controller creates or updates."},
+		"ca_bundle_pem":   {Type: "string", Description: "Public PEM CA certificates only; any other PEM block is refused."},
+		"config_map_name": {Type: "string", Description: "ConfigMap written in every target namespace; defaults to the name."},
+		"key":             {Type: "string", Description: "ConfigMap data key; defaults to ca-bundle.pem."},
+		"namespaces":      {Type: "array", Items: str(), Description: "Namespaces that receive the ConfigMap in each cluster."},
+		"clusters":        {Type: "array", Items: str(), Description: "Cluster ids that have reported Kubernetes controller posture, in rollout order; the first is the canary and the rest wait for it to be verified."},
+	}, "name", "ca_bundle_pem", "namespaces", "clusters")
+	kubernetesTrustRolloutCluster := object(map[string]*Schema{
+		"cluster_id": str(), "position": {Type: "integer"}, "canary": {Type: "boolean"},
+		"state":         {Type: "string", Enum: []string{"waiting", "dispatched", "verified", "failed"}, Description: "verified means the cluster's own controller reported the bundle distributed with bundle_sha256."},
+		"reason":        str(),
+		"report_id":     {Type: "string", Description: "The posture report that verified or failed the cluster."},
+		"observed_hash": str(), "dispatched_at": timestamp(), "verified_at": timestamp(),
+	}, "cluster_id", "position", "canary", "state")
+	kubernetesTrustRollout := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "ca_bundle_pem": str(), "bundle_sha256": str(),
+		"config_map_name": str(), "key": str(), "namespaces": {Type: "array", Items: str()},
+		"state":             {Type: "string", Enum: []string{"running", "paused", "completed", "superseded"}},
+		"verified_clusters": {Type: "integer"},
+		"created_at":        timestamp(), "updated_at": timestamp(),
+		"clusters": {Type: "array", Items: ref("KubernetesTrustRolloutCluster")},
+	}, "id", "name", "ca_bundle_pem", "bundle_sha256", "config_map_name", "key", "namespaces", "state", "verified_clusters", "created_at", "updated_at", "clusters")
+	kubernetesTrustRolloutList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("KubernetesTrustRollout")},
+	}, "items")
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
 		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed."},
@@ -7857,6 +7883,10 @@ func componentSchemas() map[string]*Schema {
 		"KubernetesCSRSupport":               kubernetesCSRSupport,
 		"KubernetesCertManagerRequests":      kubernetesCertManagerRequests,
 		"KubernetesTrustBundleDistribution":  kubernetesTrustBundleDistribution,
+		"KubernetesTrustRolloutRequest":      kubernetesTrustRolloutRequest,
+		"KubernetesTrustRolloutCluster":      kubernetesTrustRolloutCluster,
+		"KubernetesTrustRollout":             kubernetesTrustRollout,
+		"KubernetesTrustRolloutList":         kubernetesTrustRolloutList,
 		"SecretScanRequest":                  secretScanReq,
 		"SecretScanPreview":                  secretScanPreview,
 		"SecretScanFinding":                  secretScanFinding,

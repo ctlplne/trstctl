@@ -195,6 +195,11 @@ var coreCommandTable = []Command{
 	{Name: []string{"kubernetes", "csr"}, Method: "GET", Path: "/api/v1/kubernetes/certificate-signing-requests", Summary: "Show native Kubernetes CertificateSigningRequest support"},
 	{Name: []string{"kubernetes", "cert-manager-requests"}, Method: "GET", Path: "/api/v1/kubernetes/cert-manager-certificate-requests", Summary: "Show authenticated cert-manager CertificateRequest observations"},
 	{Name: []string{"kubernetes", "trust-bundles"}, Method: "GET", Path: "/api/v1/kubernetes/trust-bundles", Summary: "Show Kubernetes trust-bundle distribution support"},
+	{Name: []string{"kubernetes", "trust-rollouts", "start"}, Method: "POST", Path: "/api/v1/kubernetes/trust-rollouts", Body: bodyFile, Summary: "Roll a TrustBundle out to reported clusters, canary first"},
+	{Name: []string{"kubernetes", "trust-rollouts", "list"}, Method: "GET", Path: "/api/v1/kubernetes/trust-rollouts", Summary: "List multi-cluster TrustBundle rollouts"},
+	{Name: []string{"kubernetes", "trust-rollouts", "get"}, Method: "GET", Path: "/api/v1/kubernetes/trust-rollouts/{id}", Summary: "Show a TrustBundle rollout and each cluster's verified state"},
+	{Name: []string{"kubernetes", "trust-rollouts", "pause"}, Method: "POST", Path: "/api/v1/kubernetes/trust-rollouts/{id}/pause", Summary: "Pause a TrustBundle rollout before its canary gate"},
+	{Name: []string{"kubernetes", "trust-rollouts", "resume"}, Method: "POST", Path: "/api/v1/kubernetes/trust-rollouts/{id}/resume", Summary: "Resume a paused TrustBundle rollout"},
 	{Name: []string{"setup", "protocols", "status"}, Method: "GET", Path: "/api/v1/setup/protocols", Summary: "Show the tenant-bound eval protocol profile status"},
 	{Name: []string{"setup", "protocols", "activate"}, Method: "POST", Path: "/api/v1/setup/protocols/activate", Body: bodyNone, Summary: "Activate the tenant-bound eval protocol profile"},
 

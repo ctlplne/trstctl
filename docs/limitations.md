@@ -4873,10 +4873,14 @@ This is a deliberate, documented trust boundary, not an accident.
     the CRD, RBAC, ConfigMap target, and residuals: the controller is
     event-driven — it watches its TrustBundles and the ConfigMaps it wrote,
     converges a change or a deleted copy within about a second, and writes
-    nothing when a copy already holds the bundle — multi-cluster rollout still
-    means applying the same
-    CRD/object to each enrolled cluster, and Secret/projected-volume/CSI
-    trust distribution modes are not claimed.
+    nothing when a copy already holds the bundle. One bundle can be rolled
+    out from the control plane to every reporting cluster, canary first
+    (`/api/v1/kubernetes/trust-rollouts`, `trstctl-cli kubernetes
+    trust-rollouts`, Workloads): each cluster's agent receives it in the
+    answer to its posture report and applies it as a TrustBundle it owns, and
+    a cluster reads verified only when its own controller reports the bundle
+    distributed with the rollout's hash. Secret/projected-volume/CSI trust
+    distribution modes are not claimed.
   - The SSH CA is served at `/ssh/...` (`protocols.ssh.enabled`): cert
     issuance plus the OpenSSH binary KRL at `/ssh/krl` (`sshd`'s
     `RevokedKeys` consumes it); a served acceptance test issues a user cert
