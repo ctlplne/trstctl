@@ -452,6 +452,54 @@ func (c *Client) KeyRevoked(ctx context.Context, handle string) (bool, error) {
 	return resp.GetRevoked(), nil
 }
 
+// KeyImport is one sealed private key for the signer to take into custody
+// (A128): sealed on the operator's machine to the operation's import key.
+type KeyImport struct {
+	OperationID       string
+	TenantID          string
+	Handle            string
+	SealedKey         []byte
+	ExpectedPublicKey []byte
+	AllowedPurposes   []KeyPurpose
+}
+
+// PrepareKeyImport asks the signer for an operation's one-time import key and
+// returns its sealing suite and public half.
+func (c *Client) PrepareKeyImport(ctx context.Context, operationID string) (string, []byte, error) {
+	resp, err := c.svc.PrepareKeyImport(ctx, &signerpb.PrepareKeyImportRequest{OperationId: operationID})
+	if err != nil {
+		return "", nil, err
+	}
+	return resp.GetSuite(), resp.GetPublicKey(), nil
+}
+
+// ImportDualControlKey has the signer open a sealed private key and keep it as
+// a dual-control key bound to its allowed purposes, and returns a RemoteSigner
+// for it that asserts declaredPurpose and signs through authorizer.
+func (c *Client) ImportDualControlKey(ctx context.Context, in KeyImport, declaredPurpose KeyPurpose, authorizer SignTokenProvider) (*RemoteSigner, error) {
+	resp, err := c.svc.ImportWrappedKey(ctx, &signerpb.ImportWrappedKeyRequest{
+		OperationId: in.OperationID, TenantId: in.TenantID, SealedKey: in.SealedKey,
+		ExpectedPublicKey: in.ExpectedPublicKey, RequestedId: in.Handle,
+		AllowedPurposes: in.AllowedPurposes, RequireAuthorization: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	alg, err := algorithmFromProto(resp.GetAlgorithm())
+	if err != nil {
+		return nil, err
+	}
+	return &RemoteSigner{
+		client:                c,
+		handle:                resp.GetHandle(),
+		algorithm:             alg,
+		public:                crypto.PublicKey{Algorithm: alg, DER: resp.GetPublicKey()},
+		purpose:               declaredPurpose,
+		requiresAuthorization: true,
+		authorizer:            authorizer,
+	}, nil
+}
+
 // RemoteSigner is a crypto.DigestSigner backed by a key held inside the signer.
 // It carries the usage purpose it asserts on every Sign (SIGNER-002/003); the
 // signer enforces that purpose against the key's allowed set.

@@ -145,7 +145,7 @@ func (s *Server) RevokeKey(_ context.Context, req *signerpb.RevokeKeyRequest) (*
 	if req.GetHandle() == nil || req.GetHandle().GetId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "missing key handle")
 	}
-	if !validRevocationOperation(req.GetOperationId()) || !validRevocationReason(req.GetReason()) {
+	if !validOperationID(req.GetOperationId()) || !validRevocationReason(req.GetReason()) {
 		return nil, status.Error(codes.InvalidArgument, "revocation needs an operation id and a lower-case reason code")
 	}
 	held, err := s.lookup(req.GetHandle())
@@ -201,7 +201,9 @@ func (s *Server) lookupSigning(h *signerpb.KeyHandle) (*heldKey, error) {
 	return held, nil
 }
 
-func validRevocationOperation(value string) bool {
+// validOperationID accepts a printable operation identifier of at most 128
+// bytes: a ceremony ID, or any caller operation that names a request.
+func validOperationID(value string) bool {
 	if value == "" || len(value) > 128 {
 		return false
 	}

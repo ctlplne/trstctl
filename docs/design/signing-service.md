@@ -235,6 +235,24 @@ keeps refusing it. The first revocation holds: a repeat or redelivered request
 reads back the original operation, reason and time. The mark travels with the
 keystore in a full backup.
 
+`PrepareKeyImport` and `ImportWrappedKey` (A128) take an operator's existing
+private key into custody without its plaintext crossing the control plane.
+`PrepareKeyImport` returns a one-time import key for one operation (the
+control plane's ceremony): HPKE (RFC 9180) base mode with the MLKEM768-P256
+hybrid KEM, HKDF-SHA256 and AES-256-GCM, every component FIPS-approved. A
+persistent signer seals the import key's seed at rest beside the signing keys
+and links it into place exclusively, so every signer process sharing the
+keystore offers the same key and any of them can complete the import. The
+operator seals the PKCS#8 key to it on their own machine under a binding of
+the tenant, the operation and the public key the private key must match (the
+CA certificate's). `ImportWrappedKey` opens it inside the signer, refuses a key
+that does not open under that binding, does not match the expected public key,
+is weak, or is an algorithm the signer does not hold, keeps it under the
+requested handle with the requested purpose constraints (and dual control when
+asked), destroys the used import key, and returns only the public key. A retry
+after a lost response finds the key already held under its handle and returns
+it. Both RPCs count against the expensive-call bound.
+
 ### 5.4 Limits and resource bounds
 
 - Maximum request/response size (default 1 MiB; the signer signs digests/short

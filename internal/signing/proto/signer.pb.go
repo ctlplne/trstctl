@@ -4069,6 +4069,271 @@ func (x *RevokeKeyResponse) GetRevokedAtUnix() int64 {
 	return 0
 }
 
+type PrepareKeyImportRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// operation_id names the import: the control plane's ceremony.
+	OperationId   string `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrepareKeyImportRequest) Reset() {
+	*x = PrepareKeyImportRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareKeyImportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareKeyImportRequest) ProtoMessage() {}
+
+func (x *PrepareKeyImportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareKeyImportRequest.ProtoReflect.Descriptor instead.
+func (*PrepareKeyImportRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *PrepareKeyImportRequest) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+type PrepareKeyImportResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// suite names the sealing scheme, e.g.
+	// "hpke-base-mlkem768p256-hkdfsha256-aes256gcm".
+	Suite string `protobuf:"bytes,1,opt,name=suite,proto3" json:"suite,omitempty"`
+	// public_key is the import key's public half, the bytes to seal to.
+	PublicKey     []byte `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PrepareKeyImportResponse) Reset() {
+	*x = PrepareKeyImportResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareKeyImportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareKeyImportResponse) ProtoMessage() {}
+
+func (x *PrepareKeyImportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareKeyImportResponse.ProtoReflect.Descriptor instead.
+func (*PrepareKeyImportResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *PrepareKeyImportResponse) GetSuite() string {
+	if x != nil {
+		return x.Suite
+	}
+	return ""
+}
+
+func (x *PrepareKeyImportResponse) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+type ImportWrappedKeyRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	OperationId string                 `protobuf:"bytes,1,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	TenantId    string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	// sealed_key is the PKCS#8 private key sealed to the operation's import key.
+	SealedKey []byte `protobuf:"bytes,3,opt,name=sealed_key,json=sealedKey,proto3" json:"sealed_key,omitempty"`
+	// expected_public_key is the PKIX/DER public key the private key must match:
+	// the CA certificate's.
+	ExpectedPublicKey []byte       `protobuf:"bytes,4,opt,name=expected_public_key,json=expectedPublicKey,proto3" json:"expected_public_key,omitempty"`
+	RequestedId       string       `protobuf:"bytes,5,opt,name=requested_id,json=requestedId,proto3" json:"requested_id,omitempty"`
+	AllowedPurposes   []KeyPurpose `protobuf:"varint,6,rep,packed,name=allowed_purposes,json=allowedPurposes,proto3,enum=trstctl.signing.v1.KeyPurpose" json:"allowed_purposes,omitempty"`
+	AllowedHashes     []Hash       `protobuf:"varint,7,rep,packed,name=allowed_hashes,json=allowedHashes,proto3,enum=trstctl.signing.v1.Hash" json:"allowed_hashes,omitempty"`
+	// require_authorization marks the imported key dual-control, as the
+	// GenerateKey metadata flag does for a generated key.
+	RequireAuthorization bool `protobuf:"varint,8,opt,name=require_authorization,json=requireAuthorization,proto3" json:"require_authorization,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *ImportWrappedKeyRequest) Reset() {
+	*x = ImportWrappedKeyRequest{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportWrappedKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportWrappedKeyRequest) ProtoMessage() {}
+
+func (x *ImportWrappedKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportWrappedKeyRequest.ProtoReflect.Descriptor instead.
+func (*ImportWrappedKeyRequest) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *ImportWrappedKeyRequest) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
+func (x *ImportWrappedKeyRequest) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *ImportWrappedKeyRequest) GetSealedKey() []byte {
+	if x != nil {
+		return x.SealedKey
+	}
+	return nil
+}
+
+func (x *ImportWrappedKeyRequest) GetExpectedPublicKey() []byte {
+	if x != nil {
+		return x.ExpectedPublicKey
+	}
+	return nil
+}
+
+func (x *ImportWrappedKeyRequest) GetRequestedId() string {
+	if x != nil {
+		return x.RequestedId
+	}
+	return ""
+}
+
+func (x *ImportWrappedKeyRequest) GetAllowedPurposes() []KeyPurpose {
+	if x != nil {
+		return x.AllowedPurposes
+	}
+	return nil
+}
+
+func (x *ImportWrappedKeyRequest) GetAllowedHashes() []Hash {
+	if x != nil {
+		return x.AllowedHashes
+	}
+	return nil
+}
+
+func (x *ImportWrappedKeyRequest) GetRequireAuthorization() bool {
+	if x != nil {
+		return x.RequireAuthorization
+	}
+	return false
+}
+
+type ImportWrappedKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Handle        *KeyHandle             `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
+	Algorithm     Algorithm              `protobuf:"varint,2,opt,name=algorithm,proto3,enum=trstctl.signing.v1.Algorithm" json:"algorithm,omitempty"`
+	PublicKey     []byte                 `protobuf:"bytes,3,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportWrappedKeyResponse) Reset() {
+	*x = ImportWrappedKeyResponse{}
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportWrappedKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportWrappedKeyResponse) ProtoMessage() {}
+
+func (x *ImportWrappedKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_signing_proto_signer_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportWrappedKeyResponse.ProtoReflect.Descriptor instead.
+func (*ImportWrappedKeyResponse) Descriptor() ([]byte, []int) {
+	return file_internal_signing_proto_signer_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *ImportWrappedKeyResponse) GetHandle() *KeyHandle {
+	if x != nil {
+		return x.Handle
+	}
+	return nil
+}
+
+func (x *ImportWrappedKeyResponse) GetAlgorithm() Algorithm {
+	if x != nil {
+		return x.Algorithm
+	}
+	return Algorithm_ALGORITHM_UNSPECIFIED
+}
+
+func (x *ImportWrappedKeyResponse) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
 var File_internal_signing_proto_signer_proto protoreflect.FileDescriptor
 
 const file_internal_signing_proto_signer_proto_rawDesc = "" +
@@ -4358,7 +4623,28 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"public_key\x18\x01 \x01(\fR\tpublicKey\x12!\n" +
 	"\foperation_id\x18\x02 \x01(\tR\voperationId\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12&\n" +
-	"\x0frevoked_at_unix\x18\x04 \x01(\x03R\rrevokedAtUnix*\xf2\x02\n" +
+	"\x0frevoked_at_unix\x18\x04 \x01(\x03R\rrevokedAtUnix\"<\n" +
+	"\x17PrepareKeyImportRequest\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\"O\n" +
+	"\x18PrepareKeyImportResponse\x12\x14\n" +
+	"\x05suite\x18\x01 \x01(\tR\x05suite\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x02 \x01(\fR\tpublicKey\"\x8c\x03\n" +
+	"\x17ImportWrappedKeyRequest\x12!\n" +
+	"\foperation_id\x18\x01 \x01(\tR\voperationId\x12\x1b\n" +
+	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x1d\n" +
+	"\n" +
+	"sealed_key\x18\x03 \x01(\fR\tsealedKey\x12.\n" +
+	"\x13expected_public_key\x18\x04 \x01(\fR\x11expectedPublicKey\x12!\n" +
+	"\frequested_id\x18\x05 \x01(\tR\vrequestedId\x12I\n" +
+	"\x10allowed_purposes\x18\x06 \x03(\x0e2\x1e.trstctl.signing.v1.KeyPurposeR\x0fallowedPurposes\x12?\n" +
+	"\x0eallowed_hashes\x18\a \x03(\x0e2\x18.trstctl.signing.v1.HashR\rallowedHashes\x123\n" +
+	"\x15require_authorization\x18\b \x01(\bR\x14requireAuthorization\"\xad\x01\n" +
+	"\x18ImportWrappedKeyResponse\x125\n" +
+	"\x06handle\x18\x01 \x01(\v2\x1d.trstctl.signing.v1.KeyHandleR\x06handle\x12;\n" +
+	"\talgorithm\x18\x02 \x01(\x0e2\x1d.trstctl.signing.v1.AlgorithmR\talgorithm\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x03 \x01(\fR\tpublicKey*\xf2\x02\n" +
 	"\tAlgorithm\x12\x19\n" +
 	"\x15ALGORITHM_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ALGORITHM_RSA_2048\x10\x01\x12\x16\n" +
@@ -4402,7 +4688,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x19MANAGED_KEY_ACTION_ROTATE\x10\x02\x12\x1d\n" +
 	"\x19MANAGED_KEY_ACTION_REVOKE\x10\x03\x12\x1e\n" +
 	"\x1aMANAGED_KEY_ACTION_ZEROIZE\x10\x04\x12%\n" +
-	"!MANAGED_KEY_ACTION_VERIFY_CUSTODY\x10\x052\xc3\x17\n" +
+	"!MANAGED_KEY_ACTION_VERIFY_CUSTODY\x10\x052\xa1\x19\n" +
 	"\rSignerService\x12^\n" +
 	"\vGenerateKey\x12&.trstctl.signing.v1.GenerateKeyRequest\x1a'.trstctl.signing.v1.GenerateKeyResponse\x12a\n" +
 	"\fGetPublicKey\x12'.trstctl.signing.v1.GetPublicKeyRequest\x1a(.trstctl.signing.v1.GetPublicKeyResponse\x12I\n" +
@@ -4434,7 +4720,9 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x13OpenTenantDomainKEK\x12..trstctl.signing.v1.OpenTenantDomainKEKRequest\x1a/.trstctl.signing.v1.OpenTenantDomainKEKResponse\x12p\n" +
 	"\x11WrapTenantDataKey\x12,.trstctl.signing.v1.WrapTenantDataKeyRequest\x1a-.trstctl.signing.v1.WrapTenantDataKeyResponse\x12v\n" +
 	"\x13UnwrapTenantDataKey\x12..trstctl.signing.v1.UnwrapTenantDataKeyRequest\x1a/.trstctl.signing.v1.UnwrapTenantDataKeyResponse\x12X\n" +
-	"\tRevokeKey\x12$.trstctl.signing.v1.RevokeKeyRequest\x1a%.trstctl.signing.v1.RevokeKeyResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
+	"\tRevokeKey\x12$.trstctl.signing.v1.RevokeKeyRequest\x1a%.trstctl.signing.v1.RevokeKeyResponse\x12m\n" +
+	"\x10PrepareKeyImport\x12+.trstctl.signing.v1.PrepareKeyImportRequest\x1a,.trstctl.signing.v1.PrepareKeyImportResponse\x12m\n" +
+	"\x10ImportWrappedKey\x12+.trstctl.signing.v1.ImportWrappedKeyRequest\x1a,.trstctl.signing.v1.ImportWrappedKeyResponseB5Z3trstctl.com/trstctl/internal/signing/proto;signerpbb\x06proto3"
 
 var (
 	file_internal_signing_proto_signer_proto_rawDescOnce sync.Once
@@ -4449,7 +4737,7 @@ func file_internal_signing_proto_signer_proto_rawDescGZIP() []byte {
 }
 
 var file_internal_signing_proto_signer_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 57)
+var file_internal_signing_proto_signer_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
 var file_internal_signing_proto_signer_proto_goTypes = []any{
 	(Algorithm)(0),                                // 0: trstctl.signing.v1.Algorithm
 	(Hash)(0),                                     // 1: trstctl.signing.v1.Hash
@@ -4514,6 +4802,10 @@ var file_internal_signing_proto_signer_proto_goTypes = []any{
 	(*UnwrapTenantDataKeyResponse)(nil),           // 60: trstctl.signing.v1.UnwrapTenantDataKeyResponse
 	(*RevokeKeyRequest)(nil),                      // 61: trstctl.signing.v1.RevokeKeyRequest
 	(*RevokeKeyResponse)(nil),                     // 62: trstctl.signing.v1.RevokeKeyResponse
+	(*PrepareKeyImportRequest)(nil),               // 63: trstctl.signing.v1.PrepareKeyImportRequest
+	(*PrepareKeyImportResponse)(nil),              // 64: trstctl.signing.v1.PrepareKeyImportResponse
+	(*ImportWrappedKeyRequest)(nil),               // 65: trstctl.signing.v1.ImportWrappedKeyRequest
+	(*ImportWrappedKeyResponse)(nil),              // 66: trstctl.signing.v1.ImportWrappedKeyResponse
 }
 var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	0,  // 0: trstctl.signing.v1.GenerateKeyRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
@@ -4546,67 +4838,75 @@ var file_internal_signing_proto_signer_proto_depIdxs = []int32{
 	0,  // 27: trstctl.signing.v1.GenerateSuccessorKEMResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
 	0,  // 28: trstctl.signing.v1.GatedIssueRequest.algorithm:type_name -> trstctl.signing.v1.Algorithm
 	6,  // 29: trstctl.signing.v1.RevokeKeyRequest.handle:type_name -> trstctl.signing.v1.KeyHandle
-	7,  // 30: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
-	9,  // 31: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
-	11, // 32: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
-	13, // 33: trstctl.signing.v1.SignerService.SignArtifact:input_type -> trstctl.signing.v1.SignArtifactRequest
-	15, // 34: trstctl.signing.v1.SignerService.VerifyOperation:input_type -> trstctl.signing.v1.OperationRequest
-	17, // 35: trstctl.signing.v1.SignerService.GatedDestroy:input_type -> trstctl.signing.v1.GatedDestroyRequest
-	19, // 36: trstctl.signing.v1.SignerService.GatedDestroyStream:input_type -> trstctl.signing.v1.GatedDestroyStreamRequest
-	21, // 37: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
-	23, // 38: trstctl.signing.v1.SignerService.ManageKey:input_type -> trstctl.signing.v1.ManageKeyRequest
-	25, // 39: trstctl.signing.v1.SignerService.SignManagedKey:input_type -> trstctl.signing.v1.SignManagedKeyRequest
-	27, // 40: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
-	29, // 41: trstctl.signing.v1.SignerService.MintSuccessor:input_type -> trstctl.signing.v1.MintSuccessorRequest
-	31, // 42: trstctl.signing.v1.SignerService.ApplyDelegation:input_type -> trstctl.signing.v1.ApplyDelegationRequest
-	33, // 43: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:input_type -> trstctl.signing.v1.GenerateSuccessorKEMRequest
-	35, // 44: trstctl.signing.v1.SignerService.Decapsulate:input_type -> trstctl.signing.v1.DecapsulateRequest
-	37, // 45: trstctl.signing.v1.SignerService.RewrapKEMDataKey:input_type -> trstctl.signing.v1.RewrapKEMDataKeyRequest
-	39, // 46: trstctl.signing.v1.SignerService.VerifyKEMDataKey:input_type -> trstctl.signing.v1.VerifyKEMDataKeyRequest
-	41, // 47: trstctl.signing.v1.SignerService.ZeroizeKey:input_type -> trstctl.signing.v1.ZeroizeKeyRequest
-	43, // 48: trstctl.signing.v1.SignerService.GatedIssue:input_type -> trstctl.signing.v1.GatedIssueRequest
-	45, // 49: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:input_type -> trstctl.signing.v1.ProvisionAgentRootAnchorRequest
-	47, // 50: trstctl.signing.v1.SignerService.GetAgentRootAnchor:input_type -> trstctl.signing.v1.GetAgentRootAnchorRequest
-	49, // 51: trstctl.signing.v1.SignerService.ProvisionAgentReachabilityKey:input_type -> trstctl.signing.v1.ProvisionAgentReachabilityKeyRequest
-	51, // 52: trstctl.signing.v1.SignerService.GetAgentReachabilityKey:input_type -> trstctl.signing.v1.GetAgentReachabilityKeyRequest
-	53, // 53: trstctl.signing.v1.SignerService.CreateTenantDomainKEK:input_type -> trstctl.signing.v1.CreateTenantDomainKEKRequest
-	55, // 54: trstctl.signing.v1.SignerService.OpenTenantDomainKEK:input_type -> trstctl.signing.v1.OpenTenantDomainKEKRequest
-	57, // 55: trstctl.signing.v1.SignerService.WrapTenantDataKey:input_type -> trstctl.signing.v1.WrapTenantDataKeyRequest
-	59, // 56: trstctl.signing.v1.SignerService.UnwrapTenantDataKey:input_type -> trstctl.signing.v1.UnwrapTenantDataKeyRequest
-	61, // 57: trstctl.signing.v1.SignerService.RevokeKey:input_type -> trstctl.signing.v1.RevokeKeyRequest
-	8,  // 58: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
-	10, // 59: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
-	12, // 60: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
-	14, // 61: trstctl.signing.v1.SignerService.SignArtifact:output_type -> trstctl.signing.v1.SignArtifactResponse
-	16, // 62: trstctl.signing.v1.SignerService.VerifyOperation:output_type -> trstctl.signing.v1.OperationResponse
-	18, // 63: trstctl.signing.v1.SignerService.GatedDestroy:output_type -> trstctl.signing.v1.GatedDestroyResponse
-	20, // 64: trstctl.signing.v1.SignerService.GatedDestroyStream:output_type -> trstctl.signing.v1.GatedDestroyStreamResponse
-	22, // 65: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
-	24, // 66: trstctl.signing.v1.SignerService.ManageKey:output_type -> trstctl.signing.v1.ManageKeyResponse
-	26, // 67: trstctl.signing.v1.SignerService.SignManagedKey:output_type -> trstctl.signing.v1.SignManagedKeyResponse
-	28, // 68: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
-	30, // 69: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
-	32, // 70: trstctl.signing.v1.SignerService.ApplyDelegation:output_type -> trstctl.signing.v1.ApplyDelegationResponse
-	34, // 71: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:output_type -> trstctl.signing.v1.GenerateSuccessorKEMResponse
-	36, // 72: trstctl.signing.v1.SignerService.Decapsulate:output_type -> trstctl.signing.v1.DecapsulateResponse
-	38, // 73: trstctl.signing.v1.SignerService.RewrapKEMDataKey:output_type -> trstctl.signing.v1.RewrapKEMDataKeyResponse
-	40, // 74: trstctl.signing.v1.SignerService.VerifyKEMDataKey:output_type -> trstctl.signing.v1.VerifyKEMDataKeyResponse
-	42, // 75: trstctl.signing.v1.SignerService.ZeroizeKey:output_type -> trstctl.signing.v1.ZeroizeKeyResponse
-	44, // 76: trstctl.signing.v1.SignerService.GatedIssue:output_type -> trstctl.signing.v1.GatedIssueResponse
-	46, // 77: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:output_type -> trstctl.signing.v1.ProvisionAgentRootAnchorResponse
-	48, // 78: trstctl.signing.v1.SignerService.GetAgentRootAnchor:output_type -> trstctl.signing.v1.GetAgentRootAnchorResponse
-	50, // 79: trstctl.signing.v1.SignerService.ProvisionAgentReachabilityKey:output_type -> trstctl.signing.v1.ProvisionAgentReachabilityKeyResponse
-	52, // 80: trstctl.signing.v1.SignerService.GetAgentReachabilityKey:output_type -> trstctl.signing.v1.GetAgentReachabilityKeyResponse
-	54, // 81: trstctl.signing.v1.SignerService.CreateTenantDomainKEK:output_type -> trstctl.signing.v1.CreateTenantDomainKEKResponse
-	56, // 82: trstctl.signing.v1.SignerService.OpenTenantDomainKEK:output_type -> trstctl.signing.v1.OpenTenantDomainKEKResponse
-	58, // 83: trstctl.signing.v1.SignerService.WrapTenantDataKey:output_type -> trstctl.signing.v1.WrapTenantDataKeyResponse
-	60, // 84: trstctl.signing.v1.SignerService.UnwrapTenantDataKey:output_type -> trstctl.signing.v1.UnwrapTenantDataKeyResponse
-	62, // 85: trstctl.signing.v1.SignerService.RevokeKey:output_type -> trstctl.signing.v1.RevokeKeyResponse
-	58, // [58:86] is the sub-list for method output_type
-	30, // [30:58] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	3,  // 30: trstctl.signing.v1.ImportWrappedKeyRequest.allowed_purposes:type_name -> trstctl.signing.v1.KeyPurpose
+	1,  // 31: trstctl.signing.v1.ImportWrappedKeyRequest.allowed_hashes:type_name -> trstctl.signing.v1.Hash
+	6,  // 32: trstctl.signing.v1.ImportWrappedKeyResponse.handle:type_name -> trstctl.signing.v1.KeyHandle
+	0,  // 33: trstctl.signing.v1.ImportWrappedKeyResponse.algorithm:type_name -> trstctl.signing.v1.Algorithm
+	7,  // 34: trstctl.signing.v1.SignerService.GenerateKey:input_type -> trstctl.signing.v1.GenerateKeyRequest
+	9,  // 35: trstctl.signing.v1.SignerService.GetPublicKey:input_type -> trstctl.signing.v1.GetPublicKeyRequest
+	11, // 36: trstctl.signing.v1.SignerService.Sign:input_type -> trstctl.signing.v1.SignRequest
+	13, // 37: trstctl.signing.v1.SignerService.SignArtifact:input_type -> trstctl.signing.v1.SignArtifactRequest
+	15, // 38: trstctl.signing.v1.SignerService.VerifyOperation:input_type -> trstctl.signing.v1.OperationRequest
+	17, // 39: trstctl.signing.v1.SignerService.GatedDestroy:input_type -> trstctl.signing.v1.GatedDestroyRequest
+	19, // 40: trstctl.signing.v1.SignerService.GatedDestroyStream:input_type -> trstctl.signing.v1.GatedDestroyStreamRequest
+	21, // 41: trstctl.signing.v1.SignerService.DestroyKey:input_type -> trstctl.signing.v1.DestroyKeyRequest
+	23, // 42: trstctl.signing.v1.SignerService.ManageKey:input_type -> trstctl.signing.v1.ManageKeyRequest
+	25, // 43: trstctl.signing.v1.SignerService.SignManagedKey:input_type -> trstctl.signing.v1.SignManagedKeyRequest
+	27, // 44: trstctl.signing.v1.SignerService.Health:input_type -> trstctl.signing.v1.HealthRequest
+	29, // 45: trstctl.signing.v1.SignerService.MintSuccessor:input_type -> trstctl.signing.v1.MintSuccessorRequest
+	31, // 46: trstctl.signing.v1.SignerService.ApplyDelegation:input_type -> trstctl.signing.v1.ApplyDelegationRequest
+	33, // 47: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:input_type -> trstctl.signing.v1.GenerateSuccessorKEMRequest
+	35, // 48: trstctl.signing.v1.SignerService.Decapsulate:input_type -> trstctl.signing.v1.DecapsulateRequest
+	37, // 49: trstctl.signing.v1.SignerService.RewrapKEMDataKey:input_type -> trstctl.signing.v1.RewrapKEMDataKeyRequest
+	39, // 50: trstctl.signing.v1.SignerService.VerifyKEMDataKey:input_type -> trstctl.signing.v1.VerifyKEMDataKeyRequest
+	41, // 51: trstctl.signing.v1.SignerService.ZeroizeKey:input_type -> trstctl.signing.v1.ZeroizeKeyRequest
+	43, // 52: trstctl.signing.v1.SignerService.GatedIssue:input_type -> trstctl.signing.v1.GatedIssueRequest
+	45, // 53: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:input_type -> trstctl.signing.v1.ProvisionAgentRootAnchorRequest
+	47, // 54: trstctl.signing.v1.SignerService.GetAgentRootAnchor:input_type -> trstctl.signing.v1.GetAgentRootAnchorRequest
+	49, // 55: trstctl.signing.v1.SignerService.ProvisionAgentReachabilityKey:input_type -> trstctl.signing.v1.ProvisionAgentReachabilityKeyRequest
+	51, // 56: trstctl.signing.v1.SignerService.GetAgentReachabilityKey:input_type -> trstctl.signing.v1.GetAgentReachabilityKeyRequest
+	53, // 57: trstctl.signing.v1.SignerService.CreateTenantDomainKEK:input_type -> trstctl.signing.v1.CreateTenantDomainKEKRequest
+	55, // 58: trstctl.signing.v1.SignerService.OpenTenantDomainKEK:input_type -> trstctl.signing.v1.OpenTenantDomainKEKRequest
+	57, // 59: trstctl.signing.v1.SignerService.WrapTenantDataKey:input_type -> trstctl.signing.v1.WrapTenantDataKeyRequest
+	59, // 60: trstctl.signing.v1.SignerService.UnwrapTenantDataKey:input_type -> trstctl.signing.v1.UnwrapTenantDataKeyRequest
+	61, // 61: trstctl.signing.v1.SignerService.RevokeKey:input_type -> trstctl.signing.v1.RevokeKeyRequest
+	63, // 62: trstctl.signing.v1.SignerService.PrepareKeyImport:input_type -> trstctl.signing.v1.PrepareKeyImportRequest
+	65, // 63: trstctl.signing.v1.SignerService.ImportWrappedKey:input_type -> trstctl.signing.v1.ImportWrappedKeyRequest
+	8,  // 64: trstctl.signing.v1.SignerService.GenerateKey:output_type -> trstctl.signing.v1.GenerateKeyResponse
+	10, // 65: trstctl.signing.v1.SignerService.GetPublicKey:output_type -> trstctl.signing.v1.GetPublicKeyResponse
+	12, // 66: trstctl.signing.v1.SignerService.Sign:output_type -> trstctl.signing.v1.SignResponse
+	14, // 67: trstctl.signing.v1.SignerService.SignArtifact:output_type -> trstctl.signing.v1.SignArtifactResponse
+	16, // 68: trstctl.signing.v1.SignerService.VerifyOperation:output_type -> trstctl.signing.v1.OperationResponse
+	18, // 69: trstctl.signing.v1.SignerService.GatedDestroy:output_type -> trstctl.signing.v1.GatedDestroyResponse
+	20, // 70: trstctl.signing.v1.SignerService.GatedDestroyStream:output_type -> trstctl.signing.v1.GatedDestroyStreamResponse
+	22, // 71: trstctl.signing.v1.SignerService.DestroyKey:output_type -> trstctl.signing.v1.DestroyKeyResponse
+	24, // 72: trstctl.signing.v1.SignerService.ManageKey:output_type -> trstctl.signing.v1.ManageKeyResponse
+	26, // 73: trstctl.signing.v1.SignerService.SignManagedKey:output_type -> trstctl.signing.v1.SignManagedKeyResponse
+	28, // 74: trstctl.signing.v1.SignerService.Health:output_type -> trstctl.signing.v1.HealthResponse
+	30, // 75: trstctl.signing.v1.SignerService.MintSuccessor:output_type -> trstctl.signing.v1.MintSuccessorResponse
+	32, // 76: trstctl.signing.v1.SignerService.ApplyDelegation:output_type -> trstctl.signing.v1.ApplyDelegationResponse
+	34, // 77: trstctl.signing.v1.SignerService.GenerateSuccessorKEM:output_type -> trstctl.signing.v1.GenerateSuccessorKEMResponse
+	36, // 78: trstctl.signing.v1.SignerService.Decapsulate:output_type -> trstctl.signing.v1.DecapsulateResponse
+	38, // 79: trstctl.signing.v1.SignerService.RewrapKEMDataKey:output_type -> trstctl.signing.v1.RewrapKEMDataKeyResponse
+	40, // 80: trstctl.signing.v1.SignerService.VerifyKEMDataKey:output_type -> trstctl.signing.v1.VerifyKEMDataKeyResponse
+	42, // 81: trstctl.signing.v1.SignerService.ZeroizeKey:output_type -> trstctl.signing.v1.ZeroizeKeyResponse
+	44, // 82: trstctl.signing.v1.SignerService.GatedIssue:output_type -> trstctl.signing.v1.GatedIssueResponse
+	46, // 83: trstctl.signing.v1.SignerService.ProvisionAgentRootAnchor:output_type -> trstctl.signing.v1.ProvisionAgentRootAnchorResponse
+	48, // 84: trstctl.signing.v1.SignerService.GetAgentRootAnchor:output_type -> trstctl.signing.v1.GetAgentRootAnchorResponse
+	50, // 85: trstctl.signing.v1.SignerService.ProvisionAgentReachabilityKey:output_type -> trstctl.signing.v1.ProvisionAgentReachabilityKeyResponse
+	52, // 86: trstctl.signing.v1.SignerService.GetAgentReachabilityKey:output_type -> trstctl.signing.v1.GetAgentReachabilityKeyResponse
+	54, // 87: trstctl.signing.v1.SignerService.CreateTenantDomainKEK:output_type -> trstctl.signing.v1.CreateTenantDomainKEKResponse
+	56, // 88: trstctl.signing.v1.SignerService.OpenTenantDomainKEK:output_type -> trstctl.signing.v1.OpenTenantDomainKEKResponse
+	58, // 89: trstctl.signing.v1.SignerService.WrapTenantDataKey:output_type -> trstctl.signing.v1.WrapTenantDataKeyResponse
+	60, // 90: trstctl.signing.v1.SignerService.UnwrapTenantDataKey:output_type -> trstctl.signing.v1.UnwrapTenantDataKeyResponse
+	62, // 91: trstctl.signing.v1.SignerService.RevokeKey:output_type -> trstctl.signing.v1.RevokeKeyResponse
+	64, // 92: trstctl.signing.v1.SignerService.PrepareKeyImport:output_type -> trstctl.signing.v1.PrepareKeyImportResponse
+	66, // 93: trstctl.signing.v1.SignerService.ImportWrappedKey:output_type -> trstctl.signing.v1.ImportWrappedKeyResponse
+	64, // [64:94] is the sub-list for method output_type
+	34, // [34:64] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_internal_signing_proto_signer_proto_init() }
@@ -4620,7 +4920,7 @@ func file_internal_signing_proto_signer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_signing_proto_signer_proto_rawDesc), len(file_internal_signing_proto_signer_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   57,
+			NumMessages:   61,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

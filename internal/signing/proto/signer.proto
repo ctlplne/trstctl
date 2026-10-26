@@ -170,6 +170,22 @@ service SignerService {
   // revocation holds: a repeat or redelivered request reads back the original
   // operation, reason and time.
   rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse);
+
+  // PrepareKeyImport returns the one-time import key for an operation (A128):
+  // an operator seals an existing private key to its public half on their own
+  // machine, so only sealed bytes cross the control plane. A repeat for the
+  // same operation returns the same import key until an import uses it. The
+  // import key is held sealed at rest like a signing key and is never a
+  // signing key.
+  rpc PrepareKeyImport(PrepareKeyImportRequest) returns (PrepareKeyImportResponse);
+
+  // ImportWrappedKey opens a sealed private key with the operation's import
+  // key, under a binding of the tenant, the operation and the public key the
+  // private key must match; refuses a key that does not match it or is weak;
+  // and keeps it under the requested handle with the requested constraints.
+  // Only the public key comes back. The plaintext exists inside the signer for
+  // the one call, and the import key is destroyed by the import that uses it.
+  rpc ImportWrappedKey(ImportWrappedKeyRequest) returns (ImportWrappedKeyResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -703,4 +719,39 @@ message RevokeKeyResponse {
   string operation_id = 2;
   string reason = 3;
   int64 revoked_at_unix = 4;
+}
+
+message PrepareKeyImportRequest {
+  // operation_id names the import: the control plane's ceremony.
+  string operation_id = 1;
+}
+
+message PrepareKeyImportResponse {
+  // suite names the sealing scheme, e.g.
+  // "hpke-base-mlkem768p256-hkdfsha256-aes256gcm".
+  string suite = 1;
+  // public_key is the import key's public half, the bytes to seal to.
+  bytes public_key = 2;
+}
+
+message ImportWrappedKeyRequest {
+  string operation_id = 1;
+  string tenant_id = 2;
+  // sealed_key is the PKCS#8 private key sealed to the operation's import key.
+  bytes sealed_key = 3;
+  // expected_public_key is the PKIX/DER public key the private key must match:
+  // the CA certificate's.
+  bytes expected_public_key = 4;
+  string requested_id = 5;
+  repeated KeyPurpose allowed_purposes = 6;
+  repeated Hash allowed_hashes = 7;
+  // require_authorization marks the imported key dual-control, as the
+  // GenerateKey metadata flag does for a generated key.
+  bool require_authorization = 8;
+}
+
+message ImportWrappedKeyResponse {
+  KeyHandle handle = 1;
+  Algorithm algorithm = 2;
+  bytes public_key = 3;
 }
