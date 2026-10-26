@@ -334,7 +334,10 @@ func approveCertificateRequest(t *testing.T, raw func(string, string, any) (int,
 		"lastTransitionTime": time.Now().UTC().Format(time.RFC3339),
 	})
 	request["status"] = status
-	if st, body := raw(http.MethodPut, path+"/approval", request); st/100 != 2 {
+	// A CustomResourceDefinition serves only the status and scale subresources,
+	// so the Approved condition is written through status (cert-manager checks
+	// that the writer may approve for this signer).
+	if st, body := raw(http.MethodPut, path+"/status", request); st/100 != 2 {
 		t.Fatalf("approve CertificateRequest as fixture administrator: status %d: %s", st, body)
 	}
 }
