@@ -3186,7 +3186,7 @@ export interface DiscoveryRun {
   source_id: string;
   started_at?: string;
   status: "queued" | "running" | "succeeded" | "partial" | "failed";
-  target_results: ({ error?: string; kind: "network" | "ssh" | "cloud_provider" | "k8s_tls_auto_issuance"; status: "succeeded" | "failed" | "blocked" | "rejected" | "not_delivered"; target: string })[];
+  target_results: ({ error?: string; kind: "network" | "ssh" | "cloud_provider" | "k8s_tls_auto_issuance"; status: "succeeded" | "failed" | "blocked" | "rejected" | "not_delivered" | "delivery_queued" | "delivered"; target: string })[];
   targets: number;
   tenant_id: string;
 }

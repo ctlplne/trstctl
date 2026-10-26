@@ -13146,7 +13146,9 @@
                     "failed",
                     "blocked",
                     "rejected",
-                    "not_delivered"
+                    "not_delivered",
+                    "delivery_queued",
+                    "delivered"
                   ],
                   "type": "string"
                 },

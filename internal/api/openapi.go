@@ -2052,7 +2052,7 @@ func componentSchemas() map[string]*Schema {
 		"target_results": {Type: "array", Items: object(map[string]*Schema{
 			"kind":   {Type: "string", Enum: []string{"network", "ssh", "cloud_provider", "k8s_tls_auto_issuance"}},
 			"target": str(),
-			"status": {Type: "string", Enum: []string{"succeeded", "failed", "blocked", "rejected", "not_delivered"}},
+			"status": {Type: "string", Enum: []string{"succeeded", "failed", "blocked", "rejected", "not_delivered", "delivery_queued", "delivered"}},
 			"error":  str(),
 		}, "kind", "target", "status")},
 	}, "id", "tenant_id", "source_id", "status", "dry_run", "execution", "targets", "discovered", "failed", "rejected", "blocked", "created_at", "target_results")
