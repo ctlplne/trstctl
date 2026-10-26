@@ -54,6 +54,9 @@ type Service struct {
 	// forgets to save produces a key that works until the next restart and then
 	// silently does not, which is the failure this whole mechanism exists to stop.
 	persist func() error
+	// shared, when set, keeps each tenant's keyring as a sealed row every
+	// replica shares (A125), in place of persist.
+	shared *sharedPersistence
 }
 
 // SetPersist installs the checkpoint invoked after a key is created or rotated.
@@ -129,6 +132,18 @@ func (s *Service) ring(tenantID string) *Keyring {
 
 // CreateKey creates a tenant-scoped key.
 func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kind) (KeyInfo, error) {
+	if p := s.sharedState(); p != nil {
+		err := s.mutateShared(ctx, p, tenantID, func(k *Keyring) (func(), error) {
+			if err := k.CreateKey(ctx, name, kind); err != nil {
+				return nil, err
+			}
+			return func() { k.discardUnpersistedKey(name) }, nil
+		})
+		if err != nil {
+			return KeyInfo{}, err
+		}
+		return KeyInfo{Name: name, Kind: kind, Version: 1}, nil
+	}
 	k := s.ring(tenantID)
 	if err := k.CreateKey(ctx, name, kind); err != nil {
 		return KeyInfo{}, err
@@ -147,7 +162,14 @@ func (s *Service) CreateKey(ctx context.Context, tenantID, name string, kind Kin
 
 // ListKeys returns only non-secret metadata for the tenant's current keyring.
 // A read for an empty tenant does not allocate a ring or create mutable state.
-func (s *Service) ListKeys(_ context.Context, tenantID string) ([]KeyInfo, error) {
+func (s *Service) ListKeys(ctx context.Context, tenantID string) ([]KeyInfo, error) {
+	if p := s.sharedState(); p != nil {
+		k, err := s.readShared(ctx, p, tenantID)
+		if err != nil || k == nil {
+			return []KeyInfo{}, err
+		}
+		return k.ListKeys(), nil
+	}
 	s.mu.Lock()
 	k := s.rings[tenantID]
 	s.mu.Unlock()
@@ -158,7 +180,17 @@ func (s *Service) ListKeys(_ context.Context, tenantID string) ([]KeyInfo, error
 }
 
 // ListKeyVersions returns the complete metadata-only history for one tenant key.
-func (s *Service) ListKeyVersions(_ context.Context, tenantID, name string) (Kind, []KeyVersionInfo, error) {
+func (s *Service) ListKeyVersions(ctx context.Context, tenantID, name string) (Kind, []KeyVersionInfo, error) {
+	if p := s.sharedState(); p != nil {
+		k, err := s.readShared(ctx, p, tenantID)
+		if err != nil {
+			return "", nil, err
+		}
+		if k == nil {
+			return "", nil, fmt.Errorf("transit: unknown key %q", name)
+		}
+		return k.ListKeyVersions(name)
+	}
 	s.mu.Lock()
 	k := s.rings[tenantID]
 	s.mu.Unlock()
@@ -170,6 +202,27 @@ func (s *Service) ListKeyVersions(_ context.Context, tenantID, name string) (Kin
 
 // Rotate adds a new version to a tenant-scoped key.
 func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, error) {
+	if p := s.sharedState(); p != nil {
+		var info KeyInfo
+		err := s.mutateShared(ctx, p, tenantID, func(k *Keyring) (func(), error) {
+			version, err := k.Rotate(ctx, name)
+			if err != nil {
+				return nil, err
+			}
+			undo := func() { k.discardUnpersistedVersion(name, version) }
+			kind, err := k.Kind(name)
+			if err != nil {
+				undo()
+				return nil, err
+			}
+			info = KeyInfo{Name: name, Kind: kind, Version: version}
+			return undo, nil
+		})
+		if err != nil {
+			return KeyInfo{}, err
+		}
+		return info, nil
+	}
 	k := s.ring(tenantID)
 	version, err := k.Rotate(ctx, name)
 	if err != nil {
@@ -188,24 +241,44 @@ func (s *Service) Rotate(ctx context.Context, tenantID, name string) (KeyInfo, e
 	return KeyInfo{Name: name, Kind: kind, Version: version}, nil
 }
 
-func (s *Service) Encrypt(ctx context.Context, tenantID, name string, plaintext, aad []byte) (string, error) {
-	return s.ring(tenantID).Encrypt(ctx, name, plaintext, aad)
+func (s *Service) Encrypt(ctx context.Context, tenantID, name string, plaintext, aad []byte) (out string, err error) {
+	err = s.withRing(ctx, tenantID, func(k *Keyring) (err error) {
+		out, err = k.Encrypt(ctx, name, plaintext, aad)
+		return err
+	})
+	return out, err
 }
 
-func (s *Service) Decrypt(ctx context.Context, tenantID, name, ciphertext string, aad []byte) ([]byte, error) {
-	return s.ring(tenantID).Decrypt(ctx, name, ciphertext, aad)
+func (s *Service) Decrypt(ctx context.Context, tenantID, name, ciphertext string, aad []byte) (out []byte, err error) {
+	err = s.withRing(ctx, tenantID, func(k *Keyring) (err error) {
+		out, err = k.Decrypt(ctx, name, ciphertext, aad)
+		return err
+	})
+	return out, err
 }
 
-func (s *Service) Rewrap(ctx context.Context, tenantID, name, ciphertext string, aad []byte) (string, error) {
-	return s.ring(tenantID).Rewrap(ctx, name, ciphertext, aad)
+func (s *Service) Rewrap(ctx context.Context, tenantID, name, ciphertext string, aad []byte) (out string, err error) {
+	err = s.withRing(ctx, tenantID, func(k *Keyring) (err error) {
+		out, err = k.Rewrap(ctx, name, ciphertext, aad)
+		return err
+	})
+	return out, err
 }
 
-func (s *Service) HMAC(ctx context.Context, tenantID, name string, data []byte) ([]byte, error) {
-	return s.ring(tenantID).HMAC(ctx, name, data)
+func (s *Service) HMAC(ctx context.Context, tenantID, name string, data []byte) (out []byte, err error) {
+	err = s.withRing(ctx, tenantID, func(k *Keyring) (err error) {
+		out, err = k.HMAC(ctx, name, data)
+		return err
+	})
+	return out, err
 }
 
-func (s *Service) Sign(ctx context.Context, tenantID, name string, message []byte) ([]byte, []byte, error) {
-	return s.ring(tenantID).Sign(ctx, name, message)
+func (s *Service) Sign(ctx context.Context, tenantID, name string, message []byte) (sig, pubDER []byte, err error) {
+	err = s.withRing(ctx, tenantID, func(k *Keyring) (err error) {
+		sig, pubDER, err = k.Sign(ctx, name, message)
+		return err
+	})
+	return sig, pubDER, err
 }
 
 func (s *Service) Verify(ctx context.Context, tenantID string, message, sig, pubDER []byte) error {
@@ -216,6 +289,11 @@ func (s *Service) Verify(ctx context.Context, tenantID string, message, sig, pub
 // retained version of the requested tenant key. Vault's named verify route must
 // not treat an arbitrary valid signature as proof for another key or tenant.
 func (s *Service) VerifyNamed(ctx context.Context, tenantID, name string, message, sig, pubDER []byte) error {
+	if s.sharedState() != nil {
+		return s.withRing(ctx, tenantID, func(k *Keyring) error {
+			return k.VerifyNamed(ctx, name, message, sig, pubDER)
+		})
+	}
 	s.mu.Lock()
 	k := s.rings[tenantID]
 	s.mu.Unlock()
@@ -225,7 +303,8 @@ func (s *Service) VerifyNamed(ctx context.Context, tenantID, name string, messag
 	return k.VerifyNamed(ctx, name, message, sig, pubDER)
 }
 
-// Destroy zeroizes every tenant keyring.
+// Destroy zeroizes every tenant keyring. A shared keyring reloads each
+// tenant's row on its next use.
 func (s *Service) Destroy() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -233,6 +312,11 @@ func (s *Service) Destroy() {
 		k.Destroy()
 	}
 	s.rings = map[string]*Keyring{}
+	if s.shared != nil {
+		s.shared.mu.Lock()
+		s.shared.tenants = map[string]*tenantSync{}
+		s.shared.mu.Unlock()
+	}
 }
 
 // CreateKey creates a named key of the given kind with an initial version.
@@ -334,7 +418,7 @@ func (k *Keyring) Kind(name string) (Kind, error) {
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok {
-		return "", fmt.Errorf("transit: unknown key %q", name)
+		return "", missf("transit: unknown key %q", name)
 	}
 	return nk.kind, nil
 }
@@ -359,7 +443,7 @@ func (k *Keyring) ListKeyVersions(name string) (Kind, []KeyVersionInfo, error) {
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok {
-		return "", nil, fmt.Errorf("transit: unknown key %q", name)
+		return "", nil, missf("transit: unknown key %q", name)
 	}
 	versions := make([]KeyVersionInfo, 0, nk.latest)
 	for version := 1; version <= nk.latest; version++ {
@@ -374,7 +458,7 @@ func (k *Keyring) Rotate(ctx context.Context, name string) (int, error) {
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok {
-		return 0, fmt.Errorf("transit: unknown key %q", name)
+		return 0, missf("transit: unknown key %q", name)
 	}
 	switch nk.kind {
 	case KindAEAD:
@@ -411,7 +495,7 @@ func (k *Keyring) Encrypt(ctx context.Context, name string, plaintext, aad []byt
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok || nk.kind != KindAEAD {
-		return "", fmt.Errorf("transit: %q is not an AEAD key", name)
+		return "", missf("transit: %q is not an AEAD key", name)
 	}
 	ct, err := crypto.AESGCMSeal(nk.aead[nk.latest], plaintext, k.aad(name, aad))
 	if err != nil {
@@ -427,14 +511,14 @@ func (k *Keyring) Decrypt(ctx context.Context, name, ciphertext string, aad []by
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok || nk.kind != KindAEAD {
-		return nil, fmt.Errorf("transit: %q is not an AEAD key", name)
+		return nil, missf("transit: %q is not an AEAD key", name)
 	}
 	ver, ct, err := parseCT(ciphertext)
 	if err != nil {
 		return nil, err
 	}
 	if ver < 1 || ver >= len(nk.aead) {
-		return nil, fmt.Errorf("transit: unknown key version %d", ver)
+		return nil, missf("transit: unknown key version %d", ver)
 	}
 	pt, err := crypto.AESGCMOpen(nk.aead[ver], ct, k.aad(name, aad))
 	if err != nil {
@@ -475,7 +559,7 @@ func (k *Keyring) HMAC(ctx context.Context, name string, data []byte) ([]byte, e
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok || nk.kind != KindHMAC {
-		return nil, fmt.Errorf("transit: %q is not an HMAC key", name)
+		return nil, missf("transit: %q is not an HMAC key", name)
 	}
 	mac := crypto.HMACSHA256(nk.hmac[nk.latest], data)
 	k.event(ctx, "transit.hmac", name)
@@ -489,7 +573,7 @@ func (k *Keyring) Sign(ctx context.Context, name string, message []byte) (sig, p
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok || nk.kind != KindSign {
-		return nil, nil, fmt.Errorf("transit: %q is not a signing key", name)
+		return nil, nil, missf("transit: %q is not a signing key", name)
 	}
 	s := nk.sign[nk.latest]
 	sig, err = crypto.SignMessage(s, message)
@@ -518,7 +602,7 @@ func (k *Keyring) VerifyNamed(ctx context.Context, name string, message, sig, pu
 	defer k.mu.Unlock()
 	nk, ok := k.keys[name]
 	if !ok || nk.kind != KindSign {
-		return fmt.Errorf("transit: %q is not a signing key", name)
+		return missf("transit: %q is not a signing key", name)
 	}
 	if nk.latest >= len(nk.sign) {
 		return fmt.Errorf("transit: signing key %q has incomplete version history", name)
@@ -534,7 +618,7 @@ func (k *Keyring) VerifyNamed(ctx context.Context, name string, message, sig, pu
 		k.event(ctx, "transit.verify", name)
 		return nil
 	}
-	return fmt.Errorf("transit: signature key does not belong to %q", name)
+	return missf("transit: signature key does not belong to %q", name)
 }
 
 // Destroy zeroizes every key byte and destroys locked signing keys. The keyring is

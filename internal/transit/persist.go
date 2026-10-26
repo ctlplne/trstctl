@@ -338,27 +338,41 @@ func (k *Keyring) restore(keys map[string]persistedKey) error {
 		k.keys = map[string]*namedKey{}
 	}
 	for name, p := range keys {
-		nk := &namedKey{kind: p.Kind, latest: p.Latest}
-		// The AEAD/HMAC buffers BECOME the live ring keys (the slice headers are
-		// copied, the key bytes are shared), so they must not be wiped here.
-		// Only the PKCS#8 DER is a transient copy: LockedKeyFromPKCS8 moves it
-		// into locked memory, after which the decoded heap buffer would linger
-		// unzeroed for the GC to collect whenever (AUD-201 follow-up B2/V6).
-		nk.aead = append(nk.aead, p.AEAD...)
-		nk.hmac = append(nk.hmac, p.HMAC...)
-		for i, der := range p.SignPKCS8 {
-			if len(der) == 0 {
-				nk.sign = append(nk.sign, nil)
-				continue
-			}
-			ls, err := crypto.LockedKeyFromPKCS8(der)
-			secret.Wipe(der)
-			if err != nil {
-				return fmt.Errorf("restore signing key %q version %d: %w", name, i+1, err)
-			}
-			nk.sign = append(nk.sign, ls)
+		nk, err := restoreKey(name, p)
+		if err != nil {
+			return err
 		}
 		k.keys[name] = nk
 	}
 	return nil
+}
+
+// restoreKey rebuilds one named key from its persisted form.
+func restoreKey(name string, p persistedKey) (*namedKey, error) {
+	nk := &namedKey{kind: p.Kind, latest: p.Latest}
+	// The AEAD/HMAC buffers BECOME the live ring keys (the slice headers are
+	// copied, the key bytes are shared), so they must not be wiped here.
+	// Only the PKCS#8 DER is a transient copy: LockedKeyFromPKCS8 moves it
+	// into locked memory, after which the decoded heap buffer would linger
+	// unzeroed for the GC to collect whenever (AUD-201 follow-up B2/V6).
+	nk.aead = append(nk.aead, p.AEAD...)
+	nk.hmac = append(nk.hmac, p.HMAC...)
+	for i, der := range p.SignPKCS8 {
+		if len(der) == 0 {
+			nk.sign = append(nk.sign, nil)
+			continue
+		}
+		ls, err := crypto.LockedKeyFromPKCS8(der)
+		secret.Wipe(der)
+		if err != nil {
+			for _, s := range nk.sign {
+				if s != nil {
+					s.Destroy()
+				}
+			}
+			return nil, fmt.Errorf("restore signing key %q version %d: %w", name, i+1, err)
+		}
+		nk.sign = append(nk.sign, ls)
+	}
+	return nk, nil
 }
