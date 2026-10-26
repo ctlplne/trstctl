@@ -3975,6 +3975,7 @@ CustodyExportabilityCounts = TypedDict(
 CustodyOriginCounts = TypedDict(
     'CustodyOriginCounts',
     {
+        'appliance': int,
         'control_plane': int,
         'device': int,
         'host_agent': int,
@@ -3987,6 +3988,7 @@ CustodyOriginCounts = TypedDict(
 CustodyStorageCounts = TypedDict(
     'CustodyStorageCounts',
     {
+        'appliance': int,
         'device_bound': int,
         'file': int,
         'kubernetes_secret': int,

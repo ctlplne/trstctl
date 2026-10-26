@@ -9274,6 +9274,7 @@
               "requester",
               "host_agent",
               "device",
+              "appliance",
               "control_plane",
               "signer"
             ],
@@ -9308,7 +9309,8 @@
               "pkcs11",
               "device_bound",
               "service",
-              "kubernetes_secret"
+              "kubernetes_secret",
+              "appliance"
             ],
             "type": "string"
           },
@@ -11818,6 +11820,9 @@
       },
       "CustodyOriginCounts": {
         "properties": {
+          "appliance": {
+            "type": "integer"
+          },
           "control_plane": {
             "type": "integer"
           },
@@ -11845,6 +11850,9 @@
       },
       "CustodyStorageCounts": {
         "properties": {
+          "appliance": {
+            "type": "integer"
+          },
           "device_bound": {
             "type": "integer"
           },

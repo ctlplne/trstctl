@@ -10344,7 +10344,7 @@ export interface components {
             /** @description A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held. */
             key_observations?: components["schemas"]["CertificateKeyObservation"][];
             /** @enum {string} */
-            key_origin?: "" | "requester" | "host_agent" | "device" | "control_plane" | "signer";
+            key_origin?: "" | "requester" | "host_agent" | "device" | "appliance" | "control_plane" | "signer";
             /**
              * @description Set only when key_origin was derived from this certificate's retained issuance event because it was issued before its path recorded custody: the rule that proves it. Absent when the origin was recorded at issuance or is unrecorded.
              * @enum {string}
@@ -10353,7 +10353,7 @@ export interface components {
             /** @description The retained issuance event that proves a derived key_origin. */
             key_origin_proof_event_id?: string;
             /** @enum {string} */
-            key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service" | "kubernetes_secret";
+            key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service" | "kubernetes_secret" | "appliance";
             /** @description Exact authenticated cert-manager request/Certificate UID observations for this issued fingerprint; absent when unobserved. Not deployment verification. */
             kubernetes_provenance?: components["schemas"]["KubernetesCertificateProvenance"][];
             /** Format: date-time */
@@ -10987,6 +10987,7 @@ export interface components {
             non_exportable: number;
         };
         CustodyOriginCounts: {
+            appliance?: number;
             control_plane: number;
             device: number;
             host_agent: number;
@@ -10994,6 +10995,7 @@ export interface components {
             signer: number;
         };
         CustodyStorageCounts: {
+            appliance?: number;
             device_bound: number;
             file: number;
             kubernetes_secret?: number;

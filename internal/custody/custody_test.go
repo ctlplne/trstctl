@@ -95,7 +95,7 @@ func TestPartialCustodySaysOnlyWhatIsKnown(t *testing.T) {
 // package recognizes, and nothing else is.
 func TestVocabularyIsClosed(t *testing.T) {
 	for _, v := range []custody.KeyOrigin{
-		custody.OriginRequester, custody.OriginHostAgent, custody.OriginDevice,
+		custody.OriginRequester, custody.OriginHostAgent, custody.OriginDevice, custody.OriginAppliance,
 		custody.OriginControlPlane, custody.OriginSigner, custody.OriginUnrecorded,
 	} {
 		if !custody.ValidOrigin(v) {
@@ -108,7 +108,7 @@ func TestVocabularyIsClosed(t *testing.T) {
 	for _, v := range []custody.StorageClass{
 		custody.StorageLockedMemory, custody.StorageFile, custody.StorageOSStore,
 		custody.StoragePKCS11, custody.StorageDeviceBound, custody.StorageService,
-		custody.StorageKubernetesSecret, custody.StorageUnrecorded,
+		custody.StorageKubernetesSecret, custody.StorageAppliance, custody.StorageUnrecorded,
 	} {
 		if !custody.ValidStorage(v) {
 			t.Errorf("declared storage class %q is not valid", v)
@@ -136,6 +136,31 @@ func TestKubernetesSecretCustodyIsCountedAndDescribed(t *testing.T) {
 	}
 	if got := record.Summary(); !strings.Contains(got, "stored in a Kubernetes Secret") {
 		t.Fatalf("custody sentence = %q, want it to say the key is in a Kubernetes Secret", got)
+	}
+}
+
+func TestApplianceCustodyIsCountedAndDescribed(t *testing.T) {
+	t.Parallel()
+	if !custody.ValidOrigin(custody.OriginAppliance) || !custody.ValidStorage(custody.StorageAppliance) {
+		t.Fatal("appliance custody is not part of the recorded vocabulary")
+	}
+	record := custody.Record{
+		Origin: custody.OriginAppliance, Storage: custody.StorageAppliance, GeneratedBy: "dmz-relay",
+	}
+	summary := custody.SummarizeCertificates([]custody.CertificateEvidence{
+		{ID: "vip", Fingerprint: "sha256:vip", Subject: "vip.example.test", Record: record},
+	})
+	if summary.Origins.Appliance != 1 || summary.Storage.Appliance != 1 {
+		t.Fatalf("certificate custody summary = %+v", summary)
+	}
+	got := record.Summary()
+	for _, want := range []string{"generated on the appliance", "never held it", "kept in the appliance's own key store"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("custody sentence = %q, want it to say %q", got, want)
+		}
+	}
+	if strings.Contains(got, "exportable") {
+		t.Fatalf("custody sentence = %q claims an exportability nobody recorded", got)
 	}
 }
 
