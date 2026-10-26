@@ -14,11 +14,11 @@ import (
 // Owner decision 2026-10-25 (B15-L1): Kubernetes Ingress and Gateway TLS is
 // delivered the cert-manager way. The in-cluster agent generates the key inside
 // the cluster, sends a CSR and writes the TLS Secret itself with a signed
-// receipt; the control plane never generates the key. Until that agent mode
-// exists a run must not report an auto-issued certificate as issued or served:
-// it records each resource it discovered and reports it not delivered with the
-// reason, generating no key and recording no certificate, whether the tenant's
-// key-generation switch is on or off.
+// receipt; the control plane never generates the key. A source that binds no
+// in-cluster agent therefore delivers nothing: a run records each resource it
+// discovered and reports it not delivered with the reason, generating no key
+// and recording no certificate, whether the tenant's key-generation switch is
+// on or off.
 func TestServedKubernetesTLSAutoIssuanceIsReportedNotDelivered(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{})
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", "certs:read", "access:read", "access:write")

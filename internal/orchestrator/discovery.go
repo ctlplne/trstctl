@@ -1222,6 +1222,12 @@ func validateDiscoveryTargetResults(results []store.DiscoveryTargetResult) error
 			if result.Kind != "k8s_tls_auto_issuance" || strings.TrimSpace(result.Error) == "" {
 				return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
 			}
+		case "delivery_queued", "delivered":
+			// A Kubernetes TLS resource handed to its source's in-cluster agent
+			// (B15-L1): queued until the agent reports, delivered once deployed.
+			if result.Kind != "k8s_tls_auto_issuance" || strings.TrimSpace(result.Error) != "" {
+				return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
+			}
 		default:
 			return fmt.Errorf("orchestrator: invalid discovery target result status %q", result.Status)
 		}

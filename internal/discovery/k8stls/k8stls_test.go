@@ -69,3 +69,52 @@ func TestFindingsRejectsUnsafeKubernetesTLSResources(t *testing.T) {
 		})
 	}
 }
+
+// A source that binds an in-cluster agent names the agent, the owner of the
+// certificates it will request, and optionally the in-cluster listener that
+// serves the resources; each finding carries the Secret it delivers into.
+func TestDeliverySettingsBindTheClusterAgent(t *testing.T) {
+	raw := json.RawMessage(`{
+		"cluster_agent_id":"0b9b8a4e-8c1f-4b5e-9d2a-1f0e7c6b5a49",
+		"owner_id":"7d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+		"verify_address":"ingress-nginx-controller.ingress-nginx.svc:443",
+		"resources":[{"kind":"Ingress","namespace":"payments","name":"web","tls_secret_name":"web-tls","hosts":["web.example.test","api.example.test"]}]
+	}`)
+	delivery, err := DeliverySettings(raw)
+	if err != nil {
+		t.Fatalf("DeliverySettings: %v", err)
+	}
+	if delivery.ClusterAgentID != "0b9b8a4e-8c1f-4b5e-9d2a-1f0e7c6b5a49" || delivery.OwnerID != "7d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a" ||
+		delivery.VerifyAddress != "ingress-nginx-controller.ingress-nginx.svc:443" {
+		t.Fatalf("delivery = %+v", delivery)
+	}
+	findings, err := Findings(raw)
+	if err != nil || len(findings) != 1 {
+		t.Fatalf("Findings = %v, %v", findings, err)
+	}
+	if f := findings[0]; f.Namespace != "payments" || f.TLSSecretName != "web-tls" ||
+		len(f.DNSNames) != 2 || f.DNSNames[0] != "web.example.test" {
+		t.Fatalf("finding = %+v", f)
+	}
+	unbound, err := DeliverySettings(json.RawMessage(`{"resources":[{"kind":"Ingress","namespace":"payments","name":"web","tls_secret_name":"web-tls","hosts":["web.example.test"]}]}`))
+	if err != nil || unbound.ClusterAgentID != "" {
+		t.Fatalf("a source without an agent = %+v, %v", unbound, err)
+	}
+}
+
+func TestDeliverySettingsRefuseIncompleteBindings(t *testing.T) {
+	resource := `"resources":[{"kind":"Ingress","namespace":"payments","name":"web","tls_secret_name":"web-tls","hosts":["web.example.test"]}]`
+	for name, raw := range map[string]string{
+		"agent without owner":   `{"cluster_agent_id":"0b9b8a4e-8c1f-4b5e-9d2a-1f0e7c6b5a49",` + resource + `}`,
+		"agent not a UUID":      `{"cluster_agent_id":"cluster-agent","owner_id":"7d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",` + resource + `}`,
+		"owner not a UUID":      `{"cluster_agent_id":"0b9b8a4e-8c1f-4b5e-9d2a-1f0e7c6b5a49","owner_id":"payments-team",` + resource + `}`,
+		"verify without a port": `{"cluster_agent_id":"0b9b8a4e-8c1f-4b5e-9d2a-1f0e7c6b5a49","owner_id":"7d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a","verify_address":"ingress.svc",` + resource + `}`,
+	} {
+		if _, err := DeliverySettings(json.RawMessage(raw)); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+		if err := ValidateConfig(json.RawMessage(raw)); err == nil {
+			t.Errorf("%s: source config validation accepted it", name)
+		}
+	}
+}

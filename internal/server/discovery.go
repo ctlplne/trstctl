@@ -683,26 +683,24 @@ func (d *issuanceDispatcher) executeAPIKeyTokenDiscoveryRun(ctx context.Context,
 	return rep, "succeeded", "", nil
 }
 
-// kubernetesTLSNotDelivered says why a Kubernetes TLS resource that asks for
-// auto-issuance receives nothing yet (owner decision 2026-10-25, B15-L1).
-const kubernetesTLSNotDelivered = "not delivered: trstctl delivers a Kubernetes TLS Secret through an " +
-	"in-cluster agent that generates the key inside the cluster, sends only a CSR and writes the Secret " +
-	"itself with a signed receipt; that agent mode is not built yet, so no certificate was issued, no " +
-	"key was generated and nothing was written to the cluster"
-
 // kubernetesTLSOutcomeLimit bounds the per-resource outcomes a run's completion
 // event carries; the run's error states the full count.
 const kubernetesTLSOutcomeLimit = 200
 
 // executeKubernetesTLSAutoIssuanceRun records each Ingress or Gateway TLS
-// resource a source names and reports it not delivered (owner decision
-// 2026-10-25, B15-L1). Delivery belongs to an in-cluster agent that generates
-// the key inside the cluster and writes the TLS Secret itself; until that agent
-// mode is built the control plane issues nothing and generates no key, so a run
-// never reports a certificate as issued or served for a resource nobody
-// delivered to.
+// resource a source names and delivers it the cert-manager way (owner decision
+// 2026-10-25, B15-L1): with an in-cluster agent bound, each resource gets a
+// k8s_secret target and an identity whose issuance hands that agent the work of
+// generating the key in the cluster and writing the Secret. Without one, every
+// resource is reported not delivered, with the reason. The control plane never
+// generates the key, so a run never reports a certificate as served for a
+// resource nobody delivered to.
 func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Context, tenantID string, src store.DiscoverySource, run projections.DiscoveryRunQueued) (netscan.Report, string, string, error) {
 	findings, err := k8stls.Findings(src.Config)
+	if err != nil {
+		return netscan.Report{}, "failed", err.Error(), nil
+	}
+	delivery, err := k8stls.DeliverySettings(src.Config)
 	if err != nil {
 		return netscan.Report{}, "failed", err.Error(), nil
 	}
@@ -710,6 +708,7 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 		return netscan.Report{Targets: len(findings)}, "succeeded", "", nil
 	}
 	rep := netscan.Report{Targets: len(findings)}
+	notDelivered, sharedReason := 0, ""
 	for _, f := range findings {
 		meta, err := json.Marshal(f.Metadata)
 		if err != nil {
@@ -723,26 +722,42 @@ func (d *issuanceDispatcher) executeKubernetesTLSAutoIssuanceRun(ctx context.Con
 			return rep, "", "", err
 		}
 		rep.Discovered++
+		status, reason := kubernetesTLSNotDelivered, kubernetesTLSNoClusterAgent
+		if delivery.ClusterAgentID != "" {
+			if status, reason, err = d.deliverKubernetesTLSResource(ctx, tenantID, src, delivery, f); err != nil {
+				return rep, "", "", err
+			}
+		}
+		if status == kubernetesTLSNotDelivered {
+			notDelivered++
+			if notDelivered == 1 {
+				sharedReason = reason
+			} else if sharedReason != reason {
+				sharedReason = ""
+			}
+		}
 		if len(rep.TargetResults) < kubernetesTLSOutcomeLimit {
-			// The status says not delivered; the error carries the reason alone.
+			// The status names the outcome; the error carries the reason alone.
 			rep.TargetResults = append(rep.TargetResults, netscan.TargetResult{
-				Kind: k8stls.FindingKind, Target: f.Ref, Status: "not_delivered",
-				Error: strings.TrimPrefix(kubernetesTLSNotDelivered, "not delivered: "),
+				Kind: k8stls.FindingKind, Target: f.Ref, Status: status, Error: reason,
 			})
 		}
 	}
-	if rep.Discovered == 0 {
+	sort.SliceStable(rep.TargetResults, func(i, j int) bool { return rep.TargetResults[i].Target < rep.TargetResults[j].Target })
+	if notDelivered == 0 {
 		return rep, "succeeded", "", nil
 	}
-	sort.SliceStable(rep.TargetResults, func(i, j int) bool { return rep.TargetResults[i].Target < rep.TargetResults[j].Target })
-	summary := fmt.Sprintf("%d Kubernetes TLS resources were not delivered", rep.Discovered)
-	if rep.Discovered == 1 {
+	summary := fmt.Sprintf("%d Kubernetes TLS resources were not delivered", notDelivered)
+	if notDelivered == 1 {
 		summary = "1 Kubernetes TLS resource was not delivered"
 	}
 	if rep.Discovered > kubernetesTLSOutcomeLimit {
 		summary += fmt.Sprintf(" (the first %d are listed)", kubernetesTLSOutcomeLimit)
 	}
-	return rep, "partial", summary + ": " + strings.TrimPrefix(kubernetesTLSNotDelivered, "not delivered: "), nil
+	if sharedReason != "" {
+		summary += ": " + sharedReason
+	}
+	return rep, "partial", summary, nil
 }
 
 func ctLogDiscoverySettings(raw json.RawMessage) ([]string, []string, int, *http.Client, error) {

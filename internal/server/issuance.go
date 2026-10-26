@@ -614,11 +614,12 @@ func (d *issuanceDispatcher) handleIssue(ctx context.Context, m orchestrator.Mes
 			if err != nil {
 				return nil, err
 			}
+			names := hostFirstIssuanceNames(ident, target)
 			if err := d.enqueueHostRenewal(ctx, m.TenantID, ident, target,
-				ident.Name, []string{ident.Name}, nil, nil, nil, "", "", binding, "host-issue:"+idemKey); err != nil {
+				ident.Name, names, nil, nil, nil, "", "", binding, "host-issue:"+idemKey); err != nil {
 				return nil, err
 			}
-			d.recordAgentRenewalDispatch(ctx, m.TenantID, ident, target, []string{ident.Name}, nil, nil, nil)
+			d.recordAgentRenewalDispatch(ctx, m.TenantID, ident, target, names, nil, nil, nil)
 			return []byte(hostFirstIssuanceDispatched), nil
 		}
 

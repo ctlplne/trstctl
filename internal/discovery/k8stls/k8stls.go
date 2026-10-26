@@ -9,7 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -27,6 +31,63 @@ const (
 // admission path, or manifest inventory.
 type Config struct {
 	Resources []Resource `json:"resources"`
+	// ClusterAgentID binds the source to the host-role agent running inside the
+	// cluster. Without it a run records the resources and delivers nothing; with
+	// it each resource is delivered the cert-manager way: the agent generates
+	// the key in the cluster, sends only a CSR and writes the Secret itself.
+	ClusterAgentID string `json:"cluster_agent_id,omitempty"`
+	// OwnerID owns the identities a bound source requests. Required with
+	// ClusterAgentID.
+	OwnerID string `json:"owner_id,omitempty"`
+	// VerifyAddress is the optional in-cluster listener (host:port) the agent
+	// handshakes after writing a Secret, with the resource's first host as the
+	// server name, such as the ingress controller's service.
+	VerifyAddress string `json:"verify_address,omitempty"`
+}
+
+// Delivery is how a bound source delivers: the cluster agent, the owner of the
+// identities it requests and the optional verification listener. A zero
+// ClusterAgentID means the source binds no agent.
+type Delivery struct {
+	ClusterAgentID string
+	OwnerID        string
+	VerifyAddress  string
+}
+
+// DeliverySettings decodes and checks a source's delivery binding.
+func DeliverySettings(raw json.RawMessage) (Delivery, error) {
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return Delivery{}, fmt.Errorf("decode Kubernetes ingress/gateway discovery config: %w", err)
+	}
+	return deliveryOf(cfg)
+}
+
+func deliveryOf(cfg Config) (Delivery, error) {
+	out := Delivery{
+		ClusterAgentID: strings.TrimSpace(cfg.ClusterAgentID),
+		OwnerID:        strings.TrimSpace(cfg.OwnerID),
+		VerifyAddress:  strings.TrimSpace(cfg.VerifyAddress),
+	}
+	if out.ClusterAgentID == "" {
+		if out.OwnerID != "" || out.VerifyAddress != "" {
+			return Delivery{}, errors.New("owner_id and verify_address apply only with cluster_agent_id")
+		}
+		return out, nil
+	}
+	if _, err := uuid.Parse(out.ClusterAgentID); err != nil {
+		return Delivery{}, errors.New("cluster_agent_id must be the UUID of an enrolled host-role agent")
+	}
+	if _, err := uuid.Parse(out.OwnerID); err != nil {
+		return Delivery{}, errors.New("owner_id must name the owner of the certificates this source requests")
+	}
+	if out.VerifyAddress != "" {
+		host, port, err := net.SplitHostPort(out.VerifyAddress)
+		if number, convErr := strconv.Atoi(port); err != nil || strings.TrimSpace(host) == "" || convErr != nil || number < 1 || number > 65535 {
+			return Delivery{}, errors.New("verify_address must be host:port")
+		}
+	}
+	return out, nil
 }
 
 // Resource describes one Ingress or Gateway API object that needs a served TLS
@@ -43,6 +104,12 @@ type Resource struct {
 
 // Finding is the normalized discovery finding material emitted by the server.
 type Finding struct {
+	// The resource and the TLS Secret it names, for delivery.
+	ResourceKind  string
+	Namespace     string
+	ResourceName  string
+	TLSSecretName string
+
 	Ref                    string
 	Provenance             string
 	Fingerprint            string
@@ -69,6 +136,9 @@ func Findings(raw json.RawMessage) ([]Finding, error) {
 	}
 	if len(cfg.Resources) > MaxResources {
 		return nil, fmt.Errorf("kubernetes ingress/gateway discovery source has %d resources; maximum is %d", len(cfg.Resources), MaxResources)
+	}
+	if _, err := deliveryOf(cfg); err != nil {
+		return nil, fmt.Errorf("kubernetes ingress/gateway delivery: %w", err)
 	}
 
 	out := make([]Finding, 0, len(cfg.Resources))
@@ -133,6 +203,10 @@ func normalizeResource(resource Resource) (Finding, error) {
 		"auto_issue":      true,
 	}
 	return Finding{
+		ResourceKind:       kind,
+		Namespace:          namespace,
+		ResourceName:       name,
+		TLSSecretName:      tlsSecret,
 		Ref:                ref,
 		Provenance:         provenance,
 		Fingerprint:        provenance,
@@ -161,6 +235,10 @@ func defaultAPIVersion(kind string) string {
 	}
 	return "networking.k8s.io/v1"
 }
+
+// NormalizeHosts lowercases, validates and de-duplicates TLS hosts the way a
+// source's resources are normalized, keeping their order.
+func NormalizeHosts(values []string) ([]string, error) { return normalizeHosts(values) }
 
 func normalizeHosts(values []string) ([]string, error) {
 	out := make([]string, 0, len(values))
