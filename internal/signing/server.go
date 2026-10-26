@@ -76,6 +76,11 @@ type Server struct {
 	// address them, and the only private-key operation exposed is Decapsulate.
 	kemCustody KEMCustody
 
+	// tenantKEK, when non-nil, holds tenant domain KEKs under operator HSM
+	// wrapper keys (A123). The control plane persists only wrapped domain KEKs
+	// and reaches the keys only through the tenant KEK RPCs.
+	tenantKEK TenantKEKCustody
+
 	// artifactSigner, when non-nil, signs opaque artifact payloads inside the
 	// isolated signer. The core defines only this generic surface; concrete
 	// artifact semantics live in an edition implementation.
@@ -498,6 +503,9 @@ func (s *Server) Shutdown() {
 	}
 	if s.kemCustody != nil {
 		s.kemCustody.DestroyAll()
+	}
+	if closer, ok := s.tenantKEK.(interface{ Close() error }); ok {
+		_ = closer.Close()
 	}
 	if destroyer, ok := s.artifactSigner.(interface{ Destroy() }); ok {
 		destroyer.Destroy()

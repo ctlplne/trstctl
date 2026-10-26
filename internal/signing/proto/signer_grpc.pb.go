@@ -53,6 +53,10 @@ const (
 	SignerService_GetAgentRootAnchor_FullMethodName            = "/trstctl.signing.v1.SignerService/GetAgentRootAnchor"
 	SignerService_ProvisionAgentReachabilityKey_FullMethodName = "/trstctl.signing.v1.SignerService/ProvisionAgentReachabilityKey"
 	SignerService_GetAgentReachabilityKey_FullMethodName       = "/trstctl.signing.v1.SignerService/GetAgentReachabilityKey"
+	SignerService_CreateTenantDomainKEK_FullMethodName         = "/trstctl.signing.v1.SignerService/CreateTenantDomainKEK"
+	SignerService_OpenTenantDomainKEK_FullMethodName           = "/trstctl.signing.v1.SignerService/OpenTenantDomainKEK"
+	SignerService_WrapTenantDataKey_FullMethodName             = "/trstctl.signing.v1.SignerService/WrapTenantDataKey"
+	SignerService_UnwrapTenantDataKey_FullMethodName           = "/trstctl.signing.v1.SignerService/UnwrapTenantDataKey"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -172,6 +176,21 @@ type SignerServiceClient interface {
 	// control plane retains its sealed private key; changed first writers refuse.
 	ProvisionAgentReachabilityKey(ctx context.Context, in *ProvisionAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*ProvisionAgentReachabilityKeyResponse, error)
 	GetAgentReachabilityKey(ctx context.Context, in *GetAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*GetAgentReachabilityKeyResponse, error)
+	// Tenant domain KEK custody (A123). The signer creates a tenant's domain
+	// key-encryption key and keeps it wrapped by an operator-provisioned HSM key
+	// named by wrapper_id. The control plane persists only the wrapped form and
+	// the binding (tenant, domain, generation) it was created for, and asks the
+	// signer to wrap and unwrap the tenant's data keys; the domain KEK itself is
+	// opened only inside the signer, for one call, and never crosses this
+	// boundary. A signer without tenant KEK custody answers UNIMPLEMENTED.
+	CreateTenantDomainKEK(ctx context.Context, in *CreateTenantDomainKEKRequest, opts ...grpc.CallOption) (*CreateTenantDomainKEKResponse, error)
+	// OpenTenantDomainKEK proves the wrapped domain KEK opens under its wrapper
+	// and binding, and returns nothing else.
+	OpenTenantDomainKEK(ctx context.Context, in *OpenTenantDomainKEKRequest, opts ...grpc.CallOption) (*OpenTenantDomainKEKResponse, error)
+	WrapTenantDataKey(ctx context.Context, in *WrapTenantDataKeyRequest, opts ...grpc.CallOption) (*WrapTenantDataKeyResponse, error)
+	// UnwrapTenantDataKey returns the data key, byte-native secret material the
+	// caller must wipe after use.
+	UnwrapTenantDataKey(ctx context.Context, in *UnwrapTenantDataKeyRequest, opts ...grpc.CallOption) (*UnwrapTenantDataKeyResponse, error)
 }
 
 type signerServiceClient struct {
@@ -415,6 +434,46 @@ func (c *signerServiceClient) GetAgentReachabilityKey(ctx context.Context, in *G
 	return out, nil
 }
 
+func (c *signerServiceClient) CreateTenantDomainKEK(ctx context.Context, in *CreateTenantDomainKEKRequest, opts ...grpc.CallOption) (*CreateTenantDomainKEKResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateTenantDomainKEKResponse)
+	err := c.cc.Invoke(ctx, SignerService_CreateTenantDomainKEK_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) OpenTenantDomainKEK(ctx context.Context, in *OpenTenantDomainKEKRequest, opts ...grpc.CallOption) (*OpenTenantDomainKEKResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OpenTenantDomainKEKResponse)
+	err := c.cc.Invoke(ctx, SignerService_OpenTenantDomainKEK_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) WrapTenantDataKey(ctx context.Context, in *WrapTenantDataKeyRequest, opts ...grpc.CallOption) (*WrapTenantDataKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WrapTenantDataKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_WrapTenantDataKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) UnwrapTenantDataKey(ctx context.Context, in *UnwrapTenantDataKeyRequest, opts ...grpc.CallOption) (*UnwrapTenantDataKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnwrapTenantDataKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_UnwrapTenantDataKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -532,6 +591,21 @@ type SignerServiceServer interface {
 	// control plane retains its sealed private key; changed first writers refuse.
 	ProvisionAgentReachabilityKey(context.Context, *ProvisionAgentReachabilityKeyRequest) (*ProvisionAgentReachabilityKeyResponse, error)
 	GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error)
+	// Tenant domain KEK custody (A123). The signer creates a tenant's domain
+	// key-encryption key and keeps it wrapped by an operator-provisioned HSM key
+	// named by wrapper_id. The control plane persists only the wrapped form and
+	// the binding (tenant, domain, generation) it was created for, and asks the
+	// signer to wrap and unwrap the tenant's data keys; the domain KEK itself is
+	// opened only inside the signer, for one call, and never crosses this
+	// boundary. A signer without tenant KEK custody answers UNIMPLEMENTED.
+	CreateTenantDomainKEK(context.Context, *CreateTenantDomainKEKRequest) (*CreateTenantDomainKEKResponse, error)
+	// OpenTenantDomainKEK proves the wrapped domain KEK opens under its wrapper
+	// and binding, and returns nothing else.
+	OpenTenantDomainKEK(context.Context, *OpenTenantDomainKEKRequest) (*OpenTenantDomainKEKResponse, error)
+	WrapTenantDataKey(context.Context, *WrapTenantDataKeyRequest) (*WrapTenantDataKeyResponse, error)
+	// UnwrapTenantDataKey returns the data key, byte-native secret material the
+	// caller must wipe after use.
+	UnwrapTenantDataKey(context.Context, *UnwrapTenantDataKeyRequest) (*UnwrapTenantDataKeyResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -610,6 +684,18 @@ func (UnimplementedSignerServiceServer) ProvisionAgentReachabilityKey(context.Co
 }
 func (UnimplementedSignerServiceServer) GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgentReachabilityKey not implemented")
+}
+func (UnimplementedSignerServiceServer) CreateTenantDomainKEK(context.Context, *CreateTenantDomainKEKRequest) (*CreateTenantDomainKEKResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTenantDomainKEK not implemented")
+}
+func (UnimplementedSignerServiceServer) OpenTenantDomainKEK(context.Context, *OpenTenantDomainKEKRequest) (*OpenTenantDomainKEKResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method OpenTenantDomainKEK not implemented")
+}
+func (UnimplementedSignerServiceServer) WrapTenantDataKey(context.Context, *WrapTenantDataKeyRequest) (*WrapTenantDataKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method WrapTenantDataKey not implemented")
+}
+func (UnimplementedSignerServiceServer) UnwrapTenantDataKey(context.Context, *UnwrapTenantDataKeyRequest) (*UnwrapTenantDataKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnwrapTenantDataKey not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -1035,6 +1121,78 @@ func _SignerService_GetAgentReachabilityKey_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_CreateTenantDomainKEK_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTenantDomainKEKRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).CreateTenantDomainKEK(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_CreateTenantDomainKEK_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).CreateTenantDomainKEK(ctx, req.(*CreateTenantDomainKEKRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_OpenTenantDomainKEK_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(OpenTenantDomainKEKRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).OpenTenantDomainKEK(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_OpenTenantDomainKEK_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).OpenTenantDomainKEK(ctx, req.(*OpenTenantDomainKEKRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_WrapTenantDataKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WrapTenantDataKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).WrapTenantDataKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_WrapTenantDataKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).WrapTenantDataKey(ctx, req.(*WrapTenantDataKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_UnwrapTenantDataKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnwrapTenantDataKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).UnwrapTenantDataKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_UnwrapTenantDataKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).UnwrapTenantDataKey(ctx, req.(*UnwrapTenantDataKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1129,6 +1287,22 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgentReachabilityKey",
 			Handler:    _SignerService_GetAgentReachabilityKey_Handler,
+		},
+		{
+			MethodName: "CreateTenantDomainKEK",
+			Handler:    _SignerService_CreateTenantDomainKEK_Handler,
+		},
+		{
+			MethodName: "OpenTenantDomainKEK",
+			Handler:    _SignerService_OpenTenantDomainKEK_Handler,
+		},
+		{
+			MethodName: "WrapTenantDataKey",
+			Handler:    _SignerService_WrapTenantDataKey_Handler,
+		},
+		{
+			MethodName: "UnwrapTenantDataKey",
+			Handler:    _SignerService_UnwrapTenantDataKey_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

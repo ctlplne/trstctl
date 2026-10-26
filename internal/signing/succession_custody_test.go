@@ -66,9 +66,20 @@ func TestINT07_SuccessorKeyIsLockedAndZeroizable(t *testing.T) {
 // (the SealedBytes path), never in the clear over the transport. The check reflects
 // the generated client interface — the complete set of operations a control plane can
 // invoke — and fails if any method name suggests private-key export.
+//
+// One method is named for what it does and exports nothing the signer holds:
+// UnwrapTenantDataKey (A123, owner decision 2026-10-26) returns a data key the
+// control plane generated and asked the signer to wrap, because the control plane
+// decrypts tenant data with it. The tenant domain KEK that wraps it stays in the
+// signer; TestTenantKEKResponsesCarryNoDomainKEK pins every tenant KEK response to
+// its exact fields.
 func TestINT07_NoSuccessorKeyExportOverTransport(t *testing.T) {
+	notAnExport := map[string]bool{"UnwrapTenantDataKey": true}
 	typ := reflect.TypeOf((*signerpb.SignerServiceClient)(nil)).Elem()
 	for i := 0; i < typ.NumMethod(); i++ {
+		if notAnExport[typ.Method(i).Name] {
+			continue
+		}
 		name := strings.ToLower(typ.Method(i).Name)
 		for _, forbidden := range []string{"export", "private", "reveal", "extract", "unwrap", "unseal"} {
 			if strings.Contains(name, forbidden) {

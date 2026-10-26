@@ -146,6 +146,22 @@ service SignerService {
   // control plane retains its sealed private key; changed first writers refuse.
   rpc ProvisionAgentReachabilityKey(ProvisionAgentReachabilityKeyRequest) returns (ProvisionAgentReachabilityKeyResponse);
   rpc GetAgentReachabilityKey(GetAgentReachabilityKeyRequest) returns (GetAgentReachabilityKeyResponse);
+
+  // Tenant domain KEK custody (A123). The signer creates a tenant's domain
+  // key-encryption key and keeps it wrapped by an operator-provisioned HSM key
+  // named by wrapper_id. The control plane persists only the wrapped form and
+  // the binding (tenant, domain, generation) it was created for, and asks the
+  // signer to wrap and unwrap the tenant's data keys; the domain KEK itself is
+  // opened only inside the signer, for one call, and never crosses this
+  // boundary. A signer without tenant KEK custody answers UNIMPLEMENTED.
+  rpc CreateTenantDomainKEK(CreateTenantDomainKEKRequest) returns (CreateTenantDomainKEKResponse);
+  // OpenTenantDomainKEK proves the wrapped domain KEK opens under its wrapper
+  // and binding, and returns nothing else.
+  rpc OpenTenantDomainKEK(OpenTenantDomainKEKRequest) returns (OpenTenantDomainKEKResponse);
+  rpc WrapTenantDataKey(WrapTenantDataKeyRequest) returns (WrapTenantDataKeyResponse);
+  // UnwrapTenantDataKey returns the data key, byte-native secret material the
+  // caller must wipe after use.
+  rpc UnwrapTenantDataKey(UnwrapTenantDataKeyRequest) returns (UnwrapTenantDataKeyResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -620,4 +636,43 @@ message GetAgentReachabilityKeyRequest {
 
 message GetAgentReachabilityKeyResponse {
   bytes public_der = 1;
+}
+
+message CreateTenantDomainKEKRequest {
+  string wrapper_id = 1;
+  bytes binding = 2;
+}
+
+message CreateTenantDomainKEKResponse {
+  bytes wrapped_domain_kek = 1;
+}
+
+message OpenTenantDomainKEKRequest {
+  string wrapper_id = 1;
+  bytes wrapped_domain_kek = 2;
+  bytes binding = 3;
+}
+
+message OpenTenantDomainKEKResponse {}
+
+message WrapTenantDataKeyRequest {
+  string wrapper_id = 1;
+  bytes wrapped_domain_kek = 2;
+  bytes binding = 3;
+  bytes data_key = 4;
+}
+
+message WrapTenantDataKeyResponse {
+  bytes wrapped_data_key = 1;
+}
+
+message UnwrapTenantDataKeyRequest {
+  string wrapper_id = 1;
+  bytes wrapped_domain_kek = 2;
+  bytes binding = 3;
+  bytes wrapped_data_key = 4;
+}
+
+message UnwrapTenantDataKeyResponse {
+  bytes data_key = 1;
 }

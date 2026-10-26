@@ -52,6 +52,11 @@ var expensiveMethods = map[string]bool{
 	signerpb.SignerService_GenerateKey_FullMethodName:  true,
 	signerpb.SignerService_GatedIssue_FullMethodName:   true,
 	signerpb.SignerService_GatedDestroy_FullMethodName: true,
+	// Each tenant KEK call is at least one HSM operation.
+	signerpb.SignerService_CreateTenantDomainKEK_FullMethodName: true,
+	signerpb.SignerService_OpenTenantDomainKEK_FullMethodName:   true,
+	signerpb.SignerService_WrapTenantDataKey_FullMethodName:     true,
+	signerpb.SignerService_UnwrapTenantDataKey_FullMethodName:   true,
 }
 
 // limiter is a fixed-capacity, non-blocking concurrency gate. A failed Acquire
