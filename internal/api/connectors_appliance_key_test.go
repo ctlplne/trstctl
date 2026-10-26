@@ -24,7 +24,7 @@ func TestConnectorCatalogNamesTheFamiliesWhoseAppliancesGenerateKeys(t *testing.
 			t.Errorf("appliance-key family %q is not offered in the connector catalog", family)
 		}
 	}
-	if offered["kemp"] || offered["cisco"] || offered["nginx"] {
+	if offered["kemp"] || offered["fortigate"] || offered["nginx"] {
 		t.Errorf("the catalog offers appliance key generation to a family that cannot: %v", offered)
 	}
 }

@@ -14,6 +14,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/connector/cisco/ciscotest"
 	"trstctl.com/trstctl/internal/connector/netscaler/netscalertest"
 	"trstctl.com/trstctl/internal/connector/paloalto/paloaltotest"
 	"trstctl.com/trstctl/internal/crypto"
@@ -283,5 +284,71 @@ func TestARelayRenewsAFirewallWhoseKeyStaysOnTheFirewall(t *testing.T) {
 	}
 	if srv.KeyExports() != 0 {
 		t.Fatalf("the relay asked to export a firewall key %d times", srv.KeyExports())
+	}
+}
+
+// recordingApplianceChannel keeps the appliance references a relay records.
+type recordingApplianceChannel struct {
+	*applianceChannel
+	references []string
+}
+
+func (r *recordingApplianceChannel) RecordJobApplianceReference(_ context.Context, _ int64, _ int, reference string) error {
+	r.references = append(r.references, reference)
+	return nil
+}
+
+func iseApplianceRenewJob(t *testing.T, srv *ciscotest.Server, jobID int64, attempt int, reference string) relay.Job {
+	t.Helper()
+	targetConfig, err := json.Marshal(map[string]any{
+		"endpoint": srv.URL(), "username": "ers-admin", "password_ref": "secret://connectors/ise",
+		"node_hostname": srv.Node(), "certificate_roles": []string{"eap"}, "key_generation": "appliance",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(relay.DeployIntent{
+		Connector: "cisco", Target: "radius-vip", TargetID: applianceTargetID, IdentityID: "identity-radius",
+		SubjectCommonName: "radius.example.test", SubjectDNSNames: []string{"radius.example.test"},
+		TargetConfig: targetConfig, CredentialRefs: []string{"secret://connectors/ise"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return relay.Job{JobID: jobID, Kind: relay.KindEndpointRenew, Attempt: attempt, Payload: payload, ApplianceReference: reference}
+}
+
+// A122 (owner decision 2026-10-26): a relay renews a Cisco ISE node whose key
+// ISE generates. It records ISE's request ID for the job before asking for a
+// signature; an attempt that loses its signature is retried with the recorded
+// ID and sends the same CSR without ISE generating another; the bind installs
+// the certificate with the target's roles and appliance custody.
+func TestARelayRenewsAnISENodeAndReusesItsRequest(t *testing.T) {
+	srv := ciscotest.New("ers-admin", []byte("ise-pass"))
+	defer srv.Close()
+	ch := &recordingApplianceChannel{applianceChannel: newApplianceChannel(t)}
+	ch.material = map[string][]byte{"secret://connectors/ise": []byte("ise-pass")}
+	ch.signErr = errors.New("lease lost")
+	ch.jobs = []relay.Job{iseApplianceRenewJob(t, srv, 91, 1, "")}
+	if _, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60); err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.references) != 1 || ch.references[0] == "" || srv.CSRsGenerated() != 1 {
+		t.Fatalf("first attempt recorded %v with %d requests on ISE; want one recorded request", ch.references, srv.CSRsGenerated())
+	}
+	ch.signErr = nil
+	ch.jobs = []relay.Job{iseApplianceRenewJob(t, srv, 91, 2, ch.references[0])}
+	executed, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60)
+	if err != nil || executed != 1 {
+		t.Fatalf("retried attempt = %d, %v; reports %+v", executed, err, ch.reports)
+	}
+	if srv.CSRsGenerated() != 1 || len(ch.references) != 1 || len(ch.signed) != 2 || !bytes.Equal(ch.signed[0], ch.signed[1]) {
+		t.Fatalf("retry made %d requests, recorded %v, signed %d; want the recorded request reused", srv.CSRsGenerated(), ch.references, len(ch.signed))
+	}
+	if len(ch.fingerprints) != 1 || srv.RoleHolder("eap") != connector.DeployedObjectName("radius-vip", ch.fingerprints[0]) {
+		t.Fatalf("EAP role is on %q after the renewal (fingerprints %v)", srv.RoleHolder("eap"), ch.fingerprints)
+	}
+	if want := relay.ApplianceRenewCustody(""); len(ch.custody) != 1 || ch.custody[0] != want {
+		t.Fatalf("custody = %+v, want %+v", ch.custody, want)
 	}
 }

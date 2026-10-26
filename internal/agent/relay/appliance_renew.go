@@ -26,11 +26,21 @@ import (
 // to retain across a crash — a reclaimed job asks the appliance again and gets
 // the same CSR back from the object named for the job.
 
+// ApplianceReferenceRecorder keeps an appliance's own reference for a job's
+// key request on the control plane (A122). An appliance that names its
+// requests itself (Cisco ISE's CSR IDs) cannot be asked for "the request named
+// for this job"; recording its ID before the signature is requested is what
+// lets every later attempt of the job reuse that request. A refusal means the
+// claim is gone.
+type ApplianceReferenceRecorder interface {
+	RecordJobApplianceReference(ctx context.Context, jobID int64, attempt int, reference string) error
+}
+
 // ApplianceRenewCustody is the custody an appliance-generated key records: made
 // on the appliance, kept in its own key store, and exportable by an
 // administrator of the appliance, because the keys this mode creates are
 // software keys (a NetScaler or A10 key file, an F5 key without FIPS, a PAN-OS
-// key without an HSM). GeneratedBy names the agent that asked for it.
+// key without an HSM, an ISE system certificate key). GeneratedBy names the agent that asked for it.
 func ApplianceRenewCustody(generatedBy string) custody.Record {
 	return custody.Record{
 		Origin: custody.OriginAppliance, Storage: custody.StorageAppliance,
@@ -107,6 +117,7 @@ func runApplianceRenew(ctx context.Context, ch Channel, client *http.Client, job
 	key, stats, err := connector.RunApplianceKey(ctx, built, ops, connector.ApplianceKeyRequest{
 		ObjectName: object, CommonName: intent.SubjectCommonName,
 		DNSNames: intent.SubjectDNSNames, IPAddresses: intent.SubjectIPAddresses,
+		Reference: job.ApplianceReference,
 	})
 	if stats.Denied > 0 {
 		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
@@ -121,6 +132,20 @@ func runApplianceRenew(ctx context.Context, ch Channel, client *http.Client, job
 		log.Printf("trstctl-agent: job %d attempt %d: appliance key generation failed: %v", job.JobID, job.Attempt, err)
 		report(ctx, ch, job, OutcomeFailed, "the appliance did not generate a key and CSR")
 		return false
+	}
+	if ref := strings.TrimSpace(key.Reference); ref != "" && ref != job.ApplianceReference {
+		// The appliance named a new request (Cisco ISE's CSR ID). Keep it for
+		// the job before asking for a signature, so a later attempt reuses
+		// this request instead of making another.
+		recorder, ok := ch.(ApplianceReferenceRecorder)
+		if !ok {
+			report(ctx, ch, job, OutcomeFailed, "this agent build cannot keep the appliance's request ID for the renewal")
+			return false
+		}
+		if err := recorder.RecordJobApplianceReference(ctx, job.JobID, job.Attempt, ref); err != nil {
+			report(ctx, ch, job, OutcomeFailed, "the appliance's request ID could not be kept for this renewal; nothing was signed")
+			return false
+		}
 	}
 	block, _ := pem.Decode(key.CSRPEM)
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {

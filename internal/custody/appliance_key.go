@@ -56,6 +56,12 @@ func ValidateKeyGeneration(family string, cfg []byte) error {
 		return fmt.Errorf("connector: an F5 HA pair cannot generate its key on the appliance: each peer would hold a different "+
 			"key for one certificate. Remove %s to keep control-plane keys sealed to the deploy, which reaches both peers",
 			KeyGenerationConfigKey)
+	case family == "cisco" && (configString(cfg, "node_hostname") == "" || !configHasList(cfg, "certificate_roles")):
+		// ISE generates the request on a node and binds it to roles; a target
+		// without them has nowhere to generate or bind.
+		return fmt.Errorf("connector: a Cisco ISE target generates its key on the node only with node_hostname and "+
+			"certificate_roles set: ISE makes the request on that node and binds the signed certificate to those roles. "+
+			"Set both, or remove %s to keep control-plane keys sealed to the deploy", KeyGenerationConfigKey)
 	case family == "paloalto" && (configString(cfg, "ssl_tls_profile") == "" || configString(cfg, "commit_admin") == ""):
 		// The firewall's certificate object is installed by pointing the
 		// SSL/TLS service profile at it in a partial commit; the in-place
@@ -77,6 +83,16 @@ func configString(cfg []byte, key string) string {
 	}
 	value, _ := fields[key].(string)
 	return strings.TrimSpace(value)
+}
+
+// configHasList reports whether a target config field is a non-empty list.
+func configHasList(cfg []byte, key string) bool {
+	var fields map[string]any
+	if json.Unmarshal(cfg, &fields) != nil {
+		return false
+	}
+	list, _ := fields[key].([]any)
+	return len(list) > 0
 }
 
 // targetKeyGeneration reads the declared value. Absent, null and empty are no

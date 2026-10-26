@@ -96,6 +96,10 @@ var RecoveredFromPostgresBackup = []string{
 	// Original agent recipients are operational outbox authority. Neither
 	// lease reclamation nor event replay can reconstruct a lost binding.
 	"agent_job_attempt_bindings",
+	// A122: an appliance's own reference for a job's key request (ISE's CSR
+	// ID). Operational state beside the outbox it belongs to; replay cannot
+	// rebuild it, and losing it would orphan the request on the appliance.
+	"agent_job_appliance_references",
 	"attestations",
 	// audit_checkpoints is a dual-recovery receiver. The PostgreSQL copy is paired
 	// with the event artifact so full restore can prove hidden tenant prefixes are

@@ -57,6 +57,23 @@ func (r relayChannel) ExtendJobClaim(ctx context.Context, jobID int64, attempt i
 
 var _ relay.JobLeaseMaintainer = relayChannel{}
 
+// RecordJobApplianceReference keeps an appliance's own reference for this
+// attempt's key request on the control plane (A122).
+func (r relayChannel) RecordJobApplianceReference(ctx context.Context, jobID int64, attempt int, reference string) error {
+	resp, err := r.c.ReportJobResult(ctx, &transport.ReportJobResultRequest{
+		JobID: jobID, Attempt: attempt, Outcome: transport.JobOutcomeRecordReference, ApplianceReference: reference,
+	})
+	if err != nil {
+		return err
+	}
+	if !resp.Accepted {
+		return relay.ErrJobClaimLost
+	}
+	return nil
+}
+
+var _ relay.ApplianceReferenceRecorder = relayChannel{}
+
 func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leaseSeconds int) ([]relay.Job, error) {
 	if err := r.recoverPendingReport(ctx); err != nil {
 		return nil, err
@@ -71,6 +88,7 @@ func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leas
 	for _, job := range resp.Jobs {
 		out = append(out, relay.Job{
 			JobID: job.JobID, Kind: job.Kind, Attempt: job.Attempt, Payload: job.Payload,
+			ApplianceReference: job.ApplianceReference,
 		})
 	}
 	return out, nil

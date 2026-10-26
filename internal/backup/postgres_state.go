@@ -1244,6 +1244,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// agents were handed and what they reported back.
 		"agent_job_receipts",
 		"agent_job_attempt_bindings",
+		// A122: ISE CSR IDs per job; no foreign key, restored beside the
+		// attempt bindings.
+		"agent_job_appliance_references",
 		"attestations",
 		"audit_checkpoints",
 		"credentials",

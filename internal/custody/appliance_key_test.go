@@ -22,6 +22,10 @@ func TestKeyGenerationOnTheApplianceIsDeclaredExactly(t *testing.T) {
 		`"commit_admin":"trstctl","key_generation":"appliance"}`)); err != nil {
 		t.Fatalf("a firewall with an SSL/TLS service profile generating its key was refused: %v", err)
 	}
+	if err := custody.ValidateKeyGeneration("cisco", []byte(`{"endpoint":"https://ise.example.test","node_hostname":"ise-01",`+
+		`"certificate_roles":["eap"],"key_generation":"appliance"}`)); err != nil {
+		t.Fatalf("an ISE node with roles generating its key was refused: %v", err)
+	}
 	marked := []byte(`{"endpoint":"https://ns.example.test","key_generation":"appliance"}`)
 	if !custody.TargetGeneratesKeyOnAppliance("netscaler", marked) {
 		t.Fatal("a NetScaler target marked key_generation=appliance does not generate on the appliance")
@@ -50,6 +54,8 @@ func TestKeyGenerationOnTheApplianceIsDeclaredExactly(t *testing.T) {
 		"an F5 HA pair":                {"f5", `{"key_generation":"appliance","peer_endpoint":"https://bigip-b.example.test"}`, "HA pair"},
 		"a firewall without a profile": {"paloalto", `{"key_generation":"appliance","commit_admin":"trstctl"}`, "ssl_tls_profile"},
 		"a profile without its admin":  {"paloalto", `{"key_generation":"appliance","ssl_tls_profile":"web"}`, "commit_admin"},
+		"an ISE target without a node": {"cisco", `{"key_generation":"appliance","certificate_roles":["eap"]}`, "node_hostname"},
+		"an ISE node without roles":    {"cisco", `{"key_generation":"appliance","node_hostname":"ise-01"}`, "certificate_roles"},
 	} {
 		if custody.TargetGeneratesKeyOnAppliance(tc.family, []byte(tc.cfg)) {
 			t.Errorf("%s: generates on the appliance", name)

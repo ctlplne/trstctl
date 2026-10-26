@@ -250,6 +250,8 @@ var TenantScopedTables = []string{
 	// is tenant history and must leave with the tenant.
 	"agent_job_receipts",
 	"agent_job_attempt_bindings",
+	// A122: ISE CSR IDs recorded per job.
+	"agent_job_appliance_references",
 	// C3: declared segments. An operator's own description of the networks
 	// they own is tenant data and leaves with the tenant.
 	"discovery_segments",

@@ -261,10 +261,19 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 				continue
 			}
 		}
+		reference, refErr := a.store.AgentJobApplianceReference(ctx, info.TenantID, job.ID)
+		if refErr != nil {
+			// Handing the job out without its recorded request would make a
+			// second one on the appliance; the lease lapses and it returns.
+			a.recordAgentJobEvent(ctx, info.TenantID, "agent.jobs.envelope_refused", map[string]any{
+				"agent": info.CommonName, "job_id": job.ID, "kind": job.Destination,
+			})
+			continue
+		}
 		out.Jobs = append(out.Jobs, transport.ClaimedJob{
 			JobID: job.ID, Kind: job.Destination, Payload: payload,
 			IdempotencyKey: job.IdempotencyKey, Attempt: job.ClaimAttempts,
-			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(),
+			LeaseExpiresUnix: job.ClaimExpiresAt.Unix(), ApplianceReference: reference,
 		})
 	}
 	for _, job := range out.Jobs {
@@ -342,7 +351,8 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 	// A terminal report is a claim about the world and must be signed. An
 	// "extend" is a lease request that claims nothing, so it is not — see the
 	// note on ReportJobResultRequest.Signature.
-	if outcome != transport.JobOutcomeExtend && outcome != transport.JobOutcomeAuthorizeRollback {
+	if outcome != transport.JobOutcomeExtend && outcome != transport.JobOutcomeAuthorizeRollback &&
+		outcome != transport.JobOutcomeRecordReference {
 		if err := a.verifyJobReceipt(ctx, info, req, now); err != nil {
 			return nil, err
 		}
@@ -398,6 +408,20 @@ func (a *agentService) ReportJobResult(ctx context.Context, req *transport.Repor
 			resp.LeaseExpiresUnix = until.Unix()
 		}
 		return resp, nil
+
+	case transport.JobOutcomeRecordReference:
+		// A122: an appliance's own reference for this attempt's key request.
+		// Kept only while this agent holds the job at this attempt, and
+		// handed to every later attempt so the request is reused.
+		reference := strings.TrimSpace(req.ApplianceReference)
+		if reference == "" || len(reference) > store.MaxAgentJobApplianceReference {
+			return nil, status.Error(codes.InvalidArgument, "appliance_reference must be 1 to 256 bytes")
+		}
+		ok, err := a.store.RecordAgentJobApplianceReference(ctx, info.TenantID, agentID, req.JobID, req.Attempt, reference, now)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "record appliance reference")
+		}
+		return &transport.ReportJobResultResponse{Accepted: ok}, nil
 
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "unknown job outcome %q", req.Outcome)

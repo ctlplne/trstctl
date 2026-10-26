@@ -29,6 +29,11 @@ type ApplianceKeyRequest struct {
 	CommonName  string
 	DNSNames    []string
 	IPAddresses []string
+	// Reference is the appliance's own reference for the request an earlier
+	// attempt of the job made, for an appliance that names requests itself
+	// (Cisco ISE's CSR IDs). The generator reuses that request; empty asks
+	// for a new one.
+	Reference string
 }
 
 // ApplianceKey is a key the appliance holds and the CSR that requests a
@@ -36,6 +41,10 @@ type ApplianceKeyRequest struct {
 type ApplianceKey struct {
 	ObjectName string
 	CSRPEM     []byte
+	// Reference is the appliance's own reference for the request, which the
+	// caller keeps for the job so a retry reuses it; empty for an appliance
+	// whose request is named by ObjectName.
+	Reference string
 }
 
 // ApplianceKeyGenerator is implemented by an appliance connector whose
@@ -104,6 +113,7 @@ func IsApplianceKeyObjectName(name string) bool {
 // implement ApplianceKeyGenerator, and one that implements it must be listed.
 var applianceKeyFamilies = []string{
 	"a10",
+	"cisco",
 	"f5",
 	"netscaler",
 	"paloalto",

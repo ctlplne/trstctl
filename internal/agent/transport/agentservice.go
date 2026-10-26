@@ -515,6 +515,11 @@ type ClaimedJob struct {
 	// Attempt counts how many times this job has been claimed, ever. An agent can
 	// use it to back off from work it has already failed.
 	Attempt int `json:"attempt,omitempty"`
+	// ApplianceReference is the appliance's own reference for this job's key
+	// request, recorded by an earlier attempt (A122): Cisco ISE's ID for the
+	// CSR it generated. An attempt reuses the request instead of making a new
+	// one, so a retry leaves no orphan behind. Empty when none was recorded.
+	ApplianceReference string `json:"appliance_reference,omitempty"`
 }
 
 type ClaimJobsResponse struct {
@@ -548,6 +553,11 @@ const (
 	// JobOutcomeAuthorizeRollback confirms the current attempt and revocation
 	// state before restore, and extends its lease. It claims no target effect.
 	JobOutcomeAuthorizeRollback = "rollback_authorize"
+	// JobOutcomeRecordReference records an appliance's own reference for the
+	// key request this attempt made (ApplianceReference), so every later
+	// attempt of the job reuses that request (A122). Like extend it claims no
+	// target effect and needs the current claim.
+	JobOutcomeRecordReference = "record_reference"
 )
 
 // ReportJobResultRequest is the agent's report on a job it holds.
@@ -578,6 +588,8 @@ type ReportJobResultRequest struct {
 	AdoptedPredecessorPEM         []byte `json:"adopted_predecessor_pem,omitempty"`
 	// LeaseSeconds is the lease requested by "extend" or "rollback_authorize".
 	LeaseSeconds int `json:"lease_seconds,omitempty"`
+	// ApplianceReference is the reference "record_reference" keeps for the job.
+	ApplianceReference string `json:"appliance_reference,omitempty"`
 	// Attempt echoes the claim generation this report belongs to. It is part of
 	// the signed statement, so a receipt cannot be replayed against a later
 	// attempt of the same job after a lease lapse requeued it.

@@ -60,7 +60,9 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// node and certificate roles re-binds and reads back, so cisco
 		// migrated like fortigate and paloalto; a target without a node keeps
 		// the legacy import and reports both as not configured.
-		"cisco": {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// ISE generates its own key and CSR on the node, so the device-generated
+		// CSR gate is met too.
+		"cisco": {migrated: true, disposition: ParityDispositionMigrated},
 		// FortiGate and PAN-OS migrated once a target can name the binding to
 		// move (A44): bind_to re-points a FortiOS setting, ssl_tls_profile with
 		// a partial commit re-points a PAN-OS SSL/TLS service profile, and the

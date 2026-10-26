@@ -70,6 +70,11 @@
           "go_type": "int",
           "name": "attempt",
           "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "appliance_reference",
+          "presence": "optional"
         }
       ]
     },
@@ -590,6 +595,11 @@
         {
           "go_type": "int",
           "name": "lease_seconds",
+          "presence": "optional"
+        },
+        {
+          "go_type": "string",
+          "name": "appliance_reference",
           "presence": "optional"
         },
         {

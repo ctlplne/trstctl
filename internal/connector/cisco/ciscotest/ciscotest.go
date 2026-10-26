@@ -69,10 +69,13 @@ type Server struct {
 	failStatus int
 	failBody   []byte
 
-	// ISE OpenAPI model (ise.go): the node served and its system store.
-	node   string
-	system []*SystemCertificate
-	nextID int
+	// ISE OpenAPI model (ise.go, ise_csr.go): the node served, its system
+	// store, and the signing requests ISE generated and has not bound.
+	node     string
+	system   []*SystemCertificate
+	nextID   int
+	csrs     map[string]*iseCSR
+	csrCount int
 }
 
 // New starts a fake appliance that accepts the given Basic credentials.
@@ -97,8 +100,16 @@ func (s *Server) URL() string { return s.srv.URL }
 // Client returns an HTTP client for the fake appliance.
 func (s *Server) Client() *http.Client { return s.srv.Client() }
 
-// Close shuts the server down.
-func (s *Server) Close() { s.srv.Close() }
+// Close shuts the server down and destroys the keys ISE generated.
+func (s *Server) Close() {
+	s.srv.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, csr := range s.csrs {
+		csr.key.Destroy()
+		delete(s.csrs, id)
+	}
+}
 
 // Imported returns the credential imported under a certificate name.
 func (s *Server) Imported(name string) (Credential, bool) {

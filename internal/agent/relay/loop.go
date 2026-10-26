@@ -77,6 +77,9 @@ type Job struct {
 	Kind    string
 	Attempt int
 	Payload []byte
+	// ApplianceReference is the appliance's own reference for this job's key
+	// request, recorded by an earlier attempt (A122); empty when none was.
+	ApplianceReference string
 }
 
 // Outcome values the relay reports.
