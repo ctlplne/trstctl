@@ -114,6 +114,12 @@ rules:
   - apiGroups: ["trstctl.com"]
     resources: ["trustbundles"]
     verbs: ["create", "update", "patch"]
+  # A TrustBundle may also be published as a ClusterTrustBundle (public CA
+  # certificates, no signer name) for projected clusterTrustBundle volumes.
+  # The agent changes only the ones it created.
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["clustertrustbundles"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["trstctl.com"]
     resources: ["issuers/status", "clusterissuers/status", "certificates/status", "trustbundles/status"]
     verbs: ["update", "patch"]

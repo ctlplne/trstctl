@@ -275,6 +275,91 @@ copy private keys, bearer tokens, or workload credentials into the ConfigMap. Us
 `GET /api/v1/kubernetes/trust-bundles` to inspect the served CAP-K8S-07 posture,
 required RBAC, status fields, and residuals.
 
+A bundle that cannot be distributed (an invalid spec, a target it may not
+write, an API the cluster does not serve) is marked `Ready=False` with reason
+`DistributionFailed` and the cause in its message, so `kubectl get trustbundle`
+shows why; the agent retries and marks it Ready once the cause is fixed.
+
+### Secret and ClusterTrustBundle targets
+
+Some consumers read CA bundles from Secrets, and Kubernetes can mount a
+`ClusterTrustBundle` into pods through a projected volume. A TrustBundle can
+name either or both, next to its ConfigMaps:
+
+```yaml
+  target:
+    namespaces: [apps, payments]
+    secret:
+      name: platform-ca      # an Opaque Secret in each target namespace
+      key: ca.crt            # optional; default ca.crt
+    clusterTrustBundle:
+      name: platform-roots   # cluster-scoped, no signer name
+```
+
+Both hold the same public CA certificates and carry the agent's labels
+(`app.kubernetes.io/managed-by: trstctl-agent`, `trstctl.com/trust-bundle`);
+the agent never changes a Secret or ClusterTrustBundle of that name that
+someone else created, and reports it instead. The TrustBundle's status adds
+`secretTargets` and `clusterTrustBundle`.
+
+- **Secrets** outside the agent's own namespace need the opt-in grant in
+  `deploy/kubernetes/rbac-trust-secrets.yaml`. It lets the agent read any
+  Secret by name, so apply it only where that is acceptable, or bind a
+  namespaced Role with `get`, `create`, `update` and `patch` on Secrets in each
+  target namespace instead. Without a grant, the TrustBundle names the
+  namespace it could not write and the file to apply.
+- **ClusterTrustBundles** need a cluster that serves
+  `certificates.k8s.io/v1beta1` `clustertrustbundles` (beta, and off by default
+  through Kubernetes 1.35: enable the `ClusterTrustBundle` feature gate and that
+  API in the API server's `--runtime-config`), and, for pods to mount one, the
+  `ClusterTrustBundleProjection` feature gate on the kubelets. The agent's
+  ClusterRole in `rbac.yaml` already carries the verbs. On a cluster without the
+  API the TrustBundle says how to enable it. A pod mounts it like this:
+
+  ```yaml
+  volumes:
+    - name: trust
+      projected:
+        sources:
+          - clusterTrustBundle:
+              name: platform-roots
+              path: ca.crt
+  ```
+
+### Inline CSI volumes
+
+Where neither suits, `deploy/kubernetes/csi-trust.yaml` installs a node plugin
+(CSI driver `trust.csi.trstctl.com`) that serves a TrustBundle to a pod as an
+inline volume, with no copy per namespace:
+
+```yaml
+  volumes:
+    - name: trust
+      csi:
+        driver: trust.csi.trstctl.com
+        readOnly: true
+        volumeAttributes:
+          trustBundle: platform-roots
+          key: ca.crt          # optional; default ca.crt
+```
+
+The plugin runs the agent binary in its CSI mode
+(`trstctl-agent --csi-trust-socket`) on every node, beside the upstream node
+driver registrar. It reads TrustBundles with its own service account, which may
+only `get` them, needs no enrollment or control-plane connection, and writes
+the bundle's certificates into the volume as one read-only file. It never
+mounts anything and drops every capability, but runs as root because the
+kubelet's pod directories are root-owned. The CSIDriver asks the kubelet to
+republish volumes periodically, so a changed TrustBundle reaches running pods
+on the next republish rather than at once. Render the image digest before
+applying it:
+
+```sh
+TRSTCTL_AGENT_DAEMONSET_TEMPLATE=deploy/kubernetes/csi-trust.yaml \
+  scripts/release/render-kubernetes-agent-daemonset.sh ghcr.io/<owner>/trstctl@sha256:<digest> \
+  | kubectl apply -f -
+```
+
 ## Rolling a TrustBundle out to several clusters
 
 Instead of applying the same TrustBundle in each cluster, roll it out from the

@@ -21758,7 +21758,8 @@ export const messages = {
     description: "Heading for Kubernetes trust-bundle distribution posture on the Workloads page.",
   },
   "workloads.trustBundles.description": {
-    defaultMessage: "The agent distributes public CA bundles into namespace ConfigMaps from cluster-scoped TrustBundle resources.",
+    defaultMessage:
+      "The agent distributes public CA bundles from cluster-scoped TrustBundle resources into namespace ConfigMaps and, when a bundle names them, Secrets and a ClusterTrustBundle; the optional CSI driver serves a bundle to pods as an inline volume.",
     description: "Description for Kubernetes trust-bundle distribution posture.",
   },
   "workloads.trustBundles.errorTitle": {

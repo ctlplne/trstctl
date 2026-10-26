@@ -55,6 +55,9 @@ type IssuerController struct {
 	signer    Signer
 	group     string
 	signerURL string
+	// clusterTrustBundles remembers which API version serves
+	// ClusterTrustBundle targets (A139).
+	clusterTrustBundles clusterTrustBundleAPI
 }
 
 type issuerConfig struct {

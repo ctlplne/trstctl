@@ -2,6 +2,16 @@
 
 ### Added
 
+- A TrustBundle can also be distributed as an Opaque Secret in each target
+  namespace (`spec.target.secret`; outside the agent's namespace this needs
+  the opt-in grant in `deploy/kubernetes/rbac-trust-secrets.yaml`) and as a
+  ClusterTrustBundle (`spec.target.clusterTrustBundle`) that pods mount
+  through a projected volume. The opt-in CSI node plugin in
+  `deploy/kubernetes/csi-trust.yaml` (driver `trust.csi.trstctl.com`,
+  `trstctl-agent --csi-trust-socket`) serves a TrustBundle to a pod as an
+  inline volume and republishes it when it changes. A TrustBundle that cannot
+  be distributed is now marked `Ready=False` (reason `DistributionFailed`)
+  with the cause, instead of keeping an earlier Ready.
 - A TrustBundle can be rolled out from the control plane to several clusters,
   canary first: `POST /api/v1/kubernetes/trust-rollouts` (`trstctl-cli
   kubernetes trust-rollouts start|list|get|pause|resume`, Workloads console).

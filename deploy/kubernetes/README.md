@@ -21,6 +21,13 @@ in-cluster CA — no `client-go` dependency.
 - `rbac-inventory-namespaces.yaml` — opt-in, read-only cluster grant (list
   namespaces, list Secrets) for `--inventory-k8s-namespaces`; apply it only
   when one agent should inventory TLS Secrets across the whole cluster.
+- `rbac-trust-secrets.yaml` — opt-in cluster grant (get/create/update/patch
+  Secrets) for TrustBundle Secret targets outside the agent's namespace; it
+  lets the agent read any Secret by name, so apply it only where that is
+  acceptable.
+- `csi-trust.yaml` — opt-in CSI node plugin (driver `trust.csi.trstctl.com`)
+  that serves TrustBundles to pods as inline volumes; render its image digest
+  like the DaemonSet's, with `TRSTCTL_AGENT_DAEMONSET_TEMPLATE` pointing at it.
 - `daemonset.yaml` — the DaemonSet template; render it with a real release
   digest via `scripts/release/render-kubernetes-agent-daemonset.sh` before
   applying it (see Deploy below).
@@ -137,7 +144,8 @@ The DaemonSet runs `trstctl-agent --k8s`, which:
    set `Approved=True` (a namespaced `Issuer` can sign only in its own namespace),
    signs approved native Kubernetes
    `CertificateSigningRequest`s, fulfills trstctl-native `Certificate` resources
-   into their requested TLS Secrets and renews them, distributes `TrustBundle`s,
+   into their requested TLS Secrets and renews them, distributes `TrustBundle`s
+   (to ConfigMaps and, when named, Secrets and a ClusterTrustBundle),
    and writes status back to the owning resource. It watches these resources
    and converges each as it changes, re-checking everything every
    `--k8s-resync` (default ten minutes). It also applies the TrustBundles the

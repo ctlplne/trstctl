@@ -1738,6 +1738,20 @@ jobs:
             > "$rendered_agent_daemonset"
           kubectl apply --dry-run=server -f "$rendered_agent_daemonset"
 
+      # The CSI trust driver test mounts a TrustBundle into a pod through the
+      # node plugin in deploy/kubernetes/csi-trust.yaml, so the kind node needs
+      # the agent binary in an image: build it from this commit and load it,
+      # rather than pulling a release.
+      - name: Load an agent image for the CSI trust driver test
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          mkdir -p "$root/usr/local/bin"
+          CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false -o "$root/usr/local/bin/trstctl-agent" ./cmd/trstctl-agent
+          tar -C "$root" -c . | docker import - trstctl-agent-csi:ci
+          kind load docker-image trstctl-agent-csi:ci --name trstctl-e2e
+
       - name: Run the in-cluster e2e (secret write + cert-manager bridge)
         shell: bash
         run: |
@@ -1753,12 +1767,15 @@ jobs:
           K8S_CA_FILE="$(mktemp)"
           kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 --decode > "$K8S_CA_FILE"
           K8S_NAMESPACE="trstctl"
-          export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE
+          K8S_TRUST_CSI_IMAGE="trstctl-agent-csi:ci"
+          export K8S_SERVER K8S_TOKEN K8S_ADMIN_TOKEN K8S_CA_FILE K8S_NAMESPACE K8S_TRUST_CSI_IMAGE
           go test -tags e2e -count=1 -v ./test/e2e/kubernetes/...
 
       - name: Diagnostics on failure
         if: failure()
-        run: kubectl get certificaterequests,secrets -A || true
+        run: |
+          kubectl get certificaterequests,secrets -A || true
+          kubectl -n trstctl logs ds/trstctl-trust-csi --all-containers --tail=50 || true
 
   # A0.3f: the PQC census proofs run on every push instead of hiding behind a
   # locally-invoked build tag. The rows drive the EXACT shipped artifact: a

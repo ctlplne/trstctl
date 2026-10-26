@@ -174,8 +174,9 @@ var kubernetesCSRResiduals = []string{
 var kubernetesTrustBundleFlow = []string{
 	"the in-cluster agent controller lists and watches trstctl.com/v1alpha1 TrustBundle resources and the ConfigMaps it distributed",
 	"for each bundle it writes spec.caBundlePEM into a ConfigMap (spec.target.configMapName, default the bundle name; key spec.target.key, default ca-bundle.pem) in every namespace of spec.target.namespaces, keeping a ConfigMap's other keys",
+	"when the bundle names them, it also writes an Opaque Secret (spec.target.secret.name, key spec.target.secret.key, default ca.crt) in every target namespace and a ClusterTrustBundle (spec.target.clusterTrustBundle.name) that pods mount through a projected clusterTrustBundle volume; it never changes a Secret or ClusterTrustBundle it did not create",
 	"writes are content-compared, so an unchanged bundle rewrites nothing, and an edited or deleted copy is put back",
-	"status.targets, status.bundleSHA256 and the Ready condition are updated on the TrustBundle when they change",
+	"status.targets, status.secretTargets, status.clusterTrustBundle, status.bundleSHA256 and the Ready condition are updated on the TrustBundle when they change; a bundle that cannot be distributed is marked Ready=False (reason DistributionFailed) with the cause",
 	"after each burst of changes, and on its heartbeat, the controller posts an idempotent, metadata-only posture report over the authenticated agent channel — that report is what this surface serves",
 }
 
@@ -188,6 +189,9 @@ var kubernetesTrustBundleResiduals = []string{
 	"distribution reaches only namespaces named in spec.target.namespaces and granted by the controller's RBAC",
 	"the TrustBundle CRD must be installed in the cluster; without it the controller reports failure rather than inventing targets",
 	"only public trust material (CA certificates) is distributed — never private keys",
+	"Secret targets outside the agent's namespace need the opt-in grant in deploy/kubernetes/rbac-trust-secrets.yaml, which lets the agent read any Secret by name; without it the TrustBundle reports the namespace it could not write",
+	"ClusterTrustBundle targets need a cluster that serves certificates.k8s.io/v1beta1 clustertrustbundles (beta and off by default through Kubernetes 1.35) and, for pods to mount one, kubelets with the ClusterTrustBundleProjection feature gate",
+	"the CSI trust driver (deploy/kubernetes/csi-trust.yaml, driver trust.csi.trstctl.com) is a separate node plugin that runs as root to write into the kubelet's pod directories; a changed bundle reaches running pods on the kubelet's next republish, not instantly",
 }
 
 // kubernetesRecommendedActions derives the operator to-do list from the same
@@ -214,6 +218,9 @@ func kubernetesRecommendedActions(state kubernetesPostureState) []string {
 // distributes trust, per the CRD contract it reconciles.
 var kubernetesDistributionTargets = []string{
 	"ConfigMap spec.target.configMapName (default: the TrustBundle's name), key spec.target.key (default: ca-bundle.pem), in every namespace of spec.target.namespaces",
+	"Secret spec.target.secret.name, key spec.target.secret.key (default: ca.crt), in every namespace of spec.target.namespaces, when named (opt-in grant: deploy/kubernetes/rbac-trust-secrets.yaml)",
+	"ClusterTrustBundle spec.target.clusterTrustBundle.name, for projected clusterTrustBundle volumes, when named",
+	"inline CSI volume (driver trust.csi.trstctl.com, volumeAttributes trustBundle and optional key, default ca.crt) served by the node plugin in deploy/kubernetes/csi-trust.yaml",
 }
 
 func (a *API) getKubernetesCSRSupport(w http.ResponseWriter, r *http.Request) {
@@ -273,8 +280,9 @@ func (a *API) getKubernetesTrustBundleDistribution(w http.ResponseWriter, r *htt
 			{APIGroup: "trstctl.com", Resource: "trustbundles", Verbs: []string{"get", "list", "watch"}},
 			{APIGroup: "trstctl.com", Resource: "trustbundles/status", Verbs: []string{"update", "patch"}},
 			{APIGroup: "", Resource: "configmaps", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
+			{APIGroup: "certificates.k8s.io", Resource: "clustertrustbundles", Verbs: []string{"get", "list", "watch", "create", "update", "patch"}},
 		},
-		StatusFields:           []string{"status.targets", "status.bundleSHA256", "status.conditions[type=Ready]"},
+		StatusFields:           []string{"status.targets", "status.secretTargets", "status.clusterTrustBundle", "status.bundleSHA256", "status.conditions[type=Ready]"},
 		DistributionTargets:    kubernetesDistributionTargets,
 		ControllerFlow:         kubernetesTrustBundleFlow,
 		ArchitectureControls:   kubernetesArchitectureControls,

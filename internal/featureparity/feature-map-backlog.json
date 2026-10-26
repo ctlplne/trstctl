@@ -3601,7 +3601,7 @@
                         "current_frontend_mapping: served: Request a credential and Approvals serve requester intake plus distinct approval for certificate issuance, Wizard and Identities can issue through the served path, CA Hierarchy issues through configured external CAs and renders outbox-pending/external-ca-issued states, and Workloads discloses native Kubernetes CSR plus TrustBundle controller posture",
                         "CA Hierarchy renders configured external CA registry entries, submits CSR/DNS/profile/TTL input to api.issueExternalCA, shows outbox-pending while the request is in flight, and shows external-ca-issued evidence without rendering the issued certificate PEM.",
                         "Workloads fetches kubernetesCSRSupport and renders CAP-K8S-04, signer names, status-only RBAC, architecture controls, and residuals without storing CSR or private-key material.",
-                        "Workloads fetches kubernetesTrustBundles and renders CAP-K8S-07, TrustBundle CRD metadata, ConfigMap targets, RBAC, status fields, controls, and residuals without storing private-key material.",
+                        "Workloads fetches kubernetesTrustBundles and renders CAP-K8S-07, TrustBundle CRD metadata, ConfigMap, Secret, ClusterTrustBundle and CSI targets, RBAC, status fields, controls, and residuals without storing private-key material.",
                         "target_gui_mapping: Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states."
                     ],
                     "refs": [
@@ -3696,7 +3696,7 @@
                     "evidence": [
                         "documented in docs/features/issuance-and-cas.md",
                         "native Kubernetes CSR installation, RBAC, CLI posture inspection, and residuals are documented for operators.",
-                        "TrustBundle CRD installation, ConfigMap CA-bundle distribution, public-certificate-only validation, RBAC, CLI/API posture inspection, and residuals are documented for operators."
+                        "TrustBundle CRD installation, ConfigMap, Secret and ClusterTrustBundle CA-bundle distribution, the opt-in CSI trust driver, public-certificate-only validation, RBAC (including the opt-in Secret grant), CLI/API posture inspection, and residuals are documented for operators."
                     ],
                     "refs": [
                         "docs/features/issuance-and-cas.md",
@@ -3728,7 +3728,7 @@
                         "mutating served surface requires audit/event evidence: createIssuer, listIssuers, getIssuer, createIdentity, transitionIdentity, approveIdentityAction, issueExternalCA",
                         "issueExternalCA routes through ca.IssuanceService, which records the ca.issue outbox row under the inner external-CA idempotency key.",
                         "startKubernetesTrustRollout, pauseKubernetesTrustRollout and resumeKubernetesTrustRollout emit kubernetes.trust_rollout.started/paused/resumed under deterministic event ids; each cluster's verification is projected from that cluster's own kubernetes.controller.posture_reported event.",
-                        "getKubernetesCSRSupport and getKubernetesTrustBundleDistribution are read-only posture disclosures; native CSR signing reuses the existing idempotent issue path and TrustBundle distribution is a cluster-local controller write to ConfigMap/status resources, not a new browser-side mutation."
+                        "getKubernetesCSRSupport and getKubernetesTrustBundleDistribution are read-only posture disclosures; native CSR signing reuses the existing idempotent issue path and TrustBundle distribution is a cluster-local controller write to ConfigMap, Secret, ClusterTrustBundle and status resources (the CSI driver only writes files into kubelet-provided volume directories), not a new browser-side mutation."
                     ],
                     "refs": [
                         "internal/api/api.go",

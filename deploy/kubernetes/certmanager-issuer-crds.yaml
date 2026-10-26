@@ -108,11 +108,11 @@ spec:
                   description: Public PEM CA certificate bundle to distribute. Only CERTIFICATE blocks are allowed.
                 target:
                   type: object
-                  required: ["configMapName", "namespaces"]
+                  required: ["namespaces"]
                   properties:
                     configMapName:
                       type: string
-                      description: ConfigMap name created or updated in every target namespace.
+                      description: ConfigMap name created or updated in every target namespace; defaults to the TrustBundle name.
                     key:
                       type: string
                       default: "ca-bundle.pem"
@@ -123,11 +123,38 @@ spec:
                       items:
                         type: string
                       description: Namespaces that receive the ConfigMap copy.
+                    secret:
+                      type: object
+                      required: ["name"]
+                      description: >-
+                        Also write the bundle into an Opaque Secret of this name in every target namespace,
+                        for consumers that read CA bundles from Secrets. Needs the opt-in grant in
+                        rbac-trust-secrets.yaml outside the agent's namespace.
+                      properties:
+                        name:
+                          type: string
+                        key:
+                          type: string
+                          default: "ca.crt"
+                    clusterTrustBundle:
+                      type: object
+                      required: ["name"]
+                      description: >-
+                        Also publish the bundle as a cluster-scoped ClusterTrustBundle (no signer name), which
+                        pods mount with a projected clusterTrustBundle volume source. The cluster must serve
+                        the certificates.k8s.io ClusterTrustBundle API.
+                      properties:
+                        name:
+                          type: string
             status:
               type: object
               properties:
                 targets:
                   type: integer
+                secretTargets:
+                  type: integer
+                clusterTrustBundle:
+                  type: string
                 bundleSHA256:
                   type: string
                 conditions:

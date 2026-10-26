@@ -125,6 +125,7 @@ func main() {
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles, and the Kubernetes controller's posture heartbeat")
 	k8sResync := flag.Duration("k8s-resync", 10*time.Minute, "how often the Kubernetes controller re-checks every object, beyond what its watches report")
 	k8sTrustRollouts := flag.Bool("k8s-trust-rollouts", true, "apply the TrustBundles the control plane rolls out to this cluster (public CA certificates only)")
+	csiTrustSocket := flag.String("csi-trust-socket", "", "serve trstctl TrustBundles to pods as inline CSI volumes (driver trust.csi.trstctl.com) on this Unix socket; needs only the in-cluster service account, no enrollment")
 	prepareIdentityDirPath := flag.String("prepare-identity-dir", "", "prepare a Kubernetes hostPath identity directory, then exit")
 	prepareIdentityUID := flag.Int("prepare-identity-uid", 65532, "uid that should own --prepare-identity-dir")
 	prepareIdentityGID := flag.Int("prepare-identity-gid", 65532, "gid that should own --prepare-identity-dir")
@@ -349,6 +350,19 @@ func main() {
 			}
 			return
 		}
+	}
+
+	// The CSI trust driver (A139) is a node plugin of its own: it reads
+	// TrustBundles with the pod's service account and serves the kubelet, with
+	// no enrollment or control-plane connection.
+	if *csiTrustSocket != "" {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := runCSITrust(ctx, *csiTrustSocket); err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *secretInject {

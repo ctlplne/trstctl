@@ -1,0 +1,160 @@
+# OPT-IN: serve trstctl TrustBundles to pods as inline CSI volumes
+# (driver trust.csi.trstctl.com).
+#
+# A pod names a TrustBundle in an inline CSI volume:
+#
+#   volumes:
+#     - name: trust
+#       csi:
+#         driver: trust.csi.trstctl.com
+#         readOnly: true
+#         volumeAttributes:
+#           trustBundle: platform-roots
+#           key: ca.crt        # optional: the file name in the volume
+#
+# The node plugin below runs the agent binary in its CSI mode on every node
+# (`trstctl-agent --csi-trust-socket`). It reads TrustBundles with its own
+# read-only service account, with no enrollment and no control-plane
+# connection, and when the kubelet publishes a volume it writes the bundle's
+# public CA certificates into the volume directory as one read-only file. It
+# never mounts anything, so it runs without privilege; it runs as root only
+# because the kubelet's pod directories are root-owned. requiresRepublish makes
+# the kubelet publish volumes again periodically, so a changed bundle reaches
+# running pods.
+#
+# Render the image digest before applying:
+#   TRSTCTL_AGENT_DAEMONSET_TEMPLATE=deploy/kubernetes/csi-trust.yaml \
+#     scripts/release/render-kubernetes-agent-daemonset.sh ghcr.io/<owner>/trstctl@sha256:<digest>
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: trust.csi.trstctl.com
+  labels:
+    app.kubernetes.io/name: trstctl-trust-csi
+spec:
+  attachRequired: false
+  # The kubelet marks a volume as inline ephemeral (the only kind this driver
+  # serves) only in the pod information it sends when this is true.
+  podInfoOnMount: true
+  requiresRepublish: true
+  fsGroupPolicy: None
+  volumeLifecycleModes: ["Ephemeral"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trstctl-trust-csi
+  namespace: trstctl
+  labels:
+    app.kubernetes.io/name: trstctl-trust-csi
+---
+# Read-only: the driver reads the TrustBundle a volume names and nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: trstctl-trust-csi
+  labels:
+    app.kubernetes.io/name: trstctl-trust-csi
+rules:
+  - apiGroups: ["trstctl.com"]
+    resources: ["trustbundles"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trstctl-trust-csi
+  labels:
+    app.kubernetes.io/name: trstctl-trust-csi
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: trstctl-trust-csi
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-trust-csi
+    namespace: trstctl
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: trstctl-trust-csi
+  namespace: trstctl
+  labels:
+    app.kubernetes.io/name: trstctl-trust-csi
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trstctl-trust-csi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trstctl-trust-csi
+    spec:
+      serviceAccountName: trstctl-trust-csi
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: trust-csi
+          image: ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED
+          command: ["/usr/local/bin/trstctl-agent"]
+          args:
+            - "--csi-trust-socket=/csi/csi.sock"
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            # The kubelet names volume directories by their host path, so the
+            # driver sees the pod directories at the same path.
+            - name: pods-dir
+              mountPath: /var/lib/kubelet/pods
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar@sha256:11f199f6bec47403b03cb49c79a41f445884b213b382582a60710b8c6fdc316a # v2.15.0
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/trust.csi.trstctl.com/csi.sock"
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+          volumeMounts:
+            - name: plugin-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/trust.csi.trstctl.com
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: pods-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory

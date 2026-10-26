@@ -184,6 +184,9 @@ func fakeLabelsMatch(obj map[string]any, selector string) bool {
 
 func (f *fakeAPI) handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && f.serveDiscovery(w, r.URL.Path) {
+			return
+		}
 		resource, namespace, name, sub, ok := fakePath(r.URL.Path)
 		f.mu.Lock()
 		known := ok && f.resources[resource]
@@ -269,6 +272,30 @@ func (f *fakeAPI) handler() http.Handler {
 			http.Error(w, "unsupported", http.StatusMethodNotAllowed)
 		}
 	})
+}
+
+// serveDiscovery answers GET /apis/<group>/<version> with the resources the
+// fake serves in that group version, as the API server's discovery does.
+func (f *fakeAPI) serveDiscovery(w http.ResponseWriter, path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) != 3 || parts[0] != "apis" {
+		return false
+	}
+	gv := parts[1] + "/" + parts[2]
+	f.mu.Lock()
+	var resources []map[string]any
+	for resource := range f.resources {
+		if strings.HasPrefix(resource, gv+"/") {
+			resources = append(resources, map[string]any{"name": strings.TrimPrefix(resource, gv+"/")})
+		}
+	}
+	f.mu.Unlock()
+	if len(resources) == 0 {
+		http.Error(w, `{"kind":"Status","code":404}`, http.StatusNotFound)
+		return true
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"kind": "APIResourceList", "groupVersion": gv, "resources": resources})
+	return true
 }
 
 // serveWatch streams the collection's events after the requested version

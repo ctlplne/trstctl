@@ -11,6 +11,7 @@ require (
 	github.com/aws/smithy-go v1.27.1
 	github.com/beevik/etree v1.6.0
 	github.com/cloudflare/circl v1.6.3
+	github.com/container-storage-interface/spec v1.13.0
 	github.com/crewjam/saml v0.5.1
 	github.com/go-asn1-ber/asn1-ber v1.5.7
 	github.com/go-ldap/ldap/v3 v3.4.10

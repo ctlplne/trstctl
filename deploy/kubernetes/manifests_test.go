@@ -547,14 +547,16 @@ func agentBinaryFlags(t *testing.T) map[string]bool {
 	return flags
 }
 
+// daemonSet is the agent's DaemonSet; the opt-in CSI trust driver ships one
+// of its own beside it.
 func daemonSet(t *testing.T) map[string]any {
 	t.Helper()
 	for _, d := range docs(t) {
-		if d["kind"] == "DaemonSet" {
+		if meta, _ := d["metadata"].(map[string]any); d["kind"] == "DaemonSet" && meta != nil && meta["name"] == "trstctl-agent" {
 			return d
 		}
 	}
-	t.Fatal("no DaemonSet found")
+	t.Fatal("no trstctl-agent DaemonSet found")
 	return nil
 }
 
@@ -938,4 +940,86 @@ func asStringSlice(v any) []string {
 		}
 	}
 	return out
+}
+
+func namedDoc(t *testing.T, kind, name string) map[string]any {
+	t.Helper()
+	for _, d := range docs(t) {
+		if meta, _ := d["metadata"].(map[string]any); d["kind"] == kind && meta != nil && meta["name"] == name {
+			return d
+		}
+	}
+	t.Fatalf("no %s %q found", kind, name)
+	return nil
+}
+
+// A139: the opt-in CSI trust driver serves only inline ephemeral volumes that
+// the kubelet republishes, reads TrustBundles and nothing else, runs without
+// privilege or capabilities, pins the registrar by digest, and renders its own
+// image from the release digest like the agent.
+func TestCSITrustDriverManifestIsEphemeralReadOnlyAndUnprivileged(t *testing.T) {
+	driver := namedDoc(t, "CSIDriver", "trust.csi.trstctl.com")
+	spec := driver["spec"].(map[string]any)
+	// podInfoOnMount is how the kubelet tells the driver a volume is inline
+	// ephemeral; the driver refuses any other volume.
+	if spec["attachRequired"] != false || spec["requiresRepublish"] != true || spec["podInfoOnMount"] != true ||
+		strings.Join(asStringSlice(spec["volumeLifecycleModes"]), ",") != "Ephemeral" {
+		t.Fatalf("CSIDriver spec = %v", spec)
+	}
+	role := namedClusterRole(t, "trstctl-trust-csi")
+	rules := asMaps(role["rules"])
+	if len(rules) != 1 || !hasClusterRoleRule(role, "trstctl.com", "trustbundles", "get") || len(asStringSlice(rules[0]["verbs"])) != 1 {
+		t.Fatalf("CSI driver ClusterRole must only get TrustBundles: %v", rules)
+	}
+	ds := namedDoc(t, "DaemonSet", "trstctl-trust-csi")
+	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	if podSpec["serviceAccountName"] != "trstctl-trust-csi" || podSpec["hostNetwork"] == true {
+		t.Fatalf("CSI driver pod spec = %v", podSpec)
+	}
+	containers := asMaps(podSpec["containers"])
+	if len(containers) != 2 {
+		t.Fatalf("CSI driver containers = %d, want the driver and its registrar", len(containers))
+	}
+	for _, c := range containers {
+		security, _ := c["securityContext"].(map[string]any)
+		caps, _ := security["capabilities"].(map[string]any)
+		if security["privileged"] == true || security["allowPrivilegeEscalation"] != false ||
+			strings.Join(asStringSlice(caps["drop"]), ",") != "ALL" || security["readOnlyRootFilesystem"] != true {
+			t.Fatalf("container %v security = %v", c["name"], security)
+		}
+	}
+	if image, _ := containers[0]["image"].(string); image != "ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED" ||
+		!contains(asStringSlice(containers[0]["args"]), "--csi-trust-socket=/csi/csi.sock") {
+		t.Fatalf("CSI driver container = %v", containers[0])
+	}
+	if image, _ := containers[1]["image"].(string); !regexp.MustCompile(`^registry\.k8s\.io/sig-storage/csi-node-driver-registrar@sha256:[0-9a-f]{64}$`).MatchString(image) {
+		t.Fatalf("registrar image %q is not pinned by digest", image)
+	}
+	raw, err := kubernetes.Manifests.ReadFile("csi-trust.yaml")
+	if err != nil || !bytes.Contains(raw, []byte("TRSTCTL_AGENT_DAEMONSET_TEMPLATE=deploy/kubernetes/csi-trust.yaml")) {
+		t.Fatalf("csi-trust.yaml must say how to render its image digest (err=%v)", err)
+	}
+}
+
+// A139: Secret targets need cluster-wide Secret writes, which the agent's own
+// ClusterRole never carries; the grant ships separately and opt-in.
+func TestTrustSecretRBACIsOptInAndWriteOnlyWhereNeeded(t *testing.T) {
+	grant := namedClusterRole(t, "trstctl-agent-trust-secrets")
+	if !hasClusterRoleRule(grant, "", "secrets", "get", "create", "update", "patch") {
+		t.Fatalf("trust Secret grant = %v", grant["rules"])
+	}
+	for _, rule := range asMaps(grant["rules"]) {
+		for _, verb := range asStringSlice(rule["verbs"]) {
+			if verb == "list" || verb == "watch" || verb == "delete" {
+				t.Fatalf("trust Secret grant must not %s Secrets", verb)
+			}
+		}
+	}
+	agent := clusterRole(t)
+	if hasClusterRoleRule(agent, "", "secrets", "create") || hasClusterRoleRule(agent, "", "secrets", "update") {
+		t.Fatal("the agent ClusterRole must not carry cluster-wide Secret writes; the trust Secret grant is opt-in")
+	}
+	if !hasClusterRoleRule(agent, "certificates.k8s.io", "clustertrustbundles", "get", "create", "update") {
+		t.Fatal("the agent ClusterRole must allow ClusterTrustBundle targets")
+	}
 }

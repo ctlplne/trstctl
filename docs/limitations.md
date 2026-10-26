@@ -4879,8 +4879,21 @@ This is a deliberate, documented trust boundary, not an accident.
     trust-rollouts`, Workloads): each cluster's agent receives it in the
     answer to its posture report and applies it as a TrustBundle it owns, and
     a cluster reads verified only when its own controller reports the bundle
-    distributed with the rollout's hash. Secret/projected-volume/CSI trust
-    distribution modes are not claimed.
+    distributed with the rollout's hash. A TrustBundle can also name a Secret
+    in each target namespace and a ClusterTrustBundle that pods mount through
+    a projected `clusterTrustBundle` volume, and the opt-in CSI node plugin
+    (`deploy/kubernetes/csi-trust.yaml`, driver `trust.csi.trstctl.com`)
+    serves a TrustBundle to a pod as an inline volume; focused kind tests
+    prove each target end to end, including a changed bundle reaching a
+    running pod. Their limits: Secret targets outside the agent's namespace
+    need the opt-in grant in `deploy/kubernetes/rbac-trust-secrets.yaml`,
+    which lets the agent read any Secret by name; ClusterTrustBundle needs a
+    cluster serving `certificates.k8s.io/v1beta1` (off by default through
+    Kubernetes 1.35) and the kubelet projection feature gate; the CSI plugin
+    runs as root without capabilities to write into the kubelet's pod
+    directories, and a changed bundle reaches pods on the kubelet's next
+    republish. A bundle that cannot be distributed is marked Ready=False
+    with the cause.
   - The SSH CA is served at `/ssh/...` (`protocols.ssh.enabled`): cert
     issuance plus the OpenSSH binary KRL at `/ssh/krl` (`sshd`'s
     `RevokedKeys` consumes it); a served acceptance test issues a user cert

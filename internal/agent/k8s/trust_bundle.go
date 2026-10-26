@@ -61,6 +61,9 @@ func (c *IssuerController) syncTrustBundle(ctx context.Context, bundle map[strin
 	current := trustBundlePosture(bundle)
 	n, targets, hash, err := c.distributeTrustBundle(ctx, bundle)
 	if err != nil {
+		if markErr := c.markTrustBundleNotReady(ctx, bundle, err); markErr != nil {
+			err = fmt.Errorf("%w (recording it on the TrustBundle also failed: %v)", err, markErr)
+		}
 		return n, failedPosture(current), err
 	}
 	if trustBundleStatusCurrent(bundle, targets, hash) {
@@ -83,17 +86,19 @@ func (c *IssuerController) syncTrustBundle(ctx context.Context, bundle map[strin
 	return n, current, nil
 }
 
-// distributeTrustBundle writes the bundle to every target namespace that does
-// not already hold it, returning how many it wrote, how many targets there
-// are, and the bundle's hash.
-func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[string]any) (int, int, string, error) {
+// distributeTrustBundle writes the bundle to every target that does not
+// already hold it — the ConfigMap in each target namespace and, when named, a
+// Secret in each and a ClusterTrustBundle — returning how many objects it
+// wrote, where the bundle is distributed, and its hash.
+func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[string]any) (int, trustBundleTargets, string, error) {
+	var none trustBundleTargets
 	name := objectName(obj)
 	if name == "" {
-		return 0, 0, "", fmt.Errorf("k8s: trstctl TrustBundle missing metadata.name")
+		return 0, none, "", fmt.Errorf("k8s: trstctl TrustBundle missing metadata.name")
 	}
 	spec, _ := obj["spec"].(map[string]any)
 	if spec == nil {
-		return 0, 0, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s missing spec", name))
+		return 0, none, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s missing spec", name))
 	}
 	target, _ := spec["target"].(map[string]any)
 	configMapName := nativeString(target, "configMapName")
@@ -106,38 +111,63 @@ func (c *IssuerController) distributeTrustBundle(ctx context.Context, obj map[st
 	}
 	namespaces := nativeStringList(target["namespaces"])
 	if len(namespaces) == 0 {
-		return 0, 0, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s missing spec.target.namespaces", name))
+		return 0, none, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s missing spec.target.namespaces", name))
 	}
 	bundlePEM, hash, err := trustBundlePEM(spec)
 	if err != nil {
-		return 0, 0, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s: %w", name, err))
+		return 0, none, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s: %w", name, err))
+	}
+	secretTarget, err := parseTrustSecretTarget(target)
+	if err != nil {
+		return 0, none, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s: %w", name, err))
+	}
+	clusterTrustBundle, err := parseClusterTrustBundleTarget(target)
+	if err != nil {
+		return 0, none, "", permanent(fmt.Errorf("k8s: trstctl TrustBundle %s: %w", name, err))
 	}
 
+	targets := trustBundleTargets{Namespaces: len(namespaces), ClusterTrustBundle: clusterTrustBundle}
 	written := 0
-	for _, namespace := range namespaces {
-		dest := configMapDestination{client: c.client, namespace: namespace, name: configMapName, bundleName: name}
-		wrote, err := dest.Install(ctx, key, bundlePEM, hash)
-		if err != nil {
-			return written, len(namespaces), "", err
-		}
+	count := func(wrote bool) {
 		if wrote {
 			written++
 		}
 	}
-	return written, len(namespaces), hash, nil
+	for _, namespace := range namespaces {
+		dest := configMapDestination{client: c.client, namespace: namespace, name: configMapName, bundleName: name}
+		wrote, err := dest.Install(ctx, key, bundlePEM, hash)
+		if err != nil {
+			return written, targets, "", err
+		}
+		count(wrote)
+		if secretTarget != nil {
+			wrote, err := c.installTrustSecret(ctx, namespace, name, *secretTarget, bundlePEM, hash)
+			if err != nil {
+				return written, targets, "", err
+			}
+			count(wrote)
+			targets.Secrets++
+		}
+	}
+	if clusterTrustBundle != "" {
+		wrote, err := c.installClusterTrustBundle(ctx, clusterTrustBundle, name, bundlePEM, hash)
+		if err != nil {
+			return written, targets, "", err
+		}
+		count(wrote)
+	}
+	return written, targets, hash, nil
 }
 
 // trustBundleStatusCurrent reports whether the status already records this
 // distribution, so it need not be written again.
-func trustBundleStatusCurrent(obj map[string]any, targets int, hash string) bool {
+func trustBundleStatusCurrent(obj map[string]any, targets trustBundleTargets, hash string) bool {
 	status, _ := obj["status"].(map[string]any)
-	if stringField(status, "bundleSHA256") != hash {
+	if stringField(status, "bundleSHA256") != hash || stringField(status, "clusterTrustBundle") != targets.ClusterTrustBundle {
 		return false
 	}
-	if recorded, _ := status["targets"].(float64); int(recorded) != targets {
-		if recordedInt, ok := status["targets"].(int); !ok || recordedInt != targets {
-			return false
-		}
+	if statusCount(status, "targets") != targets.Namespaces || statusCount(status, "secretTargets") != targets.Secrets {
+		return false
 	}
 	conds, _ := status["conditions"].([]any)
 	want := trustBundleReadyCondition(targets)
@@ -148,6 +178,18 @@ func trustBundleStatusCurrent(obj map[string]any, targets int, hash string) bool
 		}
 	}
 	return false
+}
+
+// statusCount reads an integer status field as decoded JSON or as written.
+func statusCount(status map[string]any, key string) int {
+	switch value := status[key].(type) {
+	case float64:
+		return int(value)
+	case int:
+		return value
+	default:
+		return 0
+	}
 }
 
 func trustBundlePEM(spec map[string]any) (string, string, error) {
@@ -279,14 +321,22 @@ func configMapObject(meta map[string]any, data map[string]string) map[string]any
 	}
 }
 
-func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[string]any, targets int, hash string) (map[string]any, error) {
+func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[string]any, targets trustBundleTargets, hash string) (map[string]any, error) {
 	name := objectName(obj)
 	status, _ := obj["status"].(map[string]any)
 	if status == nil {
 		status = map[string]any{}
 	}
-	status["targets"] = targets
+	status["targets"] = targets.Namespaces
 	status["bundleSHA256"] = hash
+	delete(status, "secretTargets")
+	if targets.Secrets > 0 {
+		status["secretTargets"] = targets.Secrets
+	}
+	delete(status, "clusterTrustBundle")
+	if targets.ClusterTrustBundle != "" {
+		status["clusterTrustBundle"] = targets.ClusterTrustBundle
+	}
 	status["conditions"] = upsertTrustBundleReady(status["conditions"], targets)
 	obj["status"] = status
 
@@ -304,16 +354,61 @@ func (c *IssuerController) markTrustBundleReady(ctx context.Context, obj map[str
 	return updated, nil
 }
 
-func trustBundleReadyCondition(targets int) map[string]any {
+// markTrustBundleNotReady records on the TrustBundle why it could not be
+// distributed, so its status never keeps claiming an earlier distribution while
+// a target it now names is missing. It writes only when the reason changed.
+func (c *IssuerController) markTrustBundleNotReady(ctx context.Context, obj map[string]any, cause error) error {
+	name := objectName(obj)
+	if name == "" {
+		return nil
+	}
+	notReady := map[string]any{
+		"type":    "Ready",
+		"status":  "False",
+		"reason":  "DistributionFailed",
+		"message": "trstctl TrustBundle not distributed: " + cause.Error(),
+	}
+	status, _ := obj["status"].(map[string]any)
+	if status == nil {
+		status = map[string]any{}
+	}
+	conds, _ := status["conditions"].([]any)
+	replaced := false
+	for i, condition := range conds {
+		item, ok := condition.(map[string]any)
+		if !ok || item["type"] != "Ready" {
+			continue
+		}
+		if item["status"] == notReady["status"] && item["reason"] == notReady["reason"] && item["message"] == notReady["message"] {
+			return nil
+		}
+		conds[i], replaced = notReady, true
+	}
+	if !replaced {
+		conds = append(conds, notReady)
+	}
+	status["conditions"] = conds
+	obj["status"] = status
+	st, body, err := c.client.request(ctx, http.MethodPut, trustBundleCollectionPath()+"/"+name+"/status", obj)
+	if err != nil {
+		return err
+	}
+	if st/100 != 2 {
+		return fmt.Errorf("k8s: update trstctl TrustBundle %s status: %d: %s", name, st, string(body))
+	}
+	return nil
+}
+
+func trustBundleReadyCondition(targets trustBundleTargets) map[string]any {
 	return map[string]any{
 		"type":    "Ready",
 		"status":  "True",
 		"reason":  "Distributed",
-		"message": fmt.Sprintf("trstctl TrustBundle distributed to %d namespace targets", targets),
+		"message": targets.message(),
 	}
 }
 
-func upsertTrustBundleReady(existing any, targets int) []any {
+func upsertTrustBundleReady(existing any, targets trustBundleTargets) []any {
 	ready := trustBundleReadyCondition(targets)
 	conds, _ := existing.([]any)
 	for i, c := range conds {

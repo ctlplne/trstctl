@@ -406,3 +406,123 @@ func TestApplyDesiredTrustBundlesCreatesUpdatesAndRefuses(t *testing.T) {
 		t.Fatal("a mismatched bundle was written")
 	}
 }
+
+// A139: a TrustBundle with Secret and ClusterTrustBundle targets is also
+// written into an Opaque Secret in each target namespace and published as a
+// ClusterTrustBundle, all labeled as the agent's own; a second pass writes
+// nothing; someone else's Secret of the same name is refused; and a cluster that
+// does not serve ClusterTrustBundle is told how to enable it.
+func TestTrustBundleSecretAndClusterTrustBundleTargets(t *testing.T) {
+	const resCTB = "certificates.k8s.io/v1beta1/clustertrustbundles"
+	ca, err := mtls.NewCA("trust targets CA")
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := newFakeAPI(resClusterIssuers, resIssuers, resCertificates, resTrustBundles, resCSRs, resConfigMaps, resSecrets, resCTB)
+	srv := httptest.NewServer(api.handler())
+	defer srv.Close()
+	controller, err := NewIssuerController(New(srv.URL, "tok", "apps", srv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
+		return nil, nil
+	}), DefaultIssuerGroup, runSignerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle := runTrustBundle("roots", string(ca.BundlePEM()), "apps", "payments")
+	target := bundle["spec"].(map[string]any)["target"].(map[string]any)
+	target["secret"] = map[string]any{"name": "roots-ca"}
+	target["clusterTrustBundle"] = map[string]any{"name": "roots"}
+	api.seed(resTrustBundles, bundle)
+	ctx := context.Background()
+
+	result, err := controller.Reconcile(ctx, "apps")
+	if err != nil || !result.TrustBundleComplete {
+		t.Fatalf("reconcile = %+v, %v", result, err)
+	}
+	normalized := strings.TrimSpace(string(ca.BundlePEM())) + "\n"
+	for _, namespace := range []string{"apps", "payments"} {
+		obj, ok := api.get(resSecrets, namespace, "roots-ca")
+		if !ok || obj["type"] != "Opaque" || !trustObjectOwned(fakeMeta(obj), "roots") {
+			t.Fatalf("Secret %s/roots-ca = %v", namespace, obj)
+		}
+		encoded, _ := obj["data"].(map[string]any)["ca.crt"].(string)
+		if decoded, err := base64.StdEncoding.DecodeString(encoded); err != nil || string(decoded) != normalized {
+			t.Fatalf("Secret %s/roots-ca ca.crt = %q (%v)", namespace, decoded, err)
+		}
+	}
+	ctb, ok := api.get(resCTB, "", "roots")
+	if !ok || ctb["spec"].(map[string]any)["trustBundle"] != normalized || !trustObjectOwned(fakeMeta(ctb), "roots") {
+		t.Fatalf("ClusterTrustBundle = %v", ctb)
+	}
+	status, _ := func() (map[string]any, bool) {
+		obj, ok := api.get(resTrustBundles, "", "roots")
+		status, _ := obj["status"].(map[string]any)
+		return status, ok
+	}()
+	if status["secretTargets"] != float64(2) || status["clusterTrustBundle"] != "roots" || status["targets"] != float64(2) {
+		t.Fatalf("status = %v", status)
+	}
+	before := api.totalWrites()
+	if _, err := controller.Reconcile(ctx, "apps"); err != nil {
+		t.Fatal(err)
+	}
+	if after := api.totalWrites(); after != before {
+		t.Fatalf("a converged bundle with Secret and ClusterTrustBundle targets wrote %d times: %v", after-before, api.writes)
+	}
+
+	api.seed(resSecrets, map[string]any{"metadata": map[string]any{"name": "taken", "namespace": "apps"}, "data": map[string]any{"ca.crt": "b3RoZXI="}})
+	taken := runTrustBundle("taken-roots", string(ca.BundlePEM()), "apps")
+	taken["spec"].(map[string]any)["target"].(map[string]any)["secret"] = map[string]any{"name": "taken"}
+	api.seed(resTrustBundles, taken)
+	if _, err := controller.Reconcile(ctx, "apps"); err == nil || !strings.Contains(err.Error(), "was not created for TrustBundle taken-roots") {
+		t.Fatalf("reconcile over someone else's Secret = %v", err)
+	}
+	if obj, _ := api.get(resSecrets, "apps", "taken"); obj["data"].(map[string]any)["ca.crt"] != "b3RoZXI=" {
+		t.Fatal("someone else's Secret was changed")
+	}
+	// The refused bundle says why on its own status, and saying so once is
+	// enough: the same failure again writes nothing.
+	notReady := func(api *fakeAPI, name, want string) {
+		t.Helper()
+		obj, _ := api.get(resTrustBundles, "", name)
+		conditions, _ := obj["status"].(map[string]any)["conditions"].([]any)
+		if len(conditions) != 1 {
+			t.Fatalf("%s conditions = %v", name, conditions)
+		}
+		ready, _ := conditions[0].(map[string]any)
+		if ready["status"] != "False" || ready["reason"] != "DistributionFailed" || !strings.Contains(ready["message"].(string), want) {
+			t.Fatalf("%s Ready = %v", name, ready)
+		}
+	}
+	notReady(api, "taken-roots", "was not created for TrustBundle taken-roots")
+	before = api.totalWrites()
+	if _, err := controller.Reconcile(ctx, "apps"); err == nil {
+		t.Fatal("the refused bundle reconciled")
+	}
+	if after := api.totalWrites(); after != before {
+		t.Fatalf("an unchanged failure wrote %d times: %v", after-before, api.writes)
+	}
+	api.remove(resSecrets, "apps", "taken")
+	if result, err := controller.Reconcile(ctx, "apps"); err != nil || !result.TrustBundleComplete {
+		t.Fatalf("reconcile after the foreign Secret was removed = %+v, %v", result, err)
+	}
+	if obj, _ := api.get(resTrustBundles, "", "taken-roots"); !isReady(obj) {
+		t.Fatalf("taken-roots after the foreign Secret was removed = %v", obj["status"])
+	}
+
+	plain := newFakeAPI(resClusterIssuers, resIssuers, resCertificates, resTrustBundles, resCSRs, resConfigMaps, resSecrets)
+	plainSrv := httptest.NewServer(plain.handler())
+	defer plainSrv.Close()
+	plainController, err := NewIssuerController(New(plainSrv.URL, "tok", "apps", plainSrv.Client()), SignerFunc(func(context.Context, []byte, time.Duration) ([]byte, error) {
+		return nil, nil
+	}), DefaultIssuerGroup, runSignerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projected := runTrustBundle("projected", string(ca.BundlePEM()), "apps")
+	projected["spec"].(map[string]any)["target"].(map[string]any)["clusterTrustBundle"] = map[string]any{"name": "projected"}
+	plain.seed(resTrustBundles, projected)
+	if _, err := plainController.Reconcile(ctx, "apps"); err == nil || !strings.Contains(err.Error(), "does not serve the ClusterTrustBundle API") {
+		t.Fatalf("ClusterTrustBundle target on a cluster without the API = %v", err)
+	}
+	notReady(plain, "projected", "enable certificates.k8s.io/v1beta1 clustertrustbundles")
+}
