@@ -56,6 +56,14 @@ func ValidateKeyGeneration(family string, cfg []byte) error {
 		return fmt.Errorf("connector: an F5 HA pair cannot generate its key on the appliance: each peer would hold a different "+
 			"key for one certificate. Remove %s to keep control-plane keys sealed to the deploy, which reaches both peers",
 			KeyGenerationConfigKey)
+	case family == "paloalto" && (configString(cfg, "ssl_tls_profile") == "" || configString(cfg, "commit_admin") == ""):
+		// The firewall's certificate object is installed by pointing the
+		// SSL/TLS service profile at it in a partial commit; the in-place
+		// import has nothing to point.
+		return fmt.Errorf("connector: a Palo Alto target generates its key on the firewall only with ssl_tls_profile and "+
+			"commit_admin set, because the certificate the firewall makes is installed by binding that SSL/TLS service "+
+			"profile in that administrator's partial commit. Set both, or remove %s to keep control-plane keys sealed to the deploy",
+			KeyGenerationConfigKey)
 	}
 	return nil
 }

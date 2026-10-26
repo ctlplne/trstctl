@@ -176,17 +176,14 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 	if strings.TrimSpace(rb.PredecessorFingerprint) == "" {
 		return connector.ErrNoPredecessorInstalled
 	}
+	if object := strings.TrimSpace(rb.PredecessorKeyObject); object != "" {
+		return c.rollbackToApplianceKey(ctx, sb, object, rb.PredecessorFingerprint)
+	}
 	name := connector.RollbackObjectName(certName(rb.Target), rb.PredecessorFingerprint)
-	q := url.Values{}
-	q.Set("type", "config")
-	q.Set("action", "get")
-	q.Set("xpath", "/config/shared/certificate/entry[@name='"+name+"']")
-	body, err := c.api(ctx, sb, q)
+	present, err := c.certificateEntryExists(ctx, sb, name)
 	if err != nil {
 		return fmt.Errorf("paloalto: predecessor certificate %q: %w", name, err)
 	}
-	present := containsASCIIFold(body, []byte(`<entry name="`+name+`"`)) || containsASCIIFold(body, []byte(`<entry name='`+name+`'`))
-	secret.Wipe(body)
 	if !present {
 		return fmt.Errorf("paloalto: predecessor certificate %q: %w", name, connector.ErrNoPredecessorInstalled)
 	}
@@ -215,6 +212,19 @@ func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, _ string
 	if name == "" {
 		return connector.Installed{ObjectName: c.sslTLSProfile}, nil
 	}
+	if connector.IsApplianceKeyObjectName(name) {
+		// A122: an object the firewall generated the key into is named for its
+		// job, not its certificate, so the bound certificate itself is exported
+		// and fingerprinted.
+		certPEM, blockType, err := c.exportPublic(ctx, sb, name)
+		if err != nil {
+			return connector.Installed{}, fmt.Errorf("paloalto: read back certificate object %q: %w", name, err)
+		}
+		if blockType != pemCertificate {
+			return connector.Installed{ObjectName: name, Bound: true}, nil
+		}
+		return connector.Installed{Fingerprint: connector.CertificateFingerprint(certPEM), ObjectName: name, Bound: true}, nil
+	}
 	return connector.Installed{Fingerprint: connector.FingerprintFromObjectName(name), ObjectName: name, Bound: true}, nil
 }
 
@@ -229,6 +239,22 @@ func betweenBytes(body []byte, start, end string) string {
 		return ""
 	}
 	return string(rest[:j])
+}
+
+// certificateEntryExists reports whether the candidate configuration holds a
+// certificate object of that name.
+func (c *Connector) certificateEntryExists(ctx context.Context, sb connector.Sandbox, name string) (bool, error) {
+	q := url.Values{}
+	q.Set("type", "config")
+	q.Set("action", "get")
+	q.Set("xpath", "/config/shared/certificate/entry[@name='"+name+"']")
+	body, err := c.api(ctx, sb, q)
+	if err != nil {
+		return false, err
+	}
+	present := containsASCIIFold(body, []byte(`<entry name="`+name+`"`)) || containsASCIIFold(body, []byte(`<entry name='`+name+`'`))
+	secret.Wipe(body)
+	return present, nil
 }
 
 // bindAndCommit sets the shared SSL/TLS service profile's certificate and

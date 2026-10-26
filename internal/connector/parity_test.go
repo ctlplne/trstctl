@@ -70,7 +70,9 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// binding keeps the in-place deploy and reports its rollback and
 		// readback as not configured.
 		"fortigate": {migrated: true, disposition: ParityDispositionMigrated},
-		"paloalto":  {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// A122: a PAN-OS firewall with an SSL/TLS service profile generates
+		// its own key and CSR, so the device-generated CSR gate is met.
+		"paloalto": {migrated: true, disposition: ParityDispositionMigrated},
 		// The source plan's six omitted families, after A59. The cloud stores
 		// execute on an enrolled relay: GCP re-binds a certificate map entry and
 		// passes every gate; ACM and Key Vault cannot express a re-bind or a

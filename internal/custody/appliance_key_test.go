@@ -18,6 +18,10 @@ func TestKeyGenerationOnTheApplianceIsDeclaredExactly(t *testing.T) {
 	if err := custody.ValidateKeyGeneration("f5", []byte(`{"endpoint":"https://bigip.example.test","key_generation":"appliance"}`)); err != nil {
 		t.Fatalf("a single BIG-IP generating its key was refused: %v", err)
 	}
+	if err := custody.ValidateKeyGeneration("paloalto", []byte(`{"endpoint":"https://fw.example.test","ssl_tls_profile":"web",`+
+		`"commit_admin":"trstctl","key_generation":"appliance"}`)); err != nil {
+		t.Fatalf("a firewall with an SSL/TLS service profile generating its key was refused: %v", err)
+	}
 	marked := []byte(`{"endpoint":"https://ns.example.test","key_generation":"appliance"}`)
 	if !custody.TargetGeneratesKeyOnAppliance("netscaler", marked) {
 		t.Fatal("a NetScaler target marked key_generation=appliance does not generate on the appliance")
@@ -38,12 +42,14 @@ func TestKeyGenerationOnTheApplianceIsDeclaredExactly(t *testing.T) {
 		cfg    string
 		want   string
 	}{
-		"a family that cannot":        {"kemp", `{"key_generation":"appliance"}`, "kemp"},
-		"a host family":               {"nginx", `{"key_generation":"appliance"}`, "nginx"},
-		"another value":               {"netscaler", `{"key_generation":"device"}`, `"appliance"`},
-		"a boolean is not consent":    {"netscaler", `{"key_generation":true}`, "string"},
-		"control plane is not a mode": {"netscaler", `{"key_generation":"control_plane"}`, `"appliance"`},
-		"an F5 HA pair":               {"f5", `{"key_generation":"appliance","peer_endpoint":"https://bigip-b.example.test"}`, "HA pair"},
+		"a family that cannot":         {"kemp", `{"key_generation":"appliance"}`, "kemp"},
+		"a host family":                {"nginx", `{"key_generation":"appliance"}`, "nginx"},
+		"another value":                {"netscaler", `{"key_generation":"device"}`, `"appliance"`},
+		"a boolean is not consent":     {"netscaler", `{"key_generation":true}`, "string"},
+		"control plane is not a mode":  {"netscaler", `{"key_generation":"control_plane"}`, `"appliance"`},
+		"an F5 HA pair":                {"f5", `{"key_generation":"appliance","peer_endpoint":"https://bigip-b.example.test"}`, "HA pair"},
+		"a firewall without a profile": {"paloalto", `{"key_generation":"appliance","commit_admin":"trstctl"}`, "ssl_tls_profile"},
+		"a profile without its admin":  {"paloalto", `{"key_generation":"appliance","ssl_tls_profile":"web"}`, "commit_admin"},
 	} {
 		if custody.TargetGeneratesKeyOnAppliance(tc.family, []byte(tc.cfg)) {
 			t.Errorf("%s: generates on the appliance", name)

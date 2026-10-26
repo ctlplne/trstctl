@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/connector/netscaler/netscalertest"
+	"trstctl.com/trstctl/internal/connector/paloalto/paloaltotest"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/custody"
 )
@@ -221,5 +223,65 @@ func TestARelayRollsAnApplianceBackToItsGeneratedKey(t *testing.T) {
 	srv.RemoveFile(object + ".csr")
 	if _, _, err := relay.RollbackWithResult(context.Background(), srv.Client(), intent(object), material()); !errors.Is(err, connector.ErrNoPredecessorInstalled) {
 		t.Fatalf("rollback to an appliance key whose object is gone = %v, want ErrNoPredecessorInstalled", err)
+	}
+}
+
+func panApplianceRenewJob(t *testing.T, srv *paloaltotest.Server, jobID int64, attempt int) relay.Job {
+	t.Helper()
+	targetConfig, err := json.Marshal(map[string]string{
+		"endpoint": srv.URL(), "api_key_ref": "secret://connectors/pan", "ssl_tls_profile": "web-profile",
+		"commit_admin": "trstctl", "key_generation": "appliance",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(relay.DeployIntent{
+		Connector: "paloalto", Target: "web-prod", TargetID: applianceTargetID, IdentityID: "identity-vip",
+		SubjectCommonName: "vip.example.test", SubjectDNSNames: []string{"vip.example.test"},
+		TargetConfig: targetConfig, CredentialRefs: []string{"secret://connectors/pan"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return relay.Job{JobID: jobID, Kind: relay.KindEndpointRenew, Attempt: attempt, Payload: payload}
+}
+
+// A122 on PAN-OS: a relay renews a firewall whose key stays on the firewall,
+// binding the SSL/TLS service profile to the object named for the job. PAN-OS
+// keeps no CSR once its certificate is imported, so a reclaim after the
+// install asks for no second signature and says why it stopped.
+func TestARelayRenewsAFirewallWhoseKeyStaysOnTheFirewall(t *testing.T) {
+	srv := paloaltotest.New([]byte("pan-api-key"))
+	defer srv.Close()
+	ch := newApplianceChannel(t)
+	ch.material = map[string][]byte{"secret://connectors/pan": []byte("pan-api-key")}
+	ch.jobs = []relay.Job{panApplianceRenewJob(t, srv, 51, 1)}
+	executed, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60)
+	if err != nil || executed != 1 {
+		t.Fatalf("RunOnceWithHost = %d, %v; reports %+v", executed, err, ch.reports)
+	}
+	object := connector.ApplianceKeyObjectName(applianceTargetID, 51)
+	if !srv.DeviceKey(object) || srv.ProfileCertificate("web-profile") != object {
+		t.Fatalf("firewall key %s generated %v, profile bound to %q", object, srv.DeviceKey(object), srv.ProfileCertificate("web-profile"))
+	}
+	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeExecuted {
+		t.Fatalf("reports = %+v, want one executed report", ch.reports)
+	}
+	if want := relay.ApplianceRenewCustody(""); len(ch.custody) != 1 || ch.custody[0] != want {
+		t.Fatalf("custody = %+v, want %+v", ch.custody, want)
+	}
+
+	ch.jobs = []relay.Job{panApplianceRenewJob(t, srv, 51, 2)}
+	if _, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60); err != nil {
+		t.Fatal(err)
+	}
+	if len(ch.signed) != 1 {
+		t.Fatalf("signing requests = %d, want none after the install", len(ch.signed))
+	}
+	if len(ch.reports) != 2 || ch.reports[1].outcome != relay.OutcomeFailed || !strings.Contains(ch.reports[1].detail, "earlier attempt") {
+		t.Fatalf("reclaim reports = %+v, want a failure naming the earlier attempt", ch.reports)
+	}
+	if srv.KeyExports() != 0 {
+		t.Fatalf("the relay asked to export a firewall key %d times", srv.KeyExports())
 	}
 }

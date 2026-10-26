@@ -90,4 +90,15 @@ func TestApplianceKeyObjectNameIsFixedPerJob(t *testing.T) {
 			t.Fatalf("an object name without a destination or job = %q, want none", empty)
 		}
 	}
+	if !connector.IsApplianceKeyObjectName(connector.ApplianceKeyObjectName("0f3c9a71-2d4e-4b8a-9c1d-5e6f7a8b9c0d", 77)) {
+		t.Fatal("a name ApplianceKeyObjectName produced is not recognized")
+	}
+	for _, other := range []string{
+		"", "web-vip-0123456789ab", "trstctl-0f3c9a71", "trstctl-0f3c9a7-j77", "trstctl-0F3C9A71-j77",
+		"trstctl-0f3c9a71-j0", "trstctl-0f3c9a71-j077", "trstctl-0f3c9a71-j77x", "trstctl-0f3c9a71-j77']",
+	} {
+		if connector.IsApplianceKeyObjectName(other) {
+			t.Errorf("%q is recognized as an appliance key object name", other)
+		}
+	}
 }

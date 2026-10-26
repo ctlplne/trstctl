@@ -18,10 +18,13 @@
 // cannot trust a 2xx alone, so a double that never produced one would leave that
 // logic unproven.
 //
-// No crypto/* (AN-3): PEM is matched as opaque bytes by its armor, never
-// parsed. Imported material is held as []byte (AN-8), never as a string.
+// No crypto/* (AN-3): imported PEM is matched as opaque bytes by its armor.
+// Keys the firewall generates itself (A122) are made through the crypto
+// boundary (internal/crypto), which is also how a certificate imported for one
+// is checked against it. Imported material is held as []byte (AN-8), never as
+// a string.
 //
-// Two known fidelity gaps bound what a passing test here proves. Both are
+// Three known fidelity gaps bound what a passing test here proves. Both are
 // recorded rather than guessed at, because a double that invents a requirement
 // fails a working connector just as surely as a permissive one passes a broken
 // one.
@@ -42,14 +45,31 @@
 // connector sends none, so requiring one here would fail every deploy on an
 // assumption this package cannot verify against a real device. The parameter is
 // therefore recorded when present (see Import.Passphrase) and not required.
+//
+// Generating on the firewall (A122). The connector asks for a key and CSR with
+// the op command request certificate generate (signed-by external, ECDSA
+// P-256) and exports the pending CSR with type=export&category=certificate.
+// This double accepts exactly those shapes, pairs a certificate imported under
+// the object's name with the key it generated, and refuses one for any other
+// key. That proves the sequence, the naming, the pairing check and that no key
+// is ever exported, not that a firewall accepts those exact element names;
+// that needs hardware.
 package paloaltotest
 
 import (
 	"bytes"
+	"encoding/pem"
+	"encoding/xml"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"sync"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // PAN-OS import categories. The certificate and the private key are two objects
@@ -103,6 +123,13 @@ type Server struct {
 	partFailCategory string
 	partFailStatus   int
 	partFailBody     []byte
+
+	// A122: keys the firewall generated itself (object -> key), the pending
+	// CSR each such object holds until a certificate is imported for it, and
+	// how often a client asked to export one of those keys.
+	deviceKeys map[string]*crypto.LockedSigner
+	csrs       map[string][]byte
+	keyExports int
 }
 
 // New starts a fake PAN-OS requiring apiKey in the X-PAN-KEY header. The key is
@@ -110,9 +137,11 @@ type Server struct {
 // it into a string.
 func New(apiKey []byte) *Server {
 	s := &Server{
-		apiKey:   append([]byte(nil), apiKey...),
-		objects:  map[string]Object{},
-		profiles: map[string]string{},
+		apiKey:     append([]byte(nil), apiKey...),
+		objects:    map[string]Object{},
+		profiles:   map[string]string{},
+		deviceKeys: map[string]*crypto.LockedSigner{},
+		csrs:       map[string][]byte{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -124,8 +153,52 @@ func (s *Server) URL() string { return s.srv.URL }
 // Client returns an HTTP client for the fake appliance.
 func (s *Server) Client() *http.Client { return s.srv.Client() }
 
-// Close shuts the server down.
-func (s *Server) Close() { s.srv.Close() }
+// Close shuts the server down and destroys the keys the firewall generated.
+func (s *Server) Close() {
+	s.srv.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for name, key := range s.deviceKeys {
+		key.Destroy()
+		delete(s.deviceKeys, name)
+	}
+}
+
+// DeviceKey reports whether the firewall generated the named object's key.
+func (s *Server) DeviceKey(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.deviceKeys[name]
+	return ok
+}
+
+// Pending reports whether the named object still holds only its CSR.
+func (s *Server) Pending(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.csrs[name]
+	return ok
+}
+
+// KeyExports counts requests to export a key the firewall generated. A client
+// that keeps keys on the firewall never makes one.
+func (s *Server) KeyExports() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.keyExports
+}
+
+// Remove deletes a certificate object so a test can model one that is gone.
+func (s *Server) Remove(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.objects, name)
+	delete(s.csrs, name)
+	if key, ok := s.deviceKeys[name]; ok {
+		key.Destroy()
+		delete(s.deviceKeys, name)
+	}
+}
 
 // Object returns the certificate object stored under name.
 func (s *Server) Object(name string) (Object, bool) {
@@ -306,6 +379,12 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		writeEnvelope(w, http.StatusOK, `<response status="success" code="19"><result><msg><line>Commit succeeded</line></msg></result></response>`)
 		return
+	case "op":
+		s.generate(w, q.Get("cmd"))
+		return
+	case "export":
+		s.export(w, q)
+		return
 	}
 	category := q.Get("category")
 	name := q.Get("certificate-name")
@@ -365,6 +444,19 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	obj, exists := s.objects[name]
+	if deviceKey, device := s.deviceKeys[name]; device {
+		// A122: the firewall pairs a certificate imported under the name of an
+		// object it generated with that object's key and refuses one for any
+		// other key; that object's key is its own, so none is imported onto it.
+		info, err := certinfo.Inspect(body)
+		if category == categoryPrivateKey || err != nil || info.SPKISHA256 != crypto.SHA256Hex(deviceKey.Public().DER) {
+			s.mu.Unlock()
+			writeEnvelope(w, http.StatusOK,
+				`<response status="error" code="400"><result><msg>certificate does not match the private key</msg></result></response>`)
+			return
+		}
+		delete(s.csrs, name)
+	}
 	// A private key attaches to a certificate object, so there has to be one to
 	// attach it to. Modeled because it pins the connector's call ORDER: import
 	// the certificate, then the key. A double indifferent to order would let a
@@ -434,7 +526,8 @@ func (s *Server) handleConfig(w http.ResponseWriter, q map[string][]string) {
 			writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="400"><result><msg>Invalid xpath or element</msg></result></response>`)
 			return
 		}
-		if _, exists := s.objects[cert]; !exists {
+		if obj, exists := s.objects[cert]; !exists || len(obj.CertPEM) == 0 {
+			// A pending object (a CSR without its certificate) cannot be used.
 			writeEnvelope(w, http.StatusOK, `<response status="error" code="12"><result><msg>certificate is invalid</msg></result></response>`)
 			return
 		}
@@ -443,6 +536,98 @@ func (s *Server) handleConfig(w http.ResponseWriter, q map[string][]string) {
 	default:
 		writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="400"><result><msg>Unsupported action</msg></result></response>`)
 	}
+}
+
+// generateCommand is the op command request certificate generate, as far as
+// the connector uses it.
+type generateCommand struct {
+	XMLName  xml.Name `xml:"request"`
+	Generate *struct {
+		CertificateName string   `xml:"certificate-name"`
+		Name            string   `xml:"name"`
+		ECDSABits       string   `xml:"algorithm>ECDSA>ecdsa-nbits"`
+		Digest          string   `xml:"digest"`
+		SignedBy        string   `xml:"signed-by"`
+		Hostnames       []string `xml:"hostname>member"`
+		IPs             []string `xml:"ip>member"`
+	} `xml:"certificate>generate"`
+}
+
+// generate models request certificate generate for an external authority: the
+// firewall makes an ECDSA P-256 key and a CSR under a new object name (A122).
+func (s *Server) generate(w http.ResponseWriter, cmd string) {
+	var in generateCommand
+	if err := xml.Unmarshal([]byte(cmd), &in); err != nil || in.Generate == nil {
+		writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="17"><msg>invalid op command</msg></response>`)
+		return
+	}
+	gen := in.Generate
+	if gen.CertificateName == "" || gen.Name == "" || gen.ECDSABits != "256" || gen.SignedBy != "external" ||
+		(gen.Digest != "" && gen.Digest != "sha256") {
+		writeEnvelope(w, http.StatusOK, `<response status="error" code="17"><msg>certificate-name, name, ECDSA 256 and signed-by external are required</msg></response>`)
+		return
+	}
+	tmpl := crypto.CertificateRequestTemplate{CommonName: gen.Name, DNSNames: gen.Hostnames}
+	for _, raw := range gen.IPs {
+		ip := net.ParseIP(raw)
+		if ip == nil {
+			writeEnvelope(w, http.StatusOK, `<response status="error" code="17"><msg>invalid ip</msg></response>`)
+			return
+		}
+		tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.objects[gen.CertificateName]; exists {
+		writeEnvelope(w, http.StatusOK, `<response status="error" code="12"><msg>certificate already exists</msg></response>`)
+		return
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		writeEnvelope(w, http.StatusOK, `<response status="error" code="12"><msg>key generation failed</msg></response>`)
+		return
+	}
+	csrDER, err := crypto.CreateCertificateRequest(tmpl, key)
+	if err != nil {
+		key.Destroy()
+		writeEnvelope(w, http.StatusOK, `<response status="error" code="12"><msg>CSR could not be created</msg></response>`)
+		return
+	}
+	s.objects[gen.CertificateName] = Object{Name: gen.CertificateName}
+	s.deviceKeys[gen.CertificateName] = key
+	s.csrs[gen.CertificateName] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+	writeEnvelope(w, http.StatusOK, `<response status="success"><result>Successfully generated</result></response>`)
+}
+
+// export returns a certificate object's public half as PEM: the pending CSR,
+// or the certificate once one is imported. A request for a key the firewall
+// generated is counted and refused; a client that keeps keys there never asks.
+func (s *Server) export(w http.ResponseWriter, q url.Values) {
+	name := q.Get("certificate-name")
+	if q.Get("category") != categoryCertificate || q.Get("format") != "pem" || name == "" {
+		writeEnvelope(w, http.StatusBadRequest, `<response status="error" code="400"><result><msg>Invalid export</msg></result></response>`)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.EqualFold(q.Get("include-key"), "yes") {
+		if _, device := s.deviceKeys[name]; device {
+			s.keyExports++
+		}
+		writeEnvelope(w, http.StatusOK, `<response status="error" code="400"><result><msg>key export is not modeled</msg></result></response>`)
+		return
+	}
+	body := s.csrs[name]
+	if obj, exists := s.objects[name]; exists && len(obj.CertPEM) > 0 {
+		body = obj.CertPEM
+	}
+	if len(body) == 0 {
+		writeEnvelope(w, http.StatusOK, `<response status="error" code="400"><result><msg>certificate not found</msg></result></response>`)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
 }
 
 func between(s, start, end string) string {

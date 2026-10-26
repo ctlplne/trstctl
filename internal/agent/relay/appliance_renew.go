@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -28,8 +29,8 @@ import (
 // ApplianceRenewCustody is the custody an appliance-generated key records: made
 // on the appliance, kept in its own key store, and exportable by an
 // administrator of the appliance, because the keys this mode creates are
-// software keys (a NetScaler key file, an F5 key without FIPS, a PAN-OS key
-// without an HSM). GeneratedBy names the agent that asked for it.
+// software keys (a NetScaler or A10 key file, an F5 key without FIPS, a PAN-OS
+// key without an HSM). GeneratedBy names the agent that asked for it.
 func ApplianceRenewCustody(generatedBy string) custody.Record {
 	return custody.Record{
 		Origin: custody.OriginAppliance, Storage: custody.StorageAppliance,
@@ -109,6 +110,11 @@ func runApplianceRenew(ctx context.Context, ch Channel, client *http.Client, job
 	})
 	if stats.Denied > 0 {
 		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
+		return false
+	}
+	if errors.Is(err, connector.ErrApplianceKeyAlreadyInstalled) {
+		report(ctx, ch, job, OutcomeFailed, "an earlier attempt of this renewal already installed its certificate against the "+
+			"appliance key, and the appliance kept no request to sign again; check the appliance and start a new renewal")
 		return false
 	}
 	if err != nil {

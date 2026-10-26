@@ -76,6 +76,28 @@ func ApplianceKeyObjectName(targetID string, jobID int64) string {
 	return "trstctl-" + short.String() + "-j" + strconv.FormatInt(jobID, 10)
 }
 
+// IsApplianceKeyObjectName reports whether name has the form
+// ApplianceKeyObjectName produces, so a connector can tell an object a job's
+// key was generated into from a fingerprint-named deploy object, and refuse
+// any other name before it reaches an appliance query.
+func IsApplianceKeyObjectName(name string) bool {
+	rest, ok := strings.CutPrefix(name, "trstctl-")
+	if !ok {
+		return false
+	}
+	short, job, ok := strings.Cut(rest, "-j")
+	if !ok || len(short) != 8 {
+		return false
+	}
+	for _, r := range short {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'z') {
+			return false
+		}
+	}
+	id, err := strconv.ParseInt(job, 10, 64)
+	return err == nil && id > 0 && strconv.FormatInt(id, 10) == job
+}
+
 // applianceKeyFamilies is the census of appliance connectors that generate the
 // subject key on the appliance. Like the rollback and readback censuses it is
 // checked against the code in both directions: a family listed here must
@@ -84,6 +106,7 @@ var applianceKeyFamilies = []string{
 	"a10",
 	"f5",
 	"netscaler",
+	"paloalto",
 }
 
 // ApplianceKeyFamily reports whether a family can generate its subject key on
@@ -107,6 +130,13 @@ func ApplianceKeyFamilies() []string {
 // ErrApplianceKeyUnsupported is returned when a connector cannot generate its
 // subject key on the appliance.
 var ErrApplianceKeyUnsupported = errors.New("connector: this connector cannot generate the subject key on the appliance")
+
+// ErrApplianceKeyAlreadyInstalled is returned when the object a job's key was
+// generated into already holds the job's certificate and the appliance kept no
+// CSR beside it (PAN-OS replaces a pending request with the certificate
+// imported for it). The control plane signs one CSR per job, so a reclaimed job
+// cannot ask for another; it stops instead of generating a second key.
+var ErrApplianceKeyAlreadyInstalled = errors.New("connector: the appliance already installed a certificate for this job's key")
 
 // RunApplianceKey asks the appliance for a key and CSR inside the connector's
 // capability sandbox.
