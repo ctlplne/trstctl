@@ -33,6 +33,11 @@ const (
 	runtimeRunnerAuditCapabilityHex = "0000010000000040"
 )
 
+// runtimeRunnerPlatforms are the platforms a shipped profile's runner may be
+// built for: linux/amd64 for the shipped proof profiles and linux/arm64 for the
+// arm64 proof profile (A127), each run natively on a host of that architecture.
+var runtimeRunnerPlatforms = map[string]bool{"linux/amd64": true, "linux/arm64": true}
+
 func validateRuntimeRunnerProof(where string, profile BuildProfile) error {
 	proof := profile.RuntimeRunner
 	if proof.Dockerfile == "" || proof.Platform == "" || proof.Identity == "" {
@@ -41,8 +46,8 @@ func validateRuntimeRunnerProof(where string, profile BuildProfile) error {
 	if proof.Dockerfile != "tools/dodcensus/Dockerfile.runtime-runner" {
 		return fmt.Errorf("%s runtime runner uses unreviewed Dockerfile %q", where, proof.Dockerfile)
 	}
-	if proof.Platform != profile.GOOS+"/"+profile.GOARCH || proof.Platform != "linux/amd64" {
-		return fmt.Errorf("%s runtime runner platform %q does not exactly match supported shipped linux/amd64 profile", where, proof.Platform)
+	if proof.Platform != profile.GOOS+"/"+profile.GOARCH || !runtimeRunnerPlatforms[proof.Platform] {
+		return fmt.Errorf("%s runtime runner platform %q does not exactly match a supported linux/amd64 or linux/arm64 profile", where, proof.Platform)
 	}
 	if !pinnedImagePattern.MatchString(proof.Identity) {
 		return fmt.Errorf("%s runtime runner identity %q is not digest pinned", where, proof.Identity)
@@ -109,6 +114,7 @@ func inspectRuntimeRunnerProof(repo string, profile BuildProfile) checkEvidence 
 		"ca-certificates docker.io git openssl python3",
 		"KIND_VERSION=v0.31.0",
 		"KIND_LINUX_AMD64_SHA256=eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa",
+		"KIND_LINUX_ARM64_SHA256=8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4",
 		"OPENSSL_VERSION=3.5.7",
 		"OPENSSL_SOURCE_SHA256=a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8",
 		"/usr/local/bin/openssl list -signature-algorithms",
@@ -245,12 +251,19 @@ version = subprocess.run(
     text=True,
     env={"PATH": "/usr/local/go/bin:/usr/bin:/bin"},
 ).stdout.strip()
-if version != "go version go1.26.10 linux/amd64":
+expected_platform = os.environ["TRSTCTL_DOD_PREFLIGHT_PLATFORM"]
+kind_digests = {
+    "linux/amd64": "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa",
+    "linux/arm64": "8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4",
+}
+if expected_platform not in kind_digests:
+    raise RuntimeError("runtime runner platform %r is not a reviewed profile platform" % expected_platform)
+if version != "go version go1.26.10 " + expected_platform:
     raise RuntimeError("runtime runner toolchain identity is %r" % version)
 
 kind_path = pathlib.Path("/usr/local/bin/kind")
 kind_digest = hashlib.sha256(kind_path.read_bytes()).hexdigest()
-if kind_digest != "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa":
+if kind_digest != kind_digests[expected_platform]:
     raise RuntimeError("runtime runner kind v0.31.0 digest is %r" % kind_digest)
 kind_version = subprocess.run(
     [str(kind_path), "version"], check=True, stdout=subprocess.PIPE,
@@ -529,6 +542,7 @@ func (r *linuxRuntimeExecutor) run(ctx context.Context, repo, cacheDir string, p
 		"--env", "TRSTCTL_DOD_PREFLIGHT_GID="+strconv.FormatUint(uint64(gid), 10),
 		"--env", "TRSTCTL_DOD_PREFLIGHT_SOCKET_GID="+strconv.FormatUint(uint64(socketGID), 10),
 		"--env", "TRSTCTL_DOD_PREFLIGHT_SOCKET_UID="+strconv.FormatUint(uint64(socketUID), 10),
+		"--env", "TRSTCTL_DOD_PREFLIGHT_PLATFORM="+profile.RuntimeRunner.Platform,
 		"--entrypoint", "/usr/bin/setpriv",
 		profile.RuntimeRunnerImage,
 	)

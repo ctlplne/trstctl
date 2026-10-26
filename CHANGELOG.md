@@ -2,6 +2,13 @@
 
 ### Added
 
+- The managed-key production-assembly proof has an arm64 profile:
+  `make dod-gate-arm64` runs it on a native arm64 host against the release's
+  `linux/arm64` control plane and cgo HSM signer, with the same custody substrate
+  and entries as the amd64 proof, and CI runs it on GitHub's arm64 runner. The
+  proof runner image builds for either architecture from the same pinned inputs,
+  and the proof now waits out a queued (202) managed-key receipt the way a client
+  does instead of reading it as the key.
 - Transit key creation and rotation are facts in the event log: a
   `transit.key.created` or `transit.key.rotated` event names the key, its kind
   and the version, under a fact ID saved with that version's sealed material, and

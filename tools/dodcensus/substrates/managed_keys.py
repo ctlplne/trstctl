@@ -117,6 +117,24 @@ def required_image_id() -> str:
     return value
 
 
+# The proof profiles' platforms: the shipped linux/amd64 proof and the arm64
+# proof profile (A127). The emulator runs on the platform its image was built
+# for, which the parent broker has already matched to the entry's profile.
+PROOF_PLATFORMS = ("linux/amd64", "linux/arm64")
+
+
+def required_image_platform(image: str) -> str:
+    inspected = subprocess.run(
+        ["docker", "image", "inspect", "--format={{.Os}}/{{.Architecture}}", image],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False,
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
+    )
+    platform = inspected.stdout.strip()
+    if inspected.returncode != 0 or platform not in PROOF_PLATFORMS:
+        raise SystemExit(f"{IMAGE_ENV} is not a {' or '.join(PROOF_PLATFORMS)} image")
+    return platform
+
+
 def inner_envelope_matches(
     value: object, *, challenge: str, entry_id: str, identity: str,
     contract: str, flag: str, outer_pid: int, expected_pid: int | None = None,
@@ -300,6 +318,10 @@ class State:
 
     @staticmethod
     def _mode(entry_id: str) -> str:
+        # The arm64 proof profile (A127) proves the same providers under the
+        # hsm_kms.arm64.<provider> entry IDs.
+        if entry_id.startswith("hsm_kms.arm64."):
+            entry_id = "hsm_kms." + entry_id.removeprefix("hsm_kms.arm64.")
         if entry_id in {"hsm_kms.runtime", "hsm_kms.aws_kms"}:
             return "aws"
         if entry_id == "hsm_kms.azure_key_vault":
@@ -754,6 +776,7 @@ def container_main() -> int:
     """Run the emulator on an isolated bridge and proxy nonce-bound receipts."""
     network = required_env(NETWORK_ENV)
     image = required_image_id()
+    platform = required_image_platform(image)
     challenge = required_env("TRSTCTL_DOD_CHALLENGE")
     entry_id = required_env("TRSTCTL_DOD_ENTRY_ID")
     identity = required_env("TRSTCTL_DOD_SUBSTRATE_IDENTITY")
@@ -761,7 +784,7 @@ def container_main() -> int:
     outer_pid = os.getpid()
     name = f"trstctl-dod-hsm-emulator-{os.getpid()}"
     command = [
-        "docker", "run", "--rm", "--platform", "linux/amd64", "--name", name,
+        "docker", "run", "--rm", "--platform", platform, "--name", name,
         "--network", network, "--network-alias", "managed-key-emulator",
         "-p", f"127.0.0.1::{INNER_PORT}",
     ]

@@ -312,10 +312,16 @@ func (b *substrateBroker) validatedDynamicInputs(ctx context.Context, expected r
 	if _, err := parseContentImageID(image); err != nil || !dockerObjectNamePattern.MatchString(network) {
 		return nil, fmt.Errorf("managed-key dynamic image/network input is invalid")
 	}
+	// The image must be built for the entry's own profile platform: linux/amd64
+	// for the shipped proof, linux/arm64 for the arm64 proof profile (A127).
+	platform := expected.RuntimeGOOS + "/" + expected.RuntimeGOARCH
+	if !managedKeyRuntimePlatforms[platform] {
+		return nil, fmt.Errorf("managed-key runtime platform %q is not a reviewed profile platform", platform)
+	}
 	inspected := runHostCommand(ctx, b.repo, "docker", "image", "inspect", "--format={{.Id}} {{.Os}}/{{.Architecture}}", image)
 	fields := strings.Fields(inspected.Stdout)
-	if inspected.Err != nil || len(fields) != 2 || fields[0] != image || fields[1] != managedKeyRuntimePlatform {
-		return nil, fmt.Errorf("managed-key dynamic image is not the exact local %s content ID", managedKeyRuntimePlatform)
+	if inspected.Err != nil || len(fields) != 2 || fields[0] != image || fields[1] != platform {
+		return nil, fmt.Errorf("managed-key dynamic image is not the exact local %s content ID", platform)
 	}
 	inspected = runHostCommand(ctx, b.repo, "docker", "network", "inspect", network)
 	if inspected.Err != nil {

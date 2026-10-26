@@ -51,7 +51,9 @@ func (f *claimFailureSet) err() error {
 // product-wide denominator would manufacture false disclosure failures. The
 // mandatory unfocused make dod-gate path always reaches the full validator.
 func validateClaimsForSelection(repo string, manifest Manifest, report Report, sel selection) error {
-	if sel.Capability != "" || sel.CardID != "" {
+	// A focused run and a proof-profile manifest have no full denominator; the
+	// shipped manifest's own census certifies the breadth-wide claims.
+	if sel.Capability != "" || sel.CardID != "" || manifest.ProfileOf != "" {
 		return nil
 	}
 	return validateFreshProductClaims(repo, manifest, report)

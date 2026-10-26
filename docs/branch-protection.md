@@ -104,6 +104,12 @@ embedded PostgreSQL/JetStream and analyzes a cap-small replay/outbox burst via
 path, and `docs/branch_protection_test.go` pins each as an explicit exemption with
 a reason, so no CI job silently escapes the merge gate.
 
+`definition of done / arm64 proof profile` runs on every push, on GitHub's native
+`ubuntu-24.04-arm` runner: `make dod-gate-arm64` proves the managed-key production
+assembly against the release's `linux/arm64` control plane and cgo HSM signer. It
+is exempt from the required set until it has run green on that runner; adding it
+to `.github/branch-protection.json` is then the repository owner's decision.
+
 ### Release-time gate
 
 A version tag never ships an unverified commit: `release.yml` sets three blockers

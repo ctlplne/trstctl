@@ -97,6 +97,41 @@ func TestFocusedCensusDoesNotApplyFullDenominatorClaims(t *testing.T) {
 	}
 }
 
+// A proof-profile manifest re-proves a slice of the shipped manifest on another
+// platform (A127). Like a focused run it has no full denominator, so the
+// breadth-wide claims stay with the shipped manifest's own census.
+func TestProofProfileCensusDoesNotApplyFullDenominatorClaims(t *testing.T) {
+	missingRepo := t.TempDir()
+	profile := Manifest{ProfileOf: shippedManifestPath}
+	if err := validateClaimsForSelection(missingRepo, profile, Report{}, selection{}); err != nil {
+		t.Fatalf("proof-profile census tried to load full-denominator claims: %v", err)
+	}
+}
+
+func TestManifestProfileOfNamesOnlyTheShippedManifest(t *testing.T) {
+	repo := filepath.Clean(filepath.Join("..", ".."))
+	manifest, err := loadManifest(filepath.Join(repo, "tools", "dodcensus", "manifest-arm64.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.ProfileOf != shippedManifestPath {
+		t.Fatalf("arm64 manifest profile_of = %q, want %q", manifest.ProfileOf, shippedManifestPath)
+	}
+	for _, other := range []string{"tools/dodcensus/manifest-arm64.json", "manifest.json", "../manifest.json"} {
+		manifest.ProfileOf = other
+		if err := validateManifest(manifest); err == nil || !strings.Contains(err.Error(), "profile_of") {
+			t.Errorf("profile_of %q was accepted: %v", other, err)
+		}
+	}
+	shipped, err := loadManifest(filepath.Join(repo, filepath.FromSlash(shippedManifestPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shipped.ProfileOf != "" {
+		t.Fatalf("the shipped manifest declares profile_of %q and would skip its own claims", shipped.ProfileOf)
+	}
+}
+
 func TestClaimsFailureStillWritesReceiptAndReturnsGateFailure(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "wiring-census.json")
 	report := Report{SchemaVersion: 1, Entries: map[string]entryResult{}}

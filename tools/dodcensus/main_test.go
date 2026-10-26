@@ -1406,6 +1406,7 @@ RUN printf '%s\n' 'snapshot.debian.org/archive/debian/20260701T000000Z' 'snapsho
  && apt-get install -y ca-certificates docker.io git openssl python3
 ARG KIND_VERSION=v0.31.0
 ARG KIND_LINUX_AMD64_SHA256=eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
+ARG KIND_LINUX_ARM64_SHA256=8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4
 ARG OPENSSL_VERSION=3.5.7
 ARG OPENSSL_SOURCE_SHA256=a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8
 RUN /usr/local/bin/openssl list -signature-algorithms

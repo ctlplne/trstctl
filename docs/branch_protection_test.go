@@ -58,11 +58,12 @@ func workflowJobNames(t *testing.T, rel string) map[string]bool {
 // not block pull-request merges. Every exemption needs a reason so a new job cannot
 // silently become "runs but does not protect main" by omission.
 var branchProtectionExemptCIJobs = map[string]string{
-	"branch protection / live policy drift": "scheduled/manual-only drift verifier; it audits the live GitHub branch-protection settings outside the PR path",
-	"captured soak / leak gate":             "scheduled/manual-only endurance verifier; it publishes captured soak trend evidence outside the PR path and cannot be required on pull_request",
-	"spine burst / replay-outbox gate":      "scheduled/manual-only event-spine capacity verifier; it boots embedded datastores, publishes replay/outbox trend evidence, and cannot be required on pull_request",
-	"perf live / served hot-path load gate": "scheduled/manual-only served-load verifier; too load-sensitive for shared per-PR runners. Promoted to required by the per-PR 'scheduled gates / nightly freshness' check",
-	"web storybook (workbench build)":       "advisory component-workbench build (S-C8): it verifies the stories compile against real tokens, and stays non-blocking while story coverage matures so a workbench regression cannot hold product merges",
+	"branch protection / live policy drift":    "scheduled/manual-only drift verifier; it audits the live GitHub branch-protection settings outside the PR path",
+	"captured soak / leak gate":                "scheduled/manual-only endurance verifier; it publishes captured soak trend evidence outside the PR path and cannot be required on pull_request",
+	"spine burst / replay-outbox gate":         "scheduled/manual-only event-spine capacity verifier; it boots embedded datastores, publishes replay/outbox trend evidence, and cannot be required on pull_request",
+	"perf live / served hot-path load gate":    "scheduled/manual-only served-load verifier; too load-sensitive for shared per-PR runners. Promoted to required by the per-PR 'scheduled gates / nightly freshness' check",
+	"web storybook (workbench build)":          "advisory component-workbench build (S-C8): it verifies the stories compile against real tokens, and stays non-blocking while story coverage matures so a workbench regression cannot hold product merges",
+	"definition of done / arm64 proof profile": "runs the managed-key proof on a native arm64 runner; it joins the required set once it has run green there, which is the repository owner's branch-protection decision",
 }
 
 // TestBranchProtectionMatchesCIJobs is the TEST-006 reality-test for the codified

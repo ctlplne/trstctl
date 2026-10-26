@@ -226,6 +226,38 @@ jobs:
         with:
           name: wiring-census
           path: wiring-census.json
+
+  # The arm64 proof profile (tools/dodcensus/manifest-arm64.json) proves the
+  # managed-key production assembly against the release's linux/arm64 control
+  # plane and cgo HSM signer. It needs a native arm64 runner: emulation cannot
+  # qualify those bytes, and the make target refuses any other Docker host.
+  dod-gate-arm64:
+    name: definition of done / arm64 proof profile
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Prefetch dependencies for the offline census
+        run: go mod download
+
+      - name: Run the arm64 managed-key proof profile
+        run: make dod-gate-arm64
+
+      - name: Upload arm64 wiring census
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wiring-census-arm64
+          path: wiring-census-arm64.json
           if-no-files-found: error
 
   captured-soak:

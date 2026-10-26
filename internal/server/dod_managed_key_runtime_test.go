@@ -48,6 +48,7 @@ const (
 	dodManagedKeySignTokenSecretFileEnv        = "TRSTCTL_DOD_MANAGED_KEY_SIGN_TOKEN_SECRET_FILE"
 	dodRuntimeDockerHostEnv                    = "TRSTCTL_RUNTIME_DOCKER_HOST"
 	dodManagedKeyRuntimePlatform               = "linux/amd64"
+	dodManagedKeyArm64RuntimePlatform          = "linux/arm64"
 	dodManagedKeyLoopbackProxyPort             = 18080
 	dodTPMOwnerPersistentFirst          uint64 = 0x81000000
 	dodTPMOwnerPersistentLast           uint64 = 0x817fffff
@@ -55,6 +56,7 @@ const (
 )
 
 type dodManagedKeyArtifacts struct {
+	platform         string
 	licenseFile      string
 	licensePublicKey []byte
 	network          string
@@ -143,7 +145,7 @@ type dodManagedKeyRuntime struct {
 // Rotation is submitted while the signer is stopped, then completes after the
 // same signer journal/device state restarts, proving real redelivery/recovery.
 func TestDODManagedKeyProductionAssembly(t *testing.T) {
-	artifacts := dodBuildManagedKeyArtifacts(t)
+	artifacts := dodBuildManagedKeyArtifacts(t, dodManagedKeyRuntimePlatform)
 	only := os.Getenv("TRSTCTL_HSM_PROOF_ONLY")
 	if only == "" {
 		only = proof.OnlyExpectation(t)
@@ -175,6 +177,46 @@ func TestDODManagedKeyProductionAssembly(t *testing.T) {
 	if only == "" || only == "hsm_kms.yubihsm2" {
 		yubiEntry := proof.StartCommand(t, "hsm_kms.yubihsm2")
 		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.yubihsm2", config.ManagedKeyProviderYubiHSM2, yubiEntry, yubiEntry.Endpoint())
+	}
+}
+
+// TestDODManagedKeyProductionAssemblyArm64 is the same production-assembly
+// proof for the arm64 proof profile (A127): the linux/arm64 signer image the
+// release builds, run natively on an arm64 host by the arm64 manifest. Running
+// it under emulation on another architecture would not qualify the artifact.
+func TestDODManagedKeyProductionAssemblyArm64(t *testing.T) {
+	artifacts := dodBuildManagedKeyArtifacts(t, dodManagedKeyArm64RuntimePlatform)
+	only := os.Getenv("TRSTCTL_HSM_PROOF_ONLY")
+	if only == "" {
+		only = proof.OnlyExpectation(t)
+	}
+	if only == "" || only == "hsm_kms.arm64.runtime" {
+		runtimeEntry := proof.StartCommand(t, "hsm_kms.arm64.runtime")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.runtime", config.ManagedKeyProviderAWS, runtimeEntry, runtimeEntry.Endpoint())
+	}
+	if only == "" || only == "hsm_kms.arm64.aws_kms" {
+		awsEntry := proof.StartCommand(t, "hsm_kms.arm64.aws_kms")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.aws_kms", config.ManagedKeyProviderAWS, awsEntry, awsEntry.Endpoint())
+	}
+	if only == "" || only == "hsm_kms.arm64.azure_key_vault" {
+		azureEntry := proof.StartCommand(t, "hsm_kms.arm64.azure_key_vault")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.azure_key_vault", config.ManagedKeyProviderAzureKeyVault, azureEntry, azureEntry.Endpoint())
+	}
+	if only == "" || only == "hsm_kms.arm64.gcp_kms" {
+		gcpEntry := proof.StartCommand(t, "hsm_kms.arm64.gcp_kms")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.gcp_kms", config.ManagedKeyProviderGCPKMS, gcpEntry, gcpEntry.Endpoint())
+	}
+	if only == "" || only == "hsm_kms.arm64.pkcs11" {
+		pkcsEntry := proof.StartCommand(t, "hsm_kms.arm64.pkcs11")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.pkcs11", config.ManagedKeyProviderPKCS11, pkcsEntry, pkcsEntry.Endpoint())
+	}
+	if only == "" || only == "hsm_kms.arm64.tpm2" {
+		tpmEntry := proof.StartCommand(t, "hsm_kms.arm64.tpm2")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.tpm2", config.ManagedKeyProviderTPM2, tpmEntry, tpmEntry.Endpoint())
+	}
+	if only == "" || only == "hsm_kms.arm64.yubihsm2" {
+		yubiEntry := proof.StartCommand(t, "hsm_kms.arm64.yubihsm2")
+		dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.yubihsm2", config.ManagedKeyProviderYubiHSM2, yubiEntry, yubiEntry.Endpoint())
 	}
 }
 
@@ -221,8 +263,11 @@ func TestDODManagedKeySignTokenHelper(t *testing.T) {
 	os.Exit(0)
 }
 
-func dodBuildManagedKeyArtifacts(t *testing.T) dodManagedKeyArtifacts {
+func dodBuildManagedKeyArtifacts(t *testing.T, platform string) dodManagedKeyArtifacts {
 	t.Helper()
+	if platform != dodManagedKeyRuntimePlatform && platform != dodManagedKeyArm64RuntimePlatform {
+		t.Fatalf("managed-key proof platform %q is not a reviewed profile platform", platform)
+	}
 	root := t.TempDir()
 	repo := dodManagedKeyRepoRoot(t)
 	// A prior buggy proof omitted signer state env vars, so cmd/trstctl used its
@@ -263,16 +308,16 @@ func dodBuildManagedKeyArtifacts(t *testing.T) dodManagedKeyArtifacts {
 	trustedKey := base64.StdEncoding.EncodeToString(publicKey)
 	signerLDFlags := "-s -w -buildid= -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=" + trustedKey
 	goVersion := dodManagedKeyToolchainVersion(t, repo)
-	buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang")
-	runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian")
-	dodRunCommandAt(t, repo, "build shipped cgo signer image", "docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "deploy/docker/Dockerfile.signer-hsm", "--build-arg", "BUILD_IMAGE="+buildBase, "--build-arg", "BASE_IMAGE="+runtimeBase, "--build-arg", "LDFLAGS="+signerLDFlags, "-t", "trstctl-signer-hsm:dod", ".")
-	signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", dodManagedKeyRuntimePlatform)
+	buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang", platform)
+	runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian", platform)
+	dodRunCommandAt(t, repo, "build shipped cgo signer image", "docker", "build", "--platform", platform, "-f", "deploy/docker/Dockerfile.signer-hsm", "--build-arg", "BUILD_IMAGE="+buildBase, "--build-arg", "BASE_IMAGE="+runtimeBase, "--build-arg", "LDFLAGS="+signerLDFlags, "-t", "trstctl-signer-hsm:dod", ".")
+	signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", platform)
 	// BuildKit resolves a bare sha256 image ID as a registry repository name.
 	// Docker's local image-ID resolver is the path that can consume these exact
 	// just-built bytes without falling back to a mutable local tag or registry.
 	t.Setenv("DOCKER_BUILDKIT", "0")
-	dodRunCommandAt(t, repo, "build independent device-reader image", "docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime", "--build-arg", "SIGNER_IMAGE="+signerImage, "-t", "trstctl-managed-key-runtime:dod", ".")
-	runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", dodManagedKeyRuntimePlatform)
+	dodRunCommandAt(t, repo, "build independent device-reader image", "docker", "build", "--platform", platform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime", "--build-arg", "SIGNER_IMAGE="+signerImage, "-t", "trstctl-managed-key-runtime:dod", ".")
+	runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", platform)
 	network := "trstctl-dod-hsm-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	dodRunCommand(t, "create isolated managed-key proof network", "docker", "network", "create", network)
 	t.Cleanup(func() {
@@ -281,6 +326,7 @@ func dodBuildManagedKeyArtifacts(t *testing.T) dodManagedKeyArtifacts {
 	t.Setenv("TRSTCTL_HSM_PROOF_NETWORK", network)
 	t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", runtimeImage)
 	return dodManagedKeyArtifacts{
+		platform:    platform,
 		licenseFile: licenseFile, licensePublicKey: append([]byte(nil), publicKey...),
 		postgresDSN: dodManagedKeyPostgresDSN(t), root: root, repo: repo, network: network, runtimeImage: runtimeImage,
 	}
@@ -789,7 +835,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 		t.Fatalf("initial managed-key route status=%d durable=%s", status, runtime.durableDiagnostics())
 	}
 	session := proof.StartResponse(t, entryID, generateResponse)
-	generated := dodDecodeManagedKey(t, session.ResponseBody())
+	generated := runtime.settledManagedKey(session.ResponseBody())
 	dodRequireActiveManagedKey(t, generated)
 	runtime.requireHardwareKeyID(generated.KeyID)
 	if generated.Extractable {
@@ -799,7 +845,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 		runtime.assertTPMForeignCollisionAndOperationTag(generated.KeyID)
 	}
 	// Same HTTP idempotency key must return the original provider handle.
-	replayed := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"provider": provider, "algorithm": string(crypto.RSA2048)})))
+	replayed := runtime.settledManagedKey(runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys", "generate", map[string]string{"provider": provider, "algorithm": string(crypto.RSA2048)})))
 	runtime.requireHardwareKeyID(replayed.KeyID)
 	if replayed.KeyID != generated.KeyID {
 		t.Fatalf("HTTP idempotency replay minted %q after %q", replayed.KeyID, generated.KeyID)
@@ -822,7 +868,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	case <-time.After(35 * time.Second):
 		t.Fatal("managed-key outbox did not recover after signer restart")
 	}
-	rotated := dodDecodeManagedKey(t, runtime.responseBody(rotateResponse))
+	rotated := runtime.settledManagedKey(runtime.responseBody(rotateResponse))
 	dodRequireActiveManagedKey(t, rotated)
 	runtime.requireHardwareKeyID(rotated.KeyID)
 	if rotated.KeyID == generated.KeyID || bytes.Equal(rotated.PublicDER, generated.PublicDER) {
@@ -840,7 +886,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	}
 
 	runtime.approveManagedKeyAction(rotated.KeyID, "revoke")
-	revoked := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/revoke", "revoke", map[string]string{"key_id": rotated.KeyID})))
+	revoked := runtime.settledManagedKey(runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/revoke", "revoke", map[string]string{"key_id": rotated.KeyID})))
 	runtime.requireHardwareKeyID(revoked.KeyID)
 	if revoked.KeyID != rotated.KeyID || revoked.State != "revoked" {
 		t.Fatalf("revoke state = %q", revoked.State)
@@ -852,7 +898,7 @@ func dodRunManagedKeyProvider(t *testing.T, artifacts dodManagedKeyArtifacts, en
 	}
 
 	runtime.approveManagedKeyAction(rotated.KeyID, "zeroize")
-	zeroized := dodDecodeManagedKey(t, runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/zeroize", "zeroize", map[string]string{"key_id": rotated.KeyID})))
+	zeroized := runtime.settledManagedKey(runtime.responseBody(dodManagedKeyRequest(runtime, http.MethodPost, "/api/v1/managed-keys/zeroize", "zeroize", map[string]string{"key_id": rotated.KeyID})))
 	runtime.requireHardwareKeyID(zeroized.KeyID)
 	wantZeroizeState := "zeroized"
 	if provider == config.ManagedKeyProviderAWS || provider == config.ManagedKeyProviderAzureKeyVault || provider == config.ManagedKeyProviderGCPKMS {
@@ -1370,7 +1416,7 @@ func (r *dodManagedKeyRuntime) startSigner() {
 	groupMountSource := proof.DockerHostMountSource(r.t, groupFile)
 	args := []string{
 		"run", "-d", "--name", r.containerName,
-		"--platform", dodManagedKeyRuntimePlatform,
+		"--platform", r.artifacts.platform,
 		"--user", strconv.Itoa(uid) + ":" + strconv.Itoa(gid),
 		"--security-opt", "no-new-privileges", "--cap-drop", "ALL",
 		"--network", r.artifacts.network,
@@ -2221,6 +2267,108 @@ func dodDecodeManagedKey(t *testing.T, body []byte) dodManagedKeyWire {
 	return value
 }
 
+// A queued managed-key receipt is the route's documented answer when its
+// two-second fast path ends before the durable outbox finishes the provider
+// action (a cold signer or provider). The proof settles it the way a client
+// does instead of reading the receipt as a key.
+func TestDODManagedKeyQueuedReceiptIsSettledNotReadAsAKey(t *testing.T) {
+	id := "managedkey:" + strings.Repeat("ab", 32)
+	queued := []byte(`{"operation_id":"` + id + `","status":"queued","status_url":"/api/v1/managed-keys/operations/` + id + `"}`)
+	if got, err := dodQueuedManagedKeyOperation(queued); err != nil || got != id {
+		t.Fatalf("queued receipt = %q, %v; want operation %q", got, err, id)
+	}
+	if got, err := dodQueuedManagedKeyOperation([]byte(`{"key_id":"k","algorithm":"RSA-2048","state":"active"}`)); err != nil || got != "" {
+		t.Fatalf("a finished key read as a queued receipt: %q, %v", got, err)
+	}
+	for _, forged := range []string{
+		`{"operation_id":"` + id + `","status":"queued","status_url":"https://elsewhere.example/x"}`,
+		`{"operation_id":"op-1","status":"queued","status_url":"/api/v1/managed-keys/operations/op-1"}`,
+	} {
+		if _, err := dodQueuedManagedKeyOperation([]byte(forged)); err == nil {
+			t.Fatalf("malformed queued receipt accepted: %s", forged)
+		}
+	}
+}
+
+// dodQueuedManagedKeyOperation returns the operation a 202 queued receipt
+// names, or "" when the body is a finished key.
+func dodQueuedManagedKeyOperation(body []byte) (string, error) {
+	var receipt struct {
+		OperationID string `json:"operation_id"`
+		Status      string `json:"status"`
+		StatusURL   string `json:"status_url"`
+	}
+	if err := json.Unmarshal(body, &receipt); err != nil || receipt.Status != "queued" {
+		return "", nil
+	}
+	if !strings.HasPrefix(receipt.OperationID, "managedkey:") || len(receipt.OperationID) != len("managedkey:")+64 ||
+		receipt.StatusURL != "/api/v1/managed-keys/operations/"+receipt.OperationID {
+		return "", fmt.Errorf("queued managed-key receipt is malformed: %s", body)
+	}
+	return receipt.OperationID, nil
+}
+
+// settledManagedKey reads the key a managed-key mutation produced. A finished
+// response is the key itself; a queued receipt is polled through its status
+// URL until the durable operation completes, and the result key is then read
+// from the tenant's managed-key inventory.
+func (r *dodManagedKeyRuntime) settledManagedKey(body []byte) dodManagedKeyWire {
+	r.t.Helper()
+	operationID, err := dodQueuedManagedKeyOperation(body)
+	if err != nil {
+		r.t.Fatal(err)
+	}
+	if operationID == "" {
+		return dodDecodeManagedKey(r.t, body)
+	}
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		var operation struct {
+			Status      string `json:"status"`
+			Provider    string `json:"provider"`
+			ResultKeyID string `json:"result_key_id"`
+		}
+		raw := r.responseBody(dodManagedKeyRequest(r, http.MethodGet, "/api/v1/managed-keys/operations/"+operationID, "operation", nil))
+		if err := json.Unmarshal(raw, &operation); err != nil {
+			r.t.Fatalf("decode managed-key operation: %v body=%s", err, raw)
+		}
+		switch operation.Status {
+		case "completed":
+			return r.inventoryManagedKey(operation.Provider, operation.ResultKeyID)
+		case "failed":
+			r.t.Fatalf("managed-key operation failed: %s durable=%s", raw, r.durableDiagnostics())
+		}
+		if time.Now().After(deadline) {
+			r.t.Fatalf("managed-key operation is still %q after 90s durable=%s", operation.Status, r.durableDiagnostics())
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func (r *dodManagedKeyRuntime) inventoryManagedKey(provider, keyID string) dodManagedKeyWire {
+	r.t.Helper()
+	if provider == "" || keyID == "" {
+		r.t.Fatalf("completed managed-key operation names no result key (provider=%q key=%q)", provider, keyID)
+	}
+	var inventory struct {
+		Items []struct {
+			Provider string `json:"provider"`
+			dodManagedKeyWire
+		} `json:"items"`
+	}
+	raw := r.responseBody(dodManagedKeyRequest(r, http.MethodGet, "/api/v1/managed-keys?limit=100", "inventory", nil))
+	if err := json.Unmarshal(raw, &inventory); err != nil {
+		r.t.Fatalf("decode managed-key inventory: %v body=%s", err, raw)
+	}
+	for _, item := range inventory.Items {
+		if item.Provider == provider && item.KeyID == keyID {
+			return item.dodManagedKeyWire
+		}
+	}
+	r.t.Fatalf("managed-key inventory has no %s key %q: %s", provider, keyID, raw)
+	return dodManagedKeyWire{}
+}
+
 func dodRequireActiveManagedKey(t *testing.T, value dodManagedKeyWire) {
 	t.Helper()
 	if value.KeyID == "" || value.Algorithm != crypto.RSA2048 || value.State != "active" || len(value.PublicDER) < 128 {
@@ -2327,12 +2475,12 @@ func dodManagedKeyToolchainVersion(t *testing.T, repo string) string {
 	return ""
 }
 
-func dodPinnedBaseImage(t *testing.T, taggedImage, repository string) string {
+func dodPinnedBaseImage(t *testing.T, taggedImage, repository, platform string) string {
 	t.Helper()
 	if repository == "" || strings.ContainsAny(repository, "@:\t\r\n ") {
 		t.Fatalf("invalid pinned base repository %q", repository)
 	}
-	command := exec.Command("docker", "pull", "--platform", dodManagedKeyRuntimePlatform, taggedImage)
+	command := exec.Command("docker", "pull", "--platform", platform, taggedImage)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("pull exact-platform base for %s: %v output=%s", taggedImage, err, output)

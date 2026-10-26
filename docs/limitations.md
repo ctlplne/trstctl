@@ -5469,13 +5469,19 @@ closed for native PKCS#11/YubiHSM selection; use the published HSM signer artifa
 is startup-static: this is ordinary Go interface injection, not a runtime crypto
 plugin engine or a policy-selected algorithm marketplace.
 
-The shipped managed-key runtime proof is pinned to the released `linux/amd64`
-signer and an `amd64` proof runner. An arm64 Docker host that crashes while
-emulating that runner cannot qualify the shipped artifact, even when its native
-SoftHSM and swtpm component tests pass. Run the proof on a native amd64 host, or
-define and audit a separate arm64 release and proof profile before claiming arm64
-artifact coverage. Neither a component test nor a locally rebuilt signer is a
-substitute for that production-assembly proof.
+The managed-key runtime proof qualifies each released platform on a native
+runner of that platform. `make dod-gate` proves the `linux/amd64` control plane
+and cgo HSM signer on an amd64 runner. `make dod-gate-arm64` proves the
+`linux/arm64` builds of the same two release artifacts on a native arm64 runner,
+against the same custody substrate and the same seven managed-key entries
+(`tools/dodcensus/manifest-arm64.json`, which a census test keeps derived from
+the shipped manifest); CI runs it on GitHub's `ubuntu-24.04-arm` runner. The
+arm64 target refuses a Docker host that is not arm64: an emulated runner cannot
+qualify either platform's artifact, even when its SoftHSM and swtpm component
+tests pass. Neither a component test nor a locally rebuilt signer is a substitute
+for that production-assembly proof. The rest of the wiring census is proved on
+`linux/amd64`; extending the arm64 profile beyond managed-key custody is what
+comes next.
 
 Still library-tier (reachable from no served verb yet): the in-process key
 lifecycle for the local CA/issuing signing key and the secrets KEK

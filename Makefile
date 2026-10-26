@@ -267,6 +267,26 @@ dod-gate: ## Prove every required capability is compiled, production-assembled, 
 	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
 		--repo . --manifest tools/dodcensus/manifest.json --out "$(DOD_CENSUS_OUT)" $(DOD_SELECTION)
 
+DOD_ARM64_CENSUS_OUT ?= wiring-census-arm64.json
+
+# The arm64 proof profile runs the managed-key production assembly against the
+# release jobs' linux/arm64 artifacts. Emulation cannot qualify those bytes, so
+# the target refuses anything but a native arm64 Docker host.
+.PHONY: dod-gate-arm64
+dod-gate-arm64: ## Prove managed-key custody on the linux/arm64 release artifacts (native arm64 Docker host)
+	@echo ">> definition-of-done arm64 proof profile (tools/dodcensus/manifest-arm64.json)"
+	@if [ -n "$(strip $(DOD_CARD))" ] && [ -n "$(strip $(DOD_CAPABILITY))" ]; then \
+		echo "dod-gate-arm64: choose only one of DOD_CARD or DOD_CAPABILITY" >&2; exit 2; \
+	fi
+	@arch="$$(docker info --format '{{.Architecture}}' 2>/dev/null || true)"; \
+		case "$$arch" in aarch64|arm64) ;; \
+		*) echo "dod-gate-arm64: needs a native arm64 Docker host, found '$$arch'" >&2; exit 2 ;; esac
+	@set -eu; cache="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}"; \
+		if [ ! -e "$$cache" ]; then (umask 077; mkdir -p "$$cache"); fi
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) test ./tools/dodcensus/... -count=1
+	@TRSTCTL_DOD_GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" GOCACHE="$${TRSTCTL_DOD_GOCACHE:-$(DOD_GOCACHE_DEFAULT)}" $(GO) run ./tools/dodcensus \
+		--repo . --manifest tools/dodcensus/manifest-arm64.json --out "$(DOD_ARM64_CENSUS_OUT)" $(DOD_SELECTION)
+
 PQC_OPERATOR_LAB_OUT ?= dist/pqc-operator-lab-licensed.tar.gz
 
 .PHONY: pqc-operator-lab

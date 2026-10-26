@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -46,6 +47,73 @@ func TestManagedKeyManifestMatchesEnterpriseSignerAssemblyAndRuntimeBinding(t *t
 	}
 	if checked != 7 {
 		t.Fatalf("managed-key manifest entries = %d, want runtime + six providers", checked)
+	}
+}
+
+// A127: the arm64 proof profile is the managed-key slice of the shipped
+// manifest rebuilt for linux/arm64: the release jobs' arm64 builds of the static
+// control plane and the cgo HSM signer, an arm64 runner, the same custody
+// substrate, and one entry per shipped managed-key entry, proved by the arm64
+// production-assembly test. Drift from the shipped manifest fails here.
+func TestArm64ManifestMirrorsTheShippedManagedKeyProof(t *testing.T) {
+	repo, manifest := loadManagedKeyManifest(t)
+	got, err := loadManifest(filepath.Join(repo, "tools", "dodcensus", "manifest-arm64.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	arm64 := func(profile BuildProfile) BuildProfile {
+		profile.GOARCH = "arm64"
+		profile.Artifact.Platform = "linux/arm64"
+		profile.RuntimeRunner.Platform = "linux/arm64"
+		return profile
+	}
+	want := Manifest{
+		SchemaVersion: manifest.SchemaVersion, ManifestVersion: manifest.ManifestVersion,
+		ProfileOf:     shippedManifestPath,
+		BinaryPackage: manifest.BinaryPackage, DefaultBuildProfile: "static_arm64",
+		BuildProfiles: map[string]BuildProfile{
+			"static_arm64":     arm64(manifest.BuildProfiles[manifest.DefaultBuildProfile]),
+			"pkcs11_cgo_arm64": arm64(manifest.BuildProfiles["pkcs11_cgo"]),
+		},
+		Substrates: map[string]Substrate{"managed_key_custody": manifest.Substrates["managed_key_custody"]},
+	}
+	for _, entry := range manifest.Entries {
+		if entry.Capability != "hsm_kms" {
+			continue
+		}
+		entry.ID = "hsm_kms.arm64." + strings.TrimPrefix(entry.ID, "hsm_kms.")
+		entry.CardID = "WIRE-HSM-2" + entry.CardID[len(entry.CardID)-2:]
+		entry.BuildProfile = "pkcs11_cgo_arm64"
+		entry.Runtime.Test = "TestDODManagedKeyProductionAssemblyArm64"
+		want.Entries = append(want.Entries, entry)
+	}
+	if len(want.Entries) != 7 {
+		t.Fatalf("shipped managed-key entries = %d, want runtime + six providers", len(want.Entries))
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("manifest-arm64.json drifted from the managed-key slice of manifest.json; derive it again")
+	}
+
+	groups := groupRuntimeEntries(got, "", false)
+	for _, entry := range got.Entries {
+		name, profile := resolvedProfile(got, entry)
+		if evidence := inspectArtifactDeclaration(repo, profile); !evidence.OK {
+			t.Errorf("%s artifact: %s", entry.ID, evidence.Detail)
+		}
+		if evidence := inspectAssembly(repo, entry, profile); !evidence.OK {
+			t.Errorf("%s assembly: %s; required=%v found=%v", entry.ID, evidence.Detail, evidence.Required, evidence.Found)
+		}
+		if evidence := inspectRuntimeBindingForGroup(repo, entry, got.Substrates, groups[runtimeCacheKey(name, entry)], profile); !evidence.OK {
+			t.Errorf("%s runtime: %s; required=%v found=%v", entry.ID, evidence.Detail, evidence.Required, evidence.Found)
+		}
+	}
+	launched, err := launchedBinarySpecForManifest(repo, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if launched.BinaryPackage != "./cmd/trstctl" || launched.GOOS != "linux" || launched.GOARCH != "arm64" ||
+		launched.CGOEnabled != "0" || !reflect.DeepEqual(launched.CompanionPackages, []string{"./cmd/trstctl-signer"}) {
+		t.Fatalf("arm64 launched control plane = %+v, want the static linux/arm64 cmd/trstctl with its signer", launched)
 	}
 }
 
@@ -118,13 +186,18 @@ func TestManagedKeyClosureRejectsRehashedMutableBuildInputs(t *testing.T) {
 		{"runtime uses signer tag", "internal/server/dod_managed_key_runtime_test.go", `"SIGNER_IMAGE="+signerImage`, `"SIGNER_IMAGE=trstctl-signer-hsm:dod"`},
 		{"runtime changes shipped platform", "internal/server/dod_managed_key_runtime_test.go", `"linux/amd64"`, `"linux/arm64"`},
 		{"runtime image inspection drops platform", "internal/server/dod_managed_key_runtime_test.go", `"--format={{.Id}} {{.Os}}/{{.Architecture}}"`, `"--format={{.Id}}"`},
-		{"base pull drops platform", "internal/server/dod_managed_key_runtime_test.go", `"docker", "pull", "--platform", dodManagedKeyRuntimePlatform, taggedImage`, `"docker", "pull", taggedImage`},
+		{"base pull drops platform", "internal/server/dod_managed_key_runtime_test.go", `"docker", "pull", "--platform", platform, taggedImage`, `"docker", "pull", taggedImage`},
+		{"arm64 profile changes its frozen platform", "internal/server/dod_managed_key_runtime_test.go", `dodManagedKeyArm64RuntimePlatform          = "linux/arm64"`, `dodManagedKeyArm64RuntimePlatform          = "linux/amd64"`},
+		{"signer run pins a literal platform", "internal/server/dod_managed_key_runtime_test.go", `"--platform", r.artifacts.platform,`, `"--platform", "linux/amd64",`},
+		{"artifacts accept any platform", "internal/server/dod_managed_key_runtime_test.go", `if platform != dodManagedKeyRuntimePlatform && platform != dodManagedKeyArm64RuntimePlatform {`, `if platform == "" {`},
+		{"arm64 proof skips the TPM restart", "internal/server/dod_managed_key_runtime_test.go", `dodRunManagedKeyProvider(t, artifacts, "hsm_kms.arm64.tpm2", config.ManagedKeyProviderTPM2, tpmEntry, tpmEntry.Endpoint())`, `_ = tpmEntry`},
 		{"runtime restores embedded postgres sibling", "internal/server/dod_managed_key_runtime_test.go", `postgresDSN: dodManagedKeyPostgresDSN(t)`, `postgresDSN: serverTestPostgresDSN(t)`},
 		{"postgres image becomes mutable", "internal/server/dod_managed_key_runtime_test.go", `postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685`, `postgres:16.15-alpine`},
 		{"postgres publishes on every interface", "internal/server/dod_managed_key_runtime_test.go", `fmt.Sprintf("127.0.0.1:%d:5432", port)`, `fmt.Sprintf("0.0.0.0:%d:5432", port)`},
 		{"postgres runs as root", "internal/server/dod_managed_key_runtime_test.go", `postgresUser := strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `postgresUser := "0:0"`},
 		{"postgres shares host PID namespace", "internal/server/dod_managed_key_runtime_test.go", `"--network", route.network, "--pids-limit", "256", "--memory", "512m"`, `"--network", route.network, "--pid", "host", "--pids-limit", "256", "--memory", "512m"`},
-		{"inner emulator run drops platform", "tools/dodcensus/substrates/managed_keys.py", `"docker", "run", "--rm", "--platform", "linux/amd64", "--name"`, `"docker", "run", "--rm", "--name"`},
+		{"inner emulator run drops platform", "tools/dodcensus/substrates/managed_keys.py", `"docker", "run", "--rm", "--platform", platform, "--name"`, `"docker", "run", "--rm", "--name"`},
+		{"inner emulator trusts any platform", "tools/dodcensus/substrates/managed_keys.py", `PROOF_PLATFORMS = ("linux/amd64", "linux/arm64")`, `PROOF_PLATFORMS = ("linux/amd64", "linux/arm64", "linux/386")`},
 		{"receipt omits runtime image id", "tools/dodcensus/substrates/managed_keys.py", `"runtime_identity": image`, `"runtime_identity": "mutable"`},
 		{"signer drops nonroot uid", "internal/server/dod_managed_key_runtime_test.go", `"--user", strconv.Itoa(uid) + ":" + strconv.Itoa(gid)`, `"--user", "0:0"`},
 		{"signer drops no-new-privileges", "internal/server/dod_managed_key_runtime_test.go", `"--security-opt", "no-new-privileges"`, `"--security-opt", "seccomp=unconfined"`},
@@ -275,15 +348,15 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 	}
 	source := string(runtimeSource)
 	for _, required := range []string{
-		`buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang")`,
-		`runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian")`,
-		`"docker", "pull", "--platform", dodManagedKeyRuntimePlatform, taggedImage`,
+		`buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang", platform)`,
+		`runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian", platform)`,
+		`"docker", "pull", "--platform", platform, taggedImage`,
 		`"--format={{json .RepoDigests}}"`,
-		`"docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "deploy/docker/Dockerfile.signer-hsm"`,
-		`signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", dodManagedKeyRuntimePlatform)`,
-		`"docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime"`,
+		`"docker", "build", "--platform", platform, "-f", "deploy/docker/Dockerfile.signer-hsm"`,
+		`signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", platform)`,
+		`"docker", "build", "--platform", platform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime"`,
 		`"SIGNER_IMAGE="+signerImage`,
-		`runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", dodManagedKeyRuntimePlatform)`,
+		`runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", platform)`,
 		`"--format={{.Id}} {{.Os}}/{{.Architecture}}"`,
 		`len(fields) != 2 || fields[1] != platform`,
 		`t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", runtimeImage)`,
@@ -303,8 +376,8 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 			t.Errorf("managed-key runtime source omits content-addressed image dataflow %q", required)
 		}
 	}
-	if count := strings.Count(source, `"--platform", dodManagedKeyRuntimePlatform`); count != 4 {
-		t.Errorf("managed-key runtime pins exact shipped pull/build/run platform %d times, want four", count)
+	if count := strings.Count(source, `"--platform", platform`) + strings.Count(source, `"--platform", r.artifacts.platform`); count != 4 {
+		t.Errorf("managed-key runtime pins the profile's pull/build/run platform %d times, want four", count)
 	}
 	for _, forbidden := range []string{
 		`t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", "trstctl-managed-key-runtime:dod")`,
@@ -326,7 +399,7 @@ func TestManagedKeyRuntimeUsesContentAddressedImageAtBothRunSites(t *testing.T) 
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(pythonSource), "image = required_image_id()") ||
-		!strings.Contains(string(pythonSource), `"docker", "run", "--rm", "--platform", "linux/amd64"`) ||
+		!strings.Contains(string(pythonSource), `"docker", "run", "--rm", "--platform", platform`) ||
 		!strings.Contains(string(pythonSource), `"runtime_identity": image`) ||
 		strings.Contains(string(pythonSource), `os.environ.get(IMAGE_ENV, "trstctl-managed-key-runtime:dod")`) {
 		t.Fatal("managed-key substrate does not fail closed on a content-addressed inner image id")

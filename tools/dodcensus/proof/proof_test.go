@@ -728,6 +728,35 @@ func TestLaunchedResponseStatusCodeExposesOnlyGateOwnedStatus(t *testing.T) {
 	}
 }
 
+// A127: the gate may launch the static control plane the release image job
+// ships for linux/amd64 and linux/arm64, and nothing else.
+func TestLaunchedProfileIsAClosedStaticLinuxSet(t *testing.T) {
+	exact := expectation{
+		LaunchedModulePath: "trstctl.com/trstctl", LaunchedBinaryPackage: "./cmd/trstctl",
+		LaunchedCGOEnabled: "0", LaunchedGOOS: "linux", LaunchedGOARCH: "amd64",
+	}
+	for _, goarch := range []string{"amd64", "arm64"} {
+		accepted := exact
+		accepted.LaunchedGOARCH = goarch
+		if err := validateLaunchedProfile(accepted); err != nil {
+			t.Fatalf("static linux/%s control plane refused: %v", goarch, err)
+		}
+	}
+	for name, mutate := range map[string]func(*expectation){
+		"riscv64":        func(e *expectation) { e.LaunchedGOARCH = "riscv64" },
+		"darwin":         func(e *expectation) { e.LaunchedGOOS = "darwin"; e.LaunchedGOARCH = "arm64" },
+		"cgo":            func(e *expectation) { e.LaunchedCGOEnabled = "1" },
+		"signer package": func(e *expectation) { e.LaunchedBinaryPackage = "./cmd/trstctl-signer" },
+		"no module":      func(e *expectation) { e.LaunchedModulePath = "" },
+	} {
+		refused := exact
+		mutate(&refused)
+		if err := validateLaunchedProfile(refused); err == nil {
+			t.Errorf("%s launched profile was accepted", name)
+		}
+	}
+}
+
 func TestShippedBuildEnvironmentUsesPrivateContainerWorkDirectory(t *testing.T) {
 	expected := expectation{LaunchedCGOEnabled: "0", LaunchedGOOS: "linux", LaunchedGOARCH: "amd64"}
 	environment := shippedBuildEnvironment(expected, "/long/host/receipt/shipped-cache", RuntimeTempDir)

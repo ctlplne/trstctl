@@ -8,6 +8,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import managed_keys  # noqa: E402
 
 
+class EntryModeTest(unittest.TestCase):
+    def test_arm64_profile_entries_use_their_provider_mode(self) -> None:
+        modes = {
+            "runtime": "aws", "aws_kms": "aws", "azure_key_vault": "azure", "gcp_kms": "gcp",
+            "pkcs11": "hardware", "tpm2": "hardware", "yubihsm2": "hardware",
+        }
+        for provider, mode in modes.items():
+            for entry_id in (f"hsm_kms.{provider}", f"hsm_kms.arm64.{provider}"):
+                self.assertEqual(managed_keys.State._mode(entry_id), mode, entry_id)
+
+
 class HardwareWitnessVerificationTest(unittest.TestCase):
     def test_tampered_signature_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory(prefix="trstctl-managed-key-test-") as raw:

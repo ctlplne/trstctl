@@ -195,10 +195,22 @@ func (p *ShippedProcess) revalidateBuiltArtifacts() error {
 	return p.watch.AssertQuiet()
 }
 
-func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, error) {
+// launchedPlatforms are the static control-plane builds the release image job
+// ships and a gate may launch: linux/amd64, and linux/arm64 for the arm64 proof
+// profile (A127).
+var launchedPlatforms = map[string]bool{"linux/amd64": true, "linux/arm64": true}
+
+func validateLaunchedProfile(expected expectation) error {
 	if expected.LaunchedBinaryPackage != "./cmd/trstctl" || expected.LaunchedModulePath == "" ||
-		expected.LaunchedGOOS != "linux" || expected.LaunchedGOARCH != "amd64" || expected.LaunchedCGOEnabled != "0" {
-		return shippedBuild{}, fmt.Errorf("gate-issued launched binary profile is not exact static linux/amd64 cmd/trstctl")
+		!launchedPlatforms[expected.LaunchedGOOS+"/"+expected.LaunchedGOARCH] || expected.LaunchedCGOEnabled != "0" {
+		return fmt.Errorf("gate-issued launched binary profile is not exact static linux/amd64 or linux/arm64 cmd/trstctl")
+	}
+	return nil
+}
+
+func buildShippedProcess(expected expectation, publicKey []byte) (shippedBuild, error) {
+	if err := validateLaunchedProfile(expected); err != nil {
+		return shippedBuild{}, err
 	}
 	if runtime.GOOS != expected.LaunchedGOOS || runtime.GOARCH != expected.LaunchedGOARCH {
 		return shippedBuild{}, fmt.Errorf("launched build host %s/%s does not match gate profile %s/%s", runtime.GOOS, runtime.GOARCH, expected.LaunchedGOOS, expected.LaunchedGOARCH)

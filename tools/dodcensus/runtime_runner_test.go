@@ -376,10 +376,22 @@ func TestRuntimeRunnerPrepareUsesOnlyCommittedBaseAndExactPlatform(t *testing.T)
 	repo := t.TempDir()
 	manifest := validManifest(t, repo, enforcementRequired)
 	profile := manifest.BuildProfiles[manifest.DefaultBuildProfile]
+	// A127: the arm64 proof profile's runner is a reviewed platform; any other
+	// platform, or a runner that does not match its profile, is refused.
 	profile.GOARCH = "arm64"
 	profile.RuntimeRunner.Platform = "linux/arm64"
-	if evidence := inspectRuntimeRunnerProof(repo, profile); evidence.OK {
-		t.Fatalf("self-consistent but unsupported arm64 runner profile passed: %+v", evidence)
+	if err := validateRuntimeRunnerProof("arm64 profile", profile); err != nil {
+		t.Fatalf("the arm64 proof profile's runner was refused: %v", err)
+	}
+	profile.GOARCH = "riscv64"
+	profile.RuntimeRunner.Platform = "linux/riscv64"
+	if err := validateRuntimeRunnerProof("riscv64 profile", profile); err == nil || !strings.Contains(err.Error(), "linux/amd64 or linux/arm64") {
+		t.Fatalf("an unreviewed runner platform = %v, want refused", err)
+	}
+	profile.GOARCH = "amd64"
+	profile.RuntimeRunner.Platform = "linux/arm64"
+	if err := validateRuntimeRunnerProof("mismatched profile", profile); err == nil {
+		t.Fatal("a linux/arm64 runner for a linux/amd64 profile passed")
 	}
 }
 
@@ -406,8 +418,11 @@ func TestRuntimeRunnerPreflightCoversBothWritesAndAuthenticatedBroker(t *testing
 		`os.open(map_file, os.O_RDONLY)`,
 		`os.read(descriptor, 4) != b"\x7fELF"`,
 		`["/usr/local/go/bin/go", "version"]`,
-		`go version go1.26.10 linux/amd64`,
-		`kind_digest != "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa"`,
+		`expected_platform = os.environ["TRSTCTL_DOD_PREFLIGHT_PLATFORM"]`,
+		`"linux/amd64": "eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa"`,
+		`"linux/arm64": "8e1014e87c34901cc422a1445866835d1e666f2a61301c27e722bdeab5a1f7e4"`,
+		`if version != "go version go1.26.10 " + expected_platform:`,
+		`kind_digest != kind_digests[expected_platform]`,
 		`"kind v0.31.0" not in kind_version`,
 		`openssl_version.startswith("OpenSSL 3.5.7 ")`,
 		`os.environ.get("OPENSSL_CONF") != "/dev/null"`,

@@ -55,8 +55,13 @@ var (
 
 // Manifest is the versioned, repo-owned list of product claims under the DoD gate.
 type Manifest struct {
-	SchemaVersion       int                     `json:"schema_version"`
-	ManifestVersion     int                     `json:"manifest_version"`
+	SchemaVersion   int `json:"schema_version"`
+	ManifestVersion int `json:"manifest_version"`
+	// ProfileOf marks a proof-profile manifest: a slice of the shipped manifest
+	// re-proved on another platform (the arm64 profile). It may name only the
+	// shipped manifest, and its census leaves the breadth-wide product claims
+	// to the shipped manifest's own census.
+	ProfileOf           string                  `json:"profile_of,omitempty"`
 	BinaryPackage       string                  `json:"binary_package"`
 	DefaultBuildProfile string                  `json:"default_build_profile"`
 	BuildProfiles       map[string]BuildProfile `json:"build_profiles"`
@@ -417,7 +422,7 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("dodcensus", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	repoFlag := flags.String("repo", ".", "repository root")
-	manifestFlag := flags.String("manifest", "tools/dodcensus/manifest.json", "versioned capability manifest")
+	manifestFlag := flags.String("manifest", shippedManifestPath, "versioned capability manifest")
 	outFlag := flags.String("out", "wiring-census.json", "JSON receipt path")
 	capabilityFlag := flags.String("capability", "", "require one exact manifest entry ID to be REQUIRED and SERVED")
 	cardFlag := flags.String("card", "", "require the entry for one DoD card ID to be served")
@@ -520,12 +525,19 @@ func loadManifest(path string) (Manifest, error) {
 	return manifest, nil
 }
 
+// shippedManifestPath is the repository-relative shipped manifest: the one whose
+// full census certifies the product claims.
+const shippedManifestPath = "tools/dodcensus/manifest.json"
+
 func validateManifest(manifest Manifest) error {
 	if manifest.SchemaVersion != 1 {
 		return fmt.Errorf("schema_version %d is unsupported (want 1)", manifest.SchemaVersion)
 	}
 	if manifest.ManifestVersion < 1 {
 		return fmt.Errorf("manifest_version must be positive")
+	}
+	if manifest.ProfileOf != "" && manifest.ProfileOf != shippedManifestPath {
+		return fmt.Errorf("profile_of %q must name the shipped manifest %s", manifest.ProfileOf, shippedManifestPath)
 	}
 	if manifest.BinaryPackage == "" {
 		return fmt.Errorf("binary_package is required")

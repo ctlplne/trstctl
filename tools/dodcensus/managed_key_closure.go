@@ -13,7 +13,10 @@ import (
 	"strings"
 )
 
-const managedKeyRuntimePlatform = "linux/amd64"
+// managedKeyRuntimePlatforms are the managed-key proof profiles' platforms:
+// the shipped linux/amd64 proof and the arm64 proof profile (A127). Each is
+// frozen in the runtime test and run natively on a host of its architecture.
+var managedKeyRuntimePlatforms = map[string]bool{"linux/amd64": true, "linux/arm64": true}
 
 var managedKeyIdentityClosure = []string{
 	".github/base-image-digests.env",
@@ -131,32 +134,33 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 	if err != nil {
 		return err
 	}
-	platformDeclared := false
+	declared := map[string]bool{}
 	for _, line := range strings.Split(runtimeSource, "\n") {
-		if strings.Join(strings.Fields(line), " ") == `dodManagedKeyRuntimePlatform = "linux/amd64"` {
-			platformDeclared = true
-			break
-		}
+		declared[strings.Join(strings.Fields(line), " ")] = true
 	}
-	if !platformDeclared {
-		return fmt.Errorf("managed-key runtime does not freeze its shipped platform to linux/amd64")
+	if !declared[`dodManagedKeyRuntimePlatform = "linux/amd64"`] || !declared[`dodManagedKeyArm64RuntimePlatform = "linux/arm64"`] {
+		return fmt.Errorf("managed-key runtime does not freeze its profile platforms to linux/amd64 and linux/arm64")
 	}
 	if err := inspectManagedKeyTPMRestartClosure("internal/server/dod_managed_key_runtime_test.go", runtimeSource); err != nil {
 		return fmt.Errorf("managed-key TPM restart proof: %w", err)
 	}
 	for _, required := range []string{
-		`buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang")`,
-		`runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian")`,
-		`"docker", "pull", "--platform", dodManagedKeyRuntimePlatform, taggedImage`,
+		`artifacts := dodBuildManagedKeyArtifacts(t, dodManagedKeyRuntimePlatform)`,
+		`artifacts := dodBuildManagedKeyArtifacts(t, dodManagedKeyArm64RuntimePlatform)`,
+		`if platform != dodManagedKeyRuntimePlatform && platform != dodManagedKeyArm64RuntimePlatform {`,
+		`buildBase := dodPinnedBaseImage(t, "golang:"+goVersion+"-bookworm", "golang", platform)`,
+		`runtimeBase := dodPinnedBaseImage(t, "debian:bookworm-slim", "debian", platform)`,
+		`"docker", "pull", "--platform", platform, taggedImage`,
 		`"--format={{json .RepoDigests}}"`,
-		`"docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "deploy/docker/Dockerfile.signer-hsm"`,
+		`"docker", "build", "--platform", platform, "-f", "deploy/docker/Dockerfile.signer-hsm"`,
 		`"BUILD_IMAGE="+buildBase`,
 		`"BASE_IMAGE="+runtimeBase`,
-		`signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", dodManagedKeyRuntimePlatform)`,
+		`signerImage := dodBuiltImageID(t, "trstctl-signer-hsm:dod", platform)`,
 		`t.Setenv("DOCKER_BUILDKIT", "0")`,
-		`"docker", "build", "--platform", dodManagedKeyRuntimePlatform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime"`,
+		`"docker", "build", "--platform", platform, "-f", "tools/dodcensus/Dockerfile.managed-key-runtime"`,
 		`"SIGNER_IMAGE="+signerImage`,
-		`runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", dodManagedKeyRuntimePlatform)`,
+		`runtimeImage := dodBuiltImageID(t, "trstctl-managed-key-runtime:dod", platform)`,
+		`"--platform", r.artifacts.platform,`,
 		`dodManagedKeyPostgresImage                 = "postgres:16.15-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685"`,
 		`postgresDSN: dodManagedKeyPostgresDSN(t)`,
 		`"docker", "pull", dodManagedKeyPostgresImage`,
@@ -213,8 +217,11 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 			return fmt.Errorf("managed-key runtime omits content-addressed image dataflow %q", required)
 		}
 	}
-	if count := strings.Count(runtimeSource, `"--platform", dodManagedKeyRuntimePlatform`); count != 4 {
-		return fmt.Errorf("managed-key runtime pins linux/amd64 at %d shipped pull/build/run sites, want four", count)
+	if count := strings.Count(runtimeSource, `"--platform", platform`); count != 3 {
+		return fmt.Errorf("managed-key runtime pins the profile platform at %d pull/build sites, want three", count)
+	}
+	if count := strings.Count(runtimeSource, `"--platform", r.artifacts.platform`); count != 1 {
+		return fmt.Errorf("managed-key runtime pins the profile platform at %d signer run sites, want one", count)
 	}
 	if count := strings.Count(runtimeSource, `"--format={{.Id}} {{.Os}}/{{.Architecture}}"`); count != 2 {
 		return fmt.Errorf("managed-key runtime has %d architecture-bound image inspections, want PostgreSQL plus signer", count)
@@ -223,6 +230,7 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 		return fmt.Errorf("managed-key runtime has %d exclusive private NSS writers, want PostgreSQL plus signer", count)
 	}
 	for _, forbidden := range []string{
+		`"--platform", dodManagedKeyRuntimePlatform`, `"--platform", "linux/`,
 		`"BUILD_IMAGE=golang:`, `"BASE_IMAGE=debian:`,
 		`"SIGNER_IMAGE=trstctl-signer-hsm:dod"`,
 		`t.Setenv("TRSTCTL_HSM_PROOF_IMAGE", "trstctl-managed-key-runtime:dod")`,
@@ -272,7 +280,9 @@ func inspectManagedKeyRuntimeClosure(repo string, substrate Substrate) error {
 	}
 	for _, required := range []string{
 		"image = required_image_id()",
-		`"docker", "run", "--rm", "--platform", "linux/amd64"`,
+		"platform = required_image_platform(image)",
+		`PROOF_PLATFORMS = ("linux/amd64", "linux/arm64")`,
+		`"docker", "run", "--rm", "--platform", platform`,
 	} {
 		if !strings.Contains(substrateSource, required) {
 			return fmt.Errorf("managed-key substrate omits image-ID receipt binding %q", required)
@@ -494,18 +504,32 @@ func managedKeyCollectConstants(constants map[string]string, declaration *ast.Ge
 }
 
 func inspectManagedKeyTPMEntry(syntax *managedKeyRuntimeSyntax) error {
-	function, err := managedKeyRequiredFunction(syntax, "TestDODManagedKeyProductionAssembly")
+	// Each profile's production test must reach the TPM2 provider: the shipped
+	// linux/amd64 proof and the arm64 proof profile (A127).
+	for _, c := range []struct{ test, entry string }{
+		{"TestDODManagedKeyProductionAssembly", "hsm_kms.tpm2"},
+		{"TestDODManagedKeyProductionAssemblyArm64", "hsm_kms.arm64.tpm2"},
+	} {
+		if err := inspectManagedKeyTPMEntryIn(syntax, c.test, c.entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func inspectManagedKeyTPMEntryIn(syntax *managedKeyRuntimeSyntax, test, entry string) error {
+	function, err := managedKeyRequiredFunction(syntax, test)
 	if err != nil {
 		return err
 	}
 	for _, statement := range function.Body.List {
 		selection, ok := statement.(*ast.IfStmt)
-		if !ok || !managedKeyOnlySelection(selection.Cond, "hsm_kms.tpm2") {
+		if !ok || !managedKeyOnlySelection(selection.Cond, entry) {
 			continue
 		}
 		index := managedKeyFindStatement(selection.Body, func(statement ast.Stmt) bool {
 			return managedKeyExpressionCall(statement, "dodRunManagedKeyProvider",
-				managedKeyPathArg("t"), managedKeyPathArg("artifacts"), managedKeyStringArg("hsm_kms.tpm2"),
+				managedKeyPathArg("t"), managedKeyPathArg("artifacts"), managedKeyStringArg(entry),
 				managedKeyPathArg("config.ManagedKeyProviderTPM2"), managedKeyPathArg("tpmEntry"),
 				managedKeyZeroArgCall("tpmEntry.Endpoint"),
 			)
@@ -514,7 +538,7 @@ func inspectManagedKeyTPMEntry(syntax *managedKeyRuntimeSyntax) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("production test does not reach dodRunManagedKeyProvider with the TPM2 provider")
+	return fmt.Errorf("%s does not reach dodRunManagedKeyProvider with the TPM2 provider", test)
 }
 
 func inspectManagedKeyProviderRestartOrder(syntax *managedKeyRuntimeSyntax) error {
