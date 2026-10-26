@@ -7,13 +7,18 @@ package a10test
 import (
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // Binding is the certificate/key material bound to a client-SSL template.
@@ -36,6 +41,11 @@ type Server struct {
 	certs    map[string][]byte
 	keys     map[string][]byte
 	bindings map[string]Binding
+	// A122: keys the A10 generated itself (key file -> key), the CSRs it made
+	// with them, and how often a client read such a key file.
+	deviceKeys     map[string]*crypto.LockedSigner
+	csrs           map[string][]byte
+	deviceKeyReads int
 }
 
 // New starts a fake A10 endpoint requiring the given credentials.
@@ -46,6 +56,9 @@ func New(user, pass string) *Server {
 		certs:    map[string][]byte{},
 		keys:     map[string][]byte{},
 		bindings: map[string]Binding{},
+
+		deviceKeys: map[string]*crypto.LockedSigner{},
+		csrs:       map[string][]byte{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -58,7 +71,39 @@ func (s *Server) URL() string { return s.srv.URL }
 func (s *Server) Client() *http.Client { return s.srv.Client() }
 
 // Close shuts the server down.
-func (s *Server) Close() { s.srv.Close() }
+func (s *Server) Close() {
+	s.srv.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for name, key := range s.deviceKeys {
+		key.Destroy()
+		delete(s.deviceKeys, name)
+	}
+}
+
+// DeviceKey reports whether the A10 generated the key file name itself.
+func (s *Server) DeviceKey(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.deviceKeys[name]
+	return ok
+}
+
+// DeviceKeyReads counts reads of a key file the A10 generated. A client that
+// keeps keys on the appliance never makes one.
+func (s *Server) DeviceKeyReads() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.deviceKeyReads
+}
+
+// RemoveCSR deletes a CSR file so a test can model an appliance key whose
+// object is gone.
+func (s *Server) RemoveCSR(name string) {
+	s.mu.Lock()
+	delete(s.csrs, name)
+	s.mu.Unlock()
+}
 
 // HasFile reports whether an uploaded ssl-cert or ssl-key file of that name exists.
 func (s *Server) HasFile(kind, name string) bool {
@@ -89,6 +134,21 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.requireToken(w, r, func() { s.upload(w, body, "ssl-cert") })
 	case r.Method == http.MethodPost && r.URL.Path == "/axapi/v3/file/ssl-key":
 		s.requireToken(w, r, func() { s.upload(w, body, "ssl-key") })
+	// A122: the A10 generates a key file and a CSR file.
+	case r.Method == http.MethodPost && r.URL.Path == "/axapi/v3/pki/create":
+		s.requireToken(w, r, func() { s.createKey(w, body) })
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/axapi/v3/file/csr/"):
+		s.requireToken(w, r, func() {
+			name, _ := url.PathUnescape(strings.TrimPrefix(r.URL.Path, "/axapi/v3/file/csr/"))
+			s.mu.Lock()
+			csr, ok := s.csrs[name]
+			s.mu.Unlock()
+			if !ok {
+				http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
+				return
+			}
+			s.ok(w, map[string]any{"csr": map[string]string{"file": name, "file-content": base64.StdEncoding.EncodeToString(csr)}})
+		})
 	// D4: reading an uploaded file, so a rollback can tell "the predecessor is
 	// gone" from "the appliance did not answer".
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/axapi/v3/file/"):
@@ -103,6 +163,9 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		_, isCert := s.certs[name]
 		_, isKey := s.keys[name]
 		exists := isCert || isKey
+		if _, device := s.deviceKeys[name]; device && parts[0] == "ssl-key" {
+			s.deviceKeyReads++
+		}
 		s.mu.Unlock()
 		if !exists {
 			http.Error(w, `{"response":{"status":"fail"}}`, http.StatusNotFound)
@@ -216,10 +279,79 @@ func (s *Server) bind(w http.ResponseWriter, body []byte, template string) {
 		return
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	cert := append([]byte(nil), s.certs[in.ClientSSL.Cert]...)
+	if deviceKey, device := s.deviceKeys[in.ClientSSL.Key]; device {
+		// The A10 refuses a template whose certificate is not the key's.
+		info, err := certinfo.Inspect(cert)
+		if err != nil || info.SPKISHA256 != crypto.SHA256Hex(deviceKey.Public().DER) {
+			http.Error(w, `{"response":{"status":"fail","err":"certificate and key do not match"}}`, http.StatusBadRequest)
+			return
+		}
+	}
 	key := append([]byte(nil), s.keys[in.ClientSSL.Key]...)
 	s.bindings[template] = Binding{Certificate: cert, PrivateKey: key, CertFile: in.ClientSSL.Cert, KeyFile: in.ClientSSL.Key}
-	s.mu.Unlock()
+	s.ok(w, map[string]any{"response": map[string]string{"status": "OK"}})
+}
+
+// createKey generates a key file the A10 holds and a CSR file for it (A122).
+// An existing key file is a conflict, as on the device.
+func (s *Server) createKey(w http.ResponseWriter, body []byte) {
+	var in struct {
+		Create struct {
+			KeyFile     string `json:"key-file"`
+			CSRFile     string `json:"csr-file"`
+			CSRGenerate int    `json:"csr-generate"`
+			ECCurve     string `json:"ec-curve"`
+			CommonName  string `json:"common-name"`
+			SANs        []struct {
+				Type  string `json:"type"`
+				Value string `json:"value"`
+			} `json:"subject-alternate-name"`
+		} `json:"create"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil || in.Create.KeyFile == "" || in.Create.CSRFile == "" ||
+		in.Create.CSRGenerate != 1 || in.Create.ECCurve != "prime256v1" {
+		http.Error(w, `{"response":{"status":"fail","err":"key-file, csr-file and a prime256v1 curve are required"}}`, http.StatusBadRequest)
+		return
+	}
+	tmpl := crypto.CertificateRequestTemplate{CommonName: in.Create.CommonName}
+	for _, san := range in.Create.SANs {
+		switch san.Type {
+		case "dns":
+			tmpl.DNSNames = append(tmpl.DNSNames, san.Value)
+		case "ip":
+			ip := net.ParseIP(san.Value)
+			if ip == nil {
+				http.Error(w, `{"response":{"status":"fail","err":"invalid IP"}}`, http.StatusBadRequest)
+				return
+			}
+			tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
+		default:
+			http.Error(w, `{"response":{"status":"fail","err":"unsupported subject alternate name"}}`, http.StatusBadRequest)
+			return
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.keys[in.Create.KeyFile]; exists {
+		http.Error(w, `{"response":{"status":"fail","err":"file exists"}}`, http.StatusConflict)
+		return
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		http.Error(w, `{"response":{"status":"fail","err":"key generation failed"}}`, http.StatusInternalServerError)
+		return
+	}
+	csrDER, err := crypto.CreateCertificateRequest(tmpl, key)
+	if err != nil {
+		key.Destroy()
+		http.Error(w, `{"response":{"status":"fail","err":"CSR could not be created"}}`, http.StatusBadRequest)
+		return
+	}
+	s.keys[in.Create.KeyFile] = []byte("appliance-held ECDSA P-256 key")
+	s.deviceKeys[in.Create.KeyFile] = key
+	s.csrs[in.Create.CSRFile] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 	s.ok(w, map[string]any{"response": map[string]string{"status": "OK"}})
 }
 

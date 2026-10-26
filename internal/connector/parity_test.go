@@ -41,7 +41,9 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// that refuses their deploys when a relay is enrolled. For these three,
 		// E1's sentence is now true: where you run a relay, the relay is the
 		// executor rather than one of two candidates racing.
-		"a10":  {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// A122: the A10 generates its own key and CSR, so the device-generated
+		// CSR gate is met.
+		"a10":  {migrated: true, disposition: ParityDispositionMigrated},
 		"kemp": {migrated: true, disposition: ParityDispositionMigrated},
 		// A122: the NetScaler generates its own key and CSR through NITRO, so
 		// the device-generated CSR gate is met.

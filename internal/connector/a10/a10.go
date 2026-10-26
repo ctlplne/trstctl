@@ -104,6 +104,19 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 	if err := c.mustExistFile(ctx, sb, token, "ssl-cert", certFile); err != nil {
 		return fmt.Errorf("a10: predecessor certificate %q: %w", certFile, err)
 	}
+	if object := strings.TrimSpace(rb.PredecessorKeyObject); object != "" {
+		// A122: the A10 generated this key into a job-named file. Its CSR
+		// beside it proves the key was made here; the key itself is not read.
+		if _, found, err := c.readCSR(ctx, sb, token, object+".csr"); err != nil {
+			return fmt.Errorf("a10: predecessor appliance key %q: %w", object, err)
+		} else if !found {
+			return fmt.Errorf("a10: predecessor appliance key %q: %w", object, connector.ErrNoPredecessorInstalled)
+		}
+		if err := c.bind(ctx, sb, token, rb.Target, certFile, object+".key"); err != nil {
+			return fmt.Errorf("a10: re-bind client-ssl template %q to the predecessor and its appliance key: %w", rb.Target, err)
+		}
+		return nil
+	}
 	// The key too: the template binds both, the deploy uploads them separately,
 	// and binding a template to a key that is not present takes the virtual port
 	// down instead of restoring it.
