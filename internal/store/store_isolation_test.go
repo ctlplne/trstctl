@@ -337,6 +337,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// derived registry during full replay. Event writes and reads use the
 		// event tenant's RLS context, and the payload must bind that tenant.
 		"internal/agentid/delegation/store/root_anchor_projection.go": 1,
+		// The AGID attestor projection is the same shape: one system transaction
+		// clears the derived attestor registry during full replay; every event
+		// write and read uses the event tenant's RLS context.
+		"internal/agentid/delegation/store/attestor_projection.go": 1,
 		// Upgrade/recovery preflight inventories public legacy root tuples
 		// across tenants at startup. It appends a canonical event only after
 		// exact isolated-signer readback; one-shot rebuild refuses unchecked
