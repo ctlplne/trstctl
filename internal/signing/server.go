@@ -67,6 +67,7 @@ type Server struct {
 	// The control plane reaches it only over the authenticated signer transport.
 	agentRootAnchors      AgentRootAnchorStore
 	agentReachabilityKeys AgentReachabilityKeyStore
+	agentAttestors        AgentAttestorStore
 
 	// issuanceKeyOp, when non-nil, is the attached generic after-approval issuance key op
 	// (WithIssuanceKeyOp). It performs the real key operation INSIDE the boundary on an

@@ -168,7 +168,7 @@ var Inventory = []Constructor{
 	// ---- api (external AGID surface) ---------------------------------------------
 	{Pkg: "internal/agentid/api", Name: "NewAPIOptionsFactory", File: "internal/agentid/api/api.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (FeatureAgentDelegation API attach)"},
 	{Pkg: "internal/agentid/api", Name: "NewService", File: "internal/agentid/api/service.go", Tier: TierRequired, SeededVia: "api.NewAPIOptionsFactory (built by the attach seam)"},
-	{Pkg: "internal/agentid/api", Name: "NewServiceWithRootAnchorProvisioner", File: "internal/agentid/api/service.go", Tier: TierRequired, SeededVia: "api.NewAPIOptionsFactory (AGID root-anchor provisioning)"},
+	{Pkg: "internal/agentid/api", Name: "NewServiceWithSignerFloors", File: "internal/agentid/api/service.go", Tier: TierRequired, SeededVia: "api.NewAPIOptionsFactory (AGID root-anchor and attestor provisioning)"},
 
 	// ---- orchestrator (licensed-outbox worker: the production caller) ------------
 	{Pkg: "internal/agentid/orchestrator", Name: "NewLicensedOutboxFactory", File: "internal/agentid/orchestrator/orchestrator.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (FeatureAgentDelegation outbox attach)"},
@@ -185,13 +185,14 @@ var Inventory = []Constructor{
 	{Pkg: "internal/agentid/delegation", Name: "NewTenantTrustStore", File: "internal/agentid/delegation/verifier.go", Tier: TierRequired, SeededVia: "delegation.NewSignerGate (builds tenant-scoped root-anchor trust)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableAnchorStore", File: "internal/agentid/delegation/anchorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach + api.NewAPIOptionsFactory (durable signer root-anchor floor)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableReachabilityTrustStore", File: "internal/agentid/delegation/reachtruststore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach + orchestrator.NewLicensedOutboxFactory (durable signer reachability-verdict trust floor)"},
-	{Pkg: "internal/agentid/delegation", Name: "NewDurableAttestationTrustStore", File: "internal/agentid/delegation/attestorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer ee_attach (durable signer attestor trust + spent-evidence floor)"},
+	{Pkg: "internal/agentid/delegation", Name: "NewDurableAttestationTrustStore", File: "internal/agentid/delegation/attestorstore.go", Tier: TierRequired, SeededVia: "cmd/trstctl-signer attach_families (durable signer attestor trust: operator floor, tenant floor provisioned over the signer transport, spent-evidence floor)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewBrokerTaskEnvelopeGate", File: "internal/agentid/delegation/brokertaskgate.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (broker task-envelope verification seam)"},
 	{Pkg: "internal/agentid/delegation", Name: "NewDurableTaskEnvelopeTrustStore", File: "internal/agentid/delegation/brokertaskgate.go", Tier: TierRequired, SeededVia: "cmd/trstctl ee_attach (operator-provisioned requester trust floor)"},
 
 	// ---- delegation/store (AGID-02 projection-backed repo) -----------------------
 	{Pkg: "internal/agentid/delegation/store", Name: "New", File: "internal/agentid/delegation/store/store.go", Tier: TierRequired, SeededVia: "api.NewService + orchestrator handler (AGID-02 repo)"},
 	{Pkg: "internal/agentid/delegation/store", Name: "NewRootAnchorProjection", File: "internal/agentid/delegation/store/root_anchor_projection.go", Tier: TierRequired, SeededVia: "cmd/trstctl attach_families (AGID root-anchor rebuild and tail projection)"},
+	{Pkg: "internal/agentid/delegation/store", Name: "NewAttestorProjection", File: "internal/agentid/delegation/store/attestor_projection.go", Tier: TierRequired, SeededVia: "cmd/trstctl attach_families (AGID attestor rebuild and tail projection)"},
 
 	// ---- delegation/brokerstore (AGID-07b chain-bound issuance precondition) ------
 	{Pkg: "internal/agentid/delegation/brokerstore", Name: "NewMemoryIdempotencer", File: "internal/agentid/delegation/brokerstore/precondition.go", Tier: TierRequired, SeededVia: "brokerstore.NewBrokerPrecondition (default Idem)"},

@@ -84,6 +84,9 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		// trust authority without the matching independent signer floor.
 		rejectingEntry("agent.root_anchor.registered"),
 		rejectingEntry("agent.root_anchor.unprovisioned"),
+		// Rewriting an attestor's key or method would change what the signer
+		// accepts as attestation evidence without its independent floor.
+		rejectingEntry("agent.attestor.registered"),
 		entry("acme.account.upserted",
 			catalogPrivacyRule("/seq", opaque), catalogPrivacyRule("/id", opaque),
 			catalogPrivacyRule("/url", opaque), catalogPrivacyRule("/jwk", opaque),

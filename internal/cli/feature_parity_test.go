@@ -343,8 +343,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A147's `audit anchors` raised it to 597, mapped onto the audit row.
 	// A145's `protocols tsa certificates list|rotate|revoke` raised it to 600,
 	// mapped onto F51.
-	if len(out) != 600 {
-		t.Fatalf("CLI commands = %d, want 600", len(out))
+	// A150's `agent-delegation attestors register|list` raised it to 602,
+	// mapped onto the agent-delegation row.
+	if len(out) != 602 {
+		t.Fatalf("CLI commands = %d, want 602", len(out))
 	}
 	return out
 }

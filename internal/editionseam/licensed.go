@@ -54,6 +54,7 @@ type LicensedAPIOptionsDeps struct {
 	TenantCrypto       tenantseal.Access
 	SignerKeyStoreDir  string
 	AGIDRootAnchors    AgentRootAnchorProvisioner
+	AGIDAttestors      AgentAttestorProvisioner
 	KEMCustody         KEMCustody
 	PCASLeafIssuer     PCASLeafIssuer
 }
@@ -64,6 +65,13 @@ type LicensedAPIOptionsDeps struct {
 type AgentRootAnchorProvisioner interface {
 	ProvisionAgentRootAnchor(context.Context, string, string, []byte, string) error
 	ReadAgentRootAnchor(context.Context, string, string) ([]byte, string, error)
+}
+
+// AgentAttestorProvisioner writes and reads a tenant's public attestor keys, each
+// bound to one attestation method, through the authenticated signer channel.
+type AgentAttestorProvisioner interface {
+	ProvisionAgentAttestor(context.Context, string, string, []byte, string) error
+	ReadAgentAttestor(context.Context, string, string) ([]byte, string, error)
 }
 
 // AgentReachabilityKeyProvisioner binds the control plane's public verdict key

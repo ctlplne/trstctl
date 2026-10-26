@@ -23,6 +23,8 @@ import "time"
 var licensedRouteCommands = []Command{
 	{Name: []string{"agent-delegation", "roots", "register"}, Method: "POST", Path: "/api/v1/agent-delegation/root-anchors", Body: bodyFile, Summary: "Register an immutable tenant delegation root anchor; use a new key ID to rotate"},
 	{Name: []string{"agent-delegation", "roots", "list"}, Method: "GET", Path: "/api/v1/agent-delegation/root-anchors", Summary: "List tenant delegation root anchors"},
+	{Name: []string{"agent-delegation", "attestors", "register"}, Method: "POST", Path: "/api/v1/agent-delegation/attestors", Body: bodyFile, Summary: "Register a tenant attestor key for one attestation method in the signer; use a new key ID to rotate"},
+	{Name: []string{"agent-delegation", "attestors", "list"}, Method: "GET", Path: "/api/v1/agent-delegation/attestors", Summary: "List tenant attestors and whether the signer holds each"},
 	{Name: []string{"agent-delegation", "issue"}, Method: "POST", Path: "/api/v1/agent-delegation/issuances", Body: bodyFile, Summary: "Queue signer-gated issuance of a chain-bound agent credential"},
 	{Name: []string{"agent-delegation", "issuance", "get"}, Method: "GET", Path: "/api/v1/agent-delegation/issuance", Query: []string{"issuance_id"}, RequiredQuery: []string{"issuance_id"}, Summary: "Follow an issuance receipt to the public credential ID"},
 	{Name: []string{"agent-delegation", "revoke"}, Method: "POST", Path: "/api/v1/agent-delegation/revocations", Body: bodyFile, Summary: "Queue a cascaded delegation revocation; review the subject and use --force"},

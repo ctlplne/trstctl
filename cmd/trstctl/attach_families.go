@@ -121,7 +121,8 @@ func attachPCAS(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 // stage so the seam stays readable (the startup-hotspot ratchet).
 func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions,
-		projections.WithEventProjection(agentstore.NewRootAnchorProjection(deps.Store)))
+		projections.WithEventProjection(agentstore.NewRootAnchorProjection(deps.Store)),
+		projections.WithEventProjection(agentstore.NewAttestorProjection(deps.Store)))
 	{
 		// Core activation point for Agent Identity Lifecycle Enforcement (AGID).
 		// Every build attaches the feature-neutral chain-bound
@@ -175,12 +176,15 @@ func attachAgentDelegation(cfg *config.Config, log *slog.Logger, deps *server.De
 }
 
 // The one-shot rebuild/restore entry points do not call attachFamilies, so the
-// core AGID projection must be included in their explicit projection options.
+// core AGID trust projections must be included in their explicit projection options.
 func agentRootRecoveryProjectionOptions(st *corestore.Store) []projections.Option {
 	if st == nil {
 		return nil
 	}
-	return []projections.Option{projections.WithEventProjection(agentstore.NewRootAnchorProjection(st))}
+	return []projections.Option{
+		projections.WithEventProjection(agentstore.NewRootAnchorProjection(st)),
+		projections.WithEventProjection(agentstore.NewAttestorProjection(st)),
+	}
 }
 
 func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) error {

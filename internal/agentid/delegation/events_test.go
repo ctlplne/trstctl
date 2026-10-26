@@ -19,6 +19,13 @@ func TestRootAnchorEventIDsRemainStableAcrossSignerDependencyRepair(t *testing.T
 	if got, want := delegation.RootAnchorUnprovisionedEventID(tenant, key), "08074d45-1154-575f-a84d-92ba85f495ad"; got != want {
 		t.Fatalf("unprovisioned root event ID = %s, want %s", got, want)
 	}
+	// An attestor's event identity is its own slot: the same key ID names a
+	// different event than a root anchor's, and another tenant's differs too.
+	attestor := delegation.AttestorEventID(tenant, key)
+	if attestor == delegation.RootAnchorEventID(tenant, key) || attestor == delegation.AttestorEventID("22222222-2222-4222-8222-222222222222", key) ||
+		attestor != delegation.AttestorEventID(tenant, key) {
+		t.Fatalf("attestor event ID %s is not a stable per-tenant slot", attestor)
+	}
 }
 
 // TestEvents_RoundTrip verifies every delegation-lifecycle event type has a
@@ -52,6 +59,12 @@ func TestEvents_RoundTrip(t *testing.T) {
 			SubjectID: "manager",
 			Reason:    "compromise",
 			Watermark: 42,
+		},
+		delegation.AttestorRegisteredV1{
+			TenantID:  "t1",
+			KeyID:     "attestor-1",
+			Method:    "tpm",
+			PublicDER: []byte{10, 11},
 		},
 	}
 	for _, want := range cases {

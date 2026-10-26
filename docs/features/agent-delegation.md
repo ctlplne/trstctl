@@ -51,14 +51,20 @@ its own `TRSTCTL_SIGNER_KEY_STORE_DIR` path using the deployment KEK. It sends
 only that key's public DER over the authenticated signer transport and verifies
 the signer's independent readback before starting AGID delivery. The signer
 keeps the first public key for that key ID across restarts and rejects a changed
-binding. Control-plane and signer paths can be separate volumes. The attestor
-trust floor still needs operator provisioning at the signer:
+binding. Control-plane and signer paths can be separate volumes. Attestors reach
+the signer the same way: the attestor API sends a tenant's attestor public key
+and its attestation method over the authenticated signer transport and reads the
+exact binding back. An operator can still place a deployment-wide attestor in
+the signer's floor by hand; a tenant's own attestor under the same key ID decides
+for that tenant:
 
 ```text
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.pem      # root anchor, public key DER wrapped as PEM
 <signer key store dir>/agid-root-anchors/<tenant_id>/<key_id>.authref  # non-secret auth reference
 <signer key store dir>/agid-reach-verdict-keys/agentid-reach-verdict.der  # RPC-provisioned public key
-<signer key store dir>/agid-attestors/<key_id>.der
+<signer key store dir>/agid-tenant-attestors/<tenant_id>/<key_id>.pem     # tenant attestor, RPC-provisioned
+<signer key store dir>/agid-tenant-attestors/<tenant_id>/<key_id>.method  # the attestation method it vouches for
+<signer key store dir>/agid-attestors/<key_id>.der                        # deployment-wide attestor, operator-provisioned
 <signer key store dir>/agid-attestor-spent/<evidence_digest>.spent
 <control-plane key store dir>/agid-control-plane/reachability-verdict-v1.sealed  # KEK-sealed private key
 ```
@@ -98,6 +104,32 @@ Content-Type: application/json
 }
 ```
 
+Register the tenant's attestor: the service that checks a workload's raw
+attestation (a TPM quote, a cloud instance identity document) and signs a
+portable attestation the signer can verify offline. The request carries only the
+attestor's **public** key and the one attestation method its evidence is for.
+Like a root, a `key_id` keeps its first key and method: an identical request can
+be retried, and a changed binding returns 409 and needs a new key ID. The
+response reports the attestation `class` the method grants and
+`provisioned: true` only after the signer read back the exact binding:
+
+```http
+POST /api/v1/agent-delegation/attestors
+Idempotency-Key: <stable operation key>
+Content-Type: application/json
+
+{
+  "key_id": "tpm-verifier-1",
+  "method": "tpm",
+  "public_pem": "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"
+}
+```
+
+The signer then verifies attestation evidence on this tenant's issuances against
+this key. Evidence must name the registered method, cannot claim a class above
+that method's (`software`, then `virtual-tpm` for cloud and workload identity
+methods, `hardware-tpm`, `hsm`), and is never accepted for another tenant.
+
 Issue a chain-bound credential:
 
 ```http
@@ -124,6 +156,7 @@ revocation when a subject is compromised:
 
 ```http
 GET  /api/v1/agent-delegation/root-anchors
+GET  /api/v1/agent-delegation/attestors
 GET  /api/v1/agent-delegation/issuance?issuance_id=...  # follow the POST receipt to status and credential_id
 GET  /api/v1/agent-delegation/credential?credential_id=...
 GET  /api/v1/agent-delegation/chain?credential_id=...
@@ -132,7 +165,7 @@ GET  /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...
 GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
 ```
 
-The downloadable `trstctl-cli` exposes the same nine routes. Set
+The downloadable `trstctl-cli` exposes the same eleven routes. Set
 `TRSTCTL_SERVER`, `TRSTCTL_TOKEN`, `TRSTCTL_TENANT`, and `TRSTCTL_CA_FILE` for
 the deployment, then use a stable idempotency key for each mutation. Request
 JSON can be supplied from a private file or standard input; the CLI does not
@@ -142,6 +175,8 @@ is sent, including IDs containing a slash:
 ```sh
 trstctl-cli agent-delegation roots list
 trstctl-cli --idempotency-key root-qa-1 agent-delegation roots register -f root-anchor.json
+trstctl-cli agent-delegation attestors list
+trstctl-cli --idempotency-key attestor-qa-1 agent-delegation attestors register -f attestor.json
 trstctl-cli --idempotency-key issue-qa-1 agent-delegation issue -f issuance.json
 trstctl-cli agent-delegation issuance get --issuance_id '<issuance_id from the 202 receipt>'
 trstctl-cli agent-delegation credential get --credential_id '<credential_id from the issued result>'
@@ -160,8 +195,14 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
 - Register root anchors through the API, CLI, or console. The signer stores its
   public root floor under its own durable key store; an absent anchor is a
   refusal, not a fallback. The control plane provisions and reads back the
-  reachability public floor over the authenticated signer RPC. Attestor public
-  floors still need operator provisioning at the signer.
+  reachability public floor and each tenant attestor over the authenticated
+  signer RPC. A list response marks an attestor unprovisioned when the signer
+  readback is absent or differs; registering the same binding again
+  re-provisions it, for example after the signer volume was replaced.
+- A deployment-wide attestor placed by hand under `agid-attestors/` still
+  serves every tenant that has not registered the same key ID, with no method
+  binding. Prefer tenant registration: it is recorded, rebuilt after read-model
+  loss, and bound to one method.
 - At upgrade, a pre-event root row gains a registered authority event only
   after the isolated signer returns the exact tenant, key, public key, and
   authentication reference. An explicit signer `NotFound` records the old
@@ -187,9 +228,9 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
 ## Reference
 
 - **Mutations** (all require `Idempotency-Key`):
-  `POST /api/v1/agent-delegation/root-anchors`, `.../issuances`,
-  `.../revocations`.
-- **Reads:** `.../root-anchors`, `.../issuance?issuance_id=`, `.../credential?credential_id=`,
+  `POST /api/v1/agent-delegation/root-anchors`, `.../attestors`,
+  `.../issuances`, `.../revocations`.
+- **Reads:** `.../root-anchors`, `.../attestors`, `.../issuance?issuance_id=`, `.../credential?credential_id=`,
   `.../chain?credential_id=`, `.../revocations/incomplete-jobs?directive_id=`,
   `.../revocations/evidence?directive_id=`.
 - **Outbox job:** `agentid.issue-chain-bound`; signer call: `GatedIssue`.

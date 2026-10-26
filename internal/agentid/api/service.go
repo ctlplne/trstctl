@@ -64,7 +64,8 @@ type service struct {
 	log    *events.Log
 	outbox *orchestrator.Outbox
 
-	anchorProvisioner RootAnchorProvisioner
+	anchorProvisioner   RootAnchorProvisioner
+	attestorProvisioner AttestorProvisioner
 }
 
 // NewService builds the store/log/outbox-backed AGID API Service. It is exported so the
@@ -78,13 +79,22 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 	return s
 }
 
-// NewServiceWithRootAnchorProvisioner builds the AGID API service with an optional signer
-// root-anchor provisioner. Production supplies the authenticated signer client;
-// the signer writes and reads its own durable floor in its own address space.
-func NewServiceWithRootAnchorProvisioner(store *corestore.Store, log *events.Log, outbox *orchestrator.Outbox, provisioner RootAnchorProvisioner) Service {
+// SignerFloors are the isolated signer's public trust floors the AGID API
+// provisions and reads back. Production supplies the authenticated signer client
+// for each; the signer writes and reads its own durable floors in its own
+// address space. A nil floor makes its registration routes answer unavailable.
+type SignerFloors struct {
+	RootAnchors RootAnchorProvisioner
+	Attestors   AttestorProvisioner
+}
+
+// NewServiceWithSignerFloors builds the AGID API service with the signer's
+// root-anchor and attestor floors.
+func NewServiceWithSignerFloors(store *corestore.Store, log *events.Log, outbox *orchestrator.Outbox, floors SignerFloors) Service {
 	svc := NewService(store, log, outbox)
 	if s, ok := svc.(*service); ok {
-		s.anchorProvisioner = provisioner
+		s.anchorProvisioner = floors.RootAnchors
+		s.attestorProvisioner = floors.Attestors
 	}
 	return svc
 }

@@ -53,6 +53,8 @@ const (
 	SignerService_GetAgentRootAnchor_FullMethodName            = "/trstctl.signing.v1.SignerService/GetAgentRootAnchor"
 	SignerService_ProvisionAgentReachabilityKey_FullMethodName = "/trstctl.signing.v1.SignerService/ProvisionAgentReachabilityKey"
 	SignerService_GetAgentReachabilityKey_FullMethodName       = "/trstctl.signing.v1.SignerService/GetAgentReachabilityKey"
+	SignerService_ProvisionAgentAttestor_FullMethodName        = "/trstctl.signing.v1.SignerService/ProvisionAgentAttestor"
+	SignerService_GetAgentAttestor_FullMethodName              = "/trstctl.signing.v1.SignerService/GetAgentAttestor"
 	SignerService_CreateTenantDomainKEK_FullMethodName         = "/trstctl.signing.v1.SignerService/CreateTenantDomainKEK"
 	SignerService_OpenTenantDomainKEK_FullMethodName           = "/trstctl.signing.v1.SignerService/OpenTenantDomainKEK"
 	SignerService_WrapTenantDataKey_FullMethodName             = "/trstctl.signing.v1.SignerService/WrapTenantDataKey"
@@ -179,6 +181,14 @@ type SignerServiceClient interface {
 	// control plane retains its sealed private key; changed first writers refuse.
 	ProvisionAgentReachabilityKey(ctx context.Context, in *ProvisionAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*ProvisionAgentReachabilityKeyResponse, error)
 	GetAgentReachabilityKey(ctx context.Context, in *GetAgentReachabilityKeyRequest, opts ...grpc.CallOption) (*GetAgentReachabilityKeyResponse, error)
+	// ProvisionAgentAttestor binds one tenant's PUBLIC attestation verifier key
+	// in the signer floor (A150), so a chain-bound mint can verify that tenant's
+	// attestation evidence without an operator writing the floor by hand. A
+	// changed first-writer binding is refused; the response is the exact durable
+	// readback.
+	ProvisionAgentAttestor(ctx context.Context, in *ProvisionAgentAttestorRequest, opts ...grpc.CallOption) (*ProvisionAgentAttestorResponse, error)
+	// GetAgentAttestor reads the exact signer-held public attestor key.
+	GetAgentAttestor(ctx context.Context, in *GetAgentAttestorRequest, opts ...grpc.CallOption) (*GetAgentAttestorResponse, error)
 	// Tenant domain KEK custody (A123). The signer creates a tenant's domain
 	// key-encryption key and keeps it wrapped by an operator-provisioned HSM key
 	// named by wrapper_id. The control plane persists only the wrapped form and
@@ -458,6 +468,26 @@ func (c *signerServiceClient) GetAgentReachabilityKey(ctx context.Context, in *G
 	return out, nil
 }
 
+func (c *signerServiceClient) ProvisionAgentAttestor(ctx context.Context, in *ProvisionAgentAttestorRequest, opts ...grpc.CallOption) (*ProvisionAgentAttestorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProvisionAgentAttestorResponse)
+	err := c.cc.Invoke(ctx, SignerService_ProvisionAgentAttestor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *signerServiceClient) GetAgentAttestor(ctx context.Context, in *GetAgentAttestorRequest, opts ...grpc.CallOption) (*GetAgentAttestorResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAgentAttestorResponse)
+	err := c.cc.Invoke(ctx, SignerService_GetAgentAttestor_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *signerServiceClient) CreateTenantDomainKEK(ctx context.Context, in *CreateTenantDomainKEKRequest, opts ...grpc.CallOption) (*CreateTenantDomainKEKResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateTenantDomainKEKResponse)
@@ -645,6 +675,14 @@ type SignerServiceServer interface {
 	// control plane retains its sealed private key; changed first writers refuse.
 	ProvisionAgentReachabilityKey(context.Context, *ProvisionAgentReachabilityKeyRequest) (*ProvisionAgentReachabilityKeyResponse, error)
 	GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error)
+	// ProvisionAgentAttestor binds one tenant's PUBLIC attestation verifier key
+	// in the signer floor (A150), so a chain-bound mint can verify that tenant's
+	// attestation evidence without an operator writing the floor by hand. A
+	// changed first-writer binding is refused; the response is the exact durable
+	// readback.
+	ProvisionAgentAttestor(context.Context, *ProvisionAgentAttestorRequest) (*ProvisionAgentAttestorResponse, error)
+	// GetAgentAttestor reads the exact signer-held public attestor key.
+	GetAgentAttestor(context.Context, *GetAgentAttestorRequest) (*GetAgentAttestorResponse, error)
 	// Tenant domain KEK custody (A123). The signer creates a tenant's domain
 	// key-encryption key and keeps it wrapped by an operator-provisioned HSM key
 	// named by wrapper_id. The control plane persists only the wrapped form and
@@ -759,6 +797,12 @@ func (UnimplementedSignerServiceServer) ProvisionAgentReachabilityKey(context.Co
 }
 func (UnimplementedSignerServiceServer) GetAgentReachabilityKey(context.Context, *GetAgentReachabilityKeyRequest) (*GetAgentReachabilityKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAgentReachabilityKey not implemented")
+}
+func (UnimplementedSignerServiceServer) ProvisionAgentAttestor(context.Context, *ProvisionAgentAttestorRequest) (*ProvisionAgentAttestorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProvisionAgentAttestor not implemented")
+}
+func (UnimplementedSignerServiceServer) GetAgentAttestor(context.Context, *GetAgentAttestorRequest) (*GetAgentAttestorResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAgentAttestor not implemented")
 }
 func (UnimplementedSignerServiceServer) CreateTenantDomainKEK(context.Context, *CreateTenantDomainKEKRequest) (*CreateTenantDomainKEKResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateTenantDomainKEK not implemented")
@@ -1205,6 +1249,42 @@ func _SignerService_GetAgentReachabilityKey_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_ProvisionAgentAttestor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProvisionAgentAttestorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).ProvisionAgentAttestor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_ProvisionAgentAttestor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).ProvisionAgentAttestor(ctx, req.(*ProvisionAgentAttestorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SignerService_GetAgentAttestor_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAgentAttestorRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).GetAgentAttestor(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_GetAgentAttestor_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).GetAgentAttestor(ctx, req.(*GetAgentAttestorRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _SignerService_CreateTenantDomainKEK_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateTenantDomainKEKRequest)
 	if err := dec(in); err != nil {
@@ -1425,6 +1505,14 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAgentReachabilityKey",
 			Handler:    _SignerService_GetAgentReachabilityKey_Handler,
+		},
+		{
+			MethodName: "ProvisionAgentAttestor",
+			Handler:    _SignerService_ProvisionAgentAttestor_Handler,
+		},
+		{
+			MethodName: "GetAgentAttestor",
+			Handler:    _SignerService_GetAgentAttestor_Handler,
 		},
 		{
 			MethodName: "CreateTenantDomainKEK",

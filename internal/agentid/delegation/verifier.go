@@ -612,7 +612,12 @@ func (g *Gate) verifyAttestation(req signing.IssuancePreconditions, body Precond
 		// Evidence supplied but no verifier configured: fail closed (cannot verify).
 		return attResult{verifyResult: refusal(CheckAttestation, -1, "no attestation verifier configured")}
 	}
-	verified, err := g.cfg.Attestor.VerifyEvidence(att.Method, att.Payload)
+	var verified VerifiedAttestation
+	if scoped, ok := g.cfg.Attestor.(TenantAttestationVerifier); ok {
+		verified, err = scoped.VerifyTenantEvidence(req.TenantID, att.Method, att.Payload)
+	} else {
+		verified, err = g.cfg.Attestor.VerifyEvidence(att.Method, att.Payload)
+	}
 	if err != nil {
 		return attResult{verifyResult: refusal(CheckAttestation, -1, "attestation evidence failed verification")}
 	}

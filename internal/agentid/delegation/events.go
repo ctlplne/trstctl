@@ -23,6 +23,10 @@ const (
 	// a first-writer fence, never a grant of signer authority.
 	TypeRootAnchorUnprovisioned               = "agent.root_anchor.unprovisioned"
 	RootAnchorUnprovisionedReasonSignerAbsent = "signer_absent"
+	// TypeAttestorRegistered is the immutable first-writer binding of a tenant's
+	// attestor key ID to its public key and attestation method. It rebuilds the
+	// tenant attestor registry after PostgreSQL read-model loss.
+	TypeAttestorRegistered = "agent.attestor.registered"
 	// TypeDelegationRecorded records that a signed delegation record was appended to
 	// a chain (the delegator conferred a no-broader authority set on a delegate).
 	TypeDelegationRecorded = "agent.delegation.recorded"
@@ -47,6 +51,7 @@ const (
 const (
 	RootAnchorRegisteredSchemaV1    = 1
 	RootAnchorUnprovisionedSchemaV1 = 1
+	AttestorRegisteredSchemaV1      = 1
 	DelegationRecordedSchemaV1      = 1
 	IssuanceRecordedSchemaV1        = 1
 	RefusalRecordedSchemaV1         = 1
@@ -90,6 +95,24 @@ func RootAnchorEventID(tenantID, keyID string) string {
 // tenant/key. A retry with different bytes must not rewrite the record.
 func RootAnchorUnprovisionedEventID(tenantID, keyID string) string {
 	return crypto.UUIDv5OID([]byte("agent.root_anchor.unprovisioned.v1\x00" + tenantID + "\x00" + keyID))
+}
+
+// AttestorRegisteredV1 carries a tenant attestor's public key and the attestation
+// method it vouches for. The attestor's private key stays with the attestation
+// service that signs evidence; the signer only verifies against this public half.
+type AttestorRegisteredV1 struct {
+	TenantID  string `json:"tenant_id"`
+	KeyID     string `json:"key_id"`
+	Method    string `json:"method"`
+	PublicDER []byte `json:"public_der"`
+}
+
+func (AttestorRegisteredV1) isDelegationPayload() {}
+
+// AttestorEventID fixes one event identity per tenant/attestor key slot, so a retry
+// with a changed key or method meets the existing event and is refused.
+func AttestorEventID(tenantID, keyID string) string {
+	return crypto.UUIDv5OID([]byte("agent.attestor.registered.v1\x00" + tenantID + "\x00" + keyID))
 }
 
 // DelegationRecordedV1 is the ledger announcement of an appended delegation record.
@@ -168,6 +191,8 @@ func Encode(p Payload) (eventspec.Event, error) {
 		return marshalEvent(TypeRootAnchorRegistered, RootAnchorRegisteredSchemaV1, v.TenantID, v)
 	case RootAnchorUnprovisionedV1:
 		return marshalEvent(TypeRootAnchorUnprovisioned, RootAnchorUnprovisionedSchemaV1, v.TenantID, v)
+	case AttestorRegisteredV1:
+		return marshalEvent(TypeAttestorRegistered, AttestorRegisteredSchemaV1, v.TenantID, v)
 	case DelegationRecordedV1:
 		return marshalEvent(TypeDelegationRecorded, DelegationRecordedSchemaV1, v.TenantID, v)
 	case IssuanceRecordedV1:
@@ -213,6 +238,15 @@ func Decode(e eventspec.Event) (Payload, error) {
 			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
 		}
 		var p RootAnchorUnprovisionedV1
+		if err := json.Unmarshal(e.Data, &p); err != nil {
+			return nil, fmt.Errorf("delegation: decode %s v%d: %w", e.Type, ver, err)
+		}
+		return p, nil
+	case TypeAttestorRegistered:
+		if ver > AttestorRegisteredSchemaV1 {
+			return Unknown{Type: e.Type, Version: ver, Raw: e.Data}, nil
+		}
+		var p AttestorRegisteredV1
 		if err := json.Unmarshal(e.Data, &p); err != nil {
 			return nil, fmt.Errorf("delegation: decode %s v%d: %w", e.Type, ver, err)
 		}

@@ -33,11 +33,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"trstctl.com/trstctl/internal/agentid/delegation"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/editionseam"
@@ -205,6 +207,35 @@ type RootAnchorsResponse struct {
 	Count   int                  `json:"count"`
 }
 
+// AttestorRequest registers one tenant attestor: the public half of the key that
+// signs the tenant's attestation evidence, and the attestation method that evidence
+// is for. The key ID binds the first public key and method; a changed binding needs
+// a new key ID. Exactly one public-key form is required.
+type AttestorRequest struct {
+	KeyID     string `json:"key_id"`
+	Method    string `json:"method"`
+	PublicDER []byte `json:"public_der,omitempty"`
+	PublicPEM string `json:"public_pem,omitempty"`
+}
+
+// AttestorResponse is the public read model for one registered attestor. Class is
+// the attestation class its method grants; evidence from this attestor cannot claim
+// more. Provisioned is true only when the signer read back the exact binding.
+type AttestorResponse struct {
+	KeyID       string    `json:"key_id"`
+	Method      string    `json:"method"`
+	Class       string    `json:"class"`
+	PublicDER   []byte    `json:"public_der,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	Provisioned bool      `json:"provisioned"`
+}
+
+// AttestorsResponse lists a tenant's registered attestors.
+type AttestorsResponse struct {
+	Attestors []AttestorResponse `json:"attestors"`
+	Count     int                `json:"count"`
+}
+
 // Service is the AGID API backend. The concrete implementation is store/log/outbox
 // backed (service.go); handlers depend only on this interface (the PCAS pattern).
 type Service interface {
@@ -212,6 +243,10 @@ type Service interface {
 	RegisterRootAnchor(ctx context.Context, tenantID string, req RootAnchorRequest) (RootAnchorResponse, error)
 	// ListRootAnchors returns the caller tenant's registered delegation root anchors.
 	ListRootAnchors(ctx context.Context, tenantID string) (RootAnchorsResponse, error)
+	// RegisterAttestor persists and provisions a tenant attestor in the signer.
+	RegisterAttestor(ctx context.Context, tenantID string, req AttestorRequest) (AttestorResponse, error)
+	// ListAttestors returns the caller tenant's registered attestors.
+	ListAttestors(ctx context.Context, tenantID string) (AttestorsResponse, error)
 	// IssueChainBound stages a chain-bound issuance as an idempotent outbox job
 	// (agentid.issue-chain-bound) for the orchestrator to drive.
 	IssueChainBound(ctx context.Context, tenantID string, req IssueChainBoundRequest) (IssueChainBoundResponse, error)
@@ -238,7 +273,7 @@ type Service interface {
 // NewAPIOptionsFactory.
 func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		svc := NewServiceWithRootAnchorProvisioner(d.Store, d.Log, d.Outbox, d.AGIDRootAnchors)
+		svc := NewServiceWithSignerFloors(d.Store, d.Log, d.Outbox, SignerFloors{RootAnchors: d.AGIDRootAnchors, Attestors: d.AGIDAttestors})
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
@@ -264,6 +299,19 @@ func Routes(svc Service) []api.LicensedRoute {
 			Summary:        "List tenant-scoped AGID delegation root anchors",
 			Handler:        func(a *api.API) http.HandlerFunc { return listRootAnchorsHandler(a, svc) },
 			ResponseSchema: "AGIDRootAnchors", SuccessCode: "200", Permission: authz.AgentsRead,
+		},
+		{
+			Method: "POST", Path: "/api/v1/agent-delegation/attestors", OperationID: "registerAgentDelegationAttestor",
+			Summary:       "Register a tenant attestor in the signer's attestation trust (idempotent)",
+			Handler:       func(a *api.API) http.HandlerFunc { return registerAttestorHandler(a, svc) },
+			RequestSchema: "AGIDAttestorRequest", ResponseSchema: "AGIDAttestor",
+			SuccessCode: "200", Mutation: true, Permission: authz.AgentsWrite,
+		},
+		{
+			Method: "GET", Path: "/api/v1/agent-delegation/attestors", OperationID: "listAgentDelegationAttestors",
+			Summary:        "List tenant attestors and whether the signer holds each",
+			Handler:        func(a *api.API) http.HandlerFunc { return listAttestorsHandler(a, svc) },
+			ResponseSchema: "AGIDAttestors", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 		{
 			Method: "POST", Path: "/api/v1/agent-delegation/issuances", OperationID: "issueChainBoundCredential",
@@ -394,6 +442,86 @@ func listRootAnchorsHandler(a *api.API, svc Service) http.HandlerFunc {
 		writeJSON(w, http.StatusOK, resp)
 	}
 }
+
+// registerAttestorHandler persists and provisions one tenant attestor. Like the root
+// anchor route it is a mutation that writes the event log, the RLS registry and the
+// signer floor; api.Mutate supplies the AN-5 idempotency envelope.
+func registerAttestorHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idempotencyKey := r.Header.Get("Idempotency-Key")
+		a.Mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+			var req AttestorRequest
+			if err := api.DecodeJSON(r, &req); err != nil {
+				return 0, nil, api.ErrWithStatus(http.StatusBadRequest, err)
+			}
+			if req.KeyID == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "key_id is required")
+			}
+			if req.Method == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "method is required")
+			}
+			if len(req.PublicDER) == 0 && req.PublicPEM == "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "public_der or public_pem is required")
+			}
+			if len(req.PublicDER) != 0 && req.PublicPEM != "" {
+				return 0, nil, api.ErrStatus(http.StatusBadRequest, "provide only one of public_der or public_pem")
+			}
+			start := time.Now()
+			var opErr error
+			defer func() { a.ObserveFeature("agentid", "register-attestor", start, opErr) }()
+			resp, err := svc.RegisterAttestor(ctx, tenantID, req)
+			if err != nil {
+				opErr = err
+				if errors.Is(err, ErrInvalidAttestorRequest) {
+					return 0, nil, api.ErrStatus(http.StatusBadRequest, "attestor key ID, method or public key is invalid; method must be one of "+knownAttestationMethods)
+				}
+				if errors.Is(err, store.ErrIdempotencyConflict) {
+					return 0, nil, api.ErrStatus(http.StatusConflict, "attestor key_id already binds a different key or method; register a new key_id")
+				}
+				if status.Code(err) == codes.AlreadyExists || errors.Is(err, ErrAttestorSignerReadback) {
+					return 0, nil, api.ErrStatus(http.StatusConflict, "signer attestor key_id already binds a different key or method; inspect the signer floor before retrying")
+				}
+				if status.Code(err) == codes.InvalidArgument {
+					return 0, nil, api.ErrStatus(http.StatusBadRequest, "signer refused the attestor key_id, method or public key")
+				}
+				if errors.Is(err, ErrAttestorLogUnavailable) || errors.Is(err, events.ErrEventIDIndexBehind) {
+					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "attestor event authority is unavailable; retry the same request after recovery")
+				}
+				if errors.Is(err, ErrAttestorSignerUnavailable) || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.Unavailable {
+					return 0, nil, api.ErrStatus(http.StatusServiceUnavailable, "signer attestor floor is unavailable; retry the same request after signer recovery")
+				}
+				return 0, nil, err
+			}
+			return http.StatusOK, resp, nil
+		})
+	}
+}
+
+func listAttestorsHandler(a *api.API, svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID, ok := a.Tenant(r)
+		if !ok {
+			writeProblem(w, http.StatusUnauthorized, "missing or invalid tenant")
+			return
+		}
+		start := time.Now()
+		resp, err := svc.ListAttestors(r.Context(), tenantID)
+		a.ObserveFeature("agentid", "attestors", start, err)
+		if err != nil {
+			if errors.Is(err, ErrAttestorSignerUnavailable) {
+				writeProblem(w, http.StatusServiceUnavailable, "signer attestor floor is unavailable")
+				return
+			}
+			writeProblem(w, http.StatusInternalServerError, "failed to list attestors")
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+// knownAttestationMethods names the methods an attestor can be registered for, in
+// the order the error message shows them.
+var knownAttestationMethods = strings.Join(delegation.AttestationMethods(), ", ")
 
 // issueHandler stages a chain-bound issuance idempotently (the PCAS requestSuccessionHandler
 // shape): decode, validate the public scalars, then enqueue via the service under the
@@ -604,6 +732,21 @@ func schemas() map[string]*api.Schema {
 		"auth_ref":   api.StringSchema(),
 	}, "key_id", "auth_ref")
 	rootRequest.OneOf = []*api.Schema{{Required: []string{"public_pem"}}, {Required: []string{"public_der"}}}
+	attestorRequest := api.ObjectSchema(map[string]*api.Schema{
+		"key_id":     api.StringSchema(),
+		"method":     {Type: "string", Enum: delegation.AttestationMethods(), Description: "The attestation method this attestor's evidence is for; evidence for another method, or claiming a higher class than this method grants, is refused."},
+		"public_der": {Type: "string", MinLength: 56, Description: "Base64-encoded PKIX SubjectPublicKeyInfo DER of the key that signs the attestation evidence; supply exactly one public key source."},
+		"public_pem": {Type: "string", MinLength: 100, Description: "PEM-encoded PUBLIC KEY of the key that signs the attestation evidence. Never submit a private key. Supply exactly one public key source."},
+	}, "key_id", "method")
+	attestorRequest.OneOf = []*api.Schema{{Required: []string{"public_pem"}}, {Required: []string{"public_der"}}}
+	attestor := api.ObjectSchema(map[string]*api.Schema{
+		"key_id":      api.StringSchema(),
+		"method":      api.StringSchema(),
+		"class":       api.StringSchema(),
+		"public_der":  api.StringSchema(), // base64-encoded PKIX SubjectPublicKeyInfo DER
+		"created_at":  api.TimestampSchema(),
+		"provisioned": api.BooleanSchema(),
+	}, "key_id", "method", "class", "provisioned")
 	return map[string]*api.Schema{
 		"AGIDRootAnchorRequest": rootRequest,
 		"AGIDRootAnchor": api.ObjectSchema(map[string]*api.Schema{
@@ -623,6 +766,12 @@ func schemas() map[string]*api.Schema {
 			}, "key_id", "auth_ref")),
 			"count": api.IntegerSchema(),
 		}, "anchors", "count"),
+		"AGIDAttestorRequest": attestorRequest,
+		"AGIDAttestor":        attestor,
+		"AGIDAttestors": api.ObjectSchema(map[string]*api.Schema{
+			"attestors": api.ArraySchema(attestor),
+			"count":     api.IntegerSchema(),
+		}, "attestors", "count"),
 		"AGIDIssuanceRequest": api.ObjectSchema(map[string]*api.Schema{
 			"agent_id":           api.StringSchema(),
 			"trust_anchor_ref":   api.StringSchema(),

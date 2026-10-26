@@ -420,7 +420,7 @@ func newHarness(t *testing.T, tenant string) *harness {
 	}
 	t.Cleanup(h.wrapper.Destroy)
 	rootKey := generateSigner(t)
-	h.api = agidapi.NewServiceWithRootAnchorProvisioner(st, log, h.outbox, delegation.NewDurableAnchorStore(h.keystore))
+	h.api = agidapi.NewServiceWithSignerFloors(st, log, h.outbox, agidapi.SignerFloors{RootAnchors: delegation.NewDurableAnchorStore(h.keystore)})
 	if _, err := h.api.RegisterRootAnchor(ctx, tenant, agidapi.RootAnchorRequest{
 		KeyID:     "root-key",
 		PublicDER: rootKey.Public().DER,
@@ -430,12 +430,18 @@ func newHarness(t *testing.T, tenant string) *harness {
 	}
 	chainKeys[t.Name()+tenant] = rootKey
 
-	h.attestor = generateSigner(t)
-	if err := delegation.NewDurableAttestationTrustStore(h.keystore).PutVerifier(ctx, "attestor-1", h.attestor.Public().DER); err != nil {
-		t.Fatalf("PutVerifier: %v", err)
-	}
 	h.startSigner(t)
 	h.restartControlPlane(t)
+	// The tenant's attestor reaches the signer the way an operator registers one:
+	// through the API, which records it, provisions it over the signer transport
+	// and reads it back from the signer process.
+	h.attestor = generateSigner(t)
+	registered, err := h.api.RegisterAttestor(ctx, tenant, agidapi.AttestorRequest{
+		KeyID: "attestor-1", Method: "software", PublicDER: h.attestor.Public().DER,
+	})
+	if err != nil || !registered.Provisioned {
+		t.Fatalf("RegisterAttestor: %+v, %v", registered, err)
+	}
 	return h
 }
 
@@ -540,7 +546,9 @@ func (h *harness) dispatchDirectiveOnly(t *testing.T) {
 func (h *harness) restartControlPlane(t *testing.T) {
 	t.Helper()
 	h.outbox = newTestOutbox(h.store)
-	h.api = agidapi.NewServiceWithRootAnchorProvisioner(h.store, h.log, h.outbox, delegation.NewDurableAnchorStore(h.keystore))
+	h.api = agidapi.NewServiceWithSignerFloors(h.store, h.log, h.outbox, agidapi.SignerFloors{
+		RootAnchors: delegation.NewDurableAnchorStore(h.keystore), Attestors: h.client,
+	})
 	licensed, err := agidorch.NewLicensedOutboxFactory()(editionseam.LicensedOutboxDeps{
 		Store:                h.store,
 		Log:                  h.log,

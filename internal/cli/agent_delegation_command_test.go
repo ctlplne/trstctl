@@ -14,6 +14,8 @@ func TestAgentDelegationCommandsCoverServedRouteFamily(t *testing.T) {
 	want := map[string]string{ // #nosec G101 -- API route names are public identifiers, not credential values (CWE-798)
 		"agent-delegation roots register":              "POST /api/v1/agent-delegation/root-anchors",
 		"agent-delegation roots list":                  "GET /api/v1/agent-delegation/root-anchors",
+		"agent-delegation attestors register":          "POST /api/v1/agent-delegation/attestors",
+		"agent-delegation attestors list":              "GET /api/v1/agent-delegation/attestors",
 		"agent-delegation issue":                       "POST /api/v1/agent-delegation/issuances",
 		"agent-delegation issuance get":                "GET /api/v1/agent-delegation/issuance",
 		"agent-delegation revoke":                      "POST /api/v1/agent-delegation/revocations",

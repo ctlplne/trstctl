@@ -2,6 +2,14 @@
 
 ### Added
 
+- Tenant attestors for agent delegation: `POST /api/v1/agent-delegation/attestors`
+  (`trstctl-cli agent-delegation attestors register|list`) records a tenant's
+  attestor public key and attestation method as an immutable first-writer
+  event, provisions it into the isolated signer over its authenticated
+  transport and reports `provisioned` only after the signer reads the exact
+  binding back. The signer verifies a tenant's attestation evidence only
+  against that tenant's attestors, for the registered method and no higher
+  class; attestors no longer need operator provisioning on the signer host.
 - `/readyz` gains `ssh_krl` (the SSH revocation list can be brought up to the
   event log, when the SSH CA is served) and `audit_read` (audit history can be
   read), so a restarted replica stays out of rotation until its KRL and audit
@@ -169,6 +177,10 @@
 
 ### Security
 
+- The signer's attestation verifier checks the key ID inside attestation
+  evidence as a single path segment and reads the key through a directory
+  handle. Before, the key ID was joined into a file path unchecked, so evidence
+  could name another public key file on the signer's floor as its attestor.
 - Every image now ships one trust store: the pinned, checksum-verified Alpine
   `ca-certificates-bundle-20261020` filtered at build time by the shipped
   distrust list (`internal/crypto/trust/distrust.json`), which leaves exactly

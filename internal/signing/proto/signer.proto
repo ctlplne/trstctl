@@ -147,6 +147,15 @@ service SignerService {
   rpc ProvisionAgentReachabilityKey(ProvisionAgentReachabilityKeyRequest) returns (ProvisionAgentReachabilityKeyResponse);
   rpc GetAgentReachabilityKey(GetAgentReachabilityKeyRequest) returns (GetAgentReachabilityKeyResponse);
 
+  // ProvisionAgentAttestor binds one tenant's PUBLIC attestation verifier key
+  // in the signer floor (A150), so a chain-bound mint can verify that tenant's
+  // attestation evidence without an operator writing the floor by hand. A
+  // changed first-writer binding is refused; the response is the exact durable
+  // readback.
+  rpc ProvisionAgentAttestor(ProvisionAgentAttestorRequest) returns (ProvisionAgentAttestorResponse);
+  // GetAgentAttestor reads the exact signer-held public attestor key.
+  rpc GetAgentAttestor(GetAgentAttestorRequest) returns (GetAgentAttestorResponse);
+
   // Tenant domain KEK custody (A123). The signer creates a tenant's domain
   // key-encryption key and keeps it wrapped by an operator-provisioned HSM key
   // named by wrapper_id. The control plane persists only the wrapped form and
@@ -662,6 +671,28 @@ message GetAgentReachabilityKeyRequest {
 
 message GetAgentReachabilityKeyResponse {
   bytes public_der = 1;
+}
+
+message ProvisionAgentAttestorRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+  bytes public_der = 3;
+  string method = 4;
+}
+
+message ProvisionAgentAttestorResponse {
+  bytes public_der = 1;
+  string method = 2;
+}
+
+message GetAgentAttestorRequest {
+  string tenant_id = 1;
+  string key_id = 2;
+}
+
+message GetAgentAttestorResponse {
+  bytes public_der = 1;
+  string method = 2;
 }
 
 message CreateTenantDomainKEKRequest {

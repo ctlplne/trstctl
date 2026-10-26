@@ -47,6 +47,8 @@ func TestRoutes_Surface(t *testing.T) {
 	}{
 		{"POST /api/v1/agent-delegation/root-anchors", true, "200", authz.AgentsWrite},
 		{"GET /api/v1/agent-delegation/root-anchors", false, "200", authz.AgentsRead},
+		{"POST /api/v1/agent-delegation/attestors", true, "200", authz.AgentsWrite},
+		{"GET /api/v1/agent-delegation/attestors", false, "200", authz.AgentsRead},
 		{"POST /api/v1/agent-delegation/issuances", true, "202", authz.AgentsWrite},
 		{"GET /api/v1/agent-delegation/issuance", false, "200", authz.AgentsRead},
 		{"POST /api/v1/agent-delegation/revocations", true, "202", authz.AgentsWrite},
@@ -94,6 +96,7 @@ func TestOpenAPI_Surface(t *testing.T) {
 	paths, _ := doc["paths"].(map[string]any)
 	for _, p := range []string{
 		"/api/v1/agent-delegation/root-anchors",
+		"/api/v1/agent-delegation/attestors",
 		"/api/v1/agent-delegation/issuances",
 		"/api/v1/agent-delegation/issuance",
 		"/api/v1/agent-delegation/revocations",
@@ -136,10 +139,12 @@ func TestOpenAPIRootAnchorRequiresOnePublicKeySource(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	got := doc.Components.Schemas["AGIDRootAnchorRequest"].OneOf
-	if len(got) != 2 || len(got[0].Required) != 1 || got[0].Required[0] != "public_pem" ||
-		len(got[1].Required) != 1 || got[1].Required[0] != "public_der" {
-		t.Fatalf("root-anchor public key oneOf = %+v; want PEM or DER exactly once", got)
+	for _, schema := range []string{"AGIDRootAnchorRequest", "AGIDAttestorRequest"} {
+		got := doc.Components.Schemas[schema].OneOf
+		if len(got) != 2 || len(got[0].Required) != 1 || got[0].Required[0] != "public_pem" ||
+			len(got[1].Required) != 1 || got[1].Required[0] != "public_der" {
+			t.Fatalf("%s public key oneOf = %+v; want PEM or DER exactly once", schema, got)
+		}
 	}
 }
 
@@ -278,7 +283,7 @@ func TestService_NilBackedReadsAreSafe(t *testing.T) {
 func TestService_RegisterRootAnchorProvisionsSignerFloor(t *testing.T) {
 	dir := t.TempDir()
 	provisioner := delegation.NewDurableAnchorStore(dir)
-	svc := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, provisioner)
+	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{RootAnchors: provisioner})
 	rootKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatalf("generate public root for fixture: %v", err)
@@ -334,11 +339,11 @@ func TestService_RegisterRootAnchorNeedsExactSignerReadback(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := agidapi.RootAnchorRequest{KeyID: "root", PublicDER: key.Public().DER, AuthRef: "webauthn:credential"}
-	if _, err := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, nil).RegisterRootAnchor(t.Context(), "tenant", req); !errors.Is(err, agidapi.ErrRootAnchorSignerUnavailable) {
+	if _, err := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{}).RegisterRootAnchor(t.Context(), "tenant", req); !errors.Is(err, agidapi.ErrRootAnchorSignerUnavailable) {
 		t.Fatalf("missing signer = %v, want unavailable", err)
 	}
 	probe := &rootReadbackProbe{readErr: errors.New("signer floor unreachable")}
-	svc := agidapi.NewServiceWithRootAnchorProvisioner(nil, nil, nil, probe)
+	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{RootAnchors: probe})
 	if _, err := svc.RegisterRootAnchor(t.Context(), "tenant", req); err == nil {
 		t.Fatal("signer readback outage reported a provisioned root")
 	}
@@ -371,4 +376,98 @@ func hasIdempotencyHeader(params []any) bool {
 		}
 	}
 	return false
+}
+
+type attestorReadbackProbe struct {
+	publicDER      []byte
+	method         string
+	overrideMethod string
+	readErr        error
+	provisionErr   error
+}
+
+func (p *attestorReadbackProbe) ProvisionAgentAttestor(_ context.Context, _, _ string, publicDER []byte, method string) error {
+	if p.provisionErr != nil {
+		return p.provisionErr
+	}
+	p.publicDER = append([]byte(nil), publicDER...)
+	p.method = method
+	return nil
+}
+
+func (p *attestorReadbackProbe) ReadAgentAttestor(_ context.Context, _, _ string) ([]byte, string, error) {
+	if p.readErr != nil {
+		return nil, "", p.readErr
+	}
+	if p.overrideMethod != "" {
+		return append([]byte(nil), p.publicDER...), p.overrideMethod, nil
+	}
+	return append([]byte(nil), p.publicDER...), p.method, nil
+}
+
+// A150: registering an attestor provisions the signer's tenant attestor floor and
+// reports provisioned only after an exact, independent readback.
+func TestService_RegisterAttestorProvisionsSignerFloor(t *testing.T) {
+	floor := delegation.NewDurableAttestationTrustStore(t.TempDir())
+	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{Attestors: floor})
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := svc.RegisterAttestor(t.Context(), "tenant-1", agidapi.AttestorRequest{
+		KeyID: "tpm-verifier", Method: "tpm", PublicPEM: string(delegation.EncodeRootAnchorPEM(key.Public().DER)),
+	})
+	if err != nil || !resp.Provisioned || resp.Method != "tpm" || resp.Class != "hardware-tpm" {
+		t.Fatalf("RegisterAttestor = %+v, %v", resp, err)
+	}
+	der, method, err := floor.ReadAgentAttestor(t.Context(), "tenant-1", "tpm-verifier")
+	if err != nil || string(der) != string(key.Public().DER) || method != "tpm" {
+		t.Fatalf("signer floor holds method %q, %v", method, err)
+	}
+	for name, req := range map[string]agidapi.AttestorRequest{
+		"unknown method":   {KeyID: "a", Method: "made-up", PublicDER: key.Public().DER},
+		"padded method":    {KeyID: "a", Method: " tpm", PublicDER: key.Public().DER},
+		"unsafe key id":    {KeyID: "../a", Method: "tpm", PublicDER: key.Public().DER},
+		"no key":           {KeyID: "a", Method: "tpm"},
+		"two key sources":  {KeyID: "a", Method: "tpm", PublicDER: key.Public().DER, PublicPEM: "x"},
+		"not a public key": {KeyID: "a", Method: "tpm", PublicDER: []byte("not a key")},
+	} {
+		if _, err := svc.RegisterAttestor(t.Context(), "tenant-1", req); !errors.Is(err, agidapi.ErrInvalidAttestorRequest) {
+			t.Fatalf("%s = %v, want ErrInvalidAttestorRequest", name, err)
+		}
+	}
+	listed, err := svc.ListAttestors(t.Context(), "tenant-1")
+	if err != nil || listed.Count != 0 {
+		t.Fatalf("list without a registry = %+v, %v", listed, err)
+	}
+}
+
+func TestService_RegisterAttestorNeedsExactSignerReadback(t *testing.T) {
+	key, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := agidapi.AttestorRequest{KeyID: "tpm-verifier", Method: "tpm", PublicDER: key.Public().DER}
+	if _, err := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{}).RegisterAttestor(t.Context(), "tenant", req); !errors.Is(err, agidapi.ErrAttestorSignerUnavailable) {
+		t.Fatalf("missing signer = %v, want unavailable", err)
+	}
+	probe := &attestorReadbackProbe{provisionErr: errors.New("signer floor unreachable")}
+	svc := agidapi.NewServiceWithSignerFloors(nil, nil, nil, agidapi.SignerFloors{Attestors: probe})
+	if _, err := svc.RegisterAttestor(t.Context(), "tenant", req); err == nil {
+		t.Fatal("signer provisioning outage reported a provisioned attestor")
+	}
+	probe.provisionErr = nil
+	probe.readErr = errors.New("signer floor unreachable")
+	if _, err := svc.RegisterAttestor(t.Context(), "tenant", req); err == nil {
+		t.Fatal("signer readback outage reported a provisioned attestor")
+	}
+	probe.readErr = nil
+	probe.overrideMethod = "hsm"
+	if _, err := svc.RegisterAttestor(t.Context(), "tenant", req); !errors.Is(err, agidapi.ErrAttestorSignerReadback) {
+		t.Fatalf("different signer binding = %v, want mismatch", err)
+	}
+	probe.overrideMethod = ""
+	if resp, err := svc.RegisterAttestor(t.Context(), "tenant", req); err != nil || !resp.Provisioned {
+		t.Fatalf("exact signer readback: %+v, %v", resp, err)
+	}
 }

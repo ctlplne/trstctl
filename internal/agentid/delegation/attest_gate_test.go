@@ -3,9 +3,11 @@
 package delegation
 
 import (
+	"context"
 	"testing"
-	"trstctl.com/trstctl/internal/agentid/agentstack"
 
+	"trstctl.com/trstctl/internal/agentid/agentstack"
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -182,4 +184,62 @@ func containsSubstr(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// A150: with the signer's durable attestor floor as its verifier, the gate checks
+// evidence against the requesting tenant's own attestors. The same evidence key
+// presented on another tenant's request is refused before any key operation.
+func TestIssue_AttestationUsesTheRequestingTenantsAttestors(t *testing.T) {
+	minClass := MinClassPolicy{"agent": ClassHardwareTPM}
+	f := newGateFixture(t, map[string]RootAnchor{}, minClass, nil, nil)
+	floor := NewDurableAttestationTrustStore(t.TempDir())
+	attestorKey, err := crypto.NewSoftwareBackend().GenerateKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := floor.ProvisionAgentAttestor(context.Background(), "t1", "tpm-verifier", attestorKey.Public().DER, "tpm"); err != nil {
+		t.Fatal(err)
+	}
+	refusal, refusalDER := signerWithDER(t)
+	gate, err := NewGate(Config{
+		SignerID: "test-signer", Roots: NewTrustStore(map[string]RootAnchor{}), RefusalSigner: refusal,
+		Revocations: NeverRevoked{}, Attestor: floor, MinClass: minClass,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep := mustRepr(t, "you are a helpful agent", "search")
+	repBytes, err := jsonMarshal(rep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pre, _ := encodePreconditionsForTest(PreconditionsBody{DesignatedClass: "agent"})
+	request := func(tenant, nonce string) signing.IssuancePreconditions {
+		payload, err := SignAttestation(attestorKey, "tpm-verifier", "tpm", "instance-1", nil, []byte(nonce))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signing.IssuancePreconditions{
+			TenantID: tenant, TrustAnchorRef: "agent-subject", Preconditions: pre, SubjectRepr: repBytes,
+			Attestation: attBody(t, "tpm", payload), AttestationMethod: "tpm",
+		}
+	}
+	if res := runGatedIssue(t, f.log, gate, request("t1", "n1"), f.mintKeyOp(t)); !res.decision.Approved {
+		t.Fatalf("the tenant's own attestor was refused: %s", refusalReason(t, res.decision))
+	}
+	before := f.keystore.keyOps()
+	res := runGatedIssue(t, f.log, gate, request("t2", "n2"), f.mintKeyOp(t))
+	if res.decision.Approved {
+		t.Fatal("another tenant's attestor vouched for this tenant's issuance")
+	}
+	if f.keystore.keyOps() != before {
+		t.Fatal("a refused attestation still ran a key operation")
+	}
+	art := decodeRefusalForTest(t, res.decision.RefusalRecord)
+	if art.FailedCheck != CheckAttestation {
+		t.Fatalf("failed_check = %q, want %q", art.FailedCheck, CheckAttestation)
+	}
+	if err := VerifyRefusal(refusalDER, art); err != nil {
+		t.Fatalf("signed refusal does not verify: %v", err)
+	}
 }

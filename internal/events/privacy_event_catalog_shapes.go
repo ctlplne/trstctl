@@ -197,6 +197,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"tenant_id":"","key_id":"","public_der":"","auth_ref":""}`), true
 	case "agent.root_anchor.unprovisioned":
 		return shape(`{"tenant_id":"","key_id":"","public_der":"","auth_ref":"","reason":""}`), true
+	case "agent.attestor.registered":
+		return shape(`{"tenant_id":"","key_id":"","method":"","public_der":""}`), true
 	case "acme.account.upserted":
 		return shape(`{"seq":1,"id":"","url":"","jwk":{},"contact":[""],"status":"","eab_key_id":""}`,
 			catalogPrivacyShapeOptions{

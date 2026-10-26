@@ -1525,6 +1525,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 		licensedOpts, err := d.LicensedAPIOptionsFactory(LicensedAPIOptionsDeps{
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
 			AGIDRootAnchors: s.agidRootAnchors(),
+			AGIDAttestors:   s.agidAttestors(),
 			DefaultProfile:  d.DefaultProfile,
 			KEMCustody:      s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
 			TLSPostureDeployer: d.ConnectorRegistry,
@@ -2214,6 +2215,13 @@ func (s *Server) successionMinter() SuccessionMinter {
 }
 
 func (s *Server) agidRootAnchors() editionseam.AgentRootAnchorProvisioner {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) agidAttestors() editionseam.AgentAttestorProvisioner {
 	if s.signer == nil {
 		return nil
 	}

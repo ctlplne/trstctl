@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
@@ -92,6 +93,17 @@ var methodClass = map[string]AttestationClass{
 // unknown).
 func ClassOfMethod(method string) AttestationClass { return methodClass[method] }
 
+// AttestationMethods lists the attestation methods the gate knows, sorted, for an
+// attestor registration to choose from.
+func AttestationMethods() []string {
+	out := make([]string, 0, len(methodClass))
+	for method := range methodClass {
+		out = append(out, method)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // VerifiedAttestation is the gate's package-local view of a verified attestation: the
 // non-secret facts the gate needs (the method, the verified subject, and the
 // verified attributes/claims). It deliberately mirrors the subset of
@@ -142,6 +154,14 @@ type AttestationVerifier interface {
 	// VerifyEvidence verifies the evidence for method and returns the verified
 	// attestation, or an error (forged/replayed/malformed evidence fails closed).
 	VerifyEvidence(method string, payload []byte) (VerifiedAttestation, error)
+}
+
+// TenantAttestationVerifier is an AttestationVerifier whose trust is tenant-scoped: it
+// verifies evidence against the requesting tenant's own registered attestors before any
+// deployment-wide one, and never against another tenant's. The gate prefers it when the
+// configured verifier implements it (the durable signer floor does).
+type TenantAttestationVerifier interface {
+	VerifyTenantEvidence(tenantID, method string, payload []byte) (VerifiedAttestation, error)
 }
 
 // classOfAttestation returns the class a verified attestation asserts: the

@@ -46,7 +46,9 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 		reachStore := agiddelegation.NewDurableReachabilityTrustStore(floorDir)
 		reachabilityTrust = reachStore.TrustLookup
 		opts = append(opts, signing.WithAgentReachabilityKeyStore(reachStore))
-		attestor = agiddelegation.NewDurableAttestationTrustStore(floorDir)
+		attestorStore := agiddelegation.NewDurableAttestationTrustStore(floorDir)
+		attestor = attestorStore
+		opts = append(opts, signing.WithAgentAttestorStore(attestorStore))
 	}
 	// Issuance-precondition gate (AGID-04a seam; AGID-04b verifier). Attached in
 	// every build: the free single-hop issuance path is never gated
@@ -56,10 +58,10 @@ func appendFamilyOptions(opts []signing.ServerOption, floorDir string, wrapper s
 	// per-hop narrowing under the AGID-01 partial order, and the attestation (with the
 	// min-class gate) BEFORE any key op, and failing closed with a signed refusal (INV-A1).
 	// The refusal-signing key is generated inside the signer as locked material and never
-	// leaves the boundary. Root anchors, the AGID-02 projection-backed revocation reader,
-	// and the attestation verifier are provisioned by the deployment (AGID-INT-WIRE);
-	// until then a delegated chain fails closed at the root-anchor check rather than being
-	// approved unverified.
+	// leaves the boundary. Root anchors, attestors and the reachability verdict key reach
+	// the signer's floor over this transport from the control plane (attestors may also be
+	// operator-provisioned deployment-wide); until a root anchor is present a delegated
+	// chain fails closed at the root-anchor check rather than being approved unverified.
 	gate, _, err := agiddelegation.NewSignerGate(agiddelegation.SignerConfig{
 		SignerID:            "trstctl-signer",
 		AnchorSource:        anchorSource,
