@@ -829,7 +829,7 @@ not this file.
 | `internal/api/csrf_test.go:70` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/csrf_test.go:71` | test cookie against the test's own local server (CWE-1004) |
 | `internal/api/rate_limit_guard_test.go:50` | test cookie against the test's own local server (CWE-1004) |
-| `internal/connector/netscaler/netscaler.go:341` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
+| `internal/connector/netscaler/netscaler.go:354` | cookie on an outbound API request; response-cookie attributes do not apply (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:170` | test cookie against the test's own local server (CWE-1004) |
 | `internal/projections/auth_resolver_test.go:179` | test cookie against the test's own local server (CWE-1004) |
 

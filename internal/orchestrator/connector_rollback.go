@@ -13,7 +13,9 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/connector"
+	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // Queueing a rollback that actually executes (epic D4 + AUD32/G1).
@@ -48,6 +50,10 @@ type ConnectorRollbackRequest struct {
 	TargetConfig json.RawMessage `json:"target_config,omitempty"`
 	// PredecessorFingerprint names the installed object to bind back to.
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
+	// PredecessorKeyObject names the appliance object holding the predecessor's
+	// key when the appliance generated it (A122). Derived here from the
+	// predecessor certificate; a caller does not supply it.
+	PredecessorKeyObject string `json:"predecessor_key_object,omitempty"`
 	// AllowLegacyObject lets an appliance re-bind fall back to the object a
 	// pre-fingerprint deploy installed under the target-derived name (A45).
 	AllowLegacyObject bool `json:"allow_legacy_object,omitempty"`
@@ -83,6 +89,31 @@ type ConnectorRollbackQueued struct {
 // RequestConnectorRollback queues the appropriate executable inverse. Appliance
 // rows demand network role; host rows demand host role plus the exact agent ID
 // that retained the predecessor.
+// applianceKeyObjectFor names the appliance object holding a predecessor's key
+// when the appliance generated it (A122): the certificate's issuance key
+// records the renewal job, and the object is named for the destination and
+// that job. A predecessor whose key a deploy installed needs no name; an
+// appliance-generated one whose job cannot be read is refused rather than
+// re-bound to a key object that may not be its own.
+func (o *Orchestrator) applianceKeyObjectFor(ctx context.Context, tenantID, targetID, fingerprint string) (string, error) {
+	cert, err := o.store.GetCertificateByFingerprint(ctx, tenantID, fingerprint)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("orchestrator: read the rollback predecessor: %w", err)
+	}
+	if cert.KeyOrigin != string(custody.OriginAppliance) {
+		return "", nil
+	}
+	jobID, ok := store.AgentCSRJobID(cert.IssuanceIdempotencyKey)
+	object := connector.ApplianceKeyObjectName(targetID, jobID)
+	if !ok || object == "" {
+		return "", errors.New("orchestrator: the predecessor's key was generated on the appliance, but its certificate does not name the renewal job and destination that hold it; no rollback was queued")
+	}
+	return object, nil
+}
+
 func (o *Orchestrator) RequestConnectorRollback(ctx context.Context, tenantID string, in ConnectorRollbackRequest) (ConnectorRollbackQueued, error) {
 	return o.requestConnectorRollback(ctx, tenantID, in, nil)
 }
@@ -147,6 +178,13 @@ func (o *Orchestrator) requestConnectorRollback(ctx context.Context, tenantID st
 		}
 	default:
 		return ConnectorRollbackQueued{}, connector.ErrRollbackUnsupported
+	}
+	if connector.ApplianceKeyFamily(req.Connector) {
+		object, err := o.applianceKeyObjectFor(ctx, tenantID, req.TargetID, req.PredecessorFingerprint)
+		if err != nil {
+			return ConnectorRollbackQueued{}, err
+		}
+		req.PredecessorKeyObject = object
 	}
 	if req.RequestedBy == "" {
 		if actor, ok := events.ActorFromContext(ctx); ok {

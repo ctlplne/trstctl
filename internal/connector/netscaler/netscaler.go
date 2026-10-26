@@ -158,6 +158,19 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 	if err := c.mustExistFile(ctx, sb, token, certFile); err != nil {
 		return fmt.Errorf("netscaler: predecessor file %q: %w", certFile, err)
 	}
+	if object := strings.TrimSpace(rb.PredecessorKeyObject); object != "" {
+		// A122: the appliance generated this key into a job-named file. Its CSR
+		// beside it proves the key was made here; the key itself is not read.
+		if _, found, err := c.readPublicFile(ctx, sb, token, object+".csr"); err != nil {
+			return fmt.Errorf("netscaler: predecessor appliance key %q: %w", object, err)
+		} else if !found {
+			return fmt.Errorf("netscaler: predecessor appliance key %q: %w", object, connector.ErrNoPredecessorInstalled)
+		}
+		if err := c.rebind(ctx, sb, token, rb.Target, certFile, object+".key"); err != nil {
+			return fmt.Errorf("netscaler: re-bind certkey %q to the predecessor and its appliance key: %w", rb.Target, err)
+		}
+		return nil
+	}
 	// BOTH halves. The certkey is bound to a cert AND a key, and the deploy
 	// uploads them in two separate calls — so a deploy that failed between them
 	// leaves an orphan .crt with no matching .key. Checking only the certificate

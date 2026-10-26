@@ -63,7 +63,7 @@ func runApplianceRenew(ctx context.Context, ch Channel, client *http.Client, job
 		report(ctx, ch, job, OutcomeFailed, "renewal intent names no subject to certify")
 		return false
 	}
-	object := connector.ApplianceKeyObjectName(intent.Target, job.JobID)
+	object := connector.ApplianceKeyObjectName(intent.TargetID, job.JobID)
 	var target TargetConfig
 	if len(intent.TargetConfig) > 0 {
 		if err := json.Unmarshal(intent.TargetConfig, &target); err != nil {

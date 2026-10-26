@@ -53,17 +53,27 @@ type ApplianceKeyGenerator interface {
 }
 
 // ApplianceKeyObjectName is the appliance object a job's key is generated
-// into: the target's object base and the job ID. The key exists before its
-// certificate, so it cannot carry the certificate fingerprint the way deployed
-// certificate objects do; the job ID is known to the relay when it claims the
-// job and to the control plane from the certificate the job's CSR produced,
-// which is how a rollback finds a predecessor's key again.
-func ApplianceKeyObjectName(base string, jobID int64) string {
-	base = strings.TrimSpace(base)
-	if base == "" || jobID <= 0 {
+// into: trstctl-<first eight characters of the destination ID>-j<job ID>. The
+// key exists before its certificate, so it cannot carry the certificate
+// fingerprint the way deployed certificate objects do. Both halves are known to
+// the relay when it claims the job and to the control plane when a rollback
+// names the destination and the predecessor certificate, whose issuance key
+// records the job; neither depends on a routing name that can change. The
+// destination ID keeps two installations driving one appliance apart.
+func ApplianceKeyObjectName(targetID string, jobID int64) string {
+	var short strings.Builder
+	for _, r := range strings.ToLower(targetID) {
+		if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') {
+			short.WriteRune(r)
+			if short.Len() == 8 {
+				break
+			}
+		}
+	}
+	if short.Len() < 8 || jobID <= 0 {
 		return ""
 	}
-	return base + "-j" + strconv.FormatInt(jobID, 10)
+	return "trstctl-" + short.String() + "-j" + strconv.FormatInt(jobID, 10)
 }
 
 // applianceKeyFamilies is the census of appliance connectors that generate the

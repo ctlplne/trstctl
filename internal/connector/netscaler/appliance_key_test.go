@@ -16,6 +16,9 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 )
 
+// nsTargetID is the destination the appliance keys in these tests belong to.
+const nsTargetID = "0f3c9a71-2d4e-4b8a-9c1d-5e6f7a8b9c0d"
+
 // signApplianceCSR is the control plane's half in these tests: a CA signs the
 // CSR the appliance returned.
 func signApplianceCSR(t *testing.T, csrPEM []byte) []byte {
@@ -52,7 +55,7 @@ func TestNetScalerGeneratesTheKeyOnTheApplianceAndInstallsAgainstIt(t *testing.T
 	ctx := context.Background()
 
 	req := connector.ApplianceKeyRequest{
-		ObjectName: connector.ApplianceKeyObjectName(certkey, 41),
+		ObjectName: connector.ApplianceKeyObjectName(nsTargetID, 41),
 		CommonName: "vip.example.test", DNSNames: []string{"vip.example.test", "www.example.test"},
 	}
 	key, _, err := connector.RunApplianceKey(ctx, c, ops, req)
@@ -109,7 +112,7 @@ func TestNetScalerApplianceKeyInstallRefusesAMismatchedCertificate(t *testing.T)
 	ops := connector.NewHTTPOps(srv.Client())
 	ctx := context.Background()
 	key, _, err := connector.RunApplianceKey(ctx, c, ops, connector.ApplianceKeyRequest{
-		ObjectName: connector.ApplianceKeyObjectName(certkey, 42), CommonName: "vip.example.test",
+		ObjectName: connector.ApplianceKeyObjectName(nsTargetID, 42), CommonName: "vip.example.test",
 		DNSNames: []string{"vip.example.test"},
 	})
 	if err != nil {

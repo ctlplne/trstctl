@@ -79,12 +79,15 @@ func TestDeviceCSRGateFollowsTheApplianceKeyCensus(t *testing.T) {
 
 func TestApplianceKeyObjectNameIsFixedPerJob(t *testing.T) {
 	t.Parallel()
-	if got := connector.ApplianceKeyObjectName("web-vip", 77); got != "web-vip-j77" {
+	if got := connector.ApplianceKeyObjectName("0F3C9A71-2D4E-4B8A-9C1D-5E6F7A8B9C0D", 77); got != "trstctl-0f3c9a71-j77" {
 		t.Fatalf("object name = %q", got)
 	}
-	for _, empty := range []string{connector.ApplianceKeyObjectName("", 77), connector.ApplianceKeyObjectName("web-vip", 0)} {
+	for _, empty := range []string{
+		connector.ApplianceKeyObjectName("", 77), connector.ApplianceKeyObjectName("ab-12", 77),
+		connector.ApplianceKeyObjectName("0f3c9a71-2d4e-4b8a-9c1d-5e6f7a8b9c0d", 0),
+	} {
 		if empty != "" {
-			t.Fatalf("an object name without a base or job = %q, want none", empty)
+			t.Fatalf("an object name without a destination or job = %q, want none", empty)
 		}
 	}
 }

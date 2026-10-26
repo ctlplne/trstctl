@@ -44,6 +44,12 @@ type Rollback struct {
 	// makes the object addressable without the control plane storing anything
 	// about the appliance's internal naming.
 	PredecessorFingerprint string
+	// PredecessorKeyObject names the appliance object holding the predecessor's
+	// key when the appliance generated it (A122). That key exists before its
+	// certificate, so its name carries the job that created it rather than
+	// the fingerprint; empty means the key was installed by a deploy under the
+	// fingerprint-derived name.
+	PredecessorKeyObject string
 	// Reason is operator-facing context recorded with the transcript. It never
 	// reaches the appliance.
 	Reason string

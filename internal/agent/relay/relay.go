@@ -283,7 +283,9 @@ type RollbackIntent struct {
 	CredentialRefs []string `json:"credential_refs,omitempty"`
 	// PredecessorFingerprint identifies the installed object to bind back to.
 	PredecessorFingerprint string `json:"predecessor_fingerprint"`
-	SuccessorFingerprint   string `json:"successor_fingerprint,omitempty"`
+	// PredecessorKeyObject names the appliance-generated predecessor key (A122).
+	PredecessorKeyObject string `json:"predecessor_key_object,omitempty"`
+	SuccessorFingerprint string `json:"successor_fingerprint,omitempty"`
 	// PredecessorSerial is carried for the operator-facing receipt only; the
 	// restore selects by fingerprint.
 	PredecessorSerial string `json:"predecessor_serial,omitempty"`
@@ -349,6 +351,7 @@ func RollbackWithResult(ctx context.Context, client *http.Client, intent Rollbac
 	return connector.RunRollbackWithResult(ctx, built, connector.NewHTTPOps(client), connector.Rollback{
 		Target:                 intent.Target,
 		PredecessorFingerprint: intent.PredecessorFingerprint,
+		PredecessorKeyObject:   intent.PredecessorKeyObject,
 		Reason:                 intent.Reason,
 		AllowLegacyObject:      intent.AllowLegacyObject,
 	})

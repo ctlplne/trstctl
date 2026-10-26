@@ -64,6 +64,9 @@ func (a *applianceChannel) ReportJobResultWithCustody(ctx context.Context, jobID
 	return a.ReportJobResult(ctx, jobID, attempt, outcome, detail, evidence)
 }
 
+// applianceTargetID is the destination these renewals belong to.
+const applianceTargetID = "0f3c9a71-2d4e-4b8a-9c1d-5e6f7a8b9c0d"
+
 func applianceRenewJob(t *testing.T, srv *netscalertest.Server, jobID int64, attempt int, declare bool) relay.Job {
 	t.Helper()
 	cfg := map[string]string{"endpoint": srv.URL(), "username": "nsroot", "password_ref": "secret://connectors/ns"}
@@ -75,7 +78,7 @@ func applianceRenewJob(t *testing.T, srv *netscalertest.Server, jobID int64, att
 		t.Fatal(err)
 	}
 	payload, err := json.Marshal(relay.DeployIntent{
-		Connector: "netscaler", Target: "web-prod", TargetID: "target-ns", IdentityID: "identity-vip",
+		Connector: "netscaler", Target: "web-prod", TargetID: applianceTargetID, IdentityID: "identity-vip",
 		SubjectCommonName: "vip.example.test", SubjectDNSNames: []string{"vip.example.test"},
 		TargetConfig: targetConfig, CredentialRefs: []string{"secret://connectors/ns"},
 	})
@@ -106,7 +109,7 @@ func TestARelayRenewsAnApplianceWhoseKeyStaysOnTheAppliance(t *testing.T) {
 	if ch.redeemed != 1 {
 		t.Fatalf("redemptions = %d, want the appliance login once", ch.redeemed)
 	}
-	object := connector.ApplianceKeyObjectName("web-prod", 41)
+	object := connector.ApplianceKeyObjectName(applianceTargetID, 41)
 	if !srv.DeviceKey(object + ".key") {
 		t.Fatalf("the appliance holds no key %s.key", object)
 	}
@@ -168,5 +171,55 @@ func TestAnUndeclaredApplianceRenewalIsRefused(t *testing.T) {
 	}
 	if len(ch.reports) != 1 || ch.reports[0].outcome != relay.OutcomeFailed {
 		t.Fatalf("reports = %+v, want the renewal refused", ch.reports)
+	}
+}
+
+// A rollback to a predecessor whose key the appliance generated re-binds the
+// certkey to that certificate and to the appliance key named for its job,
+// without reading the key; a predecessor key object that is gone is refused.
+func TestARelayRollsAnApplianceBackToItsGeneratedKey(t *testing.T) {
+	srv := netscalertest.New("nsroot", "s3cret")
+	defer srv.Close()
+	ch := newApplianceChannel(t)
+	ch.material = map[string][]byte{"secret://connectors/ns": []byte("s3cret")}
+	for _, jobID := range []int64{41, 42} {
+		ch.jobs = []relay.Job{applianceRenewJob(t, srv, jobID, 1, true)}
+		if executed, err := relay.RunOnceWithHost(context.Background(), ch, srv.Client(), connector.LocalOpsConfig{}, 4, 60); err != nil || executed != 1 {
+			t.Fatalf("renewal job %d = %d, %v; reports %+v", jobID, executed, err, ch.reports)
+		}
+	}
+	predecessor, successor := ch.fingerprints[0], ch.fingerprints[1]
+	if binding, _ := srv.Binding("web-prod"); binding.Cert != connector.DeployedObjectName("web-prod", successor)+".crt" {
+		t.Fatalf("certkey before the rollback = %+v, want the successor", binding)
+	}
+	intent := func(object string) relay.RollbackIntent {
+		cfg, err := json.Marshal(map[string]string{"endpoint": srv.URL(), "username": "nsroot",
+			"password_ref": "secret://connectors/ns", "key_generation": "appliance"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return relay.RollbackIntent{
+			Connector: "netscaler", Target: "web-prod", TargetID: applianceTargetID, TargetConfig: cfg,
+			CredentialRefs: []string{"secret://connectors/ns"}, PredecessorFingerprint: predecessor,
+			PredecessorKeyObject: object,
+		}
+	}
+	material := func() relay.Material {
+		return relay.Material{"secret://connectors/ns": []byte("s3cret")}
+	}
+	object := connector.ApplianceKeyObjectName(applianceTargetID, 41)
+	if _, _, err := relay.RollbackWithResult(context.Background(), srv.Client(), intent(object), material()); err != nil {
+		t.Fatalf("roll back to the appliance-generated predecessor: %v", err)
+	}
+	binding, _ := srv.Binding("web-prod")
+	if binding.Cert != connector.DeployedObjectName("web-prod", predecessor)+".crt" || binding.Key != object+".key" {
+		t.Fatalf("certkey after the rollback = %+v, want the predecessor and %s.key", binding, object)
+	}
+	if srv.DeviceKeyReads() != 0 {
+		t.Fatalf("the rollback read an appliance key %d times", srv.DeviceKeyReads())
+	}
+	srv.RemoveFile(object + ".csr")
+	if _, _, err := relay.RollbackWithResult(context.Background(), srv.Client(), intent(object), material()); !errors.Is(err, connector.ErrNoPredecessorInstalled) {
+		t.Fatalf("rollback to an appliance key whose object is gone = %v, want ErrNoPredecessorInstalled", err)
 	}
 }
