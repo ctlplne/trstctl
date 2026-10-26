@@ -111,7 +111,7 @@ func TestFeatureCatalogHasExplicitServedState(t *testing.T) {
 func TestFeatureServedStateClassifiesRuntimeConditionsAndResiduals(t *testing.T) {
 	want := map[string]string{
 		"F3":  "conditional", // agent_channel.enabled gates the actual agent transport
-		"F4":  "partial",     // built-in and external CA issuance are served; Kubernetes posture routes remain
+		"F4":  "served",      // built-in and external CA issuance and the Kubernetes posture routes are all census-proven
 		"F5":  "conditional", // protocols.acme.enabled
 		"F7":  "conditional", // all 24 native connectors are assembled when their immutable targets are configured
 		"F13": "conditional", // browser SSO needs operator IdP configuration

@@ -190,12 +190,12 @@
       "requirement_text": "trstctl shall provide CA-agnostic outbound issuance.",
       "owner": "Issuance and CAs",
       "priority": "P0",
-      "acceptance_criteria": "TestServedSelfServiceIssuanceRequiresApproval proves the built-in signer-backed issuance spine. External-CA and Kubernetes controller tests do not certify shipped wiring; their DoD census entries must become served first.",
-      "status": "partial",
-      "served_state": "partial",
-      "backend_status": "partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
-      "ga_served_scope": "out_of_ga",
-      "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+      "acceptance_criteria": "TestServedSelfServiceIssuancePortalCAPISS11 proves the built-in signer-backed issuance spine; the DoD census proves all 14 external-CA drivers and both Kubernetes controller posture routes served through the production composition.",
+      "status": "served",
+      "served_state": "served",
+      "backend_status": "served: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven, and the Kubernetes CSR and TrustBundle posture routes serve authenticated controller reports, proven against a real kind cluster through the shipped composition",
+      "ga_served_scope": "in_ga",
+      "ga_scope_reason": "",
       "source_docs": [
         "docs/features/issuance-and-cas.md"
       ]

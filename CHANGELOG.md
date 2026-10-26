@@ -297,6 +297,11 @@
 
 ### Changed
 
+- CA-agnostic outbound issuance (F4) is now listed as served. Its last
+  residual, the Kubernetes CSR and TrustBundle posture routes, already served
+  the authenticated reports the cluster agents send and is proven by the
+  definition-of-done census against a real kind cluster; the catalog,
+  requirements and limitations had kept calling those routes descriptor-only.
 - A `k8s_ingress_gateway` discovery source can be bound to the host-role agent
   running in the cluster (`cluster_agent_id`, `owner_id`, optional
   `verify_address`). Each run then keeps a `k8s_secret` destination and a

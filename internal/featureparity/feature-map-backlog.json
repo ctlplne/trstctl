@@ -3488,11 +3488,11 @@
             "domain": "Issuance and CAs",
             "phase": "P0",
             "priority": 4,
-            "served_state": "partial",
-            "backend_status": "partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only",
-            "current_frontend_mapping": "served primary journey: Request uses selectable served profiles and owners, an effect-free server preview, fail-closed submission, and prerequisite links; Approvals preserves the approved request and retries issuance with the same deterministic identity/key after failure; Wizard, Identities, and CA Hierarchy use served built-in/external issuance. Kubernetes controller posture remains a separately tracked out-of-GA supporting disclosure.",
+            "served_state": "served",
+            "backend_status": "served: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven, and the Kubernetes CSR and TrustBundle posture routes serve authenticated controller reports, proven against a real kind cluster through the shipped composition",
+            "current_frontend_mapping": "served primary journey: Request uses selectable served profiles and owners, an effect-free server preview, fail-closed submission, and prerequisite links; Approvals preserves the approved request and retries issuance with the same deterministic identity/key after failure; Wizard, Identities, and CA Hierarchy use served built-in/external issuance. Workloads shows the Kubernetes CSR and TrustBundle controller posture the cluster agents report.",
             "target_gui_mapping": "Issuance UI that distinguishes request, approve, issue, protocol-issued, external CA-issued, failed, replayed, and outbox-pending states.",
-            "acceptance_test": "Built-in acceptance proves signer-backed issuance; the external-CA DoD proof drives all 14 configured drivers through production buildRunDeps and the served issue route to independently verified chains; Kubernetes controller DoD entries remain the only residual.",
+            "acceptance_test": "Built-in acceptance proves signer-backed issuance; the external-CA DoD proof drives all 14 configured drivers through production buildRunDeps and the served issue route to independently verified chains; the Kubernetes posture DoD proof reconciles a digest-pinned kind cluster through the agent controller, the agent mTLS channel and PostgreSQL to the authenticated routes and compares them with the live cluster.",
             "source_docs": [
                 "docs/features/issuance-and-cas.md"
             ],
@@ -3564,9 +3564,9 @@
                     "evidence": [
                         "The built-in self-service request, approval, signer issuance, inventory, and event path is served.",
                         "All 14 external-CA drivers are constructed from validated operator configuration by buildRunDeps and reached through the served registry/issue route, durable outbox, exact provider protocol, and independent chain verification.",
-                        "The remaining DoD residual is k8s_posture_routes, whose CSR/TrustBundle rows remain descriptor-only until their later wiring wave.",
-                        "served_state=partial",
-                        "backend_status=partial: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven; the Kubernetes CSR/TrustBundle posture routes remain descriptor-only"
+                        "The Kubernetes CSR and TrustBundle posture routes serve authenticated, event-projected controller reports; the DoD census proves both against a digest-pinned kind cluster through the shipped composition.",
+                        "served_state=served",
+                        "backend_status=served: built-in issuance and all 14 operator-configured external-CA drivers are production-assembled and runtime-proven, and the Kubernetes CSR and TrustBundle posture routes serve authenticated controller reports, proven against a real kind cluster through the shipped composition"
                     ],
                     "refs": [
                         "internal/api/external_ca.go",
@@ -3580,6 +3580,7 @@
                         "internal/agent/k8s/issuer_controller.go"
                     ],
                     "commands": [
+                        "make test",
                         "make dod-gate"
                     ]
                 },
@@ -3649,9 +3650,9 @@
                 },
                 "test": {
                     "evidence": [
-                        "TestServedSelfServiceIssuanceRequiresApproval proves the built-in issuance spine.",
+                        "TestServedSelfServiceIssuancePortalCAPISS11 proves the built-in issuance spine.",
                         "TestDODExternalCAUniversalProductionAssembly starts one nonce-bound process per configured CA, calls production buildRunDeps and Build, enters through the authenticated served issue route, and independently verifies the returned chain.",
-                        "Kubernetes controller tests remain controller/library evidence until their separate DoD rows are wired; the fresh DoD census is the promotion authority."
+                        "TestServedKubernetesPostureReportUsesAuthenticatedAgentEventProjection, TestServedKubernetesCertificateSigningRequestCAPK8S04 and TestServedKubernetesTrustBundleDistributionCAPK8S07 carry the authenticated agent report through the event projection to the served routes; TestDODKubernetesPostureRoutesProductionAssembly proves both routes against a real kind cluster through the shipped composition, and the fresh DoD census is the promotion authority."
                     ],
                     "refs": [
                         "internal/server/self_service_issuance_served_test.go",
@@ -3661,6 +3662,8 @@
                         "internal/featureparity/feature_facet_coverage_test.go",
                         "internal/server/kubernetes_csr_served_test.go",
                         "internal/server/kubernetes_trust_bundle_served_test.go",
+                        "internal/server/dod_kubernetes_posture_runtime_test.go",
+                        "tools/dodcensus/kubernetes_posture_manifest_test.go",
                         "internal/agent/k8s/issuer_controller_test.go",
                         "deploy/kubernetes/manifests_test.go",
                         "web/src/__tests__/ca_hierarchy.test.tsx",
@@ -3748,8 +3751,8 @@
                     ]
                 }
             },
-            "ga_served_scope": "out_of_ga",
-            "ga_scope_reason": "Residual runtime condition or missing integration breadth remains outside the GA denominator.",
+            "ga_served_scope": "in_ga",
+            "ga_scope_reason": "",
             "dod_capabilities": [
                 "external_ca",
                 "k8s_posture_routes"

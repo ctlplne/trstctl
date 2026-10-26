@@ -110,6 +110,7 @@ receipt cannot certify it.
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
+| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
 | F48 | Private/enterprise CA hierarchy management | docs/features/issuance-and-cas.md, docs/runbooks/key-ceremony.md |
 | F53 | Certificate profiles and registration-authority model | docs/features/issuance-and-cas.md, docs/guides/profile-authoring.md |
 | F46 | ACME Renewal Information (ARI) | docs/features/issuance-and-cas.md, docs/features/acme-and-dns.md |
@@ -186,7 +187,6 @@ receipt cannot certify it.
 
 | ID | Feature | Primary docs |
 |----|---------|--------------|
-| F4 | CA-agnostic outbound issuance | docs/features/issuance-and-cas.md |
 | F16 | Crypto-agility and PQC readiness | docs/features/lifecycle-and-pqc.md |
 | F57 | PQC migration orchestration | docs/features/lifecycle-and-pqc.md |
 | F64 | Developer secrets experience | docs/features/secrets.md, docs/cli.md, docs/journeys/manage-secrets.md |
@@ -2724,9 +2724,11 @@ than sending an operator looking for a credential that was never there.
   Entrust, GlobalSign, Google CAS, Let's Encrypt/ACME, Sectigo, shell CA,
   Smallstep, Vault PKI, and Venafi TPP/TLS Protect clients. The authenticated
   served issue route journals the request before the upstream call, and the acceptance
-  proof independently validates the returned chain for every provider. F4
-  remains partial only because its separate Kubernetes CSR/TrustBundle posture
-  rows are still residual, not because CA breadth is library-only.
+  proof independently validates the returned chain for every provider. The
+  Kubernetes CSR and TrustBundle posture routes beside them serve the
+  authenticated reports the cluster agents' controllers send, and the same
+  census proves both against a real kind cluster, so CA-agnostic issuance
+  (F4) is served end to end.
 - Discovery collectors with residual connector-owned execution: SSH host-key
   scanning is served through the discovery outbox worker, and on-host
   SSH/private-key inventory is served through the agent mTLS inventory report
