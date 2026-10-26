@@ -9,6 +9,8 @@ import { asRFC3339UTCMinute, defaultBillingPeriod, validUTCPeriod } from "@/lib/
 import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import type { StatusTone } from "@/lib/statusVocab";
 
+type TenantWrapperKind = "local_file" | "pkcs11";
+
 export function IdempotencyResultProtectionPanel({
   readout,
   loading,
@@ -131,6 +133,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
   const [requestFailed, setRequestFailed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [wrapperID, setWrapperID] = useState("");
+  const [wrapperKind, setWrapperKind] = useState<TenantWrapperKind>("local_file");
   const [sealConfirmOpen, setSealConfirmOpen] = useState(false);
 
   async function refreshStatus() {
@@ -140,6 +143,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
       const next = await api.tenantKeyDomain();
       setStatus(next);
       if (!wrapperID && next.wrapper_id) setWrapperID(next.wrapper_id);
+      if (next.wrapper_kind === "pkcs11") setWrapperKind("pkcs11");
     } catch {
       setRequestFailed(true);
     } finally {
@@ -155,6 +159,8 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
         if (!active) return;
         setStatus(next);
         setWrapperID((current) => current || next.wrapper_id || "");
+        // A started migration resumes only with the kind it began with.
+        if (next.wrapper_kind === "pkcs11") setWrapperKind("pkcs11");
         setRequestFailed(false);
       })
       .catch(() => {
@@ -176,7 +182,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
     setRequestFailed(false);
     setNotice(null);
     try {
-      const next = await api.migrateTenantKeyDomain({ wrapper_kind: "local_file", wrapper_id: exactWrapperID });
+      const next = await api.migrateTenantKeyDomain({ wrapper_kind: wrapperKind, wrapper_id: exactWrapperID });
       setStatus(next);
       setNotice(t("platform.tenantSeal.noticeMigrated"));
     } catch {
@@ -302,6 +308,16 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
               <dd className="font-mono text-xs">{status.wrapper_id || t("platform.tenantSeal.notConfigured")}</dd>
             </div>
             <div>
+              <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.keyHeldBy")}</dt>
+              <dd>
+                {status.remote_wrapper_state === "signer_hsm"
+                  ? t("platform.tenantSeal.keyHeldBySignerHSM")
+                  : status.wrapper_kind === "local_file"
+                    ? t("platform.tenantSeal.keyHeldByLocalFile")
+                    : t("platform.tenantSeal.keyHeldByDeployment")}
+              </dd>
+            </div>
+            <div>
               <dt className="font-medium text-muted-foreground">{t("platform.tenantSeal.progress")}</dt>
               <dd>
                 {status.progress_total > 0
@@ -344,8 +360,25 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
 
           {canWrite && canMigrate ? (
             <form className="grid gap-3 rounded-control border border-border p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={migrate}>
+              <fieldset className="grid gap-2 text-sm sm:col-span-2">
+                <legend className="font-medium">{t("platform.tenantSeal.wrapperKind")}</legend>
+                {(["local_file", "pkcs11"] as const).map((kind) => (
+                  <label key={kind} className="flex items-start gap-2">
+                    <input
+                      type="radio"
+                      name="tenant-key-domain-wrapper-kind"
+                      value={kind}
+                      checked={wrapperKind === kind}
+                      disabled={Boolean(status.wrapper_kind) && status.wrapper_kind !== kind}
+                      onChange={() => setWrapperKind(kind)}
+                      className="mt-1"
+                    />
+                    <span>{kind === "pkcs11" ? t("platform.tenantSeal.wrapperKindPKCS11") : t("platform.tenantSeal.wrapperKindLocal")}</span>
+                  </label>
+                ))}
+              </fieldset>
               <label className="grid gap-1 text-sm" htmlFor="tenant-key-domain-wrapper-id">
-                <span className="font-medium">{t("platform.tenantSeal.wrapperID")}</span>
+                <span className="font-medium">{wrapperKind === "pkcs11" ? t("platform.tenantSeal.wrapperIDPKCS11") : t("platform.tenantSeal.wrapperID")}</span>
                 <input
                   id="tenant-key-domain-wrapper-id"
                   className="min-h-10 rounded-control border border-border bg-background px-3 py-2"
@@ -356,7 +389,7 @@ export function TenantKeyDomainPanel({ canWrite }: { canWrite: boolean }) {
                   aria-describedby="tenant-key-domain-wrapper-help"
                 />
                 <span id="tenant-key-domain-wrapper-help" className="text-xs text-muted-foreground">
-                  {t("platform.tenantSeal.wrapperHelp")}
+                  {wrapperKind === "pkcs11" ? t("platform.tenantSeal.wrapperHelpPKCS11") : t("platform.tenantSeal.wrapperHelp")}
                 </span>
               </label>
               <Button type="submit" disabled={busy || !wrapperID.trim()}>

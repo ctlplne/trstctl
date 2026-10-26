@@ -5277,6 +5277,40 @@ export const messages = {
     defaultMessage: "Enter the exact local_file wrapper ID already configured by the operator. trstctl does not create or upload this key.",
     description: "Tenant wrapper custody explanation.",
   },
+  "platform.tenantSeal.wrapperKind": {
+    defaultMessage: "Where the tenant's domain key is kept",
+    description: "Tenant migration wrapper kind choice legend.",
+  },
+  "platform.tenantSeal.wrapperKindLocal": {
+    defaultMessage: "A local wrapper file on this control plane",
+    description: "Tenant migration choice: a local_file wrapper.",
+  },
+  "platform.tenantSeal.wrapperKindPKCS11": {
+    defaultMessage: "An HSM key the signer holds (the key never reaches the control plane)",
+    description: "Tenant migration choice: a pkcs11 wrapper the isolated signer holds.",
+  },
+  "platform.tenantSeal.wrapperIDPKCS11": {
+    defaultMessage: "Configured HSM wrapper ID",
+    description: "Tenant migration pkcs11 wrapper identifier input label.",
+  },
+  "platform.tenantSeal.wrapperHelpPKCS11": {
+    defaultMessage:
+      "Enter the exact pkcs11 wrapper ID listed in the control plane's configuration and in the signer's tenant KEK file. The signer keeps this tenant's domain key wrapped by that HSM key; trstctl does not create the HSM key.",
+    description: "Tenant pkcs11 wrapper custody explanation.",
+  },
+  "platform.tenantSeal.keyHeldBy": { defaultMessage: "Domain key held by", description: "Tenant key-domain custody location label." },
+  "platform.tenantSeal.keyHeldBySignerHSM": {
+    defaultMessage: "The signer, under an HSM key",
+    description: "Tenant domain key held in the isolated signer under an HSM key.",
+  },
+  "platform.tenantSeal.keyHeldByLocalFile": {
+    defaultMessage: "This control plane, from a local wrapper file",
+    description: "Tenant domain key opened by the control plane from a local wrapper file.",
+  },
+  "platform.tenantSeal.keyHeldByDeployment": {
+    defaultMessage: "The deployment key (not migrated)",
+    description: "Tenant still protected by the deployment key.",
+  },
   "platform.tenantSeal.migrate": { defaultMessage: "Start or resume migration", description: "Tenant key-domain migration action." },
   "platform.tenantSeal.seal": { defaultMessage: "Seal tenant crypto", description: "Tenant key-domain seal action." },
   "platform.tenantSeal.retrySeal": { defaultMessage: "Retry seal with a new request", description: "Tenant key-domain retry action after terminal failure." },

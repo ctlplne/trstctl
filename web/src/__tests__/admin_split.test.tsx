@@ -520,6 +520,59 @@ describe("C-A1 /admin split + permanent /platform redirects", () => {
     expect(await axe(view.container)).toHaveNoViolations();
   });
 
+  it("migrates a tenant to an HSM key the signer holds and keeps the kind it started with", async () => {
+    apiMock.me.mockResolvedValue({
+      subject: "custody-operator",
+      tenant_id: "t1",
+      email: "custody@example.test",
+      permissions: ["access:read", "keys:read", "keys:write"],
+    });
+    const legacy = {
+      served: true,
+      protection_mode: "legacy_deployment_kek",
+      state: "legacy",
+      progress_completed: 0,
+      progress_total: 0,
+      retryable: false,
+      legacy_history_exposure: "hot_history_pending",
+      last_transition_evidence_refs: [],
+      local_wrapper_zero_egress: true,
+      remote_wrapper_state: "disabled_in_core_local_custody",
+      recovery: "Configure a wrapper and migrate.",
+    };
+    const migrating = {
+      ...legacy,
+      protection_mode: "tenant_domain",
+      state: "migrating",
+      wrapper_id: "hsm-a",
+      wrapper_kind: "pkcs11",
+      operation_kind: "migrate",
+      operation_status: "running",
+      progress_completed: 3,
+      progress_total: 10,
+      local_wrapper_zero_egress: false,
+      remote_wrapper_state: "signer_hsm",
+      recovery: "Migration is resumable.",
+    };
+    apiMock.tenantKeyDomain.mockReset();
+    apiMock.tenantKeyDomain.mockResolvedValueOnce(legacy);
+    apiMock.migrateTenantKeyDomain.mockReset();
+    apiMock.migrateTenantKeyDomain.mockResolvedValue(migrating);
+
+    const user = userEvent.setup();
+    const view = renderAt("/admin/system");
+    await user.click(await screen.findByRole("button", { name: "Fix first issue" }));
+    expect(await screen.findByText("The deployment key (not migrated)")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /An HSM key the signer holds/ }));
+    await user.type(screen.getByRole("textbox", { name: /Configured HSM wrapper ID/ }), "hsm-a");
+    await user.click(screen.getByRole("button", { name: "Start or resume migration" }));
+    await waitFor(() => expect(apiMock.migrateTenantKeyDomain).toHaveBeenCalledWith({ wrapper_kind: "pkcs11", wrapper_id: "hsm-a" }));
+    expect(await screen.findByText("The signer, under an HSM key")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /A local wrapper file/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /An HSM key the signer holds/ })).toBeChecked();
+    expect(await axe(view.container)).toHaveNoViolations();
+  });
+
   it("renders a terminal seal failure as available, retryable custody truth", async () => {
     apiMock.me.mockResolvedValue({
       subject: "custody-operator",
