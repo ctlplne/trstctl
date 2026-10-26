@@ -2,6 +2,12 @@
 
 ### Added
 
+- Transit key creation and rotation are facts in the event log: a
+  `transit.key.created` or `transit.key.rotated` event names the key, its kind
+  and the version, under a fact ID saved with that version's sealed material, and
+  is appended only after the material is saved. The versions listing reports each
+  version's `fact_id` and whether the log records it; a fact whose append failed,
+  and the versions saved before this release, are recorded by a reconcile pass.
 - A tenant's key domain can live in the signer under an HSM key: migrate with
   `wrapper_kind: "pkcs11"` and a wrapper ID the control plane lists in
   `secrets.tenant_seal_pkcs11_wrappers`. The signer (the `signer-hsm` image, the

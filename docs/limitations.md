@@ -4207,9 +4207,19 @@ Three properties bound what this gives you:
   cannot be opened still refuses the start.
 - **A keyring that cannot be opened fails the operation.** A row the tenant's key
   domain cannot open (a sealed tenant, a lost KEK) fails each transit operation for
-  that tenant instead of minting fresh keys over it. The create and rotate
-  lifecycle facts are audit events; the key bytes are deliberately not
-  event-sourced, so the table restores from the PostgreSQL backup.
+  that tenant instead of minting fresh keys over it. The key bytes are deliberately
+  not event-sourced, so the table restores from the PostgreSQL backup.
+- **Create and rotate are event-sourced facts (A126).** Each is a
+  `transit.key.created` or `transit.key.rotated` event (schema 2: key, kind,
+  version) under a fact ID saved with that version's sealed material, appended only
+  after the material is saved, and projected into `transit_key_facts`, which
+  rebuilds from the log. `GET /api/v1/transit/keys/{name}/versions` reports each
+  version's `fact_id` and whether the log records it. A fact whose append fails
+  leaves the key usable and is recorded by the leader's reconcile pass (at start and
+  every ten minutes), which also gives fact IDs to versions saved before facts
+  existed; until then the version reads `recorded: false`. Facts recorded before
+  this change are schema-1 audit records that name only the key and project
+  nothing.
 
 **Private-egress allowlist entries must be exact network prefixes.** Every
 `allow_private_cidrs` / `private_egress_cidrs` surface (connectors, Rekor
