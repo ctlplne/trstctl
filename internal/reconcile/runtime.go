@@ -52,12 +52,17 @@ type RuntimeConfig struct {
 	// names (A10). Each registers a vault reducer with a real HTTP source under
 	// its authority id; an id with no entry keeps a nil source and fails closed.
 	VaultSources []VaultSourceConfig
+	// KMIPSources are the external KMIP servers operator config names (A124),
+	// registered the same way: a kmip reducer with a real wire source under
+	// each authority id.
+	KMIPSources []KMIPSourceConfig
 }
 
 // Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. The
 // "trstctl-self" and "trstctl-ca" authorities are store-backed (epic C4); the
-// vault, cloud-kms and kmip reducers keep nil sources — fail-closed — until
-// operator config supplies external credentials and endpoints.
+// vault and kmip reducers keep nil sources — fail-closed — until operator
+// config supplies external credentials and endpoints, and cloud-kms has no
+// source yet.
 type Runtime struct {
 	Reducers                 *reducers.Registry
 	ObservationSandbox       *reducers.ObservationSandbox
@@ -144,8 +149,6 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 	if err := reducerRegistry.Register(defaultCAAuthority, reducers.NewSelfReducer(defaultCAAuthority, caLedgerSource)); err != nil {
 		return nil, err
 	}
-	kmipClient := kmip.NewClient(defaultKMIPAuthority, nil)
-	_ = kmipClient
 	if err := reducerRegistry.Register(defaultKMIPAuthority, kmip.NewReducer(reducerConfig(defaultKMIPAuthority, reducers.ModePoll), nil)); err != nil {
 		return nil, err
 	}
@@ -158,6 +161,17 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 			return nil, err
 		}
 		if err := reducerRegistry.Register(src.cfg.AuthorityID, reducers.NewVaultReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
+			return nil, err
+		}
+	}
+	// A124: operator-configured KMIP authorities, registered like the Vault
+	// ones: a configured "kmip" replaces the fail-closed placeholder.
+	for _, ks := range cfg.KMIPSources {
+		src, err := newKMIPSource(ks)
+		if err != nil {
+			return nil, err
+		}
+		if err := reducerRegistry.Register(src.cfg.AuthorityID, kmip.NewReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
 			return nil, err
 		}
 	}

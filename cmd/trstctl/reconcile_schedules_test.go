@@ -85,3 +85,25 @@ func TestNoReconcileConfigSchedulesNothing(t *testing.T) {
 		t.Fatalf("a nil config produced %d schedules", len(got))
 	}
 }
+
+// A124: a kmip source block becomes one KMIP source per authority id, with
+// its TLS material, cap and opt-ins carried over; a vault block does not.
+func TestReconcileKMIPSourcesFromConfig(t *testing.T) {
+	kmipSource := &config.ReconcileAuthoritySource{Kind: config.ReconcileSourceKindKMIP, Address: " kmip.internal:5696 ",
+		ServerName: "kmip.internal", CAFile: "/run/ca.pem", ClientCertFile: "/run/client.pem", ClientKeyFile: "/run/client-key.pem",
+		MaxObjects: 250, AllowTLS12: true, AllowInsecureLoopback: true, PrivateEndpointCIDRs: []string{"10.20.0.0/16"}}
+	got := reconcileKMIPSourcesFromConfig(config.Reconcile{Schedules: []config.ReconcileSchedule{
+		{TenantID: "t1", Authorities: []config.ReconcileAuthority{{AuthorityID: "trstctl-ca"}, {AuthorityID: "kmip-hsm", Source: kmipSource}}},
+		{TenantID: "t2", Authorities: []config.ReconcileAuthority{{AuthorityID: "trstctl-ca"}, {AuthorityID: "kmip-hsm", Source: kmipSource},
+			{AuthorityID: "vault", Source: &config.ReconcileAuthoritySource{Kind: config.ReconcileSourceKindVault, Address: "https://vault.internal"}}}},
+	}})
+	if len(got) != 1 {
+		t.Fatalf("kmip sources = %+v, want one for kmip-hsm", got)
+	}
+	ks := got[0]
+	if ks.AuthorityID != "kmip-hsm" || ks.Address != "kmip.internal:5696" || ks.ServerName != "kmip.internal" ||
+		ks.CAFile != "/run/ca.pem" || ks.ClientCertFile != "/run/client.pem" || ks.ClientKeyFile != "/run/client-key.pem" ||
+		ks.MaxObjects != 250 || !ks.AllowTLS12 || !ks.AllowLoopback || len(ks.PrivateEndpointCIDRs) != 1 {
+		t.Fatalf("kmip source = %+v", ks)
+	}
+}

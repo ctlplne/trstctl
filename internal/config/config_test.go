@@ -367,6 +367,33 @@ func TestValidateRejectsBadValues(t *testing.T) {
 				{AuthorityID: "vault", Source: &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault.internal:8200", TokenFile: "/run/t"}},
 			}}}
 		},
+		"reconcile kmip source without client certificate": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "kmip", Source: &ReconcileAuthoritySource{Kind: "kmip", Address: "kmip.internal:5696", CAFile: "/run/ca.pem"}},
+			}}}
+		},
+		"reconcile kmip source with a URL address": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "kmip", Source: &ReconcileAuthoritySource{Kind: "kmip", Address: "https://kmip.internal:5696",
+					CAFile: "/run/ca.pem", ClientCertFile: "/run/client.pem", ClientKeyFile: "/run/client-key.pem"}},
+			}}}
+		},
+		"reconcile kmip source with vault fields": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "kmip", Source: &ReconcileAuthoritySource{Kind: "kmip", Address: "kmip.internal:5696", TokenFile: "/run/t",
+					CAFile: "/run/ca.pem", ClientCertFile: "/run/client.pem", ClientKeyFile: "/run/client-key.pem"}},
+			}}}
+		},
+		"reconcile vault source with kmip fields": func(c *Config) {
+			c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+				{AuthorityID: "trstctl-self"},
+				{AuthorityID: "vault", Source: &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault.internal:8200", TokenFile: "/run/t",
+					KVMounts: []string{"secret"}, CAFile: "/run/ca.pem"}},
+			}}}
+		},
 		"reconcile source conflicts across schedules": func(c *Config) {
 			a := &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault-a.internal:8200", TokenFile: "/run/t", KVMounts: []string{"secret"}}
 			b := &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault-b.internal:8200", TokenFile: "/run/t", KVMounts: []string{"secret"}}
@@ -989,5 +1016,19 @@ func TestFullBackupEncryptionConfigurable(t *testing.T) {
 	}
 	if rpo, rto, err := cfg.Backup.DrillObjectiveDurations(); err != nil || rpo != 4*time.Hour || rto != 45*time.Minute {
 		t.Fatalf("backup objectives = %v/%v err=%v", rpo, rto, err)
+	}
+}
+
+// A124: a kmip source names a host:port, its trust anchor and its client
+// certificate, and validates without any vault field.
+func TestReconcileKMIPSourceValidates(t *testing.T) {
+	c := Default()
+	c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+		{AuthorityID: "trstctl-ca"},
+		{AuthorityID: "kmip-hsm", Source: &ReconcileAuthoritySource{Kind: "kmip", Address: "kmip.internal:5696", ServerName: "kmip.internal",
+			CAFile: "/run/kmip/ca.pem", ClientCertFile: "/run/kmip/client.pem", ClientKeyFile: "/run/kmip/client-key.pem", AllowTLS12: true}},
+	}}}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("a valid kmip source was refused: %v", err)
 	}
 }

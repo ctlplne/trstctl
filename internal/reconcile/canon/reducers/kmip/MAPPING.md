@@ -12,4 +12,4 @@
 | State | R-7 status |
 | Initial/Activation/Deactivation dates | R-6 bucketed validity |
 
-The observation client performs Locate and Get-Attributes only. Key material and secret object values are never fetched.
+The observation client (`wire.go`, KMIP 1.4 over TLS with a client certificate) performs Locate, paged with Maximum Items and Offset Items, and Get Attributes. A Certificate object's issuer DER, serial and subject come from a Get of the certificate, whose value is public. Key material and secret object values are never fetched. Objects of other types (templates, split keys, PGP keys) have no canon record and are skipped.

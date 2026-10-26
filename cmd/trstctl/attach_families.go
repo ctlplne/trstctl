@@ -206,6 +206,8 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 		// A10: external Vault authorities named with a source block observe a
 		// real server; the rest keep failing closed.
 		VaultSources: reconcileVaultSourcesFromConfig(reconcileConfigOf(cfg)),
+		// A124: external KMIP servers named with a kmip source block.
+		KMIPSources: reconcileKMIPSourcesFromConfig(reconcileConfigOf(cfg)),
 	})
 	if err != nil {
 		return err
@@ -265,6 +267,40 @@ func reconcileVaultSourcesFromConfig(c config.Reconcile) []reconcile.VaultSource
 				}
 			}
 			out = append(out, vs)
+		}
+	}
+	return out
+}
+
+// reconcileKMIPSourcesFromConfig collects the kmip source blocks across all
+// schedules, one per authority id, as the vault sources are collected.
+func reconcileKMIPSourcesFromConfig(c config.Reconcile) []reconcile.KMIPSourceConfig {
+	seen := map[string]bool{}
+	var out []reconcile.KMIPSourceConfig
+	for _, s := range c.Schedules {
+		for _, a := range s.Authorities {
+			id := strings.TrimSpace(a.AuthorityID)
+			if a.Source == nil || id == "" || seen[id] || strings.TrimSpace(a.Source.Kind) != config.ReconcileSourceKindKMIP {
+				continue
+			}
+			seen[id] = true
+			ks := reconcile.KMIPSourceConfig{
+				AuthorityID:    id,
+				Address:        strings.TrimSpace(a.Source.Address),
+				ServerName:     strings.TrimSpace(a.Source.ServerName),
+				CAFile:         strings.TrimSpace(a.Source.CAFile),
+				ClientCertFile: strings.TrimSpace(a.Source.ClientCertFile),
+				ClientKeyFile:  strings.TrimSpace(a.Source.ClientKeyFile),
+				MaxObjects:     a.Source.MaxObjects,
+				AllowTLS12:     a.Source.AllowTLS12,
+				AllowLoopback:  a.Source.AllowInsecureLoopback,
+			}
+			for _, cidr := range a.Source.PrivateEndpointCIDRs {
+				if p, err := netip.ParsePrefix(strings.TrimSpace(cidr)); err == nil {
+					ks.PrivateEndpointCIDRs = append(ks.PrivateEndpointCIDRs, p)
+				}
+			}
+			out = append(out, ks)
 		}
 	}
 	return out

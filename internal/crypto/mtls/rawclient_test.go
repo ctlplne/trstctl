@@ -85,6 +85,68 @@ func TestMutualTLSClientConnFromFilesRawTLS13NoALPN(t *testing.T) {
 	}
 }
 
+// A124: a KMIP server capped at TLS 1.2 is refused by default and reached
+// with an AEAD suite once the operator opts that server down to TLS 1.2.
+func TestMutualTLSClientConnFromFilesReachesATLS12ServerOnlyWhenAllowed(t *testing.T) {
+	files := writeMutualTLSFiles(t)
+	serverCert, err := tls.LoadX509KeyPair(files.serverCert, files.serverKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientCAs, err := loadCAPool(files.ca)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+		MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12, Certificates: []tls.Certificate{serverCert}, // #nosec G402 -- the test server models a KMIP server whose TLS stops at 1.2 (CWE-327)
+		ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: clientCAs,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer func() { _ = conn.Close() }()
+				if tc, ok := conn.(*tls.Conn); ok {
+					_ = tc.Handshake()
+				}
+			}()
+		}
+	}()
+	dial := func(opts ...RawClientOption) (net.Conn, error) {
+		raw, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return MutualTLSClientConnFromFiles(ctx, raw, files.clientCert, files.clientKey, files.ca, "kmip.test", opts...)
+	}
+	if conn, err := dial(); err == nil {
+		_ = conn.Close()
+		t.Fatal("the default TLS 1.3 floor reached a TLS 1.2-only server")
+	}
+	conn, err := dial(AllowTLS12())
+	if err != nil {
+		t.Fatalf("an opted-down client could not reach a TLS 1.2 server: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	state := conn.(*tls.Conn).ConnectionState()
+	aead := false
+	for _, id := range tls12AEADSuites() {
+		aead = aead || state.CipherSuite == id
+	}
+	if state.Version != tls.VersionTLS12 || !aead {
+		t.Fatalf("negotiated version %x suite %x, want TLS 1.2 with an AEAD suite", state.Version, state.CipherSuite)
+	}
+}
+
 func TestMutualTLSClientConnFromFilesRejectsWrongServerName(t *testing.T) {
 	files := writeMutualTLSFiles(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

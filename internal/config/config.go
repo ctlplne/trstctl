@@ -1855,11 +1855,26 @@ type ReconcileAuthority struct {
 // token read from TokenFile at each observation: KV v2 secret METADATA (never
 // secret data), PKI-issued certificates and Transit key metadata from the
 // listed mounts. Plain http is accepted only with AllowInsecureLoopback.
+//
+// Kind "kmip" (A124) reads a KMIP 1.4 server at Address (host:port) over TLS
+// with the client certificate in ClientCertFile and ClientKeyFile, trusting
+// only CAFile: object metadata with Locate and Get Attributes and certificate
+// values with Get, never key values. The TLS floor is 1.3 unless AllowTLS12;
+// AllowInsecureLoopback permits a loopback address (TLS is still required).
 type ReconcileAuthoritySource struct {
 	Kind      string `json:"kind"`
 	Address   string `json:"address"`
 	Namespace string `json:"namespace,omitempty"`
-	TokenFile string `json:"token_file"`
+	TokenFile string `json:"token_file,omitempty"`
+	// KMIP: the server certificate's name (default: the address host), the
+	// trust anchor, the client certificate and key, the most objects one
+	// observation reads (default 10000), and the TLS 1.2 opt-in.
+	ServerName     string `json:"server_name,omitempty"`
+	CAFile         string `json:"ca_file,omitempty"`
+	ClientCertFile string `json:"client_cert_file,omitempty"`
+	ClientKeyFile  string `json:"client_key_file,omitempty"`
+	MaxObjects     int    `json:"max_objects,omitempty"`
+	AllowTLS12     bool   `json:"allow_tls12,omitempty"`
 	// KVMounts, PKIMounts and TransitMounts choose what the authority asserts.
 	// Pair a vault authority with another authority that observes the same
 	// universe: list only pki_mounts to compare certificates, for example.
@@ -1873,18 +1888,51 @@ type ReconcileAuthoritySource struct {
 	PrivateEndpointCIDRs  []string `json:"private_endpoint_cidrs,omitempty"`
 }
 
-// ReconcileSourceKindVault is the only external authority source kind served
-// today; cloud-kms and kmip authorities still fail observation closed.
-const ReconcileSourceKindVault = "vault"
+// The external authority source kinds served today; a cloud-kms authority still
+// fails observation closed.
+const (
+	ReconcileSourceKindVault = "vault"
+	ReconcileSourceKindKMIP  = "kmip"
+)
 
 func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySource) []error {
 	if src == nil {
 		return nil
 	}
-	var errs []error
-	if strings.TrimSpace(src.Kind) != ReconcileSourceKindVault {
-		errs = append(errs, fmt.Errorf("%s.kind %q is not served; only %q is", label, src.Kind, ReconcileSourceKindVault))
+	switch strings.TrimSpace(src.Kind) {
+	case ReconcileSourceKindVault:
+		return validateReconcileVaultSource(label, src)
+	case ReconcileSourceKindKMIP:
+		return validateReconcileKMIPSource(label, src)
+	default:
+		return []error{fmt.Errorf("%s.kind %q is not served; use %q or %q", label, src.Kind, ReconcileSourceKindVault, ReconcileSourceKindKMIP)}
 	}
+}
+
+// validateReconcileKMIPSource checks a kind "kmip" source (A124).
+func validateReconcileKMIPSource(label string, src *ReconcileAuthoritySource) []error {
+	var errs []error
+	host, port, err := net.SplitHostPort(strings.TrimSpace(src.Address))
+	if n, convErr := strconv.Atoi(port); err != nil || host == "" || convErr != nil || n < 1 || n > 65535 {
+		errs = append(errs, fmt.Errorf("%s.address must be host:port for a kmip source", label))
+	}
+	for field, value := range map[string]string{"ca_file": src.CAFile, "client_cert_file": src.ClientCertFile, "client_key_file": src.ClientKeyFile} {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s.%s is required for a kmip source", label, field))
+		}
+	}
+	if src.MaxObjects < 0 {
+		errs = append(errs, fmt.Errorf("%s.max_objects cannot be negative", label))
+	}
+	if strings.TrimSpace(src.TokenFile) != "" || len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts) > 0 || strings.TrimSpace(src.Namespace) != "" {
+		errs = append(errs, fmt.Errorf("%s: token_file, namespace and mounts belong to a vault source, not a kmip one", label))
+	}
+	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
+	return errs
+}
+
+func validateReconcileVaultSource(label string, src *ReconcileAuthoritySource) []error {
+	var errs []error
 	address := strings.TrimSpace(src.Address)
 	u, err := url.Parse(address)
 	switch {
@@ -1900,6 +1948,9 @@ func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySourc
 	}
 	if len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts) == 0 {
 		errs = append(errs, fmt.Errorf("%s needs at least one of kv_mounts, pki_mounts or transit_mounts", label))
+	}
+	if strings.TrimSpace(src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile) != "" || src.MaxObjects != 0 || src.AllowTLS12 {
+		errs = append(errs, fmt.Errorf("%s: server_name, ca_file, client certificate, max_objects and allow_tls12 belong to a kmip source, not a vault one", label))
 	}
 	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
 	return errs
