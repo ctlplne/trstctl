@@ -2011,6 +2011,31 @@ type Audit struct {
 	// ArchiveDir. An ArchiveDir set alongside it stays readable for report
 	// artifacts written there before the move.
 	ArchiveObjectStore bool `json:"archive_object_store,omitempty"`
+	// AnchorInterval is the cadence at which each tenant's full audit chain is
+	// timestamped and the anchor appended to its audit log (Enterprise audit
+	// compliance with the TSA served). Go duration; empty means hourly, "0s"
+	// turns continuous anchoring off.
+	AnchorInterval string `json:"anchor_interval,omitempty"`
+}
+
+// DefaultAuditAnchorInterval is the continuous anchoring cadence when
+// audit.anchor_interval is unset.
+const DefaultAuditAnchorInterval = time.Hour
+
+// AnchorIntervalDuration parses the continuous anchoring cadence: empty means
+// DefaultAuditAnchorInterval and zero means off.
+func (a Audit) AnchorIntervalDuration() (time.Duration, error) {
+	if strings.TrimSpace(a.AnchorInterval) == "" {
+		return DefaultAuditAnchorInterval, nil
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(a.AnchorInterval))
+	if err != nil {
+		return 0, err
+	}
+	if d != 0 && (d < time.Minute || d > 24*time.Hour) {
+		return 0, fmt.Errorf("must be 0s (off) or between 1m and 24h")
+	}
+	return d, nil
 }
 
 // RetentionDuration parses the retention window. An empty value means indefinite
@@ -2967,6 +2992,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
 	setBool(getenv, "TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE", &c.Audit.ArchiveObjectStore)
+	setString(getenv, "TRSTCTL_AUDIT_ANCHOR_INTERVAL", &c.Audit.AnchorInterval)
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ENABLED", &c.Breakglass.Enabled)
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ONLINE_ENABLED", &c.Breakglass.OnlineEnabled)
 	setString(getenv, "TRSTCTL_BREAKGLASS_CA_CERT_FILE", &c.Breakglass.CACertFile)
@@ -4100,6 +4126,9 @@ func validateOptionalServices(c *Config) []error {
 		errs = append(errs, fmt.Errorf("audit.retention %q is invalid: %w", c.Audit.Retention, err))
 	} else if d < 0 {
 		errs = append(errs, errors.New("audit.retention must not be negative"))
+	}
+	if _, err := c.Audit.AnchorIntervalDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("audit.anchor_interval %q is invalid: %w", c.Audit.AnchorInterval, err))
 	}
 	if _, _, err := c.Backup.DrillObjectiveDurations(); err != nil {
 		errs = append(errs, fmt.Errorf("backup recovery objectives are invalid: %w", err))

@@ -30,6 +30,8 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 	tsaRootPath := fs.String("tsa-root", "", "separately pinned TSA root certificate in PEM or DER form")
 	requireAnchor := fs.Bool("require-anchor", false, "require an independently verified external timestamp; needs --tsa-root")
 	maxAnchorDelay := fs.Duration("max-anchor-delay", 0, "optional maximum delay between the newest record and its authority timestamp")
+	anchorCadence := fs.Duration("anchor-cadence", 0, "require every record to be covered by an anchor of the continuous series within this cadence; needs --tsa-root")
+	anchorSkew := fs.Duration("anchor-skew", auditanchor.DefaultSeriesSkew, "clock tolerance between record times and the timestamp authority")
 	fs.Usage = func() { auditVerifyUsage(stderr) }
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -38,8 +40,8 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 		_, _ = fmt.Fprintln(stderr, "error: audit verify accepts flags only; pass the file with --artifact")
 		return 2
 	}
-	if *maxAnchorDelay < 0 {
-		_, _ = fmt.Fprintln(stderr, "error: --max-anchor-delay cannot be negative")
+	if *maxAnchorDelay < 0 || *anchorCadence < 0 || *anchorSkew < 0 {
+		_, _ = fmt.Fprintln(stderr, "error: --max-anchor-delay, --anchor-cadence and --anchor-skew cannot be negative")
 		return 2
 	}
 	// An explicitly configured trust file must not become optional when an
@@ -55,7 +57,7 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 		_, _ = fmt.Fprintln(stderr, "error: --tsa-root must name a separately pinned TSA root certificate; an explicitly supplied path cannot be empty")
 		return 2
 	}
-	if strings.TrimSpace(*tsaRootPath) == "" && (*requireAnchor || *maxAnchorDelay > 0) {
+	if strings.TrimSpace(*tsaRootPath) == "" && (*requireAnchor || *maxAnchorDelay > 0 || *anchorCadence > 0) {
 		_, _ = fmt.Fprintln(stderr, "error: --tsa-root is required by the requested timestamp policy; never trust a TSA root supplied only by the artifact")
 		return 2
 	}
@@ -66,7 +68,7 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 		_, _ = fmt.Fprintln(stderr, "error: --expected-tenant and --previous-head require --format retention-jws")
 		return 2
 	}
-	if retention && (tsaRootSupplied || *requireAnchor || *maxAnchorDelay != 0) {
+	if retention && (tsaRootSupplied || *requireAnchor || *maxAnchorDelay != 0 || *anchorCadence != 0) {
 		_, _ = fmt.Fprintln(stderr, "error: retention archives are signed but unanchored; timestamp policy cannot be applied to them")
 		return 2
 	}
@@ -149,6 +151,7 @@ func runAuditVerify(args []string, stdin io.Reader, stdout, stderr io.Writer) in
 	result, err := auditanchor.VerifyArtifact(artifact, auditanchor.VerificationOptions{
 		Format: format, AuditKeys: auditKeys, TSARootDER: tsaRootDER, MaxAnchorDelay: *maxAnchorDelay,
 		AllowUnanchoredJWS: !*requireAnchor && len(tsaRootDER) == 0 && *maxAnchorDelay == 0,
+		Series:             auditanchor.SeriesPolicy{Cadence: *anchorCadence, Skew: *anchorSkew},
 	})
 	if err != nil {
 		return auditVerifyFailure(stderr, err)
@@ -206,10 +209,11 @@ func auditVerifyFailure(stderr io.Writer, err error) int {
 }
 
 func auditVerifyUsage(w io.Writer) {
-	_, _ = fmt.Fprintln(w, "Usage: trstctl audit verify --artifact <file|-> [--tsa-root <root.pem|root.der>] [--require-anchor] [--audit-jwks <audit.jwks.json>] [--format auto|jws|retention-jws|ndjson|csv|splunk-hec|sentinel] [--max-anchor-delay 24h]")
+	_, _ = fmt.Fprintln(w, "Usage: trstctl audit verify --artifact <file|-> [--tsa-root <root.pem|root.der>] [--require-anchor] [--audit-jwks <audit.jwks.json>] [--format auto|jws|retention-jws|ndjson|csv|splunk-hec|sentinel] [--max-anchor-delay 24h] [--anchor-cadence 1h] [--anchor-skew 5m]")
 	_, _ = fmt.Fprintln(w, "\nVerify a saved audit export completely offline. The TSA root may be PEM or DER. The audit JWK set and TSA root are external trust inputs; keys carried only by an artifact are never trusted.")
 	_, _ = fmt.Fprintln(w, "\nPlain JWS exports need --audit-jwks and report signature/chain verification without an external timestamp. Timestamped exports and record streams require --tsa-root. --require-anchor, a supplied TSA root, or a positive --max-anchor-delay refuses unanchored evidence; timestamp failures never fall back to signature-only verification.")
 	_, _ = fmt.Fprintln(w, "\nPlain export: trstctl audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json")
+	_, _ = fmt.Fprintln(w, "\nContinuous anchoring: with --tsa-root, every audit.anchored record inside an unbroken run of records is checked — its timestamp against the pinned root and its chain head against the export's own chain — and the receipt's anchor_series says what was found. No record may enter the chain after an anchor it predates. --anchor-cadence 1h also requires every record to be covered by an anchor within an hour of its time (plus --anchor-skew); the newest records are covered by the export's own anchor.")
 	_, _ = fmt.Fprintln(w, "\nRetention archive: trstctl audit verify --artifact audit-00001.jws --format retention-jws --audit-jwks audit.jwks.json --expected-tenant <tenant-id> [--previous-head <verified-prior-head>]. A retention receipt has no independent timestamp; use a separately timestamped export when your policy requires one.")
 	_, _ = fmt.Fprintln(w, "\nExample: trstctl audit verify --artifact audit.jws.json --audit-jwks audit.jwks.json --tsa-root tsa-root.pem --max-anchor-delay 24h")
 }

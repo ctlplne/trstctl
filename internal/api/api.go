@@ -203,6 +203,8 @@ type API struct {
 	kubernetesCMPosture                KubernetesPostureReader
 	kubernetesTrustPosture             KubernetesPostureReader
 	kubernetesTrustRollouts            KubernetesTrustRolloutStore
+	auditAnchoringRuntime              func() AuditAnchoringRuntime
+	auditAnchorReader                  AuditAnchorReader
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -339,6 +341,8 @@ type config struct {
 	kubernetesCMPosture         KubernetesPostureReader
 	kubernetesTrustPosture      KubernetesPostureReader
 	kubernetesTrustRollouts     KubernetesTrustRolloutStore
+	auditAnchoringRuntime       func() AuditAnchoringRuntime
+	auditAnchorReader           AuditAnchorReader
 	featureObserver             func(feature, action, outcome string, seconds float64)
 	ownershipAttestationCadence time.Duration
 }
@@ -667,6 +671,8 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		kubernetesCMPosture:         cfg.kubernetesCMPosture,
 		kubernetesTrustPosture:      cfg.kubernetesTrustPosture,
 		kubernetesTrustRollouts:     cfg.kubernetesTrustRollouts,
+		auditAnchoringRuntime:       cfg.auditAnchoringRuntime,
+		auditAnchorReader:           cfg.auditAnchorReader,
 	}
 	a.bindLifecyclePolicy()
 	if a.auth != nil {
@@ -1443,6 +1449,7 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
+		{method: "GET", path: "/api/v1/audit/anchors", opID: "getAuditAnchoring", summary: "Show continuous audit anchoring and the tenant's recent anchors", handler: a.getAuditAnchoring, query: auditAnchorParams(), resSchema: "AuditAnchoringStatus", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/verification-keys", opID: "getAuditVerificationKeys", summary: "Download public keys for offline audit evidence verification", handler: a.auditVerificationKeys, resSchema: "AuditVerificationKeySet", successCode: "200", perm: authz.AuditRead},
 		{method: "POST", path: "/api/v1/audit/feeds/{id}/preview", opID: "previewAuditFeed", summary: "Validate and explain an exact audit collector feed without writing state or contacting the collector", handler: a.previewAuditFeed, pathParams: idPath, reqSchema: "AuditFeedRequest", resSchema: "AuditFeedPreview", successCode: "200", perm: authz.AuditWrite},
 		{method: "PUT", path: "/api/v1/audit/feeds/{id}", opID: "putAuditFeed", summary: "Configure a durable native Splunk HEC or Sentinel audit feed", handler: a.putAuditFeed, pathParams: idPath, reqSchema: "AuditFeedRequest", resSchema: "AuditFeed", successCode: "200", mutation: true, perm: authz.AuditWrite},

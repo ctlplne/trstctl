@@ -303,8 +303,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// the certificate inventory row.
 	// A138's multi-cluster TrustBundle rollouts (start, list, get, pause,
 	// resume) raised it to 540, mapped onto F4.
-	if len(out) != 540 {
-		t.Fatalf("OpenAPI operationIds = %d, want 540", len(out))
+	// A147's continuous audit anchoring status raised it to 541, mapped onto
+	// the audit row.
+	if len(out) != 541 {
+		t.Fatalf("OpenAPI operationIds = %d, want 541", len(out))
 	}
 	return out
 }

@@ -1475,9 +1475,24 @@ never live in the API process. What you can do end to end against the running bi
   remove a record hashes differently, so no earlier token exists for it, and a
   freshly-taken token is dated long after the events the bundle describes.
   Scope, stated exactly: an anchor proves the head is no NEWER than the timestamp.
-  It does NOT prove the chain was complete when anchored — a record withheld
-  before anchoring was never in the chain — and detecting that needs continuous
-  anchoring at a known cadence, which is not served. A deployment without a TSA
+  One anchor does NOT prove the chain was complete when anchored — a record
+  withheld before anchoring was never in the chain. Continuous anchoring at a
+  known cadence is served for that: with Enterprise audit compliance and the TSA
+  served, the leader timestamps each tenant's full chain whenever it has grown, on
+  `audit.anchor_interval` (hourly by default), and appends the anchor to the
+  tenant's own log as an `audit.anchored` record; `GET /api/v1/audit/anchors`
+  (`trstctl-cli audit anchors`, Audit console) shows the cadence, state and recent
+  anchors. A selection by time or sequence alone exports the hashes its records
+  have in the tenant's full chain (`prev_hash` is the chain head before its first
+  record), so `trstctl-cli audit verify --tsa-root ... --anchor-cadence 1h`
+  re-checks every anchor inside it, refuses a record that entered the chain after
+  an anchor it predates, and requires every record to be covered within the
+  cadence. Its limits: a record withheld for less than one cadence plus the clock
+  tolerance (five minutes by default) is not caught; a content-filtered selection
+  cannot carry the series; an anchor taken before a subject erasure that changed
+  the records it covers is reported as superseded, not verified; and anchoring
+  stops while the TSA is unreachable (the status reads failing and the next pass
+  catches up). A deployment without a TSA
   exports successfully and says in the payload that it is unanchored; that is a
   weaker claim, not an invalid one, and the export states which it is. The CLI
   verifies a plain signed JWS using separately pinned `--audit-jwks`, reporting

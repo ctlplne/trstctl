@@ -21,10 +21,12 @@
 // to something else.
 //
 // SCOPE, stated plainly: an anchor proves the head is no NEWER than the
-// timestamp. It cannot prove the chain was complete at that moment — a record
-// withheld before anchoring was never in the chain to begin with. Detecting that
-// needs a different control (continuous anchoring at a known cadence, so a gap
-// in the anchor series is itself evidence), and this package does not claim it.
+// timestamp. One anchor cannot prove the chain was complete at that moment — a
+// record withheld before anchoring was never in the chain to begin with. The
+// continuous anchor series (series.go) narrows that to one cadence: anchors over
+// the tenant's full chain, recorded in the chain itself, let a verifier refuse a
+// record that entered after an anchor it predates and require every record to
+// be covered within the cadence.
 package auditanchor
 
 import (

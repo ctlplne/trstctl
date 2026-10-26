@@ -1199,6 +1199,17 @@ export interface AuditAnchor {
   token?: AuditTimestampToken;
 }
 
+export interface AuditAnchoringStatus {
+  anchor_count: number;
+  anchors: AuditChainAnchor[];
+  cadence_seconds: number;
+  detail?: string;
+  last_anchored_at?: string;
+  last_run_at?: string;
+  state: "anchoring" | "failing" | "off" | "unlicensed";
+  verification: string;
+}
+
 export interface AuditArchivedPrefix {
   chain_head: string;
   record_count: number;
@@ -1210,6 +1221,14 @@ export interface AuditBundle {
   chain_head: string;
   format: "jws";
   schema_version: number;
+}
+
+export interface AuditChainAnchor {
+  anchored_at: string;
+  chain_head: string;
+  through_sequence: number;
+  token_serial: number;
+  token_sha256: string;
 }
 
 export interface AuditEvent {
@@ -1227,6 +1246,7 @@ export interface AuditEventList {
   archived_prefix?: AuditArchivedPrefix;
   count?: number;
   events: AuditEvent[];
+  prev_hash?: string;
 }
 
 export interface AuditFeed {

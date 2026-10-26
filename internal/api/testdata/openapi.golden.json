@@ -4907,6 +4907,54 @@
         ],
         "type": "object"
       },
+      "AuditAnchoringStatus": {
+        "properties": {
+          "anchor_count": {
+            "type": "integer"
+          },
+          "anchors": {
+            "items": {
+              "$ref": "#/components/schemas/AuditChainAnchor"
+            },
+            "type": "array"
+          },
+          "cadence_seconds": {
+            "description": "How often the full chain of every tenant whose log grew is timestamped; zero when anchoring is not running.",
+            "type": "integer"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "last_anchored_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_run_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "anchoring",
+              "failing",
+              "off",
+              "unlicensed"
+            ],
+            "type": "string"
+          },
+          "verification": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "cadence_seconds",
+          "anchor_count",
+          "anchors",
+          "verification"
+        ],
+        "type": "object"
+      },
       "AuditArchivedPrefix": {
         "properties": {
           "chain_head": {
@@ -4950,6 +4998,37 @@
           "bundle",
           "chain_head",
           "anchor"
+        ],
+        "type": "object"
+      },
+      "AuditChainAnchor": {
+        "properties": {
+          "anchored_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "chain_head": {
+            "description": "The tenant's full audit chain head through that record.",
+            "type": "string"
+          },
+          "through_sequence": {
+            "description": "The tenant-local audit record the anchored head covers through.",
+            "type": "integer"
+          },
+          "token_serial": {
+            "type": "integer"
+          },
+          "token_sha256": {
+            "description": "SHA-256 of the RFC 3161 timestamp token.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "through_sequence",
+          "chain_head",
+          "anchored_at",
+          "token_serial",
+          "token_sha256"
         ],
         "type": "object"
       },
@@ -5003,6 +5082,10 @@
               "$ref": "#/components/schemas/AuditEvent"
             },
             "type": "array"
+          },
+          "prev_hash": {
+            "description": "The chain head the events' hashes continue from: the tenant's full-chain head before the first event for an unbroken run selected without a content filter, else the archived prefix's head.",
+            "type": "string"
           }
         },
         "required": [
@@ -43123,6 +43206,63 @@
         ],
         "summary": "Deny one exact immutable operation request without mutating its target",
         "x-trstctl-permission": "approvals:review"
+      }
+    },
+    "/api/v1/audit/anchors": {
+      "get": {
+        "operationId": "getAuditAnchoring",
+        "parameters": [
+          {
+            "description": "most recent anchors to return (default 50, maximum 500)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditAnchoringStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show continuous audit anchoring and the tenant's recent anchors",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/audit/events": {

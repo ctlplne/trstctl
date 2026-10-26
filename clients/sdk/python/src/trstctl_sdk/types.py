@@ -1661,6 +1661,21 @@ AuditAnchor = TypedDict(
     total=False,
 )
 
+AuditAnchoringStatus = TypedDict(
+    'AuditAnchoringStatus',
+    {
+        'anchor_count': int,
+        'anchors': list[dict[str, Any]],
+        'cadence_seconds': int,
+        'detail': str,
+        'last_anchored_at': str,
+        'last_run_at': str,
+        'state': str,
+        'verification': str,
+    },
+    total=False,
+)
+
 AuditArchivedPrefix = TypedDict(
     'AuditArchivedPrefix',
     {
@@ -1678,6 +1693,18 @@ AuditBundle = TypedDict(
         'chain_head': str,
         'format': str,
         'schema_version': int,
+    },
+    total=False,
+)
+
+AuditChainAnchor = TypedDict(
+    'AuditChainAnchor',
+    {
+        'anchored_at': str,
+        'chain_head': str,
+        'through_sequence': int,
+        'token_serial': int,
+        'token_sha256': str,
     },
     total=False,
 )
@@ -1703,6 +1730,7 @@ AuditEventList = TypedDict(
         'archived_prefix': dict[str, Any],
         'count': int,
         'events': list[dict[str, Any]],
+        'prev_hash': str,
     },
     total=False,
 )

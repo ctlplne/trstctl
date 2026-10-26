@@ -119,6 +119,7 @@ import type {
   AttestedSVID as GenAttestedSVID,
   AttestedSVIDPreview as GenAttestedSVIDPreview,
   AttestedSVIDRequest,
+  AuditAnchoringStatus,
   AuditBundle,
   AuditFeed,
   AuditFeedList,
@@ -1024,6 +1025,7 @@ export type {
   APITokenCreateRequest,
   APITokenCreateResponse,
   APITokenList,
+  AuditAnchoringStatus,
   AuditBundle,
   AuditFeed,
   AuditFeedList,
@@ -2168,6 +2170,7 @@ export interface Api {
   auditWindow(options?: AuditQuery, signal?: AbortSignal): Promise<AuditWindow>;
   exportAudit(options?: AuditQuery, signal?: AbortSignal): Promise<AuditBundle>;
   auditFeeds(): Promise<AuditFeedList>;
+  auditAnchors(): Promise<AuditAnchoringStatus>;
   previewAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeedPreview>;
   putAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeed>;
   // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
@@ -2950,6 +2953,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   auditWindow: (options, signal) => req<AuditWindow>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   exportAudit: (options, signal) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
+  auditAnchors: () => req<AuditAnchoringStatus>("/api/v1/audit/anchors"),
   previewAuditFeed: (id, input) => postRead<AuditFeedPreview>(`/api/v1/audit/feeds/${encodeURIComponent(id)}/preview`, input),
   putAuditFeed: (id, input) => mutate<AuditFeed>("PUT", `/api/v1/audit/feeds/${encodeURIComponent(id)}`, input),
   downloadAuditExport: (options, format, signal) => downloadAuditExportImpl(options, format, signal),

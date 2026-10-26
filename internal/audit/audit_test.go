@@ -131,7 +131,13 @@ func TestSearchLatestWindowKeepsTenantScopeAndSignedExport(t *testing.T) {
 			t.Fatalf("cross-tenant record in latest window: %+v", record)
 		}
 	}
-	if _, err := audit.VerifyChain(latest); err != nil {
+	// The latest window is an unbroken run, so it continues the tenant's full
+	// chain from the head just before its first record.
+	_, seed, err := svc.SearchWithSeed(ctx, query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := audit.VerifyChainFrom(seed, latest); err != nil {
 		t.Fatalf("latest window chain: %v", err)
 	}
 }

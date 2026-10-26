@@ -24,6 +24,7 @@ import (
 	fleet "trstctl.com/trstctl/internal/agentupgrade"
 	"trstctl.com/trstctl/internal/attest"
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditanchor"
 	"trstctl.com/trstctl/internal/backup"
 	"trstctl.com/trstctl/internal/caevent"
 	"trstctl.com/trstctl/internal/connector"
@@ -4441,6 +4442,7 @@ func (p *Projector) rebuildEventProjectionsThrough(
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
+	auditanchor.EventTypeAnchored:                 {auditanchor.AnchoredEventSchemaVersion: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
 	EventRestoreDrillRecorded:                     {1: true},
@@ -4810,6 +4812,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyKubernetesTrustRolloutTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyAuditAnchorTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {

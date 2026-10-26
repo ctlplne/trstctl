@@ -19888,6 +19888,7 @@
                 "/api/v1/audit/events",
                 "/api/v1/audit/export",
                 "/api/v1/audit/verification-keys",
+                "/api/v1/audit/anchors",
                 "/api/v1/audit/feeds",
                 "/api/v1/audit/feeds/{id}/preview",
                 "/api/v1/audit/feeds/{id}"
@@ -19901,6 +19902,7 @@
                 "searchAudit",
                 "exportAudit",
                 "getAuditVerificationKeys",
+                "getAuditAnchoring",
                 "previewAuditFeed",
                 "putAuditFeed",
                 "listAuditFeeds"
@@ -19910,6 +19912,7 @@
                 "audit events",
                 "audit export",
                 "audit verification-keys",
+                "audit anchors",
                 "audit verify",
                 "audit feeds preview",
                 "audit feeds set",
@@ -19942,6 +19945,7 @@
                         "CLI command: audit events",
                         "CLI command: audit export",
                         "CLI command: audit verification-keys",
+                        "CLI command: audit anchors",
                         "CLI command: audit verify",
                         "CLI command: audit feeds preview",
                         "CLI command: audit feeds set",
@@ -19957,6 +19961,7 @@
                         "OpenAPI operationId: searchAudit",
                         "OpenAPI operationId: exportAudit",
                         "OpenAPI operationId: getAuditVerificationKeys",
+                        "OpenAPI operationId: getAuditAnchoring",
                         "OpenAPI operationId: previewAuditFeed",
                         "OpenAPI operationId: putAuditFeed",
                         "OpenAPI operationId: listAuditFeeds"
@@ -19998,7 +20003,7 @@
                 },
                 "rbac": {
                     "evidence": [
-                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: searchAudit, exportAudit, getAuditVerificationKeys, previewAuditFeed, putAuditFeed, listAuditFeeds",
+                        "feature authz manifest maps api_surface operations to route permissions or explicit public rationales: searchAudit, exportAudit, getAuditVerificationKeys, getAuditAnchoring, previewAuditFeed, putAuditFeed, listAuditFeeds",
                         "OpenAPI publishes BearerAuth/SessionCookie security and x-trstctl-permission for guarded operations; public credential exchanges publish x-trstctl-public-rationale."
                     ],
                     "refs": [

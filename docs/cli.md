@@ -224,7 +224,24 @@ trstctl-cli audit verify --artifact audit.csv --format auto \
 # Pipe a saved artifact instead of naming a file.
 trstctl-cli audit verify --artifact - --format ndjson \
   --tsa-root tsa-root.pem < audit.ndjson
+
+# Hold the continuous anchor series inside an unbroken run of records to an
+# hourly cadence (Enterprise audit compliance with the TSA served).
+trstctl-cli audit export --format ndjson --since 2026-10-01T00:00:00Z > audit.ndjson
+trstctl-cli audit verify --artifact audit.ndjson --format ndjson \
+  --tsa-root tsa-root.pem --anchor-cadence 1h
 ```
+
+With `--tsa-root`, every `audit.anchored` record inside an unbroken run of
+records is re-checked and the receipt's `anchor_series` says how many anchors
+verified, how many cover only records before the window, and how many a later
+subject erasure superseded. `--anchor-cadence` also requires every record to be
+covered by an anchor within that cadence (plus `--anchor-skew`, five minutes by
+default); the newest records are covered by the export's own anchor. A run with
+a content filter (`--type`, `--q`, a tool or feature) is a chain of its own and
+cannot carry the series; a run selected only by time or sequence keeps the hashes
+its records have in the tenant's full chain, and its `prev_hash` is that chain's
+head just before its first record.
 
 `auto` identifies only the five pinned served grammars; use an explicit format for
 an empty or otherwise ambiguous JSON stream. Verification starts from the trailer
@@ -276,7 +293,7 @@ exhaustive subcommand list:
 | `agent-delegation`                | Core chain-bound agent credentials: register/list root anchors, issue, follow the issuance receipt to its credential ID, read credential/chain, revoke with `--force`, and inspect exact directive jobs/evidence. See [agent delegation](features/agent-delegation.md).                                                                                             |
 | `ai`                              | AI assistant status, question answering, root-cause analysis (`status` · `query` · `rca`)                                                                                                                                                                                                                           |
 | `approval-requests`               | Review immutable certificate, secret, and managed-key operation requests within the caller's real permission domains (`list` · `approve` · `deny`)                                                                                                                                                                  |
-| `audit`                           | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `verify` · `feeds set` · `feeds list`)                                                                                        |
+| `audit`                           | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `anchors` · `verify` · `feeds set` · `feeds list`)                                                                                        |
 | `breakglass`                      | Effect-free emergency-request preview, ceremony-gated online issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-preview` · `issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`)                                                                        |
 | `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                                                                                                                                                                                |
 | `ca ceremonies`                   | Effect-free review, start, inspect, approve, and reasoned cancellation of m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve` · `cancel`)                                                                                                                                                                                                  |

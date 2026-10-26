@@ -321,7 +321,10 @@ type Deps struct {
 	// persistent, purpose-constrained handle in the isolated signer when nil.
 	ComplianceSigner crypto.DigestSigner
 	AuditRetention   time.Duration // licensed audit retention window; >0 with AuditArchiveDir configures the attached worker
-	AuditArchiveDir  string        // cold-storage directory for signed audit archive bundles (R4.4)
+	// AuditAnchorInterval is the licensed continuous anchoring cadence
+	// (audit.anchor_interval); zero, or no served TSA, leaves it off.
+	AuditAnchorInterval time.Duration
+	AuditArchiveDir     string // cold-storage directory for signed audit archive bundles (R4.4)
 	// ArchiveObjectStore, when set (audit.archive_object_store), receives signed
 	// audit archive segments and new scheduled report artifacts under each
 	// tenant's object prefix instead of AuditArchiveDir.
@@ -874,6 +877,7 @@ type Server struct {
 
 	// Audit retention worker (R4.4); nil unless retention + archive are configured.
 	retention    editionseam.AuditRetentionWorker
+	anchoring    *auditAnchoring
 	mRetRuns     *observ.Counter
 	mRetArchived *observ.Counter
 	mRetPruned   *observ.Counter
@@ -1658,15 +1662,24 @@ func (s *Server) appendAuditAPIOptions(d Deps, options *[]api.Option) *audit.Ser
 	auditSvc := audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
 	s.audit = auditSvc
 	*options = append(*options, api.WithAudit(auditSvc))
+	anchorInterval, anchorOff := auditAnchorCadence(d)
+	var anchoring editionseam.AuditAnchorWorker
 	if d.AuditComplianceFactory != nil {
 		runtime := d.AuditComplianceFactory(editionseam.AuditComplianceDeps{
 			Audit: auditSvc, Log: d.Log, Signer: d.AuditSigningKey, Checkpoints: d.Store,
 			Timestamper: auditTimestamper{srv: s}, Retention: d.AuditRetention, ArchiveDir: d.AuditArchiveDir,
-			ArchiveStore: d.ArchiveObjectStore,
+			ArchiveStore: d.ArchiveObjectStore, AnchorInterval: anchorInterval, Tenants: d.Store,
 		})
 		s.retention = runtime.Retention
+		anchoring = runtime.Anchoring
 		*options = append(*options, api.WithAuditAnchor(runtime.Anchor))
 	}
+	s.anchoring = newAuditAnchoring(s.registry, anchoring, d.AuditComplianceFactory != nil, anchorInterval, anchorOff)
+	var anchors api.AuditAnchorReader
+	if d.Store != nil {
+		anchors = d.Store
+	}
+	*options = append(*options, api.WithAuditAnchoring(s.anchoring.status, anchors))
 	return auditSvc
 }
 

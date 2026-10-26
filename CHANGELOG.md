@@ -2,6 +2,18 @@
 
 ### Added
 
+- Continuous audit anchoring at a known cadence (Enterprise audit compliance
+  with `protocols.tsa` enabled): whenever a tenant's audit log has grown, the
+  leader timestamps the tenant's full audit chain on `audit.anchor_interval`
+  (`TRSTCTL_AUDIT_ANCHOR_INTERVAL`, hourly by default, `0s` off) and appends
+  the timestamp to the tenant's own log as an `audit.anchored` record.
+  `trstctl-cli audit verify --tsa-root ... --anchor-cadence 1h` re-checks every
+  anchor inside an unbroken run of exported records, refuses a record that
+  entered the chain after an anchor it predates, and requires every record to
+  be covered within the cadence; the receipt reports the series as
+  `anchor_series`. `GET /api/v1/audit/anchors` (`trstctl-cli audit anchors`,
+  Audit console) shows the cadence, state and recent anchors.
+
 - A TrustBundle can also be distributed as an Opaque Secret in each target
   namespace (`spec.target.secret`; outside the agent's namespace this needs
   the opt-in grant in `deploy/kubernetes/rbac-trust-secrets.yaml`) and as a
@@ -330,6 +342,13 @@
 
 ### Changed
 
+- An audit export or search that is an unbroken run of records selected only
+  by time or sequence now carries the hashes its records have in the tenant's
+  full audit chain, and its `prev_hash` is that chain's head just before its
+  first record (before, every selection was re-hashed from the archived
+  prefix). Content-filtered selections are unchanged. Search responses now
+  include `prev_hash`, and record-stream trailers mark a full-chain export with
+  `"chain": "tenant"`. Saved exports from either rule verify as before.
 - CA-agnostic outbound issuance (F4) is now listed as served. Its last
   residual, the Kubernetes CSR and TrustBundle posture routes, already served
   the authenticated reports the cluster agents send and is proven by the

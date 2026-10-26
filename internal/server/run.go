@@ -747,6 +747,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		BreakglassRotation: breakglassRotation, BreakglassReconciler: breakglassReconciler,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
 		AuditSigningKey: securityGuards.auditKey, AuditRetention: retention, AuditArchiveDir: cfg.Audit.ArchiveDir,
+		AuditAnchorInterval:     auditAnchorIntervalFromConfig(cfg),
 		PrivacyRetentionEnabled: privacyRetentionEnabled, PrivacyRetentionInterval: privacyRetentionInterval,
 		PrivacyRetentionPolicy:       privacyRetentionPolicy,
 		LifecycleRenewBefore:         renewBefore,
@@ -1443,6 +1444,7 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 		workers := []runtimeWorker{
 			startRuntimeWorker(workCtx, srv.RunDispatcher),
 			startRuntimeWorker(workCtx, srv.RunRetention),
+			startRuntimeWorker(workCtx, srv.RunAuditAnchoring),
 			startRuntimeWorker(workCtx, srv.RunPrivacyRetention),
 			startRuntimeWorker(workCtx, srv.RunComplianceReportScheduler),
 			startRuntimeWorker(workCtx, srv.RunApplicationSecretMutationReconciler),

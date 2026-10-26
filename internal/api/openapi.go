@@ -4139,6 +4139,7 @@ func componentSchemas() map[string]*Schema {
 		"events":          {Type: "array", Items: ref("AuditEvent")},
 		"count":           {Type: "integer"},
 		"archived_prefix": ref("AuditArchivedPrefix"),
+		"prev_hash":       {Type: "string", Description: "The chain head the events' hashes continue from: the tenant's full-chain head before the first event for an unbroken run selected without a content filter, else the archived prefix's head."},
 	}, "events")
 	auditTimestampInfo := object(map[string]*Schema{
 		"version": {Type: "integer"}, "policy": str(), "hash_algorithm": str(),
@@ -6599,6 +6600,22 @@ func componentSchemas() map[string]*Schema {
 	kubernetesTrustRolloutList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("KubernetesTrustRollout")},
 	}, "items")
+	auditAnchorItem := object(map[string]*Schema{
+		"through_sequence": {Type: "integer", Description: "The tenant-local audit record the anchored head covers through."},
+		"chain_head":       {Type: "string", Description: "The tenant's full audit chain head through that record."},
+		"anchored_at":      timestamp(), "token_serial": {Type: "integer"},
+		"token_sha256": {Type: "string", Description: "SHA-256 of the RFC 3161 timestamp token."},
+	}, "through_sequence", "chain_head", "anchored_at", "token_serial", "token_sha256")
+	auditAnchoringStatus := object(map[string]*Schema{
+		"state":            {Type: "string", Enum: []string{"anchoring", "failing", "off", "unlicensed"}},
+		"detail":           str(),
+		"cadence_seconds":  {Type: "integer", Description: "How often the full chain of every tenant whose log grew is timestamped; zero when anchoring is not running."},
+		"last_run_at":      timestamp(),
+		"anchor_count":     {Type: "integer"},
+		"last_anchored_at": timestamp(),
+		"anchors":          {Type: "array", Items: ref("AuditChainAnchor")},
+		"verification":     str(),
+	}, "state", "cadence_seconds", "anchor_count", "anchors", "verification")
 	secretScanReq := object(map[string]*Schema{
 		"path": str(), "mode": str(), "custom_rules_path": str(),
 		"preview_fingerprint": {Type: "string", Description: "Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed."},
@@ -7887,6 +7904,8 @@ func componentSchemas() map[string]*Schema {
 		"KubernetesTrustRolloutCluster":      kubernetesTrustRolloutCluster,
 		"KubernetesTrustRollout":             kubernetesTrustRollout,
 		"KubernetesTrustRolloutList":         kubernetesTrustRolloutList,
+		"AuditChainAnchor":                   auditAnchorItem,
+		"AuditAnchoringStatus":               auditAnchoringStatus,
 		"SecretScanRequest":                  secretScanReq,
 		"SecretScanPreview":                  secretScanPreview,
 		"SecretScanFinding":                  secretScanFinding,

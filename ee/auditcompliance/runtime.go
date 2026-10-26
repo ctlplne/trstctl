@@ -25,6 +25,9 @@ func Build(d editionseam.AuditComplianceDeps) editionseam.AuditComplianceRuntime
 			runtime.Retention = NewRetentionWorker(d.Audit, d.Log, archiver, d.Checkpoints, d.Retention, d.Signer)
 		}
 	}
+	if d.Audit != nil && d.Log != nil && d.Timestamper != nil && d.Checkpoints != nil && d.Tenants != nil && d.AnchorInterval > 0 {
+		runtime.Anchoring = NewAnchorWorker(d.Audit, d.Log, d.Timestamper, d.Checkpoints, d.Tenants, d.AnchorInterval)
+	}
 	return runtime
 }
 

@@ -107,15 +107,46 @@ var csvColumns = []string{
 // line for the JSON formats and as the final RFC 4180-safe row for CSV. A format
 // that dropped it would turn evidence into logging.
 func WriteRecords(w io.Writer, format Format, recs []auditchain.Record, prevHash, head string, anchor Anchor) error {
+	return WriteRecordStream(w, format, RecordStream{Records: recs, PrevHash: prevHash, Head: head, Anchor: anchor})
+}
+
+// RecordStream is one record-stream export: its records and the proof its
+// trailer carries.
+type RecordStream struct {
+	Records  []auditchain.Record
+	PrevHash string
+	Head     string
+	Anchor   Anchor
+	// FullChain marks records that carry the hashes they have in the
+	// tenant's full chain (audit.FullChain), so anchors over that chain can be
+	// re-checked inside them.
+	FullChain bool
+}
+
+// chainFull is the trailer's mark for a stream that continues the tenant's
+// full chain.
+const chainFull = "tenant"
+
+func (s RecordStream) trailer() trailer {
+	t := trailer{Kind: "chain_trailer", PrevHash: s.PrevHash, ChainHead: s.Head, Count: len(s.Records), Anchor: s.Anchor}
+	if s.FullChain {
+		t.Chain = chainFull
+	}
+	return t
+}
+
+// WriteRecordStream renders a record stream in the requested format.
+func WriteRecordStream(w io.Writer, format Format, stream RecordStream) error {
+	proof := stream.trailer()
 	switch format {
 	case FormatCSV:
-		return writeCSV(w, recs, prevHash, head, anchor)
+		return writeCSV(w, stream.Records, proof)
 	case FormatNDJSON:
-		return writeNDJSON(w, recs, prevHash, head, anchor)
+		return writeNDJSON(w, stream.Records, proof)
 	case FormatSplunkHEC:
-		return writeSplunkHEC(w, recs, prevHash, head, anchor)
+		return writeSplunkHEC(w, stream.Records, proof)
 	case FormatSentinel:
-		return writeSentinel(w, recs, prevHash, head, anchor)
+		return writeSentinel(w, stream.Records, proof)
 	default:
 		return fmt.Errorf("auditanchor: %q is not a record-stream format", format)
 	}
@@ -133,7 +164,7 @@ func actorFields(r auditchain.Record) (subject, roles string) {
 	return r.Actor.Subject, strings.Join(r.Actor.Roles, " ")
 }
 
-func writeCSV(w io.Writer, recs []auditchain.Record, prevHash, head string, anchor Anchor) error {
+func writeCSV(w io.Writer, recs []auditchain.Record, proof trailer) error {
 	cw := csv.NewWriter(w)
 	if err := cw.Write(csvColumns); err != nil {
 		return err
@@ -155,15 +186,13 @@ func writeCSV(w io.Writer, recs []auditchain.Record, prevHash, head string, anch
 			return err
 		}
 	}
-	proof, err := json.Marshal(trailer{
-		Kind: "chain_trailer", PrevHash: prevHash, ChainHead: head, Count: len(recs), Anchor: anchor,
-	})
+	encoded, err := json.Marshal(proof)
 	if err != nil {
 		return err
 	}
 	trailerRow := make([]string, len(csvColumns))
 	trailerRow[len(trailerRow)-2] = "chain_trailer"
-	trailerRow[len(trailerRow)-1] = string(proof)
+	trailerRow[len(trailerRow)-1] = string(encoded)
 	if err := cw.Write(trailerRow); err != nil {
 		return err
 	}
@@ -209,22 +238,23 @@ type trailer struct {
 	ChainHead string `json:"chain_head"`
 	Count     int    `json:"count"`
 	Anchor    Anchor `json:"anchor"`
+	// Chain is "tenant" when the records carry the hashes they have in the
+	// tenant's full chain; absent, the stream is a chain of its own.
+	Chain string `json:"chain,omitempty"`
 }
 
-func writeTrailer(enc *json.Encoder, recs []auditchain.Record, prevHash, head string, anchor Anchor) error {
-	return enc.Encode(trailer{
-		Kind: "chain_trailer", PrevHash: prevHash, ChainHead: head, Count: len(recs), Anchor: anchor,
-	})
+func writeTrailer(enc *json.Encoder, proof trailer) error {
+	return enc.Encode(proof)
 }
 
-func writeNDJSON(w io.Writer, recs []auditchain.Record, prevHash, head string, anchor Anchor) error {
+func writeNDJSON(w io.Writer, recs []auditchain.Record, proof trailer) error {
 	enc := json.NewEncoder(w)
 	for _, r := range recs {
 		if err := enc.Encode(toNDJSON(r)); err != nil {
 			return err
 		}
 	}
-	return writeTrailer(enc, recs, prevHash, head, anchor)
+	return writeTrailer(enc, proof)
 }
 
 // splunkEvent is one HTTP Event Collector event.
@@ -244,7 +274,7 @@ type splunkEvent struct {
 	Event      ndjsonRecord `json:"event"`
 }
 
-func writeSplunkHEC(w io.Writer, recs []auditchain.Record, prevHash, head string, anchor Anchor) error {
+func writeSplunkHEC(w io.Writer, recs []auditchain.Record, proof trailer) error {
 	enc := json.NewEncoder(w)
 	for _, r := range recs {
 		if err := enc.Encode(splunkEvent{
@@ -256,7 +286,7 @@ func writeSplunkHEC(w io.Writer, recs []auditchain.Record, prevHash, head string
 			return err
 		}
 	}
-	return writeTrailer(enc, recs, prevHash, head, anchor)
+	return writeTrailer(enc, proof)
 }
 
 // sentinelRecord is the Azure Monitor / Sentinel custom-table shape.
@@ -277,7 +307,7 @@ type sentinelRecord struct {
 	Data          json.RawMessage `json:"Data,omitempty"`
 }
 
-func writeSentinel(w io.Writer, recs []auditchain.Record, prevHash, head string, anchor Anchor) error {
+func writeSentinel(w io.Writer, recs []auditchain.Record, proof trailer) error {
 	enc := json.NewEncoder(w)
 	for _, r := range recs {
 		subject, roles := actorFields(r)
@@ -289,7 +319,7 @@ func writeSentinel(w io.Writer, recs []auditchain.Record, prevHash, head string,
 			return err
 		}
 	}
-	return writeTrailer(enc, recs, prevHash, head, anchor)
+	return writeTrailer(enc, proof)
 }
 
 func compactJSON(raw json.RawMessage) []byte {

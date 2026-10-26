@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditchain"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/eventspec"
@@ -43,6 +44,10 @@ type VerificationOptions struct {
 	// The default remains strict timestamp verification. This never permits
 	// unsigned record streams or fallback after a timestamp verification error.
 	AllowUnanchoredJWS bool
+	// Series is the auditor's expectation of the continuous anchor series
+	// recorded inside the export (EventTypeAnchored). The series is checked
+	// whenever a TSA root is supplied; a cadence also needs one.
+	Series SeriesPolicy
 }
 
 // VerificationResult is the stable, non-secret receipt printed by the offline
@@ -60,6 +65,9 @@ type VerificationResult struct {
 	AnchorVerified            bool      `json:"anchor_verified"`
 	TimestampArtifactVerified bool      `json:"timestamp_artifact_verified"`
 	AnchorDetail              string    `json:"anchor_detail,omitempty"`
+	// AnchorSeries is the continuous anchor series found inside the export;
+	// absent when no TSA root was supplied to verify it.
+	AnchorSeries *SeriesResult `json:"anchor_series,omitempty"`
 }
 
 // VerifyArtifact verifies any saved format served by /api/v1/audit/export.
@@ -86,15 +94,29 @@ func VerifyArtifact(raw []byte, opts VerificationOptions) (VerificationResult, e
 	if _, err := ParseFormat(string(format)); err != nil {
 		return VerificationResult{}, err
 	}
-	if len(opts.TSARootDER) == 0 && (format != FormatJWS || !opts.AllowUnanchoredJWS || opts.MaxAnchorDelay != 0) {
+	if len(opts.TSARootDER) == 0 && (format != FormatJWS || !opts.AllowUnanchoredJWS || opts.MaxAnchorDelay != 0 || opts.Series.Cadence != 0) {
 		return VerificationResult{}, errors.New("auditanchor: a separately pinned TSA root certificate is required")
 	}
 
+	var (
+		result    VerificationResult
+		records   []auditchain.Record
+		prevHash  string
+		fullChain bool
+	)
 	switch format {
 	case FormatJWS:
-		return verifyJWSEvidence(raw, opts)
+		var bundle audit.Bundle
+		var err error
+		result, bundle, err = verifyJWSEvidence(raw, opts)
+		if err != nil {
+			return VerificationResult{}, err
+		}
+		records, prevHash = bundle.Records, bundle.PrevHash
+		fullChain = audit.FullChain(bundle.Query, bundle.Records)
 	case FormatCSV:
-		records, err := VerifyCSVArtifact(raw, opts.TSARootDER, opts.MaxAnchorDelay)
+		var err error
+		records, err = VerifyCSVArtifact(raw, opts.TSARootDER, opts.MaxAnchorDelay)
 		if err != nil {
 			return VerificationResult{}, err
 		}
@@ -105,40 +127,61 @@ func VerifyArtifact(raw []byte, opts VerificationOptions) (VerificationResult, e
 		if _, err := validateRecordTenancy(records); err != nil {
 			return VerificationResult{}, err
 		}
-		return resultFor(format, records, proof), nil
+		result, prevHash = resultFor(format, records, proof), proof.PrevHash
+		if fullChain, err = proof.fullChain(); err != nil {
+			return VerificationResult{}, err
+		}
 	case FormatNDJSON, FormatSplunkHEC, FormatSentinel:
-		records, proof, err := decodeRecordStream(raw, format)
+		var proof trailer
+		var err error
+		records, proof, err = decodeRecordStream(raw, format)
 		if err != nil {
 			return VerificationResult{}, err
 		}
 		if err := verifyRecordStream(records, proof, opts.TSARootDER, opts.MaxAnchorDelay); err != nil {
 			return VerificationResult{}, err
 		}
-		return resultFor(format, records, proof), nil
+		result, prevHash = resultFor(format, records, proof), proof.PrevHash
+		if fullChain, err = proof.fullChain(); err != nil {
+			return VerificationResult{}, err
+		}
 	default:
 		return VerificationResult{}, fmt.Errorf("auditanchor: unsupported verification format %q", format)
 	}
+	if len(opts.TSARootDER) == 0 {
+		return result, nil
+	}
+	var exportAnchoredAt time.Time
+	if result.AnchorVerified {
+		exportAnchoredAt = result.AnchoredAt
+	}
+	series, err := VerifySeries(records, prevHash, fullChain, exportAnchoredAt, opts.TSARootDER, opts.Series)
+	if err != nil {
+		return VerificationResult{}, err
+	}
+	result.AnchorSeries = &series
+	return result, nil
 }
 
-func verifyJWSEvidence(raw []byte, opts VerificationOptions) (VerificationResult, error) {
+func verifyJWSEvidence(raw []byte, opts VerificationOptions) (VerificationResult, audit.Bundle, error) {
 	if opts.AuditKeys == nil {
-		return VerificationResult{}, errors.New("auditanchor: JWS verification requires a separately pinned audit JWK set")
+		return VerificationResult{}, audit.Bundle{}, errors.New("auditanchor: JWS verification requires a separately pinned audit JWK set")
 	}
 	bundle, envelope, err := verifySignedEvidenceEnvelope(raw, opts.AuditKeys)
 	if err != nil {
-		return VerificationResult{}, err
+		return VerificationResult{}, audit.Bundle{}, err
 	}
 	plain := envelope.Anchor.Kind == KindNone && opts.AllowUnanchoredJWS && len(opts.TSARootDER) == 0 && opts.MaxAnchorDelay == 0
 	if plain {
 		if envelope.Anchor.Token != nil || !envelope.Anchor.AnchoredAt.IsZero() || envelope.Anchor.ChainHead != bundle.ChainHead {
-			return VerificationResult{}, errors.New("auditanchor: plain evidence contains conflicting timestamp or chain-head metadata")
+			return VerificationResult{}, audit.Bundle{}, errors.New("auditanchor: plain evidence contains conflicting timestamp or chain-head metadata")
 		}
 	} else {
 		if len(opts.TSARootDER) == 0 {
-			return VerificationResult{}, errors.New("auditanchor: a separately pinned TSA root certificate is required for timestamp verification")
+			return VerificationResult{}, audit.Bundle{}, errors.New("auditanchor: a separately pinned TSA root certificate is required for timestamp verification")
 		}
 		if err := verifyEvidenceAnchor(bundle, envelope.Anchor, opts.TSARootDER, opts.MaxAnchorDelay); err != nil {
-			return VerificationResult{}, err
+			return VerificationResult{}, audit.Bundle{}, err
 		}
 	}
 	result := VerificationResult{
@@ -155,7 +198,7 @@ func verifyJWSEvidence(raw []byte, opts VerificationOptions) (VerificationResult
 	} else if !result.TimestampArtifactVerified {
 		result.AnchorDetail = "Signed legacy timestamp manifest verified; no RFC 3161 CMS artifact was present."
 	}
-	return result, nil
+	return result, bundle, nil
 }
 
 func detectArtifactFormat(raw []byte) (Format, error) {
@@ -336,6 +379,18 @@ func validateRecordTenancy(records []auditchain.Record) (string, error) {
 		}
 	}
 	return tenantID, nil
+}
+
+// fullChain reads the trailer's chain mark.
+func (t trailer) fullChain() (bool, error) {
+	switch t.Chain {
+	case "":
+		return false, nil
+	case chainFull:
+		return true, nil
+	default:
+		return false, fmt.Errorf("auditanchor: unrecognized chain mark %q in the integrity trailer", t.Chain)
+	}
 }
 
 func csvTrailer(raw []byte) (trailer, error) {

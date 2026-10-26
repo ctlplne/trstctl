@@ -983,6 +983,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit/anchors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show continuous audit anchoring and the tenant's recent anchors */
+        get: operations["getAuditAnchoring"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/events": {
         parameters: {
             query?: never;
@@ -9329,6 +9346,20 @@ export interface components {
             kind: "" | "rfc3161";
             token?: components["schemas"]["AuditTimestampToken"];
         };
+        AuditAnchoringStatus: {
+            anchor_count: number;
+            anchors: components["schemas"]["AuditChainAnchor"][];
+            /** @description How often the full chain of every tenant whose log grew is timestamped; zero when anchoring is not running. */
+            cadence_seconds: number;
+            detail?: string;
+            /** Format: date-time */
+            last_anchored_at?: string;
+            /** Format: date-time */
+            last_run_at?: string;
+            /** @enum {string} */
+            state: "anchoring" | "failing" | "off" | "unlicensed";
+            verification: string;
+        };
         AuditArchivedPrefix: {
             chain_head: string;
             /** @description Tenant-local records retired from the served audit view into signed offline archives. */
@@ -9341,6 +9372,17 @@ export interface components {
             /** @enum {string} */
             format: "jws";
             schema_version: number;
+        };
+        AuditChainAnchor: {
+            /** Format: date-time */
+            anchored_at: string;
+            /** @description The tenant's full audit chain head through that record. */
+            chain_head: string;
+            /** @description The tenant-local audit record the anchored head covers through. */
+            through_sequence: number;
+            token_serial: number;
+            /** @description SHA-256 of the RFC 3161 timestamp token. */
+            token_sha256: string;
         };
         AuditEvent: {
             actor?: Record<string, never>;
@@ -9358,6 +9400,8 @@ export interface components {
             archived_prefix?: components["schemas"]["AuditArchivedPrefix"];
             count?: number;
             events: components["schemas"]["AuditEvent"][];
+            /** @description The chain head the events' hashes continue from: the tenant's full-chain head before the first event for an unbroken run selected without a content filter, else the archived prefix's head. */
+            prev_hash?: string;
         };
         AuditFeed: {
             allow_private_endpoint: boolean;
@@ -21192,6 +21236,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalDecision"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getAuditAnchoring: {
+        parameters: {
+            query?: {
+                /** @description most recent anchors to return (default 50, maximum 500) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditAnchoringStatus"];
                 };
             };
             /** @description client error */

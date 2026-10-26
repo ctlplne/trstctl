@@ -92,3 +92,41 @@ func TestPrivacyRetentionValidated(t *testing.T) {
 		t.Fatal("Load accepted a non-positive privacy.retention.owners")
 	}
 }
+
+// A147: continuous anchoring runs hourly unless configured; 0s turns it off,
+// and a cadence outside 1m–24h is refused.
+func TestAuditAnchorIntervalDefaultsHourlyAndIsBounded(t *testing.T) {
+	if d, err := config.Default().Audit.AnchorIntervalDuration(); err != nil || d != config.DefaultAuditAnchorInterval {
+		t.Fatalf("default anchor interval = %v, %v", d, err)
+	}
+	base := map[string]string{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		"TRSTCTL_POSTGRES_MODE": "external",
+		"TRSTCTL_POSTGRES_DSN":  "postgres://u:p@h:5432/db?sslmode=require",
+		"TRSTCTL_NATS_MODE":     "external",
+		"TRSTCTL_NATS_URL":      "nats://h:4222",
+
+		"TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND":           "/usr/local/bin/trstctl-sign-approve",
+		"TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER": "false",
+	}
+	load := func(interval string) (*config.Config, error) {
+		env := map[string]string{"TRSTCTL_AUDIT_ANCHOR_INTERVAL": interval}
+		for k, v := range base {
+			env[k] = v
+		}
+		return config.Load(func(k string) string { return env[k] })
+	}
+	for interval, want := range map[string]string{"15m": "15m0s", "0s": "0s"} {
+		cfg, err := load(interval)
+		if err != nil {
+			t.Fatalf("anchor interval %s: %v", interval, err)
+		}
+		if d, err := cfg.Audit.AnchorIntervalDuration(); err != nil || d.String() != want {
+			t.Fatalf("anchor interval %s = %v, %v", interval, d, err)
+		}
+	}
+	for _, bad := range []string{"30s", "48h", "-1h", "hourly"} {
+		if _, err := load(bad); err == nil {
+			t.Fatalf("anchor interval %q was accepted", bad)
+		}
+	}
+}

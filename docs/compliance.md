@@ -58,11 +58,25 @@ signature fails). With Enterprise audit compliance licensed and `protocols.tsa` 
 record-stream trailer also carry the complete RFC 3161 token over that exact
 head. Offline verification takes the separately pinned audit JWK set and TSA root,
 recomputes the record chain, checks the timestamp token, and applies the chosen
-maximum delay from newest record to authority time. It does **not** provide
-continuous at-rest notarization without periodic reference points — for that, an
-operator schedules exports (e.g. a nightly `trstctl-cli audit export`) and retains
-them in write-once / WORM storage. Translog inclusion and hardware-notary
-checkpoints remain separate roadmap controls.
+maximum delay from newest record to authority time.
+
+**Continuous anchoring.** On the same license with the TSA served, the leader
+also timestamps each tenant's full audit chain at a known cadence
+(`audit.anchor_interval`, hourly by default; `0s` turns it off) whenever the
+tenant's log has grown, and appends the timestamp to that tenant's own log as an
+`audit.anchored` record, which the next anchor then covers. An export of an
+unbroken run of records (no content filter) carries those anchors, and offline
+verification with `--tsa-root` re-checks each one: its timestamp against the
+pinned root, its chain head against the export's own chain, and the order of
+records around it — a record that entered the chain after an anchor it predates
+was withheld or back-dated. With `--anchor-cadence 1h` it also requires every
+record to be covered by an anchor within an hour of its time. What this cannot
+catch is a record withheld for less than one cadence plus the clock tolerance
+(`--anchor-skew`, five minutes by default); and an anchor taken before a subject
+erasure that changed the records it covers is reported as superseded by that
+erasure rather than verified. `GET /api/v1/audit/anchors` (`trstctl-cli audit
+anchors`, Audit console) shows the cadence, the state and the tenant's recent
+anchors. Hardware-notary checkpoints remain a separate roadmap control.
 
 The shipped workflow is `trstctl-cli audit verification-keys` while connected,
 followed by `trstctl-cli audit verify --artifact <saved-file> --audit-jwks

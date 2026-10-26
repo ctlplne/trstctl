@@ -191,6 +191,12 @@ func (s *Service) SearchWithArchivedPrefix(ctx context.Context, q Query) ([]Reco
 	return records, prefix, err
 }
 
+// SearchView returns the visible records, the chain head they continue from,
+// and the archived prefix, from one pinned history read.
+func (s *Service) SearchView(ctx context.Context, q Query) ([]Record, string, ArchivedPrefix, error) {
+	return s.search(ctx, q)
+}
+
 // SearchWithSeed returns the visible records plus the archived-prefix head they
 // continue from. Record-stream exporters need both values in one history read:
 // without the seed, an offline verifier cannot reconstruct a chain after
@@ -259,50 +265,203 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, Archiv
 		if tenantOrdinal > 0 {
 			prefix = ArchivedPrefix{RecordCount: tenantOrdinal, ChainHead: chainSeed}
 		}
-		refs := map[string]struct{}{}
-		if s.erasures != nil {
-			refs, err = s.erasures.ListPrivacyErasureRefs(readCtx, q.TenantID)
-			if err != nil {
-				return err
-			}
+		redactor, err := s.redactor(readCtx, q.TenantID)
+		if err != nil {
+			return err
 		}
-		redactor := privacy.Redactor{TenantID: q.TenantID, Refs: refs}
+		// A selection by time or sequence alone follows the tenant's full chain
+		// through every record while replaying; a selection by content is a
+		// chain of its own from the archived prefix.
+		follow := !q.ContentFiltered()
+		tenantHead := chainSeed
+		var before []string
 		out = []Record{}
-		return s.log.ReplayTenantThrough(readCtx, q.TenantID, from, head, func(e events.Event) error {
+		if err := s.log.ReplayTenantThrough(readCtx, q.TenantID, from, head, func(e events.Event) error {
 			if e.TenantID != q.TenantID { // AN-1: tenant floor before any public cursor advances.
 				return nil
 			}
-			redacted := e
-			if !redactor.Empty() {
-				redacted.Actor = redactor.RedactActor(e.Actor)
-				redacted.Data = redactor.RedactJSON(e.Data)
-			}
 			tenantOrdinal++
+			record, redacted := redactedRecord(e, redactor, tenantOrdinal)
+			prior := tenantHead
+			if follow {
+				next, err := link(prior, record)
+				if err != nil {
+					return err
+				}
+				tenantHead = next
+			}
 			if !toolScope.matches(redacted) || !q.matches(redacted, tenantOrdinal) {
 				return nil
 			}
-			out = append(out, Record{
-				Sequence: tenantOrdinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
-				TenantID: e.TenantID, Time: e.Time, Actor: redacted.Actor, Data: json.RawMessage(redacted.Data),
-			})
+			out = append(out, record)
+			if follow {
+				before = append(before, prior)
+			}
 			return nil
-		})
+		}); err != nil {
+			return err
+		}
+		if q.Limit > 0 && len(out) > q.Limit {
+			if q.Latest {
+				out = out[len(out)-q.Limit:]
+				if follow {
+					before = before[len(before)-q.Limit:]
+				}
+			} else {
+				out = out[:q.Limit]
+				if follow {
+					before = before[:q.Limit]
+				}
+			}
+		}
+		// An unbroken run selected without a content filter keeps the hashes
+		// it has in the tenant's full chain: its seed is the chain head just
+		// before its first record, so an anchor taken over the full chain can be
+		// re-checked inside it (FullChain). Any other selection is a chain of
+		// its own, seeded from the archived prefix.
+		if follow && Contiguous(out) {
+			seed = before[0]
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, "", ArchivedPrefix{}, err
 	}
-	if q.Limit > 0 && len(out) > q.Limit {
-		if q.Latest {
-			out = out[len(out)-q.Limit:]
-		} else {
-			out = out[:q.Limit]
-		}
-	}
-	// Hash-link the returned records (R2.1), seeded from the sealed boundary so the
-	// chain attests to exactly this slice as a continuation of the archived prefix;
-	// a later tampering of any record is detectable by VerifyChain.
+	// Hash-link the returned records (R2.1) from the seed chosen above, so a later
+	// tampering of any record is detectable by VerifyChain.
 	SealFrom(seed, out)
 	return out, seed, prefix, nil
+}
+
+// ContentFiltered reports whether the query selects records by what they say
+// rather than only by when or where they fall in the tenant's sequence.
+func (q Query) ContentFiltered() bool {
+	return q.Tool != "" || len(q.Types) > 0 || len(q.ExcludeTypePrefixes) > 0 ||
+		q.FeatureID != "" || q.Action != "" || q.Contains != ""
+}
+
+// Contiguous reports whether records are one unbroken run of tenant sequence
+// numbers.
+func Contiguous(records []Record) bool {
+	if len(records) == 0 {
+		return false
+	}
+	for i := 1; i < len(records); i++ {
+		if records[i].Sequence != records[i-1].Sequence+1 {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Service) redactor(ctx context.Context, tenantID string) (privacy.Redactor, error) {
+	refs := map[string]struct{}{}
+	if s.erasures != nil {
+		var err error
+		refs, err = s.erasures.ListPrivacyErasureRefs(ctx, tenantID)
+		if err != nil {
+			return privacy.Redactor{}, err
+		}
+	}
+	return privacy.Redactor{TenantID: tenantID, Refs: refs}, nil
+}
+
+// FullChain reports whether records selected by q carry the hashes they have
+// in the tenant's full chain: an unbroken run selected without a content
+// filter. Exports and the offline verifier apply this one rule.
+func FullChain(q Query, records []Record) bool {
+	return !q.ContentFiltered() && Contiguous(records)
+}
+
+// redactedRecord is the audit view of one event at a tenant-local ordinal.
+func redactedRecord(e events.Event, redactor privacy.Redactor, ordinal uint64) (Record, events.Event) {
+	redacted := e
+	if !redactor.Empty() {
+		redacted.Actor = redactor.RedactActor(e.Actor)
+		redacted.Data = redactor.RedactJSON(e.Data)
+	}
+	return Record{
+		Sequence: ordinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
+		TenantID: e.TenantID, Time: e.Time, Actor: redacted.Actor, Data: json.RawMessage(redacted.Data),
+	}, redacted
+}
+
+// ChainPosition is a point in a tenant's full audit chain: the head after the
+// record at tenant-local Sequence, and that record's time and type.
+type ChainPosition struct {
+	Sequence uint64
+	Head     string
+	Time     time.Time
+	Type     string
+}
+
+// chainPosition follows the tenant's chain from the archived prefix through the
+// record at tenant-local ordinal through (or the newest record when through is
+// zero), without holding the records.
+func (s *Service) chainPosition(ctx context.Context, tenantID string, from, head uint64, seed string, base uint64, redactor privacy.Redactor, through uint64) (ChainPosition, error) {
+	position := ChainPosition{Sequence: base, Head: seed}
+	errReached := errors.New("audit: chain position reached")
+	err := s.log.ReplayTenantThrough(ctx, tenantID, from, head, func(e events.Event) error {
+		if e.TenantID != tenantID {
+			return nil
+		}
+		if through != 0 && position.Sequence >= through {
+			return errReached
+		}
+		record, _ := redactedRecord(e, redactor, position.Sequence+1)
+		next, err := link(position.Head, record)
+		if err != nil {
+			return err
+		}
+		position = ChainPosition{Sequence: record.Sequence, Head: next, Time: record.Time, Type: record.Type}
+		return nil
+	})
+	if errors.Is(err, errReached) {
+		err = nil
+	}
+	return position, err
+}
+
+// ChainHead returns the head of the tenant's full audit chain — every record
+// from the archived prefix through the newest, redacted as an export would show
+// it — without holding the records. It is what a periodic anchor timestamps
+// (EventTypeAnchored), and it equals the last hash of an unfiltered export taken
+// on the same history. A history that an export would refuse is refused here
+// too. An empty tenant reports Sequence 0 and no head.
+func (s *Service) ChainHead(ctx context.Context, tenantID string) (ChainPosition, error) {
+	if tenantID == "" {
+		return ChainPosition{}, ErrMissingTenant
+	}
+	var position ChainPosition
+	err := s.log.WithHistoryRead(ctx, func(readCtx context.Context) error {
+		head, err := s.log.LastSequence(readCtx)
+		if err != nil {
+			return err
+		}
+		if err := s.log.ReplayTenantThrough(readCtx, tenantID, 1, head, func(e events.Event) error {
+			if e.TenantID != tenantID {
+				return nil
+			}
+			unsafe, inspectErr := schedulerhistory.RequiresSanitation(e.Type, e.SchemaVersion, e.Data)
+			if inspectErr != nil || unsafe {
+				return schedulerhistory.ErrSanitationRequired
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		from, seed, base, err := s.searchSeed(readCtx, tenantID)
+		if err != nil {
+			return err
+		}
+		redactor, err := s.redactor(readCtx, tenantID)
+		if err != nil {
+			return err
+		}
+		position, err = s.chainPosition(readCtx, tenantID, from, head, seed, base, redactor, 0)
+		return err
+	})
+	return position, err
 }
 
 func (q Query) matches(e events.Event, tenantSequence uint64) bool {

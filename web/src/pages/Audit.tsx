@@ -19,6 +19,7 @@ import { AppQueryProvider, useApiQuery, useHasAppQueryProvider } from "@/lib/que
 import { useAuth } from "@/auth/AuthProvider";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
+import { AuditAnchoringPanel } from "@/pages/audit/AuditAnchoringPanel";
 import { AuditFeedPanel } from "@/pages/audit/AuditFeedPanel";
 
 type Notice = { kind: "permission" | "error"; message: string };
@@ -450,6 +451,7 @@ function AuditWorkspace() {
           {exportError && <ErrorState title={translateNow("source.evidence.export.unavailable.9cb4129ff9")}>{exportError}</ErrorState>}
           {bundle && <EvidenceBundle bundle={bundle} />}
           {events && <HashChainPanel events={events} />}
+          <AuditAnchoringPanel />
         </div>
       </AuditDisclosure>
 

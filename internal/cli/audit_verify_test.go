@@ -248,3 +248,28 @@ func newAuditVerifyHarness(t *testing.T, at time.Time) auditVerifyHarness {
 	}
 	return auditVerifyHarness{authority: authority, rootDER: rootDER}
 }
+
+// A147: the continuous anchor series policy needs the pinned TSA root it is
+// verified against, cannot be negative, and does not apply to retention
+// archives; the help says what it checks.
+func TestAuditVerifyAnchorCadenceFlags(t *testing.T) {
+	t.Parallel()
+	run := func(args ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		code := cli.Run(t.Context(), append([]string{"audit", "verify"}, args...), cli.Env{}, strings.NewReader(""), &stdout, &stderr)
+		return code, stdout.String(), stderr.String()
+	}
+	if code, out, _ := run("--help"); code != 0 || !strings.Contains(out, "--anchor-cadence") || !strings.Contains(out, "anchor_series") {
+		t.Fatalf("help exit=%d:\n%s", code, out)
+	}
+	for name, args := range map[string][]string{
+		"cadence without a TSA root": {"--artifact", "-", "--audit-jwks", "keys.json", "--anchor-cadence", "1h"},
+		"negative cadence":           {"--artifact", "-", "--tsa-root", "root.pem", "--anchor-cadence", "-1h"},
+		"negative skew":              {"--artifact", "-", "--tsa-root", "root.pem", "--anchor-skew", "-1m"},
+		"cadence on a retention":     {"--artifact", "-", "--format", "retention-jws", "--audit-jwks", "keys.json", "--anchor-cadence", "1h"},
+	} {
+		if code, _, stderr := run(args...); code != 2 || stderr == "" {
+			t.Fatalf("%s: exit=%d stderr=%q", name, code, stderr)
+		}
+	}
+}

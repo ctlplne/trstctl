@@ -130,7 +130,7 @@ func (a *API) searchAudit(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	records, prefix, err := a.audit.SearchWithArchivedPrefix(r.Context(), q)
+	records, seed, prefix, err := a.audit.SearchView(r.Context(), q)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -138,6 +138,12 @@ func (a *API) searchAudit(w http.ResponseWriter, r *http.Request) {
 	response := map[string]any{"events": records, "count": len(records)}
 	if prefix.RecordCount > 0 {
 		response["archived_prefix"] = prefix
+	}
+	// The events' hashes chain from prev_hash: the tenant's full-chain head
+	// before the first event for an unbroken run selected without a content
+	// filter, else the archived prefix's head.
+	if seed != "" {
+		response["prev_hash"] = seed
 	}
 	a.writeJSON(w, http.StatusOK, response)
 }
@@ -215,7 +221,9 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// line, so a consumer that reaches EOF without one knows its download was
 	// truncated, and knows it from the file itself rather than from a status
 	// code it no longer has access to.
-	_ = auditanchor.WriteRecords(w, format, recs, prevHash, head, anchor)
+	_ = auditanchor.WriteRecordStream(w, format, auditanchor.RecordStream{
+		Records: recs, PrevHash: prevHash, Head: head, Anchor: anchor, FullChain: audit.FullChain(q, recs),
+	})
 }
 
 func (a *API) anchorAuditExport(r *http.Request, head string) (auditanchor.Anchor, error) {

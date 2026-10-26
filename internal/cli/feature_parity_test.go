@@ -340,8 +340,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// 591, mapped onto the certificate inventory row.
 	// A138's `kubernetes trust-rollouts start|list|get|pause|resume` raised it
 	// to 596, mapped onto F4.
-	if len(out) != 596 {
-		t.Fatalf("CLI commands = %d, want 596", len(out))
+	// A147's `audit anchors` raised it to 597, mapped onto the audit row.
+	if len(out) != 597 {
+		t.Fatalf("CLI commands = %d, want 597", len(out))
 	}
 	return out
 }
