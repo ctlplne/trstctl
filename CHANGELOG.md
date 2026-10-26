@@ -111,6 +111,11 @@
 
 ### Fixed
 
+- The first issuance of an identity bound to a host-executed destination never
+  completed in a tenant that had not yet issued a certificate from the platform
+  CA: after handing the work to the host agent, the issuance command tried to
+  refresh a CRL the tenant could not have yet and retried forever. The CRL step
+  now runs only when the command itself issued a certificate.
 - Rogue certificate detection flagged every ECDSA certificate as a weak key
   (risk 85) and never an RSA-1024 one: it read only the bare algorithm name, so
   "ecdsa" matched "dsa". It now rates the certificate itself when trstctl holds
@@ -180,6 +185,15 @@
 
 ### Changed
 
+- A `k8s_ingress_gateway` discovery source can be bound to the host-role agent
+  running in the cluster (`cluster_agent_id`, `owner_id`, optional
+  `verify_address`). Each run then keeps a `k8s_secret` destination and a
+  certificate identity per TLS block and queues the first issuance to that agent,
+  which generates the key inside the cluster, sends only a CSR, writes the TLS
+  Secret and reads it back; the certificate records `key_storage=kubernetes_secret`.
+  Resources report `delivery_queued`, then `delivered`. A source without an agent
+  still reports each resource `not_delivered` with the reason. A `k8s_secret`
+  destination saved without `executor=agent` is refused.
 - The outbound clients that used Go's default client with no timeout at all
   (secret-sync pushers, dynamic-secret backends, the ACM, Certificate Manager
   and Key Vault discovery clients, the Azure and GCP token clients, AWS IAM,

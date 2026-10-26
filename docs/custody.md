@@ -90,7 +90,8 @@ silently counted as a complete custody record.
 | Automated renewal successor, no CSR and retained control-plane target | The control plane | Tenant-bound encrypted recovery record; sealed deploy intent when a control-plane connector is configured | **Yes — deprecated** identity fallback, see below |
 | Ephemeral workload credential (attested) | The attested workload | Wherever the workload put it | No — it presents its own public key |
 | Direct attested X.509-SVID | The requesting workload | Not established by the attestation request | No — only the public key travels up |
-| Kubernetes TLS auto-issuance | Nobody yet: nothing is delivered | No key or certificate is made; each resource is reported not delivered until the in-cluster agent generates the key inside the cluster | No, see below |
+| Kubernetes TLS auto-issuance, source bound to a cluster agent | The agent running in the cluster | The TLS Secret the Ingress or Gateway names (`key_storage=kubernetes_secret`) | No — only the CSR leaves the cluster, see below |
+| Kubernetes TLS auto-issuance, no cluster agent bound | Nobody: nothing is delivered | No key or certificate is made; each resource is reported not delivered with the reason | No, see below |
 | PQC migration reissue, older run | The control plane | Held in locked memory and wiped; nothing delivers it to the asset | **Yes** — only runs queued before host-csr migration, see below |
 
 ACME, EST simple enrollment, SCEP, CMP, direct attested issuance, and a
@@ -137,8 +138,8 @@ There are five `Yes` rows because the identity generator is reused by its
 automated-renewal fallback. There are four distinct control-plane subject-key
 generators: the three deprecated paths below and the reissue step of a PQC migration
 run that predates host-csr migration. The tenant's switch governs all four.
-Kubernetes TLS auto-issuance is no longer one of them: it generates nothing until the
-in-cluster agent delivers it (below).
+Kubernetes TLS auto-issuance is not one of them: the agent running in the cluster
+generates its keys (below).
 
 **Identity leaf without a CSR, including its renewal fallback.** Supplying
 `subject_csr_pem` is the primary direct-identity path: trstctl signs the request
@@ -252,19 +253,22 @@ legacy choice to its filtered Audit evidence. Vault/OpenBao clients use
 `pki/sign/{role}` for CSR custody; `pki/issue/{role}` is the same deprecated
 server-keygen choice.
 
-**Kubernetes TLS auto-issuance.** A Kubernetes TLS certificate is delivered the
-cert-manager way: the in-cluster agent generates the key inside the cluster, sends
-only a CSR, and writes the TLS Secret itself with a signed receipt, so the key never
-leaves the cluster and the control plane never generates it. That agent mode is the
-next piece of work. Until it exists, a `k8s_ingress_gateway` discovery run records
-each Ingress or Gateway TLS resource it finds and reports it `not_delivered` with the
-reason; the run completes as `partial`, and no key, certificate or
-`issuance.server_side_keygen` event is made, whatever the tenant's switch says.
-Certificates that earlier versions minted for these resources (with a control-plane
-key that was wiped, never delivered to the cluster) stay in the inventory with
-`key_origin=control_plane`. To serve Kubernetes TLS today, issue it with cert-manager
-against trstctl's ACME directory, so the cluster generates the key and sends only a
-CSR.
+**Kubernetes TLS auto-issuance.** A Kubernetes TLS certificate is delivered by the
+host-role agent running in the cluster: a `k8s_ingress_gateway` source names it in
+`cluster_agent_id`, and each TLS block becomes a `k8s_secret` destination with
+`executor=agent`. The agent generates the key inside the cluster, sends only a CSR,
+writes the TLS Secret, reads it back and returns a signed receipt, so the key never
+leaves the cluster and the control plane never generates it. The certificate records
+`key_origin=host_agent` and `key_storage=kubernetes_secret`. A `k8s_secret`
+destination saved without `executor=agent` is refused, because it would route through
+control-plane key generation. A source with no agent bound records each Ingress or
+Gateway TLS resource it finds and reports it `not_delivered` with the reason; the run
+completes as `partial`, and no key, certificate or `issuance.server_side_keygen`
+event is made, whatever the tenant's switch says. Certificates that earlier versions
+minted for these resources (with a control-plane key that was wiped, never delivered
+to the cluster) stay in the inventory with `key_origin=control_plane`. cert-manager
+against trstctl's ACME directory remains another way to serve Kubernetes TLS with a
+cluster-generated key.
 
 **PQC migration reissue from an older run.** A PQC migration started today binds each
 certificate asset to a host target and runs as host-csr migration: the host agent

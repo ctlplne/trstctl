@@ -922,6 +922,51 @@ target configuration without changing the queued policy or target revision.
 Both the control plane and host agent need this capability to complete
 password-protected host issuance and restore.
 
+### Deliver into a Kubernetes Secret from inside the cluster
+
+A `k8s_secret` destination is the `kubernetes.io/tls` Secret an Ingress or Gateway
+names, written by a host-role agent running inside that cluster. The agent
+generates the key in the cluster, sends only a CSR, writes `tls.crt` and `tls.key`,
+and reads the Secret back: the install succeeds only when the cluster holds the
+certificate just written. The key never leaves the cluster and the control plane
+never generates it, so the destination requires `"executor": "agent"`; one saved
+without it is refused. Custody records `key_origin=host_agent` and
+`key_storage=kubernetes_secret`. When `verify_address` names the listener that
+serves the Secret, such as the ingress controller's Service, the agent then
+handshakes it and the signed host receipt records what it served. Without one the
+deploy is recorded as executed, not verified.
+
+```json
+{
+  "executor": "agent",
+  "required_agent_id": "<the cluster agent's UUID>",
+  "namespace": "payments",
+  "secret_name": "payments-web-tls",
+  "verify_address": "ingress-nginx-controller.ingress-nginx.svc:443",
+  "verify_server_name": "payments.example.com"
+}
+```
+
+Run the agent in the cluster with a host enrollment, `--relay-claim`, and a host
+exec profile (`--host-exec-profile`) that lists the namespaces it may write. It
+needs no host roots:
+
+```json
+{ "kubernetes_secrets": { "namespaces": ["payments", "edge"] } }
+```
+
+The agent reaches the cluster API through its pod's service account, which needs
+`get`, `create` and `update` on Secrets in those namespaces (a Role and RoleBinding
+in each). A target in a namespace the profile does not list is refused before any
+key is generated. A dry run checks the namespace, asks the cluster API for the
+Secret and probes `verify_address`; it writes nothing. Rollback restores the
+previous certificate and key into the Secret from the agent's encrypted predecessor
+ledger, so keep the agent's `--key` and `--host-rollback-dir` on persistent storage.
+
+A `k8s_ingress_gateway` discovery source bound to the agent creates these
+destinations for you, one per TLS block; see
+[Discovery and inventory](discovery-and-inventory.md).
+
 ### Activate Tomcat PEM certificates
 
 The `tomcat` destination writes the certificate and key paths already referenced
