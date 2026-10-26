@@ -75,3 +75,19 @@ func (c legacyTenantCipher) Seal(plaintext, aad []byte) ([]byte, error) {
 func (c legacyTenantCipher) Open(container, aad []byte) ([]byte, error) {
 	return seal.Open(c.wrapper, container, aad)
 }
+
+// transitTenantSealer seals each tenant's shared transit keyring (A125) under
+// the tenant's key domain, or the deployment KEK for a tenant that has not
+// migrated, the same way every other tenant-owned sealed value is protected.
+type transitTenantSealer struct {
+	access tenantseal.Access
+	legacy seal.KeyWrapper
+}
+
+func (t transitTenantSealer) SealTenantKeyring(ctx context.Context, tenantID string, plaintext, aad []byte) ([]byte, error) {
+	return sealTenantValue(ctx, t.access, t.legacy, tenantID, plaintext, aad)
+}
+
+func (t transitTenantSealer) OpenTenantKeyring(ctx context.Context, tenantID string, sealed, aad []byte) ([]byte, error) {
+	return openTenantValue(ctx, t.access, t.legacy, tenantID, sealed, aad)
+}

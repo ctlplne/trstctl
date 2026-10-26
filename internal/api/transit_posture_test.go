@@ -149,3 +149,22 @@ func TestTransitRecoveryRoutesAreRegisteredReadOnlyAndAuthenticated(t *testing.T
 		}
 	}
 }
+
+// A125: a keyring every replica shares reports itself as shared, ready for
+// recovery, and says that keys work on every replica.
+func TestTransitPostureReportsASharedKeyring(t *testing.T) {
+	handler := api.New(nil, nil, nil, api.WithInsecureHeaderResolver(), api.WithTransitPosture(func(context.Context, string) api.TransitRuntimePosture {
+		return api.TransitRuntimePosture{Served: true, PersistenceConfigured: true, Shared: true}
+	}))
+	rec := transitRead(t, handler, "/api/v1/transit/status", transitPostureTenant)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("posture status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var got api.TransitPosture
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Transit.RecoveryReady || got.Transit.RestoreState != "shared" || !strings.Contains(got.Transit.Detail, "every replica") {
+		t.Fatalf("shared transit posture = %+v", got.Transit)
+	}
+}

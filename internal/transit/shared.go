@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -345,4 +346,53 @@ func wipeKeyBytes(keys [][]byte) {
 	for _, b := range keys {
 		secret.Wipe(b)
 	}
+}
+
+// ImportFileKeyring copies each tenant's keyring from a file checkpoint a
+// previous version wrote into the shared store, for tenants that have no row
+// yet, and returns the tenants it imported (A125). The file is left as it is:
+// it remains the operator's copy, and a tenant that already has a row keeps it.
+func ImportFileKeyring(ctx context.Context, file *Store, store TenantKeyringStore, sealer TenantSealer) ([]string, error) {
+	if file == nil {
+		return nil, nil
+	}
+	if store == nil || sealer == nil {
+		return nil, errors.New("transit: importing a keyring file needs a store and a sealer")
+	}
+	found, err := file.HasState()
+	if err != nil || !found {
+		return nil, err
+	}
+	staged := NewService(nil)
+	defer staged.Destroy()
+	if err := file.Load(staged); err != nil {
+		return nil, err
+	}
+	staged.mu.Lock()
+	tenants := make([]string, 0, len(staged.rings))
+	for tenantID := range staged.rings {
+		tenants = append(tenants, tenantID)
+	}
+	staged.mu.Unlock()
+	sort.Strings(tenants)
+	p := &sharedPersistence{store: store, sealer: sealer, tenants: map[string]*tenantSync{}}
+	var imported []string
+	for _, tenantID := range tenants {
+		if _, _, exists, err := store.LoadTransitKeyring(ctx, tenantID); err != nil {
+			return imported, fmt.Errorf("transit: import the keyring file: %w", err)
+		} else if exists {
+			continue
+		}
+		ts := p.sync(tenantID)
+		ts.mu.Lock()
+		saved, err := staged.saveLocked(ctx, p, tenantID, ts, staged.ring(tenantID))
+		ts.mu.Unlock()
+		if err != nil {
+			return imported, fmt.Errorf("transit: import the keyring file: %w", err)
+		}
+		if saved {
+			imported = append(imported, tenantID)
+		}
+	}
+	return imported, nil
 }

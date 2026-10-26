@@ -45,11 +45,14 @@ type TransitRuntimePosture struct {
 	Served                bool
 	PersistenceConfigured bool
 	SealedStateFound      bool
-	KMIPConfigured        bool
-	KMIPServed            bool
-	KMIPListening         bool
-	KMIPTenantBound       bool
-	KMIPAddress           string
+	// Shared is true when each tenant's keyring is a sealed database row
+	// every replica shares (A125).
+	Shared          bool
+	KMIPConfigured  bool
+	KMIPServed      bool
+	KMIPListening   bool
+	KMIPTenantBound bool
+	KMIPAddress     string
 }
 
 // TransitPostureProvider reads only assembled runtime state for the authenticated
@@ -280,6 +283,10 @@ func buildTransitPosture(runtime TransitRuntimePosture) TransitPosture {
 		if runtime.SealedStateFound {
 			restoreState = "restored"
 			transitDetail = "The running service restored its sealed keyring during startup. Older AEAD versions remain available for decryption; signature verification uses the public DER returned when the signature was created."
+		}
+		if runtime.Shared {
+			restoreState = "shared"
+			transitDetail = "Each tenant's keyring is a sealed row in the database that every replica shares, saved after every create or rotate. A key created or rotated on one replica works on all of them and survives restarts. No key material is uploaded through the browser."
 		}
 	}
 

@@ -713,6 +713,9 @@ type Server struct {
 	transitStore         *transitpkg.Store
 	transitStateMu       sync.RWMutex
 	transitStateFound    bool
+	// transitShared is true when each tenant's keyring is a sealed row every
+	// replica shares (A125) rather than a file this process checkpoints.
+	transitShared bool
 	// codeSignGate is the production adapter over the live OPA evaluator and
 	// distinct-approver store assembled by configurePolicyGate.
 	codeSignGate     codesign.Gate
@@ -1854,6 +1857,35 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 		return nil, nil
 	}
 	s.transit = transitpkg.NewService(audit.NewAuditor(d.Log))
+	// A125: with the database and tenant key protection in place, each
+	// tenant's keyring is a sealed row every replica shares, so a key created
+	// or rotated on one replica works on all of them and survives restarts. A
+	// keyring a previous version checkpointed to keyring_dir is imported once
+	// for tenants that have no row; the file is left as the operator's copy.
+	if d.Store != nil && (d.TenantCrypto != nil || d.KEK != nil) {
+		sealer := transitTenantSealer{access: d.TenantCrypto, legacy: d.KEK}
+		if err := s.transit.SetSharedPersistence(d.Store, sealer); err != nil {
+			return nil, fmt.Errorf("server: shared transit keyring: %w", err)
+		}
+		if file := transitpkg.NewStore(d.TransitKeyringDir, d.KEK); file != nil {
+			importCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			imported, err := transitpkg.ImportFileKeyring(importCtx, file, d.Store, sealer)
+			cancel()
+			if err != nil {
+				// The same rule as a file that cannot be opened: refusing to
+				// start keeps the operator's sealed copy and every ciphertext
+				// recoverable.
+				return nil, fmt.Errorf("server: import the sealed transit keyring file: %w", err)
+			}
+			if len(imported) > 0 && d.Logger != nil {
+				d.Logger.Info("imported the transit keyring file into the shared keyring", "tenants", len(imported))
+			}
+		}
+		s.transitStateMu.Lock()
+		s.transitShared = true
+		s.transitStateMu.Unlock()
+		return s.transit, nil
+	}
 	// Durability for the transit keyring. Without it every key vanished on
 	// restart and anything encrypted with it became permanently undecryptable —
 	// a data-loss bug wearing the costume of a cache.
@@ -1899,7 +1931,7 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 
 func (s *Server) transitRuntimePosture(kmipEnabled bool, kmipTenantID, tenantID string) api.TransitRuntimePosture {
 	s.transitStateMu.RLock()
-	stateFound := s.transitStateFound
+	stateFound, shared := s.transitStateFound, s.transitShared
 	s.transitStateMu.RUnlock()
 	s.kmipStateMu.RLock()
 	listening := s.kmipListening
@@ -1910,8 +1942,8 @@ func (s *Server) transitRuntimePosture(kmipEnabled bool, kmipTenantID, tenantID 
 		address = s.kmip.Addr()
 	}
 	return api.TransitRuntimePosture{
-		Served: s.transit != nil, PersistenceConfigured: s.transitStore != nil,
-		SealedStateFound: stateFound, KMIPConfigured: tenantBound,
+		Served: s.transit != nil, PersistenceConfigured: s.transitStore != nil || shared,
+		SealedStateFound: stateFound, Shared: shared, KMIPConfigured: tenantBound,
 		KMIPServed: tenantBound && s.kmip != nil, KMIPListening: tenantBound && listening,
 		KMIPTenantBound: tenantBound, KMIPAddress: address,
 	}
