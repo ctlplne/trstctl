@@ -9,11 +9,16 @@ package f5test
 
 import (
 	"encoding/json"
+	"encoding/pem"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+
+	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 )
 
 // Chain is the cert/key pair a Client SSL profile references.
@@ -34,6 +39,10 @@ type Server struct {
 	keys     map[string]bool   // installed crypto key names
 	profiles map[string]Chain  // client-ssl profile -> bound chain
 	calls    int
+	// A122: keys the BIG-IP generated itself (key object -> key) and the CSRs
+	// it made with them (CSR object -> PEM). Only the CSR is ever readable.
+	deviceKeys map[string]*crypto.LockedSigner
+	csrs       map[string][]byte
 }
 
 // New starts a fake BIG-IP requiring the given basic-auth credentials.
@@ -44,6 +53,9 @@ func New(user, pass string) *Server {
 		certs:    map[string]bool{},
 		keys:     map[string]bool{},
 		profiles: map[string]Chain{},
+
+		deviceKeys: map[string]*crypto.LockedSigner{},
+		csrs:       map[string][]byte{},
 	}
 	s.srv = httptest.NewServer(http.HandlerFunc(s.handle))
 	return s
@@ -57,7 +69,23 @@ func (s *Server) URL() string { return s.srv.URL }
 func (s *Server) Client() *http.Client { return s.srv.Client() }
 
 // Close shuts the server down.
-func (s *Server) Close() { s.srv.Close() }
+func (s *Server) Close() {
+	s.srv.Close()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for name, key := range s.deviceKeys {
+		key.Destroy()
+		delete(s.deviceKeys, name)
+	}
+}
+
+// DeviceKey reports whether the BIG-IP generated the key object name itself.
+func (s *Server) DeviceKey(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.deviceKeys[name]
+	return ok
+}
 
 // Uploaded returns the bytes uploaded under filename.
 func (s *Server) Uploaded(filename string) ([]byte, bool) {
@@ -147,12 +175,41 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		s.ok(w, map[string]any{"name": cmd.Name})
 
 	case r.Method == http.MethodPost && r.URL.Path == "/mgmt/tm/sys/crypto/key":
-		var cmd struct{ Name string }
+		var cmd struct {
+			Name                   string              `json:"name"`
+			KeyType                string              `json:"keyType"`
+			CurveName              string              `json:"curveName"`
+			CommonName             string              `json:"commonName"`
+			SubjectAlternativeName string              `json:"subjectAlternativeName"`
+			Options                []map[string]string `json:"options"`
+		}
 		_ = json.Unmarshal(body, &cmd)
+		csrName := ""
+		for _, option := range cmd.Options {
+			if v, ok := option["gen-csr"]; ok {
+				csrName = v
+			}
+		}
+		if csrName != "" {
+			s.generateKey(w, cmd.Name, csrName, cmd.KeyType, cmd.CurveName, cmd.CommonName, cmd.SubjectAlternativeName)
+			return
+		}
 		s.mu.Lock()
 		s.keys[cmd.Name] = true
 		s.mu.Unlock()
 		s.ok(w, map[string]any{"name": cmd.Name})
+
+	// A122: the CSR the BIG-IP generated with a key.
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/csr/"):
+		name := strings.TrimPrefix(r.URL.Path, "/mgmt/tm/sys/crypto/csr/")
+		s.mu.Lock()
+		csr, exists := s.csrs[name]
+		s.mu.Unlock()
+		if !exists {
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+			return
+		}
+		s.ok(w, map[string]any{"name": name, "csrPem": string(csr)})
 
 	// D4: reading a crypto object. Rollback checks the predecessor is present
 	// before re-binding to it, and a double that answered 200 to everything
@@ -238,14 +295,72 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"message":"malformed certKeyChain"}`, http.StatusBadRequest)
 			return
 		}
+		chain := Chain{Cert: patch.CertKeyChain[0].Cert, Key: patch.CertKeyChain[0].Key}
 		s.mu.Lock()
-		s.profiles[profile] = Chain{Cert: patch.CertKeyChain[0].Cert, Key: patch.CertKeyChain[0].Key}
-		s.mu.Unlock()
+		defer s.mu.Unlock()
+		if key, device := s.deviceKeys[chain.Key]; device {
+			// The BIG-IP refuses a chain whose certificate is not the key's.
+			info, err := certinfo.Inspect(s.uploads[chain.Cert])
+			if err != nil || info.SPKISHA256 != crypto.SHA256Hex(key.Public().DER) {
+				http.Error(w, `{"message":"certificate and key do not match"}`, http.StatusBadRequest)
+				return
+			}
+		}
+		s.profiles[profile] = chain
 		s.ok(w, map[string]any{"name": profile})
 
 	default:
 		http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
 	}
+}
+
+// generateKey creates a key object the BIG-IP holds and a CSR for it (A122).
+// An existing key object is a conflict, as on the device.
+func (s *Server) generateKey(w http.ResponseWriter, keyName, csrName, keyType, curve, commonName, sans string) {
+	if keyName == "" || keyType != "ec-private" || curve != "prime256v1" {
+		http.Error(w, `{"message":"an ec-private prime256v1 key name is required"}`, http.StatusBadRequest)
+		return
+	}
+	tmpl := crypto.CertificateRequestTemplate{CommonName: commonName}
+	for _, entry := range strings.Split(sans, ",") {
+		entry = strings.TrimSpace(entry)
+		switch {
+		case entry == "":
+		case strings.HasPrefix(entry, "DNS:"):
+			tmpl.DNSNames = append(tmpl.DNSNames, strings.TrimPrefix(entry, "DNS:"))
+		case strings.HasPrefix(entry, "IP Address:"):
+			ip := net.ParseIP(strings.TrimPrefix(entry, "IP Address:"))
+			if ip == nil {
+				http.Error(w, `{"message":"invalid IP address"}`, http.StatusBadRequest)
+				return
+			}
+			tmpl.IPAddresses = append(tmpl.IPAddresses, ip)
+		default:
+			http.Error(w, `{"message":"unsupported subject alternative name"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.keys[keyName] {
+		http.Error(w, `{"message":"key already exists"}`, http.StatusConflict)
+		return
+	}
+	key, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		http.Error(w, `{"message":"key generation failed"}`, http.StatusInternalServerError)
+		return
+	}
+	csrDER, err := crypto.CreateCertificateRequest(tmpl, key)
+	if err != nil {
+		key.Destroy()
+		http.Error(w, `{"message":"CSR could not be created"}`, http.StatusBadRequest)
+		return
+	}
+	s.keys[keyName] = true
+	s.deviceKeys[keyName] = key
+	s.csrs[csrName] = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+	s.ok(w, map[string]any{"name": keyName})
 }
 
 func (s *Server) ok(w http.ResponseWriter, body any) {

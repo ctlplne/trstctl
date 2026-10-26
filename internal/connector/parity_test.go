@@ -51,7 +51,9 @@ func TestTheParityProgramReportsExactlyWhatIsBuilt(t *testing.T) {
 		// pair. A deploy that reaches only the active node fails rather than
 		// reporting success, and a readback reports the pair serving only when
 		// both peers are bound to the deployed certificate.
-		"f5": {migrated: true, disposition: ParityDispositionMigrated, outstanding: []ParityGate{ParityGateDeviceCSR}},
+		// A122: a single BIG-IP generates its own key and CSR, so the
+		// device-generated CSR gate is met (an HA pair keeps sealed keys).
+		"f5": {migrated: true, disposition: ParityDispositionMigrated},
 		// Device-proven and relay-proven, but they cannot be asked what they
 		// hold or told to put back what they held. Migrating them would remove
 		// the control plane's fallback without providing the recovery path that

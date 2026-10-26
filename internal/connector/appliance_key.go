@@ -81,6 +81,7 @@ func ApplianceKeyObjectName(targetID string, jobID int64) string {
 // checked against the code in both directions: a family listed here must
 // implement ApplianceKeyGenerator, and one that implements it must be listed.
 var applianceKeyFamilies = []string{
+	"f5",
 	"netscaler",
 }
 

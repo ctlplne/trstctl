@@ -15,6 +15,9 @@ import (
 // string: anything else is refused rather than read as consent or ignored.
 func TestKeyGenerationOnTheApplianceIsDeclaredExactly(t *testing.T) {
 	t.Parallel()
+	if err := custody.ValidateKeyGeneration("f5", []byte(`{"endpoint":"https://bigip.example.test","key_generation":"appliance"}`)); err != nil {
+		t.Fatalf("a single BIG-IP generating its key was refused: %v", err)
+	}
 	marked := []byte(`{"endpoint":"https://ns.example.test","key_generation":"appliance"}`)
 	if !custody.TargetGeneratesKeyOnAppliance("netscaler", marked) {
 		t.Fatal("a NetScaler target marked key_generation=appliance does not generate on the appliance")
@@ -40,6 +43,7 @@ func TestKeyGenerationOnTheApplianceIsDeclaredExactly(t *testing.T) {
 		"another value":               {"netscaler", `{"key_generation":"device"}`, `"appliance"`},
 		"a boolean is not consent":    {"netscaler", `{"key_generation":true}`, "string"},
 		"control plane is not a mode": {"netscaler", `{"key_generation":"control_plane"}`, `"appliance"`},
+		"an F5 HA pair":               {"f5", `{"key_generation":"appliance","peer_endpoint":"https://bigip-b.example.test"}`, "HA pair"},
 	} {
 		if custody.TargetGeneratesKeyOnAppliance(tc.family, []byte(tc.cfg)) {
 			t.Errorf("%s: generates on the appliance", name)

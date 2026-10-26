@@ -23,11 +23,12 @@ const KeyGenerationAppliance = "appliance"
 
 // TargetGeneratesKeyOnAppliance reports whether a target's subject key is
 // generated on the appliance: the target declares key_generation=appliance
-// and its family can ask its appliance for a key. Absent, unparseable or any
-// other value means no, the same direction TargetExecutorIsAgent fails in.
+// and the declaration is one the target can honor. Absent, unparseable, any
+// other value or a refused declaration means no, the same direction
+// TargetExecutorIsAgent fails in.
 func TargetGeneratesKeyOnAppliance(family string, cfg []byte) bool {
 	value, err := targetKeyGeneration(cfg)
-	return err == nil && value == KeyGenerationAppliance && connector.ApplianceKeyFamily(family)
+	return err == nil && value == KeyGenerationAppliance && ValidateKeyGeneration(family, cfg) == nil
 }
 
 // ValidateKeyGeneration refuses a key_generation declaration the target cannot
@@ -49,8 +50,25 @@ func ValidateKeyGeneration(family string, cfg []byte) error {
 		return fmt.Errorf("connector: a %s target cannot generate its key on the appliance; %s=%q is available for %s. "+
 			"Remove it to keep control-plane keys sealed to the deploy",
 			family, KeyGenerationConfigKey, KeyGenerationAppliance, strings.Join(connector.ApplianceKeyFamilies(), ", "))
+	case family == "f5" && configString(cfg, "peer_endpoint") != "":
+		// Each BIG-IP of a pair keeps its own crypto objects, so each would
+		// generate its own key, and one certificate cannot carry two keys.
+		return fmt.Errorf("connector: an F5 HA pair cannot generate its key on the appliance: each peer would hold a different "+
+			"key for one certificate. Remove %s to keep control-plane keys sealed to the deploy, which reaches both peers",
+			KeyGenerationConfigKey)
 	}
 	return nil
+}
+
+// configString reads a string field of a target config, or "" when it is
+// absent, empty or not a string.
+func configString(cfg []byte, key string) string {
+	var fields map[string]any
+	if json.Unmarshal(cfg, &fields) != nil {
+		return ""
+	}
+	value, _ := fields[key].(string)
+	return strings.TrimSpace(value)
 }
 
 // targetKeyGeneration reads the declared value. Absent, null and empty are no

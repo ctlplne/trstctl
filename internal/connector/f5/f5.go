@@ -138,6 +138,11 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 	base := connector.RollbackObjectName(c.name, rb.PredecessorFingerprint)
 	certName := base + ".crt"
 	keyName := base + ".key"
+	if object := strings.TrimSpace(rb.PredecessorKeyObject); object != "" {
+		// A122: the BIG-IP generated this key into a job-named object. Reading
+		// a key object returns its metadata, never the key.
+		keyName = object + ".key"
+	}
 
 	if err := c.mustExist(ctx, sb, "/mgmt/tm/sys/crypto/cert/"+url.PathEscape(certName)); err != nil {
 		return fmt.Errorf("f5: predecessor certificate %q: %w", certName, err)
