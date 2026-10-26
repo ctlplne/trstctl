@@ -121,6 +121,9 @@ import type {
   AttestedSVIDRequest,
   AuditAnchoringStatus,
   AuditBundle,
+  TSACertificate,
+  TSACertificateList,
+  TSARotation,
   AuditFeed,
   AuditFeedList,
   AuditFeedPreview,
@@ -1027,6 +1030,9 @@ export type {
   APITokenList,
   AuditAnchoringStatus,
   AuditBundle,
+  TSACertificate,
+  TSACertificateList,
+  TSARotation,
   AuditFeed,
   AuditFeedList,
   AuditFeedPreview,
@@ -2171,6 +2177,9 @@ export interface Api {
   exportAudit(options?: AuditQuery, signal?: AbortSignal): Promise<AuditBundle>;
   auditFeeds(): Promise<AuditFeedList>;
   auditAnchors(): Promise<AuditAnchoringStatus>;
+  tsaCertificates(): Promise<TSACertificateList>;
+  rotateTSACertificate(revokePreviousReason?: string): Promise<TSARotation>;
+  revokeTSACertificate(serial: string, reason: string): Promise<TSACertificate>;
   previewAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeedPreview>;
   putAuditFeed(id: string, input: AuditFeedRequest): Promise<AuditFeed>;
   // J1: download a record stream (ndjson/csv/splunk-hec/sentinel) as a file.
@@ -2954,6 +2963,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   exportAudit: (options, signal) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
   auditAnchors: () => req<AuditAnchoringStatus>("/api/v1/audit/anchors"),
+  tsaCertificates: () => req<TSACertificateList>("/api/v1/protocols/tsa/certificates"),
+  rotateTSACertificate: (revokePreviousReason) =>
+    mutate<TSARotation>("POST", "/api/v1/protocols/tsa/certificates/rotate", revokePreviousReason ? { revoke_previous_reason: revokePreviousReason } : {}),
+  revokeTSACertificate: (serial, reason) =>
+    mutate<TSACertificate>("POST", `/api/v1/protocols/tsa/certificates/${encodeURIComponent(serial)}/revoke`, { reason }),
   previewAuditFeed: (id, input) => postRead<AuditFeedPreview>(`/api/v1/audit/feeds/${encodeURIComponent(id)}/preview`, input),
   putAuditFeed: (id, input) => mutate<AuditFeed>("PUT", `/api/v1/audit/feeds/${encodeURIComponent(id)}`, input),
   downloadAuditExport: (options, format, signal) => downloadAuditExportImpl(options, format, signal),

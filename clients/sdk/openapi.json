@@ -5057,8 +5057,11 @@
             "type": "string"
           },
           "schema_version": {
-            "description": "1, or 2 when anchor_log is present.",
+            "description": "1, or 2 when anchor_log or validation is present.",
             "type": "integer"
+          },
+          "validation": {
+            "$ref": "#/components/schemas/AuditValidation"
           }
         },
         "required": [
@@ -5463,6 +5466,23 @@
         ],
         "type": "object"
       },
+      "AuditTSAStatus": {
+        "properties": {
+          "ocsp": {
+            "description": "DER OCSP response from the TSA's issuing CA.",
+            "format": "byte",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "serial",
+          "ocsp"
+        ],
+        "type": "object"
+      },
       "AuditTimestampInfo": {
         "properties": {
           "gen_time": {
@@ -5519,6 +5539,25 @@
           "signature",
           "tsa_cert",
           "der"
+        ],
+        "type": "object"
+      },
+      "AuditValidation": {
+        "properties": {
+          "captured_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "tsa_status": {
+            "items": {
+              "$ref": "#/components/schemas/AuditTSAStatus"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tsa_status",
+          "captured_at"
         ],
         "type": "object"
       },
@@ -37245,6 +37284,78 @@
         ],
         "type": "object"
       },
+      "TSACertificate": {
+        "properties": {
+          "cert_pem": {
+            "type": "string"
+          },
+          "cert_sha256": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reason": {
+            "description": "RFC 5280 revocation reason name.",
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "description": "Lowercase hex serial, as the CA's CRL and OCSP responder name it.",
+            "type": "string"
+          },
+          "state": {
+            "description": "active: tokens are issued under it; retired: rotated out and still valid for the tokens it signed; revoked.",
+            "enum": [
+              "active",
+              "retired",
+              "revoked"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "serial",
+          "state",
+          "not_before",
+          "not_after",
+          "cert_sha256",
+          "cert_pem"
+        ],
+        "type": "object"
+      },
+      "TSACertificateList": {
+        "properties": {
+          "crl": {
+            "description": "Where the issuing CA publishes the CRL that lists revoked TSA certificates.",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TSACertificate"
+            },
+            "type": "array"
+          },
+          "ocsp": {
+            "description": "The issuing CA's OCSP responder for this tenant.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "crl",
+          "ocsp"
+        ],
+        "type": "object"
+      },
       "TSAQualification": {
         "properties": {
           "blockers": {
@@ -37338,6 +37449,42 @@
           "label",
           "passed",
           "detail"
+        ],
+        "type": "object"
+      },
+      "TSARevokeRequest": {
+        "properties": {
+          "reason": {
+            "description": "RFC 5280 revocation reason name.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
+      "TSARotateRequest": {
+        "properties": {
+          "revoke_previous_reason": {
+            "description": "Optional RFC 5280 reason (keyCompromise, superseded, cessationOfOperation, ...) to revoke the outgoing certificate with; omit to retire it, still valid for the timestamps it signed.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TSARotation": {
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/TSACertificate"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/TSACertificate"
+          }
+        },
+        "required": [
+          "current",
+          "previous"
         ],
         "type": "object"
       },
@@ -65155,6 +65302,198 @@
         ],
         "summary": "Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/protocols/tsa/certificates": {
+      "get": {
+        "operationId": "listTSACertificates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TSACertificateList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the timestamp authority's certificates and where relying parties check their status",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/protocols/tsa/certificates/rotate": {
+      "post": {
+        "operationId": "rotateTSACertificate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TSARotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TSARotation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Move the timestamp authority onto a fresh signer-held key and certificate, optionally revoking the outgoing one",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/protocols/tsa/certificates/{serial}/revoke": {
+      "post": {
+        "operationId": "revokeTSACertificate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "TSA certificate serial, lowercase hex",
+            "in": "path",
+            "name": "serial",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TSARevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TSACertificate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a timestamp authority certificate the authority no longer signs under",
+        "x-trstctl-permission": "issuers:write"
       }
     },
     "/api/v1/protocols/tsa/qualification": {

@@ -178,6 +178,9 @@ type CRLInfo struct {
 	RevokedSerials       []string
 	HasDeltaCRLIndicator bool
 	DeltaBaseNumber      int64
+	// Revoked carries each entry's revocation time and RFC 5280 reason code,
+	// in the order of RevokedSerials.
+	Revoked []RevokedSerial
 }
 
 // CRLOptions carries optional RFC 5280 CRL extensions that callers can request
@@ -761,6 +764,7 @@ func ParseCRL(crlDER, issuerDER []byte) (CRLInfo, error) {
 	}
 	for _, e := range rl.RevokedCertificateEntries {
 		info.RevokedSerials = append(info.RevokedSerials, e.SerialNumber.Text(16))
+		info.Revoked = append(info.Revoked, RevokedSerial{Serial: e.SerialNumber.Text(16), RevokedAt: e.RevocationTime, Reason: e.ReasonCode})
 	}
 	return info, nil
 }

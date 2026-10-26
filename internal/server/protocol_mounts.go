@@ -77,6 +77,7 @@ type servedProtocols struct {
 	scep               http.Handler
 	cmp                *cmp.Server
 	tsa                *tsa.Authority
+	tsaState           *tsaCertificateState
 	ssh                *sshProtocol
 	spiffe             *spiffeProtocol
 
@@ -205,6 +206,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			return nil, fmt.Errorf("server: build TSA: %w", err)
 		}
 		sp.tsa = authority
+		sp.tsaState = &tsaCertificateState{certFile: cfg.TSACertFile}
 		sp.names = append(sp.names, "tsa")
 	}
 
@@ -745,14 +747,17 @@ func (s *Server) buildTSA(ctx context.Context, tenantID, certFile string) (*tsa.
 		return nil, errors.New("signer is required")
 	}
 	c := s.signer.Client()
-	tsaSigner, err := c.SignerForHandleWithPurpose(ctx, tsaSignerHandle, signing.PurposeGeneric)
+	// A145: a rotated TSA signs under the handle its certificate was
+	// registered with.
+	handle := s.activeTSAHandle(ctx, tenantID, certFile)
+	tsaSigner, err := c.SignerForHandleWithPurpose(ctx, handle, signing.PurposeGeneric)
 	replacedKey := false
 	if err != nil {
-		generated, genErr := c.GenerateConstrainedKeyHandle(ctx, crypto.RSA2048, tsaSignerHandle,
+		generated, genErr := c.GenerateConstrainedKeyHandle(ctx, crypto.RSA2048, handle,
 			[]signing.KeyPurpose{signing.PurposeGeneric}, signing.PurposeGeneric)
 		if genErr != nil {
 			if status.Code(genErr) == codes.AlreadyExists {
-				generated, genErr = c.SignerForHandleWithPurpose(ctx, tsaSignerHandle, signing.PurposeGeneric)
+				generated, genErr = c.SignerForHandleWithPurpose(ctx, handle, signing.PurposeGeneric)
 			}
 			if genErr != nil {
 				return nil, fmt.Errorf("provision timestamping key in signer: %w", genErr)
@@ -765,6 +770,11 @@ func (s *Server) buildTSA(ctx context.Context, tenantID, certFile string) (*tsa.
 	certDER, err := s.tsaCertificate(ctx, tsaSigner, certFile, replacedKey)
 	if err != nil {
 		return nil, err
+	}
+	// The CA's CRL and OCSP responder answer for the TSA certificate only
+	// once its ledger holds it.
+	if err := s.registerTSACertificate(ctx, tenantID, handle, certDER); err != nil {
+		return nil, fmt.Errorf("register the TSA certificate in the CA ledger: %w", err)
 	}
 	return tsa.New(tsa.Config{
 		TenantID:   tenantID,

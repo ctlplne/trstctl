@@ -37,3 +37,24 @@ func NormalizeCertificateDER(raw []byte) ([]byte, error) {
 	}
 	return append([]byte(nil), block.Bytes...), nil
 }
+
+// NormalizeCRLDER accepts one CRL encoded as PEM ("X509 CRL") or DER and
+// returns its DER bytes, with the same strictness as NormalizeCertificateDER.
+// ParseCRL then verifies it against its issuer.
+func NormalizeCRLDER(raw []byte) ([]byte, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, errors.New("crypto: CRL is empty")
+	}
+	if !bytes.HasPrefix(trimmed, []byte("-----BEGIN")) {
+		return append([]byte(nil), raw...), nil
+	}
+	block, rest := pem.Decode(trimmed)
+	if block == nil || block.Type != "X509 CRL" || len(block.Bytes) == 0 {
+		return nil, errors.New("crypto: PEM CRL must contain one X509 CRL block")
+	}
+	if len(bytes.TrimSpace(rest)) != 0 {
+		return nil, errors.New("crypto: PEM CRL contains trailing or multiple blocks")
+	}
+	return append([]byte(nil), block.Bytes...), nil
+}

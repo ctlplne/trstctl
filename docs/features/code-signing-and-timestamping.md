@@ -195,6 +195,37 @@ It calls that same read-only qualification surface. It sends no request body or
 mutation headers and cannot issue a timestamp; use the OpenSSL flow above for the
 real RFC 3161 proof.
 
+### Rotating and revoking the TSA certificate
+
+Every certificate the TSA signs under is an entry of its issuing CA's ledger, so
+the CA's CRL (`/crl/<tenant>.crl`) and OCSP responder (`/ocsp/<tenant>`) answer
+for it like any other certificate the CA issued. **Protocols → TSA certificates**
+(or `trstctl protocols tsa certificates list`) shows each one as active, retired
+or revoked.
+
+Rotate when the key must be replaced:
+
+```console
+echo '{"revoke_previous_reason":"keyCompromise"}' > rotate.json
+trstctl protocols tsa certificates rotate -f rotate.json
+```
+
+A new key is generated in the isolated signer under its own handle, certified by
+the same CA, persisted to `protocols.tsa_cert_file`, and used for every later
+timestamp. With a reason, the outgoing certificate is revoked and the CRL is
+published again; without one it is retired and stays valid for the timestamps it
+signed. A certificate rotated out earlier can be revoked later with
+`trstctl protocols tsa certificates revoke <serial> -f reason.json`. The active
+certificate cannot be revoked in place — rotate instead, so the TSA never signs
+under a revoked certificate. Both changes need `issuers:write` and are served only
+to the TSA's own tenant.
+
+Audit exports carry the CA's OCSP answer for every TSA certificate their
+timestamps rely on, and `trstctl audit verify --tsa-root ...` checks it: a
+certificate revoked for key or CA compromise refuses every timestamp it signed,
+one revoked for another reason refuses only the timestamps at or after its
+revocation, and `--tsa-crl` lets an auditor bring a fresher CRL.
+
 ## Preview, execute, recover, prove
 
 The console and headless client now use the same two-step safety contract:

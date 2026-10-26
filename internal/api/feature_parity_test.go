@@ -305,8 +305,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// resume) raised it to 540, mapped onto F4.
 	// A147's continuous audit anchoring status raised it to 541, mapped onto
 	// the audit row.
-	if len(out) != 541 {
-		t.Fatalf("OpenAPI operationIds = %d, want 541", len(out))
+	// A145's TSA certificate list, rotation and revocation raised it to 544,
+	// mapped onto F51.
+	if len(out) != 544 {
+		t.Fatalf("OpenAPI operationIds = %d, want 544", len(out))
 	}
 	return out
 }

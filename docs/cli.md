@@ -247,6 +247,19 @@ trstctl-cli audit verify --artifact later.ndjson --audit-jwks audit.jwks.json \
 `anchor_log_from` is the earlier head's `tree_size`; the export then proves the
 anchor log extends it.
 
+Exports also carry the issuing CA's OCSP answer for every TSA certificate their
+timestamps rely on; the receipt's `tsa_revocation` lists each certificate's
+status. Fetch the CA's current CRL while connected and pass it with `--tsa-crl` to
+see revocations recorded after the export; `--require-tsa-revocation` refuses a
+TSA certificate whose status no evidence issued after its newest timestamp
+establishes:
+
+```bash
+curl -fsS "$TRSTCTL_SERVER/crl/<tenant>.crl" -o tsa-root.crl
+trstctl-cli audit verify --artifact audit.ndjson --tsa-root tsa-root.pem \
+  --tsa-crl tsa-root.crl --require-tsa-revocation
+```
+
 With `--tsa-root`, every `audit.anchored` record inside an unbroken run of
 records is re-checked and the receipt's `anchor_series` says how many anchors
 verified, how many cover only records before the window, and how many a later

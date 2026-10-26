@@ -13288,8 +13288,8 @@
             "served_state": "conditional",
             "backend_status": "conditional: served /tsa RFC 3161 protocol",
             "current_frontend_mapping": "operate: Protocols at /protocols serves a tenant-scoped, effect-free TSA readiness review for the exact mounted endpoint, active protocol profile, stable certificate, isolated signer, immutable audit path, and bounded capacity; it names secure recovery per failed gate, keeps retry available, and separates that preview from the stock OpenSSL query/POST/verification commands that perform the real RFC 3161 wire test.",
-            "target_gui_mapping": "Roadmap residual: dedicated TSA admin console for policy/certificate lifecycle and richer audit exploration; GA scope is the served RFC 3161 TSA responder plus the route-backed Protocols workflow evidence.",
-            "acceptance_test": "TestServedTSAOpenSSLTimestampOverHTTP proves the assembled /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits exactly the real issuance event, and then returns a ready effect-free qualification without issuing again. TestServedTSAQualificationMatchesEvalActivationGate proves the readiness oracle stays blocked while the exact served route is gated and becomes ready only after activation. API tests prove tenant scoping, authentication, zero-effect evidence, fail-closed checks, and secret-field exclusion; TSAOperatorPanel tests prove preview, exact readiness, malformed-response refusal, secure repair, retry, and the distinct stock-client wire boundary; TestTSAQualificationUsesAuthenticatedReadOnlyPOST proves the equivalent headless command. The dedicated TSA policy/certificate lifecycle admin console remains a roadmap residual.",
+            "target_gui_mapping": "Served: Protocols lists the TSA's certificates, rotates the TSA onto a fresh signer-held key with an optional revocation of the outgoing certificate, and revokes a certificate rotated out earlier. Roadmap residual: a dedicated TSA admin console for policy administration and richer audit exploration.",
+            "acceptance_test": "TestServedTSACertificateRotationAndRevocation proves the boot TSA certificate is in the CA ledger and answered for by OCSP, rotation with a reason persists a new signer-held certificate and lists the old serial on the published CRL, and the audit verifier refuses timestamps under the compromised certificate. TestServedTSAOpenSSLTimestampOverHTTP proves the assembled /tsa endpoint accepts an RFC 3161 TimeStampReq, returns an application/timestamp-reply TimeStampResp verified by OpenSSL, emits exactly the real issuance event, and then returns a ready effect-free qualification without issuing again. TestServedTSAQualificationMatchesEvalActivationGate proves the readiness oracle stays blocked while the exact served route is gated and becomes ready only after activation. API tests prove tenant scoping, authentication, zero-effect evidence, fail-closed checks, and secret-field exclusion; TSAOperatorPanel tests prove preview, exact readiness, malformed-response refusal, secure repair, retry, and the distinct stock-client wire boundary; TestTSAQualificationUsesAuthenticatedReadOnlyPOST proves the equivalent headless command. Certificate rotation and revocation are served; the dedicated TSA admin console for policy administration remains a roadmap residual.",
             "source_docs": [
                 "docs/features/code-signing-and-timestamping.md"
             ],
@@ -13297,19 +13297,29 @@
                 "/tsa",
                 "internal/tsa",
                 "internal/api/tsa_qualification.go",
-                "internal/server/tsa_qualification.go"
+                "internal/server/tsa_qualification.go",
+                "/api/v1/protocols/tsa/certificates",
+                "internal/api/tsa_certificates.go",
+                "internal/server/tsa_certificates.go"
             ],
             "source_frontend": [
                 "web/src/pages/Protocols.tsx",
-                "web/src/pages/protocols/TSAOperatorPanel.tsx"
+                "web/src/pages/protocols/TSAOperatorPanel.tsx",
+                "web/src/pages/protocols/TSACertificatesPanel.tsx"
             ],
             "status": "closed",
             "notes": "Qualified as a complete F51 vertical slice, with the live activation-oracle repair recorded on candidate 84aec9b894d2772d650ebad215aba5561ba4b99c after g98 proved the pre-repair check could report ready while the eval profile still returned HTTP 503. The readiness action is authenticated, tenant-derived, and effect-free; it cannot mint or accept a TimeStampReq. The real RFC 3161 operation remains POST /tsa and is proved with stock OpenSSL against the assembled signer-backed responder. Browser and headless operators share the same readiness oracle, every failed gate has a security-preserving repair and retry path, and the optional dedicated lifecycle admin console stays a named roadmap residual.",
             "api_surface": [
-                "qualifyTSA"
+                "qualifyTSA",
+                "listTSACertificates",
+                "rotateTSACertificate",
+                "revokeTSACertificate"
             ],
             "cli_surface": [
-                "protocols tsa qualify"
+                "protocols tsa qualify",
+                "protocols tsa certificates list",
+                "protocols tsa certificates rotate",
+                "protocols tsa certificates revoke"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -13337,7 +13347,10 @@
                 },
                 "cli": {
                     "evidence": [
-                        "The read-only `trstctl protocols tsa qualify` command calls the same authenticated, tenant-scoped readiness oracle as the console without a request body, idempotency key, CSRF header, timestamp issuance, signer call, or write."
+                        "The read-only `trstctl protocols tsa qualify` command calls the same authenticated, tenant-scoped readiness oracle as the console without a request body, idempotency key, CSRF header, timestamp issuance, signer call, or write.",
+                        "CLI command: protocols tsa certificates list",
+                        "CLI command: protocols tsa certificates rotate",
+                        "CLI command: protocols tsa certificates revoke"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -13347,7 +13360,10 @@
                 },
                 "api": {
                     "evidence": [
-                        "OpenAPI operationId qualifyTSA reads authenticated tenant-scoped in-memory posture only and returns zero writes, zero outside effects, and zero signer calls; the public RFC 3161 issuance surface remains POST /tsa."
+                        "OpenAPI operationId qualifyTSA reads authenticated tenant-scoped in-memory posture only and returns zero writes, zero outside effects, and zero signer calls; the public RFC 3161 issuance surface remains POST /tsa.",
+                        "OpenAPI operationId: listTSACertificates",
+                        "OpenAPI operationId: rotateTSACertificate",
+                        "OpenAPI operationId: revokeTSACertificate"
                     ],
                     "refs": [
                         "internal/api/feature_authz_test.go",
@@ -13389,7 +13405,8 @@
                 "rbac": {
                     "evidence": [
                         "protocol authz manifest maps tsa route/RPC patterns to an explicit public protocol rationale, tenant mapping, principal mapping, and admin enablement authority.",
-                        "The public POST /tsa protocol keeps its explicit public-protocol rationale; the API feature authz manifest maps the separate qualifyTSA operator preview to certs:read and the route derives tenant identity only from the authenticated request context."
+                        "The public POST /tsa protocol keeps its explicit public-protocol rationale; the API feature authz manifest maps the separate qualifyTSA operator preview to certs:read and the route derives tenant identity only from the authenticated request context.",
+                        "feature authz manifest maps api_surface operations to route permissions: listTSACertificates certs:read; rotateTSACertificate and revokeTSACertificate issuers:write, served only to the TSA's own tenant."
                     ],
                     "refs": [
                         "internal/api/feature_authz_test.go",

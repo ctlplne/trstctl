@@ -78,6 +78,18 @@ erasure rather than verified. `GET /api/v1/audit/anchors` (`trstctl-cli audit
 anchors`, Audit console) shows the cadence, the state and the tenant's recent
 anchors.
 
+**TSA revocation.** The TSA's certificates are entries of the issuing CA's ledger,
+so its CRL and OCSP responder answer for them, and an operator rotates the TSA
+onto a fresh key (`trstctl-cli protocols tsa certificates rotate`), revoking the
+outgoing certificate when it can no longer be trusted. Every export carries the
+CA's OCSP answer for each TSA certificate its timestamps rely on, and offline
+verification checks it against the pinned root: a certificate revoked for key or
+CA compromise refuses every timestamp it signed; one revoked for another reason
+refuses only the timestamps at or after its revocation. Bring a current CRL with
+`--tsa-crl` to see revocations recorded after the export, and use
+`--require-tsa-revocation` to refuse any certificate whose status cannot be
+established.
+
 **Anchor log.** The anchors are also kept, per tenant and in order, in an
 RFC 6962 Merkle log. Every export carries a head of that log signed with the
 audit export key and an inclusion proof for each anchor record it holds; with

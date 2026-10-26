@@ -196,7 +196,8 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 		if anchorErr != nil && anchor.Detail == "" {
 			anchor.Detail = "this export could not be externally anchored"
 		}
-		a.writeJSON(w, http.StatusOK, auditanchor.NewEvidenceEnvelope(signed, bundle.ChainHead, anchor, anchorLog))
+		validation := a.auditValidation(r.Context(), anchor, bundle.Records)
+		a.writeJSON(w, http.StatusOK, auditanchor.NewEvidenceEnvelope(signed, bundle.ChainHead, anchor, anchorLog, validation))
 		return
 	}
 
@@ -223,6 +224,7 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	if anchorErr != nil && anchor.Detail == "" {
 		anchor.Detail = "this export could not be externally anchored"
 	}
+	validation := a.auditValidation(r.Context(), anchor, recs)
 
 	w.Header().Set("Content-Type", format.ContentType())
 	w.Header().Set("X-Trstctl-Audit-Chain-Head", head)
@@ -236,7 +238,7 @@ func (a *API) exportAudit(w http.ResponseWriter, r *http.Request) {
 	// code it no longer has access to.
 	_ = auditanchor.WriteRecordStream(w, format, auditanchor.RecordStream{
 		Records: recs, PrevHash: prevHash, Head: head, Anchor: anchor, FullChain: audit.FullChain(q, recs),
-		AnchorLog: anchorLog,
+		AnchorLog: anchorLog, Validation: validation,
 	})
 }
 

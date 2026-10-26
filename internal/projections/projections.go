@@ -4443,6 +4443,8 @@ func (p *Projector) rebuildEventProjectionsThrough(
 var knownSchemaVersions = map[string]map[int]bool{
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
 	auditanchor.EventTypeAnchored:                 {auditanchor.AnchoredEventSchemaVersion: true},
+	EventTSACertificateRegistered:                 {1: true},
+	EventTSACertificateRevoked:                    {1: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
 	EventRestoreDrillRecorded:                     {1: true},
@@ -4815,6 +4817,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyAuditAnchorTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyTSACertificateTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {

@@ -1723,6 +1723,7 @@ AuditBundle = TypedDict(
         'chain_head': str,
         'format': str,
         'schema_version': int,
+        'validation': dict[str, Any],
     },
     total=False,
 )
@@ -1849,6 +1850,15 @@ AuditFeedRequest = TypedDict(
     total=False,
 )
 
+AuditTSAStatus = TypedDict(
+    'AuditTSAStatus',
+    {
+        'ocsp': str,
+        'serial': str,
+    },
+    total=False,
+)
+
 AuditTimestampInfo = TypedDict(
     'AuditTimestampInfo',
     {
@@ -1869,6 +1879,15 @@ AuditTimestampToken = TypedDict(
         'info': dict[str, Any],
         'signature': str,
         'tsa_cert': str,
+    },
+    total=False,
+)
+
+AuditValidation = TypedDict(
+    'AuditValidation',
+    {
+        'captured_at': str,
+        'tsa_status': list[dict[str, Any]],
     },
     total=False,
 )
@@ -12387,6 +12406,31 @@ SystemReadout = TypedDict(
     total=False,
 )
 
+TSACertificate = TypedDict(
+    'TSACertificate',
+    {
+        'cert_pem': str,
+        'cert_sha256': str,
+        'not_after': str,
+        'not_before': str,
+        'reason': str,
+        'revoked_at': str,
+        'serial': str,
+        'state': str,
+    },
+    total=False,
+)
+
+TSACertificateList = TypedDict(
+    'TSACertificateList',
+    {
+        'crl': str,
+        'items': list[dict[str, Any]],
+        'ocsp': str,
+    },
+    total=False,
+)
+
 TSAQualification = TypedDict(
     'TSAQualification',
     {
@@ -12413,6 +12457,31 @@ TSAQualificationCheck = TypedDict(
         'label': str,
         'passed': bool,
         'recovery': str,
+    },
+    total=False,
+)
+
+TSARevokeRequest = TypedDict(
+    'TSARevokeRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+TSARotateRequest = TypedDict(
+    'TSARotateRequest',
+    {
+        'revoke_previous_reason': str,
+    },
+    total=False,
+)
+
+TSARotation = TypedDict(
+    'TSARotation',
+    {
+        'current': dict[str, Any],
+        'previous': dict[str, Any],
     },
     total=False,
 )

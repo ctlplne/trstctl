@@ -205,6 +205,7 @@ type API struct {
 	kubernetesTrustRollouts            KubernetesTrustRolloutStore
 	auditAnchoringRuntime              func() AuditAnchoringRuntime
 	auditAnchorReader                  AuditAnchorReader
+	tsaCertificates                    TSACertificateManager
 	// featureObserver records a per-feature operation signal (COVER-009). It receives
 	// only closed-set, non-sensitive labels (feature, action, outcome) and the
 	// duration — never tenant or credential data. nil disables per-feature telemetry.
@@ -343,6 +344,7 @@ type config struct {
 	kubernetesTrustRollouts     KubernetesTrustRolloutStore
 	auditAnchoringRuntime       func() AuditAnchoringRuntime
 	auditAnchorReader           AuditAnchorReader
+	tsaCertificates             TSACertificateManager
 	featureObserver             func(feature, action, outcome string, seconds float64)
 	ownershipAttestationCadence time.Duration
 }
@@ -673,6 +675,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		kubernetesTrustRollouts:     cfg.kubernetesTrustRollouts,
 		auditAnchoringRuntime:       cfg.auditAnchoringRuntime,
 		auditAnchorReader:           cfg.auditAnchorReader,
+		tsaCertificates:             cfg.tsaCertificates,
 	}
 	a.bindLifecyclePolicy()
 	if a.auth != nil {
@@ -1064,6 +1067,7 @@ func (a *API) routes() []route {
 		pathInteger("version", "positive certificate profile version"),
 	}
 	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
+	tsaSerialPath := []param{pathString("serial", "TSA certificate serial, lowercase hex")}
 	nhiReviewItemPath := []param{pathUUID("id"), pathUUID("item_id")}
 	pqcCampaignFindingPath := []param{pathUUID("id"), pathUUID("finding_id")}
 	mcpToolPath := []param{pathString("tool", "MCP tool name")}
@@ -1191,6 +1195,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/setup/protocols", opID: "getProtocolProfile", summary: "Get the tenant-bound eval protocol profile status", handler: a.getProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", perm: authz.IssuersRead},
 		{method: "POST", path: "/api/v1/setup/protocols/activate", opID: "activateProtocolProfile", summary: "Activate the tenant-bound eval protocol profile", handler: a.activateProtocolProfile, resSchema: "ProtocolProfileStatus", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/protocols/cmp/qualification", opID: "qualifyCMP", summary: "Check the tenant-bound CMP endpoint without sending a PKIMessage, calling the signer, or writing state", handler: a.qualifyCMP, resSchema: "CMPQualification", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/protocols/tsa/certificates", opID: "listTSACertificates", summary: "List the timestamp authority's certificates and where relying parties check their status", handler: a.listTSACertificates, resSchema: "TSACertificateList", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/protocols/tsa/certificates/rotate", opID: "rotateTSACertificate", summary: "Move the timestamp authority onto a fresh signer-held key and certificate, optionally revoking the outgoing one", handler: a.rotateTSACertificate, reqSchema: "TSARotateRequest", resSchema: "TSARotation", successCode: "200", mutation: true, perm: authz.IssuersWrite},
+		{method: "POST", path: "/api/v1/protocols/tsa/certificates/{serial}/revoke", opID: "revokeTSACertificate", summary: "Revoke a timestamp authority certificate the authority no longer signs under", handler: a.revokeTSACertificate, pathParams: tsaSerialPath, reqSchema: "TSARevokeRequest", resSchema: "TSACertificate", successCode: "200", mutation: true, perm: authz.IssuersWrite},
 		{method: "POST", path: "/api/v1/protocols/tsa/qualification", opID: "qualifyTSA", summary: "Check tenant-bound TSA readiness without sending a TimeStampReq, calling the signer, or writing state", handler: a.qualifyTSA, resSchema: "TSAQualification", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/protocols/spiffe/qualification", opID: "qualifySPIFFE", summary: "Check the tenant-bound SPIFFE Workload API without dialing the socket, requesting an SVID, calling the signer, or writing state", handler: a.qualifySPIFFE, resSchema: "SPIFFEQualification", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/issuers/{id}", opID: "getIssuer", summary: "Get an issuer", handler: a.getIssuer, pathParams: idPath, resSchema: "Issuer", successCode: "200", perm: authz.IssuersRead, scope: scopeIssuerPath("id")},

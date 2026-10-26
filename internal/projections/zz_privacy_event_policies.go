@@ -1622,6 +1622,9 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}: privacyPayloadShape[audit.ArchivedEvent](),
 		// A timestamp over a chain head: public certificates and hashes only.
 		{auditanchor.EventTypeAnchored, auditanchor.AnchoredEventSchemaVersion}: privacyPayloadShape[auditanchor.AnchoredEvent](),
+		// The TSA's own certificate and its revocation: public PKI material.
+		{EventTSACertificateRegistered, 1}: privacyPayloadShape[TSACertificateRegistered](),
+		{EventTSACertificateRevoked, 1}:    privacyPayloadShape[TSACertificateRevoked](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
 		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(

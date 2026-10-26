@@ -1688,6 +1688,9 @@ func (s *Server) appendAuditAPIOptions(d Deps, options *[]api.Option) *audit.Ser
 func (s *Server) appendProtocolQualificationOptions(d Deps, options *[]api.Option) {
 	s.appendCMPQualificationOption(d, options)
 	s.appendTSAQualificationOption(d, options)
+	// A145: TSA certificate rotation and revocation resolve the served TSA at
+	// call time, like auditTimestamper; protocols mount after the API.
+	*options = append(*options, api.WithTSACertificates(s))
 	s.appendSPIFFEQualificationOption(d, options)
 }
 

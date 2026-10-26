@@ -11,6 +11,7 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditchain"
 	"trstctl.com/trstctl/internal/eventledger"
+	"trstctl.com/trstctl/internal/tsa"
 )
 
 // Continuous anchoring at a known cadence (A147).
@@ -91,6 +92,10 @@ type SeriesResult struct {
 	// was enforced.
 	CadenceSeconds int64 `json:"cadence_seconds"`
 	SkewSeconds    int64 `json:"skew_seconds"`
+
+	// tokens are the verified anchors' timestamps, whose TSA certificates the
+	// revocation check covers.
+	tokens []tsa.Token
 }
 
 type seriesAnchor struct {
@@ -133,6 +138,9 @@ func VerifySeries(records []auditchain.Record, prevHash string, fullChain bool, 
 		return result, err
 	}
 	result.Anchors = len(anchors)
+	for _, anchor := range anchors {
+		result.tokens = append(result.tokens, *anchor.payload.Anchor.Token)
+	}
 	for i, anchor := range anchors {
 		if i == 0 || anchor.at.Before(result.FirstAnchoredAt) {
 			result.FirstAnchoredAt = anchor.at

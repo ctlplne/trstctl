@@ -6127,6 +6127,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/protocols/tsa/certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the timestamp authority's certificates and where relying parties check their status */
+        get: operations["listTSACertificates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protocols/tsa/certificates/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move the timestamp authority onto a fresh signer-held key and certificate, optionally revoking the outgoing one */
+        post: operations["rotateTSACertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/protocols/tsa/certificates/{serial}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a timestamp authority certificate the authority no longer signs under */
+        post: operations["revokeTSACertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/protocols/tsa/qualification": {
         parameters: {
             query?: never;
@@ -9390,8 +9441,9 @@ export interface components {
             chain_head: string;
             /** @enum {string} */
             format: "jws";
-            /** @description 1, or 2 when anchor_log is present. */
+            /** @description 1, or 2 when anchor_log or validation is present. */
             schema_version: number;
+            validation?: components["schemas"]["AuditValidation"];
         };
         AuditChainAnchor: {
             /** Format: date-time */
@@ -9500,6 +9552,14 @@ export interface components {
             provider: "splunk-hec" | "sentinel";
             token_ref: string;
         };
+        AuditTSAStatus: {
+            /**
+             * Format: byte
+             * @description DER OCSP response from the TSA's issuing CA.
+             */
+            ocsp: string;
+            serial: string;
+        };
         AuditTimestampInfo: {
             /** Format: date-time */
             gen_time: string;
@@ -9518,6 +9578,11 @@ export interface components {
             signature: string;
             /** Format: byte */
             tsa_cert: string;
+        };
+        AuditValidation: {
+            /** Format: date-time */
+            captured_at: string;
+            tsa_status: components["schemas"]["AuditTSAStatus"][];
         };
         AuditVerificationKeySet: {
             keys: {
@@ -17914,6 +17979,32 @@ export interface components {
             uptime_seconds: number;
             version: string;
         };
+        TSACertificate: {
+            cert_pem: string;
+            cert_sha256: string;
+            /** Format: date-time */
+            not_after: string;
+            /** Format: date-time */
+            not_before: string;
+            /** @description RFC 5280 revocation reason name. */
+            reason?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** @description Lowercase hex serial, as the CA's CRL and OCSP responder name it. */
+            serial: string;
+            /**
+             * @description active: tokens are issued under it; retired: rotated out and still valid for the tokens it signed; revoked.
+             * @enum {string}
+             */
+            state: "active" | "retired" | "revoked";
+        };
+        TSACertificateList: {
+            /** @description Where the issuing CA publishes the CRL that lists revoked TSA certificates. */
+            crl: string;
+            items: components["schemas"]["TSACertificate"][];
+            /** @description The issuing CA's OCSP responder for this tenant. */
+            ocsp: string;
+        };
         TSAQualification: {
             blockers: string[];
             /** Format: date-time */
@@ -17934,6 +18025,18 @@ export interface components {
             label: string;
             passed: boolean;
             recovery?: string;
+        };
+        TSARevokeRequest: {
+            /** @description RFC 5280 revocation reason name. */
+            reason: string;
+        };
+        TSARotateRequest: {
+            /** @description Optional RFC 5280 reason (keyCompromise, superseded, cessationOfOperation, ...) to revoke the outgoing certificate with; omit to retire it, still valid for the timestamps it signed. */
+            revoke_previous_reason?: string;
+        };
+        TSARotation: {
+            current: components["schemas"]["TSACertificate"];
+            previous: components["schemas"]["TSACertificate"];
         };
         TenantKeyDomainMigrateRequest: {
             wrapper_id: string;
@@ -36095,6 +36198,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SPIFFEQualification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listTSACertificates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TSACertificateList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateTSACertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TSARotateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TSARotation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeTSACertificate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description TSA certificate serial, lowercase hex */
+                serial: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TSARevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TSACertificate"];
                 };
             };
             /** @description client error */

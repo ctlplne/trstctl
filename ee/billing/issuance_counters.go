@@ -71,7 +71,7 @@ func (p *PGStore) refreshIssuedTenant(ctx context.Context, tenantID string) erro
 					WHERE tenant_id=$1 AND (issuance_status IS NULL OR issuance_status='unverifiable')
 				) OR EXISTS (SELECT 1 FROM ca_issued_certs c WHERE c.tenant_id=$1
 					AND (c.issuance_event_id IS NULL OR
-						(c.issuance_event_type <> 'edge.delegation.issued' AND NOT EXISTS (
+						(c.issuance_event_type NOT IN ('edge.delegation.issued', 'tsa.certificate.registered') AND NOT EXISTS (
 							SELECT 1 FROM certificate_metadata_receipts r
 							WHERE r.tenant_id=$1 AND r.event_id=c.issuance_event_id))))`, tenantID).Scan(&unknown); err != nil {
 					return err

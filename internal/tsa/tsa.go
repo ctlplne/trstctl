@@ -149,6 +149,36 @@ func (a *Authority) Timestamp(ctx context.Context, hashedMessage []byte) (Token,
 	return a.timestamp(ctx, hashedMessage, nil)
 }
 
+// Rotate moves the authority onto a new certificate and signing key (A145):
+// tokens issued afterwards carry the new certificate, and the token serial
+// sequence continues. The certificate must meet the RFC 3161 profile.
+func (a *Authority) Rotate(certDER []byte, signer crypto.DigestSigner) error {
+	if len(certDER) == 0 || signer == nil {
+		return fmt.Errorf("tsa: TSA certificate and signer required")
+	}
+	if err := verifyTSACertificateProfile(certDER); err != nil {
+		return err
+	}
+	pub, err := crypto.PublicKeyDERFromCert(certDER)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(pub, signer.Public().DER) {
+		return fmt.Errorf("tsa: the new certificate does not certify the new signing key")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cfg.TSACertDER, a.cfg.TSASigner = append([]byte(nil), certDER...), signer
+	return nil
+}
+
+// Certificate returns the certificate tokens are currently issued under.
+func (a *Authority) Certificate() []byte {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]byte(nil), a.cfg.TSACertDER...)
+}
+
 func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *big.Int) (Token, error) {
 	if len(hashedMessage) == 0 {
 		return Token{}, fmt.Errorf("tsa: empty message imprint")
@@ -156,6 +186,7 @@ func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *
 	a.mu.Lock()
 	a.serial++
 	serial := a.serial
+	certDER, signer := a.cfg.TSACertDER, a.cfg.TSASigner
 	a.mu.Unlock()
 
 	info := TSTInfo{
@@ -166,7 +197,7 @@ func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *
 	if err != nil {
 		return Token{}, err
 	}
-	sig, err := crypto.SignMessage(a.cfg.TSASigner, mb)
+	sig, err := crypto.SignMessage(signer, mb)
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: sign token: %w", err)
 	}
@@ -179,13 +210,13 @@ func (a *Authority) timestamp(ctx context.Context, hashedMessage []byte, nonce *
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: encode TSTInfo: %w", err)
 	}
-	der, err := crypto.BuildTimeStampToken(tstInfoDER, a.cfg.TSACertDER, a.cfg.TSASigner)
+	der, err := crypto.BuildTimeStampToken(tstInfoDER, certDER, signer)
 	if err != nil {
 		return Token{}, fmt.Errorf("tsa: build timestamp token: %w", err)
 	}
 	_ = auditsink.Emit(ctx, a.cfg.Audit, nil, "tsa.timestamp.issued", a.cfg.TenantID,
 		[]byte(fmt.Sprintf(`{"serial":%d,"gen_time":%q}`, serial, info.GenTime.Format(time.RFC3339))))
-	return Token{Info: info, Signature: sig, TSACertDER: a.cfg.TSACertDER, DER: der}, nil
+	return Token{Info: info, Signature: sig, TSACertDER: certDER, DER: der}, nil
 }
 
 // Verify checks a token: the imprint matches hashedMessage, the TSA certificate

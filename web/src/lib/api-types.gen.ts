@@ -1239,6 +1239,7 @@ export interface AuditBundle {
   chain_head: string;
   format: "jws";
   schema_version: number;
+  validation?: AuditValidation;
 }
 
 export interface AuditChainAnchor {
@@ -1335,6 +1336,11 @@ export interface AuditFeedRequest {
   token_ref: string;
 }
 
+export interface AuditTSAStatus {
+  ocsp: string;
+  serial: string;
+}
+
 export interface AuditTimestampInfo {
   gen_time: string;
   hash_algorithm: string;
@@ -1349,6 +1355,11 @@ export interface AuditTimestampToken {
   info: AuditTimestampInfo;
   signature: string;
   tsa_cert: string;
+}
+
+export interface AuditValidation {
+  captured_at: string;
+  tsa_status: AuditTSAStatus[];
 }
 
 export interface AuditVerificationKeySet {
@@ -9005,6 +9016,23 @@ export interface SystemReadout {
   version: string;
 }
 
+export interface TSACertificate {
+  cert_pem: string;
+  cert_sha256: string;
+  not_after: string;
+  not_before: string;
+  reason?: string;
+  revoked_at?: string;
+  serial: string;
+  state: "active" | "retired" | "revoked";
+}
+
+export interface TSACertificateList {
+  crl: string;
+  items: TSACertificate[];
+  ocsp: string;
+}
+
 export interface TSAQualification {
   blockers: string[];
   checked_at: string;
@@ -9025,6 +9053,19 @@ export interface TSAQualificationCheck {
   label: string;
   passed: boolean;
   recovery?: string;
+}
+
+export interface TSARevokeRequest {
+  reason: string;
+}
+
+export interface TSARotateRequest {
+  revoke_previous_reason?: string;
+}
+
+export interface TSARotation {
+  current: TSACertificate;
+  previous: TSACertificate;
 }
 
 export interface TenantKeyDomainMigrateRequest {

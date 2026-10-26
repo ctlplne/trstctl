@@ -13,6 +13,16 @@
   be covered within the cadence; the receipt reports the series as
   `anchor_series`. `GET /api/v1/audit/anchors` (`trstctl-cli audit anchors`,
   Audit console) shows the cadence, state and recent anchors.
+- The TSA's certificates are entries of the issuing CA's ledger, so its CRL and
+  OCSP responder answer for them. `trstctl-cli protocols tsa certificates
+  list|rotate|revoke` (`/api/v1/protocols/tsa/certificates`, Protocols console)
+  moves the TSA onto a fresh signer-held key, revoking the outgoing certificate
+  with a reason, and revokes a certificate rotated out earlier. Audit exports
+  carry the CA's OCSP answer for each TSA certificate their timestamps rely on
+  (`validation`), and `trstctl-cli audit verify` checks it against the pinned
+  root, refusing every timestamp under a certificate revoked for key or CA
+  compromise and those at or after any other revocation; `--tsa-crl` brings a
+  fresher CRL and `--require-tsa-revocation` refuses an unchecked certificate.
 - Each tenant's anchors are kept in an RFC 6962 anchor log. Audit exports carry
   a head of that log signed with the audit export key (JWS envelopes move to
   schema 2 when they carry it; stream trailers gain `anchor_log`) and an

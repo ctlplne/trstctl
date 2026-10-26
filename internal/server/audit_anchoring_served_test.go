@@ -113,10 +113,17 @@ func TestServedContinuousAnchorVerifiesOfflineFromAnExport(t *testing.T) {
 	exported := get("/api/v1/audit/export?format=jws")
 	result, err := auditanchor.VerifyArtifact(exported, auditanchor.VerificationOptions{
 		Format: auditanchor.FormatJWS, AuditKeys: keys, TSARootDER: block.Bytes,
-		Series: auditanchor.SeriesPolicy{Cadence: time.Hour},
+		Series:        auditanchor.SeriesPolicy{Cadence: time.Hour},
+		TSARevocation: auditanchor.TSARevocationPolicy{Require: true},
 	})
 	if err != nil {
 		t.Fatalf("offline verification of the served export: %v", err)
+	}
+	// A146: the export carries the CA's OCSP answer for the TSA certificate
+	// its timestamps rely on, so its status is established offline.
+	if !result.TSARevocationChecked || len(result.TSARevocation) != 1 || result.TSARevocation[0].Status != "good" ||
+		result.TSARevocation[0].Tokens != 2 {
+		t.Fatalf("TSA revocation receipt = %+v", result.TSARevocation)
 	}
 	if !result.AnchorVerified || result.AnchorSeries == nil || result.AnchorSeries.Anchors != 1 || result.AnchorSeries.Verified != 1 {
 		t.Fatalf("receipt = %+v series %+v", result, result.AnchorSeries)

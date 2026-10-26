@@ -1845,6 +1845,40 @@ export const messages = {
     defaultMessage: "Open affected issuer",
     description: "Audit event detail link to a recognized issuer resource.",
   },
+  "protocols.tsaCertificates.heading": { defaultMessage: "TSA certificates", description: "Heading for the timestamp authority's certificates." },
+  "protocols.tsaCertificates.description": {
+    defaultMessage:
+      "The timestamp authority signs under its active certificate. Its issuing CA's CRL and OCSP responder answer for every one, so audit verification can tell a timestamp signed under a revoked certificate. Rotate onto a fresh key when a key must be replaced; revoke for compromise to taint every timestamp the certificate signed.",
+    description: "Explains TSA certificate rotation and revocation.",
+  },
+  "protocols.tsaCertificates.state.active": { defaultMessage: "Active", description: "The TSA signs under this certificate." },
+  "protocols.tsaCertificates.state.retired": { defaultMessage: "Retired", description: "Rotated out, still valid for the timestamps it signed." },
+  "protocols.tsaCertificates.state.revoked": { defaultMessage: "Revoked", description: "The TSA certificate is revoked." },
+  "protocols.tsaCertificates.listLabel": { defaultMessage: "TSA certificates", description: "Accessible label for the TSA certificate list." },
+  "protocols.tsaCertificates.validUntil": { defaultMessage: "Valid until {time}", description: "A TSA certificate's expiry." },
+  "protocols.tsaCertificates.revokedAt": { defaultMessage: "Revoked {time} ({reason})", description: "When and why a TSA certificate was revoked." },
+  "protocols.tsaCertificates.status": {
+    defaultMessage: "Relying parties check these certificates at {crl} and {ocsp}.",
+    description: "Where the CRL and OCSP responder answer for TSA certificates.",
+  },
+  "protocols.tsaCertificates.rotateReason": { defaultMessage: "Revoke the outgoing certificate", description: "Label for the revocation reason on rotation." },
+  "protocols.tsaCertificates.retireOnly": { defaultMessage: "No: retire it", description: "Rotate without revoking the outgoing certificate." },
+  "protocols.tsaCertificates.revokeReason": {
+    defaultMessage: "Reason to revoke a retired certificate",
+    description: "Label for the revocation reason of a retired certificate.",
+  },
+  "protocols.tsaCertificates.rotate": {
+    defaultMessage: "Rotate the TSA certificate",
+    description: "Button that rotates the TSA onto a new key and certificate.",
+  },
+  "protocols.tsaCertificates.rotateHelp": {
+    defaultMessage: "A new key is generated in the isolated signer and certified by the same CA; later timestamps carry the new certificate.",
+    description: "Explains what rotation does.",
+  },
+  "protocols.tsaCertificates.revoke": { defaultMessage: "Revoke", description: "Button that revokes a retired TSA certificate." },
+  "protocols.tsaCertificates.rotated": { defaultMessage: "The TSA now signs under a new certificate.", description: "Notice after rotation." },
+  "protocols.tsaCertificates.revoked": { defaultMessage: "The certificate is revoked and listed on the CRL.", description: "Notice after revocation." },
+  "protocols.tsaCertificates.failed": { defaultMessage: "The TSA certificate action failed.", description: "Error title for TSA certificate actions." },
   "audit.anchoring.heading": {
     defaultMessage: "Continuous anchoring",
     description: "Heading for the scheduled RFC 3161 timestamps over the tenant's full audit chain.",

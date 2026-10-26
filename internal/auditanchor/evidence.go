@@ -18,7 +18,8 @@ import (
 const EvidenceEnvelopeSchemaVersion = 1
 
 // EvidenceEnvelopeAnchorLogSchemaVersion is the envelope schema that carries
-// the tenant's anchor log proof (A148).
+// the tenant's anchor log proof (A148) and long-term validation material
+// (A146).
 const EvidenceEnvelopeAnchorLogSchemaVersion = 2
 
 // EvidenceEnvelope is the browser/download representation of a signed audit
@@ -34,16 +35,19 @@ type EvidenceEnvelope struct {
 	// AnchorLog proves the export's anchor records against the tenant's
 	// anchor log; present only in schema 2.
 	AnchorLog *AnchorLogProof `json:"anchor_log,omitempty"`
+	// Validation is the revocation evidence for the TSA certificates the
+	// export's timestamps rely on; present only in schema 2.
+	Validation *Validation `json:"validation,omitempty"`
 }
 
 // NewEvidenceEnvelope builds the saved JWS evidence document, choosing the
-// schema by whether it carries an anchor log.
-func NewEvidenceEnvelope(bundle, chainHead string, anchor Anchor, anchorLog *AnchorLogProof) EvidenceEnvelope {
+// schema by whether it carries an anchor log or validation material.
+func NewEvidenceEnvelope(bundle, chainHead string, anchor Anchor, anchorLog *AnchorLogProof, validation *Validation) EvidenceEnvelope {
 	envelope := EvidenceEnvelope{
 		SchemaVersion: EvidenceEnvelopeSchemaVersion, Format: FormatJWS,
-		Bundle: bundle, ChainHead: chainHead, Anchor: anchor, AnchorLog: anchorLog,
+		Bundle: bundle, ChainHead: chainHead, Anchor: anchor, AnchorLog: anchorLog, Validation: validation,
 	}
-	if anchorLog != nil {
+	if anchorLog != nil || validation != nil {
 		envelope.SchemaVersion = EvidenceEnvelopeAnchorLogSchemaVersion
 	}
 	return envelope
@@ -73,9 +77,10 @@ func verifySignedEvidenceEnvelope(raw []byte, keys *jose.JWKSet) (audit.Bundle, 
 	if err := decodeExactJSON(raw, &envelope); err != nil {
 		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: decode evidence envelope: %w", err)
 	}
+	extended := envelope.AnchorLog != nil || envelope.Validation != nil
 	switch {
-	case envelope.SchemaVersion == EvidenceEnvelopeSchemaVersion && envelope.AnchorLog == nil:
-	case envelope.SchemaVersion == EvidenceEnvelopeAnchorLogSchemaVersion && envelope.AnchorLog != nil:
+	case envelope.SchemaVersion == EvidenceEnvelopeSchemaVersion && !extended:
+	case envelope.SchemaVersion == EvidenceEnvelopeAnchorLogSchemaVersion && extended:
 	default:
 		return audit.Bundle{}, EvidenceEnvelope{}, fmt.Errorf("auditanchor: unsupported evidence envelope schema %d", envelope.SchemaVersion)
 	}

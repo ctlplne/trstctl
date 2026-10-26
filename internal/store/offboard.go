@@ -139,6 +139,8 @@ var TenantScopedTables = []string{
 	"kubernetes_trust_rollouts",
 	// A147: the audit anchor series projection.
 	"audit_anchors",
+	// A145: the TSA's certificates.
+	"tsa_certificates",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

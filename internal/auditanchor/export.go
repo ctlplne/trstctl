@@ -124,6 +124,9 @@ type RecordStream struct {
 	// AnchorLog proves the stream's anchor records against the tenant's
 	// anchor log (A148).
 	AnchorLog *AnchorLogProof
+	// Validation is the revocation evidence for the TSA certificates the
+	// stream's timestamps rely on (A146).
+	Validation *Validation
 }
 
 // chainFull is the trailer's mark for a stream that continues the tenant's
@@ -131,7 +134,8 @@ type RecordStream struct {
 const chainFull = "tenant"
 
 func (s RecordStream) trailer() trailer {
-	t := trailer{Kind: "chain_trailer", PrevHash: s.PrevHash, ChainHead: s.Head, Count: len(s.Records), Anchor: s.Anchor, AnchorLog: s.AnchorLog}
+	t := trailer{Kind: "chain_trailer", PrevHash: s.PrevHash, ChainHead: s.Head, Count: len(s.Records), Anchor: s.Anchor,
+		AnchorLog: s.AnchorLog, Validation: s.Validation}
 	if s.FullChain {
 		t.Chain = chainFull
 	}
@@ -247,6 +251,9 @@ type trailer struct {
 	// AnchorLog proves the stream's anchor records against the tenant's
 	// anchor log (A148).
 	AnchorLog *AnchorLogProof `json:"anchor_log,omitempty"`
+	// Validation is the revocation evidence for the TSA certificates the
+	// stream's timestamps rely on (A146).
+	Validation *Validation `json:"validation,omitempty"`
 }
 
 func writeTrailer(enc *json.Encoder, proof trailer) error {

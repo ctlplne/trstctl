@@ -216,7 +216,7 @@ func TestSavedExportsCarryAndVerifyTheAnchorLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	envelope := auditanchor.NewEvidenceEnvelope(signed, head, exportAnchor, proof)
+	envelope := auditanchor.NewEvidenceEnvelope(signed, head, exportAnchor, proof, nil)
 	if envelope.SchemaVersion != auditanchor.EvidenceEnvelopeAnchorLogSchemaVersion {
 		t.Fatalf("an envelope with an anchor log is schema %d", envelope.SchemaVersion)
 	}

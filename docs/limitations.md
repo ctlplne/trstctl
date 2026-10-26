@@ -1469,8 +1469,24 @@ never live in the API process. What you can do end to end against the running bi
   exact signer and signed fields against the authenticated manifest. The receipt's
   `timestamp_artifact_verified` flag distinguishes that proof from historical
   manifest-only tokens, which remain verifiable but have no portable CMS artifact.
-  This does not establish TSA revocation status or a complete long-term evidence
-  bundle. This independently pinned trust is what makes a
+  The TSA's own certificates are entries of the issuing CA's ledger, so its CRL
+  and OCSP responder answer for them; `POST /api/v1/protocols/tsa/certificates/rotate`
+  (`trstctl-cli protocols tsa certificates rotate`, Protocols console) moves the TSA
+  onto a fresh signer-held key, revoking the outgoing certificate when given a
+  reason, and a certificate rotated out earlier can be revoked later. Every
+  export carries the CA's OCSP answer for each TSA certificate its timestamps rely
+  on, captured when the export is made, and the verifier checks it against the
+  pinned root: a certificate revoked for key or CA compromise refuses every
+  timestamp it signed, one revoked for another reason refuses only timestamps at
+  or after its revocation, `--tsa-crl` brings a fresher CRL, and
+  `--require-tsa-revocation` refuses a certificate whose status no evidence issued
+  after its newest timestamp establishes. Its limits: the evidence is the status
+  when the export was made, so a revocation recorded later is seen only through a
+  CRL the auditor fetches; the long-term evidence is the timestamps, their TSA
+  certificates and this OCSP evidence, not a renewed archive timestamp (RFC 4998),
+  so verification still depends on the TSA root and SHA-256 remaining trusted; and
+  an export whose evidence could not be captured says so as an unchecked status.
+  This independently pinned trust is what makes a
   BACK-DATED head detectable: a chain rebuilt to
   remove a record hashes differently, so no earlier token exists for it, and a
   freshly-taken token is dated long after the events the bundle describes.

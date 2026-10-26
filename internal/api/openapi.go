@@ -431,6 +431,39 @@ func componentSchemas() map[string]*Schema {
 	tsaQualificationCheck := object(map[string]*Schema{
 		"id": str(), "label": str(), "passed": {Type: "boolean"}, "detail": str(), "recovery": str(),
 	}, "id", "label", "passed", "detail")
+	tsaCertificate := object(map[string]*Schema{
+		"serial":      {Type: "string", Description: "Lowercase hex serial, as the CA's CRL and OCSP responder name it."},
+		"state":       {Type: "string", Enum: []string{"active", "retired", "revoked"}, Description: "active: tokens are issued under it; retired: rotated out and still valid for the tokens it signed; revoked."},
+		"not_before":  timestamp(),
+		"not_after":   timestamp(),
+		"cert_sha256": str(),
+		"cert_pem":    str(),
+		"revoked_at":  timestamp(),
+		"reason":      {Type: "string", Description: "RFC 5280 revocation reason name."},
+	}, "serial", "state", "not_before", "not_after", "cert_sha256", "cert_pem")
+	tsaCertificateList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("TSACertificate")},
+		"crl":   {Type: "string", Description: "Where the issuing CA publishes the CRL that lists revoked TSA certificates."},
+		"ocsp":  {Type: "string", Description: "The issuing CA's OCSP responder for this tenant."},
+	}, "items", "crl", "ocsp")
+	tsaRotation := object(map[string]*Schema{
+		"current":  ref("TSACertificate"),
+		"previous": ref("TSACertificate"),
+	}, "current", "previous")
+	tsaRotateRequest := object(map[string]*Schema{
+		"revoke_previous_reason": {Type: "string", Description: "Optional RFC 5280 reason (keyCompromise, superseded, cessationOfOperation, ...) to revoke the outgoing certificate with; omit to retire it, still valid for the timestamps it signed."},
+	})
+	tsaRevokeRequest := object(map[string]*Schema{
+		"reason": {Type: "string", Description: "RFC 5280 revocation reason name."},
+	}, "reason")
+	auditTSAStatus := object(map[string]*Schema{
+		"serial": str(),
+		"ocsp":   {Type: "string", Format: "byte", Description: "DER OCSP response from the TSA's issuing CA."},
+	}, "serial", "ocsp")
+	auditValidation := object(map[string]*Schema{
+		"tsa_status":  {Type: "array", Items: ref("AuditTSAStatus")},
+		"captured_at": timestamp(),
+	}, "tsa_status", "captured_at")
 	tsaQualification := object(map[string]*Schema{
 		"checked_at": timestamp(), "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"endpoint": str(), "policy_oid": str(),
@@ -4171,12 +4204,13 @@ func componentSchemas() map[string]*Schema {
 		"consistency": ref("AuditAnchorConsistency"),
 	}, "signed_head", "inclusions")
 	auditBundle := object(map[string]*Schema{
-		"schema_version": {Type: "integer", Description: "1, or 2 when anchor_log is present."},
+		"schema_version": {Type: "integer", Description: "1, or 2 when anchor_log or validation is present."},
 		"format":         {Type: "string", Enum: []string{"jws"}},
 		"bundle":         str(), // a compact JWS whose payload is the signed evidence bundle
 		"chain_head":     str(),
 		"anchor":         ref("AuditAnchor"),
 		"anchor_log":     ref("AuditAnchorLogProof"),
+		"validation":     ref("AuditValidation"),
 	}, "schema_version", "format", "bundle", "chain_head", "anchor")
 	auditVerificationKey := object(map[string]*Schema{
 		"kty": str(), "kid": str(), "n": str(), "e": str(),
@@ -7702,6 +7736,13 @@ func componentSchemas() map[string]*Schema {
 		"CMPQualification":                      cmpQualification,
 		"TSAQualificationCheck":                 tsaQualificationCheck,
 		"TSAQualification":                      tsaQualification,
+		"TSACertificate":                        tsaCertificate,
+		"TSACertificateList":                    tsaCertificateList,
+		"TSARotation":                           tsaRotation,
+		"TSARotateRequest":                      tsaRotateRequest,
+		"TSARevokeRequest":                      tsaRevokeRequest,
+		"AuditTSAStatus":                        auditTSAStatus,
+		"AuditValidation":                       auditValidation,
 		"SPIFFEQualificationCheck":              spiffeQualificationCheck,
 		"SPIFFEQualification":                   spiffeQualification,
 		"CASpec":                                caSpec,

@@ -152,6 +152,16 @@ func (s *revocationService) respondOCSP(ctx context.Context, tenantID string, re
 	if noncePresent {
 		s.observeOCSPNonce("echoed")
 	}
+	return s.signedStatus(ctx, tenantID, serial, nonce, noncePresent)
+}
+
+// statusResponse is the signed OCSP response for one serial the tenant's
+// responder would serve, for evidence a caller carries away (A146).
+func (s *revocationService) statusResponse(ctx context.Context, tenantID, serial string) ([]byte, error) {
+	return s.signedStatus(ctx, tenantID, serial, nil, false)
+}
+
+func (s *revocationService) signedStatus(ctx context.Context, tenantID, serial string, nonce []byte, noncePresent bool) ([]byte, error) {
 	if pending, err := s.store.PendingCertificateRevocationForSerial(ctx, tenantID, s.caID, serial); err != nil {
 		return nil, err
 	} else if pending {
