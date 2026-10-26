@@ -150,6 +150,18 @@ command's result unrecorded and wall its key as "indeterminate" (bookkeeping
 pool), or convoy commands behind the projection lock in acquire-window steps
 (lock pool).
 
+### Readiness after a restart
+
+`ssh_krl` brings the served SSH revocation list up to the event log — the same
+step a KRL request takes — and fails while it cannot: behind by more than one
+request's replay page, or on a revocation generation this issuer has not
+reconciled (`trstctl ssh krl adopt`). Each probe advances one page, so a lagging
+replica catches up and turns ready by itself. `audit_read` takes the history read
+an audit query takes and fails while history reads are refused, such as while a
+restored history awaits cutover. Both read **ok** on a deployment without the SSH
+CA or audit service. Before them, `/healthz` and the other checks could report a
+restarted replica ready while its KRL answered 503 and its audit reads failed.
+
 ### Readiness under load
 
 The `db` check pings the probe pool and fails readiness when PostgreSQL is

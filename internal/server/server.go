@@ -2580,6 +2580,10 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 		// datastore itself is reachable). A genuine failure still fails the probe.
 		{Name: "projection", Probe: readyDespiteBackpressure("projection", s.probeProjectionTail, s.readinessShedGauge("projection"))},
 		{Name: "secret_sync_recovery_authority", Probe: readyDespiteBackpressure("secret_sync_recovery_authority", d.Store.RequireSecretSyncReceiverRecoveryAuthorized, s.readinessShedGauge("secret_sync_recovery_authority"))},
+		// A149: what a restart can leave unservable while everything above is
+		// up — the SSH revocation list and audit history reads.
+		{Name: "ssh_krl", Probe: s.probeSSHKRL},
+		{Name: "audit_read", Probe: s.probeAuditRead},
 	}
 	if s.api != nil {
 		checks = append(checks, observ.Check{

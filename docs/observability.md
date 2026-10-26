@@ -10,7 +10,7 @@ readiness-probed.
 | Path | Purpose | Auth |
 | --- | --- | --- |
 | `/healthz` | **Liveness** — the process is up and the signer (if configured) is reachable. | none |
-| `/readyz` | **Readiness** — probes PostgreSQL, NATS JetStream, the durable projection tail, and the signer; returns `200` when all are trustworthy, `503` with a per-dependency body otherwise. | none |
+| `/readyz` | **Readiness** — probes PostgreSQL, NATS JetStream, the durable projection tail, the signer, whether the SSH revocation list can be served current (`ssh_krl`, when the SSH CA is served), and whether audit history can be read (`audit_read`); returns `200` when all are trustworthy, `503` with a per-dependency body otherwise. | none |
 | `/metrics` | **Prometheus** metrics in the text exposition format. | none |
 
 `/readyz` is the Kubernetes readiness-probe target: a dropped dependency flips it
@@ -28,7 +28,7 @@ public evaluation CA or the operator-managed production CA before probing HTTPS;
 do not train monitors to disable certificate verification.
 
 ```bash
-curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/readyz # {"status":"ok","checks":{"db":"ok","nats":"ok","projection":"ok","signer":"ok"}}
+curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/readyz # {"status":"ok","checks":{"audit_read":"ok","db":"ok","nats":"ok","projection":"ok","signer":"ok","ssh_krl":"ok"}}
 curl -fsS --cacert "$TRSTCTL_CA_FILE" https://localhost:8443/metrics
 ```
 

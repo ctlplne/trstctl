@@ -3282,8 +3282,11 @@ than sending an operator looking for a credential that was never there.
   its console retry removed the exact role and survived a cold restart. The
   KRL endpoint returns 503 during a catch-up it cannot finish within its read
   deadline, and an opted-in host retains its installed list and retries.
-  Control-plane health alone does not prove KRL or audit-read readiness during
-  startup. A host agent refuses a KRL whose version does not advance its
+  `/readyz` proves KRL and audit-read readiness after a restart: `ssh_krl`
+  reads not ready while the revocation list cannot be brought current and
+  `audit_read` while audit history cannot be read, so a replica restarted
+  behind the revocation stream or before a restored history's cutover stays out
+  of rotation. A host agent refuses a KRL whose version does not advance its
   installed one (a list that revokes nothing, such as the empty one
   `ssh-keygen -k` writes when a host is prepared, yields to a list of the same
   version, so a new host reads current before the first revocation), and

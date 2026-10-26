@@ -2,6 +2,10 @@
 
 ### Added
 
+- `/readyz` gains `ssh_krl` (the SSH revocation list can be brought up to the
+  event log, when the SSH CA is served) and `audit_read` (audit history can be
+  read), so a restarted replica stays out of rotation until its KRL and audit
+  reads can be served.
 - Continuous audit anchoring at a known cadence (Enterprise audit compliance
   with `protocols.tsa` enabled): whenever a tenant's audit log has grown, the
   leader timestamps the tenant's full audit chain on `audit.anchor_interval`
