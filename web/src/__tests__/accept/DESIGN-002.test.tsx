@@ -263,6 +263,8 @@ describe("DESIGN-002 answer-first API playground", () => {
   it("shows one public-key source for AGID roots and rejects missing or ambiguous keys", async () => {
     renderRoute("/integrate/api?operation=registerAgentDelegationRootAnchor");
     const body = (await screen.findByRole("textbox", { name: "Request body JSON" })) as HTMLTextAreaElement;
+    // The textbox renders before the operation's sample body is filled in.
+    await waitFor(() => expect(body.value).not.toBe(""), { timeout: 5000 });
     const sample = JSON.parse(body.value) as Record<string, unknown>;
     expect(sample).toHaveProperty("public_pem");
     expect(sample).not.toHaveProperty("public_der");
