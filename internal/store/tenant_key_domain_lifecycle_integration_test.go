@@ -48,47 +48,7 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	storeDir := t.TempDir()
-	log, err := events.Open(
-		ctx,
-		config.NATS{Mode: config.NATSEmbedded, StoreDir: storeDir},
-		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(s)),
-		events.WithHistoryRewriteContinuityVerifier(func(
-			_ context.Context,
-			evidence events.TenantDataContinuityEvidence,
-		) error {
-			if evidence.TenantID == "" || evidence.Receipt.Type != projections.EventHistoryTenantDataRewriteContinuity {
-				return errors.New("invalid tenant-domain continuity receipt")
-			}
-			return nil
-		}),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = log.Close() })
-
-	rewriteOptions := []events.TenantDataRewriteOption{
-		events.WithTenantDataCutoverPreparation(s.PrepareTenantDataCutover),
-		events.WithTenantDataAuditContinuity(func(
-			context.Context,
-			events.TenantDataAuditView,
-		) (events.TenantDataAuditCheckpoint, error) {
-			return events.TenantDataAuditCheckpoint{IdentityDigest: "tenant-domain-test-genesis"}, nil
-		}),
-		events.WithTenantDataContinuity(func(
-			_ context.Context,
-			report events.TenantDataRewriteReport,
-		) (events.Event, error) {
-			data, err := json.Marshal(report)
-			return events.Event{
-				ID:       "tenant-domain-continuity-" + report.OperationID,
-				Type:     projections.EventHistoryTenantDataRewriteContinuity,
-				TenantID: report.TenantID, Time: report.CompletedAt,
-				SchemaVersion: events.DefaultSchemaVersion, Data: data,
-			}, err
-		}),
-	}
+	log, rewriteOptions := openTenantKeyDomainHistory(t, s)
 	lifecycle, err := tenantseal.NewLifecycle(s, log, deployment, registry, rewriteOptions...)
 	if err != nil {
 		t.Fatal(err)
@@ -272,6 +232,54 @@ func TestTenantKeyDomainLifecycleMigratesSealsAndUnsealsOneTenant(t *testing.T) 
 	}
 	if !foundMigratedHistory {
 		t.Fatal("tenant A migrated history event not found")
+	}
+}
+
+// openTenantKeyDomainHistory opens the real embedded JetStream log with the
+// cross-store history-rewrite coordinator and receipt verifier, and returns the
+// rewrite proof walls a lifecycle needs: backup-fence cutover preparation,
+// audit continuity, and a continuity receipt.
+func openTenantKeyDomainHistory(t *testing.T, s *store.Store) (*events.Log, []events.TenantDataRewriteOption) {
+	t.Helper()
+	log, err := events.Open(
+		context.Background(),
+		config.NATS{Mode: config.NATSEmbedded, StoreDir: t.TempDir()},
+		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(s)),
+		events.WithHistoryRewriteContinuityVerifier(func(
+			_ context.Context,
+			evidence events.TenantDataContinuityEvidence,
+		) error {
+			if evidence.TenantID == "" || evidence.Receipt.Type != projections.EventHistoryTenantDataRewriteContinuity {
+				return errors.New("invalid tenant-domain continuity receipt")
+			}
+			return nil
+		}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = log.Close() })
+
+	return log, []events.TenantDataRewriteOption{
+		events.WithTenantDataCutoverPreparation(s.PrepareTenantDataCutover),
+		events.WithTenantDataAuditContinuity(func(
+			context.Context,
+			events.TenantDataAuditView,
+		) (events.TenantDataAuditCheckpoint, error) {
+			return events.TenantDataAuditCheckpoint{IdentityDigest: "tenant-domain-test-genesis"}, nil
+		}),
+		events.WithTenantDataContinuity(func(
+			_ context.Context,
+			report events.TenantDataRewriteReport,
+		) (events.Event, error) {
+			data, err := json.Marshal(report)
+			return events.Event{
+				ID:       "tenant-domain-continuity-" + report.OperationID,
+				Type:     projections.EventHistoryTenantDataRewriteContinuity,
+				TenantID: report.TenantID, Time: report.CompletedAt,
+				SchemaVersion: events.DefaultSchemaVersion, Data: data,
+			}, err
+		}),
 	}
 }
 

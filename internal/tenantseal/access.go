@@ -30,6 +30,7 @@ const (
 	StatusSealing            Status = store.TenantKeyDomainStateSealing
 	StatusSealed             Status = store.TenantKeyDomainStateSealed
 	StatusUnsealing          Status = store.TenantKeyDomainStateUnsealing
+	StatusRotating           Status = store.TenantKeyDomainStateRotating
 	StatusWrapperUnavailable Status = store.TenantKeyDomainStateWrapperUnavailable
 	StatusWrongWrapper       Status = store.TenantKeyDomainStateWrongWrapper
 	StatusCorrupt            Status = store.TenantKeyDomainStateCorrupt
@@ -100,8 +101,9 @@ type SharedDomainStore interface {
 }
 
 // Resolver implements Access using the deployment wrapper for missing legacy
-// rows, an explicit version-routed dual cipher during migration, and a transient
-// independently wrapped domain key after hot-state migration completes.
+// rows, an explicit version-routed dual cipher during migration, a transient
+// independently wrapped domain key after hot-state migration completes, and a
+// generation-routed dual cipher while that key rotates.
 type Resolver struct {
 	domains    SharedDomainStore
 	deployment seal.KeyWrapper
@@ -191,10 +193,12 @@ func (r *Resolver) WithTenant(
 			}
 			defer domainKey.Destroy()
 
+			sealKey, sealBinding := domainKey, binding
 			open := func(container, aad []byte) ([]byte, error) {
 				return seal.OpenDomain(domainKey, container, aad, binding)
 			}
-			if mode == domainAccessDualMigration {
+			switch mode {
+			case domainAccessDualMigration:
 				open = func(container, aad []byte) ([]byte, error) {
 					containerDomain, err := seal.Domain(container)
 					if err != nil {
@@ -208,10 +212,48 @@ func (r *Resolver) WithTenant(
 					}
 					return seal.OpenDomain(domainKey, container, aad, binding)
 				}
+			case domainAccessDualRotation:
+				// New data seals under the next generation; a container opens
+				// with the key its own domain label names, and only those two.
+				nextBinding, err := DomainBinding(domain.TenantID, domain.DomainID, domain.NextGeneration)
+				if err != nil {
+					return statusError(StatusCorrupt, err)
+				}
+				nextKey, err := r.registry.OpenDomainKEK(
+					ctx,
+					WrapperRef{Kind: domain.NextWrapperKind, ID: domain.NextWrapperID},
+					domain.NextWrappedDomainKEK,
+					nextBinding,
+				)
+				if err != nil {
+					return classifyDomainOpenError(err)
+				}
+				if nextKey == nil {
+					return statusError(
+						StatusCustodyUnavailable,
+						errors.New("tenantseal: wrapper registry returned no next-generation domain key"),
+					)
+				}
+				defer nextKey.Destroy()
+				sealKey, sealBinding = nextKey, nextBinding
+				open = func(container, aad []byte) ([]byte, error) {
+					containerDomain, err := seal.Domain(container)
+					if err != nil {
+						return nil, err
+					}
+					switch {
+					case containerDomain != nil && bytes.Equal(containerDomain, nextBinding):
+						return seal.OpenDomain(nextKey, container, aad, nextBinding)
+					case containerDomain != nil && bytes.Equal(containerDomain, binding):
+						return seal.OpenDomain(domainKey, container, aad, binding)
+					default:
+						return nil, seal.ErrDomain
+					}
+				}
 			}
 			cipher := newLeasedCipher(
 				func(plaintext, aad []byte) ([]byte, error) {
-					return seal.SealDomain(domainKey, plaintext, aad, binding)
+					return seal.SealDomain(sealKey, plaintext, aad, sealBinding)
 				},
 				open,
 			)
@@ -227,6 +269,7 @@ const (
 	domainAccessDenied domainAccessMode = iota
 	domainAccessTenantOnly
 	domainAccessDualMigration
+	domainAccessDualRotation
 )
 
 func resolveDomainAccessMode(tenantID string, domain store.TenantKeyDomain) (domainAccessMode, Status) {
@@ -241,12 +284,26 @@ func resolveDomainAccessMode(tenantID string, domain store.TenantKeyDomain) (dom
 		len(domain.WrappedDomainKEK) == 0 {
 		return domainAccessDenied, StatusCorrupt
 	}
+	// A next generation exists only while a rotation runs, and then wholly and
+	// exactly one generation ahead.
+	rotating := domain.State == store.TenantKeyDomainStateRotating
+	nextPresent := domain.NextGeneration != 0 || domain.NextWrapperKind != "" ||
+		domain.NextWrapperID != "" || len(domain.NextWrappedDomainKEK) > 0
+	if nextPresent && !rotating {
+		return domainAccessDenied, StatusCorrupt
+	}
+	if rotating && (domain.NextGeneration != domain.Generation+1 ||
+		domain.NextWrapperKind == "" || domain.NextWrapperID == "" ||
+		len(domain.NextWrappedDomainKEK) == 0) {
+		return domainAccessDenied, StatusCorrupt
+	}
 
 	switch domain.State {
 	case store.TenantKeyDomainStateUnsealed:
 		validCompletedOperation := domain.OperationStatus == store.TenantKeyOperationCompleted &&
 			(domain.OperationKind == store.TenantKeyOperationMigrate ||
-				domain.OperationKind == store.TenantKeyOperationUnseal)
+				domain.OperationKind == store.TenantKeyOperationUnseal ||
+				domain.OperationKind == store.TenantKeyOperationRotate)
 		failedSeal := domain.OperationKind == store.TenantKeyOperationSeal &&
 			domain.OperationStatus == store.TenantKeyOperationFailed && domain.Retryable
 		validExposure := domain.LegacyHistoryExposure == store.TenantKeyLegacyNone ||
@@ -296,6 +353,22 @@ func resolveDomainAccessMode(tenantID string, domain store.TenantKeyDomain) (dom
 			return domainAccessDualMigration, ""
 		}
 		return domainAccessDenied, StatusMigrating
+	case store.TenantKeyDomainStateRotating:
+		validProgress := domain.ProgressCompleted >= 0 &&
+			domain.ProgressTotal >= 0 &&
+			domain.ProgressCompleted <= domain.ProgressTotal
+		// A failed rotation stays readable in both generations so a retry can
+		// finish it; only a completed migration can have started one.
+		activeRotation := domain.OperationKind == store.TenantKeyOperationRotate &&
+			(domain.OperationStatus == store.TenantKeyOperationRunning ||
+				domain.OperationStatus == store.TenantKeyOperationFailed) &&
+			validProgress &&
+			(domain.LegacyHistoryExposure == store.TenantKeyLegacyNone ||
+				domain.LegacyHistoryExposure == store.TenantKeyLegacyExternalArchivesPossible)
+		if activeRotation {
+			return domainAccessDualRotation, ""
+		}
+		return domainAccessDenied, StatusRotating
 	case store.TenantKeyDomainStateSealQueued:
 		queuedSeal := domain.OperationID != nil && *domain.OperationID != "" &&
 			domain.OperationKind == store.TenantKeyOperationSeal &&

@@ -36,11 +36,15 @@ var (
 
 // HistoryRewrapper transforms sealed containers embedded anywhere in event JSON,
 // including base64-encoded nested outbox payloads. It never opens payload
-// ciphertext and never needs row-specific AAD.
+// ciphertext and never needs row-specific AAD. One pass moves containers from
+// exactly one source to exactly one destination domain: a migration's source is
+// the unlabeled deployment-KEK container, a rotation's source is the previous
+// generation's domain.
 type HistoryRewrapper struct {
-	deployment seal.KeyWrapper
-	tenant     seal.KeyWrapper
-	domain     []byte
+	source       seal.KeyWrapper
+	sourceDomain []byte
+	tenant       seal.KeyWrapper
+	domain       []byte
 }
 
 // NewHistoryRewrapper binds a migration pass to exactly one destination domain.
@@ -52,10 +56,43 @@ func NewHistoryRewrapper(deployment, tenant seal.KeyWrapper, domain []byte) (*Hi
 		return nil, errors.New("tenantseal: destination domain is required")
 	}
 	return &HistoryRewrapper{
-		deployment: deployment,
-		tenant:     tenant,
-		domain:     append([]byte(nil), domain...),
+		source: deployment,
+		tenant: tenant,
+		domain: append([]byte(nil), domain...),
 	}, nil
+}
+
+// NewRotationRewrapper binds a rotation pass: containers authenticated under
+// sourceDomain move to destination's key and domain, containers already in the
+// destination domain stay byte-identical, and every other container (including
+// an unlabeled deployment-KEK one) fails closed.
+func NewRotationRewrapper(
+	source seal.KeyWrapper,
+	sourceDomain []byte,
+	destination seal.KeyWrapper,
+	destinationDomain []byte,
+) (*HistoryRewrapper, error) {
+	if source == nil || destination == nil {
+		return nil, errors.New("tenantseal: source and destination domain wrappers are required")
+	}
+	if len(sourceDomain) == 0 || len(destinationDomain) == 0 || bytes.Equal(sourceDomain, destinationDomain) {
+		return nil, errors.New("tenantseal: rotation requires distinct source and destination domains")
+	}
+	return &HistoryRewrapper{
+		source:       source,
+		sourceDomain: append([]byte(nil), sourceDomain...),
+		tenant:       destination,
+		domain:       append([]byte(nil), destinationDomain...),
+	}, nil
+}
+
+// fromSource reports whether a container's domain label is this pass's source:
+// no label for a migration, the exact previous generation for a rotation.
+func (r *HistoryRewrapper) fromSource(containerDomain []byte) bool {
+	if r.sourceDomain == nil {
+		return containerDomain == nil
+	}
+	return containerDomain != nil && bytes.Equal(containerDomain, r.sourceDomain)
 }
 
 // Transform implements events.TenantDataTransform. eventType and schemaVersion
@@ -220,8 +257,8 @@ func (r *HistoryRewrapper) validateContainerPair(before, after []byte) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
 	}
-	if beforeDomain != nil {
-		return errors.New("tenantseal: rewrite pair source is not a legacy deployment container")
+	if !r.fromSource(beforeDomain) {
+		return errors.New("tenantseal: rewrite pair source is not this pass's source container")
 	}
 	afterDomain, err := seal.Domain(after)
 	if err != nil {
@@ -338,14 +375,14 @@ func (r *HistoryRewrapper) rewriteContainer(container []byte) ([]byte, bool, err
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %v", ErrCorruptContainer, err)
 	}
-	if domain == nil {
-		next, err := seal.RewrapDomain(r.deployment, r.tenant, container, r.domain)
+	if r.fromSource(domain) {
+		next, err := seal.RewrapDomain(r.source, r.tenant, container, r.domain)
 		if err != nil {
 			return nil, false, err
 		}
 		return next, true, nil
 	}
-	if !bytes.Equal(domain, r.domain) {
+	if domain == nil || !bytes.Equal(domain, r.domain) {
 		return nil, false, ErrUnexpectedDomain
 	}
 	if err := seal.ValidateDomain(r.tenant, container, r.domain); err != nil {

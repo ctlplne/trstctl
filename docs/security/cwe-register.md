@@ -569,10 +569,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6150` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6167` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6180` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6208` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6166` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6183` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6196` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6224` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -700,7 +700,7 @@ not this file.
 | `internal/store/snapshot.go:566` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:63` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:81` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/tenant_key_domain.go:146` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/tenant_key_domain.go:168` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:94` | small fixture counters (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:105` | small fixture counter (CWE-190) |
 | `internal/store/upsert_arbiter_race_test.go:220` | small fixture counter (CWE-190) |
@@ -837,7 +837,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4173` | closed test table list above |
+| `internal/store/migration_content_test.go:4174` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (2 sites)
 

@@ -338,6 +338,10 @@ const (
 	EventTenantKeyDomainSealed              = "tenant.key_domain.sealed"
 	EventTenantKeyDomainUnsealRequested     = "tenant.key_domain.unseal_requested"
 	EventTenantKeyDomainUnsealed            = "tenant.key_domain.unsealed"
+	EventTenantKeyDomainRotationStarted     = "tenant.key_domain.rotation_started"
+	EventTenantKeyDomainRotationProgressed  = "tenant.key_domain.rotation_progressed"
+	EventTenantKeyDomainRotationCompleted   = "tenant.key_domain.rotation_completed"
+	EventTenantKeyDomainRotationFailed      = "tenant.key_domain.rotation_failed"
 	EventRestoreDrillRecorded               = "backup.restore_drill.recorded"
 	// A126: transit lifecycle facts. Schema 1 was an audit record naming only
 	// the key and projects nothing; schema 2 is the fact (key, kind, version)
@@ -1737,6 +1741,14 @@ type TenantKeyDomainSnapshot struct {
 	MigrationCompletedAt  *time.Time `json:"migration_completed_at,omitempty"`
 	SealedAt              *time.Time `json:"sealed_at,omitempty"`
 	UnsealedAt            *time.Time `json:"unsealed_at,omitempty"`
+	// The next generation exists only while a rotation runs: its wrapped KEK
+	// rides in every rotation snapshot so replay can resume with both
+	// generations openable. RotatedAt is the last completed rotation.
+	NextGeneration       int64      `json:"next_generation,omitempty"`
+	NextWrapperKind      string     `json:"next_wrapper_kind,omitempty"`
+	NextWrapperID        string     `json:"next_wrapper_id,omitempty"`
+	NextWrappedDomainKEK []byte     `json:"next_wrapped_domain_kek,omitempty"`
+	RotatedAt            *time.Time `json:"rotated_at,omitempty"`
 	// SealIdempotencyKey and SealRequestBinding exist only on
 	// tenant.key_domain.seal_requested. They let exact event replay rebuild the
 	// derived bounded-worker command after a projection/outbox crash. Neither is
@@ -4622,6 +4634,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantKeyDomainSealed:                    {1: true},
 	EventTenantKeyDomainUnsealRequested:           {1: true},
 	EventTenantKeyDomainUnsealed:                  {1: true},
+	EventTenantKeyDomainRotationStarted:           {1: true},
+	EventTenantKeyDomainRotationProgressed:        {1: true},
+	EventTenantKeyDomainRotationCompleted:         {1: true},
+	EventTenantKeyDomainRotationFailed:            {1: true},
 	EventTransitKeyCreated:                        {1: true, transit.FactSchemaVersion: true},
 	EventTransitKeyRotated:                        {1: true, transit.FactSchemaVersion: true},
 }
@@ -7981,7 +7997,11 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		EventTenantKeyDomainSealFailed,
 		EventTenantKeyDomainSealed,
 		EventTenantKeyDomainUnsealRequested,
-		EventTenantKeyDomainUnsealed:
+		EventTenantKeyDomainUnsealed,
+		EventTenantKeyDomainRotationStarted,
+		EventTenantKeyDomainRotationProgressed,
+		EventTenantKeyDomainRotationCompleted,
+		EventTenantKeyDomainRotationFailed:
 		var pl TenantKeyDomainSnapshot
 		if err := decode(e, &pl); err != nil {
 			return err
@@ -8019,6 +8039,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			at := e.Time
 			pl.UnsealedAt = &at
 		}
+		if e.Type == EventTenantKeyDomainRotationCompleted && pl.RotatedAt == nil {
+			at := e.Time
+			pl.RotatedAt = &at
+		}
 		actor := ""
 		if e.Actor != nil {
 			actor = e.Actor.Subject
@@ -8027,9 +8051,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			TenantID: e.TenantID, DomainID: pl.DomainID, Generation: pl.Generation,
 			ProtectionMode: pl.ProtectionMode, State: pl.State,
 			WrapperKind: pl.WrapperKind, WrapperID: pl.WrapperID,
-			WrappedDomainKEK: pl.WrappedDomainKEK, OperationID: pl.OperationID,
-			OperationKind: pl.OperationKind, OperationStatus: pl.OperationStatus,
-			MigrationStage: pl.MigrationStage, ProgressCompleted: pl.ProgressCompleted,
+			WrappedDomainKEK: pl.WrappedDomainKEK, NextGeneration: pl.NextGeneration,
+			NextWrapperKind: pl.NextWrapperKind, NextWrapperID: pl.NextWrapperID,
+			NextWrappedDomainKEK: pl.NextWrappedDomainKEK, RotatedAt: pl.RotatedAt,
+			OperationID: pl.OperationID, OperationKind: pl.OperationKind,
+			OperationStatus: pl.OperationStatus,
+			MigrationStage:  pl.MigrationStage, ProgressCompleted: pl.ProgressCompleted,
 			ProgressTotal: pl.ProgressTotal, ProgressCursor: pl.ProgressCursor,
 			Retryable: pl.Retryable, LastErrorCode: pl.LastErrorCode,
 			LastError: pl.LastError, LegacyHistoryExposure: pl.LegacyHistoryExposure,
@@ -8791,6 +8818,7 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 		store.TenantKeyDomainStateSealing,
 		store.TenantKeyDomainStateSealed,
 		store.TenantKeyDomainStateUnsealing,
+		store.TenantKeyDomainStateRotating,
 		store.TenantKeyDomainStateWrapperUnavailable,
 		store.TenantKeyDomainStateWrongWrapper,
 		store.TenantKeyDomainStateCorrupt) {
@@ -8799,7 +8827,8 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 	if !oneOf(pl.OperationKind,
 		store.TenantKeyOperationMigrate,
 		store.TenantKeyOperationSeal,
-		store.TenantKeyOperationUnseal) {
+		store.TenantKeyOperationUnseal,
+		store.TenantKeyOperationRotate) {
 		return fmt.Errorf("projections: %s has unsupported operation kind %q", eventType, pl.OperationKind)
 	}
 	if !oneOf(pl.OperationStatus,
@@ -8814,6 +8843,21 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 		store.TenantKeyLegacyHotHistoryPending,
 		store.TenantKeyLegacyExternalArchivesPossible) {
 		return fmt.Errorf("projections: %s has unsupported legacy-history exposure %q", eventType, pl.LegacyHistoryExposure)
+	}
+	// A next generation is wholly present or wholly absent, exactly one
+	// generation ahead, and exists only while a rotation runs (or on the record
+	// a failed rotation marked corrupt).
+	nextPresent := pl.NextGeneration != 0 || pl.NextWrapperKind != "" || pl.NextWrapperID != "" ||
+		len(pl.NextWrappedDomainKEK) > 0
+	switch {
+	case nextPresent && (pl.NextGeneration != pl.Generation+1 ||
+		strings.TrimSpace(pl.NextWrapperKind) == "" || strings.TrimSpace(pl.NextWrapperID) == "" ||
+		len(pl.NextWrappedDomainKEK) == 0):
+		return fmt.Errorf("projections: %s carries an incomplete next generation; it must be generation+1 with a wrapper kind/id and wrapped KEK", eventType)
+	case nextPresent && !oneOf(pl.State, store.TenantKeyDomainStateRotating, store.TenantKeyDomainStateCorrupt):
+		return fmt.Errorf("projections: %s carries a next generation outside a rotation", eventType)
+	case !nextPresent && pl.State == store.TenantKeyDomainStateRotating:
+		return fmt.Errorf("projections: %s is rotating without a next generation", eventType)
 	}
 
 	switch eventType {
@@ -8897,6 +8941,32 @@ func validateTenantKeyDomainSnapshot(eventType string, pl TenantKeyDomainSnapsho
 			pl.OperationKind != store.TenantKeyOperationUnseal ||
 			pl.OperationStatus != store.TenantKeyOperationCompleted {
 			return fmt.Errorf("projections: %s must carry a completed unsealed state", eventType)
+		}
+	case EventTenantKeyDomainRotationStarted, EventTenantKeyDomainRotationProgressed:
+		// Only a completed migration can rotate, so hot history is never still
+		// pending under a rotation.
+		if pl.State != store.TenantKeyDomainStateRotating ||
+			pl.OperationKind != store.TenantKeyOperationRotate ||
+			pl.OperationStatus != store.TenantKeyOperationRunning ||
+			pl.LegacyHistoryExposure == store.TenantKeyLegacyHotHistoryPending {
+			return fmt.Errorf("projections: %s must carry a running rotation to the next generation", eventType)
+		}
+	case EventTenantKeyDomainRotationCompleted:
+		if pl.State != store.TenantKeyDomainStateUnsealed ||
+			pl.OperationKind != store.TenantKeyOperationRotate ||
+			pl.OperationStatus != store.TenantKeyOperationCompleted ||
+			pl.Generation < 2 || pl.ProgressCompleted != pl.ProgressTotal ||
+			pl.LegacyHistoryExposure == store.TenantKeyLegacyHotHistoryPending ||
+			!hasNonBlankTenantKeyDomainEvidence(pl.TransitionEvidenceRefs) {
+			return fmt.Errorf("projections: %s must promote the next generation into an available state with completed progress and evidence", eventType)
+		}
+	case EventTenantKeyDomainRotationFailed:
+		validFailedState := (pl.State == store.TenantKeyDomainStateRotating && pl.Retryable) ||
+			(pl.State == store.TenantKeyDomainStateCorrupt && !pl.Retryable)
+		if !validFailedState || pl.OperationKind != store.TenantKeyOperationRotate ||
+			pl.OperationStatus != store.TenantKeyOperationFailed ||
+			strings.TrimSpace(pl.LastErrorCode) == "" || strings.TrimSpace(pl.LastError) == "" {
+			return fmt.Errorf("projections: %s must keep a retryable rotation with both generations, or mark the record corrupt, with a visible error", eventType)
 		}
 	}
 	return nil

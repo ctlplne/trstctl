@@ -23,6 +23,7 @@ const (
 	TenantKeyDomainStateSealing            = "sealing"
 	TenantKeyDomainStateSealed             = "sealed"
 	TenantKeyDomainStateUnsealing          = "unsealing"
+	TenantKeyDomainStateRotating           = "rotating"
 	TenantKeyDomainStateWrapperUnavailable = "wrapper_unavailable"
 	TenantKeyDomainStateWrongWrapper       = "wrong_wrapper"
 	TenantKeyDomainStateCorrupt            = "corrupt"
@@ -30,6 +31,7 @@ const (
 	TenantKeyOperationMigrate = "migrate"
 	TenantKeyOperationSeal    = "seal"
 	TenantKeyOperationUnseal  = "unseal"
+	TenantKeyOperationRotate  = "rotate"
 
 	TenantKeyOperationPending   = "pending"
 	TenantKeyOperationRunning   = "running"
@@ -46,6 +48,8 @@ const (
 // end-to-end (AN-8); WrapperID is only a configuration reference, never key
 // material. A missing row means legacy deployment-KEK protection and is
 // synthesized by the service/API rather than persisted as a pretend domain.
+// The Next* fields exist only while a rotation to generation Generation+1
+// runs; RotatedAt is the last completed rotation.
 type TenantKeyDomain struct {
 	TenantID                   string
 	DomainID                   string
@@ -55,6 +59,11 @@ type TenantKeyDomain struct {
 	WrapperKind                string
 	WrapperID                  string
 	WrappedDomainKEK           []byte
+	NextGeneration             int64
+	NextWrapperKind            string
+	NextWrapperID              string
+	NextWrappedDomainKEK       []byte
+	RotatedAt                  *time.Time
 	OperationID                *string
 	OperationKind              string
 	OperationStatus            string
@@ -88,6 +97,12 @@ func (s *Store) ApplyTenantKeyDomainSnapshotTx(ctx context.Context, tx pgx.Tx, d
 	if evidenceRefs == nil {
 		evidenceRefs = []string{}
 	}
+	// An absent next generation is NULL, never an empty key (the table's
+	// next-generation check accepts exactly absent or exactly present).
+	var nextWrapped any
+	if len(domain.NextWrappedDomainKEK) > 0 {
+		nextWrapped = domain.NextWrappedDomainKEK
+	}
 	_, err := tx.Exec(ctx,
 		`INSERT INTO tenant_key_domains
 		        (tenant_id, domain_id, generation, protection_mode, state,
@@ -98,10 +113,12 @@ func (s *Store) ApplyTenantKeyDomainSnapshotTx(ctx context.Context, tx pgx.Tx, d
 		         migration_started_at, migration_completed_at, sealed_at, unsealed_at,
 		         last_transition_event_id, last_transition_type, last_transition_actor,
 		         last_transition_at, last_transition_evidence_refs,
-		         last_transition_sequence, created_at, updated_at)
+		         last_transition_sequence, created_at, updated_at,
+		         next_generation, next_wrapper_kind, next_wrapper_id,
+		         next_wrapped_domain_kek, rotated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
 		         $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
-		         $26, $27, $28, $29, $30, $31)
+		         $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
 		 ON CONFLICT (tenant_id) DO UPDATE SET
 		     domain_id = EXCLUDED.domain_id,
 		     generation = EXCLUDED.generation,
@@ -110,6 +127,11 @@ func (s *Store) ApplyTenantKeyDomainSnapshotTx(ctx context.Context, tx pgx.Tx, d
 		     wrapper_kind = EXCLUDED.wrapper_kind,
 		     wrapper_id = EXCLUDED.wrapper_id,
 		     wrapped_domain_kek = EXCLUDED.wrapped_domain_kek,
+		     next_generation = EXCLUDED.next_generation,
+		     next_wrapper_kind = EXCLUDED.next_wrapper_kind,
+		     next_wrapper_id = EXCLUDED.next_wrapper_id,
+		     next_wrapped_domain_kek = EXCLUDED.next_wrapped_domain_kek,
+		     rotated_at = EXCLUDED.rotated_at,
 		     operation_id = EXCLUDED.operation_id,
 		     operation_kind = EXCLUDED.operation_kind,
 		     operation_status = EXCLUDED.operation_status,
@@ -143,7 +165,9 @@ func (s *Store) ApplyTenantKeyDomainSnapshotTx(ctx context.Context, tx pgx.Tx, d
 		domain.MigrationCompletedAt, domain.SealedAt, domain.UnsealedAt,
 		domain.LastTransitionEventID, domain.LastTransitionType,
 		domain.LastTransitionActor, domain.LastTransitionAt, evidenceRefs,
-		int64(domain.LastTransitionSequence), domain.CreatedAt, domain.UpdatedAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		int64(domain.LastTransitionSequence), domain.CreatedAt, domain.UpdatedAt, // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		domain.NextGeneration, domain.NextWrapperKind, domain.NextWrapperID,
+		nextWrapped, domain.RotatedAt)
 	return err
 }
 
@@ -162,9 +186,9 @@ func (s *Store) GetTenantKeyDomain(ctx context.Context, tenantID string) (Tenant
 
 // WithTenantKeyDomainShared runs fn while holding this tenant's shared
 // key-domain advisory fence inside the same RLS-scoped PostgreSQL transaction
-// that reads the domain projection. A migration, seal, or unseal transition
-// cannot acquire its matching exclusive fence until fn returns and this
-// transaction releases the shared fence.
+// that reads the domain projection. A migration, seal, unseal, or rotation
+// transition cannot acquire its matching exclusive fence until fn returns and
+// this transaction releases the shared fence.
 //
 // A nil domain means the tenant has no key-domain row and therefore still uses
 // legacy deployment-KEK protection. The domain pointer is callback-scoped.
@@ -209,7 +233,9 @@ func (s *Store) GetTenantKeyDomainTx(ctx context.Context, tx pgx.Tx, tenantID st
 		        migration_started_at, migration_completed_at, sealed_at, unsealed_at,
 		        last_transition_event_id, last_transition_type, last_transition_actor,
 		        last_transition_at, last_transition_evidence_refs,
-		        last_transition_sequence, created_at, updated_at
+		        last_transition_sequence, created_at, updated_at,
+		        next_generation, next_wrapper_kind, next_wrapper_id,
+		        next_wrapped_domain_kek, rotated_at
 		   FROM tenant_key_domains
 		  WHERE tenant_id = $1`,
 		tenantID).Scan(
@@ -223,7 +249,8 @@ func (s *Store) GetTenantKeyDomainTx(ctx context.Context, tx pgx.Tx, tenantID st
 		&out.LastTransitionEventID, &out.LastTransitionType,
 		&out.LastTransitionActor, &out.LastTransitionAt,
 		&out.LastTransitionEvidenceRefs, &transitionSequence, &out.CreatedAt,
-		&out.UpdatedAt)
+		&out.UpdatedAt, &out.NextGeneration, &out.NextWrapperKind,
+		&out.NextWrapperID, &out.NextWrappedDomainKEK, &out.RotatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TenantKeyDomain{}, ErrTenantKeyDomainNotFound
 	}
@@ -246,8 +273,8 @@ func (s *Store) LockTenantKeyDomainSharedTx(ctx context.Context, tx pgx.Tx, tena
 	return lockTenantKeyDomainTx(ctx, tx, tenantID, true)
 }
 
-// LockTenantKeyDomainExclusiveTx fences migration/seal/unseal transitions for
-// one tenant without pausing independent tenants.
+// LockTenantKeyDomainExclusiveTx fences migration/seal/unseal/rotation
+// transitions for one tenant without pausing independent tenants.
 func (s *Store) LockTenantKeyDomainExclusiveTx(ctx context.Context, tx pgx.Tx, tenantID string) error {
 	return lockTenantKeyDomainTx(ctx, tx, tenantID, false)
 }
