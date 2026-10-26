@@ -1464,6 +1464,7 @@ cryptography lives behind the platform's single crypto boundary.
 | `TRSTCTL_SECRETS_KEK_FILE` | `data/secrets/kek.bin` | Path to the 256-bit KEK that wraps every stored credential. It is **created `0600` on first boot** if absent, and is the root of trust for credentials at rest. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID` | unset | Stable non-secret ID for one operator-provisioned local tenant-domain wrapper. Both this variable and the file variable below are required together. The database stores this ID, never the path or wrapper key. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE` | unset | Existing local wrapper-key file for the ID above. trstctl does **not** create it or fall back to the deployment KEK when it is missing/wrong. Configure multiple wrappers with `secrets.tenant_seal_local_wrappers` in JSON/YAML. |
+| `TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID` | unset | Stable non-secret ID of one `pkcs11` wrapper the signer holds under an HSM key (see [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)). The signer's tenant KEK file maps the same ID to its HSM key. Configure several with `secrets.tenant_seal_pkcs11_wrappers`. |
 | `TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY` | `false` | Operator assertion that **every** process writing this PostgreSQL database understands `sealed-row-v1` and durable indeterminate claims. After the legacy drain, startup installs a sealed-only PostgreSQL default/constraint. Never enable it while an older writer is running; the ratchet is deliberately incompatible and is not inferred from one node seeing zero rows. |
 | `TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY` | `false` | Operator assertion that every older process able to read, export, or write schema-v1 `secret.rotation_schedule.ran` events is stopped. When retained unsafe error details exist, startup stays unready until this is true; it then performs the signed, deterministic live-generation sanitation and installs the v1 write floor. This is a one-way fleet compatibility decision, not a per-pod readiness guess. |
 | `TRSTCTL_SECRETS_ENABLE_API` | `false` | Enables the served `/api/v1/secrets/*` surface, including store, dynamic leases, sharing, CSR-first PKI secret signing, deprecated auditable PKI keypair generation, machine login, sync, and Gitleaks scans. It also enables the Vault/OpenBao-compatible common aliases under `/v1/auth/token/lookup-self`, `/v1/secret/data/*`, `/v1/pki/sign/*`, and `/v1/pki/issue/*`. |
@@ -1517,6 +1518,71 @@ Wrapper files are operator authority, not ordinary application data. Provision
 them separately with restrictive ownership/mode before configuring a tenant.
 Missing, corrupt, or mismatched custody fails that tenant closed while other
 tenants continue. This local mode makes no outbound call and works air-gapped.
+
+### Tenant domain keys under an HSM
+
+A tenant can instead keep its domain KEK under an HSM key the isolated signer
+holds (`wrapper_kind: "pkcs11"`). The signer creates the tenant's domain KEK,
+keeps it wrapped by an AES-256 key the operator provisions on the HSM and
+reaches over PKCS#11, and wraps and unwraps the tenant's data keys itself. The
+database stores only the wrapped KEK; the control plane never holds the KEK and
+asks the signer for every data-key wrap and unwrap, and the HSM key never
+leaves the HSM. This mode needs the cgo signer built by
+`deploy/docker/Dockerfile.signer-hsm` and a license with the BYOK feature.
+
+1. Provision a sensitive, non-extractable AES-256 key on the token, for
+   example with OpenSC (`--login` prompts for the user PIN):
+
+   ```bash
+   pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so --token-label trstctl-prod --login --keygen --key-type AES:32 --label trstctl-tenant-kek-a --sensitive
+   ```
+
+   The signer refuses a key that is extractable, not sensitive, not AES-256, or
+   not allowed to both encrypt and decrypt.
+2. Give the signer its tenant KEK file with `--tenant-kek-config` (a child
+   signer receives `signer.tenant_kek_config`, or
+   `TRSTCTL_SIGNER_TENANT_KEK_CONFIG`). The PIN is a file reference only:
+
+   ```json
+   {
+     "pkcs11": {
+       "module_path": "/usr/lib/softhsm/libsofthsm2.so",
+       "token_label": "trstctl-prod",
+       "user_pin_file": "/etc/trstctl/pkcs11-user-pin"
+     },
+     "wrappers": [
+       {"id": "hsm-a", "key_label": "trstctl-tenant-kek-a"}
+     ]
+   }
+   ```
+
+   At startup the signer seals and opens a probe under every listed key and
+   refuses to start if one fails, so a missing or mislabeled key is found before
+   any tenant depends on it.
+3. List the same wrapper IDs on the control plane:
+
+   ```json
+   {"secrets": {"tenant_seal_pkcs11_wrappers": [{"id": "hsm-a"}]}}
+   ```
+
+4. Migrate the tenant from the console's tenant custody panel, or with
+   `trstctl-cli platform tenant-key-domain migrate -f migrate.json` where
+   `migrate.json` is `{"wrapper_kind":"pkcs11","wrapper_id":"hsm-a"}`. Seal and
+   unseal work as they do for a local wrapper.
+
+A wrapper ID the control plane does not list, or one the signer does not hold,
+is refused as not configured. If the signer loses the HSM key or the token, the
+tenant fails closed as `wrapper_unavailable`; nothing falls back to the
+deployment KEK. The status reports `remote_wrapper_state: "signer_hsm"` and
+`local_wrapper_zero_egress: false` for such a tenant.
+
+Limits: the data keys return to the control plane, which decrypts tenant data
+with them; every tenant-crypto callback for such a tenant makes signer calls,
+an HSM decrypt each; and the PKCS#11 binding hands the decrypted KEK back
+through a C buffer it frees without zeroing (the signer is non-dumpable and
+refuses ptrace). It is proven against SoftHSM; proof against a hardware HSM
+needs hardware. What comes next: one non-extractable HSM key per tenant, so the
+tenant's KEK is itself an HSM object and data-key wraps run inside the HSM.
 
 Dynamic-secret providers and outbound sync targets use structured JSON/YAML because
 each entry is bound to exactly one tenant. Authority-bearing values are references,
@@ -2117,6 +2183,7 @@ two ways:
 | `TRSTCTL_SIGNER_MTLS_CERT_FILE` / `TRSTCTL_SIGNER_MTLS_KEY_FILE` | — | The control plane's own **client** certificate and key (PEM) presented on the mTLS channel. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_CA_FILE` | — | PEM CA bundle anchoring the **signer's** certificate. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_PIN` | — | Hex SHA-256 of the **signer** certificate's public key, pinned by the control plane. Required with `…_MTLS_ADDRESS`. |
+| `TRSTCTL_SIGNER_TENANT_KEK_CONFIG` | — | Signer-local tenant KEK file a child signer receives as `--tenant-kek-config`: the PKCS#11 token and the HSM keys that wrap tenant domain KEKs (see [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)). Needs the cgo signer and the BYOK license; an external signer takes the flag directly. |
 | `TRSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
 | `TRSTCTL_CA_PUBLIC_CERT_FILE` | — | Optional certificate-only mirror of the issuing CA. Use this to give an unprivileged bootstrap client the public trust anchor without mounting the private control-plane data volume. The control plane republishes it from `TRSTCTL_CA_CERT_FILE` on every successful CA bind. |
 

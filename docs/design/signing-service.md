@@ -208,6 +208,21 @@ certificate, CRL or OCSP signature covers the whole TBS, so that request
 carries the TBS bytes (bounded by a message cap) and a classical key refuses
 it.
 
+Tenant domain KEK custody (A123) adds `CreateTenantDomainKEK`,
+`OpenTenantDomainKEK`, `WrapTenantDataKey`, and `UnwrapTenantDataKey`. The
+Enterprise attach seam gives the signer a PKCS#11 session and a table of
+wrapper IDs naming operator-provisioned AES-256 HSM keys. The signer creates a
+tenant's domain KEK, returns only its HSM-wrapped container, and for each later
+call opens the KEK inside the signer, wraps or unwraps one 32-byte data key, and
+destroys it; the KEK never crosses the transport. The one secret that does is
+`UnwrapTenantDataKey`'s data key: the control plane generated it, asked the
+signer to wrap it, and needs it back to decrypt tenant data, as `Decapsulate`
+returns a shared secret for re-wrap. A signer without the custody answers
+`UNIMPLEMENTED`, and custody failures cross as fixed codes (`NOT_FOUND` for an
+unknown wrapper, `UNAVAILABLE` for the HSM key or token, `DATA_LOSS` for a
+corrupt container, `FAILED_PRECONDITION` for an authentication failure) with no
+wrapper, key, or ciphertext detail.
+
 ### 5.4 Limits and resource bounds
 
 - Maximum request/response size (default 1 MiB; the signer signs digests/short
@@ -223,7 +238,8 @@ it.
 
 **Implemented:** the serving path caps concurrent HTTP/2 streams
 (`MaxConcurrentStreams`) and adds a fixed-size in-flight semaphore over the
-expensive RPCs (`Sign`, `GenerateKey`); excess is rejected immediately with
+expensive RPCs (`Sign`, `GenerateKey`, and the tenant KEK calls, each at
+least one HSM operation); excess is rejected immediately with
 `RESOURCE_EXHAUSTED` (never queued unboundedly), and an RPC with no caller
 deadline is given one. Cheap RPCs (`Health`, `GetPublicKey`, `DestroyKey`) stay
 ungated, so a sign/keygen flood cannot starve a liveness probe, tunable via

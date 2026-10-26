@@ -3635,7 +3635,27 @@ than sending an operator looking for a credential that was never there.
   JetStream reports it, or a note saying why there is none); the Provider
   console shows it in each customer's setup view beside health, and the
   isolation drill with its lane and audit-stream checks sits on the same page.
-  The per-tenant KEK/HSM remains unbuilt. The product ships an S3-compatible
+  Per-tenant HSM custody is served (A123): a tenant can migrate its key domain
+  to a `pkcs11` wrapper the isolated signer holds. The signer creates the
+  tenant's domain KEK, keeps it wrapped by an AES-256 key the operator
+  provisions on an HSM and reaches over PKCS#11, and wraps and unwraps the
+  tenant's data keys itself; the control plane persists only the wrapped KEK
+  and never holds the KEK. Each data-key wrap or unwrap is one signer call that
+  opens the KEK from its wrapped form inside the signer and destroys it after.
+  Seal, unseal and the history rewrap work as they do for a local wrapper, and a
+  lost HSM key fails only that tenant closed (`wrapper_unavailable`), never
+  falling back to the deployment KEK. It runs in the cgo signer (the
+  `signer-hsm` image) under the BYOK license and is proven against SoftHSM in a
+  container; proof against a hardware HSM needs hardware and has not been run.
+  Stated limits: the data keys themselves return to the control plane, which
+  decrypts tenant data with them; the PKCS#11 binding hands the decrypted KEK
+  back through a C buffer it frees without zeroing (the signer is non-dumpable
+  and refuses ptrace, and the Go copy is wiped); and every tenant-crypto
+  callback for such a tenant makes signer calls, each an HSM decrypt, inside the
+  signer's in-flight bound. What comes next: one non-extractable HSM key per
+  tenant, so the tenant's KEK is itself an HSM object and data-key wraps run
+  inside the HSM.
+  The product ships an S3-compatible
   object-store client that keeps each tenant's objects under the object-key
   prefix the tenancy router resolves (`tenant/<id>/`, or `silo/<id>/` for an
   isolated tenant), and the doctor's operator-run isolation suite proves that

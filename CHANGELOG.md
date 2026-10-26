@@ -2,6 +2,15 @@
 
 ### Added
 
+- A tenant's key domain can live in the signer under an HSM key: migrate with
+  `wrapper_kind: "pkcs11"` and a wrapper ID the control plane lists in
+  `secrets.tenant_seal_pkcs11_wrappers`. The signer (the `signer-hsm` image, the
+  BYOK license, `--tenant-kek-config`) creates the tenant's domain KEK, keeps it
+  wrapped by an AES-256 key the operator provisions on the HSM over PKCS#11, and
+  wraps and unwraps the tenant's data keys itself; the database keeps only the
+  wrapped KEK and the control plane never holds it. Seal and unseal work as for
+  a local wrapper file, a lost HSM key fails only that tenant closed, and the
+  console's tenant custody panel offers the choice.
 - Transit keys are shared by every replica: each tenant's keyring is a sealed
   row in PostgreSQL, saved before a create or rotate is reported and reloaded
   when a replica lacks a key or version, so a key made on one replica works on

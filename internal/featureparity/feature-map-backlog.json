@@ -21616,7 +21616,7 @@
             "priority": 13,
             "served_state": "served",
             "backend_status": "served RLS, tenancy, managed-provider tenant provisioning, and enterprise support/SLA posture",
-            "current_frontend_mapping": "Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper migration, asynchronous seal, terminal-failure recovery, and unseal; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
+            "current_frontend_mapping": "Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper or signer-held HSM migration, asynchronous seal, terminal-failure recovery, and unseal; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
             "target_gui_mapping": "Tenant context UI with current tenant, provider-plane status, enterprise support/SLA/professional-services posture, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits.",
             "acceptance_test": "Execution tests prove CAP-MODEL-02 is served by provider-plane status plus idempotent managed tenant provisioning and CAP-MODEL-04 is served by enterprise support/SLA/professional-services posture; UI tests cross-tenant denial, current tenant display, and no tenant ID taken from user-editable route fields for ordinary tenant operations.",
             "source_docs": [
@@ -21678,7 +21678,7 @@
                 },
                 "ui": {
                     "evidence": [
-                        "current_frontend_mapping: Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper migration, asynchronous seal, terminal-failure recovery, and unseal; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
+                        "current_frontend_mapping: Admin System at /admin/system serves current tenant/session context plus tenant key-domain status, local-wrapper or signer-held HSM migration, asynchronous seal, terminal-failure recovery, and unseal; the historical /platform route redirects to the split admin routes. Admin Editions serves provider-plane, enterprise support/SLA/professional-services, and managed-offering posture.",
                         "target_gui_mapping: Tenant context UI with current tenant, provider-plane status, enterprise support/SLA/professional-services posture, managed tenant provisioning, tenant admin, isolation warning, and per-tenant status/limits."
                     ],
                     "refs": [

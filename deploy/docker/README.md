@@ -172,7 +172,8 @@ or outbox waves.
   the same commit yields identical binaries (`make reproducible-check`).
 - **cgo variants:** two capabilities need `dlopen`, so they ship as separate
   glibc images rather than widening this one. `Dockerfile.signer-hsm` builds
-  `trstctl-signer-hsm` for PKCS#11/YubiHSM key custody.
+  `trstctl-signer-hsm` for PKCS#11/YubiHSM key custody and for tenant domain
+  KEKs kept under an HSM key (`--tenant-kek-config`).
   `Dockerfile.agent-pkcs11` builds the agent with cgo plus SoftHSM and OpenSC
   modules (`ghcr.io/ctlplne/trstctl-agent-pkcs11`, `make agent-pkcs11-image`)
   so one DaemonSet image swap turns on `--inventory-pkcs11-module` token
