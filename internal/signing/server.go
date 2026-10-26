@@ -30,11 +30,14 @@ type heldKey struct {
 type Server struct {
 	signerpb.UnimplementedSignerServiceServer
 
-	mu      sync.Mutex
-	keys    map[string]*heldKey
-	serving bool
-	store   *KeyStore // optional sealed persistence; nil = in-memory only
-	keyspec KeyFactory
+	mu   sync.Mutex
+	keys map[string]*heldKey
+	// revocations holds the administrative key revocations of a signer without
+	// a key store; a persistent signer keeps them beside the sealed keys.
+	revocations map[string]KeyRevocation
+	serving     bool
+	store       *KeyStore // optional sealed persistence; nil = in-memory only
+	keyspec     KeyFactory
 	// managedKeys owns remote KMS/HSM lifecycle backends in this isolated
 	// process. The control plane can reach them only through ManageKey over the
 	// authenticated signer transport; provider credentials and key operations
@@ -144,7 +147,7 @@ func WithKeyFactory(factory KeyFactory) ServerOption {
 // NewServer returns a ready in-memory signing server (keys do not survive a
 // restart).
 func NewServer(opts ...ServerOption) *Server {
-	s := &Server{keys: make(map[string]*heldKey), serving: true, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
+	s := &Server{keys: make(map[string]*heldKey), revocations: make(map[string]KeyRevocation), serving: true, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
 	for _, o := range opts {
 		o(s)
 	}
@@ -159,7 +162,7 @@ func NewServer(opts ...ServerOption) *Server {
 // generated. Usage constraints are sealed with the key and restored too, so a
 // CA-class key stays purpose-bound across a restart.
 func NewPersistentServer(store *KeyStore, opts ...ServerOption) (*Server, error) {
-	s := &Server{serving: true, store: store, keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
+	s := &Server{serving: true, store: store, revocations: make(map[string]KeyRevocation), keyspec: defaultKeyFactory{}, gatedDestroyStreams: newLimiter(2)}
 	for _, o := range opts {
 		o(s)
 	}
@@ -291,10 +294,15 @@ func (s *Server) GetPublicKey(_ context.Context, req *signerpb.GetPublicKeyReque
 	if err != nil {
 		return nil, err
 	}
+	revoked, err := s.revoked(req.GetHandle().GetId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "read key revocation: %v", err)
+	}
 	return &signerpb.GetPublicKeyResponse{
 		Algorithm:             s.keyspec.ProtoFromAlgorithm(held.signer.Algorithm()),
 		PublicKey:             held.signer.Public().DER,
 		RequiresAuthorization: held.constraints.requireAuth,
+		Revoked:               revoked,
 	}, nil
 }
 
@@ -310,7 +318,7 @@ func (s *Server) Sign(ctx context.Context, req *signerpb.SignRequest) (*signerpb
 	if err := validateSignRequest(req); err != nil {
 		return nil, err
 	}
-	held, err := s.lookup(req.GetHandle())
+	held, err := s.lookupSigning(req.GetHandle())
 	if err != nil {
 		return nil, err
 	}
@@ -468,6 +476,7 @@ func (s *Server) destroyGatedKeyHandle(_ context.Context, handle string) error {
 	if ok {
 		delete(s.keys, handle)
 	}
+	delete(s.revocations, handle)
 	s.mu.Unlock()
 	if ok {
 		held.signer.Destroy()

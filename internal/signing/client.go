@@ -428,6 +428,30 @@ func (c *Client) SignerForHandleWithPurpose(ctx context.Context, handle string, 
 	}, nil
 }
 
+// RevokeKey asks the signer to revoke handle administratively (A128). It returns
+// the revocation that holds, which is the first one for the handle, and the
+// revoked key's PKIX public key.
+func (c *Client) RevokeKey(ctx context.Context, handle, operationID, reason string) (KeyRevocation, []byte, error) {
+	resp, err := c.svc.RevokeKey(ctx, &signerpb.RevokeKeyRequest{
+		Handle: &signerpb.KeyHandle{Id: handle}, OperationId: operationID, Reason: reason,
+	})
+	if err != nil {
+		return KeyRevocation{}, nil, err
+	}
+	return KeyRevocation{OperationID: resp.GetOperationId(), Reason: resp.GetReason(), RevokedAt: resp.GetRevokedAtUnix()},
+		resp.GetPublicKey(), nil
+}
+
+// KeyRevoked reads whether the signer holds handle as revoked: the signer's own
+// answer, independent of any control-plane record.
+func (c *Client) KeyRevoked(ctx context.Context, handle string) (bool, error) {
+	resp, err := c.svc.GetPublicKey(ctx, &signerpb.GetPublicKeyRequest{Handle: &signerpb.KeyHandle{Id: handle}})
+	if err != nil {
+		return false, err
+	}
+	return resp.GetRevoked(), nil
+}
+
 // RemoteSigner is a crypto.DigestSigner backed by a key held inside the signer.
 // It carries the usage purpose it asserts on every Sign (SIGNER-002/003); the
 // signer enforces that purpose against the key's allowed set.

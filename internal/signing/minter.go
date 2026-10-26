@@ -144,7 +144,7 @@ type custodyAwareMinter interface {
 // attached succession minter can use it as a predecessor. Private key bytes never
 // leave the signer: signing goes through the in-signer DigestSigner.
 func (s *Server) ResolvePredecessor(handle string) (crypto.Signer, error) {
-	held, err := s.lookup(&signerpb.KeyHandle{Id: handle})
+	held, err := s.lookupSigning(&signerpb.KeyHandle{Id: handle})
 	if err != nil {
 		return nil, err
 	}

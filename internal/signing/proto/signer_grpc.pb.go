@@ -57,6 +57,7 @@ const (
 	SignerService_OpenTenantDomainKEK_FullMethodName           = "/trstctl.signing.v1.SignerService/OpenTenantDomainKEK"
 	SignerService_WrapTenantDataKey_FullMethodName             = "/trstctl.signing.v1.SignerService/WrapTenantDataKey"
 	SignerService_UnwrapTenantDataKey_FullMethodName           = "/trstctl.signing.v1.SignerService/UnwrapTenantDataKey"
+	SignerService_RevokeKey_FullMethodName                     = "/trstctl.signing.v1.SignerService/RevokeKey"
 )
 
 // SignerServiceClient is the client API for SignerService service.
@@ -191,6 +192,13 @@ type SignerServiceClient interface {
 	// UnwrapTenantDataKey returns the data key, byte-native secret material the
 	// caller must wipe after use.
 	UnwrapTenantDataKey(ctx context.Context, in *UnwrapTenantDataKeyRequest, opts ...grpc.CallOption) (*UnwrapTenantDataKeyResponse, error)
+	// RevokeKey administratively revokes a key handle (A128). The key stays in
+	// custody, so its public half remains readable and a gated destruction can
+	// still retire it, but this signer and every signer process sharing its
+	// keystore refuse to sign with it from the next request on. The first
+	// revocation holds: a repeat or redelivered request reads back the original
+	// operation, reason and time.
+	RevokeKey(ctx context.Context, in *RevokeKeyRequest, opts ...grpc.CallOption) (*RevokeKeyResponse, error)
 }
 
 type signerServiceClient struct {
@@ -474,6 +482,16 @@ func (c *signerServiceClient) UnwrapTenantDataKey(ctx context.Context, in *Unwra
 	return out, nil
 }
 
+func (c *signerServiceClient) RevokeKey(ctx context.Context, in *RevokeKeyRequest, opts ...grpc.CallOption) (*RevokeKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeKeyResponse)
+	err := c.cc.Invoke(ctx, SignerService_RevokeKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SignerServiceServer is the server API for SignerService service.
 // All implementations must embed UnimplementedSignerServiceServer
 // for forward compatibility.
@@ -606,6 +624,13 @@ type SignerServiceServer interface {
 	// UnwrapTenantDataKey returns the data key, byte-native secret material the
 	// caller must wipe after use.
 	UnwrapTenantDataKey(context.Context, *UnwrapTenantDataKeyRequest) (*UnwrapTenantDataKeyResponse, error)
+	// RevokeKey administratively revokes a key handle (A128). The key stays in
+	// custody, so its public half remains readable and a gated destruction can
+	// still retire it, but this signer and every signer process sharing its
+	// keystore refuse to sign with it from the next request on. The first
+	// revocation holds: a repeat or redelivered request reads back the original
+	// operation, reason and time.
+	RevokeKey(context.Context, *RevokeKeyRequest) (*RevokeKeyResponse, error)
 	mustEmbedUnimplementedSignerServiceServer()
 }
 
@@ -696,6 +721,9 @@ func (UnimplementedSignerServiceServer) WrapTenantDataKey(context.Context, *Wrap
 }
 func (UnimplementedSignerServiceServer) UnwrapTenantDataKey(context.Context, *UnwrapTenantDataKeyRequest) (*UnwrapTenantDataKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UnwrapTenantDataKey not implemented")
+}
+func (UnimplementedSignerServiceServer) RevokeKey(context.Context, *RevokeKeyRequest) (*RevokeKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeKey not implemented")
 }
 func (UnimplementedSignerServiceServer) mustEmbedUnimplementedSignerServiceServer() {}
 func (UnimplementedSignerServiceServer) testEmbeddedByValue()                       {}
@@ -1193,6 +1221,24 @@ func _SignerService_UnwrapTenantDataKey_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SignerService_RevokeKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SignerServiceServer).RevokeKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SignerService_RevokeKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SignerServiceServer).RevokeKey(ctx, req.(*RevokeKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SignerService_ServiceDesc is the grpc.ServiceDesc for SignerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1303,6 +1349,10 @@ var SignerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UnwrapTenantDataKey",
 			Handler:    _SignerService_UnwrapTenantDataKey_Handler,
+		},
+		{
+			MethodName: "RevokeKey",
+			Handler:    _SignerService_RevokeKey_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

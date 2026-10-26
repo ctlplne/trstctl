@@ -223,6 +223,18 @@ unknown wrapper, `UNAVAILABLE` for the HSM key or token, `DATA_LOSS` for a
 corrupt container, `FAILED_PRECONDITION` for an authentication failure) with no
 wrapper, key, or ciphertext detail.
 
+`RevokeKey` (A128) revokes a key administratively. The key stays in custody,
+so `GetPublicKey` still returns its public half (now with `revoked: true`) and
+a gated destruction can still retire it, but every operation that signs with
+it — `Sign`, and resolving it as a succession predecessor — answers
+`FAILED_PRECONDITION` from the next request on. A persistent signer writes the
+revocation as a small non-secret mark beside the sealed key (the operation ID,
+a lower-case reason code and the time), linked into place whole, so every
+signer process sharing the keystore refuses the key and a restarted signer
+keeps refusing it. The first revocation holds: a repeat or redelivered request
+reads back the original operation, reason and time. The mark travels with the
+keystore in a full backup.
+
 ### 5.4 Limits and resource bounds
 
 - Maximum request/response size (default 1 MiB; the signer signs digests/short

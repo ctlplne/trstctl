@@ -162,6 +162,14 @@ service SignerService {
   // UnwrapTenantDataKey returns the data key, byte-native secret material the
   // caller must wipe after use.
   rpc UnwrapTenantDataKey(UnwrapTenantDataKeyRequest) returns (UnwrapTenantDataKeyResponse);
+
+  // RevokeKey administratively revokes a key handle (A128). The key stays in
+  // custody, so its public half remains readable and a gated destruction can
+  // still retire it, but this signer and every signer process sharing its
+  // keystore refuse to sign with it from the next request on. The first
+  // revocation holds: a repeat or redelivered request reads back the original
+  // operation, reason and time.
+  rpc RevokeKey(RevokeKeyRequest) returns (RevokeKeyResponse);
 }
 
 // Algorithm mirrors internal/crypto.Algorithm. Proprietary algorithms use
@@ -263,6 +271,8 @@ message GetPublicKeyResponse {
   // Read-only capability bit from the signer's sealed key constraints. A caller
   // without an approval flow must refuse this key before claiming it is usable.
   bool requires_authorization = 3;
+  // The key is administratively revoked: it signs nothing (RevokeKey).
+  bool revoked = 4;
 }
 
 message SignRequest {
@@ -675,4 +685,22 @@ message UnwrapTenantDataKeyRequest {
 
 message UnwrapTenantDataKeyResponse {
   bytes data_key = 1;
+}
+
+message RevokeKeyRequest {
+  KeyHandle handle = 1;
+  // operation_id names the revoking operation (the control plane's ceremony),
+  // so a redelivered request is recognisably the same revocation.
+  string operation_id = 2;
+  // reason is a lower-case revocation reason code.
+  string reason = 3;
+}
+
+message RevokeKeyResponse {
+  // public_key is the revoked key's PKIX DER public key.
+  bytes public_key = 1;
+  // The first revocation's operation, reason and time.
+  string operation_id = 2;
+  string reason = 3;
+  int64 revoked_at_unix = 4;
 }

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1739 annotated sites across 27 rules. Each row is
+1741 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1150,7 +1150,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (495 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (496 sites)
 
 | Location | Reason |
 |---|---|
@@ -1550,6 +1550,7 @@ not this file.
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
+| `internal/signing/revocation.go:105` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/spireupstream/plugin.go:239` | operator-configured public CA bundle path (CWE-22) |
 | `internal/spireupstream/plugin.go:318` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
@@ -1865,7 +1866,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (93 sites)
+### G703 — CWE-22 Path traversal (taint) (94 sites)
 
 | Location | Reason |
 |---|---|
@@ -1935,6 +1936,7 @@ not this file.
 | `internal/signing/keystore.go:317` | tmpPath passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore.go:454` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/signing/keystore_test.go:233` | test path inside its own tempdir/checkout (CWE-22) |
+| `internal/signing/revocation.go:132` | path passed the explicit signer-keystore confinement check above (CWE-22) |
 | `internal/testutil/openssltest/openssltest.go:89` | test-support helper probing fixed well-known openssl paths; not linked into served binaries (CWE-22) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/tsa/http_test.go:112` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
