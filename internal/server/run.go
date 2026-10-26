@@ -471,6 +471,9 @@ func startChildSigner(ctx context.Context, cfg *config.Config) (SignerProvider, 
 		managedKeysCleanup = cleanup
 		args = append(args, "--managed-keys-config", managedKeysConfig)
 	}
+	if cfg.Signer.TenantKEKConfig != "" {
+		args = append(args, "--tenant-kek-config", cfg.Signer.TenantKEKConfig)
+	}
 	args = appendSignerLicenseArgs(args, cfg.License)
 	if cfg.Signer.AllowInsecureDevNonLinux {
 		args = append(args, "--allow-insecure-dev-nonlinux")
@@ -673,7 +676,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		return Deps{}, err
 	}
 	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, err := runTenantCustodyFromConfig(
-		cfg.Secrets, st, log, sec.kek, securityGuards.auditKey,
+		cfg.Secrets, st, log, sec.kek, signer.signer, securityGuards.auditKey,
 	)
 	if err != nil {
 		return Deps{}, err
@@ -890,12 +893,13 @@ func runTenantCustodyFromConfig(
 	st *store.Store,
 	log *events.Log,
 	deployment sealKeyWrapper,
+	signer SignerProvider,
 	auditKey *jose.SigningKey,
 ) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.Lifecycle, tenantseal.Access, error) {
 	if st == nil {
 		return nil, nil, nil, nil, nil
 	}
-	protector, migrator, registry, access, err := idempotencyResultProtectionFromConfig(cfg, st, deployment)
+	protector, migrator, registry, access, err := idempotencyResultProtectionFromConfig(cfg, st, deployment, signer)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("tenant result protection: %w", err)
 	}
@@ -912,21 +916,30 @@ func runTenantCustodyFromConfig(
 	return protector, migrator, lifecycle, access, nil
 }
 
+// idempotencyResultProtectionFromConfig builds the one wrapper registry every
+// tenant-crypto path shares: local_file wrappers from operator files, and
+// pkcs11 wrappers held by the isolated signer under HSM keys (A123).
 func idempotencyResultProtectionFromConfig(
 	cfg config.Secrets,
 	st *store.Store,
 	deployment sealKeyWrapper,
-) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.LocalWrapperRegistry, tenantseal.Access, error) {
+	signer SignerProvider,
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, tenantseal.DomainKEKManager, tenantseal.Access, error) {
 	wrappers := make([]tenantseal.LocalWrapper, 0, len(cfg.TenantSealLocalWrappers))
 	for _, wrapper := range cfg.TenantSealLocalWrappers {
 		wrappers = append(wrappers, tenantseal.LocalWrapper{
 			ID: wrapper.ID, Path: wrapper.File,
 		})
 	}
-	registry, err := tenantseal.NewLocalWrapperRegistry(wrappers)
+	local, err := tenantseal.NewLocalWrapperRegistry(wrappers)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
+	hsm, err := pkcs11WrapperRegistryFromConfig(cfg.TenantSealPKCS11Wrappers, signer)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	registry := tenantseal.NewRoutedWrapperRegistry(local, hsm)
 	access, err := tenantseal.NewAccess(st, deployment, registry)
 	if err != nil {
 		return nil, nil, nil, nil, err

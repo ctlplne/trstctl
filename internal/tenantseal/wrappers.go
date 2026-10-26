@@ -12,7 +12,13 @@ import (
 	"trstctl.com/trstctl/internal/crypto/tenantwrap"
 )
 
-const WrapperKindLocalFile = "local_file"
+const (
+	WrapperKindLocalFile = "local_file"
+	// WrapperKindPKCS11 is a tenant domain KEK the isolated signer holds,
+	// wrapped by an operator HSM key it reaches over PKCS#11 (A123). The
+	// control plane persists only the wrapped form and never sees the KEK.
+	WrapperKindPKCS11 = "pkcs11"
+)
 
 var (
 	// ErrWrapperNotConfigured means the persisted wrapper kind and ID did not
@@ -41,8 +47,11 @@ type TransientDomainKEK interface {
 
 // DomainKEKRegistry opens a transient tenant-domain KEK through one exact,
 // non-egress operator-configured wrapper. Implementations return key memory
-// owned by the caller, which must Destroy it. A remote custody integration must
-// not use this request-path seam; it belongs in the bounded outbox workflow.
+// owned by the caller, which must Destroy it, or (for the pkcs11 kind) a
+// handle whose wraps and unwraps run in the deployment's own isolated signer,
+// the process issuance already signs through on the request path. A remote
+// custody integration (a cloud KMS) must not use this request-path seam; it
+// belongs in the bounded outbox workflow.
 type DomainKEKRegistry interface {
 	OpenDomainKEK(
 		ctx context.Context,

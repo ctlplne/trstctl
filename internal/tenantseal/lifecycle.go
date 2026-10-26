@@ -30,8 +30,9 @@ const tenantKeyDomainHistoryStage = "jetstream_hot_history"
 var tenantKeyDomainSealOperationNamespace = uuid.MustParse("ebffb468-4321-4d13-8f5f-3b56515744ec")
 
 // DomainKEKManager combines the exact wrapper operations needed by the served
-// lifecycle. LocalWrapperRegistry is the CORE implementation and performs zero
-// egress. A future remote implementation must live behind a bounded outbox
+// lifecycle. LocalWrapperRegistry performs zero egress; SignerWrapperRegistry
+// reaches only the deployment's isolated signer, which holds the HSM session.
+// A remote implementation (a cloud KMS) must live behind a bounded outbox
 // worker rather than implementing this request-path interface.
 type DomainKEKManager interface {
 	DomainKEKRegistry
@@ -401,7 +402,8 @@ func (l *Lifecycle) validateMigrationPreconditions(tenantID string, ref WrapperR
 	if strings.TrimSpace(tenantID) == "" {
 		return errors.New("tenantseal: migration requires tenant_id (AN-1)")
 	}
-	if ref.Kind != WrapperKindLocalFile || strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID {
+	if (ref.Kind != WrapperKindLocalFile && ref.Kind != WrapperKindPKCS11) ||
+		strings.TrimSpace(ref.ID) == "" || strings.TrimSpace(ref.ID) != ref.ID {
 		return ErrWrapperNotConfigured
 	}
 	if err := l.log.HistoryRewriteReady(); err != nil {

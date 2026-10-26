@@ -120,8 +120,8 @@ func (a *API) migrateTenantKeyDomain(w http.ResponseWriter, r *http.Request) {
 		if req.WrapperKind == "" {
 			req.WrapperKind = tenantseal.WrapperKindLocalFile
 		}
-		if req.WrapperKind != tenantseal.WrapperKindLocalFile || req.WrapperID == "" {
-			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file and wrapper_id is required")
+		if (req.WrapperKind != tenantseal.WrapperKindLocalFile && req.WrapperKind != tenantseal.WrapperKindPKCS11) || req.WrapperID == "" {
+			return 0, nil, errStatus(http.StatusBadRequest, "wrapper_kind must be local_file or pkcs11 and wrapper_id is required")
 		}
 		domain, err := a.tenantKeyDomains.Migrate(ctx, tenantID, tenantseal.WrapperRef{
 			Kind: req.WrapperKind, ID: req.WrapperID,
@@ -283,9 +283,8 @@ func tenantKeyDomainStatusFromStore(domain store.TenantKeyDomain) TenantKeyDomai
 		LastTransitionType:        domain.LastTransitionType,
 		LastTransitionActor:       domain.LastTransitionActor,
 		LastTransitionEvidenceRef: append([]string(nil), domain.LastTransitionEvidenceRefs...),
-		LocalWrapperZeroEgress:    true,
-		RemoteWrapperState:        "disabled_in_core_local_custody",
 	}
+	status.LocalWrapperZeroEgress, status.RemoteWrapperState = tenantWrapperPosture(domain.WrapperKind)
 	if status.LastTransitionEvidenceRef == nil {
 		status.LastTransitionEvidenceRef = []string{}
 	}
@@ -296,6 +295,19 @@ func tenantKeyDomainStatusFromStore(domain store.TenantKeyDomain) TenantKeyDomai
 	status.Recovery = tenantKeyDomainRecovery(domain)
 	return status
 }
+
+// tenantWrapperPosture says where a tenant's domain KEK lives. A local_file
+// wrapper opens it in this process with zero egress; a pkcs11 wrapper keeps it
+// in the isolated signer under an HSM key, so this process never holds it but
+// does call the signer for every data-key wrap and unwrap.
+func tenantWrapperPosture(kind string) (localZeroEgress bool, remoteState string) {
+	if kind == tenantseal.WrapperKindPKCS11 {
+		return false, tenantWrapperSignerHSM
+	}
+	return true, "disabled_in_core_local_custody"
+}
+
+const tenantWrapperSignerHSM = "signer_hsm"
 
 func unavailableTenantKeyDomainStatus() TenantKeyDomainStatus {
 	return TenantKeyDomainStatus{
@@ -313,7 +325,7 @@ func legacyTenantKeyDomainStatus() TenantKeyDomainStatus {
 		LegacyHistoryExposure:     store.TenantKeyLegacyHotHistoryPending,
 		LastTransitionEvidenceRef: []string{}, LocalWrapperZeroEgress: true,
 		RemoteWrapperState: "disabled_in_core_local_custody",
-		Recovery:           "Provision an existing local tenant wrapper and start migration; trstctl will not create the wrapper or fall back to the deployment KEK after opt-in.",
+		Recovery:           "Provision an existing local tenant wrapper, or an HSM wrapper the signer holds, and start migration; trstctl will not create the wrapper or fall back to the deployment KEK after opt-in.",
 	}
 }
 
@@ -327,7 +339,7 @@ func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
 		return "Migration is resumable. Retry with the same wrapper kind and ID after the current operation stops progressing."
 	case store.TenantKeyDomainStatePartial:
 		if domain.OperationStatus == store.TenantKeyOperationFailed {
-			return "Fix the reported local custody or history prerequisite, then retry migration with the same wrapper kind and ID."
+			return "Fix the reported custody or history prerequisite, then retry migration with the same wrapper kind and ID."
 		}
 		return "Hot state is tenant-domain protected. Retire or re-encrypt pre-migration archives, exports, and backups before asserting no legacy exposure."
 	case store.TenantKeyDomainStateSealQueued:
@@ -335,8 +347,14 @@ func tenantKeyDomainRecovery(domain store.TenantKeyDomain) string {
 	case store.TenantKeyDomainStateSealed:
 		return "Use the configured operator-controlled wrapper and the unseal mutation to restore tenant cryptographic access."
 	case store.TenantKeyDomainStateWrapperUnavailable:
+		if domain.WrapperKind == tenantseal.WrapperKindPKCS11 {
+			return "Restore the signer's tenant KEK custody for this wrapper ID (the HSM key its tenant KEK file names, the token and its PIN file, and the BYOK license) and retry; no deployment-key fallback is attempted."
+		}
 		return "Restore the exact configured local wrapper file and retry; no deployment-key fallback is attempted."
 	case store.TenantKeyDomainStateWrongWrapper:
+		if domain.WrapperKind == tenantseal.WrapperKindPKCS11 {
+			return "Restore the HSM key that originally wrapped this tenant domain under this wrapper ID; trstctl cannot distinguish a wrong key from authenticated unwrap failure."
+		}
 		return "Restore the wrapper key that originally protected this tenant domain; trstctl cannot distinguish a wrong key from authenticated unwrap failure."
 	case store.TenantKeyDomainStateCorrupt:
 		return "Stop mutation attempts and restore the tenant-domain record plus wrapper from verified recovery evidence."

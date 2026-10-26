@@ -2337,6 +2337,14 @@ type Secrets struct {
 	// for simple deployments through TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID and
 	// TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE.
 	TenantSealLocalWrappers []TenantSealLocalWrapper `json:"tenant_seal_local_wrappers,omitempty"`
+	// TenantSealPKCS11Wrappers name the wrappers the isolated signer holds under
+	// operator HSM keys (A123). A tenant domain KEK migrated to one of them never
+	// reaches the control plane: the signer creates, opens and uses it, and the
+	// database stores only its wrapped form. The signer's own tenant KEK file
+	// (--tenant-kek-config) maps each ID to its HSM key; this list is the control
+	// plane's exact allowlist. The environment overlay exposes one entry through
+	// TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID.
+	TenantSealPKCS11Wrappers []TenantSealPKCS11Wrapper `json:"tenant_seal_pkcs11_wrappers,omitempty"`
 	// IdempotencyResultFleetReady is the operator assertion that every writer
 	// sharing this PostgreSQL database understands sealed-row-v1 and durable
 	// indeterminate claims. Startup then installs the incompatible sealed-only
@@ -2403,6 +2411,11 @@ type Transit struct {
 type TenantSealLocalWrapper struct {
 	ID   string `json:"id"`
 	File string `json:"file"`
+}
+
+// TenantSealPKCS11Wrapper names one wrapper the signer holds under an HSM key.
+type TenantSealPKCS11Wrapper struct {
+	ID string `json:"id"`
 }
 
 // MachineAuthMethod configures one served workload-login method.
@@ -2543,6 +2556,13 @@ type Signer struct {
 	MTLSKeyFile    string `json:"mtls_key_file,omitempty"`     // control-plane client key (PEM)
 	MTLSPeerCAFile string `json:"mtls_peer_ca_file,omitempty"` // CA bundle anchoring the signer certificate (PEM)
 	MTLSPeerPin    string `json:"mtls_peer_pin,omitempty"`     // hex SHA-256 of the signer certificate's public key
+
+	// TenantKEKConfig is the signer-local tenant KEK custody file (A123) a
+	// child signer receives as --tenant-kek-config: the PKCS#11 token and the
+	// HSM keys that wrap tenant domain KEKs. It needs a cgo signer build (the
+	// signer-hsm image) and the BYOK license. An external signer takes the
+	// flag directly.
+	TenantKEKConfig string `json:"tenant_kek_config,omitempty"`
 }
 
 const (
@@ -2979,6 +2999,9 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_TRANSIT_KEYRING_DIR", &c.Transit.KeyringDir)
 	setBool(getenv, "TRSTCTL_IDEMPOTENCY_RESULT_FLEET_READY", &c.Secrets.IdempotencyResultFleetReady)
 	setBool(getenv, "TRSTCTL_SECRET_ROTATION_HISTORY_FLEET_READY", &c.Secrets.SecretRotationHistoryFleetReady)
+	if id := getenv("TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID"); id != "" {
+		c.Secrets.TenantSealPKCS11Wrappers = []TenantSealPKCS11Wrapper{{ID: id}}
+	}
 	localWrapperID := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID")
 	localWrapperFile := getenv("TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE")
 	if localWrapperID != "" || localWrapperFile != "" {
@@ -3014,6 +3037,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_KEY_FILE", &c.Signer.MTLSKeyFile)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", &c.Signer.MTLSPeerCAFile)
 	setString(getenv, "TRSTCTL_SIGNER_MTLS_PEER_PIN", &c.Signer.MTLSPeerPin)
+	setString(getenv, "TRSTCTL_SIGNER_TENANT_KEK_CONFIG", &c.Signer.TenantKEKConfig)
 	applyCAEnv(getenv, &c.CA)
 	applyAgentChannelEnv(getenv, &c.AgentChannel)
 	applyWorkloadIdentityEnv(getenv, &c.AttestedIssuance)
@@ -4441,6 +4465,7 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
+	errs = append(errs, validateTenantSealPKCS11Wrappers(c.Secrets.TenantSealPKCS11Wrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
 	errs = append(errs, validateObjectStore(c.ObjectStore)...)
 	if c.Audit.ArchiveObjectStore && !c.ObjectStore.Configured() {
@@ -4609,6 +4634,21 @@ func validateTenantSealLocalWrappers(wrappers []TenantSealLocalWrapper) []error 
 		}
 		if _, duplicate := seen[wrapper.ID]; duplicate && wrapper.ID != "" {
 			errs = append(errs, fmt.Errorf("secrets.tenant_seal_local_wrappers contains duplicate id %q", wrapper.ID))
+		}
+		seen[wrapper.ID] = struct{}{}
+	}
+	return errs
+}
+
+func validateTenantSealPKCS11Wrappers(wrappers []TenantSealPKCS11Wrapper) []error {
+	var errs []error
+	seen := make(map[string]struct{}, len(wrappers))
+	for index, wrapper := range wrappers {
+		if wrapper.ID == "" || strings.TrimSpace(wrapper.ID) != wrapper.ID || len(wrapper.ID) > 128 {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_pkcs11_wrappers[%d].id must be 1 to 128 characters with no surrounding space", index))
+		}
+		if _, duplicate := seen[wrapper.ID]; duplicate && wrapper.ID != "" {
+			errs = append(errs, fmt.Errorf("secrets.tenant_seal_pkcs11_wrappers contains duplicate id %q", wrapper.ID))
 		}
 		seen[wrapper.ID] = struct{}{}
 	}

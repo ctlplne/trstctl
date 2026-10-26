@@ -17565,7 +17565,7 @@ export interface components {
         TenantKeyDomainMigrateRequest: {
             wrapper_id: string;
             /** @enum {string} */
-            wrapper_kind?: "local_file";
+            wrapper_kind?: "local_file" | "pkcs11";
         };
         TenantKeyDomainSealReceipt: {
             accepted: boolean;

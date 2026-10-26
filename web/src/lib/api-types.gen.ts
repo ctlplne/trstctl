@@ -8893,7 +8893,7 @@ export interface TSAQualificationCheck {
 
 export interface TenantKeyDomainMigrateRequest {
   wrapper_id: string;
-  wrapper_kind?: "local_file";
+  wrapper_kind?: "local_file" | "pkcs11";
 }
 
 export interface TenantKeyDomainSealReceipt {

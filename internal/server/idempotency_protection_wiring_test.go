@@ -47,7 +47,7 @@ func TestProductionIdempotencyConstructorsAttachTenantResultProtector(t *testing
 	assertSourceContains(t, filepath.Join(serverDir, "..", "api", "secrets.go"),
 		"TenantCrypto tenantseal.Access")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),
-		"idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek)")
+		"idempotencyResultProtectionFromConfig(cfg.Secrets, st, kek, signerRuntime.signer)")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),
 		"resultMigrator.MigrateAll(ctx)")
 	assertSourceContains(t, filepath.Join(serverDir, "bootstrap.go"),

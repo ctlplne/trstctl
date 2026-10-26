@@ -36758,7 +36758,8 @@
           },
           "wrapper_kind": {
             "enum": [
-              "local_file"
+              "local_file",
+              "pkcs11"
             ],
             "type": "string"
           }

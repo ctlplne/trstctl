@@ -135,3 +135,34 @@ func TestTenantSealLocalWrapperConfigFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+// A123: the control plane's pkcs11 wrapper allowlist and the signer's tenant
+// KEK file load from the environment, and a malformed allowlist fails closed.
+func TestTenantSealPKCS11WrapperConfig(t *testing.T) {
+	env := map[string]string{
+		"TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID": "hsm-a",
+		"TRSTCTL_SIGNER_TENANT_KEK_CONFIG":      "/etc/trstctl/tenant-kek.json",
+	}
+	cfg, err := config.Load(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(cfg.Secrets.TenantSealPKCS11Wrappers) != 1 || cfg.Secrets.TenantSealPKCS11Wrappers[0].ID != "hsm-a" {
+		t.Fatalf("pkcs11 wrappers = %#v", cfg.Secrets.TenantSealPKCS11Wrappers)
+	}
+	if cfg.Signer.TenantKEKConfig != "/etc/trstctl/tenant-kek.json" {
+		t.Fatalf("signer tenant KEK config = %q", cfg.Signer.TenantKEKConfig)
+	}
+	for name, wrappers := range map[string][]config.TenantSealPKCS11Wrapper{
+		"missing id":   {{}},
+		"untrimmed id": {{ID: " hsm-a"}},
+		"long id":      {{ID: strings.Repeat("h", 129)}},
+		"duplicate id": {{ID: "hsm-a"}, {ID: "hsm-a"}},
+	} {
+		cfg := config.Default()
+		cfg.Secrets.TenantSealPKCS11Wrappers = wrappers
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: Validate accepted the pkcs11 wrapper allowlist", name)
+		}
+	}
+}

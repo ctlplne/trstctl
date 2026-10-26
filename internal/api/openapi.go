@@ -3714,7 +3714,7 @@ func componentSchemas() map[string]*Schema {
 		"indeterminate_results": {Type: "integer"}, "failure": str(), "recovery": str(),
 	}, "state", "fleet_ready", "sealed_only_floor", "raw_v0_remaining", "legacy_dynamic_remaining", "sealed_results", "pending_results", "indeterminate_results", "recovery")
 	tenantKeyDomainMigrateRequest := object(map[string]*Schema{
-		"wrapper_kind": {Type: "string", Enum: []string{"local_file"}},
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}},
 		"wrapper_id":   str(),
 	}, "wrapper_id")
 	tenantKeyDomainSealReceipt := object(map[string]*Schema{

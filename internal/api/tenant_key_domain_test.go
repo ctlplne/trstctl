@@ -265,3 +265,51 @@ func tenantDomainRequest(method, path string, body []byte, idempotencyKey string
 	}
 	return req
 }
+
+// A123: a tenant migrates to a pkcs11 wrapper the signer holds. The exact
+// kind and ID reach the lifecycle, and the status says the domain KEK lives in
+// the signer under an HSM key (not a zero-egress local file), with recovery
+// that names the signer's HSM custody when the wrapper is unavailable.
+func TestTenantKeyDomainMigratesToASignerHeldHSMWrapper(t *testing.T) {
+	operationID := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	service := &fakeTenantKeyDomainLifecycle{domain: store.TenantKeyDomain{
+		TenantID: connectorTenantA, DomainID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		Generation: 1, ProtectionMode: store.TenantKeyProtectionTenantDomain,
+		State:       store.TenantKeyDomainStateUnsealed,
+		WrapperKind: tenantseal.WrapperKindPKCS11, WrapperID: "hsm-a",
+		OperationID: &operationID, OperationKind: store.TenantKeyOperationMigrate,
+		OperationStatus:   store.TenantKeyOperationCompleted,
+		ProgressCompleted: 10, ProgressTotal: 10,
+		LegacyHistoryExposure: store.TenantKeyLegacyNone,
+	}}
+	handler := api.New(nil, orchestrator.NewMemoryIdempotency(), nil,
+		api.WithInsecureHeaderResolver(), api.WithTenantKeyDomainLifecycle(service))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, tenantDomainRequest(
+		http.MethodPost, "/api/v1/platform/tenant-key-domain/migrate",
+		[]byte(`{"wrapper_kind":"pkcs11","wrapper_id":"hsm-a"}`), "tenant-migrate-hsm",
+	))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("migrate to pkcs11 = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(service.refs) != 1 || service.refs[0] != (tenantseal.WrapperRef{Kind: tenantseal.WrapperKindPKCS11, ID: "hsm-a"}) {
+		t.Fatalf("migration wrapper refs = %+v", service.refs)
+	}
+	var status api.TenantKeyDomainStatus
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status.WrapperKind != "pkcs11" || status.LocalWrapperZeroEgress || status.RemoteWrapperState != "signer_hsm" {
+		t.Fatalf("pkcs11 status = %+v", status)
+	}
+
+	service.domain.State = store.TenantKeyDomainStateWrapperUnavailable
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, tenantDomainRequest(http.MethodGet, "/api/v1/platform/tenant-key-domain", nil, ""))
+	if err := json.NewDecoder(rec.Body).Decode(&status); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(status.Recovery, "HSM key") || strings.Contains(status.Recovery, "local wrapper file") {
+		t.Fatalf("pkcs11 wrapper-unavailable recovery = %q", status.Recovery)
+	}
+}
