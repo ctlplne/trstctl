@@ -10353,7 +10353,7 @@ export interface components {
             /** @description The retained issuance event that proves a derived key_origin. */
             key_origin_proof_event_id?: string;
             /** @enum {string} */
-            key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service";
+            key_storage?: "" | "locked_memory" | "sealed_store" | "file" | "os_store" | "pkcs11" | "device_bound" | "service" | "kubernetes_secret";
             /** @description Exact authenticated cert-manager request/Certificate UID observations for this issued fingerprint; absent when unobserved. Not deployment verification. */
             kubernetes_provenance?: components["schemas"]["KubernetesCertificateProvenance"][];
             /** Format: date-time */
@@ -10996,6 +10996,7 @@ export interface components {
         CustodyStorageCounts: {
             device_bound: number;
             file: number;
+            kubernetes_secret?: number;
             locked_memory: number;
             os_store: number;
             pkcs11: number;

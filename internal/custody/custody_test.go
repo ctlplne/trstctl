@@ -108,7 +108,7 @@ func TestVocabularyIsClosed(t *testing.T) {
 	for _, v := range []custody.StorageClass{
 		custody.StorageLockedMemory, custody.StorageFile, custody.StorageOSStore,
 		custody.StoragePKCS11, custody.StorageDeviceBound, custody.StorageService,
-		custody.StorageUnrecorded,
+		custody.StorageKubernetesSecret, custody.StorageUnrecorded,
 	} {
 		if !custody.ValidStorage(v) {
 			t.Errorf("declared storage class %q is not valid", v)
@@ -119,6 +119,23 @@ func TestVocabularyIsClosed(t *testing.T) {
 	}
 	if custody.ValidExportability("maybe") {
 		t.Error("an unknown exportability was accepted")
+	}
+}
+
+func TestKubernetesSecretCustodyIsCountedAndDescribed(t *testing.T) {
+	t.Parallel()
+	record := custody.Record{
+		Origin: custody.OriginHostAgent, Storage: custody.StorageKubernetesSecret,
+		Exportable: custody.Exportable, GeneratedBy: "cluster-agent",
+	}
+	summary := custody.SummarizeCertificates([]custody.CertificateEvidence{
+		{ID: "ingress", Fingerprint: "sha256:ingress", Subject: "web.example.test", Record: record},
+	})
+	if summary.Storage.KubernetesSecret != 1 || summary.Recorded != 1 {
+		t.Fatalf("certificate custody summary = %+v", summary)
+	}
+	if got := record.Summary(); !strings.Contains(got, "stored in a Kubernetes Secret") {
+		t.Fatalf("custody sentence = %q, want it to say the key is in a Kubernetes Secret", got)
 	}
 }
 

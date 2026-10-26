@@ -3989,6 +3989,7 @@ CustodyStorageCounts = TypedDict(
     {
         'device_bound': int,
         'file': int,
+        'kubernetes_secret': int,
         'locked_memory': int,
         'os_store': int,
         'pkcs11': int,

@@ -85,6 +85,11 @@ const (
 	// locked memory: the agent can prove which service accepted the key, but it
 	// cannot prove how that service protects its heap.
 	StorageService StorageClass = "service"
+	// StorageKubernetesSecret: a Kubernetes Secret of type kubernetes.io/tls in
+	// the cluster the certificate serves. The in-cluster agent generated the key
+	// and wrote the Secret; anyone the cluster lets read that Secret can read the
+	// key, so it is exportable by construction.
+	StorageKubernetesSecret StorageClass = "kubernetes_secret" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	// StorageUnrecorded: not recorded. Same discipline as OriginUnrecorded.
 	StorageUnrecorded StorageClass = ""
 )
@@ -265,6 +270,8 @@ func (r Record) Summary() string {
 		parts = append(parts, "bound to hardware that will not export it")
 	case StorageService:
 		parts = append(parts, "held by a credential service on the serving host")
+	case StorageKubernetesSecret:
+		parts = append(parts, "stored in a Kubernetes Secret in the cluster it serves")
 	}
 	switch r.Exportable {
 	case Exportable:
@@ -302,7 +309,8 @@ func ValidOrigin(v KeyOrigin) bool {
 // ValidStorage reports whether v is a value this system records.
 func ValidStorage(v StorageClass) bool {
 	switch v {
-	case StorageLockedMemory, StorageSealedStore, StorageFile, StorageOSStore, StoragePKCS11, StorageDeviceBound, StorageService, StorageUnrecorded:
+	case StorageLockedMemory, StorageSealedStore, StorageFile, StorageOSStore, StoragePKCS11, StorageDeviceBound, StorageService,
+		StorageKubernetesSecret, StorageUnrecorded:
 		return true
 	default:
 		return false
@@ -329,13 +337,14 @@ type OriginCounts struct {
 
 // StorageCounts is a closed, reviewable count for every non-empty storage class.
 type StorageCounts struct {
-	LockedMemory int `json:"locked_memory"`
-	SealedStore  int `json:"sealed_store"`
-	File         int `json:"file"`
-	OSStore      int `json:"os_store"`
-	PKCS11       int `json:"pkcs11"`
-	DeviceBound  int `json:"device_bound"`
-	Service      int `json:"service"`
+	LockedMemory     int `json:"locked_memory"`
+	SealedStore      int `json:"sealed_store"`
+	File             int `json:"file"`
+	OSStore          int `json:"os_store"`
+	PKCS11           int `json:"pkcs11"`
+	DeviceBound      int `json:"device_bound"`
+	Service          int `json:"service"`
+	KubernetesSecret int `json:"kubernetes_secret"`
 }
 
 // ExportabilityCounts preserves the tri-state boundary by counting only facts.
@@ -399,6 +408,8 @@ func SummarizeCertificates(certificates []CertificateEvidence) CertificateSummar
 			out.Storage.DeviceBound++
 		case StorageService:
 			out.Storage.Service++
+		case StorageKubernetesSecret:
+			out.Storage.KubernetesSecret++
 		}
 		switch r.Exportable {
 		case Exportable:
