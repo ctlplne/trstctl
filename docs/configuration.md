@@ -479,8 +479,37 @@ paired with the certificate inventory witnesses presence divergence by
 construction. Plain `http://` addresses and loopback dialing need
 `"allow_insecure_loopback": true`; `private_endpoint_cidrs` widens the
 SSRF-safe dialer to operator-owned ranges. Any authority id may carry a vault
-source (`vault-prod`, `vault-dr` are separate authorities); the ids
-`cloud-kms` and `kmip` still have no source and fail observation closed.
+source (`vault-prod`, `vault-dr` are separate authorities).
+
+A KMIP server joins a round the same way, with a `kmip` source:
+
+```json
+{"authority_id": "kmip-hsm", "source": {
+  "kind": "kmip",
+  "address": "kmip.internal:5696",
+  "server_name": "kmip.internal",
+  "ca_file": "/run/secrets/kmip/ca.pem",
+  "client_cert_file": "/run/secrets/kmip/observer.pem",
+  "client_key_file": "/run/secrets/kmip/observer-key.pem",
+  "max_objects": 10000
+}}
+```
+
+The source speaks KMIP 1.4 over TLS with that client certificate and trusts only
+`ca_file`; `server_name` defaults to the address host. Each observation opens one
+connection, lists the objects the server shows that client with Locate (paged
+with Maximum Items and Offset Items), reads each object's type, algorithm,
+length, state and dates with Get Attributes, and reads a certificate's issuer and
+serial from its value. Keys and secret objects are never fetched, so give the
+certificate an account that can only locate objects and read their attributes.
+An observation that cannot be complete fails rather than report part of the
+server: more objects than `max_objects` (default 10000), or a server that does
+not page with Offset Items. Templates and other object types that have no
+reconciliation record are skipped. The TLS floor is 1.3; `"allow_tls12": true`
+accepts a server whose TLS stops at 1.2, with AEAD suites only.
+`allow_insecure_loopback` permits a loopback address (TLS is still used), and
+`private_endpoint_cidrs` widens the SSRF-safe dialer as it does for Vault. An
+authority id with no source block, such as `cloud-kms`, fails observation closed.
 
 ## Workload-held PCAS co-signers
 

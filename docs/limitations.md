@@ -3681,9 +3681,13 @@ than sending an operator looking for a credential that was never there.
   `source` block (address, token file, KV/PKI/Transit mounts); it asserts KV
   metadata, PKI-issued certificates and Transit key metadata, never secret
   data, and pairs meaningfully only with an authority observing the same
-  universe. The cloud-kms and kmip reducers still have nil sources —
-  scheduling them fails observation closed and logs, it does not fabricate an
-  authority — and
+  universe. A KMIP server is observed the same way when its entry carries a
+  `kmip` source block: KMIP 1.4 over mutual TLS, reading object metadata and
+  certificate values and never key values, proven against an in-process double
+  and against a PyKMIP server (run with `TRSTCTL_PYKMIP_PROOF=1`); a pre-active
+  KMIP object reduces to an unknown status. The cloud-kms reducer still has a
+  nil source — scheduling it fails observation closed and logs, it does not
+  fabricate an authority — and
   inventory rows with no captured DER cannot participate in the comparison
   (no issuer bytes to derive the shared identity from), so a metadata-only
   scanner import is invisible to this pair of authorities.

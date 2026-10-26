@@ -2,6 +2,11 @@
 
 ### Added
 
+- Authority agreement can observe a KMIP server: an authority entry with a
+  `kmip` source block reads object metadata over KMIP 1.4 with a client
+  certificate (Locate, Get Attributes, and certificate values; never key
+  values). An observation that cannot be complete fails instead of reporting
+  part of the server, and `allow_tls12` opts in a server whose TLS stops at 1.2.
 - An F5 BIG-IP (a single device), NetScaler, A10 Thunder or PAN-OS firewall
   destination can have the appliance generate its own private key:
   `"key_generation": "appliance"` with a pinned network relay. The relay asks the
