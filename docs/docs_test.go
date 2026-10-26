@@ -1332,7 +1332,7 @@ func TestSPIREUpstreamAuthorityDocsStayWired(t *testing.T) {
 			}
 		}
 	}
-	apiRoutes := read(t, "../internal/api/api.go")
+	apiRoutes := servedAPIRouteRegistry(t)
 	for _, marker := range []string{"issueIntermediateCAFromCSR", "/api/v1/ca/authorities/{id}/intermediates/csr"} {
 		if !strings.Contains(apiRoutes, marker) {
 			t.Errorf("served API route registry should contain %q", marker)
@@ -1823,9 +1823,22 @@ func apiServesCAHierarchyRootIntermediate(t *testing.T) bool {
 
 func apiServesCAHierarchyRotation(t *testing.T) bool {
 	t.Helper()
-	apiRoutes := read(t, "../internal/api/api.go")
+	apiRoutes := servedAPIRouteRegistry(t)
 	return strings.Contains(apiRoutes, `"/api/v1/ca/authorities/{id}/rotate"`) ||
 		strings.Contains(apiRoutes, "rotateCA")
+}
+
+// servedAPIRouteRegistry is the served route table: api.go plus the
+// routes_*.go files that hold each surface's route rows.
+func servedAPIRouteRegistry(t *testing.T) string {
+	t.Helper()
+	var registry strings.Builder
+	for _, path := range nonTestGoFiles(t, "../internal/api") {
+		if name := filepath.Base(path); name == "api.go" || strings.HasPrefix(name, "routes_") {
+			registry.WriteString(read(t, path))
+		}
+	}
+	return registry.String()
 }
 
 // TestHighTrafficClaimLedgerMatchesCodeReality extends the served/library guard

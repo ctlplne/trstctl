@@ -17859,7 +17859,7 @@ export const messages = {
   },
   "connectors.keyGeneration.f5Pair": {
     defaultMessage:
-      "An F5 HA pair cannot make its key on the appliance, because each peer would hold a different key. Remove peer_endpoint, or keep control-plane keys.",
+      "A BIG-IP HA pair cannot make its key on the appliance, because each peer would hold a different key. Remove peer_endpoint, or keep control-plane keys.",
     description: "Why an F5 HA pair cannot make its key on the appliance.",
   },
   "connectors.design.configurationHelp": {
