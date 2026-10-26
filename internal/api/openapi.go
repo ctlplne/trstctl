@@ -2884,6 +2884,9 @@ func componentSchemas() map[string]*Schema {
 		"grant_source": {Type: "string", Enum: []string{"registry", "shipped", "none"}},
 		// A3: where this connector's deploy work executes, from the live census.
 		"target_vantage": {Type: "string", Enum: []string{"control_plane", "host_agent", "network_relay"}},
+		// A122: whether the family's appliance can generate the key and send
+		// only a CSR (key_generation=appliance), from the appliance-key census.
+		"appliance_key_generation": {Type: "boolean"},
 		// E1: present for every family in the accepted 13-family denominator,
 		// including host/cloud families whose network-relay path is unimplemented.
 		"relay_parity": ref("ConnectorRelayParity"),

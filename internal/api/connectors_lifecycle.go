@@ -91,6 +91,10 @@ type connectorCatalogItem struct {
 	// unaudited work stays where it always ran. Read from the live registry
 	// census, never hardcoded beside the description.
 	TargetVantage string `json:"target_vantage"`
+	// ApplianceKeyGeneration is true for a family whose appliance can generate
+	// the subject key itself and send only a CSR, which a target asks for with
+	// key_generation=appliance (A122). Read from the appliance-key census.
+	ApplianceKeyGeneration bool `json:"appliance_key_generation"`
 	// RelayParity is this family's position in the accepted E1 relay migration.
 	// It is present for all thirteen source-plan families, including families
 	// whose current runtime is host-agent or control-plane. Omitting those rows
@@ -1788,6 +1792,7 @@ func (a *API) connectorCatalogWithSandbox() []connectorCatalogItem {
 		}
 		item.ExecutesRollback = connector.CanExecuteRollback(item.Name)
 		item.DeviceProven = connector.DeviceProven(item.Name)
+		item.ApplianceKeyGeneration = connector.ApplianceKeyFamily(item.Name)
 		if connector.IsE1Family(item.Name) {
 			status := connector.ParityStatusFor(item.Name)
 			item.RelayParity = &connectorRelayParity{

@@ -2655,6 +2655,7 @@ export interface ConnectorCatalog {
 }
 
 export interface ConnectorCatalogItem {
+  appliance_key_generation?: boolean;
   capabilities: string[];
   delivery_mode: string;
   device_proven: boolean;

@@ -10752,6 +10752,7 @@ export interface components {
             relay_plugins_next_cursor?: string;
         };
         ConnectorCatalogItem: {
+            appliance_key_generation?: boolean;
             capabilities: string[];
             delivery_mode: string;
             device_proven: boolean;

@@ -17657,6 +17657,46 @@ export const messages = {
   "connectors.host.choose": { defaultMessage: "Select an enrolled host", description: "Explicit destination host assignment." },
   "connectors.host.more": { defaultMessage: "Load more agents", description: "Explicit destination host assignment." },
   "connectors.host.retry": { defaultMessage: "Reload agents", description: "Explicit destination host assignment." },
+  "connectors.relay.label": {
+    defaultMessage: "Network relay",
+    description: "Relay assignment for an appliance destination whose key the appliance generates.",
+  },
+  "connectors.relay.help": {
+    defaultMessage:
+      "Select the relay that reaches this appliance. It asks the appliance for a key and a certificate request, has the request signed, and installs the certificate. Renewals wait for this relay; another relay cannot take over.",
+    description: "Relay assignment for an appliance destination whose key the appliance generates.",
+  },
+  "connectors.relay.loading": {
+    defaultMessage: "Loading enrolled relays…",
+    description: "Relay assignment for an appliance destination whose key the appliance generates.",
+  },
+  "connectors.relay.choose": {
+    defaultMessage: "Select an enrolled network relay",
+    description: "Relay assignment for an appliance destination whose key the appliance generates.",
+  },
+  "connectors.keyGeneration.label": { defaultMessage: "Key generation", description: "Where an appliance destination's private key is made." },
+  "connectors.keyGeneration.help": {
+    defaultMessage:
+      "On the appliance, the appliance makes the private key and sends only a certificate request, so the key never leaves it. With the control plane, a key is made for each deploy and sealed to it.",
+    description: "Where an appliance destination's private key is made.",
+  },
+  "connectors.keyGeneration.controlPlane": {
+    defaultMessage: "Control plane, sealed to each deploy",
+    description: "Key generation choice for an appliance destination.",
+  },
+  "connectors.keyGeneration.appliance": {
+    defaultMessage: "On the appliance, which sends only a certificate request",
+    description: "Key generation choice for an appliance destination.",
+  },
+  "connectors.keyGeneration.paloaltoProfile": {
+    defaultMessage: "A Palo Alto firewall makes its own key only when ssl_tls_profile and commit_admin are set in the configuration.",
+    description: "What a Palo Alto destination needs before its firewall can make its key.",
+  },
+  "connectors.keyGeneration.f5Pair": {
+    defaultMessage:
+      "An F5 HA pair cannot make its key on the appliance, because each peer would hold a different key. Remove peer_endpoint, or keep control-plane keys.",
+    description: "Why an F5 HA pair cannot make its key on the appliance.",
+  },
   "connectors.design.configurationHelp": {
     defaultMessage: "Store credential references, never secret values. The server validates the selected connector's schema before saving.",
     description: "Security guidance for connector configuration JSON.",

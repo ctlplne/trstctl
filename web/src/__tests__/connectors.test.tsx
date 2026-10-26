@@ -749,6 +749,26 @@ describe("connector deployment disclosure surface", () => {
     );
   });
 
+  it("offers appliance key generation only where the catalog says the appliance can make the key", async () => {
+    const base = (await apiMock.connectorCatalog()).items as Array<Record<string, unknown>>;
+    apiMock.connectorCatalog.mockResolvedValue({
+      items: base.map((item) => (item.name === "netscaler" ? { ...item, target_vantage: "network_relay", appliance_key_generation: true } : item)),
+    });
+    const user = userEvent.setup();
+    renderConnectors();
+
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByRole("button", { name: "Add destination" }));
+    const dialog = screen.getByRole("dialog", { name: "Add destination" });
+    await within(dialog).findByRole("option", { name: "netscaler" });
+    await user.selectOptions(within(dialog).getByLabelText("Connector type"), "kemp");
+    expect(within(dialog).queryByRole("combobox", { name: "Key generation" })).not.toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText("Connector type"), "netscaler");
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Key generation" }), "appliance");
+    expect(within(dialog).getByRole("combobox", { name: "Network relay" })).toBeInTheDocument();
+    expect(JSON.parse((within(dialog).getByLabelText("Configuration (JSON)") as HTMLTextAreaElement).value)).toMatchObject({ key_generation: "appliance" });
+  });
+
   it("creates and operates a served connector target", async () => {
     const binding = await apiMock.createEndpointBinding.getMockImplementation()?.();
     apiMock.getIdentity.mockResolvedValue(binding.identity);

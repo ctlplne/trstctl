@@ -9,8 +9,20 @@ import { useTranslation } from "@/i18n/I18nProvider";
 const configSchema = z.record(z.string(), z.unknown());
 
 // This field edits the same reviewed config that the API fingerprints. Changing
-// the JSON or selecting a host cannot leave a second, hidden routing value.
-export function DestinationHostField({ config, onChange, required }: { config: string; onChange: (value: string) => void; required: boolean }) {
+// the JSON or selecting an agent cannot leave a second, hidden routing value.
+// agentRole "network" picks the relay that renews an appliance whose key the
+// appliance generates (A122); the default picks the host a service runs on.
+export function DestinationHostField({
+  config,
+  onChange,
+  required,
+  agentRole = "host",
+}: {
+  config: string;
+  onChange: (value: string) => void;
+  required: boolean;
+  agentRole?: "host" | "network";
+}) {
   const { t } = useTranslation();
   const fleet = useInfiniteQuery({
     queryKey: ["agents", "destination-hosts"],
@@ -27,12 +39,16 @@ export function DestinationHostField({ config, onChange, required }: { config: s
   }
   const selected = typeof parsed?.required_agent_id === "string" ? parsed.required_agent_id : "";
   const agents = [...new Map((fleet.data?.pages.flatMap((page) => page.agents) ?? []).map((agent) => [agent.id, agent])).values()];
-  const hosts = agents.filter((agent) => agent.roles?.includes("host") && !agent.offboarded_at);
+  const hosts = agents.filter((agent) => agent.roles?.includes(agentRole) && !agent.offboarded_at);
+  const copy =
+    agentRole === "network"
+      ? { label: t("connectors.relay.label"), help: t("connectors.relay.help"), loading: t("connectors.relay.loading"), choose: t("connectors.relay.choose") }
+      : { label: t("connectors.host.label"), help: t("connectors.host.help"), loading: t("connectors.host.loading"), choose: t("connectors.host.choose") };
   return (
     <div className="grid gap-2">
       <Field
-        label={t("connectors.host.label")}
-        description={t("connectors.host.help")}
+        label={copy.label}
+        description={copy.help}
         required={required}
         error={fleet.error?.message ?? (!parsed ? t("connectors.host.invalidConfig") : undefined)}
       >
@@ -44,7 +60,7 @@ export function DestinationHostField({ config, onChange, required }: { config: s
             disabled={!parsed || fleet.isPending}
             onChange={(event) => onChange(JSON.stringify({ ...parsed, required_agent_id: event.target.value }, null, 2))}
           >
-            <option value="">{fleet.isPending ? t("connectors.host.loading") : t("connectors.host.choose")}</option>
+            <option value="">{fleet.isPending ? copy.loading : copy.choose}</option>
             {selected && !hosts.some((agent) => agent.id === selected) && <option value={selected}>{selected}</option>}
             {hosts.map((agent) => (
               <option key={agent.id} value={agent.id}>

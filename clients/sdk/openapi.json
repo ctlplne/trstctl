@@ -10903,6 +10903,9 @@
       },
       "ConnectorCatalogItem": {
         "properties": {
+          "appliance_key_generation": {
+            "type": "boolean"
+          },
           "capabilities": {
             "items": {
               "type": "string"

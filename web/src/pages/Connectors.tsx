@@ -30,6 +30,7 @@ import { RecoveryResult } from "@/pages/connectors/RecoveryResult";
 import { EndpointContainment } from "@/pages/connectors/EndpointContainment";
 import { EndpointPurge } from "@/pages/connectors/EndpointPurge";
 import { DestinationHostField } from "@/pages/connectors/DestinationHostField";
+import { ApplianceKeyGenerationField } from "@/pages/connectors/ApplianceKeyGenerationField";
 import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
 
 // VantageBadge names where a connector's deploy work executes (epic A3), read
@@ -1454,6 +1455,9 @@ export function Connectors() {
           {catalog?.find((item) => item.name === connectorName)?.target_vantage === "host_agent" && (
             <DestinationHostField config={targetConfig} onChange={setTargetConfig} required={targetEnabled} />
           )}
+          {catalog?.find((item) => item.name === connectorName)?.appliance_key_generation && (
+            <ApplianceKeyGenerationField connector={connectorName} config={targetConfig} onChange={setTargetConfig} required={targetEnabled} />
+          )}
           <p className="text-sm text-muted-foreground">{t("connectors.design.configurationHelp")}</p>
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setDestinationOpen(false)}>
@@ -1534,6 +1538,9 @@ export function Connectors() {
             </label>
             {catalog?.find((item) => item.name === editConnector)?.target_vantage === "host_agent" && (
               <DestinationHostField config={editConfig} onChange={setEditConfig} required={editEnabled} />
+            )}
+            {catalog?.find((item) => item.name === editConnector)?.appliance_key_generation && (
+              <ApplianceKeyGenerationField connector={editConnector} config={editConfig} onChange={setEditConfig} required={editEnabled} />
             )}
             {editError && (
               <p role="alert" className="text-sm text-destructive">

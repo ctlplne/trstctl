@@ -3683,6 +3683,7 @@ ConnectorCatalog = TypedDict(
 ConnectorCatalogItem = TypedDict(
     'ConnectorCatalogItem',
     {
+        'appliance_key_generation': bool,
         'capabilities': list[str],
         'delivery_mode': str,
         'device_proven': bool,
