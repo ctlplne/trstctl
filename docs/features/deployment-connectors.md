@@ -829,7 +829,8 @@ instead of being ignored:
 | `envoy` | `endpoint`, `secret_name`; optional `vantage` (`network`) makes a remote SDS endpoint relay work instead of co-resident host-agent work |
 | `f5` | `endpoint`, `client_ssl_profile`, `username`, `password_ref`; optional `object_name` |
 | `netscaler` | `endpoint`, `username`, `password_ref`; optional `file_location` |
-| `a10`, `cisco` | `endpoint`, `username`, `password_ref` |
+| `a10` | `endpoint`, `username`, `password_ref` |
+| `cisco` | `endpoint`, `username`, `password_ref`; optional `node_hostname` with `certificate_roles` (ISE roles: `admin`, `eap`, `radius`, `pxgrid`, `portal`, `saml`, `ims`) makes deploys ISE system certificates named for their fingerprint and bound to those roles on that node, and the target rollback- and readback-capable |
 | `kemp` | `endpoint`, `token_ref` |
 | `fortigate` | `endpoint`, `token_ref`; optional `bind_to` (`admin` or `ssl-vpn`) makes deploys fingerprint-named and the target rollback-capable (target name 22 characters or fewer) |
 | `paloalto` | `endpoint`, `api_key_ref`; optional `ssl_tls_profile` with `commit_admin` makes imports fingerprint-named, points the shared SSL/TLS service profile at them with a partial commit, and makes the target rollback-capable |
@@ -973,8 +974,8 @@ attest it.
 
 ### Have the appliance generate its key
 
-An F5 BIG-IP (a single device), NetScaler, A10 Thunder or PAN-OS firewall can make
-the private key itself and send only a certificate request. Declare
+An F5 BIG-IP (a single device), NetScaler, A10 Thunder, PAN-OS firewall or Cisco
+ISE node can make the private key itself and send only a certificate request. Declare
 `"key_generation": "appliance"` on the destination and name the network relay that
 reaches the appliance in `required_agent_id`; the destination dialog in Connectors
 offers both as a choice. At each renewal that relay asks the appliance for an ECDSA
@@ -1006,6 +1007,12 @@ exportable, because these are software keys an appliance administrator can expor
 - **NetScaler and A10:** the key file and the CSR file sit side by side on the
   appliance, and the certkey or client-SSL template binds the certificate to that
   key file.
+- **Cisco ISE:** the destination needs `node_hostname` and `certificate_roles`. ISE
+  names each request itself, so the relay keeps ISE's request ID for the renewal on
+  the control plane before it asks for a signature, and an attempt picked up again
+  reuses that request instead of making another. The signed certificate is bound
+  to the request under its fingerprint name with those roles; only the leaf is
+  sent, so the node must already trust the issuing CA.
 
 Readback works as it does for sealed keys. A rollback binds the predecessor
 certificate back with the key the appliance made for it, found from the
@@ -1014,8 +1021,9 @@ object is gone is refused rather than bound to another key. A renewal the relay
 picks up again after losing it asks the appliance for the same object and gets the
 same CSR back, so one renewal never leaves two keys. PAN-OS keeps no CSR once the
 certificate for it is imported, so a PAN-OS renewal picked up after that import
-stops and says so; check the firewall and start a new renewal. A Cisco destination
-keeps control-plane keys.
+stops and says so; check the firewall and start a new renewal. The same holds on
+ISE: a request is turned into its system certificate when the certificate is bound,
+so a Cisco renewal picked up after its bind stops and says so.
 
 ### Activate Tomcat PEM certificates
 
@@ -1200,12 +1208,13 @@ keeps active plus one predecessor in an encrypted local ledger at
 rollback is routed to that exact enrolled agent, serialized with deploys for the
 target, restores files, runs the allowlisted reload, and re-handshakes
 `verify_address`. The migrated appliance families use object re-bind instead: f5, kemp, netscaler
-and a10 always, fortigate and paloalto when the target names its binding, and
-GCP Certificate Manager when the target names a `certificate_map_entry`. Cisco,
-AWS ACM and Azure Key Vault have no executable rollback because their APIs
-cannot address an installed object separately from uploading one; their support
-rows say so, the refusal names the reason, and no rollback-shaped success is
-recorded.
+and a10 always, fortigate, paloalto and cisco when the target names its binding
+(for cisco, `node_hostname` with `certificate_roles`: a rollback moves the roles
+back to the predecessor's ISE system certificate), and GCP Certificate Manager
+when the target names a `certificate_map_entry`. AWS ACM and Azure Key Vault have
+no executable rollback because their APIs cannot address an installed object
+separately from uploading one; their support rows say so, the refusal names the
+reason, and no rollback-shaped success is recorded.
 
 ## Pitfalls & limits
 

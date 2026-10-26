@@ -125,8 +125,8 @@ not this file.
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
-| `internal/agent/transport/agentservice.go:829` | an RPC method name, not a credential. The material this |
-| `internal/agent/transport/agentservice.go:836` | an RPC method name. This call carries a CSR up and returns |
+| `internal/agent/transport/agentservice.go:841` | an RPC method name, not a credential. The material this |
+| `internal/agent/transport/agentservice.go:848` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt.go:270` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/transport/receipt_custody_test.go:15` | the credential fingerprint is public fixture metadata, not a credential (CWE-798). |

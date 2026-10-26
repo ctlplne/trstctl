@@ -116,6 +116,9 @@ var supportMatrix = []SupportRow{
 			"readback: report the system certificate serving the target's roles on the node, and whether it serves " +
 				"all of them (targets with node_hostname only)",
 			"deploy (legacy): import certificate and key under a named entry",
+			"appliance key (key_generation=appliance, targets with node_hostname): ISE generates an ECDSA P-256 " +
+				"key and a CSR on the node, the request ID is kept for the renewal job so a retry reuses it, and the " +
+				"signed certificate is bound to the request under its fingerprint name with the target's roles",
 		},
 		KnownLimits: []string{
 			"a target without node_hostname imports in place under the target name; its rollback and readback are " +
@@ -123,6 +126,8 @@ var supportMatrix = []SupportRow{
 			"an ISE role belongs to one system certificate per node, so a deploy or rollback takes the role from the " +
 				"certificate that held it, and moving the Admin role restarts that node's application server",
 			"system certificates accumulate on the node, one per deploy, and nothing removes them",
+			"an appliance-key bind sends only the leaf, so the node must already trust the issuing CA, and ISE " +
+				"turns a request into its system certificate when bound, so a renewal picked up after its bind stops",
 		},
 	},
 	{

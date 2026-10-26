@@ -12,15 +12,23 @@
   certificate (Locate, Get Attributes, and certificate values; never key
   values). An observation that cannot be complete fails instead of reporting
   part of the server, and `allow_tls12` opts in a server whose TLS stops at 1.2.
-- An F5 BIG-IP (a single device), NetScaler, A10 Thunder or PAN-OS firewall
-  destination can have the appliance generate its own private key:
+- A Cisco ISE destination can name its node and certificate roles
+  (`node_hostname`, `certificate_roles`): deploys then import system certificates
+  named for their fingerprint and bound to those roles, so the destination rolls
+  back by moving the roles to the predecessor and reads back the certificate
+  serving them. Cisco is no longer an architecture exception in the relay parity
+  program.
+- An F5 BIG-IP (a single device), NetScaler, A10 Thunder, PAN-OS firewall or Cisco
+  ISE destination can have the appliance generate its own private key:
   `"key_generation": "appliance"` with a pinned network relay. The relay asks the
   appliance for a key and a CSR in an object named for the renewal job, the control
   plane signs the CSR, and the certificate is installed against the appliance's key,
   so no key crosses the relay or the control plane. Custody records the key as
   appliance-generated and appliance-held. Rollback binds a predecessor back with
   its own appliance key without reading it, and a renewal picked up again sends the
-  same CSR. A PAN-OS destination needs `ssl_tls_profile` and `commit_admin`, an F5
+  same CSR (for Cisco ISE, which names its requests itself, the relay keeps ISE's
+  request ID for the job on the control plane). A PAN-OS destination needs
+  `ssl_tls_profile` and `commit_admin`, a Cisco ISE destination its node and roles, an F5
   HA pair keeps control-plane keys, and the destination dialog offers the choice
   where the family supports it (the connector catalog's
   `appliance_key_generation`).
