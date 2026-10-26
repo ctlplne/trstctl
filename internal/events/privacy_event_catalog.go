@@ -648,6 +648,19 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/window_after", opaque), catalogPrivacyRule("/window_before", opaque),
 			catalogPrivacyRule("/truncated", opaque)),
 	})
+	// v3 records how a question was planned: the plan kind and its clause kinds,
+	// never the values taken from the question, and an exact count when asked.
+	catalog = append(catalog, productionPrivacyEventPolicy{
+		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "ai.query.answered", SchemaVersion: 3},
+		Policy: catalogPrivacyPolicy(aiQueryAnsweredV3PrivacyPayloadShape(),
+			catalogPrivacyRule("/subject", token), catalogPrivacyRule("/rows", opaque),
+			catalogPrivacyRule("/citations", opaque), catalogPrivacyRule("/grounded", opaque),
+			catalogPrivacyRule("/sufficient", opaque), catalogPrivacyRule("/expiry_days", opaque),
+			catalogPrivacyRule("/window_after", opaque), catalogPrivacyRule("/window_before", opaque),
+			catalogPrivacyRule("/truncated", opaque), catalogPrivacyRule("/plan", opaque),
+			catalogPrivacyRule("/clauses/*", opaque), catalogPrivacyRule("/count", opaque),
+			catalogPrivacyRule("/counted", opaque)),
+	})
 	catalog = append(catalog, productionPrivacyEventPolicy{
 		ProductionPrivacyEventSchema: ProductionPrivacyEventSchema{EventType: "ca.authority.horizon_alerted", SchemaVersion: 2},
 		Policy: catalogPrivacyPolicy(caHorizonAlertedV2PrivacyPayloadShape(),

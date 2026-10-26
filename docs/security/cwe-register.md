@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1765 annotated sites across 27 rules. Each row is
+1766 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -762,7 +762,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/events/privacy_erasure_test.go:1545` | test goroutine lifecycle is managed by the test (CWE-664) |
+| `internal/events/privacy_erasure_test.go:1555` | test goroutine lifecycle is managed by the test (CWE-664) |
 | `internal/server/agenthttprenewal.go:71` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 | `internal/server/estmtls.go:86` | shutdown grace period must outlive the already-canceled parent context (CWE-664) |
 
@@ -792,8 +792,8 @@ not this file.
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:384` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:430` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:388` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:434` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
 ### G124 — CWE-1004 Sensitive cookie without protective attributes (42 sites)
 
@@ -1577,8 +1577,8 @@ not this file.
 | `internal/spireupstream/plugin.go:318` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
 | `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/store/store_isolation_test.go:384` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:430` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:388` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:434` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/succession/delegation/durable.go:253` | signer-owned keystore directory selected at signer startup; fsync makes the scope rename durable (CWE-22) |
 | `internal/succession/minter/spentstore.go:70` | signer-owned custody directory selected at signer startup (CWE-22). |
 | `internal/succession/minter/spentstore.go:113` | claim path is signer-owned custody dir plus a fixed SHA-256 hex nonce digest (CWE-22). |
@@ -1815,7 +1815,7 @@ not this file.
 | `internal/crypto/possession_test.go:283` | a throwaway test root key |
 | `internal/crypto/weakkey/weakkey_test.go:413` | a deliberately weak RSA-1024 key, to prove it is rated weak (CWE-326) |
 
-### G404 — CWE-338 Cryptographically weak PRNG (30 sites)
+### G404 — CWE-338 Cryptographically weak PRNG (31 sites)
 
 | Location | Reason |
 |---|---|
@@ -1849,6 +1849,7 @@ not this file.
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
+| `internal/query/filter_test.go:150` | test shuffle, not a security decision (CWE-338) |
 
 ### G505 — CWE-328 Weak hash import (SHA-1) (9 sites)
 

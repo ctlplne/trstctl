@@ -262,10 +262,23 @@ func rowSummary(row query.Row) string {
 	case query.SurfaceGraph:
 		return "graph node kind=" + row.Columns["kind"] + " name=" + row.Columns["name"]
 	case query.SurfaceCBOM:
-		return "crypto asset algorithm=" + row.Columns["algorithm"] + " location=" + row.Columns["location"] + " strength=" + row.Columns["strength"]
+		summary := "crypto asset algorithm=" + row.Columns["algorithm"] + " location=" + row.Columns["location"] + " strength=" + row.Columns["strength"]
+		if bits := row.Columns["key_bits"]; bits != "" && bits != "0" {
+			summary += " key_bits=" + bits
+		}
+		if row.Columns["quantum_vulnerable"] == "true" {
+			summary += " quantum_vulnerable"
+		}
+		return summary
 	case query.SurfaceCertificates:
-		return "certificate serial=" + row.Columns["serial"] + " subject=" + row.Columns["subject"] +
-			" status=" + row.Columns["status"] + " not_after=" + row.Columns["not_after"]
+		summary := "certificate serial=" + row.Columns["serial"] + " subject=" + row.Columns["subject"]
+		if issuer := row.Columns["issuer"]; issuer != "" {
+			summary += " issuer=" + issuer
+		}
+		if alg := row.Columns["key_algorithm"]; alg != "" {
+			summary += " key=" + alg
+		}
+		return summary + " status=" + row.Columns["status"] + " not_after=" + row.Columns["not_after"]
 	case query.SurfaceOwners:
 		return "owner name=" + row.Columns["name"]
 	default:

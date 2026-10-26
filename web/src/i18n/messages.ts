@@ -13116,12 +13116,18 @@ export const messages = {
     description: "Product help overview heading.",
   },
   "assistant.design.startBody": {
-    defaultMessage: "Ask which certificates expire within 1–365 days. Other questions show scoped evidence, not a complete answer.",
+    defaultMessage:
+      "Ask about certificates by expiry, issuer, key algorithm, name, owner or status, who owns a certificate, crypto assets, or credential-graph inventories. Each answer states how the question was read. Other questions show scoped evidence, not a complete answer.",
     description: "Honest boundary for deterministic Product help queries in an air-gapped deployment.",
   },
   "assistant.design.expiryQuestionExample": {
     defaultMessage: "Which certificates expire within 30 days?",
     description: "Example of the supported, exact certificate-expiry question.",
+  },
+  "assistant.design.questionExamples": {
+    defaultMessage:
+      "Also try “How many certificates are issued by Acme?”, “Who owns api.example.com?” or “Which crypto assets are quantum-vulnerable?”. Put a name of more than one word in double quotes, and select Owners for ownership questions.",
+    description: "Hint under the Product help question box listing more question shapes the deterministic planner answers exactly.",
   },
   "assistant.design.sourcesTitle": {
     defaultMessage: "Sources",

@@ -684,8 +684,12 @@ export function Assistant() {
                       onChange={(event) => setQuestion(event.target.value)}
                       placeholder={t("assistant.design.expiryQuestionExample")}
                       required
+                      aria-describedby="product-help-question-examples"
                     />
                   </label>
+                  <p id="product-help-question-examples" className="text-body text-muted-foreground">
+                    {t("assistant.design.questionExamples")}
+                  </p>
                   <details className="rounded-control border border-border p-3">
                     <summary className="cursor-pointer text-body font-medium">{t("assistant.design.evidenceDetails")}</summary>
                     <div className="mt-4 space-y-4">

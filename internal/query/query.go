@@ -105,6 +105,41 @@ type CertificateExpiryWindow struct {
 	Before time.Time
 }
 
+// CertificateFilter is a typed certificate question, usually the question
+// planner's output. The store binds every field as a parameter; none is ever
+// formatted into statement text. Zero fields do not filter.
+type CertificateFilter struct {
+	// Status is "active", "revoked" or "superseded"; empty means any status.
+	Status string
+	// ExpiresAfter and ExpiresBefore bound the expiry, exclusively; nil is open.
+	ExpiresAfter, ExpiresBefore *time.Time
+	// IssuerContains and NameContains are case-insensitive literal substrings
+	// of the issuer, and of the subject or any SAN.
+	IssuerContains, NameContains string
+	// KeyAlgorithm is a key algorithm family: it matches the recorded algorithm
+	// case-insensitively, exactly or as the part before a dash.
+	KeyAlgorithm string
+	// OwnerName selects certificates whose owner has this name, case aside; it
+	// needs the owners surface. Unowned selects certificates with no owner.
+	OwnerName string
+	Unowned   bool
+	// Serial and Fingerprint select one certificate exactly, case aside.
+	Serial, Fingerprint string
+}
+
+// CryptoAssetFilter is a typed question over the CBOM.
+type CryptoAssetFilter struct {
+	// Algorithm is a key algorithm family, matched like CertificateFilter's.
+	Algorithm string
+	// KeyBitsBelow selects assets with a recorded key size below it.
+	KeyBitsBelow int
+	// QuantumVulnerable and OutOfPolicy select assets the CBOM classified so.
+	QuantumVulnerable, OutOfPolicy bool
+}
+
+// maxFilterValue bounds a filter value taken from a question.
+const maxFilterValue = 200
+
 // Spec is a typed, parameterized query plan. It has NO tenant or scope field:
 // the tenant and RBAC scope come from the authenticated Principal, so a caller
 // cannot widen its own scope. Field/operator names are allow-listed enums.
@@ -112,8 +147,19 @@ type Spec struct {
 	Select                  []Surface
 	Where                   []Predicate
 	CertificateExpiryWindow *CertificateExpiryWindow
-	Limit                   int // hard-capped by Config.MaxRows
-	MaxDepth                int // graph traversal bound, hard-capped by Config.MaxDepth
+	// Focus, when set, names the selected surfaces whose rows answer the query.
+	// The others are still authorized — a caller cannot smuggle an unreadable
+	// selection past the denial — but are not read. A certificate expiry window
+	// or certificate filter focuses on certificates, a crypto-asset filter on the
+	// CBOM.
+	Focus []Surface
+	// Certificates and CryptoAssets filter one surface each; a spec may carry at
+	// most one of them. Count asks for the exact number of matches as well.
+	Certificates *CertificateFilter
+	CryptoAssets *CryptoAssetFilter
+	Count        bool
+	Limit        int // hard-capped by Config.MaxRows
+	MaxDepth     int // graph traversal bound, hard-capped by Config.MaxDepth
 }
 
 // Row is one result row: the surface it came from and its typed columns.
@@ -129,6 +175,9 @@ type Result struct {
 	Rows      []Row
 	Offset    uint64
 	Truncated bool // the row or scan budget prevents a complete-result claim
+	// Count is the exact number of matches when the Spec asked for it (Counted).
+	Count   int
+	Counted bool
 }
 
 // Config sets the cost/timeout guards.
@@ -245,6 +294,14 @@ func (e *Engine) validate(spec Spec) error {
 			return fmt.Errorf("%w: invalid certificate expiry window", ErrMalformed)
 		}
 	}
+	if err := validateFilters(spec, selected); err != nil {
+		return err
+	}
+	for _, s := range spec.Focus {
+		if !selected[s] {
+			return fmt.Errorf("%w: focus on surface %q that is not selected", ErrMalformed, s)
+		}
+	}
 	if spec.Limit < 0 || spec.Limit > e.cfg.MaxRows {
 		return fmt.Errorf("%w: limit %d exceeds max %d", ErrCostExceeded, spec.Limit, e.cfg.MaxRows)
 	}
@@ -277,7 +334,8 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 	eq := predicateIndex(spec.Where)
 	var rows []Row
 	var offset uint64
-	var truncated bool
+	var truncated, counted bool
+	var count int
 
 	add := func(r Row) bool {
 		if len(rows) >= limit {
@@ -292,10 +350,10 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 		if err := ctx.Err(); err != nil {
 			return nil, ErrDeadline
 		}
-		// A certificate expiry question is a certificate-only answer. Keep every
-		// requested surface in authorize() above so a caller cannot smuggle an
+		// A focused query answers from its focus surfaces only. Every requested
+		// surface stayed in authorize() above, so a caller cannot smuggle an
 		// unauthorized selection through the narrowing step.
-		if spec.CertificateExpiryWindow != nil && surf != SurfaceCertificates {
+		if !spec.reads(surf) {
 			continue
 		}
 		var err error
@@ -304,12 +362,24 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 			err = e.readOwners(ctx, p.TenantID, eq, add)
 		case SurfaceCertificates:
 			var scanTruncated bool
-			scanTruncated, err = e.readCertificates(ctx, p.TenantID, eq, spec.CertificateExpiryWindow, limit, add)
+			if spec.Certificates != nil {
+				scanTruncated, err = e.readFilteredCertificates(ctx, p.TenantID, *spec.Certificates, limit, add)
+				if err == nil && spec.Count {
+					count, err = e.store.CountCertificates(ctx, p.TenantID, spec.Certificates.store())
+					counted = err == nil
+				}
+			} else {
+				scanTruncated, err = e.readCertificates(ctx, p.TenantID, eq, spec.CertificateExpiryWindow, limit, add)
+			}
 			truncated = truncated || scanTruncated
 		case SurfaceGraph:
 			err = e.readGraph(ctx, p.TenantID, eq, add)
 		case SurfaceCBOM:
-			err = e.readCBOM(ctx, p.TenantID, eq, add)
+			var matches int
+			matches, err = e.readCBOM(ctx, p.TenantID, eq, spec.CryptoAssets, add)
+			if err == nil && spec.Count {
+				count, counted = matches, true
+			}
 		case SurfaceLog:
 			err = e.readLog(ctx, p.TenantID, eq, limit, &offset, add)
 		}
@@ -321,7 +391,64 @@ func (e *Engine) run(ctx context.Context, p authz.Principal, spec Spec) (*Result
 		}
 	}
 
-	return &Result{Rows: rows, Offset: offset, Truncated: truncated}, nil
+	return &Result{Rows: rows, Offset: offset, Truncated: truncated, Count: count, Counted: counted}, nil
+}
+
+// reads reports whether surf's rows belong in the answer.
+func (spec Spec) reads(surf Surface) bool {
+	focus := spec.Focus
+	switch {
+	case len(focus) > 0:
+	case spec.CertificateExpiryWindow != nil || spec.Certificates != nil:
+		focus = []Surface{SurfaceCertificates}
+	case spec.CryptoAssets != nil:
+		focus = []Surface{SurfaceCBOM}
+	default:
+		return true
+	}
+	for _, s := range focus {
+		if s == surf {
+			return true
+		}
+	}
+	return false
+}
+
+// validateFilters checks the typed surface filters against the selection.
+func validateFilters(spec Spec, selected map[Surface]bool) error {
+	if spec.Certificates != nil && spec.CryptoAssets != nil {
+		return fmt.Errorf("%w: a spec filters one surface", ErrMalformed)
+	}
+	if spec.Count && spec.Certificates == nil && spec.CryptoAssets == nil {
+		return fmt.Errorf("%w: count needs a filtered surface", ErrMalformed)
+	}
+	if f := spec.Certificates; f != nil {
+		if !selected[SurfaceCertificates] || spec.CertificateExpiryWindow != nil {
+			return fmt.Errorf("%w: a certificate filter needs the certificates surface and no expiry window", ErrMalformed)
+		}
+		switch f.Status {
+		case "", "active", "revoked", "superseded":
+		default:
+			return fmt.Errorf("%w: unknown certificate status", ErrMalformed)
+		}
+		if f.ExpiresAfter != nil && f.ExpiresBefore != nil && !f.ExpiresAfter.Before(*f.ExpiresBefore) {
+			return fmt.Errorf("%w: invalid certificate expiry bounds", ErrMalformed)
+		}
+		if f.OwnerName != "" && (f.Unowned || !selected[SurfaceOwners]) {
+			return fmt.Errorf("%w: an owner filter needs the owners surface", ErrMalformed)
+		}
+		for _, v := range []string{f.IssuerContains, f.NameContains, f.KeyAlgorithm, f.OwnerName, f.Serial, f.Fingerprint} {
+			if len(v) > maxFilterValue {
+				return fmt.Errorf("%w: filter value too long", ErrMalformed)
+			}
+		}
+	}
+	if f := spec.CryptoAssets; f != nil {
+		if !selected[SurfaceCBOM] || f.KeyBitsBelow < 0 || len(f.Algorithm) > maxFilterValue {
+			return fmt.Errorf("%w: invalid crypto asset filter", ErrMalformed)
+		}
+	}
+	return nil
 }
 
 // predicateIndex collapses equality predicates to a field→value lookup. With OpEq

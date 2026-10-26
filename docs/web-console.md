@@ -952,8 +952,11 @@ for help.
 
 After **Ask a question**, the default form accepts plain language and reads only
 certificates, owners, dependency links, cryptography inventory, and change-history
-evidence allowed by the caller's tenant and role. Advanced subject and evidence-scope
-controls stay under **Evidence and request details**. **Investigate a cause** keeps the
+evidence allowed by the caller's tenant and role. A hint under the question box lists
+question shapes the planner answers exactly (certificate filters and counts, who owns a
+certificate, crypto assets, graph inventories); each such answer begins with how the
+question was read. Advanced subject and evidence-scope controls stay under **Evidence
+and request details**. **Investigate a cause** keeps the
 grounded root-cause workflow, and **Use read-only tools** loads MCP tools only on demand.
 If the server reports write-capable MCP tools, the generic subject form remains
 disabled; an operation-specific, permission-checked workflow is required instead.

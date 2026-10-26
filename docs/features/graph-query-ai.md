@@ -168,15 +168,33 @@ only to decide whether to show the contract-owned licensed-support handoff.
 
 When the help backend is ready, select **Ask a question** to open the read-only
 workspace. For an exact expiry worklist, ask **“Which certificates expire within 30 days?”**
-(replace 30 with 1–365), with **Certificates** selected as an evidence surface.
-The query uses the caller's tenant, checks every selected surface's read permission,
-and returns only active certificates whose expiry is after the query time and before
-the requested cutoff. Each result includes its expiry time and inventory citation.
-When a row limit hides more matches, the answer says so and is marked insufficient;
-page through certificate inventory for a complete worklist. Unsupported certificate
-expiry wording returns a usable error. Other questions may show scoped evidence,
-but an unplanned question is marked insufficient rather than claiming the records
-answer it. Open **Evidence and request details** only when
+(replace 30 with 1–365, or ask in weeks), with **Certificates** selected as an evidence
+surface. The query uses the caller's tenant, checks every selected surface's read
+permission, and returns only active certificates whose expiry is after the query time and
+before the requested cutoff. Each result includes its expiry time and inventory citation.
+
+The same planner answers other questions exactly, and every answer begins with
+**Interpreted as:** so you can check what was answered:
+
+| Ask | Answers |
+| --- | --- |
+| “Which RSA certificates issued by Acme expire within 60 days?” | Any mix of: expiring within N days or weeks, expired, revoked/active/superseded, issued by, using an algorithm (RSA, ECDSA, Ed25519, ML-DSA…), for a subject or SAN name, owned by an owner, without an owner |
+| “How many certificates are issued by "Acme Issuing CA" and have no owner?” | An exact count, with the first matches cited |
+| “Who owns api.example.com?” (a serial or fingerprint works too) | Each matching certificate with its owner; select **Owners** as well |
+| “Which crypto assets are quantum-vulnerable and use RSA keys smaller than 2048 bits?”, “Where is RSA used?” | Crypto assets by algorithm, key size, quantum vulnerability or policy; select **CBOM** |
+| “Which workloads exist?”, “List all issuers” | Credential-graph inventories by node kind; select **Graph** |
+
+Values are single words or, for more than one word, text in double quotes; they are
+matched as literal, case-insensitive text and never become part of a query. An
+interpreted question's own clauses decide what is read; the optional subject narrows only
+questions that are not interpreted. When a row
+limit hides more matches, the answer says so and is marked insufficient; page through
+certificate inventory for a complete worklist. A question that needs a surface you did
+not select returns an error naming it, and unsupported certificate expiry wording
+returns a usable error. Any other question may show scoped evidence, but an unplanned
+question is marked insufficient rather than claiming the records answer it. The planner
+is a fixed grammar, not a model; questions about history or causes belong to
+**Investigate a cause**. Open **Evidence and request details** only when
 you need an exact subject or source scope. **Investigate a cause** uses the same
 tenant-scoped evidence path for root-cause analysis. **Use read-only tools** still loads
 its MCP catalog only when selected, and **Runtime and privacy details** reuses the status

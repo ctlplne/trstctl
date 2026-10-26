@@ -4198,12 +4198,17 @@ and `/api/v1/mcp/*` (off by default — `ai.enable_api` — and fail-closed when
 off, so an upgrade does not silently expose it):
 
 - `POST /api/v1/ai/query` reads typed, tenant-scoped evidence from owners,
-  certificates, the graph, CBOM, and the event log (F75). An exact certificate
-  expiry question such as “Which certificates expire within 30 days?” filters
-  active inventory rows by a typed time window and returns dated citations.
-  Other question text has no general semantic planner: it returns scoped evidence
-  marked insufficient, not a claimed complete answer. A bounded result also
-  declares when more matches may exist.
+  certificates, the graph, CBOM, and the event log (F75). A question planner
+  reads certificate questions that combine expiry windows, expired, status,
+  issuer, key algorithm, subject or SAN name, owner and no-owner clauses (as a
+  list or an exact count), “who owns” a certificate, crypto-asset questions by
+  algorithm, key size, quantum vulnerability or policy, and credential-graph
+  inventories. Each becomes a typed query whose values are bound parameters,
+  and the answer states its interpretation with dated citations. The planner is
+  a fixed grammar, not a language model: a question outside it, such as one
+  about event history or causes, returns scoped evidence marked insufficient,
+  not a claimed complete answer. A bounded result also declares when more
+  matches may exist.
 - `POST /api/v1/ai/rca` answers a grounded root-cause / NL question from
   cited real records gathered through the tenant-then-RBAC scoping seam,
   preferring "insufficient evidence" to a guess (F77). A cause question needs

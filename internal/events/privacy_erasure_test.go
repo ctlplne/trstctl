@@ -451,6 +451,16 @@ func TestAIQueryAnsweredPayloadVersionsStayClosed(t *testing.T) {
 	if err := validateRegisteredPrivacyEventPayload(append(v2[:len(v2)-1:len(v2)-1], []byte(`,"secret":"forbidden"}`)...), kind, 2); err == nil {
 		t.Fatal("v2 schema accepted an undeclared field")
 	}
+	v3 := []byte(`{"subject":"","rows":2,"citations":2,"grounded":true,"sufficient":true,"expiry_days":0,"window_after":"","window_before":"","truncated":false,"plan":"certificate-count","clauses":["status","issuer"],"count":2,"counted":true}`)
+	if err := validateRegisteredPrivacyEventPayload(v3, kind, 3); err != nil {
+		t.Fatalf("v3 event rejected: %v", err)
+	}
+	if err := validateRegisteredPrivacyEventPayload(v3, kind, 2); err == nil {
+		t.Fatal("v3 plan fields accepted under the v2 schema")
+	}
+	if err := validateRegisteredPrivacyEventPayload(v2, kind, 3); err == nil {
+		t.Fatal("v3 schema accepted a v2 payload without its plan fields")
+	}
 }
 
 func TestLiveWorkloadAndSSHProducerPayloadsFitTheClosedPrivacyCatalog(t *testing.T) {

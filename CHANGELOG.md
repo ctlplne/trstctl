@@ -2,6 +2,14 @@
 
 ### Added
 
+- `POST /api/v1/ai/query` plans questions beyond certificate expiry: certificate
+  questions combining expiry windows, expired, status, issuer, key algorithm,
+  subject or SAN name, owner and no-owner clauses (as a list or an exact count),
+  "who owns" a certificate, crypto assets by algorithm, key size, quantum
+  vulnerability or policy, and credential-graph inventories. Each is answered
+  exactly from a typed query, beginning with "Interpreted as:"; anything outside
+  the grammar is still scoped evidence marked insufficient. The audit record
+  (`ai.query.answered` v3) adds the plan kind, its clause kinds and the count.
 - Tenant attestors for agent delegation: `POST /api/v1/agent-delegation/attestors`
   (`trstctl-cli agent-delegation attestors register|list`) records a tenant's
   attestor public key and attestation method as an immutable first-writer

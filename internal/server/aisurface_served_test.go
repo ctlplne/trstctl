@@ -237,7 +237,9 @@ func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
 	if len(auditResult.Events) != 1 || auditResult.Events[0].Type != "ai.query.answered" ||
 		!bytes.Contains(auditResult.Events[0].Data, []byte(`"expiry_days":30`)) ||
 		!bytes.Contains(auditResult.Events[0].Data, []byte(`"sufficient":true`)) ||
-		!bytes.Contains(auditResult.Events[0].Data, []byte(`"window_after":`)) {
+		!bytes.Contains(auditResult.Events[0].Data, []byte(`"window_after":`)) ||
+		!bytes.Contains(auditResult.Events[0].Data, []byte(`"plan":"certificates"`)) ||
+		!bytes.Contains(auditResult.Events[0].Data, []byte(`"clauses":["expiry_window"]`)) {
 		t.Fatalf("missing versioned, durable expiry audit: %s", auditBody)
 	}
 	var auditVersion int
@@ -249,8 +251,8 @@ func TestServedAIQueryCertificateExpiryWindow(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if auditVersion != 2 {
-		t.Fatalf("AI expiry audit payload version = %d, want 2", auditVersion)
+	if auditVersion != 3 {
+		t.Fatalf("AI expiry audit payload version = %d, want 3", auditVersion)
 	}
 	for _, excluded := range []string{"later", "expired", "revoked", "superseded", "other-tenant"} {
 		if strings.Contains(string(body), excluded) {
@@ -643,5 +645,86 @@ func TestServedAISurfaceDisabledFailsClosed(t *testing.T) {
 	status, _ := aiReq(t, h, http.MethodGet, "/api/v1/mcp/tools", tok, nil)
 	if status != http.StatusServiceUnavailable {
 		t.Fatalf("disabled AI surface should fail closed with 503, got %d", status)
+	}
+}
+
+// A152: the served question planner answers certificate, ownership, crypto-asset
+// and inventory questions exactly, states its interpretation, refuses a question
+// whose surface was not selected, and never reaches another tenant's rows.
+func TestServedAIQueryPlansQuestionsBeyondExpiry(t *testing.T) {
+	h := newServedHarnessWithEventOptions(t, config.Protocols{}, []events.OpenOption{events.WithRequiredPrivacyEventPolicies()}, withAIEnabled())
+	registerServedTenant(t, h, "AI planner fixture")
+	tenantB := "22222222-2222-2222-2222-222222222222"
+	registerServedTenantID(t, h, tenantB, "AI planner neighbor")
+	owner, err := h.store.CreateOwner(t.Context(), store.Owner{TenantID: h.tenant, Kind: store.OwnerWorkload, Name: "payments-team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	seed := func(tenant, serial, issuer, alg string, owned bool, expiry time.Time) {
+		t.Helper()
+		cert := store.Certificate{Subject: "CN=" + serial + ".example.test", Serial: serial, Issuer: issuer, KeyAlgorithm: alg,
+			Fingerprint: crypto.SHA256Hex([]byte(tenant + serial)), Source: "issued", NotAfter: &expiry}
+		if owned {
+			cert.OwnerID = &owner.ID
+		}
+		if _, err := h.srv.orch.RecordCertificate(t.Context(), tenant, cert); err != nil {
+			t.Fatalf("record %s: %v", serial, err)
+		}
+	}
+	seed(h.tenant, "acme-rsa", "CN=Acme Issuing CA", "RSA", true, now.Add(10*24*time.Hour))
+	seed(h.tenant, "acme-ec", "CN=Acme Issuing CA", "ECDSA", false, now.Add(50*24*time.Hour))
+	seed(h.tenant, "other-rsa", "CN=Other CA", "RSA", false, now.Add(-2*24*time.Hour))
+	seed(tenantB, "neighbor-acme", "CN=Acme Issuing CA", "RSA", false, now.Add(10*24*time.Hour))
+	if _, err := h.store.UpsertCryptoAsset(t.Context(), store.CryptoAsset{TenantID: h.tenant, Kind: "tls", Location: "pay:443", Algorithm: "RSA", KeyBits: 1024, QuantumVulnerable: true, Library: "openssl", Strength: "weak"}); err != nil {
+		t.Fatal(err)
+	}
+	tok := seedScopedToken(t, h.store, h.tenant, "certs:read", "owners:read", "risk:read", "graph:read", "audit:read")
+	ask := func(question string, surfaces ...string) (int, map[string]any, string) {
+		t.Helper()
+		status, body := aiReq(t, h, http.MethodPost, "/api/v1/ai/query", tok, map[string]any{"surfaces": surfaces, "question": question, "limit": 25})
+		var ans map[string]any
+		_ = json.Unmarshal(body, &ans)
+		return status, ans, string(body)
+	}
+	for _, tc := range []struct {
+		question string
+		surfaces []string
+		has      []string
+		hasNot   []string
+	}{
+		{"How many certificates are issued by Acme?", []string{"certificates"}, []string{"Count: 2.", `issuer containing \"Acme\"`, "serial=acme-rsa", "serial=acme-ec"}, []string{"neighbor-acme", "other-rsa"}},
+		{"Which RSA certificates are unowned?", []string{"certificates"}, []string{"serial=other-rsa", "with no owner", "1 shown"}, []string{"acme-rsa", "acme-ec"}},
+		{"Which certificates have expired?", []string{"certificates"}, []string{"serial=other-rsa", "validity ended before"}, []string{"acme-rsa", "acme-ec"}},
+		{"which certificates are owned by payments-team", []string{"certificates", "owners"}, []string{"serial=acme-rsa", "1 shown"}, []string{"acme-ec", "other-rsa"}},
+		{"Who owns acme-rsa.example.test?", []string{"certificates", "owners"}, []string{"serial=acme-rsa", "owner=[owners#" + owner.ID + "] payments-team"}, []string{"acme-ec"}},
+		{"which crypto assets are quantum-vulnerable and use RSA keys smaller than 2048 bits", []string{"cbom"}, []string{"key_bits=1024", "1 shown"}, nil},
+		{"Which workloads exist?", []string{"graph"}, []string{"kind=workload", "payments-team"}, nil},
+	} {
+		status, ans, body := ask(tc.question, tc.surfaces...)
+		if status != http.StatusOK || ans["sufficient"] != true || !strings.Contains(body, "Interpreted as:") {
+			t.Fatalf("%q: HTTP %d %s", tc.question, status, body)
+		}
+		for _, want := range tc.has {
+			if !strings.Contains(body, want) {
+				t.Errorf("%q answer lacks %q: %s", tc.question, want, body)
+			}
+		}
+		for _, unwanted := range tc.hasNot {
+			if strings.Contains(body, unwanted) {
+				t.Errorf("%q answer includes %q: %s", tc.question, unwanted, body)
+			}
+		}
+	}
+	if status, _, body := ask("which certificates are owned by payments-team", "certificates"); status != http.StatusBadRequest || !strings.Contains(body, "select owners") {
+		t.Fatalf("owner question without the owners surface = HTTP %d %s", status, body)
+	}
+	viewer := seedScopedToken(t, h.store, h.tenant, "certs:read", "audit:read")
+	status, body := aiReq(t, h, http.MethodPost, "/api/v1/ai/query", viewer, map[string]any{"surfaces": []string{"certificates", "owners"}, "question": "Who owns acme-rsa.example.test?"})
+	if status != http.StatusForbidden {
+		t.Fatalf("ownership question without owners:read = HTTP %d %s", status, body)
+	}
+	if status, ans, body := ask("Which certificates should rotate first?", "certificates"); status != http.StatusOK || ans["sufficient"] != false || strings.Contains(body, "Interpreted as:") {
+		t.Fatalf("unplanned question = HTTP %d %s", status, body)
 	}
 }

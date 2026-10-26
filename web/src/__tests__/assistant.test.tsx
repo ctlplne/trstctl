@@ -209,6 +209,8 @@ describe("assistant console workflow", () => {
     expect(screen.getByText("Structured query preview")).toBeInTheDocument();
     expect(screen.getByText(/Surfaces: certificates, owners, graph/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Which certificates expire within 30 days?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Question")).toHaveAccessibleDescription(/Who owns api\.example\.com\?.*select Owners for ownership questions/);
+    expect(screen.getByText(/Each answer states how the question was read/)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Question"), "Which certificates expire within 30 days?");
     await user.click(screen.getByRole("button", { name: /^Ask$/i }));

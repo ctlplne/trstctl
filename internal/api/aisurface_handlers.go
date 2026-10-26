@@ -9,9 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,23 +50,17 @@ type aiQueryRequest struct {
 	Limit int `json:"limit,omitempty"`
 }
 
-// Keep deterministic question handling deliberately narrow. In model-off mode a
-// pile of cited rows cannot prove an arbitrary natural-language claim. This
-// grammar recognizes the precise expiry window an operator can verify in the
-// certificate inventory; other wording is never silently treated as a filter.
-var certificateExpiryQuestion = regexp.MustCompile(`(?i)^\s*(?:(?:which|what)\s+|(?:show|list)(?:\s+me)?\s+)(?:certificates|certs)\s+(?:are\s+)?(?:expire|expires|expiring)\s+(?:within|in(?:\s+the)?\s+next)\s+([0-9]{1,3})\s+days?\s*[?.]?\s*$`)
-var workloadListQuestion = regexp.MustCompile(`(?i)^\s*(?:which|what)\s+workloads\s+exist\s*[?.]?\s*$`)
+// Questions are interpreted by query.PlanQuestion: a compositional grammar over
+// certificates, ownership, crypto assets and graph inventories. Its typed plan is
+// answered exactly, with the interpretation stated; anything outside it is
+// answered as scoped evidence marked insufficient. In model-off mode a pile of
+// cited rows cannot prove an arbitrary natural-language claim.
 
-func certificateExpiryDays(question string) (int, bool) {
-	match := certificateExpiryQuestion.FindStringSubmatch(question)
-	if match == nil {
-		return 0, false
-	}
-	days, err := strconv.Atoi(match[1])
-	if err != nil || days < 1 || days > 365 {
-		return 0, false
-	}
-	return days, true
+// mentionsCertificateExpiry recognises an expiry question the planner could not
+// read, so the caller is told the form that works instead of getting evidence.
+func mentionsCertificateExpiry(question string) bool {
+	q := strings.ToLower(question)
+	return (strings.Contains(q, "certificate") || strings.Contains(q, "certs")) && strings.Contains(q, "expir")
 }
 
 // aiAnswer is a grounded, cited answer (F75/F77). Text is grounded in Citations, which
@@ -222,7 +214,9 @@ func (a *API) aiStatus(w http.ResponseWriter, _ *http.Request) {
 // It is read-only; despite being POST (the typed spec travels in the body) it mutates
 // no state. The tenant + RBAC scope come from the authenticated principal: a surface
 // the principal cannot read denies the whole query (ErrForbidden -> 403), and no row
-// from another tenant is reachable (RLS + in-process log tenant drop).
+// from another tenant is reachable (RLS + in-process log tenant drop). A question the
+// planner reads is answered exactly from its typed plan; any other question returns
+// the selected surfaces as scoped evidence marked insufficient.
 func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 	if a.ai == nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "AI surface is not enabled"))
@@ -242,14 +236,13 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "at least one surface is required"))
 		return
 	}
-	days, expiryQuestion := certificateExpiryDays(req.Question)
-	if !expiryQuestion {
-		q := strings.ToLower(req.Question)
-		if (strings.Contains(q, "certificate") || strings.Contains(q, "certs")) && strings.Contains(q, "expir") {
-			a.writeError(w, errStatus(http.StatusUnprocessableEntity, "For a certificate expiry window, ask 'Which certificates expire within 30 days?' (1 to 365 days)."))
-			return
-		}
+	asOf := time.Now().UTC()
+	plan, planned := query.PlanQuestion(req.Question, asOf)
+	if !planned && mentionsCertificateExpiry(req.Question) {
+		a.writeError(w, errStatus(http.StatusUnprocessableEntity, "For a certificate expiry window, ask 'Which certificates expire within 30 days?' (1 to 365 days)."))
+		return
 	}
+	selected := map[query.Surface]bool{}
 	spec := query.Spec{Limit: req.Limit}
 	for _, name := range req.Surfaces {
 		surf, ok := surfaceByName[strings.ToLower(strings.TrimSpace(name))]
@@ -257,24 +250,26 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, errStatus(http.StatusBadRequest, "unknown surface: "+name))
 			return
 		}
+		selected[surf] = true
 		spec.Select = append(spec.Select, surf)
-		if req.Subject != "" {
+		if req.Subject != "" && !planned {
 			if field, has := subjectFieldForSurface(surf); has {
 				spec.Where = append(spec.Where, query.Predicate{Field: field, Op: query.OpEq, Value: req.Subject})
 			}
 		}
 	}
-	if expiryQuestion {
-		selectedCertificates := false
-		for _, surface := range spec.Select {
-			selectedCertificates = selectedCertificates || surface == query.SurfaceCertificates
+	if planned {
+		// The question needs these surfaces selected. Every selected surface is
+		// still authorized; only the plan's focus surfaces are read.
+		for _, need := range plan.Spec.Select {
+			if !selected[need] {
+				a.writeError(w, errStatus(http.StatusBadRequest, "select "+string(need)+" to answer this question"))
+				return
+			}
 		}
-		if !selectedCertificates {
-			a.writeError(w, errStatus(http.StatusBadRequest, "select certificates to answer an expiry question"))
-			return
-		}
-		asOf := time.Now().UTC()
-		spec.CertificateExpiryWindow = &query.CertificateExpiryWindow{After: asOf, Before: asOf.Add(time.Duration(days) * 24 * time.Hour)}
+		planSpec := plan.Spec
+		planSpec.Select, planSpec.Limit = spec.Select, req.Limit
+		spec = planSpec
 	}
 
 	res, err := a.ai.be.Query.Query(r.Context(), principal, spec)
@@ -282,11 +277,18 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 		a.writeAIQueryError(w, err)
 		return
 	}
+	var owners map[string]string
+	if planned && plan.Kind == query.PlanCertificateOwners {
+		if owners, err = a.ownerNames(r, principal, spec.Select); err != nil {
+			a.writeAIQueryError(w, err)
+			return
+		}
+	}
 
 	// Build a grounded answer from the scoped rows (the same grounding the RCA path
-	// uses): cite each row, and when a model is configured, synthesize over the cited
-	// evidence with the redact+refuse boundary. Without a model the answer IS the cited
-	// evidence (air-gapped default).
+	// uses): cite each row. A planned question is answered from its plan; otherwise,
+	// when a model is configured, synthesize over the cited evidence with the
+	// redact+refuse boundary. Without a model the answer IS the cited evidence.
 	ev := rca.Evidence{Question: req.Question, Subject: req.Subject}
 	for _, row := range res.Rows {
 		ev.Items = append(ev.Items, rca.EvidenceItem{
@@ -295,63 +297,111 @@ func (a *API) aiQuery(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	var ans aiAnswer
-	if expiryQuestion {
-		ans = exactCertificateExpiryAnswer(ev, spec.CertificateExpiryWindow, days, res.Truncated)
+	if planned {
+		ans = plannedAnswer(plan, ev, res, owners, req.Subject != "")
 	} else {
 		// The typed surface/subject filters may gather useful evidence, but they
 		// do not interpret arbitrary question text. Never label a raw evidence
 		// list as a complete answer to an unplanned question.
 		ans = a.synthesize(r, ev)
-		if !workloadListQuestion.MatchString(req.Question) || res.Truncated {
-			ans.Sufficient = false
-			ans.Text = "The question was not fully interpreted. These are scoped evidence records, not a complete answer.\n" + ans.Text
-		}
+		ans.Sufficient = false
+		ans.Text = "The question was not fully interpreted. These are scoped evidence records, not a complete answer.\n" + ans.Text
 	}
-
-	windowAfter, windowBefore := "", ""
-	if spec.CertificateExpiryWindow != nil {
-		windowAfter = spec.CertificateExpiryWindow.After.Format(time.RFC3339Nano)
-		windowBefore = spec.CertificateExpiryWindow.Before.Format(time.RFC3339Nano)
-	}
-	auditPayload, err := json.Marshal(struct {
-		Subject      string `json:"subject"`
-		Rows         int    `json:"rows"`
-		Citations    int    `json:"citations"`
-		Grounded     bool   `json:"grounded"`
-		Sufficient   bool   `json:"sufficient"`
-		ExpiryDays   int    `json:"expiry_days"`
-		WindowAfter  string `json:"window_after"`
-		WindowBefore string `json:"window_before"`
-		Truncated    bool   `json:"truncated"`
-	}{req.Subject, len(res.Rows), len(ans.Citations), ans.Grounded, ans.Sufficient, days, windowAfter, windowBefore, res.Truncated})
-	if err != nil {
-		a.writeError(w, errStatus(http.StatusInternalServerError, "cannot encode AI query audit"))
-		return
-	}
-	// A successful answer without its immutable tenant audit record is a false
-	// success for an enterprise investigation. Preserve the v1 history shape and
-	// append this richer record as v2 before sending the answer.
-	if err := auditsink.EmitVersioned(r.Context(), a.ai.be.Audit, nil, "ai.query.answered", principal.TenantID, 2, auditPayload); err != nil {
+	if err := a.auditAIQuery(r, principal.TenantID, req.Subject, plan, planned, res, ans); err != nil {
 		a.writeError(w, errStatus(http.StatusServiceUnavailable, "AI query audit is unavailable; retry the question"))
 		return
 	}
-
 	a.writeJSON(w, http.StatusOK, ans)
 }
 
-func exactCertificateExpiryAnswer(ev rca.Evidence, window *query.CertificateExpiryWindow, days int, truncated bool) aiAnswer {
+// ownerNames maps the tenant's owner IDs to names for an ownership answer. It is a
+// second scoped query over the owners surface, under the same principal.
+func (a *API) ownerNames(r *http.Request, principal authz.Principal, selected []query.Surface) (map[string]string, error) {
+	res, err := a.ai.be.Query.Query(r.Context(), principal, query.Spec{Select: selected, Focus: []query.Surface{query.SurfaceOwners}})
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]string, len(res.Rows))
+	for _, row := range res.Rows {
+		names[row.Columns["id"]] = row.Columns["name"]
+	}
+	return names, nil
+}
+
+// plannedAnswer renders a planned question's exact answer. It says what was
+// answered, how many rows are shown, whether more exist, and cites every row.
+func plannedAnswer(plan query.Plan, ev rca.Evidence, res *query.Result, owners map[string]string, subjectIgnored bool) aiAnswer {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Active certificates expiring within %d days (after %s and before %s UTC): %d shown.\n",
-		days, window.After.Format(time.RFC3339Nano), window.Before.Format(time.RFC3339Nano), len(ev.Items))
-	if truncated {
+	fmt.Fprintf(&b, "Interpreted as: %s.\n", plan.Interpretation)
+	sufficient := !res.Truncated
+	if res.Counted {
+		fmt.Fprintf(&b, "Count: %d.\n", res.Count)
+		sufficient = true
+	}
+	fmt.Fprintf(&b, "%d shown.\n", len(ev.Items))
+	switch {
+	case res.Truncated && res.Counted:
+		b.WriteString("The count is exact; only the first matches are cited.\n")
+	case res.Truncated && plan.Spec.Certificates != nil:
 		b.WriteString("More matching certificates may exist. Page through the certificate inventory for the complete set.\n")
+	case res.Truncated:
+		b.WriteString("More matching records may exist. Raise the limit for the complete set.\n")
+	}
+	if subjectIgnored {
+		b.WriteString("The subject filter applies only to questions that are not interpreted; this answer follows the question.\n")
 	}
 	cites := make([]string, 0, len(ev.Items))
-	for _, item := range ev.Items {
+	for i, item := range ev.Items {
 		cites = append(cites, item.Citation)
-		fmt.Fprintf(&b, "- [%s] %s\n", item.Citation, item.Summary)
+		fmt.Fprintf(&b, "- [%s] %s", item.Citation, item.Summary)
+		if owners != nil {
+			ownerID := res.Rows[i].Columns["owner_id"]
+			if name, ok := owners[ownerID]; ok && ownerID != "" {
+				cites = append(cites, "owners#"+ownerID)
+				fmt.Fprintf(&b, " owner=[owners#%s] %s", ownerID, aimodel.DefaultRedactor(name))
+			} else {
+				b.WriteString(" owner=none recorded")
+			}
+		}
+		b.WriteString("\n")
 	}
-	return aiAnswer{Text: b.String(), Citations: cites, Sufficient: !truncated, Grounded: len(cites) > 0}
+	return aiAnswer{Text: b.String(), Citations: cites, Sufficient: sufficient, Grounded: len(cites) > 0}
+}
+
+// auditAIQuery appends the tenant's durable record of an answered question. The
+// plan's kind and clause kinds are recorded, never the values taken from the
+// question. A successful answer without it is a false success for an enterprise
+// investigation, so the answer is withheld when this fails.
+func (a *API) auditAIQuery(r *http.Request, tenantID, subject string, plan query.Plan, planned bool, res *query.Result, ans aiAnswer) error {
+	windowAfter, windowBefore := "", ""
+	kind, clauses := "", []string{}
+	if planned {
+		kind, clauses = string(plan.Kind), append(clauses, plan.Clauses...)
+		if f := plan.Spec.Certificates; f != nil && plan.ExpiryDays > 0 && f.ExpiresAfter != nil && f.ExpiresBefore != nil {
+			windowAfter = f.ExpiresAfter.Format(time.RFC3339Nano)
+			windowBefore = f.ExpiresBefore.Format(time.RFC3339Nano)
+		}
+	}
+	payload, err := json.Marshal(struct {
+		Subject      string   `json:"subject"`
+		Rows         int      `json:"rows"`
+		Citations    int      `json:"citations"`
+		Grounded     bool     `json:"grounded"`
+		Sufficient   bool     `json:"sufficient"`
+		ExpiryDays   int      `json:"expiry_days"`
+		WindowAfter  string   `json:"window_after"`
+		WindowBefore string   `json:"window_before"`
+		Truncated    bool     `json:"truncated"`
+		Plan         string   `json:"plan"`
+		Clauses      []string `json:"clauses"`
+		Count        int      `json:"count"`
+		Counted      bool     `json:"counted"`
+	}{subject, len(res.Rows), len(ans.Citations), ans.Grounded, ans.Sufficient, plan.ExpiryDays, windowAfter, windowBefore, res.Truncated,
+		kind, clauses, res.Count, res.Counted})
+	if err != nil {
+		return err
+	}
+	return auditsink.EmitVersioned(r.Context(), a.ai.be.Audit, nil, "ai.query.answered", tenantID, 3, payload)
 }
 
 // aiRCA answers a grounded root-cause / NL question over the tenant's data (F77). The

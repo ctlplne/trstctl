@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,25 +59,54 @@ func (e *Engine) readCertificates(ctx context.Context, tenant string, eq map[Fie
 	wantOwner, byOwner := eq[FieldOwnerID]
 	wantSerial, bySerial := eq[FieldCertSerial]
 	for _, c := range certs {
-		owner := ""
-		if c.OwnerID != nil {
-			owner = *c.OwnerID
-		}
-		if byOwner && owner != wantOwner {
+		row := certificateRow(c)
+		if byOwner && row.Columns["owner_id"] != wantOwner {
 			continue
 		}
 		if bySerial && c.Serial != wantSerial {
 			continue
 		}
-		if !add(Row{Surface: SurfaceCertificates, Columns: map[string]string{
-			"id": c.ID, "owner_id": owner, "serial": c.Serial,
-			"subject": c.Subject, "fingerprint": c.Fingerprint, "status": c.Status,
-			"not_after": certificateExpiry(c.NotAfter),
-		}}) {
+		if !add(row) {
 			return true, nil
 		}
 	}
 	return scanTruncated, nil
+}
+
+// readFilteredCertificates answers a typed certificate filter inside the store,
+// fetching one row beyond the limit to know whether the answer is complete.
+func (e *Engine) readFilteredCertificates(ctx context.Context, tenant string, f CertificateFilter, limit int, add func(Row) bool) (bool, error) {
+	certs, err := e.store.FilterCertificates(ctx, tenant, f.store(), limit+1)
+	if err != nil {
+		return false, err
+	}
+	for i, c := range certs {
+		if i == limit || !add(certificateRow(c)) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (f CertificateFilter) store() store.CertificateFilter {
+	return store.CertificateFilter{
+		Status: f.Status, ExpiresAfter: f.ExpiresAfter, ExpiresBefore: f.ExpiresBefore,
+		IssuerContains: f.IssuerContains, NameContains: f.NameContains, KeyAlgorithm: f.KeyAlgorithm,
+		OwnerName: f.OwnerName, Unowned: f.Unowned, Serial: f.Serial, Fingerprint: f.Fingerprint,
+	}
+}
+
+func certificateRow(c store.Certificate) Row {
+	owner := ""
+	if c.OwnerID != nil {
+		owner = *c.OwnerID
+	}
+	return Row{Surface: SurfaceCertificates, Columns: map[string]string{
+		"id": c.ID, "owner_id": owner, "serial": c.Serial,
+		"subject": c.Subject, "fingerprint": c.Fingerprint, "status": c.Status,
+		"issuer": c.Issuer, "key_algorithm": c.KeyAlgorithm,
+		"not_after": certificateExpiry(c.NotAfter),
+	}}
 }
 
 func certificateExpiry(t *time.Time) string {
@@ -108,24 +138,50 @@ func (e *Engine) readGraph(ctx context.Context, tenant string, eq map[Field]stri
 	return nil
 }
 
-func (e *Engine) readCBOM(ctx context.Context, tenant string, eq map[Field]string, add func(Row) bool) error {
+// readCBOM reads the tenant's crypto assets and returns how many matched. The
+// whole inventory is read, so the count is exact even past the row limit.
+func (e *Engine) readCBOM(ctx context.Context, tenant string, eq map[Field]string, f *CryptoAssetFilter, add func(Row) bool) (int, error) {
 	assets, err := e.store.ListCryptoAssets(ctx, tenant)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	want, filter := eq[FieldCBOMAlgorithm]
+	matches, full := 0, false
 	for _, a := range assets {
 		if filter && a.Algorithm != want {
 			continue
 		}
-		if !add(Row{Surface: SurfaceCBOM, Columns: map[string]string{
-			"kind": a.Kind, "location": a.Location, "algorithm": a.Algorithm,
-			"library": a.Library, "strength": a.Strength,
-		}}) {
-			return nil
+		if f != nil && !f.matches(a) {
+			continue
 		}
+		matches++
+		if full {
+			continue
+		}
+		full = !add(Row{Surface: SurfaceCBOM, Columns: map[string]string{
+			"kind": a.Kind, "location": a.Location, "algorithm": a.Algorithm,
+			"library": a.Library, "strength": a.Strength, "key_bits": strconv.Itoa(a.KeyBits),
+			"quantum_vulnerable": strconv.FormatBool(a.QuantumVulnerable),
+		}})
 	}
-	return nil
+	return matches, nil
+}
+
+func (f CryptoAssetFilter) matches(a store.CryptoAsset) bool {
+	if f.Algorithm != "" && !algorithmFamily(a.Algorithm, f.Algorithm) {
+		return false
+	}
+	if f.KeyBitsBelow > 0 && (a.KeyBits <= 0 || a.KeyBits >= f.KeyBitsBelow) {
+		return false
+	}
+	return (!f.QuantumVulnerable || a.QuantumVulnerable) && (!f.OutOfPolicy || a.OutOfPolicy)
+}
+
+// algorithmFamily reports whether recorded names the family: equal, case aside,
+// or the family followed by a dash ("ECDSA-P256", "ML-DSA-65").
+func algorithmFamily(recorded, family string) bool {
+	r, f := strings.ToLower(recorded), strings.ToLower(family)
+	return r == f || strings.HasPrefix(r, f+"-")
 }
 
 // errEnough stops a log replay early once the row budget is met.
