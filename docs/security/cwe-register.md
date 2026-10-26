@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1750 annotated sites across 27 rules. Each row is
+1753 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (376 sites)
+### G101 — CWE-798 Use of hardcoded credentials (379 sites)
 
 | Location | Reason |
 |---|---|
@@ -269,8 +269,11 @@ not this file.
 | `internal/mcpserver/mcpserver_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/notify/notify.go:89` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/operator/client.go:38` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/operator/reconcile_test.go:313` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/client.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/operator/networking_test.go:61` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/networking_test.go:189` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/reconcile_test.go:422` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/operator/reconcile_test.go:436` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/secretinjection.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:24` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/secretinjection.go:25` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1397,7 +1400,7 @@ not this file.
 | `internal/crypto/mtls/server_test.go:65` | test-owned path under t.TempDir (CWE-22) |
 | `internal/crypto/mtls/server_test.go:93` | test-owned path under t.TempDir (CWE-22) |
 | `internal/crypto/mtls/server_test.go:97` | test-owned path under t.TempDir (CWE-22) |
-| `internal/crypto/mtls/signer.go:107` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
+| `internal/crypto/mtls/signer.go:109` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
 | `internal/crypto/parserfuzz_audit_test.go:266` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1707,8 +1710,8 @@ not this file.
 | `internal/connector/localops_test.go:159` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/external_kms_test.go:90` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/mtls/agent.go:205` | certificate chain PEM is public material; the key is written 0600 separately (CWE-276) |
-| `internal/crypto/mtls/signer.go:217` | writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276) |
-| `internal/crypto/mtls/signer.go:264` | writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276) |
+| `internal/crypto/mtls/signer.go:209` | writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276) |
+| `internal/crypto/mtls/signer.go:322` | writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276) |
 | `internal/crypto/secretfile/custody_windows_test.go:36` | public fixture contents (CWE-276) |
 | `internal/crypto/secretfile/secretfile_test.go:48` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/tenantwrap/tenantwrap_test.go:110` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1993,7 +1996,7 @@ not this file.
 | `internal/ca/letsencrypt/acmefake/acmefake.go:468` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/connector/fortigate/fortigatetest/fortigatetest.go:241` | test-support package compiled only into test binaries (CWE-79) |
 | `internal/dns/akamai/akamai_test.go:131` | test writes fixture bytes to its own recorder/local server (CWE-79) |
-| `internal/operator/reconcile_test.go:218` | test writes fixture bytes to its own recorder/local server (CWE-79) |
+| `internal/operator/reconcile_test.go:259` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
 | `internal/secretstore/access.go:97` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
 | `internal/secretstore/access.go:113` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |

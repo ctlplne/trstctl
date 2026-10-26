@@ -44,6 +44,97 @@ spec:
                       type: string
                     keyStorePVC:
                       type: string
+                    authTokenCommand:
+                      type: string
+                      description: >-
+                        The independent command the control plane runs for each
+                        signer authorization token. Required with production NATS
+                        (nats.url set, nats.allowSingleReplica false).
+                    allowCoResidentAuthorizer:
+                      type: boolean
+                      description: >-
+                        Evaluation only, sidecar signer only: the control plane
+                        mounts the signer's verifier secret and mints its own tokens.
+                    mtls:
+                      type: object
+                      description: >-
+                        The isolated signer's mutually pinned channel. Each Secret holds
+                        tls.crt, tls.key, peer-ca.pem and peer-pin. Name neither Secret
+                        and the operator generates the pair into <name>-signer-mtls and
+                        <name>-cp-signer-mtls and renews it before it expires. serverName
+                        defaults to the signer Service's in-cluster DNS name.
+                      properties:
+                        signerSecret:
+                          type: string
+                        controlPlaneSecret:
+                          type: string
+                        serverName:
+                          type: string
+                service:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                      enum: ["ClusterIP", "NodePort", "LoadBalancer"]
+                    port:
+                      type: integer
+                      minimum: 1
+                      maximum: 65535
+                    annotations:
+                      type: object
+                      additionalProperties:
+                        type: string
+                ingress:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    className:
+                      type: string
+                    host:
+                      type: string
+                    tlsSecret:
+                      type: string
+                    annotations:
+                      type: object
+                      additionalProperties:
+                        type: string
+                networkPolicy:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    ingressController:
+                      type: object
+                      properties:
+                        disabled:
+                          type: boolean
+                        namespaceLabels:
+                          type: object
+                          additionalProperties:
+                            type: string
+                        podLabels:
+                          type: object
+                          additionalProperties:
+                            type: string
+                    allowSameNamespace:
+                      type: boolean
+                    allowedNamespaces:
+                      type: array
+                      items:
+                        type: string
+                    egressCIDRs:
+                      type: array
+                      items:
+                        type: string
+                    postgresPort:
+                      type: integer
+                      minimum: 1
+                      maximum: 65535
+                    natsPort:
+                      type: integer
+                      minimum: 1
+                      maximum: 65535
                 postgres:
                   type: object
                   properties:
@@ -82,6 +173,12 @@ spec:
                   type: string
                 readySurfaces:
                   type: integer
+                surfaces:
+                  type: object
+                  additionalProperties:
+                    type: string
+                message:
+                  type: string
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition

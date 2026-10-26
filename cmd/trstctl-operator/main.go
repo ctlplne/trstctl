@@ -19,9 +19,10 @@
 // runs via an entrypoint override (the same packaging the agent uses, OPS-002).
 //
 // Maturity is documented honestly in deploy/operator/doc.go: this is a small,
-// functional reconcile loop that owns the Deployment, its runtime config, and
-// TrstctlSecretSync projections; Services, ingress, and NetworkPolicy remain the
-// Helm chart's richer path.
+// functional reconcile loop that owns the Deployment and its runtime config, the
+// control plane's Service, NetworkPolicy and optional Ingress, the isolated
+// signer's own Deployment, Service, NetworkPolicy and mTLS pair, and
+// TrstctlSecretSync projections. It polls rather than watches.
 package main
 
 import (

@@ -316,3 +316,77 @@ func TestPinPEMMatchesConfiguredPin(t *testing.T) {
 		t.Errorf("PinPEM(signer cert) = %s, but the control plane was told to pin %s", pin, mat.ControlPlane.PeerPinHex)
 	}
 }
+
+// TestGenerateSignerPeerPEMMountsAsOneSecretPerEnd: the in-memory pair, laid out
+// the way the Kubernetes operator mounts each end's Secret (tls.crt, tls.key,
+// peer-ca.pem and the peer-pin value), completes the pinned handshake, its pins
+// are the certificates' own, the signer refuses another pair's control plane,
+// NotAfter is the leaves' expiry, and Wipe zeroes both keys.
+func TestGenerateSignerPeerPEMMountsAsOneSecretPerEnd(t *testing.T) {
+	const serverName = "edge-signer.trstctl.svc"
+	pair, err := mtls.GenerateSignerPeerPEM(serverName, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateSignerPeerPEM: %v", err)
+	}
+	if until := time.Until(pair.NotAfter); until <= 23*time.Hour || until > 24*time.Hour {
+		t.Fatalf("NotAfter is %s away, want the 24h leaf lifetime", until)
+	}
+	for name, c := range map[string]struct {
+		cert []byte
+		pin  string
+	}{"signer": {pair.SignerCert, pair.SignerPinHex}, "control plane": {pair.ControlPlaneCert, pair.ControlPlanePinHex}} {
+		if got, err := mtls.PinPEM(c.cert); err != nil || got != c.pin {
+			t.Fatalf("%s pin = %q (%v), want the certificate's own %q", name, c.pin, err, got)
+		}
+	}
+	mount := func(ca, cert, key []byte, peerPin string) mtls.SignerPeerConfig {
+		dir := t.TempDir()
+		for file, data := range map[string][]byte{"peer-ca.pem": ca, "tls.crt": cert, "tls.key": key} {
+			if err := os.WriteFile(dir+"/"+file, data, 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return mtls.SignerPeerConfig{CertFile: dir + "/tls.crt", KeyFile: dir + "/tls.key", PeerCAFile: dir + "/peer-ca.pem", PeerPinHex: peerPin}
+	}
+	signerEnd := mount(pair.CA, pair.SignerCert, pair.SignerKey, pair.ControlPlanePinHex)
+	controlPlaneEnd := mount(pair.CA, pair.ControlPlaneCert, pair.ControlPlaneKey, pair.SignerPinHex)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	addr, results := serveSignerTLS(t, ctx, signerEnd)
+	handshake := func(end mtls.SignerPeerConfig) error {
+		creds, err := mtls.SignerClientCredentials(end, serverName)
+		if err != nil {
+			return err
+		}
+		raw, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = raw.Close() }()
+		_, _, err = creds.ClientHandshake(ctx, serverName, raw)
+		return err
+	}
+	if err := handshake(controlPlaneEnd); err != nil {
+		t.Fatalf("control plane end did not complete the pinned handshake: %v", err)
+	}
+	if serverErr := nextResult(t, results); serverErr != nil {
+		t.Fatalf("signer end refused its own control plane: %v", serverErr)
+	}
+
+	other, err := mtls.GenerateSignerPeerPEM(serverName, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = handshake(mount(pair.CA, other.ControlPlaneCert, other.ControlPlaneKey, pair.SignerPinHex))
+	if serverErr := nextResult(t, results); serverErr == nil {
+		t.Fatal("signer end accepted another pair's control-plane certificate")
+	}
+
+	pair.Wipe()
+	for _, key := range [][]byte{pair.SignerKey, pair.ControlPlaneKey} {
+		if strings.Trim(string(key), "\x00") != "" {
+			t.Fatal("Wipe left private key bytes behind")
+		}
+	}
+}

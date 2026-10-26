@@ -2,6 +2,21 @@
 
 ### Added
 
+- The Kubernetes Operator manages the control plane's network surface the way
+  the Helm chart renders it: a Service (`spec.service`), a default-deny
+  NetworkPolicy (`spec.networkPolicy`) and an optional Ingress
+  (`spec.ingress`). With `signerMode: isolated` it runs the signer as its own
+  pod behind its own Service and a NetworkPolicy that admits only that control
+  plane, generates the mutually pinned mTLS pair unless you name your own
+  Secrets, renews it a month before it expires, and rolls both pods onto a new
+  pair. `spec.signer.authTokenCommand` and `spec.signer.allowCoResidentAuthorizer`
+  wire signer authorization as the chart does, and combinations the control
+  plane would refuse set the resource `Blocked` with the reason. The operator
+  deletes only objects it labels as its own and refuses to take over others.
+  Its Role gains delete on Deployments, Secrets, Services, NetworkPolicies and
+  Ingresses, and get/create/update/patch on Services, NetworkPolicies and
+  Ingresses.
+
 - Certificates can carry a device-bound custody claim the device's TPM signed.
   When an ACME `device-attest-01` attestation certifies a key the TPM generated
   and will not release (`sensitiveDataOrigin`, `fixedTPM`, `fixedParent`), the
@@ -202,6 +217,12 @@
 
 ### Fixed
 
+- The Kubernetes Operator could not create a control plane on a real cluster:
+  its owner references lacked the `uid` the API server requires. Its pods now
+  also run as the image's non-root user with that group owning mounted
+  Secrets, so the 0440 KEK and signer-authorization files are readable.
+  Upgrading the operator rolls each managed control plane once onto the
+  corrected pod template.
 - The first issuance of an identity bound to a host-executed destination never
   completed in a tenant that had not yet issued a certificate from the platform
   CA: after handing the work to the host agent, the issuance command tried to

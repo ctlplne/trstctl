@@ -5,6 +5,7 @@ package operator
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"net/http"
@@ -37,6 +38,14 @@ type ControlPlaneSpec struct {
 	NATS        NATSSpec        `json:"nats"`
 	ExternalKMS ExternalKMSSpec `json:"externalKMS"`
 	Signer      SignerSpec      `json:"signer"`
+	// The network surface (A133): see networking.go.
+	Service       ServiceSpec       `json:"service"`
+	Ingress       IngressSpec       `json:"ingress"`
+	NetworkPolicy NetworkPolicySpec `json:"networkPolicy"`
+
+	// signerMTLSFingerprint is set during a reconcile from the isolated
+	// signer's mTLS Secrets (signer_mtls.go), never read from the resource.
+	signerMTLSFingerprint string
 }
 
 type PostgresSpec struct {
@@ -59,11 +68,18 @@ type ExternalKMSSpec struct {
 }
 
 type SignerSpec struct {
-	AuthSecret    string `json:"authSecret"`
-	AuthSecretKey string `json:"authSecretKey"`
-	KekSecret     string `json:"kekSecret"`
-	KekSecretKey  string `json:"kekSecretKey"`
-	KeyStorePVC   string `json:"keyStorePVC"`
+	AuthSecret    string         `json:"authSecret"`
+	AuthSecretKey string         `json:"authSecretKey"`
+	KekSecret     string         `json:"kekSecret"`
+	KekSecretKey  string         `json:"kekSecretKey"`
+	KeyStorePVC   string         `json:"keyStorePVC"`
+	MTLS          SignerMTLSSpec `json:"mtls"`
+	// AuthTokenCommand is the independent command the control plane asks for
+	// each signer authorization token (required with production NATS).
+	// AllowCoResidentAuthorizer is the evaluation-only alternative: the control
+	// plane mounts the signer's verifier secret and mints tokens itself.
+	AuthTokenCommand          string `json:"authTokenCommand"`
+	AllowCoResidentAuthorizer bool   `json:"allowCoResidentAuthorizer"`
 }
 
 // desiredReplicas returns the spec's replica count, defaulting to 1 (the CRD's
@@ -96,12 +112,34 @@ func (s ControlPlaneSpec) desiredSignerMode() string {
 	}
 }
 
+// signerAuthorizationError mirrors the Helm chart's guards. The control plane
+// refuses these combinations at startup, so the operator reports them on the
+// resource instead of rolling out pods that cannot start.
+func (s ControlPlaneSpec) signerAuthorizationError() error {
+	command := strings.TrimSpace(s.Signer.AuthTokenCommand)
+	switch {
+	case command != "" && s.Signer.AllowCoResidentAuthorizer:
+		return errors.New("signer.authTokenCommand and signer.allowCoResidentAuthorizer are mutually exclusive: production uses the independent token command, evaluation may choose the co-resident authorizer")
+	case s.Signer.AllowCoResidentAuthorizer && s.desiredSignerMode() == "isolated":
+		return errors.New("signer.allowCoResidentAuthorizer keeps the signer's verifier secret beside the control plane, which an isolated signer exists to prevent; set signer.authTokenCommand")
+	case strings.TrimSpace(s.NATS.URL) != "" && !s.NATS.AllowSingleReplica && s.Signer.AllowCoResidentAuthorizer:
+		return errors.New("signer.allowCoResidentAuthorizer is evaluation-only; with production NATS (nats.allowSingleReplica false) set signer.authTokenCommand")
+	case strings.TrimSpace(s.NATS.URL) != "" && !s.NATS.AllowSingleReplica && command == "":
+		return errors.New("signer.authTokenCommand is required with production NATS (nats.allowSingleReplica false), so the signer's privileged keys answer to an independent token provider; for a single-node evaluation set nats.allowSingleReplica and signer.allowCoResidentAuthorizer")
+	}
+	return nil
+}
+
 func (s ControlPlaneSpec) postgresDSNSecretKey() string {
 	if strings.TrimSpace(s.Postgres.DSNSecretKey) == "" {
 		return "dsn"
 	}
 	return s.Postgres.DSNSecretKey
 }
+
+// podTemplateRevision changes when the operator's own pod template changes, so
+// an upgraded operator rolls each control plane onto it once.
+const podTemplateRevision = 2
 
 func (s ControlPlaneSpec) desiredConfigHash() string {
 	h := fnv.New64a()
@@ -112,6 +150,8 @@ func (s ControlPlaneSpec) desiredConfigHash() string {
 		NATS        NATSSpec
 		ExternalKMS ExternalKMSSpec
 		Signer      SignerSpec
+		PodTemplate int
+		SignerMTLS  string `json:",omitempty"`
 	}{
 		Image:       s.desiredImage(),
 		SignerMode:  s.desiredSignerMode(),
@@ -119,6 +159,8 @@ func (s ControlPlaneSpec) desiredConfigHash() string {
 		NATS:        s.NATS,
 		ExternalKMS: s.ExternalKMS,
 		Signer:      s.Signer,
+		PodTemplate: podTemplateRevision,
+		SignerMTLS:  s.signerMTLSFingerprint,
 	})
 	return fmt.Sprintf("%016x", h.Sum64())
 }
@@ -128,6 +170,7 @@ type controlPlaneObject struct {
 	Metadata struct {
 		Name      string `json:"name"`
 		Namespace string `json:"namespace"`
+		UID       string `json:"uid"`
 	} `json:"metadata"`
 	Spec   ControlPlaneSpec `json:"spec"`
 	Status struct {
@@ -259,6 +302,20 @@ func (r *Reconciler) ReconcileNamespace(ctx context.Context, namespace string) (
 // (create or patch), and writes the resulting phase back to the CR status. It
 // returns the action it took.
 func (r *Reconciler) Reconcile(ctx context.Context, namespace string, cr controlPlaneObject) (Action, error) {
+	surfaces := map[string]Action{}
+	if err := cr.Spec.signerAuthorizationError(); err != nil {
+		_ = r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, err)
+		return ActionNone, err
+	}
+	if cr.Spec.desiredSignerMode() == "isolated" {
+		fingerprint, mtlsAction, err := r.ensureSignerMTLS(ctx, namespace, cr)
+		surfaces["signerMTLS"] = mtlsAction
+		if err != nil {
+			_ = r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, err)
+			return mtlsAction, err
+		}
+		cr.Spec.signerMTLSFingerprint = fingerprint
+	}
 	live, err := r.observeDeployment(ctx, namespace, r.deploymentName(cr.Metadata.Name))
 	if err != nil {
 		return ActionNone, err
@@ -278,7 +335,26 @@ func (r *Reconciler) Reconcile(ctx context.Context, namespace string, cr control
 		// Already converged.
 	}
 
-	if err := r.updateStatus(ctx, namespace, cr.Metadata.Name, action); err != nil {
+	// The network surface converges after the Deployment, so a Service or
+	// NetworkPolicy never selects pods that do not exist yet for long.
+	network, networkErr := r.reconcileNetwork(ctx, namespace, cr)
+	for surface, surfaceAction := range network {
+		surfaces[surface] = surfaceAction
+	}
+	surfaces["deployment"] = action
+	if networkErr != nil {
+		_ = r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, networkErr)
+		return action, networkErr
+	}
+	if action == ActionNone {
+		for _, surface := range surfaces {
+			if surface != ActionNone {
+				action = ActionUpdate
+				break
+			}
+		}
+	}
+	if err := r.updateStatus(ctx, namespace, cr.Metadata.Name, surfaces, nil); err != nil {
 		// A status write failure must not mask a successful spec convergence: the
 		// next poll will retry the status. Surface it so it is logged, but the
 		// Deployment is already correct.
@@ -367,7 +443,7 @@ func (r *Reconciler) patchDeployment(ctx context.Context, namespace, name string
 		"metadata": map[string]any{"annotations": r.deploymentAnnotations(cr)},
 		"spec": map[string]any{
 			"replicas": cr.Spec.desiredReplicas(),
-			"template": r.podTemplate(cr),
+			"template": r.podTemplate(namespace, cr),
 		},
 	}
 	st, body, err := r.client.do(ctx, http.MethodPatch, deploymentItemPath(namespace, name), "application/merge-patch+json", patch)
@@ -380,15 +456,43 @@ func (r *Reconciler) patchDeployment(ctx context.Context, namespace, name string
 	return nil
 }
 
-// updateStatus writes the observed phase to the CR's status subresource via a
-// JSON-merge-patch, so the operator's view of the control plane is visible on
-// `kubectl get trstctlcontrolplanes`.
-func (r *Reconciler) updateStatus(ctx context.Context, namespace, name string, action Action) error {
-	phase := "Reconciling"
-	if action == ActionNone {
-		phase = "Ready"
+// managedSurfaces is every object kind the operator converges for one control
+// plane, in status order.
+var managedSurfaces = []string{"deployment", "service", "networkPolicy", "ingress", "signer", "signerService", "signerNetworkPolicy", "signerMTLS"}
+
+// updateStatus writes the observed phase and what happened to each managed
+// surface to the CR's status subresource via a JSON-merge-patch, so the
+// operator's view of the control plane is visible on `kubectl get
+// trstctlcontrolplanes`. A surface the operator could not converge sets phase
+// Blocked with the reason.
+func (r *Reconciler) updateStatus(ctx context.Context, namespace, name string, surfaces map[string]Action, failure error) error {
+	phase, ready := "Ready", 0
+	status := map[string]any{}
+	// Every surface is reported on every pass, so a merge patch never leaves a
+	// stale entry behind: one the spec does not ask for reads "absent".
+	reported := map[string]any{}
+	for _, surface := range managedSurfaces {
+		action, managed := surfaces[surface]
+		switch {
+		case !managed:
+			reported[surface] = "absent"
+		case action == ActionNone:
+			reported[surface] = string(action)
+			ready++
+		default:
+			reported[surface] = string(action)
+			phase = "Reconciling"
+		}
 	}
-	patch := map[string]any{"status": map[string]any{"phase": phase}}
+	message := ""
+	if failure != nil {
+		phase, message = "Blocked", failure.Error()
+	}
+	status["phase"] = phase
+	status["readySurfaces"] = ready
+	status["surfaces"] = reported
+	status["message"] = message
+	patch := map[string]any{"status": status}
 	st, body, err := r.client.do(ctx, http.MethodPatch, tcpItemPath(namespace, name)+"/status", "application/merge-patch+json", patch)
 	if err != nil {
 		return err
@@ -420,18 +524,12 @@ func (r *Reconciler) deploymentObject(namespace string, cr controlPlaneObject, _
 			"labels":      labels,
 			"annotations": r.deploymentAnnotations(cr),
 			// Owner reference so the Deployment is garbage-collected with the CR.
-			"ownerReferences": []map[string]any{{
-				"apiVersion":         tcpAPIGroupVersion,
-				"kind":               "TrstctlControlPlane",
-				"name":               cr.Metadata.Name,
-				"controller":         true,
-				"blockOwnerDeletion": true,
-			}},
+			"ownerReferences": ownerReferences(cr),
 		},
 		"spec": map[string]any{
 			"replicas": cr.Spec.desiredReplicas(),
 			"selector": map[string]any{"matchLabels": map[string]any{"trstctl.com/control-plane": cr.Metadata.Name}},
-			"template": r.podTemplate(cr),
+			"template": r.podTemplate(namespace, cr),
 		},
 	}
 }
@@ -443,10 +541,13 @@ func (r *Reconciler) deploymentAnnotations(cr controlPlaneObject) map[string]any
 	if strings.TrimSpace(cr.Spec.ExternalKMS.KeyRef) != "" {
 		annotations["trstctl.com/external-kms-key-ref"] = cr.Spec.ExternalKMS.KeyRef
 	}
+	if cr.Spec.signerMTLSFingerprint != "" {
+		annotations[signerMTLSFingerprintAnnotation] = cr.Spec.signerMTLSFingerprint
+	}
 	return annotations
 }
 
-func (r *Reconciler) podTemplate(cr controlPlaneObject) map[string]any {
+func (r *Reconciler) podTemplate(namespace string, cr controlPlaneObject) map[string]any {
 	labels := map[string]any{
 		"app.kubernetes.io/name":       "trstctl",
 		"app.kubernetes.io/component":  "control-plane",
@@ -458,11 +559,11 @@ func (r *Reconciler) podTemplate(cr controlPlaneObject) map[string]any {
 			"labels":      labels,
 			"annotations": r.deploymentAnnotations(cr),
 		},
-		"spec": r.podSpec(cr),
+		"spec": r.podSpec(namespace, cr),
 	}
 }
 
-func (r *Reconciler) podSpec(cr controlPlaneObject) map[string]any {
+func (r *Reconciler) podSpec(namespace string, cr controlPlaneObject) map[string]any {
 	containers := []map[string]any{}
 	volumes := []map[string]any{
 		{"name": "tmp", "emptyDir": map[string]any{}},
@@ -477,18 +578,51 @@ func (r *Reconciler) podSpec(cr controlPlaneObject) map[string]any {
 			map[string]any{"name": "kek", "secret": map[string]any{"secretName": signerKekSecret(cr), "defaultMode": 288}},
 		)
 	}
-	containers = append(containers, r.controlPlaneContainer(cr))
+	if cr.Spec.desiredSignerMode() == "isolated" {
+		// The signer runs as its own pod (networking.go); the control plane holds
+		// only its side of the mutually pinned channel and the deployment KEK.
+		volumes = append(volumes,
+			map[string]any{"name": "signer-mtls", "secret": map[string]any{"secretName": controlPlaneMTLSSecret(cr), "defaultMode": 288}},
+			map[string]any{"name": "kek", "secret": map[string]any{"secretName": signerKekSecret(cr), "defaultMode": 288}},
+		)
+	}
+	containers = append(containers, r.controlPlaneContainer(namespace, cr))
 	return map[string]any{
-		"securityContext": map[string]any{
-			"runAsNonRoot":   true,
-			"seccompProfile": map[string]any{"type": "RuntimeDefault"},
-		},
-		"containers": containers,
-		"volumes":    volumes,
+		"securityContext": podSecurityContext(),
+		"containers":      containers,
+		"volumes":         volumes,
 	}
 }
 
-func (r *Reconciler) controlPlaneContainer(cr controlPlaneObject) map[string]any {
+// podSecurityContext runs as the image's non-root user, with that group owning
+// mounted Secrets, so the 0440 KEK, authorization and mTLS files are readable
+// (the Helm chart's identity).
+func podSecurityContext() map[string]any {
+	return map[string]any{
+		"runAsNonRoot":        true,
+		"runAsUser":           65532,
+		"runAsGroup":          65532,
+		"fsGroup":             65532,
+		"fsGroupChangePolicy": "OnRootMismatch",
+		"seccompProfile":      map[string]any{"type": "RuntimeDefault"},
+	}
+}
+
+// ownerReferences makes the CR the controller owner, so deleting it
+// garbage-collects everything the operator created for it. The API server
+// requires the owner's uid.
+func ownerReferences(cr controlPlaneObject) []map[string]any {
+	return []map[string]any{{
+		"apiVersion":         tcpAPIGroupVersion,
+		"kind":               "TrstctlControlPlane",
+		"name":               cr.Metadata.Name,
+		"uid":                cr.Metadata.UID,
+		"controller":         true,
+		"blockOwnerDeletion": true,
+	}}
+}
+
+func (r *Reconciler) controlPlaneContainer(namespace string, cr controlPlaneObject) map[string]any {
 	mounts := []map[string]any{
 		{"name": "cp-data", "mountPath": "/data"},
 		{"name": "tmp", "mountPath": "/tmp"},
@@ -496,6 +630,15 @@ func (r *Reconciler) controlPlaneContainer(cr controlPlaneObject) map[string]any
 	if cr.Spec.desiredSignerMode() == "sidecar" {
 		mounts = append(mounts,
 			map[string]any{"name": "signer-sock", "mountPath": "/run/trstctl"},
+			map[string]any{"name": "kek", "mountPath": "/etc/trstctl/kek", "readOnly": true},
+		)
+		if cr.Spec.Signer.AllowCoResidentAuthorizer {
+			mounts = append(mounts, map[string]any{"name": "signer-auth", "mountPath": "/etc/trstctl/signer-auth", "readOnly": true})
+		}
+	}
+	if cr.Spec.desiredSignerMode() == "isolated" {
+		mounts = append(mounts,
+			map[string]any{"name": "signer-mtls", "mountPath": "/etc/trstctl/signer-mtls", "readOnly": true},
 			map[string]any{"name": "kek", "mountPath": "/etc/trstctl/kek", "readOnly": true},
 		)
 	}
@@ -509,7 +652,7 @@ func (r *Reconciler) controlPlaneContainer(cr controlPlaneObject) map[string]any
 			"capabilities":             map[string]any{"drop": []string{"ALL"}},
 		},
 		"ports":        []map[string]any{{"containerPort": 8443, "name": "https"}},
-		"env":          r.controlPlaneEnv(cr),
+		"env":          r.controlPlaneEnv(namespace, cr),
 		"volumeMounts": mounts,
 	}
 }
@@ -540,7 +683,7 @@ func (r *Reconciler) signerContainer(cr controlPlaneObject) map[string]any {
 	}
 }
 
-func (r *Reconciler) controlPlaneEnv(cr controlPlaneObject) []map[string]any {
+func (r *Reconciler) controlPlaneEnv(namespace string, cr controlPlaneObject) []map[string]any {
 	env := []map[string]any{}
 	if strings.TrimSpace(cr.Spec.Postgres.DSNSecret) != "" {
 		env = append(env,
@@ -572,6 +715,32 @@ func (r *Reconciler) controlPlaneEnv(cr controlPlaneObject) []map[string]any {
 			envValue("TRSTCTL_SIGNER_SOCKET", "/run/trstctl/signer.sock"),
 			envValue("TRSTCTL_SECRETS_KEK_FILE", "/etc/trstctl/kek/"+signerKekSecretKey(cr)),
 		)
+	}
+	if cr.Spec.desiredSignerMode() == "isolated" {
+		env = append(env,
+			envValue("TRSTCTL_SIGNER_MODE", "external"),
+			envValue("TRSTCTL_SIGNER_MTLS_ADDRESS", fmt.Sprintf("%s:%d", r.signerName(cr.Metadata.Name), signerMTLSPort)),
+			envValue("TRSTCTL_SIGNER_MTLS_SERVER_NAME", r.signerMTLSServerName(namespace, cr)),
+			envValue("TRSTCTL_SIGNER_MTLS_CERT_FILE", "/etc/trstctl/signer-mtls/tls.crt"),
+			envValue("TRSTCTL_SIGNER_MTLS_KEY_FILE", "/etc/trstctl/signer-mtls/tls.key"),
+			envValue("TRSTCTL_SIGNER_MTLS_PEER_CA_FILE", "/etc/trstctl/signer-mtls/peer-ca.pem"),
+			envSecret("TRSTCTL_SIGNER_MTLS_PEER_PIN", controlPlaneMTLSSecret(cr), "peer-pin"),
+			envValue("TRSTCTL_SECRETS_KEK_FILE", "/etc/trstctl/kek/"+signerKekSecretKey(cr)),
+		)
+	}
+	// Signer authorization, as the Helm chart sets it. The child signer
+	// (signerMode unset) keeps the binary's own default unless a token command
+	// is named.
+	if command := strings.TrimSpace(cr.Spec.Signer.AuthTokenCommand); command != "" {
+		env = append(env,
+			envValue("TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND", command),
+			envValue("TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", "false"),
+		)
+	} else if cr.Spec.desiredSignerMode() != "" {
+		env = append(env, envValue("TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER", fmt.Sprint(cr.Spec.Signer.AllowCoResidentAuthorizer)))
+		if cr.Spec.Signer.AllowCoResidentAuthorizer {
+			env = append(env, envValue("TRSTCTL_SIGNER_AUTH_SECRET_FILE", "/etc/trstctl/signer-auth/"+signerAuthSecretKey(cr)))
+		}
 	}
 	if cr.Spec.ExternalKMS.Enabled {
 		env = append(env, envValue("TRSTCTL_MANAGED_KEYS_ENABLED", "true"))

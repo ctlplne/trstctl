@@ -12,8 +12,10 @@
 # Kubernetes Secrets with pod-template hash annotations for opted-in workload
 # reload, and TrstctlSecretInjection resources into no-code workload sidecar/env
 # injection patches. It writes observed phase back to each resource status.
-# Scope/maturity is documented in doc.go: Services, ingress, NetworkPolicy, and
-# cross-pod isolated-signer Services remain the Helm chart's richer path.
+# It also converges the control plane's network surface: its Service, a
+# default-deny NetworkPolicy, an optional Ingress, and in the isolated signer
+# topology the signer's own Deployment, Service, NetworkPolicy and generated
+# mTLS pair. Scope/maturity is documented in doc.go.
 #
 # NOTE: set the `image:` digest/tag to the release you are deploying. The default
 # below names the built image stream; pin a digest in production.
@@ -29,12 +31,14 @@ metadata:
   name: trstctl-operator
 # Least privilege: exactly the verbs the reconcile loop exercises today — read
 # TrstctlControlPlane resources, patch their status, create/patch the
-# control-plane Deployment it manages, reconcile TrstctlSecretSync resources into
-# Kubernetes Secret objects, reconcile TrstctlSecretInjection workload patches,
-# patch opted-in workload templates for reload/injection, and coordinate
-# active/passive operator replicas through coordination.k8s.io Lease
-# objects. It does not manage Services or NetworkPolicies (the Helm chart does),
-# so it is granted no access to those object families.
+# control-plane Deployment it manages and the network surface around it (its
+# Service, NetworkPolicy and optional Ingress, plus the isolated signer's
+# Deployment, Service and NetworkPolicy), reconcile TrstctlSecretSync resources
+# into Kubernetes Secret objects, reconcile TrstctlSecretInjection workload
+# patches, patch opted-in workload templates for reload/injection, and
+# coordinate active/passive operator replicas through coordination.k8s.io Lease
+# objects. Everything except the custom resources is granted by the namespaced
+# Role below, never cluster-wide.
 rules:
   - apiGroups: ["trstctl.com"]
     resources: ["trstctlcontrolplanes", "trstctlsecretsyncs", "trstctlsecretinjections"]
@@ -63,13 +67,26 @@ metadata:
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
+    # delete: an isolated signer Deployment the operator owns is removed when the
+    # control plane goes back to the sidecar topology.
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["apps"]
     resources: ["statefulsets", "daemonsets"]
     verbs: ["get", "patch"]
+  # The control plane's network surface. The operator deletes only objects that
+  # carry its managed-by and owner labels.
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies", "ingresses"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+  # delete: the isolated signer's mTLS pair the operator generated, once the
+  # signer returns to the sidecar. It deletes only Secrets carrying its
+  # managed-by and owner labels; Secrets someone else provided stay.
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create", "update", "patch"]
+    verbs: ["get", "create", "update", "patch", "delete"]
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
     verbs: ["get", "create", "update", "patch"]

@@ -264,7 +264,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | CA key custody / HSM / BYOK | Sealed local key store by default; six of six HSM/KMS backends served | [CA key custody](#ca-key-custody) |
 | Post-quantum cryptography | ML-DSA/ML-KEM/SLH-DSA available; compatibility-bounded proofs | [Post-quantum cryptography](#post-quantum-cryptography-issuance-algorithms) |
 | PCAS KEM data re-wrap | Not built; the served route prepares successor keys but cannot migrate ciphertext | [PCAS KEM data re-wrap](#pcas-kem-data-re-wrap-not-built) |
-| Kubernetes deployment | Helm chart plus a focused Operator; Operator doesn't manage networking yet | [Kubernetes deployment](#kubernetes-deployment) |
+| Kubernetes deployment | Helm chart plus an Operator that converges the control plane's Deployment, Service, default-deny NetworkPolicy, optional Ingress and isolated signer with a generated mTLS pair; it polls rather than watches | [Kubernetes deployment](#kubernetes-deployment) |
 | Performance & usability NFRs | Perf/scale measured in CI; usability evidence-gated, no NPS claim yet | [Non-functional targets](#non-functional-targets-what-is-measured-vs-aspirational) |
 
 ## Served by the running binary today
@@ -6250,40 +6250,72 @@ The control plane ships a production-shaped Helm chart
 own locked-down, network-unreachable sidecar), external PostgreSQL and NATS
 as the default, a default-deny `NetworkPolicy`, and TLS.
 
-- Kubernetes Operator scope: a focused CRD-driven operator ships today. The
-  `trstctl-operator` binary (it rides inside the same multi-binary
+- Kubernetes Operator scope: a focused CRD-driven operator ships today.
+  The `trstctl-operator` binary (it rides inside the same multi-binary
   control-plane image and is run by `deploy/operator/operator.yaml` via an
   entrypoint override) reconciles `TrstctlControlPlane` custom resources
-  into a managed control-plane Deployment. Its manifest documents the
-  postgresql dsn secret, nats url, sidecar-signer, leader-elect, and
-  coordination.k8s.io controls that keep that reconcile path bounded. It
-  also reconciles `TrstctlSecretSync` custom resources into Kubernetes
-  Secrets plus reload annotations, and `TrstctlSecretInjection` custom
-  resources into no-code sidecar/env/file injection patches for opted-in
-  `Deployment`, `StatefulSet`, and `DaemonSet` workloads. The Helm chart
-  remains the richer path for the full production install. The operator
-  keeps the managed Deployment's replica count, image, PostgreSQL DSN
-  Secret reference, NATS URL/replica knobs, sidecar-signer socket/volumes,
-  and managed-key provider enablement matching each resource's `spec`, and
-  writes the observed phase back to resource status. For SecretSync
-  resources it resolves values through the served secret-store API, writes
+  into a managed control-plane Deployment (replicas, image, the
+  PostgreSQL DSN Secret reference, NATS URL and replica knobs,
+  sidecar-signer socket/volumes and managed-key provider enablement; its
+  manifest documents the leader-elect and coordination.k8s.io controls
+  that keep the reconcile path bounded) and the network surface around
+  it, the way the Helm chart renders them:
+  - a Service on the API/UI port (`spec.service`: type, port,
+    annotations);
+  - a default-deny `NetworkPolicy` (`spec.networkPolicy`, on unless
+    disabled) that admits the API port only from the named ingress
+    controller pods, the namespaces you list, or the same namespace when
+    you opt in, and lets the control plane reach DNS, PostgreSQL and NATS
+    (optionally only within the CIDRs you list) and its signer;
+  - an optional Ingress (`spec.ingress`: class, host, TLS Secret,
+    annotations) whose backend is the HTTPS port;
+  - with `signerMode: isolated`, the signer as its own pod with its own
+    Service on 9443 and a `NetworkPolicy` that admits only this control
+    plane, over the mutually pinned mTLS channel. Unless the resource
+    names the two Secrets you provide, the operator generates a
+    cross-pinned pair into `<name>-signer-mtls` and
+    `<name>-cp-signer-mtls`, mints a new pair a month before it expires or
+    when the server name changes, and rolls both pods onto it through a
+    pin fingerprint on their templates.
+
+  Signer authorization follows the chart: `spec.signer.authTokenCommand`
+  (required with production NATS) or, for a sidecar evaluation,
+  `spec.signer.allowCoResidentAuthorizer`. Combinations the control plane
+  would refuse at startup set the resource `Blocked` with the reason
+  instead of rolling out pods that cannot start. Every object the operator
+  creates carries its managed-by and owner labels and an owner reference,
+  so deleting the resource removes them; it deletes only objects carrying
+  both labels, and refuses to take over an object of the same name that it
+  does not own. Status reports each surface (`create`, `update`,
+  `delete`, `none` or `absent`) with phase `Ready`, `Reconciling` or
+  `Blocked` and a message. The operator also reconciles
+  `TrstctlSecretSync` custom resources into Kubernetes Secrets plus reload
+  annotations, and `TrstctlSecretInjection` custom resources into no-code
+  sidecar/env/file injection patches for opted-in `Deployment`,
+  `StatefulSet`, and `DaemonSet` workloads. For SecretSync resources it
+  resolves values through the served secret-store API, writes
   `Secret.data`, records `status.contentHash`, and patches pod-template
   annotations instead of deleting pods. For SecretInjection resources it
-  reads source Secret metadata and key names, rejects missing requested keys
-  before patching, then patches the shipped
+  reads source Secret metadata and key names, rejects missing requested
+  keys before patching, then patches the shipped
   `trstctl-agent --secret-inject` sidecar, app mounts, and optional env
   references, and records `status.injectedWorkloads`. It is a real,
   level-based reconcile loop (poll, diff, converge), not a stub; it speaks
   the Kubernetes API directly (no client-go/controller-runtime). The
   shipped operator manifest runs two replicas and `--leader-elect`; the
   replicas coordinate with a real `coordination.k8s.io` Lease so exactly
-  one reconciles while the other remains a hot follower. It is still
-  focused: it does not yet manage Services, ingress, `NetworkPolicy`, or
-  the cross-pod isolated-signer Service topology. For a complete,
-  production-shaped control-plane install (ingress/service wiring,
-  generated secrets, default-deny `NetworkPolicy`, cross-pod signer mTLS)
-  the Helm chart (`deploy/helm/trstctl`) remains the richer, recommended
-  path.
+  one reconciles while the other remains a hot follower. The `kind` job in
+  CI drives the reconciler against a real API server with only the RBAC
+  the manifest grants: the API server accepts every object it renders, the
+  generated pair completes the pinned handshake, a converged pass writes
+  nothing, a spec change patches in place and removes what the spec
+  dropped, and an object it does not own is refused. What comes next: the
+  operator does not yet generate the KEK and signer-authorization Secrets
+  or render the chart's PodDisruptionBudget, ServiceMonitor and
+  external-KMS custody arguments (the chart covers those today), it polls
+  rather than watches, and a control plane serving through an
+  operator-managed isolated signer has been proven at the object and
+  channel level, not yet as a running pair on a cluster.
 - Kubernetes certificate CRDs: the Kubernetes agent ships a real trstctl
   `Issuer`/`ClusterIssuer`/`Certificate` controller. It marks trstctl
   issuer resources Ready, signs matching cert-manager

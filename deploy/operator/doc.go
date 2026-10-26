@@ -36,21 +36,34 @@
 // SCOPE / MATURITY (no over-claim): this is a focused CRD-driven operator. It
 // owns the managed control-plane Deployment and the runtime config that fits in
 // that Deployment: replicas, image, PostgreSQL DSN Secret reference, NATS URL /
-// replica knobs, sidecar-signer socket/volumes, and managed-key provider enablement.
-// It also owns the TrstctlSecretSync projection path: CRD -> Kubernetes Secret ->
-// workload reload annotation, and TrstctlSecretInjection: CRD -> workload
-// pod-template injection -> app mount/env. It does NOT yet manage Services, ingress,
-// NetworkPolicy, or the cross-pod isolated-signer Service topology, and it is not a full
-// informer/work-queue controller (it polls). For a complete, production-shaped
-// control-plane install — ingress/service wiring, default-deny NetworkPolicy,
-// secret generation, and cross-pod signer mTLS — the Helm chart
-// (deploy/helm/trstctl) remains the richer and recommended path; see
-// docs/limitations.md ("A Kubernetes Operator").
+// replica knobs, sidecar-signer socket/volumes, signer authorization (the
+// independent token command, or the evaluation co-resident authorizer), and
+// managed-key provider enablement. It owns the control plane's network surface
+// the way the Helm chart renders it: a Service on the API/UI port, a default-deny
+// NetworkPolicy that admits only the named ingress controller and namespaces and
+// lets the control plane reach DNS, PostgreSQL, NATS and its signer, and an
+// optional Ingress. With signerMode isolated it runs the signer as its own pod
+// with its own Service and a NetworkPolicy that admits only this control plane,
+// over a mutually pinned mTLS channel whose two Secrets it generates (and renews
+// a month before they expire) unless the resource names Secrets you provide.
+// Every object it creates carries its managed-by and owner labels and an owner
+// reference; it deletes only objects carrying both, and refuses to take over an
+// object of the same name that it does not own. It also owns the
+// TrstctlSecretSync projection path: CRD -> Kubernetes Secret -> workload reload
+// annotation, and TrstctlSecretInjection: CRD -> workload pod-template injection
+// -> app mount/env. It is not a full informer/work-queue controller (it polls).
+// The Helm chart (deploy/helm/trstctl) remains the path for what the CRD does not
+// model yet, for example generated KEK and authorization Secrets, the
+// PodDisruptionBudget, the ServiceMonitor and external KMS custody arguments; see
+// docs/limitations.md ("Kubernetes deployment").
 //
-// Coverage: internal/operator's reconcile_test.go drives the controller against
-// an in-memory Kubernetes API and asserts it creates/patches/no-ops correctly for
-// each desired-vs-actual diff, including full config and two-replica leader
-// election; deploy/operator/operator_test.go validates the CRD and manifests;
+// Coverage: internal/operator's reconcile_test.go and networking_test.go drive
+// the controller against an in-memory Kubernetes API and assert it
+// creates/patches/no-ops correctly for each desired-vs-actual diff, including full
+// config, the network surface, the isolated signer and its mTLS pair, and
+// two-replica leader election; test/e2e/kubernetes runs the reconciler against a
+// real API server (kind in CI) with only the RBAC operator.yaml grants;
+// deploy/operator/operator_test.go validates the CRD and manifests;
 // deploy/deploycheck_test.go confirms the operator image is one a workflow
 // actually builds and that the manifest's flags are defined by the binary.
 package operator

@@ -14,9 +14,10 @@
 //
 // Scope and maturity are documented honestly in deploy/operator/doc.go: this is
 // a small, level-based reconcile loop (poll → diff → act), not a full
-// informer/work-queue controller. It reconciles the Deployment shape the Helm
-// chart also renders; it does not yet manage Services, secrets, NetworkPolicy,
-// or the isolated signer topology (those remain the Helm chart's job).
+// informer/work-queue controller. It reconciles the shapes the Helm chart also
+// renders: the control-plane Deployment, its Service, NetworkPolicy and
+// optional Ingress, and the isolated signer's Deployment, Service,
+// NetworkPolicy and mutually pinned mTLS Secrets.
 package operator
 
 import (

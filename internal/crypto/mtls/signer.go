@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/credentials"
+
+	"trstctl.com/trstctl/internal/crypto/secret"
 )
 
 // This file implements the cross-node mTLS transport for the isolated signing
@@ -192,6 +194,76 @@ type SignerPeerMaterial struct {
 // instead supply their own files and pins (the SignerServer/ClientCredentials
 // constructors take any well-formed material). certTTL bounds both leaves.
 func GenerateSignerPeerMaterial(dir, serverName string, certTTL time.Duration) (*SignerPeerMaterial, error) {
+	pair, err := GenerateSignerPeerPEM(serverName, certTTL)
+	if err != nil {
+		return nil, err
+	}
+	defer pair.Wipe()
+
+	caPath := filepath.Join(dir, "signer-ca.pem")
+	signerCertPath := filepath.Join(dir, "signer.crt")
+	signerKeyPath := filepath.Join(dir, "signer.key")
+	cpCertPath := filepath.Join(dir, "control-plane.crt")
+	cpKeyPath := filepath.Join(dir, "control-plane.key")
+
+	if err := os.WriteFile(caPath, pair.CA, 0o644); err != nil { // #nosec G306 -- writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276)
+		return nil, fmt.Errorf("mtls: write CA: %w", err)
+	}
+	if err := writeCertKeyPEM(signerCertPath, signerKeyPath, pair.SignerCert, pair.SignerKey); err != nil {
+		return nil, fmt.Errorf("mtls: write signer material: %w", err)
+	}
+	if err := writeCertKeyPEM(cpCertPath, cpKeyPath, pair.ControlPlaneCert, pair.ControlPlaneKey); err != nil {
+		return nil, fmt.Errorf("mtls: write control-plane material: %w", err)
+	}
+
+	return &SignerPeerMaterial{
+		ServerName: serverName,
+		Signer: SignerPeerConfig{
+			CertFile:   signerCertPath,
+			KeyFile:    signerKeyPath,
+			PeerCAFile: caPath,
+			PeerPinHex: pair.ControlPlanePinHex,
+		},
+		ControlPlane: SignerPeerConfig{
+			CertFile:   cpCertPath,
+			KeyFile:    cpKeyPath,
+			PeerCAFile: caPath,
+			PeerPinHex: pair.SignerPinHex,
+		},
+	}, nil
+}
+
+// SignerPeerPEM is a cross-pinned signer channel pair held in memory, for a
+// provisioner that stores it somewhere other than files: the Kubernetes
+// operator writes each end into its own Secret (tls.crt, tls.key, peer-ca.pem,
+// peer-pin). The minting CA's private key is discarded once both leaves are
+// issued, so nothing can issue a third peer. Keys are PKCS#8 PEM; call Wipe
+// once they are stored.
+type SignerPeerPEM struct {
+	CA               []byte
+	SignerCert       []byte
+	SignerKey        []byte
+	ControlPlaneCert []byte
+	ControlPlaneKey  []byte
+	// SignerPinHex is the hex SHA-256 of the signer key's SPKI: the control
+	// plane's peer-pin. ControlPlanePinHex is the signer's peer-pin.
+	SignerPinHex       string
+	ControlPlanePinHex string
+	// NotAfter is when the earlier of the two leaves expires.
+	NotAfter time.Time
+}
+
+// Wipe zeroes both private keys.
+func (m *SignerPeerPEM) Wipe() {
+	secret.Wipe(m.SignerKey)
+	secret.Wipe(m.ControlPlaneKey)
+}
+
+// GenerateSignerPeerPEM mints the pair GenerateSignerPeerMaterial writes to
+// files — a fresh CA, a signer certificate for serverName and a control-plane
+// client certificate, each pinned by the other end — without touching the
+// filesystem. certTTL bounds both leaves.
+func GenerateSignerPeerPEM(serverName string, certTTL time.Duration) (*SignerPeerPEM, error) {
 	if strings.TrimSpace(serverName) == "" {
 		return nil, errors.New("mtls: signer mTLS material needs a server name (the signer certificate SAN)")
 	}
@@ -207,43 +279,24 @@ func GenerateSignerPeerMaterial(dir, serverName string, certTTL time.Duration) (
 	if err != nil {
 		return nil, fmt.Errorf("mtls: issue control-plane certificate: %w", err)
 	}
-
-	caPath := filepath.Join(dir, "signer-ca.pem")
-	signerCertPath := filepath.Join(dir, "signer.crt")
-	signerKeyPath := filepath.Join(dir, "signer.key")
-	cpCertPath := filepath.Join(dir, "control-plane.crt")
-	cpKeyPath := filepath.Join(dir, "control-plane.key")
-
-	if err := os.WriteFile(caPath, ca.BundlePEM(), 0o644); err != nil { // #nosec G306 -- writes the PUBLIC CA trust anchor bundle; world-readable is intended, no key material (CWE-276)
-		return nil, fmt.Errorf("mtls: write CA: %w", err)
+	pair := &SignerPeerPEM{CA: ca.BundlePEM()}
+	if pair.SignerCert, pair.SignerKey, err = certKeyPEM(serverCert); err != nil {
+		return nil, fmt.Errorf("mtls: encode signer material: %w", err)
 	}
-	if err := writeCertKey(signerCertPath, signerKeyPath, serverCert); err != nil {
-		return nil, fmt.Errorf("mtls: write signer material: %w", err)
+	if pair.ControlPlaneCert, pair.ControlPlaneKey, err = certKeyPEM(clientCert); err != nil {
+		pair.Wipe()
+		return nil, fmt.Errorf("mtls: encode control-plane material: %w", err)
 	}
-	if err := writeCertKey(cpCertPath, cpKeyPath, clientCert); err != nil {
-		return nil, fmt.Errorf("mtls: write control-plane material: %w", err)
-	}
-
 	// Cross-pin: the signer pins the control plane's key, the control plane pins
 	// the signer's key.
-	signerPin := PinServer(serverCert)
-	cpPin := PinServer(clientCert)
-
-	return &SignerPeerMaterial{
-		ServerName: serverName,
-		Signer: SignerPeerConfig{
-			CertFile:   signerCertPath,
-			KeyFile:    signerKeyPath,
-			PeerCAFile: caPath,
-			PeerPinHex: hex.EncodeToString(cpPin[:]),
-		},
-		ControlPlane: SignerPeerConfig{
-			CertFile:   cpCertPath,
-			KeyFile:    cpKeyPath,
-			PeerCAFile: caPath,
-			PeerPinHex: hex.EncodeToString(signerPin[:]),
-		},
-	}, nil
+	signerPin, cpPin := PinServer(serverCert), PinServer(clientCert)
+	pair.SignerPinHex = hex.EncodeToString(signerPin[:])
+	pair.ControlPlanePinHex = hex.EncodeToString(cpPin[:])
+	pair.NotAfter = serverCert.Leaf.NotAfter
+	if clientCert.Leaf.NotAfter.Before(pair.NotAfter) {
+		pair.NotAfter = clientCert.Leaf.NotAfter
+	}
+	return pair, nil
 }
 
 // WriteCertKeyFiles writes a leaf certificate chain (PEM, 0644) and its private
@@ -257,21 +310,34 @@ func WriteCertKeyFiles(certPath, keyPath string, cert tls.Certificate) error {
 // writeCertKey writes a leaf certificate chain (PEM, 0644) and its private key
 // (PKCS#8 PEM, 0600) to the given paths.
 func writeCertKey(certPath, keyPath string, cert tls.Certificate) error {
-	var chain []byte
-	for _, der := range cert.Certificate {
-		chain = append(chain, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
-	}
-	if err := os.WriteFile(certPath, chain, 0o644); err != nil { // #nosec G306 -- writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276)
-		return err
-	}
-	key, ok := cert.PrivateKey.(*ecdsa.PrivateKey)
-	if !ok {
-		return errors.New("mtls: unexpected non-ECDSA private key")
-	}
-	der, err := x509.MarshalPKCS8PrivateKey(key)
+	chain, keyPEM, err := certKeyPEM(cert)
 	if err != nil {
 		return err
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	defer secret.Wipe(keyPEM)
+	return writeCertKeyPEM(certPath, keyPath, chain, keyPEM)
+}
+
+func writeCertKeyPEM(certPath, keyPath string, chain, keyPEM []byte) error {
+	if err := os.WriteFile(certPath, chain, 0o644); err != nil { // #nosec G306 -- writes the PUBLIC leaf certificate chain; the private key beside it is written 0600 (CWE-276)
+		return err
+	}
 	return os.WriteFile(keyPath, keyPEM, 0o600)
+}
+
+// certKeyPEM encodes a leaf certificate chain and its PKCS#8 private key as PEM.
+func certKeyPEM(cert tls.Certificate) (chain, keyPEM []byte, err error) {
+	for _, der := range cert.Certificate {
+		chain = append(chain, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
+	}
+	key, ok := cert.PrivateKey.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, nil, errors.New("mtls: unexpected non-ECDSA private key")
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer secret.Wipe(der)
+	return chain, pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), nil
 }

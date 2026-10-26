@@ -73,6 +73,12 @@ type fakeCluster struct {
 	secretStatusSet map[string]map[string]any
 	injectStatusSet map[string]map[string]any
 	leasePatches    int
+
+	// The network surface: Services, NetworkPolicies and Ingresses by
+	// "<plural>/<name>", plus what was patched and deleted.
+	objects        map[string]map[string]any
+	objectPatches  map[string][]byte
+	deletedObjects []string
 }
 
 func newFakeCluster() *fakeCluster {
@@ -85,6 +91,41 @@ func newFakeCluster() *fakeCluster {
 		patchedSecrets:  map[string][]byte{},
 		secretStatusSet: map[string]map[string]any{},
 		injectStatusSet: map[string]map[string]any{},
+		objects:         map[string]map[string]any{},
+		objectPatches:   map[string][]byte{},
+	}
+}
+
+// networkObjectKey maps a Service/NetworkPolicy/Ingress path to its store key,
+// or "" for any other path.
+func networkObjectKey(path string) (key string, collection bool) {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, part := range parts {
+		if part != "services" && part != "networkpolicies" && part != "ingresses" {
+			continue
+		}
+		if i == len(parts)-1 {
+			return part, true
+		}
+		return part + "/" + parts[i+1], false
+	}
+	return "", false
+}
+
+// jsonMergePatch applies RFC 7386: a null removes the key.
+func jsonMergePatch(dst, patch map[string]any) {
+	for k, v := range patch {
+		if v == nil {
+			delete(dst, k)
+			continue
+		}
+		pm, pok := v.(map[string]any)
+		dm, dok := dst[k].(map[string]any)
+		if pok && dok {
+			jsonMergePatch(dm, pm)
+			continue
+		}
+		dst[k] = v
 	}
 }
 
@@ -263,6 +304,74 @@ func (f *fakeCluster) handler() http.Handler {
 			}
 			_ = json.NewEncoder(w).Encode(lease)
 
+		// Services, NetworkPolicies and Ingresses.
+		case func() bool { key, _ := networkObjectKey(path); return key != "" }():
+			key, collection := networkObjectKey(path)
+			switch {
+			case collection && r.Method == http.MethodPost:
+				var obj map[string]any
+				_ = json.Unmarshal(body, &obj)
+				meta, _ := obj["metadata"].(map[string]any)
+				name, _ := meta["name"].(string)
+				if _, exists := f.objects[key+"/"+name]; exists {
+					http.Error(w, "already exists", http.StatusConflict)
+					return
+				}
+				f.objects[key+"/"+name] = obj
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(obj)
+			case !collection && r.Method == http.MethodGet:
+				obj, ok := f.objects[key]
+				if !ok {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(obj)
+			case !collection && r.Method == http.MethodPatch:
+				obj, ok := f.objects[key]
+				if !ok {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				f.objectPatches[key] = body
+				var patch map[string]any
+				_ = json.Unmarshal(body, &patch)
+				jsonMergePatch(obj, patch)
+				_ = json.NewEncoder(w).Encode(obj)
+			case !collection && r.Method == http.MethodDelete:
+				if _, ok := f.objects[key]; !ok {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				delete(f.objects, key)
+				f.deletedObjects = append(f.deletedObjects, key)
+				w.WriteHeader(http.StatusOK)
+			default:
+				http.Error(w, "unexpected "+r.Method+" "+path, http.StatusNotImplemented)
+			}
+
+		// Delete a Secret (a generated signer mTLS pair, when no longer wanted).
+		case r.Method == http.MethodDelete && strings.Contains(path, "/api/v1/namespaces/") && strings.Contains(path, "/secrets/"):
+			name := lastSegment(path)
+			if _, ok := f.secrets[name]; !ok {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			delete(f.secrets, name)
+			f.deletedObjects = append(f.deletedObjects, "secrets/"+name)
+			w.WriteHeader(http.StatusOK)
+
+		// Delete a Deployment (the isolated signer's, when no longer wanted).
+		case r.Method == http.MethodDelete && strings.Contains(path, "/deployments/"):
+			name := lastSegment(path)
+			if _, ok := f.deployments[name]; !ok {
+				http.Error(w, "not found", http.StatusNotFound)
+				return
+			}
+			delete(f.deployments, name)
+			f.deletedObjects = append(f.deletedObjects, "deployments/"+name)
+			w.WriteHeader(http.StatusOK)
+
 		default:
 			http.Error(w, "unexpected "+r.Method+" "+path, http.StatusNotImplemented)
 		}
@@ -299,7 +408,7 @@ func tcpObject(name string, replicas int, image string) map[string]any {
 	return map[string]any{
 		"apiVersion": tcpAPIGroupVersion,
 		"kind":       "TrstctlControlPlane",
-		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system"},
+		"metadata":   map[string]any{"name": name, "namespace": "trstctl-system", "uid": "uid-" + name},
 		"spec":       map[string]any{"replicas": replicas, "image": image},
 	}
 }
@@ -324,6 +433,7 @@ func tcpObjectFullConfig(name string) map[string]any {
 		"externalKMS": map[string]any{
 			"enabled": false,
 		},
+		"signer": map[string]any{"authTokenCommand": "/usr/local/bin/trstctl-sign-approve"}, // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 	}
 	return obj
 }
@@ -545,6 +655,28 @@ func TestReconcileCreatesFullControlPlaneConfig(t *testing.T) {
 		if !hasVolume(created, volume) {
 			t.Errorf("full sidecar config should render volume %q", volume)
 		}
+	}
+	// Production NATS: the signer's privileged keys answer to the independent
+	// token command, never a co-resident authorizer.
+	if got := envLiteral(env, "TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND"); got != "/usr/local/bin/trstctl-sign-approve" {
+		t.Errorf("TRSTCTL_SIGNER_AUTH_TOKEN_COMMAND = %q", got)
+	}
+	if got := envLiteral(env, "TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER"); got != "false" {
+		t.Errorf("TRSTCTL_SIGNER_ALLOW_CO_RESIDENT_AUTHORIZER = %q, want false", got)
+	}
+	if containerHasMount(containerByName(t, created, "control-plane"), "signer-auth", "/etc/trstctl/signer-auth") {
+		t.Error("the control plane mounts the signer's verifier secret without the co-resident authorizer")
+	}
+	// The image's non-root identity owns the mounted Secrets, so the 0440 KEK and
+	// authorization files are readable, and the owner reference carries the uid
+	// the API server requires.
+	podSecurity := normalize(t, created)
+	if dig(t, podSecurity, "spec", "template", "spec", "securityContext", "runAsUser") != float64(65532) ||
+		dig(t, podSecurity, "spec", "template", "spec", "securityContext", "fsGroup") != float64(65532) {
+		t.Errorf("pod security context = %v", dig(t, podSecurity, "spec", "template", "spec", "securityContext"))
+	}
+	if dig(t, podSecurity, "metadata", "ownerReferences", 0, "uid") != "uid-prod" {
+		t.Errorf("owner reference = %v, want the resource's uid", dig(t, podSecurity, "metadata", "ownerReferences", 0))
 	}
 }
 
@@ -826,12 +958,20 @@ func TestReconcileNoopWhenInSync(t *testing.T) {
 	defer srv.Close()
 
 	r := reconcilerForCluster(srv)
+	// The first pass creates the network surface beside the in-sync Deployment;
+	// the second must touch nothing.
+	if _, err := r.ReconcileNamespace(context.Background(), "trstctl-system"); err != nil {
+		t.Fatalf("first reconcile: %v", err)
+	}
 	actions, err := r.ReconcileNamespace(context.Background(), "trstctl-system")
 	if err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	if actions["prod"] != ActionNone {
 		t.Fatalf("action = %q, want %q", actions["prod"], ActionNone)
+	}
+	if len(f.objectPatches) != 0 {
+		t.Errorf("in-sync reconcile patched network objects: %v", f.objectPatches)
 	}
 	if len(f.created) != 0 || len(f.patched) != 0 {
 		t.Errorf("in-sync reconcile must be a no-op; creates=%d patches=%d", len(f.created), len(f.patched))

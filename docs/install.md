@@ -146,13 +146,17 @@ for the full values reference. The chart runs the signer co-located (sidecar, ov
 an in-memory UDS) by default; set `signer.mode=isolated` plus the required
 `signer.mtls.*` values to render a separate signer pod reached over mutually
 pinned mTLS (TLS 1.3, both-ways certificate pinning). A focused Kubernetes
-Operator binary (`cmd/trstctl-operator`) ships for CRD-driven
-Deployment reconciliation: replicas, image, PostgreSQL DSN Secret reference,
-NATS URL/replica knobs, sidecar-signer socket/volumes, and managed-key provider
-enablement. Its manifest runs two replicas with real leader election through a
-Kubernetes Lease, so one replica reconciles and the other stays hot. Helm remains the
-supported full control-plane install for services, ingress, generated secrets,
-network policy, and cross-pod signer mTLS topology — see [limitations](limitations.md).
+Operator binary (`cmd/trstctl-operator`) ships for CRD-driven control-plane
+reconciliation: replicas, image, PostgreSQL DSN Secret reference, NATS
+URL/replica knobs, sidecar-signer socket/volumes, signer authorization,
+managed-key provider enablement, and the network surface the chart renders — a
+Service, a default-deny NetworkPolicy, an optional Ingress, and with
+`signerMode: isolated` the signer's own pod, Service and NetworkPolicy over an
+mTLS pair the operator generates and renews. Its manifest runs two replicas with
+real leader election through a Kubernetes Lease, so one replica reconciles and
+the other stays hot. Helm remains the supported full control-plane install for
+generated KEK and signer-authorization secrets, the disruption budget, metrics
+scraping and external-KMS custody — see [limitations](limitations.md).
 
 ## Install the exact API client
 
