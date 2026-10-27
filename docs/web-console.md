@@ -57,6 +57,15 @@ from served contextual-risk evidence; current asset-specific ownership assignmen
 override older discovery metadata. When either source cannot be read, Home says
 unknown or unavailable instead of showing a false zero.
 
+An **Outcomes** section then routes to the three end-to-end workflows:
+certificate automation and assurance (starting at `/certificates`), agent and
+workload identity assurance (`/workloads`), and cryptographic risk and migration
+assurance (`/posture`). Each has an outcome page in these docs that lists every
+step with the evidence it leaves and how it is proved:
+[certificates](outcomes/certificate-automation-and-assurance.md),
+[agent and workload identity](outcomes/agent-and-workload-identity-assurance.md),
+[cryptographic risk and migration](outcomes/cryptographic-risk-and-migration-assurance.md).
+
 Five compact workspace health doors then report certificate expiry, machine
 identities, stored secrets, recent signing outcomes, and open incidents. Their
 counts come from the current served APIs. The 47-day certificate-renewal readiness

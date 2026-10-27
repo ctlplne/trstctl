@@ -2316,6 +2316,38 @@ export const messages = {
     defaultMessage: "No audit events yet.",
     description: "Dashboard recent-activity empty state when the served audit stream has no events.",
   },
+  "dashboard.outcomes.heading": {
+    defaultMessage: "Outcomes",
+    description: "Heading of the console home section that routes to the three end-to-end outcome workflows.",
+  },
+  "dashboard.outcomes.help": {
+    defaultMessage: "Each outcome is one workflow, from the first finding to the evidence you can hand to someone else.",
+    description: "Help text under the console home's outcomes heading.",
+  },
+  "dashboard.outcomes.certificates.title": {
+    defaultMessage: "Certificate automation and assurance",
+    description: "Console home link to the certificate lifecycle outcome workflow.",
+  },
+  "dashboard.outcomes.certificates.description": {
+    defaultMessage: "Discover, own, issue, deploy, verify, renew and revoke certificates, with evidence at each step.",
+    description: "Summary of the certificate lifecycle outcome on the console home.",
+  },
+  "dashboard.outcomes.identity.title": {
+    defaultMessage: "Agent and workload identity assurance",
+    description: "Console home link to the workload and agent identity outcome workflow.",
+  },
+  "dashboard.outcomes.identity.description": {
+    defaultMessage: "Attested workload identities, delegated agents and gated agent actions, each on the record.",
+    description: "Summary of the workload and agent identity outcome on the console home.",
+  },
+  "dashboard.outcomes.crypto.title": {
+    defaultMessage: "Cryptographic risk and migration assurance",
+    description: "Console home link to the cryptographic risk and post-quantum migration outcome workflow.",
+  },
+  "dashboard.outcomes.crypto.description": {
+    defaultMessage: "Find weak and quantum-vulnerable keys, plan replacements against deadlines, and migrate in waves you can roll back.",
+    description: "Summary of the cryptographic risk and migration outcome on the console home.",
+  },
   "dashboard.homeDescription": {
     defaultMessage: "See what needs attention now and what is healthy.",
     description: "Plain-language dashboard outcome shown in the shared Answer layer.",

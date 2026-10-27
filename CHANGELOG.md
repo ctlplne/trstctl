@@ -2,6 +2,12 @@
 
 ### Added
 
+- Outcome pages: three pages in the docs (certificate automation and assurance,
+  agent and workload identity assurance, and cryptographic risk and migration
+  assurance) list each outcome's end-to-end workflow, the evidence every step
+  leaves, how strongly each step is proved today (naming the test), the feature
+  doc that explains it, and what comes next. The console home gains an
+  Outcomes section that routes to each workflow's starting screen.
 - Evaluation kit: `trstctl evaluate` runs one certificate journey against an
   endpoint the evaluating team chooses, through the control plane's own API:
   discovery by the control plane's TLS handshake, ownership, issuance on the

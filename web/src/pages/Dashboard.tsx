@@ -25,6 +25,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { ReadinessPanel } from "@/components/certs";
 import { NhiInventory } from "@/components/nhi";
 import { NotificationCenter } from "@/components/notifications";
+import { OutcomeWorkflows } from "@/components/OutcomeWorkflows";
 import { isOnboardingComplete } from "@/lib/onboardingState";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { formatDateTime, formatShortDate, type FormatPolicy } from "@/i18n/format";
@@ -545,6 +546,8 @@ export function Dashboard() {
           </p>
         )}
       </section>
+
+      <OutcomeWorkflows />
 
       <section aria-labelledby="dashboard-workspace-health-heading" className="space-y-3">
         <div>

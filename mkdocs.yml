@@ -64,6 +64,10 @@ nav:
       - Support and defect reporting: support.md
       - Current limitations: limitations.md
       - Editions: editions.md
+  - See the outcomes:
+      - Certificate automation and assurance: outcomes/certificate-automation-and-assurance.md
+      - Agent and workload identity assurance: outcomes/agent-and-workload-identity-assurance.md
+      - Cryptographic risk and migration assurance: outcomes/cryptographic-risk-and-migration-assurance.md
   - Choose a goal:
       - Issue your first certificate: journeys/first-certificate.md
       - Automate TLS across your fleet: journeys/automate-fleet-tls.md

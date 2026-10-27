@@ -6200,6 +6200,17 @@ one certificate; it collects nothing new. Read it with these limits:
   `trstctl certificates verify-assurance-record` requires a JWK set you obtained
   separately and never trusts the file's own copy.
 
+## Outcome pages
+
+The three [outcome pages](outcomes/certificate-automation-and-assurance.md) say how
+strongly each step is proved and name the test:
+
+- **Kept by hand.** The proof column is maintained with the features it describes;
+  no guard checks it against the test suite, so a page can trail a change until it
+  is updated.
+- **Starting screens, not guided steps.** The console home's Outcomes section opens
+  each workflow's first screen; it does not walk the steps in order.
+
 ## Evaluation kit
 
 `trstctl evaluate` runs one certificate journey against an endpoint you choose
