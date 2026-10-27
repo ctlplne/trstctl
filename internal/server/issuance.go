@@ -287,6 +287,13 @@ func (d *issuanceDispatcher) deliverDirectoryWriteback(ctx context.Context, m or
 	return d.scimWriteback.Deliver(ctx, m)
 }
 
+func (d *issuanceDispatcher) deliverACMEDNS01(ctx context.Context, m orchestrator.Message) error {
+	if d.dns01 == nil {
+		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: acme dns-01 outbox destination is not configured"))
+	}
+	return d.dns01.Deliver(ctx, m)
+}
+
 func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message) error {
 	switch m.Destination {
 	case "ca.issue":
@@ -330,10 +337,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		}
 		return d.handleDiscoveryRun(ctx, m)
 	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
-		if d.dns01 == nil {
-			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: acme dns-01 outbox destination is not configured"))
-		}
-		return d.dns01.Deliver(ctx, m)
+		return d.deliverACMEDNS01(ctx, m)
 	case ca.DestinationExternalCAIssue:
 		if d.externalCAs == nil {
 			return orchestrator.DefiniteNoEffect(fmt.Errorf("server: external CA outbox destination is not configured"))
@@ -350,10 +354,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 	case orchestrator.DestinationAuditFeedSplunk, orchestrator.DestinationAuditFeedSentinel:
 		return d.handleAuditFeedBatch(ctx, m)
 	case store.ObserverEventDestination:
-		if d.observerEvents == nil {
-			return orchestrator.DefiniteNoEffect(errors.New("server: observer event delivery is not configured"))
-		}
-		return d.observerEvents.Deliver(ctx, m)
+		return d.deliverObserverEvent(ctx, m)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:

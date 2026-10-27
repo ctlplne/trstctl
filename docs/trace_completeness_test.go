@@ -395,19 +395,24 @@ func TestIncidentAndFleetReissuanceServingStatusIsHonest(t *testing.T) {
 	if !strings.Contains(read(t, "../internal/api/incident_fleet_reissuance.go"), "startFleetReissuance") {
 		t.Fatal("internal/api/incident_fleet_reissuance.go no longer serves startFleetReissuance; revisit this TRACE-006 reality test")
 	}
-	if !strings.Contains(read(t, "../internal/api/api.go"), `path: "/api/v1/breakglass/reconcile"`) {
-		t.Fatal("internal/api/api.go no longer registers /api/v1/breakglass/reconcile; the TRACE-006 break-glass reconciliation disclosure has no code anchor — revisit this reality test")
+	// The break-glass routes have their own route file; routes() must still append it.
+	if !strings.Contains(read(t, "../internal/api/api.go"), "a.breakglassRoutes(idPath)") {
+		t.Fatal("internal/api/api.go no longer serves the break-glass route group; the TRACE-006 break-glass disclosure has no code anchor — revisit this reality test")
 	}
-	if !strings.Contains(read(t, "../internal/api/api.go"), `path: "/api/v1/breakglass/issue"`) {
-		t.Fatal("internal/api/api.go no longer registers /api/v1/breakglass/issue; the TRACE-006 online break-glass disclosure has no code anchor — revisit this reality test")
+	breakglassRoutes := read(t, "../internal/api/routes_breakglass.go")
+	if !strings.Contains(breakglassRoutes, `path: "/api/v1/breakglass/reconcile"`) {
+		t.Fatal("internal/api/routes_breakglass.go no longer registers /api/v1/breakglass/reconcile; the TRACE-006 break-glass reconciliation disclosure has no code anchor — revisit this reality test")
+	}
+	if !strings.Contains(breakglassRoutes, `path: "/api/v1/breakglass/issue"`) {
+		t.Fatal("internal/api/routes_breakglass.go no longer registers /api/v1/breakglass/issue; the TRACE-006 online break-glass disclosure has no code anchor — revisit this reality test")
 	}
 	for _, path := range []string{
 		`path: "/api/v1/breakglass/issue-ceremonies"`,
 		`path: "/api/v1/breakglass/rotate"`,
 		`path: "/api/v1/breakglass/cross-sign"`,
 	} {
-		if !strings.Contains(read(t, "../internal/api/api.go"), path) {
-			t.Fatalf("internal/api/api.go no longer registers %s; revisit the TRACE-006 lifecycle disclosure", path)
+		if !strings.Contains(breakglassRoutes, path) {
+			t.Fatalf("internal/api/routes_breakglass.go no longer registers %s; revisit the TRACE-006 lifecycle disclosure", path)
 		}
 	}
 	if !strings.Contains(read(t, "../internal/server/breakglass.go"), "ReconcileBreakglass") {

@@ -607,6 +607,14 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		// builds its CA-pinned TLS transport from the standard library and holds no
 		// key material; any other crypto import under clients/terraform still trips.
 		"clients/terraform/internal/terraformprovider/transport.go",
+		// The agent framework reference integrations are their own module too
+		// (checked below): example customer services that never link into a
+		// trstctl binary, so they set up TLS and sign their client assertions
+		// with the standard library as a customer's own service would.
+		"test/interop/agentframeworks/",
+	}
+	if !strings.Contains(read(t, "../test/interop/agentframeworks/go.mod"), "module trstctl.com/trstctl/test/interop/agentframeworks\n") {
+		t.Error("CRYPTO-101: test/interop/agentframeworks is allowed standard-library crypto only as its own module; its go.mod is missing or renamed")
 	}
 	forbiddenPrefixes := []string{
 		"crypto",

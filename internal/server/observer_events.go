@@ -101,6 +101,14 @@ func (d *observerEventDelivery) Deliver(ctx context.Context, m orchestrator.Mess
 	return classifyObserverResponse(resp.StatusCode)
 }
 
+// deliverObserverEvent routes an observer.event row to the configured delivery.
+func (d *issuanceDispatcher) deliverObserverEvent(ctx context.Context, m orchestrator.Message) error {
+	if d.observerEvents == nil {
+		return orchestrator.DefiniteNoEffect(errors.New("server: observer event delivery is not configured"))
+	}
+	return d.observerEvents.Deliver(ctx, m)
+}
+
 // classifyObserverResponse maps the observer's status to the outbox outcome.
 func classifyObserverResponse(status int) error {
 	switch {
