@@ -38,7 +38,7 @@ func TestProviderFactoryUsesAssembledLifecycleProjector(t *testing.T) {
 	called := false
 	srv, err := Build(ctx, Deps{Store: st, Log: log,
 		LicensedProjectionOptions: []projections.Option{projections.WithEventProjection(extension)},
-		ProviderHandlerFactory: func(orch *orchestrator.Orchestrator) (http.Handler, error) {
+		ProviderHandlerFactory: func(orch *orchestrator.Orchestrator, _ api.TenantBaselineService) (http.Handler, error) {
 			called = true
 			if orch == nil {
 				return nil, errors.New("test: missing assembled orchestrator")
@@ -69,7 +69,7 @@ func TestProviderFactoryFailurePreventsServing(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			failure := errors.New("test: Provider assembly unavailable")
 			srv, err := Build(t.Context(), Deps{Store: newServerTestStore(t), Log: openServerFederationSeamTestLog(t),
-				ProviderHandlerFactory: func(*orchestrator.Orchestrator) (http.Handler, error) {
+				ProviderHandlerFactory: func(*orchestrator.Orchestrator, api.TenantBaselineService) (http.Handler, error) {
 					if kind == "error" {
 						return nil, failure
 					}

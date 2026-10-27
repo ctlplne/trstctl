@@ -420,6 +420,49 @@ authority history; deployment-wide isolation-drill evidence is Provider-admin
 only. The Provider console renders this view beside the controls, making the
 evidence for a completed mutation visible without trusting a second audit store.
 
+### Provider tenant templates
+
+A Provider holds its customers to versioned tenant templates. A template names
+the objects a customer tenant should hold, each in the shape the core API
+accepts for it:
+
+| Template section | Customer object |
+| --- | --- |
+| `profiles` | certificate profiles, by name |
+| `policy` | the active lifecycle policy module |
+| `issuers` | CA bindings: the X.509 chain (or SSH CA key) its identities are issued under |
+| `deployment_targets` | connector targets it deploys to by default |
+| `notification_channels` | its channel of each type |
+| `members` | built-in role grants to named members |
+| `report_schedules` | scheduled compliance reports |
+
+`POST /provider/v1/templates` records a version (`templates:write`): the
+template is checked with the same validation the customer's own requests get,
+and an unchanged definition returns the latest version instead of minting
+another. `GET /provider/v1/templates` and `GET /provider/v1/templates/{id}` read
+them, with the customers bound to each that the operator may see.
+
+`POST /provider/v1/tenants/{id}/template` onboards a delegated customer
+(`templates:write` and the customer's `provision` delegation): it registers the
+customer's core tenant when core has not, then writes every object the customer
+does not already hold as the version says, through the customer's own commands
+(a profile edit that dual control holds is reported `pending_approval`).
+Re-applying writes nothing that is already in place.
+`GET /provider/v1/tenants/{id}/template-drift` reads the customer's objects
+back against its version: each object is `in_sync`, `drifted` or `missing`,
+compared by digest.
+
+A new version rolls out with a preview:
+`POST /provider/v1/templates/{id}/rollout/preview` lists, for each customer bound
+to the template (or the customers named), what applying the version would
+change, writes nothing, and returns a fingerprint. `POST
+/provider/v1/templates/{id}/rollout` with that fingerprint applies the version
+exactly as previewed; if any customer changed since the preview it answers
+`409 template_rollout_stale` and applies nothing. Each customer's application is
+a `provider.tenant_template.applied` authority event naming the operator and
+each object's outcome, shown in the Provider activity view; template versions
+are `provider.template.recorded` events.
+
 ### Usage metering and invoice evidence
 
 Metering is durable: usage is recorded in PostgreSQL under the same row-level

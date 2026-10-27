@@ -244,6 +244,14 @@ var RecoveredFromPostgresBackup = []string{
 	// Core service admission honors its persisted restrictions even without a
 	// Provider attachment; dropping it could reopen a suspended customer.
 	"provider_tenants",
+	// Provider tenant templates and each customer's last application share
+	// provider_roles' dual recovery posture: the EE projection rebuilds them
+	// from provider.template.recorded and provider.tenant_template.applied, and
+	// the full PostgreSQL artifact carries the rows for a restore that starts
+	// without the Provider edition attached. Losing them hides which version a
+	// customer was onboarded from, so drift could not be read back.
+	"provider_tenant_templates",
+	"provider_tenant_template_bindings",
 	// L4: the break-glass grant ledger with two-person consent state.
 	// RecoveredFromPostgresBackup — grants, consents, denials, revocations and
 	// use counts are written directly by the plane, never derived from the log.

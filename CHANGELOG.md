@@ -2,6 +2,14 @@
 
 ### Added
 
+- Provider tenant templates: versioned templates of customer tenant objects
+  (certificate profiles, the lifecycle policy, CA bindings, connector targets,
+  notification channels, member role grants and report schedules). A Provider
+  onboards a delegated customer from a version, which registers the customer's
+  core tenant when needed and writes each object through the customer's own
+  commands; reads back each customer's drift from its version; and rolls a new
+  version out across customers after a preview, refused if any customer changed
+  since. Each application is an audited Provider authority event.
 - Cryptographic risk report: `GET /api/v1/reports/crypto-risk` (CSV through
   `/export`, `trstctl-cli reports crypto-risk`, and the `crypto_risk` scheduled
   report type) lists every weak, distrusted or quantum-vulnerable key with what

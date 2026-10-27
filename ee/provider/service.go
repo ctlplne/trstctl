@@ -119,7 +119,10 @@ type Config struct {
 	// Drills runs the on-demand isolation drill (L3). NIL MEANS THE DRILL
 	// ENDPOINT REFUSES: a provider must not be told isolation "passed" by a
 	// plane that has nothing wired to actually test it.
-	Drills           IsolationDriller
+	Drills IsolationDriller
+	// Templates holds customers to versioned tenant templates. A nil store or
+	// baseline leaves the template routes refusing, never half-applying.
+	Templates        TemplateDeps
 	Clock            func() time.Time
 	MaxBreakGlassTTL time.Duration
 }
@@ -213,6 +216,7 @@ type Service struct {
 	drills           IsolationDriller
 	tenantConsent    TenantConsentReader
 	auditStreams     AuditStreamReader
+	templates        TemplateDeps
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -252,7 +256,7 @@ func NewService(cfg Config) *Service {
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
 		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
-		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, clock: clock, maxBreakGlassTTL: maxTTL}
+		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

@@ -3516,6 +3516,17 @@ than sending an operator looking for a credential that was never there.
   round's checks. The check is bounded on purpose: it proves the agent still
   works as a job executor, not that every connector it carries deploys
   correctly on this estate.
+- Provider tenant templates: `/provider/v1/templates` records versioned templates
+  of customer objects, `/provider/v1/tenants/{id}/template` onboards a customer
+  from one (registering its core tenant when needed), `.../template-drift` reads
+  its drift, and a rollout applies a new version across customers after a
+  preview whose fingerprint it must match. What a template can say is what core
+  holds: "roles" are built-in role grants to named members, because tenants have
+  no custom role definitions of their own yet; a CA binding is an issuer record
+  (a changed chain binds a new issuer and the old one stays for what it issued);
+  connector defaults are deployment targets. The Provider console does not show
+  templates yet; they are served on the Provider API. Tenant-defined custom
+  roles and a console view are what comes next.
 - Provider console (L3 + AUD-58): the web app has a `/provider` route — a
   console for the provider's own staff, separate from the tenant plane. It lists
   customer tenants with their lifecycle state and drives the `/provider/v1` API

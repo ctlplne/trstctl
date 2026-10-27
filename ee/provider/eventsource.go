@@ -81,6 +81,8 @@ type AuthorityEvent struct {
 	EffectiveAt           time.Time             `json:"effective_at,omitempty"`
 	RequestBinding        string                `json:"request_binding,omitempty"`
 	Erasure               *TenantErasureRequest `json:"erasure,omitempty"`
+	Template              *TenantTemplate       `json:"template,omitempty"`
+	TemplateApplication   *TemplateApplication  `json:"template_application,omitempty"`
 	Audit                 AuditEvent            `json:"audit"`
 }
 
@@ -436,6 +438,10 @@ func (p *AuthorityProjection) ResetTx(ctx context.Context, tx pgx.Tx) error {
 		`DELETE FROM provider_tenant_quotas`,
 		//trstctl:system-query — same full-replay reset; the replay restores tenant_id on every row.
 		`DELETE FROM tenant_branding`,
+		//trstctl:system-query — tenant templates are rebuilt from their immutable version events.
+		`DELETE FROM provider_tenant_templates WHERE tenant_id = '` + providerAuthorityTenant + `'`,
+		//trstctl:system-query — same full-replay reset; the replay restores tenant_id on every binding.
+		`DELETE FROM provider_tenant_template_bindings`,
 		//trstctl:system-query — same full-replay reset of the provider-global registry.
 		`DELETE FROM provider_tenants`,
 	} {
@@ -626,7 +632,7 @@ func (p *AuthorityProjection) advance(sequence uint64) {
 
 func (p AuthorityEvent) hasState() bool {
 	return p.Tenant != nil || p.Operator != nil || p.Delegation != nil || len(p.Delegations) > 0 ||
-		p.Quota != nil || p.Brand != nil || p.Grant != nil
+		p.Quota != nil || p.Brand != nil || p.Grant != nil || p.Template != nil || p.TemplateApplication != nil
 }
 
 func authorityEventTime(event eventspec.Event, payload AuthorityEvent) time.Time {
@@ -657,6 +663,7 @@ var providerAuthorityEventTypes = []string{
 	EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
 	AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied,
 	AuditBreakGlassWithdrawn, AuditBreakGlassAccessed,
+	EventTemplateRecorded, EventTenantTemplateApplied,
 }
 
 var providerAuthorityEventSet = func() map[string]struct{} {
@@ -953,6 +960,41 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			max_secrets_stored = EXCLUDED.max_secrets_stored, updated_by = EXCLUDED.updated_by,
 			updated_at = EXCLUDED.updated_at`, q.TenantID, q.MaxAgents, q.MaxTenants,
 			q.MaxCertificatesStored, q.MaxSecretsStored, q.UpdatedBy, effectiveAt)
+		return err
+	case EventTemplateRecorded:
+		t := payload.Template
+		if t == nil || t.ID == "" || t.Version < 1 || event.TenantID != providerAuthorityTenant {
+			return errors.New("provider: template event needs template state under the Provider authority tenant")
+		}
+		baseline, err := json.Marshal(t.Baseline)
+		if err != nil {
+			return err
+		}
+		//trstctl:system-query — fixed-tenant Provider template projection; versions are immutable, so a replay rewrites identical values.
+		_, err = tx.Exec(ctx, `INSERT INTO provider_tenant_templates
+			(tenant_id, template_id, version, name, baseline, digest, recorded_by, recorded_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (tenant_id, template_id, version) DO UPDATE SET name = EXCLUDED.name, baseline = EXCLUDED.baseline,
+			digest = EXCLUDED.digest, recorded_by = EXCLUDED.recorded_by, recorded_at = EXCLUDED.recorded_at`,
+			providerAuthorityTenant, t.ID, t.Version, t.Name, baseline, t.Digest, t.RecordedBy, effectiveAt)
+		return err
+	case EventTenantTemplateApplied:
+		a := payload.TemplateApplication
+		if a == nil || a.TemplateID == "" || a.TenantID != event.TenantID {
+			return errors.New("provider: template application event needs the application of its own customer")
+		}
+		results, err := json.Marshal(a.Results)
+		if err != nil {
+			return err
+		}
+		//trstctl:system-query — customer-keyed binding written by the trusted Provider projection; the event's tenant names the row.
+		_, err = tx.Exec(ctx, `INSERT INTO provider_tenant_template_bindings
+			(tenant_id, template_id, version, digest, complete, results, applied_by, applied_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			ON CONFLICT (tenant_id) DO UPDATE SET template_id = EXCLUDED.template_id, version = EXCLUDED.version,
+			digest = EXCLUDED.digest, complete = EXCLUDED.complete, results = EXCLUDED.results,
+			applied_by = EXCLUDED.applied_by, applied_at = EXCLUDED.applied_at`,
+			a.TenantID, a.TemplateID, a.Version, a.Digest, a.Complete, results, a.AppliedBy, effectiveAt)
 		return err
 	case EventTenantBrandSet:
 		if payload.Brand == nil {

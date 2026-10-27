@@ -223,6 +223,20 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.setBrand(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/brand"):
 		h.getBrand(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/templates":
+		h.recordTemplate(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/templates":
+		h.listTemplates(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/templates/") && strings.HasSuffix(r.URL.Path, "/rollout/preview"):
+		h.templateRollout(w, r, true)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/templates/") && strings.HasSuffix(r.URL.Path, "/rollout"):
+		h.templateRollout(w, r, false)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/templates/"):
+		h.getTemplate(w, r)
+	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/template"):
+		h.applyTemplate(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/template-drift"):
+		h.templateDrift(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/isolation-drill":
 		h.runIsolationDrill(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/breakglass":
@@ -1166,6 +1180,10 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "idempotency_conflict"
 	case errors.Is(err, ErrBrandDomainConflict):
 		status, code = http.StatusConflict, "brand_domain_conflict"
+	case errors.Is(err, ErrTemplateInvalid):
+		status, code = http.StatusBadRequest, "template_invalid"
+	case errors.Is(err, ErrTemplateRolloutStale):
+		status, code = http.StatusConflict, "template_rollout_stale"
 	case errors.Is(err, ErrBrandRevisionConflict):
 		status, code = http.StatusConflict, "brand_revision_conflict"
 	case errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):

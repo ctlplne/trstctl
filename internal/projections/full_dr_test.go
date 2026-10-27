@@ -797,6 +797,9 @@ func seedRecoveredFromPostgresTables(
 			// to list and manage tenants. It is not projected from the event log, so
 			// a full restore must carry the actual slug, name, and lifecycle state.
 			{`INSERT INTO provider_tenants (tenant_id, slug, name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`, []any{tenantA, "full-dr-customer", "Full DR Customer", "suspended", now.Add(-time.Hour), now}},
+			// A186: the customer's binding names the template version it was
+			// onboarded from; without it a restored Provider cannot read drift.
+			{`INSERT INTO provider_tenant_template_bindings (tenant_id, template_id, version, digest, complete, results, applied_by, applied_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, []any{tenantA, "full-dr-template", 1, strings.Repeat("a", 64), true, `[]`, "full-dr-operator", now.Add(-time.Hour)}},
 			// L4: the break-glass row is the regulator-facing two-person-consent
 			// ledger. Restore the decision evidence, not merely an empty table.
 			{`INSERT INTO provider_breakglass_grants (id, tenant_id, operator_id, operator_email, reason, requested_at, expires_at, consented_at, consented_by, consented_at_2, consented_by_2, use_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{"full-dr-breakglass", tenantA, "full-dr-operator", "operator@example.test", "recovery drill", now.Add(-30 * time.Minute), now.Add(30 * time.Minute), now.Add(-20 * time.Minute), "approver-one", now.Add(-10 * time.Minute), "approver-two", 2}},
@@ -1193,6 +1196,13 @@ func seedRecoveredFromPostgresTables(
 			store.ZeroUUID, "full-dr-provisioner", "Full DR custom role", []string{"tenants:provision"}, "full-dr-operator", now,
 		); err != nil {
 			return fmt.Errorf("seed Provider custom role: %w", err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO provider_tenant_templates
+			(tenant_id, template_id, version, name, baseline, digest, recorded_by, recorded_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			store.ZeroUUID, "full-dr-template", 1, "Full DR template", `{}`, strings.Repeat("a", 64), "full-dr-operator", now.Add(-2*time.Hour),
+		); err != nil {
+			return fmt.Errorf("seed Provider tenant template: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO provider_operator_delegations
 			(tenant_id, operator_id, customer_tenant_id, operation, granted_by, granted_at, source, expires_at)

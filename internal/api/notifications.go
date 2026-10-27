@@ -327,6 +327,12 @@ func (a *API) decodeNotificationChannelRequest(r *http.Request, tenantID, pathID
 	if err := decodeJSON(r, &req); err != nil {
 		return store.NotificationChannel{}, errWithStatus(http.StatusBadRequest, err)
 	}
+	return notificationChannelFromRequest(tenantID, pathID, req)
+}
+
+// notificationChannelFromRequest normalizes and validates one channel
+// definition, whether an operator's request or a tenant baseline names it.
+func notificationChannelFromRequest(tenantID, pathID string, req notificationChannelRequest) (store.NotificationChannel, error) {
 	id := canonicalNotificationChannelID(pathID)
 	if id == "" {
 		id = canonicalNotificationChannelID(req.ID)

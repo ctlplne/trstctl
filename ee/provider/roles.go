@@ -37,6 +37,7 @@ const (
 	PermBreakGlassRequest Permission = "breakglass:request"
 	PermBreakGlassConsent Permission = "breakglass:consent"
 	PermBreakGlassResults Permission = "breakglass:results"
+	PermTemplatesWrite    Permission = "templates:write"
 )
 
 // PermissionDescription is the served vocabulary entry.
@@ -59,6 +60,7 @@ var ProviderPermissions = []PermissionDescription{
 	{PermBreakGlassRequest, "Request time-bounded emergency customer access."},
 	{PermBreakGlassConsent, "Record a custodian decision on an emergency request."},
 	{PermBreakGlassResults, "Read an active two-custodian emergency snapshot."},
+	{PermTemplatesWrite, "Record tenant templates, apply them to delegated customers and roll out new versions."},
 }
 
 var permissionSet = func() map[Permission]bool {

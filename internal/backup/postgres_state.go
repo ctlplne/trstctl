@@ -1343,6 +1343,12 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// customer list is obvious, a partial one is a provider quietly serving
 		// fewer customers than they have.
 		"provider_tenants",
+		// Tenant templates restore after the registry and before each
+		// customer's binding to a version. No foreign keys; the order only keeps
+		// a partially inspected restore from showing a binding whose template
+		// version has not arrived yet.
+		"provider_tenant_templates",
+		"provider_tenant_template_bindings",
 		// L4: the break-glass grant ledger. Restores last among the provider
 		// tables: it is consent history, and like the delegations above the
 		// plane fails closed on whatever is missing — an absent grant reads as

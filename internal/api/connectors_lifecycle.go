@@ -1495,6 +1495,12 @@ func decodeDeploymentTargetRequest(r *http.Request) (deploymentTargetRequest, er
 	if err := decodeJSON(r, &raw); err != nil {
 		return deploymentTargetRequest{}, errWithStatus(http.StatusBadRequest, err)
 	}
+	return parseDeploymentTargetRequest(raw)
+}
+
+// parseDeploymentTargetRequest validates one connector target definition,
+// whether an operator's request or a tenant baseline names it.
+func parseDeploymentTargetRequest(raw json.RawMessage) (deploymentTargetRequest, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err != nil || obj == nil {
 		return deploymentTargetRequest{}, errStatus(http.StatusBadRequest, "request body must be a JSON object")

@@ -67,6 +67,20 @@ type providerRoleAuthorityPayload struct {
 	Audit          provider.AuditEvent    `json:"audit"`
 }
 
+type providerTemplateAuthorityPayload struct {
+	Template       *provider.TenantTemplate `json:"template,omitempty"`
+	EffectiveAt    time.Time                `json:"effective_at,omitempty"`
+	RequestBinding string                   `json:"request_binding,omitempty"`
+	Audit          provider.AuditEvent      `json:"audit"`
+}
+
+type providerTemplateApplicationAuthorityPayload struct {
+	TemplateApplication *provider.TemplateApplication `json:"template_application,omitempty"`
+	EffectiveAt         time.Time                     `json:"effective_at,omitempty"`
+	RequestBinding      string                        `json:"request_binding,omitempty"`
+	Audit               provider.AuditEvent           `json:"audit"`
+}
+
 type providerQuotaAuthorityPayload struct {
 	Quota          *billing.Quota      `json:"quota,omitempty"`
 	EffectiveAt    time.Time           `json:"effective_at,omitempty"`
@@ -306,7 +320,56 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		licensedPrivacyRule("/role/created_at", events.PrivacyFieldOpaqueExact),
 		licensedPrivacyRule("/role/updated_at", events.PrivacyFieldOpaqueExact),
 	)
+	// Tenant templates: a member grant names a person (subject, display name,
+	// email) exactly as core's own member events do; the rest is the Provider's
+	// configuration vocabulary.
+	opaque := func(paths ...string) []events.PrivacyFieldRule {
+		out := make([]events.PrivacyFieldRule, 0, len(paths))
+		for _, path := range paths {
+			out = append(out, licensedPrivacyRule(path, events.PrivacyFieldOpaqueExact))
+		}
+		return out
+	}
+	templateRules := append(opaque(
+		"/template/id", "/template/version", "/template/name", "/template/digest", "/template/recorded_at",
+		"/template/baseline/profiles/*/name", "/template/baseline/profiles/*/spec",
+		"/template/baseline/policy/module",
+		"/template/baseline/issuers/*/key", "/template/baseline/issuers/*/name", "/template/baseline/issuers/*/kind",
+		"/template/baseline/issuers/*/chain/*", "/template/baseline/issuers/*/public_key", "/template/baseline/issuers/*/internal",
+		"/template/baseline/deployment_targets/*/key", "/template/baseline/deployment_targets/*/name",
+		"/template/baseline/deployment_targets/*/connector", "/template/baseline/deployment_targets/*/config",
+		"/template/baseline/deployment_targets/*/enabled",
+		"/template/baseline/notification_channels/*/channel_type", "/template/baseline/notification_channels/*/label",
+		"/template/baseline/notification_channels/*/endpoint_url", "/template/baseline/notification_channels/*/credential_ref",
+		"/template/baseline/notification_channels/*/enabled",
+		"/template/baseline/members/*/roles/*",
+		"/template/baseline/report_schedules/*/key", "/template/baseline/report_schedules/*/name",
+		"/template/baseline/report_schedules/*/framework", "/template/baseline/report_schedules/*/report_type",
+		"/template/baseline/report_schedules/*/interval_seconds", "/template/baseline/report_schedules/*/enabled",
+	),
+		licensedPrivacyRule("/template/recorded_by", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/template/baseline/policy/description", events.PrivacyFieldFreeTextClear),
+		licensedPrivacyRule("/template/baseline/members/*/subject", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/template/baseline/members/*/display_name", events.PrivacyFieldSubjectToken),
+		licensedPrivacyRule("/template/baseline/members/*/email", events.PrivacyFieldIdentityExact),
+	)
+	applicationRules := append(opaque(
+		"/template_application/tenant_id", "/template_application/template_id", "/template_application/version",
+		"/template_application/digest", "/template_application/complete", "/template_application/applied_at",
+		"/template_application/results/*/kind", "/template_application/results/*/object_id",
+		"/template_application/results/*/status", "/template_application/results/*/expected_digest",
+		"/template_application/results/*/actual_digest", "/template_application/results/*/outcome",
+		"/template_application/results/*/approval_request_id",
+	),
+		licensedPrivacyRule("/template_application/applied_by", events.PrivacyFieldIdentityExact),
+		// A member object's key is the member's subject.
+		licensedPrivacyRule("/template_application/results/*/key", events.PrivacyFieldIdentityExact),
+		licensedPrivacyRule("/template_application/results/*/detail", events.PrivacyFieldFreeTextClear),
+		licensedPrivacyRule("/template_application/results/*/error", events.PrivacyFieldFreeTextClear),
+	)
 	catalog := []licensedPrivacyEventPolicy{
+		entry(provider.EventTemplateRecorded, 1, providerPolicy[providerTemplateAuthorityPayload](templateRules...)),
+		entry(provider.EventTenantTemplateApplied, 1, providerPolicy[providerTemplateApplicationAuthorityPayload](applicationRules...)),
 		entry(provider.AuditTenantProvisioned, 1, tenantPolicy),
 		entry(provider.AuditTenantSuspended, 1, tenantPolicy),
 		entry(provider.AuditTenantResumed, 1, tenantPolicy),

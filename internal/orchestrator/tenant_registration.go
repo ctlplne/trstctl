@@ -97,6 +97,26 @@ func ResolveLiveTenantRegistrationAuthority(
 	return authority, err
 }
 
+// RegisterTenant registers a tenant in core under idempotencyKey, so a replay
+// returns the original registration. A Provider onboarding a customer from a
+// template registers the customer's tenant this way before applying it.
+func (o *Orchestrator) RegisterTenant(ctx context.Context, tenantID, name, idempotencyKey string) error {
+	if o == nil || o.log == nil || o.store == nil || o.proj == nil || o.durableIdem == nil {
+		return errors.New("orchestrator: tenant registration is not configured")
+	}
+	data, err := json.Marshal(struct {
+		Name string `json:"name"`
+	}{Name: name})
+	if err != nil {
+		return err
+	}
+	_, err = ExecuteTenantRegistration(ctx, o.log, o.store, o.proj, o.durableIdem, TenantRegistrationCommand{
+		TenantID: tenantID, Name: name, IdempotencyKey: idempotencyKey, RequestMaterial: data,
+		PayloadAt: func(time.Time) ([]byte, error) { return append([]byte(nil), data...), nil },
+	})
+	return err
+}
+
 // ExecuteTenantRegistration serializes registration with offboard and secret
 // synchronization, reconciles a deterministic retained event, and atomically
 // commits its core tenant projection with the pending idempotency binding. The

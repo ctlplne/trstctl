@@ -1350,7 +1350,12 @@ func redactArchiveEvidenceValue(value, subject, placeholder string) string {
 // CreateIssuer records an issuer.created event and returns the new issuer. The
 // caller is expected to have validated it (the structural issuer rules).
 func (o *Orchestrator) CreateIssuer(ctx context.Context, tenantID string, in store.Issuer) (store.Issuer, error) {
-	id := uuid.NewString()
+	// A caller that must create the same issuer once however often it asks (a
+	// tenant baseline) names its ID; every other caller gets a fresh one.
+	id := strings.TrimSpace(in.ID)
+	if id == "" {
+		id = uuid.NewString()
+	}
 	chain := in.Chain
 	if chain == nil {
 		chain = []string{}

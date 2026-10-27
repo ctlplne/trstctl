@@ -27,6 +27,7 @@ import (
 	eesilo "trstctl.com/trstctl/ee/silo"
 	eewhitelabel "trstctl.com/trstctl/ee/whitelabel"
 	agidstore "trstctl.com/trstctl/internal/agentid/delegation/store"
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	cryptosamlsp "trstctl.com/trstctl/internal/crypto/samlsp"
@@ -283,16 +284,18 @@ func attachEEProviderAPI(
 		EvidenceVerificationJWKS: billingEvidence.verificationJWKS,
 		Brands:                   providerBrandStore(brandInstall),
 		Drills:                   isolationDrillerAdapter{store: deps.Store, lanes: laneDrillFor(siloInstall, deps.Log)},
+		Templates:                eeprovider.TemplateDeps{Store: eeprovider.NewPGStore(deps.Store)},
 	}
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
 	deps.ProviderHandler = eeprovider.NewHandler(providerConfig)
-	deps.ProviderHandlerFactory = func(orch *orchestrator.Orchestrator) (http.Handler, error) {
+	deps.ProviderHandlerFactory = func(orch *orchestrator.Orchestrator, baselines api.TenantBaselineService) (http.Handler, error) {
 		if authorityRuntime == nil || orch == nil {
 			return nil, errors.New("provider command surface requires the assembled mutation spine")
 		}
 		configured := providerConfig
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
+		configured.Templates.Baselines, configured.Templates.RegisterTenant = baselines, orch.RegisterTenant
 		return eeprovider.NewHandler(configured), nil
 	}
 	if log == nil {

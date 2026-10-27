@@ -199,6 +199,8 @@ var TenantScopedTables = []string{
 	"provider_operators",
 	// A90: custom Provider roles live under the fixed Provider authority tenant.
 	"provider_roles",
+	// Provider tenant templates live there too; a customer offboard deletes none.
+	"provider_tenant_templates",
 	"provider_authority_projection_receipts", // same fixed Provider partition; no customer state or secret payload
 	"provider_authority_projection_state",    // upgrade/recovery status for the same fixed partition
 	// Independent tenant-scoped tables (no inbound RESTRICT foreign key).
@@ -366,6 +368,9 @@ var TenantScopedTables = []string{
 	"provider_usage_meters",
 	"provider_usage_coverage",
 	"provider_tenant_quotas",
+	// The customer's template binding (which version it holds, and the last
+	// application's outcome) leaves with the customer.
+	"provider_tenant_template_bindings",
 	// L3: the provider's durable registry rows for this customer. The
 	// break-glass grants reference the customer's id; both leave with the
 	// tenant, and the registry row is the provider-plane analog of the core
