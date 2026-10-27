@@ -115,7 +115,7 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 	}
 	var orch *orchestrator.Orchestrator
 	srv, err := server.Build(ctx, server.Deps{Store: st, Log: log, EnablePolicyGate: true,
-		ProviderHandlerFactory: func(o *orchestrator.Orchestrator, baselines api.TenantBaselineService) (http.Handler, error) {
+		ProviderHandlerFactory: func(o *orchestrator.Orchestrator, baselines api.ProviderTenantServices) (http.Handler, error) {
 			orch = o
 			return NewHandler(Config{
 				License: providerLicense(t, 10), Store: NewPGStore(st), Mutations: sink, Activity: NewEventLogActivitySource(log),

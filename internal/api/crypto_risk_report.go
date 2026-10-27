@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -269,79 +268,15 @@ func certificateDependents(g *graph.Graph, certificateID string) cryptorisk.Depe
 // and verifies it before anything is compared with it. When there is none, or it
 // cannot be read or verified, the note says so and nothing is compared.
 func (a *API) previousCryptoRiskReport(ctx context.Context, tenantID, scheduleID string, before time.Time) (*cryptorisk.Report, string) {
-	if !a.complianceReportArchive.Configured() {
-		return nil, "no report archive is configured, so no previous report can be compared"
-	}
-	var schedules []string
-	if scheduleID != "" {
-		schedules = []string{scheduleID}
-	} else {
-		after := store.ZeroUUID
-		for page := 0; page < 10; page++ {
-			rows, err := a.store.ListComplianceReportSchedulesPage(ctx, tenantID, after, 100)
-			if err != nil {
-				return nil, "the report schedules could not be read, so no previous report is compared"
-			}
-			for _, s := range rows {
-				if s.ReportType == cryptoRiskReportType {
-					schedules = append(schedules, s.ID)
-				}
-			}
-			if len(rows) < 100 {
-				break
-			}
-			after = rows[len(rows)-1].ID
-		}
-	}
-	var newest *store.ComplianceReportRun
-	for _, id := range schedules {
-		runs, err := a.store.ListComplianceReportRunsPage(ctx, tenantID, id, before, 50)
-		if err != nil {
-			return nil, "the report runs could not be read, so no previous report is compared"
-		}
-		for i := range runs {
-			run := runs[i]
-			if run.Status != "completed" || run.ReportType != cryptoRiskReportType {
-				continue
-			}
-			if newest == nil || run.DueAt.After(newest.DueAt) {
-				newest = &run
-			}
-			break
-		}
-	}
-	if newest == nil {
-		return nil, "no earlier completed scheduled crypto-risk report to compare with"
-	}
-	previous, err := a.readCryptoRiskArtifact(ctx, *newest)
-	if err != nil {
-		return nil, "the previous report (run " + newest.ID + ") could not be read and verified, so nothing is compared"
-	}
-	return &previous, ""
-}
-
-func (a *API) readCryptoRiskArtifact(ctx context.Context, run store.ComplianceReportRun) (cryptorisk.Report, error) {
-	artifact, err := a.complianceReportArchive.Read(ctx, run.ArtifactRef, run.TenantID, run.ID, run.ArtifactDigest)
-	if err != nil {
-		return cryptorisk.Report{}, err
-	}
-	if err := a.VerifyScheduledComplianceArtifact(artifact, run); err != nil {
-		return cryptorisk.Report{}, err
-	}
-	var envelope struct {
-		Manifest ScheduledComplianceManifest `json:"manifest"`
-	}
-	if err := json.Unmarshal(artifact, &envelope); err != nil {
-		return cryptorisk.Report{}, err
+	payload, runID, note := a.previousScheduledReport(ctx, tenantID, scheduleID, cryptoRiskReportType, "crypto-risk", before)
+	if payload == nil {
+		return nil, note
 	}
 	var report cryptorisk.Report
-	if err := json.Unmarshal(envelope.Manifest.Payload, &report); err != nil {
-		return cryptorisk.Report{}, err
+	if err := json.Unmarshal(payload, &report); err != nil || report.Format != cryptorisk.Format || report.TenantID != tenantID {
+		return nil, "The previous report (run " + runID + ") could not be read and verified, so nothing is compared."
 	}
-	if report.Format != cryptorisk.Format || report.TenantID != run.TenantID {
-		return cryptorisk.Report{}, errors.New("compliance: archived artifact is not this tenant's crypto-risk report")
-	}
-	return report, nil
+	return &report, ""
 }
 
 // scheduledCryptoRiskReport is the crypto_risk payload of one scheduled run,

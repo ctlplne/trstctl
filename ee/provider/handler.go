@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/ee/billing"
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/license"
@@ -237,6 +238,10 @@ func (h *handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.applyTemplate(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/template-drift"):
 		h.templateDrift(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.HasSuffix(r.URL.Path, "/assurance-reports"):
+		h.listAssuranceReports(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/provider/v1/tenants/") && strings.Contains(r.URL.Path, "/assurance-reports/"):
+		h.getAssuranceReport(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/isolation-drill":
 		h.runIsolationDrill(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == "/provider/v1/breakglass":
@@ -1184,6 +1189,10 @@ func writeProviderError(w http.ResponseWriter, err error) {
 		status, code = http.StatusBadRequest, "template_invalid"
 	case errors.Is(err, ErrTemplateRolloutStale):
 		status, code = http.StatusConflict, "template_rollout_stale"
+	case errors.Is(err, api.ErrReportSignerUnavailable):
+		status, code = http.StatusServiceUnavailable, "report_signer_unavailable"
+	case errors.Is(err, api.ErrReportArchiveUnavailable):
+		status, code = http.StatusServiceUnavailable, "report_archive_unavailable"
 	case errors.Is(err, ErrBrandRevisionConflict):
 		status, code = http.StatusConflict, "brand_revision_conflict"
 	case errors.Is(err, orchestrator.ErrInProgress), errors.Is(err, orchestrator.ErrEffectIndeterminate):

@@ -73,7 +73,7 @@ var complianceFrameworks = []ComplianceFramework{
 	ComplianceNIS2,
 }
 
-var complianceReportTypes = []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"}
+var complianceReportTypes = []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk", "customer_assurance"}
 
 const (
 	minComplianceReportIntervalSeconds = 60 * 60
@@ -408,7 +408,7 @@ func normalizeComplianceReportScheduleRequest(req complianceReportScheduleReques
 	}
 	reportType := strings.ToLower(strings.TrimSpace(req.ReportType))
 	if !validComplianceReportType(reportType) {
-		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "report_type must be one of framework_evidence_pack, inventory_snapshot, cbom_posture, audit_summary, nhi_compliance_mapping, or crypto_risk")
+		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "report_type must be one of framework_evidence_pack, inventory_snapshot, cbom_posture, audit_summary, nhi_compliance_mapping, crypto_risk, or customer_assurance")
 	}
 	if req.IntervalSeconds < minComplianceReportIntervalSeconds || req.IntervalSeconds > maxComplianceReportIntervalSeconds {
 		return complianceReportScheduleRequest{}, errStatus(http.StatusBadRequest, "interval_seconds must be between 3600 and 31622400")

@@ -171,6 +171,9 @@ func managedKeyAcceptedResponse() Response {
 // endpoint itself is omitted from the documented paths.
 func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	schemas := componentSchemas()
+	for name, schema := range customerAssuranceSchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range extraSchemas {
 		schemas[name] = schema
 	}
@@ -4555,7 +4558,7 @@ func componentSchemas() map[string]*Schema {
 	complianceReportScheduleReq := object(map[string]*Schema{
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
-		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"}},
+		"report_type":      {Type: "string", Enum: complianceReportTypes},
 		"interval_seconds": {Type: "integer"},
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
@@ -4598,7 +4601,7 @@ func componentSchemas() map[string]*Schema {
 		"tenant_id":        uuid(),
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
-		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"}},
+		"report_type":      {Type: "string", Enum: complianceReportTypes},
 		"interval_seconds": {Type: "integer"},
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},

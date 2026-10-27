@@ -620,9 +620,10 @@ and [Compliance](compliance.md). Backed by
 `/api/v1/compliance/evidence-packs/{framework}`,
 `/api/v1/compliance/inventory-report`, `/api/v1/compliance/report-schedules`,
 `/api/v1/policy/dry-run`, `/api/v1/policy/versions`, `/api/v1/audit/events`,
-`/api/v1/audit/export`, and `/api/v1/audit/feeds[/{id}]`. Email/webhook compliance
-report dispatch is not served; native audit-feed delivery is a separate served
-workflow.
+`/api/v1/audit/export`, and `/api/v1/audit/feeds[/{id}]`. A schedule can announce
+each completed run on notification channels or in a ServiceNow ticket; the notice
+names the run, its digest and its download route, never the report body. Native
+audit-feed delivery is a separate served workflow.
 
 ### Evidence privacy (`/privacy`)
 
@@ -1056,7 +1057,8 @@ trstctl-cli privacy retention run
 - **The console is a view, not a second backend** — it adds no capability the API
   lacks. If a surface looks read-only for you, that is RBAC, not a missing screen.
 - **A few adjacent capabilities are API-only today** — scheduled digest delivery
-  and email/webhook report dispatch are not served as console workflows.
+  is not served as a console workflow, and the Provider console shows neither
+  tenant templates nor customers' assurance reports yet.
   PQC migration preview, start, progress and rollback are available in the
   console's upgrade-planning section as well as the core API and CLI.
 - **Auth lives in an HttpOnly cookie**, never in web storage; only the theme

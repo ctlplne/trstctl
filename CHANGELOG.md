@@ -2,6 +2,19 @@
 
 ### Added
 
+- Customer assurance report: `GET /api/v1/reports/assurance` (`trstctl-cli
+  reports assurance`) and the `customer_assurance` scheduled report type put a
+  tenant's credential assurance into plain sentences in its white-label brand:
+  inventory and ownership coverage; expiring, renewed and failed credentials;
+  endpoint verification and how changed credentials were verified; incidents
+  with their signed evidence; each figure compared with the previous report.
+  The signed run carries a self-contained branded HTML rendering. `trstctl-cli
+  compliance report-runs verify` checks any saved scheduled report offline
+  against the signing key from `GET /api/v1/compliance/report-signing-key`. A
+  Provider schedules the report through a tenant template, whose report
+  schedules can now announce each run on the customer's channels, and lists and
+  downloads a customer's signed runs at
+  `/provider/v1/tenants/{id}/assurance-reports`.
 - Provider tenant templates: versioned templates of customer tenant objects
   (certificate profiles, the lifecycle policy, CA bindings, connector targets,
   notification channels, member role grants and report schedules). A Provider

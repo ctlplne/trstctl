@@ -4490,6 +4490,40 @@ CustodyStorageCounts = TypedDict(
     total=False,
 )
 
+CustomerAssuranceCertificate = TypedDict(
+    'CustomerAssuranceCertificate',
+    {
+        'id': str,
+        'not_after': str,
+        'owner': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+CustomerAssuranceReport = TypedDict(
+    'CustomerAssuranceReport',
+    {
+        'brand': dict[str, Any],
+        'changes': dict[str, Any],
+        'credentials': dict[str, Any],
+        'format': str,
+        'generated_at': str,
+        'html': str,
+        'html_sha256': str,
+        'incidents': dict[str, Any],
+        'inventory': dict[str, Any],
+        'limits': list[str],
+        'period_from': str,
+        'period_through': str,
+        'summary': list[str],
+        'tenant_id': str,
+        'tenant_name': str,
+        'verification': dict[str, Any],
+    },
+    total=False,
+)
+
 DRArtifactFailure = TypedDict(
     'DRArtifactFailure',
     {
@@ -11032,6 +11066,16 @@ RenewalSLO = TypedDict(
         'target_percent': float,
         'total': int,
         'window_days': int,
+    },
+    total=False,
+)
+
+ReportSigningKey = TypedDict(
+    'ReportSigningKey',
+    {
+        'public_key_der': str,
+        'public_key_pem': str,
+        'sha256': str,
     },
     total=False,
 )

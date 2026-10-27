@@ -49,17 +49,17 @@ coverage ledger applies to assets, applied to weaknesses.
 
 | CWE | Waived sites | Register section |
 |---|---|---|
-| CWE-22 | 611 | [cwe-register.md](cwe-register.md) |
+| CWE-22 | 614 | [cwe-register.md](cwe-register.md) |
 | CWE-798 | 381 | [cwe-register.md](cwe-register.md) |
 | CWE-190 | 277 | [cwe-register.md](cwe-register.md) |
 | CWE-78 | 216 | [cwe-register.md](cwe-register.md) |
-| CWE-276 | 200 | [cwe-register.md](cwe-register.md) |
+| CWE-276 | 202 | [cwe-register.md](cwe-register.md) |
 | CWE-1004 | 42 | [cwe-register.md](cwe-register.md) |
 | CWE-338 | 31 | [cwe-register.md](cwe-register.md) |
 | CWE-367 | 24 | [cwe-register.md](cwe-register.md) |
 | CWE-328 | 18 | [cwe-register.md](cwe-register.md) |
 | CWE-400 | 15 | [cwe-register.md](cwe-register.md) |
-| CWE-79 | 12 | [cwe-register.md](cwe-register.md) |
+| CWE-79 | 13 | [cwe-register.md](cwe-register.md) |
 | CWE-295 | 10 | [cwe-register.md](cwe-register.md) |
 | CWE-88 | 7 | [cwe-register.md](cwe-register.md) |
 | CWE-118 | 5 | [cwe-register.md](cwe-register.md) |
@@ -67,8 +67,8 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE-200 | 4 | [cwe-register.md](cwe-register.md) |
 | CWE-326 | 4 | [cwe-register.md](cwe-register.md) |
 | CWE-601 | 4 | [cwe-register.md](cwe-register.md) |
+| CWE-? | 4 | [cwe-register.md](cwe-register.md) |
 | CWE-664 | 3 | [cwe-register.md](cwe-register.md) |
-| CWE-? | 3 | [cwe-register.md](cwe-register.md) |
 | CWE-502 | 1 | [cwe-register.md](cwe-register.md) |
 
 Every waived site carries its reason inline in source and in the register;

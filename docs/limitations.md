@@ -3524,9 +3524,11 @@ than sending an operator looking for a credential that was never there.
   holds: "roles" are built-in role grants to named members, because tenants have
   no custom role definitions of their own yet; a CA binding is an issuer record
   (a changed chain binds a new issuer and the old one stays for what it issued);
-  connector defaults are deployment targets. The Provider console does not show
-  templates yet; they are served on the Provider API. Tenant-defined custom
-  roles and a console view are what comes next.
+  connector defaults are deployment targets. A template's report schedule can
+  carry `dispatch`, announcing each run on the customer's channel of that type.
+  The Provider console does not show templates yet; they are served on the
+  Provider API. Tenant-defined custom roles and a console view are what comes
+  next.
 - Provider console (L3 + AUD-58): the web app has a `/provider` route — a
   console for the provider's own staff, separate from the tenant plane. It lists
   customer tenants with their lifecycle state and drives the `/provider/v1` API
@@ -6197,6 +6199,45 @@ one certificate; it collects nothing new. Read it with these limits:
 - **Verify against keys you pinned.** The response's `public_jwks` is a convenience;
   `trstctl certificates verify-assurance-record` requires a JWK set you obtained
   separately and never trusts the file's own copy.
+
+## Customer assurance reports
+
+`GET /api/v1/reports/assurance` and the `customer_assurance` scheduled report put
+a tenant's credential assurance into plain sentences in its white-label brand.
+What the report decides from, and what it does not establish:
+
+- **Counts are exact; lists are bounded.** Each list names at most 10 items
+  (unowned and soon-expiring certificates, failures, incidents); the count
+  beside it is exact.
+- **Endpoint results are the latest observation.** The report counts each
+  endpoint's latest check from each vantage, not every check made in the
+  period.
+- **Only failures this deployment recorded.** Failed renewals are renewal runs
+  that ended failed; failed deliveries are connector deliveries that failed or
+  failed their verification. Work done outside trstctl is not seen.
+- **Changed credentials are classified up to 50.** Whether a changed
+  credential's deployment was independently observed comes from its assurance
+  record, read for the 50 most recently changed credentials; the report says
+  when there were more.
+- **Large incident evidence is named, not carried.** An evidence bundle over
+  64 KiB appears as its SHA-256 digest; read it from the incident.
+- **Only a brand that embeds safely.** A logo is embedded only as a PNG, JPEG,
+  GIF or WebP data URI of at most 256 KiB, never SVG, and the accent only as
+  `#rgb` or `#rrggbb`; anything else is left out and the report says so. The
+  HTML rendering never names trstctl; machine-readable format identifiers keep
+  their schema names.
+- **The comparison is with the previous signed report.** A scheduled run
+  compares with its schedule's previous completed run, read back from the
+  archive and verified first; an on-demand report compares with the tenant's
+  newest completed one, whatever period that covered. With no archive or no
+  earlier run there is nothing to compare, and the report says so.
+- **Verify against the key you pinned.** `trstctl-cli compliance report-runs
+  verify` needs the signing key obtained separately and never trusts the key
+  inside the file. A run signed before a key rotation verifies under the key
+  that signed it.
+- **The Provider reads reports on its API.** The Provider console does not show
+  a customer's reports yet; `/provider/v1/tenants/{id}/assurance-reports` lists
+  and downloads them. A console view is what comes next.
 
 ## Endpoint verification
 

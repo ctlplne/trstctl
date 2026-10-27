@@ -72,6 +72,7 @@ const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: Message
   { id: "audit_summary", labelKey: "policy.reportType.auditSummary" },
   { id: "nhi_compliance_mapping", labelKey: "policy.reportType.nhiComplianceMapping" },
   { id: "crypto_risk", labelKey: "policy.reportType.cryptoRisk" },
+  { id: "customer_assurance", labelKey: "policy.reportType.customerAssurance" },
 ];
 
 function hasUnsafeHrefChar(href: string): boolean {

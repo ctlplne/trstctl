@@ -2883,7 +2883,7 @@ export interface ComplianceReportSchedule {
   name: string;
   next_run_at: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
   tenant_id: string;
   updated_at: string;
 }
@@ -2920,7 +2920,7 @@ export interface ComplianceReportScheduleRequest {
   interval_seconds: number;
   name: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
 }
 
 export interface ComplianceReportTicket {
@@ -3234,6 +3234,32 @@ export interface CustodyStorageCounts {
   pkcs11: number;
   sealed_store?: number;
   service: number;
+}
+
+export interface CustomerAssuranceCertificate {
+  id: string;
+  not_after?: string;
+  owner?: string;
+  subject: string;
+}
+
+export interface CustomerAssuranceReport {
+  brand: { accent: string; custom: boolean; footer?: string; logo_data_uri?: string; product_name: string };
+  changes: { comparable: boolean; metrics: { current: number; delta: number; key: string; label: string; previous: number; sentence: string }[]; note?: string; previous_generated_at?: string; previous_period_from?: string; previous_period_through?: string };
+  credentials: { added: number; expired_active: number; expiring: number; expiring_soonest: CustomerAssuranceCertificate[]; expiring_within_days: number; failed_deliveries: number; failed_renewals: number; failures: ({ at: string; id: string; kind: "renewal" | "delivery"; reason?: string; status: string; subject: string; via?: string })[]; renewed: number; revoked: number };
+  format: string;
+  generated_at: string;
+  html: string;
+  html_sha256: string;
+  incidents: { in_period: number; items: ({ evidence?: string; evidence_format?: string; evidence_sha256?: string; id: string; kind: "credential_compromise" | "issuer_compromise"; opened_at: string; phase: string; reason?: string; status: string; updated_at: string })[]; open: number; opened_in_period: number };
+  inventory: { active_certificates: number; crypto_assets: number; discovery_inventory_rows: number; owned_certificates: number; ownership_coverage_percent?: number; unowned: CustomerAssuranceCertificate[] };
+  limits: string[];
+  period_from: string;
+  period_through: string;
+  summary: string[];
+  tenant_id: string;
+  tenant_name: string;
+  verification: { changed_credentials: number; changed_credentials_truncated?: boolean; endpoint_observations: number; endpoints_checked_in_period: number; endpoints_matching: number; endpoints_mismatched: number; endpoints_unreachable: number; independently_verified: number; not_verified: number; note?: string; recorded_only: number; verified_deliveries: number };
 }
 
 export interface DRArtifactFailure {
@@ -7992,6 +8018,12 @@ export interface RenewalSLO {
   target_percent: number;
   total: number;
   window_days: number;
+}
+
+export interface ReportSigningKey {
+  public_key_der: string;
+  public_key_pem: string;
+  sha256: string;
 }
 
 export interface ResponseIntegrationDestinationRequest {

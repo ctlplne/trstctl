@@ -463,6 +463,26 @@ a `provider.tenant_template.applied` authority event naming the operator and
 each object's outcome, shown in the Provider activity view; template versions
 are `provider.template.recorded` events.
 
+A report schedule in a template may carry `dispatch`, as the customer's own
+schedule does: `{"channels":["webhook"]}` names the customer's channel of that
+type, which the same template usually creates, and each completed run is
+announced there.
+
+### Provider customer assurance reports
+
+A Provider schedules a customer's [customer assurance report](compliance.md#customer-assurance-report)
+through a template's `report_schedules` (`"report_type":"customer_assurance"`),
+and brands the customer with `PUT /provider/v1/tenants/{id}/brand`. Every run
+renders in that brand and is signed by the governance report key.
+
+`GET /provider/v1/tenants/{id}/assurance-reports` lists the customer's
+completed runs, newest first (at most 50), with the public key that signs them
+and its SHA-256. `GET /provider/v1/tenants/{id}/assurance-reports/{run_id}`
+returns one run's exact signed bytes, read back from the archive and verified
+before they are handed out. Both need the operator's `read` delegation on that
+customer. The Provider shares the file and the key's SHA-256; the customer
+verifies the file offline with `trstctl-cli compliance report-runs verify`.
+
 ### Usage metering and invoice evidence
 
 Metering is durable: usage is recorded in PostgreSQL under the same row-level

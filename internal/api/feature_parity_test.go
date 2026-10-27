@@ -315,8 +315,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// (record, list) raised it to 552, mapped onto the endpoint verification row.
 	// A185's cryptographic risk report and its export raised it to 554, mapped
 	// onto the CBOM and cryptographic observability row.
-	if len(out) != 554 {
-		t.Fatalf("OpenAPI operationIds = %d, want 554", len(out))
+	// A187's customer assurance report and the report signing key raised it to
+	// 556, mapped onto the compliance reporting row.
+	if len(out) != 556 {
+		t.Fatalf("OpenAPI operationIds = %d, want 556", len(out))
 	}
 	return out
 }

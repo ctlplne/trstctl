@@ -289,13 +289,14 @@ func attachEEProviderAPI(
 	// Preserve the authenticated surface during assembly, but keep destructive
 	// commands unavailable until core supplies its fully assembled projector.
 	deps.ProviderHandler = eeprovider.NewHandler(providerConfig)
-	deps.ProviderHandlerFactory = func(orch *orchestrator.Orchestrator, baselines api.TenantBaselineService) (http.Handler, error) {
+	deps.ProviderHandlerFactory = func(orch *orchestrator.Orchestrator, services api.ProviderTenantServices) (http.Handler, error) {
 		if authorityRuntime == nil || orch == nil {
 			return nil, errors.New("provider command surface requires the assembled mutation spine")
 		}
 		configured := providerConfig
 		configured.Offboarding = eeprovider.NewTenantOffboarder(deps.Store, deps.Log, orch, authorityRuntime.Mutations)
-		configured.Templates.Baselines, configured.Templates.RegisterTenant = baselines, orch.RegisterTenant
+		configured.Templates.Baselines, configured.Templates.RegisterTenant = services, orch.RegisterTenant
+		configured.Reports = services
 		return eeprovider.NewHandler(configured), nil
 	}
 	if log == nil {

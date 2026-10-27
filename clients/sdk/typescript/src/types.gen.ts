@@ -2363,6 +2363,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/report-signing-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the public key scheduled reports are signed with, to pin before verifying a saved report offline */
+        get: operations["getReportSigningKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/catalog": {
         parameters: {
             query?: never;
@@ -6448,6 +6465,23 @@ export interface paths {
         put?: never;
         /** Run an automated remediation playbook */
         post: operations["runRemediationPlaybook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/assurance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report the tenant's credential assurance over a period in plain language and its white-label brand: inventory and ownership, expiring, renewed and failed credentials, independent verification and incidents with their evidence, compared with the last scheduled report */
+        get: operations["getCustomerAssuranceReport"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11440,7 +11474,7 @@ export interface components {
             next_run_at: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -11479,7 +11513,7 @@ export interface components {
             name: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk" | "customer_assurance";
         };
         ComplianceReportTicket: {
             instance_url: string;
@@ -11863,6 +11897,138 @@ export interface components {
             pkcs11: number;
             sealed_store?: number;
             service: number;
+        };
+        CustomerAssuranceCertificate: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            not_after?: string;
+            owner?: string;
+            subject: string;
+        };
+        CustomerAssuranceReport: {
+            brand: {
+                /** @description The token_overrides accent color as #rgb or #rrggbb, or the default. */
+                accent: string;
+                /** @description False when the tenant has no white-label brand. */
+                custom: boolean;
+                footer?: string;
+                /** @description The brand's logo when it is a PNG, JPEG, GIF or WebP data URI of at most 256 KiB. */
+                logo_data_uri?: string;
+                product_name: string;
+            };
+            changes: {
+                comparable: boolean;
+                metrics: {
+                    current: number;
+                    delta: number;
+                    key: string;
+                    label: string;
+                    previous: number;
+                    sentence: string;
+                }[];
+                note?: string;
+                /** Format: date-time */
+                previous_generated_at?: string;
+                /** Format: date-time */
+                previous_period_from?: string;
+                /** Format: date-time */
+                previous_period_through?: string;
+            };
+            credentials: {
+                added: number;
+                /** @description Active certificates already past not_after. */
+                expired_active: number;
+                expiring: number;
+                /** @description At most 10, soonest first. */
+                expiring_soonest: components["schemas"]["CustomerAssuranceCertificate"][];
+                expiring_within_days: number;
+                failed_deliveries: number;
+                failed_renewals: number;
+                /** @description At most 10, newest first. */
+                failures: {
+                    /** Format: date-time */
+                    at: string;
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    kind: "renewal" | "delivery";
+                    reason?: string;
+                    status: string;
+                    subject: string;
+                    via?: string;
+                }[];
+                renewed: number;
+                revoked: number;
+            };
+            format: string;
+            /** Format: date-time */
+            generated_at: string;
+            /** @description The branded, self-contained HTML rendering. */
+            html: string;
+            html_sha256: string;
+            incidents: {
+                /** @description Incident runs open or updated in the period. */
+                in_period: number;
+                /** @description At most 10, newest first. */
+                items: {
+                    /** @description The incident's evidence bundle when it is at most 64 KiB. */
+                    evidence?: string;
+                    evidence_format?: string;
+                    evidence_sha256?: string;
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    kind: "credential_compromise" | "issuer_compromise";
+                    /** Format: date-time */
+                    opened_at: string;
+                    phase: string;
+                    reason?: string;
+                    status: string;
+                    /** Format: date-time */
+                    updated_at: string;
+                }[];
+                open: number;
+                opened_in_period: number;
+            };
+            inventory: {
+                active_certificates: number;
+                crypto_assets: number;
+                discovery_inventory_rows: number;
+                owned_certificates: number;
+                /** @description Rounded down; absent with no active certificate. */
+                ownership_coverage_percent?: number;
+                /** @description Unowned certificates, soonest expiry first, at most 10. */
+                unowned: components["schemas"]["CustomerAssuranceCertificate"][];
+            };
+            /** @description What the report does not establish. */
+            limits: string[];
+            /** Format: date-time */
+            period_from: string;
+            /** Format: date-time */
+            period_through: string;
+            /** @description The report in a few plain sentences. */
+            summary: string[];
+            /** Format: uuid */
+            tenant_id: string;
+            tenant_name: string;
+            verification: {
+                /** @description Credentials whose lifecycle changed in the period, at most 50. */
+                changed_credentials: number;
+                changed_credentials_truncated?: boolean;
+                /** @description The latest observation per endpoint and vantage. */
+                endpoint_observations: number;
+                endpoints_checked_in_period: number;
+                endpoints_matching: number;
+                endpoints_mismatched: number;
+                endpoints_unreachable: number;
+                /** @description Seen served from outside the product's own record. */
+                independently_verified: number;
+                not_verified: number;
+                note?: string;
+                recorded_only: number;
+                verified_deliveries: number;
+            };
         };
         DRArtifactFailure: {
             detail: string;
@@ -17068,6 +17234,13 @@ export interface components {
             target_percent: number;
             total: number;
             window_days: number;
+        };
+        ReportSigningKey: {
+            /** Format: byte */
+            public_key_der: string;
+            public_key_pem: string;
+            /** @description SHA-256 of the DER public key, to compare over an independent channel. */
+            sha256: string;
         };
         ResponseIntegrationDestinationRequest: {
             allow_private_endpoint?: boolean;
@@ -25702,6 +25875,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComplianceReportRunList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getReportSigningKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportSigningKey"];
                 };
             };
             /** @description client error */
@@ -37876,6 +38087,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemediationPlaybookRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCustomerAssuranceReport: {
+        parameters: {
+            query?: {
+                /** @description the period's length in days, ending now (1-366, default 30) */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerAssuranceReport"];
                 };
             };
             /** @description client error */

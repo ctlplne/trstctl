@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/ee/billing"
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -122,7 +123,10 @@ type Config struct {
 	Drills IsolationDriller
 	// Templates holds customers to versioned tenant templates. A nil store or
 	// baseline leaves the template routes refusing, never half-applying.
-	Templates        TemplateDeps
+	Templates TemplateDeps
+	// Reports reads customers' signed assurance reports from core (A187). Nil
+	// leaves the report routes refusing.
+	Reports          api.TenantReportReader
 	Clock            func() time.Time
 	MaxBreakGlassTTL time.Duration
 }
@@ -217,6 +221,7 @@ type Service struct {
 	tenantConsent    TenantConsentReader
 	auditStreams     AuditStreamReader
 	templates        TemplateDeps
+	reports          api.TenantReportReader
 	clock            func() time.Time
 	maxBreakGlassTTL time.Duration
 }
@@ -256,7 +261,7 @@ func NewService(cfg Config) *Service {
 	return &Service{license: lic, store: store, audit: audit, authenticator: cfg.Authenticator,
 		mutations: cfg.Mutations, activity: cfg.Activity, offboarding: cfg.Offboarding,
 		delegations: cfg.Delegations, access: cfg.Access, telemetry: telemetry, quotas: cfg.Quotas, brands: cfg.Brands,
-		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, clock: clock, maxBreakGlassTTL: maxTTL}
+		drills: cfg.Drills, tenantConsent: cfg.TenantConsent, auditStreams: cfg.AuditStreams, templates: cfg.Templates, reports: cfg.Reports, clock: clock, maxBreakGlassTTL: maxTTL}
 }
 
 // ListActivity returns newest-first immutable Provider authority evidence,

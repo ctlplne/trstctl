@@ -11864,7 +11864,8 @@
               "cbom_posture",
               "audit_summary",
               "nhi_compliance_mapping",
-              "crypto_risk"
+              "crypto_risk",
+              "customer_assurance"
             ],
             "type": "string"
           },
@@ -12054,7 +12055,8 @@
               "cbom_posture",
               "audit_summary",
               "nhi_compliance_mapping",
-              "crypto_risk"
+              "crypto_risk",
+              "customer_assurance"
             ],
             "type": "string"
           }
@@ -13530,6 +13532,443 @@
           "pkcs11",
           "device_bound",
           "service"
+        ],
+        "type": "object"
+      },
+      "CustomerAssuranceCertificate": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "subject"
+        ],
+        "type": "object"
+      },
+      "CustomerAssuranceReport": {
+        "properties": {
+          "brand": {
+            "properties": {
+              "accent": {
+                "description": "The token_overrides accent color as #rgb or #rrggbb, or the default.",
+                "type": "string"
+              },
+              "custom": {
+                "description": "False when the tenant has no white-label brand.",
+                "type": "boolean"
+              },
+              "footer": {
+                "type": "string"
+              },
+              "logo_data_uri": {
+                "description": "The brand's logo when it is a PNG, JPEG, GIF or WebP data URI of at most 256 KiB.",
+                "type": "string"
+              },
+              "product_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "product_name",
+              "accent",
+              "custom"
+            ],
+            "type": "object"
+          },
+          "changes": {
+            "properties": {
+              "comparable": {
+                "type": "boolean"
+              },
+              "metrics": {
+                "items": {
+                  "properties": {
+                    "current": {
+                      "type": "integer"
+                    },
+                    "delta": {
+                      "type": "integer"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "previous": {
+                      "type": "integer"
+                    },
+                    "sentence": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "previous",
+                    "current",
+                    "delta",
+                    "sentence"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "note": {
+                "type": "string"
+              },
+              "previous_generated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "previous_period_from": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "previous_period_through": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "comparable",
+              "metrics"
+            ],
+            "type": "object"
+          },
+          "credentials": {
+            "properties": {
+              "added": {
+                "type": "integer"
+              },
+              "expired_active": {
+                "description": "Active certificates already past not_after.",
+                "type": "integer"
+              },
+              "expiring": {
+                "type": "integer"
+              },
+              "expiring_soonest": {
+                "description": "At most 10, soonest first.",
+                "items": {
+                  "$ref": "#/components/schemas/CustomerAssuranceCertificate"
+                },
+                "type": "array"
+              },
+              "expiring_within_days": {
+                "type": "integer"
+              },
+              "failed_deliveries": {
+                "type": "integer"
+              },
+              "failed_renewals": {
+                "type": "integer"
+              },
+              "failures": {
+                "description": "At most 10, newest first.",
+                "items": {
+                  "properties": {
+                    "at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "renewal",
+                        "delivery"
+                      ],
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "subject": {
+                      "type": "string"
+                    },
+                    "via": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "id",
+                    "subject",
+                    "status",
+                    "at"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "renewed": {
+                "type": "integer"
+              },
+              "revoked": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "expiring_within_days",
+              "expiring",
+              "expiring_soonest",
+              "expired_active",
+              "added",
+              "renewed",
+              "revoked",
+              "failed_renewals",
+              "failed_deliveries",
+              "failures"
+            ],
+            "type": "object"
+          },
+          "format": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "html": {
+            "description": "The branded, self-contained HTML rendering.",
+            "type": "string"
+          },
+          "html_sha256": {
+            "type": "string"
+          },
+          "incidents": {
+            "properties": {
+              "in_period": {
+                "description": "Incident runs open or updated in the period.",
+                "type": "integer"
+              },
+              "items": {
+                "description": "At most 10, newest first.",
+                "items": {
+                  "properties": {
+                    "evidence": {
+                      "description": "The incident's evidence bundle when it is at most 64 KiB.",
+                      "type": "string"
+                    },
+                    "evidence_format": {
+                      "type": "string"
+                    },
+                    "evidence_sha256": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "credential_compromise",
+                        "issuer_compromise"
+                      ],
+                      "type": "string"
+                    },
+                    "opened_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "phase": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "id",
+                    "status",
+                    "phase",
+                    "opened_at",
+                    "updated_at"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "open": {
+                "type": "integer"
+              },
+              "opened_in_period": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "in_period",
+              "opened_in_period",
+              "open",
+              "items"
+            ],
+            "type": "object"
+          },
+          "inventory": {
+            "properties": {
+              "active_certificates": {
+                "type": "integer"
+              },
+              "crypto_assets": {
+                "type": "integer"
+              },
+              "discovery_inventory_rows": {
+                "type": "integer"
+              },
+              "owned_certificates": {
+                "type": "integer"
+              },
+              "ownership_coverage_percent": {
+                "description": "Rounded down; absent with no active certificate.",
+                "type": "integer"
+              },
+              "unowned": {
+                "description": "Unowned certificates, soonest expiry first, at most 10.",
+                "items": {
+                  "$ref": "#/components/schemas/CustomerAssuranceCertificate"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "active_certificates",
+              "owned_certificates",
+              "unowned",
+              "crypto_assets",
+              "discovery_inventory_rows"
+            ],
+            "type": "object"
+          },
+          "limits": {
+            "description": "What the report does not establish.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "period_from": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "period_through": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "summary": {
+            "description": "The report in a few plain sentences.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "tenant_name": {
+            "type": "string"
+          },
+          "verification": {
+            "properties": {
+              "changed_credentials": {
+                "description": "Credentials whose lifecycle changed in the period, at most 50.",
+                "type": "integer"
+              },
+              "changed_credentials_truncated": {
+                "type": "boolean"
+              },
+              "endpoint_observations": {
+                "description": "The latest observation per endpoint and vantage.",
+                "type": "integer"
+              },
+              "endpoints_checked_in_period": {
+                "type": "integer"
+              },
+              "endpoints_matching": {
+                "type": "integer"
+              },
+              "endpoints_mismatched": {
+                "type": "integer"
+              },
+              "endpoints_unreachable": {
+                "type": "integer"
+              },
+              "independently_verified": {
+                "description": "Seen served from outside the product's own record.",
+                "type": "integer"
+              },
+              "not_verified": {
+                "type": "integer"
+              },
+              "note": {
+                "type": "string"
+              },
+              "recorded_only": {
+                "type": "integer"
+              },
+              "verified_deliveries": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "verified_deliveries",
+              "endpoint_observations",
+              "endpoints_matching",
+              "endpoints_mismatched",
+              "endpoints_unreachable",
+              "endpoints_checked_in_period",
+              "changed_credentials",
+              "independently_verified",
+              "recorded_only",
+              "not_verified"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "format",
+          "tenant_id",
+          "tenant_name",
+          "brand",
+          "period_from",
+          "period_through",
+          "generated_at",
+          "summary",
+          "inventory",
+          "credentials",
+          "verification",
+          "incidents",
+          "changes",
+          "limits",
+          "html",
+          "html_sha256"
         ],
         "type": "object"
       },
@@ -33088,6 +33527,27 @@
         ],
         "type": "object"
       },
+      "ReportSigningKey": {
+        "properties": {
+          "public_key_der": {
+            "format": "byte",
+            "type": "string"
+          },
+          "public_key_pem": {
+            "type": "string"
+          },
+          "sha256": {
+            "description": "SHA-256 of the DER public key, to compare over an independent channel.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_key_pem",
+          "public_key_der",
+          "sha256"
+        ],
+        "type": "object"
+      },
       "ResponseIntegrationDestinationRequest": {
         "properties": {
           "allow_private_endpoint": {
@@ -50832,6 +51292,53 @@
           }
         ],
         "summary": "List exact signed-report run receipts for one schedule, newest due edge first",
+        "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/report-signing-key": {
+      "get": {
+        "operationId": "getReportSigningKey",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportSigningKey"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Download the public key scheduled reports are signed with, to pin before verifying a saved report offline",
         "x-trstctl-permission": "audit:read"
       }
     },
@@ -68650,6 +69157,63 @@
         ],
         "summary": "Run an automated remediation playbook",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/reports/assurance": {
+      "get": {
+        "operationId": "getCustomerAssuranceReport",
+        "parameters": [
+          {
+            "description": "the period's length in days, ending now (1-366, default 30)",
+            "in": "query",
+            "name": "days",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerAssuranceReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report the tenant's credential assurance over a period in plain language and its white-label brand: inventory and ownership, expiring, renewed and failed credentials, independent verification and incidents with their evidence, compared with the last scheduled report",
+        "x-trstctl-permission": "audit:read"
       }
     },
     "/api/v1/reports/crypto-risk": {

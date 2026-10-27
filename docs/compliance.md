@@ -223,7 +223,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 
 The response is intentionally mechanical: framework ids, report types
 (`framework_evidence_pack`, `inventory_snapshot`, `cbom_posture`,
-`audit_summary`, `nhi_compliance_mapping`, `crypto_risk`), served routes, evidence
+`audit_summary`, `nhi_compliance_mapping`, `crypto_risk`, `customer_assurance`), served routes, evidence
 references, inventory counts, and the first page of tenant report schedules.
 
 Before enabling a schedule, set `audit.archive_dir` (or
@@ -247,7 +247,9 @@ Review returns a tenant-bound SHA-256 fingerprint, normalized definition, later 
 recovery steps, and verification steps. It appends no event, projects no row, generates
 no report, resolves no credential, and calls no destination. Creation is a
 tenant-scoped, idempotent event. The leader later archives a signed artifact
-for each due edge; it sends no email, webhook, or ticket:
+for each due edge. Unless the schedule names a `dispatch` (see the
+[customer assurance report](#customer-assurance-report)), it sends no email,
+webhook, or ticket:
 
 ```sh
 cat > soc2-schedule.json <<'JSON'
@@ -307,6 +309,84 @@ report was generated after its `next_run_at`. This is a missed deadline signal;
 open **Signed runs** for the receipt and artifact. A completed receipt means
 the signed artifact is archived locally, not delivered to a third party.
 
+## Customer assurance report
+
+The customer assurance report (`customer_assurance`) is one tenant's account of
+its credentials over a period, in plain sentences and in the tenant's
+white-label brand, for a Provider (or the tenant's own team) to hand to the
+customer. It covers:
+
+- **Inventory and ownership**: active certificates, how many have a named
+  owner (coverage is rounded down), cryptographic assets and discovery
+  inventory records, and up to ten unowned certificates, soonest expiry first.
+- **Expiring, renewed and failed credentials**: certificates that expire within
+  30 days (the ten soonest, with owners), expired certificates still active,
+  certificates renewed, added and revoked in the period, and the renewal runs
+  and connector deliveries that failed in it (the ten newest, with reasons).
+- **Verification**: deliveries verified in the period; the latest observation
+  of each endpoint from each vantage (serving the expected certificate, a
+  different one, or not reached); and, for the credentials whose lifecycle
+  changed in the period (at most 50), how many were seen served from outside
+  the product's own record, are known only from that record, or were not
+  verified, read from their [assurance records](features/discovery-and-inventory.md).
+- **Incidents**: credential-compromise and issuer-compromise runs open or
+  updated in the period, each with its signed evidence bundle. A bundle over
+  64 KiB is named by its SHA-256 digest instead.
+- **Changes**: every figure compared with the previous report.
+- **Limits**: what the report does not establish.
+
+The report carries a short summary in sentences and a self-contained HTML
+rendering: styles inline, the logo embedded, nothing fetched. The rendering
+uses the tenant's brand: its product name, its logo when that is a PNG, JPEG,
+GIF or WebP data URI of at most 256 KiB (SVG is never embedded), its
+`token_overrides.accent` color when that is `#rgb` or `#rrggbb`, and its email
+footer. It never names trstctl. A tenant without a white-label brand gets the
+built-in one. Machine-readable format identifiers keep their schema names.
+
+On demand, an operator with `audit:read` reads the report for the days ending
+now (1 to 366, default 30), compared with the newest completed scheduled one:
+
+```sh
+trstctl-cli reports assurance --days 30
+```
+
+Scheduled, each run covers the interval before its due edge and is compared
+with the schedule's previous completed run, which is read back from the
+archive and verified first. Add `dispatch` to announce each completed run on
+the tenant's notification channels or in a ServiceNow ticket; the notice names
+the run, its SHA-256 and its download route, never the report body:
+
+```sh
+cat > assurance-schedule.json <<'JSON'
+{"framework":"soc2","name":"monthly-assurance","report_type":"customer_assurance","interval_seconds":2592000,"delivery":"audit_export","dispatch":{"channels":["webhook"]}}
+JSON
+trstctl-cli --idempotency-key monthly-assurance compliance report-schedules create -f assurance-schedule.json
+```
+
+### Verify a saved report offline
+
+Every scheduled run is signed by the governance report key. Pin that key once,
+compare its `sha256` with the Provider or operator over a channel of your own,
+then verify any saved run on a machine with no access to the server:
+
+```sh
+trstctl-cli compliance report-signing-key | jq -r .public_key_pem > report-signing-key.pem
+trstctl-cli compliance report-runs download RUN_ID > signed-report.json
+trstctl-cli compliance report-runs verify --report signed-report.json \
+  --public-key report-signing-key.pem --html assurance-report.html
+```
+
+The verifier checks the signature over the run's manifest with the pinned key
+(the key inside the file is never trusted) and that the manifest binds a
+complete run. It works for every scheduled report type. For a customer
+assurance report it also checks the HTML rendering against its digest, and only
+then does `--html` write the rendering out.
+
+A Provider schedules a customer's report through a
+[tenant template](editions.md#provider-tenant-templates)'s report schedules,
+reads the customer's signed runs with the signing key, and downloads a run to
+share; see [Provider customer assurance reports](editions.md#provider-customer-assurance-reports).
+
 ## What the operator must still do
 
 trstctl enables the controls below; you operate them:
@@ -318,9 +398,10 @@ trstctl enables the controls below; you operate them:
   or KEK means past bundles still verify but you cannot produce new ones under
   the same key; rotating it changes the verification key your auditor pins.
 - Distribute the verification (public) key to auditors out of band.
-- Connect report schedules to your evidence operations — external WORM
-  storage, ticketing, email, and webhook dispatch remain operator-run
-  until a served runner exists.
+- Connect report schedules to your evidence operations. A schedule's
+  `dispatch` announces each completed run on notification channels or in a
+  ServiceNow ticket, never with the report body; external WORM storage of the
+  artifacts remains operator-run.
 - Set a retention policy. By default the served audit view is retained
   indefinitely; setting `TRSTCTL_AUDIT_RETENTION` (e.g. `8760h`) with an
   archive target (`TRSTCTL_AUDIT_ARCHIVE_DIR` or

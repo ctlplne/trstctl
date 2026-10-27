@@ -227,9 +227,10 @@ type Deps struct {
 	ProviderHandler http.Handler
 	// ProviderHandlerFactory joins the licensed HTTP surface to the actual
 	// assembled mutation spine, including every lifecycle projection, and to the
-	// API's tenant baseline (which Provider tenant templates apply). Core knows
-	// only this factory and never imports the licensed implementation.
-	ProviderHandlerFactory func(*orchestrator.Orchestrator, api.TenantBaselineService) (http.Handler, error)
+	// API's tenant services: the tenant baseline (which Provider tenant templates
+	// apply) and customers' signed assurance reports. Core knows only this
+	// factory and never imports the licensed implementation.
+	ProviderHandlerFactory func(*orchestrator.Orchestrator, api.ProviderTenantServices) (http.Handler, error)
 	// TenantServiceCheck admits current tenant work across API, agent, protocol and outbox entry points.
 	TenantServiceCheck tenancy.ServiceCheck
 	// TelemetryReporter is the opt-in usage reporter (COMP-04). Nil means telemetry
@@ -691,7 +692,7 @@ type Deps struct {
 // Server is the assembled control plane.
 type Server struct {
 	tenantServiceCheck tenancy.ServiceCheck
-	tenantBaselines    deferredTenantBaselines
+	tenantServices     deferredTenantServices
 	store              *store.Store
 	log                *events.Log
 	audit              *audit.Service
@@ -1127,7 +1128,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := s.recoverPQCCertificateRollbackLifecycle(ctx, d.PQCCertificateRollbackCandidates); err != nil {
 		return nil, err
 	}
-	if err := configureProviderCommandSurface(&d, orch, &s.tenantBaselines); err != nil {
+	if err := configureProviderCommandSurface(&d, orch, &s.tenantServices); err != nil {
 		return nil, err
 	}
 	if err := s.configureAgentEnrollment(ctx, d); err != nil {
@@ -1181,11 +1182,11 @@ func recoverPreparedPrivacySubjectErasures(ctx context.Context, d Deps) error {
 
 // configureProviderCommandSurface attaches Provider commands to the assembled
 // orchestrator so they use the same lifecycle projector as core mutations.
-func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator, baselines api.TenantBaselineService) error {
+func configureProviderCommandSurface(d *Deps, orch *orchestrator.Orchestrator, services api.ProviderTenantServices) error {
 	if d.ProviderHandlerFactory == nil {
 		return nil
 	}
-	handler, err := d.ProviderHandlerFactory(orch, baselines)
+	handler, err := d.ProviderHandlerFactory(orch, services)
 	if err != nil {
 		return fmt.Errorf("server: assemble Provider command surface: %w", err)
 	}
@@ -1639,7 +1640,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	defaults = append(defaults, api.WithFirstIssuanceRetry(s))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
-	s.tenantBaselines.api.Store(a)
+	s.tenantServices.api.Store(a)
 	return a, auditSvc, nil
 }
 

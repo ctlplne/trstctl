@@ -93,14 +93,17 @@ type BaselineMember struct {
 }
 
 // BaselineReportSchedule is a scheduled compliance report. Key names it within
-// the baseline.
+// the baseline. Dispatch announces each completed run as the tenant's own
+// schedule would (A103); its channels are the tenant's channels of those types,
+// usually the baseline's own notification channels.
 type BaselineReportSchedule struct {
-	Key             string `json:"key"`
-	Name            string `json:"name"`
-	Framework       string `json:"framework"`
-	ReportType      string `json:"report_type"`
-	IntervalSeconds int    `json:"interval_seconds"`
-	Enabled         *bool  `json:"enabled,omitempty"`
+	Key             string                          `json:"key"`
+	Name            string                          `json:"name"`
+	Framework       string                          `json:"framework"`
+	ReportType      string                          `json:"report_type"`
+	IntervalSeconds int                             `json:"interval_seconds"`
+	Enabled         *bool                           `json:"enabled,omitempty"`
+	Dispatch        *store.ComplianceReportDispatch `json:"dispatch,omitempty"`
 }
 
 // TenantBaselineService is the tenant baseline as another plane uses it: the
@@ -319,6 +322,7 @@ func baselineChannel(tenantID string, x BaselineNotificationChannel) (store.Noti
 func baselineScheduleRequest(x BaselineReportSchedule) (complianceReportScheduleRequest, error) {
 	return normalizeComplianceReportScheduleRequest(complianceReportScheduleRequest{
 		Framework: x.Framework, Name: x.Name, ReportType: x.ReportType, IntervalSeconds: x.IntervalSeconds, Enabled: x.Enabled,
+		Dispatch: x.Dispatch,
 	})
 }
 
@@ -732,21 +736,27 @@ func (a *API) baselineMemberStep(tenantID string, x BaselineMember) baselineStep
 	}
 }
 
-func scheduleDigest(name, framework, reportType string, interval int, enabled bool) string {
+// scheduleDigest omits an empty dispatch, so a schedule without one keeps the
+// digest it had before schedules could carry one.
+func scheduleDigest(name, framework, reportType string, interval int, enabled bool, dispatch *store.ComplianceReportDispatch) string {
+	if dispatch.Empty() {
+		dispatch = nil
+	}
 	return baselineDigest(struct {
-		Name            string `json:"name"`
-		Framework       string `json:"framework"`
-		ReportType      string `json:"report_type"`
-		IntervalSeconds int    `json:"interval_seconds"`
-		Enabled         bool   `json:"enabled"`
-	}{name, framework, reportType, interval, enabled})
+		Name            string                          `json:"name"`
+		Framework       string                          `json:"framework"`
+		ReportType      string                          `json:"report_type"`
+		IntervalSeconds int                             `json:"interval_seconds"`
+		Enabled         bool                            `json:"enabled"`
+		Dispatch        *store.ComplianceReportDispatch `json:"dispatch,omitempty"`
+	}{name, framework, reportType, interval, enabled, dispatch})
 }
 
 func (a *API) baselineScheduleStep(tenantID, scope string, x BaselineReportSchedule) baselineStep {
 	id := baselineObjectID(tenantID, scope, BaselineKindReportSchedule, x.Key)
 	req, reqErr := baselineScheduleRequest(x)
 	enabled := req.Enabled == nil || *req.Enabled
-	expected := scheduleDigest(req.Name, req.Framework, req.ReportType, req.IntervalSeconds, enabled)
+	expected := scheduleDigest(req.Name, req.Framework, req.ReportType, req.IntervalSeconds, enabled, req.Dispatch)
 	return baselineStep{
 		read: func(ctx context.Context) (BaselineObjectState, any, error) {
 			if reqErr != nil {
@@ -761,15 +771,17 @@ func (a *API) baselineScheduleStep(tenantID, scope string, x BaselineReportSched
 				return stateOf(BaselineKindReportSchedule, x.Key, id, expected, "", true), nil, nil
 			}
 			return stateOf(BaselineKindReportSchedule, x.Key, id, expected,
-				scheduleDigest(got.Name, got.Framework, got.ReportType, got.IntervalSeconds, got.Enabled), false), &got, nil
+				scheduleDigest(got.Name, got.Framework, got.ReportType, got.IntervalSeconds, got.Enabled, got.Dispatch), false), &got, nil
 		},
 		apply: func(ctx context.Context, current any) (string, string, error) {
-			if blockers := a.complianceReportBlockers(); len(blockers) != 0 {
+			blockers := append(a.complianceReportBlockers(), a.complianceReportDispatchBlockers(ctx, tenantID, req.Dispatch)...)
+			if len(blockers) != 0 {
 				return "", "", errors.New(strings.Join(blockers, " "))
 			}
 			if _, err := a.orch.UpsertComplianceReportSchedule(ctx, tenantID, store.ComplianceReportSchedule{
 				ID: id, Framework: req.Framework, Name: req.Name, ReportType: req.ReportType,
 				IntervalSeconds: req.IntervalSeconds, Enabled: enabled, Delivery: req.Delivery, RecipientRef: req.RecipientRef,
+				Dispatch: req.Dispatch,
 			}); err != nil {
 				return "", "", err
 			}

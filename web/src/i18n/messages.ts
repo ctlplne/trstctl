@@ -14092,6 +14092,10 @@ export const messages = {
     defaultMessage: "Cryptographic risk",
     description: "Compliance report type option for the prioritized report of weak, distrusted and quantum-vulnerable keys with their deadlines and plans.",
   },
+  "policy.reportType.customerAssurance": {
+    defaultMessage: "Customer assurance",
+    description: "Compliance report type option for the plain-language report, in the tenant's brand, that a provider shares with a customer.",
+  },
   "policy.reporting.loading": {
     defaultMessage: "Loading report coverage.",
     description: "Loading state for compliance inventory reporting coverage.",

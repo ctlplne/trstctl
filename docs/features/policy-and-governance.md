@@ -669,7 +669,10 @@ hiding them in a percentage. The reporting section also contains the compliance
 inventory report, audit-export schedules, and NHI compliance mapping; a schedule's
 report type ranges from a framework evidence pack to the cryptographic risk report
 (weak, distrusted and quantum-vulnerable keys with their deadlines and plans, see
-[Lifecycle and PQC](lifecycle-and-pqc.md#cryptographic-risk-report)). The safe-test
+[Lifecycle and PQC](lifecycle-and-pqc.md#cryptographic-risk-report)) and the
+customer assurance report (the tenant's credential assurance in plain sentences and
+its white-label brand, for a Provider to share, see
+[Compliance](../compliance.md#customer-assurance-report)). The safe-test
 section calls `POST /api/v1/policy/dry-run` to compile a candidate lifecycle or ABAC
 Rego module against tenant input, returns allow/deny/error plus a bounded trace, and
 appends `policy.dry_run.evaluated` without raw values. The change-history section

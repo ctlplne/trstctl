@@ -13,6 +13,7 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/cryptoreadiness"
 	"trstctl.com/trstctl/internal/events"
@@ -21,7 +22,9 @@ import (
 	"trstctl.com/trstctl/internal/store"
 )
 
-const ScheduledComplianceReportFormat = "trstctl.compliance.scheduled-report.v1"
+// ScheduledComplianceReportFormat is the manifest format every run is signed
+// under; compliance.VerifyScheduledReport checks a saved run offline.
+const ScheduledComplianceReportFormat = compliance.ScheduledReportFormat
 
 // ScheduledComplianceManifest is the exact message signed for one due edge.
 // Its payload is a served tenant report captured at GeneratedAt, except the
@@ -193,6 +196,8 @@ func (a *API) scheduledCompliancePayload(ctx context.Context, tenantID string, s
 		return a.buildScheduledAuditSummary(ctx, tenantID, schedule)
 	case cryptoRiskReportType:
 		return a.scheduledCryptoRiskReport(ctx, tenantID, schedule)
+	case customerAssuranceReportType:
+		return a.scheduledCustomerAssuranceReport(ctx, tenantID, schedule)
 	case "nhi_compliance_mapping":
 		report, err := a.buildNHIComplianceReport(ctx, tenantID)
 		if err != nil {
