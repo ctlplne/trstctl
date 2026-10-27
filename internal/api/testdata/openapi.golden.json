@@ -3765,6 +3765,9 @@
             ],
             "type": "object"
           },
+          "role_grant": {
+            "$ref": "#/components/schemas/AgentRoleGrant"
+          },
           "role_source": {
             "enum": [
               "certificate",
@@ -4283,6 +4286,75 @@
         },
         "required": [
           "agent_id"
+        ],
+        "type": "object"
+      },
+      "AgentRoleGrant": {
+        "properties": {
+          "applied_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "applied_serial": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "granted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "enum": [
+                "host",
+                "network"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "description": "pending until a renewal signs the roles into the agent's certificate.",
+            "enum": [
+              "pending",
+              "applied"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "roles",
+          "state",
+          "granted_at",
+          "event_id",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "AgentRoleGrantRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "roles": {
+            "description": "The complete role set the agent's next certificate carries; at least one.",
+            "items": {
+              "enum": [
+                "host",
+                "network"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles"
         ],
         "type": "object"
       },
@@ -45415,6 +45487,83 @@
         ],
         "summary": "Offboard an agent, leave a tombstone, and reject future mTLS RPCs",
         "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/agents/{id}/roles": {
+      "post": {
+        "operationId": "grantAgentRoles",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRoleGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Set the roles an agent's next certificate carries; its next renewal signs them",
+        "x-trstctl-permission": "agents:relay.grant"
       }
     },
     "/api/v1/ai/query": {

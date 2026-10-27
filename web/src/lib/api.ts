@@ -104,6 +104,7 @@ import type {
   AgentCertRevocationRequest,
   AgentOffboardRequest,
   AgentOffboardResponse,
+  AgentRoleGrantRequest,
   AIAnswer as GenAIAnswer,
   AIQueryRequest,
   AIStatus as GenAIStatus,
@@ -2037,6 +2038,9 @@ export interface Api {
   previewEnrollmentPlan(input?: EnrollmentTokenRequest): Promise<EnrollmentPlanPreview>;
   createEnrollmentToken(input?: EnrollmentTokenRequest): Promise<EnrollmentToken>;
   offboardAgent(id: string, input: AgentOffboardRequest): Promise<AgentOffboardResponse>;
+  /** grantAgentRoles records the roles an agent's next certificate carries;
+   * its next renewal signs them (needs agents:relay.grant). */
+  grantAgentRoles(id: string, input: AgentRoleGrantRequest): Promise<Agent>;
   discoveryCapabilities(): Promise<DiscoveryCapabilityCatalog>;
   previewDiscoveryPlan(input: DiscoverySourceRequest): Promise<DiscoveryPlanPreview>;
   preflightDiscoverySource(id: string): Promise<DiscoveryPlanPreview>;
@@ -2793,6 +2797,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     }),
   createEnrollmentToken: (input) => mutate<EnrollmentToken>("POST", "/api/v1/agents/enrollment-tokens", enrollmentTokenRequest(input)),
   offboardAgent: (id, input) => mutate<AgentOffboardResponse>("POST", `/api/v1/agents/${encodeURIComponent(id)}/offboard`, input),
+  grantAgentRoles: (id, input) => mutate<Agent>("POST", `/api/v1/agents/${encodeURIComponent(id)}/roles`, input),
   discoveryCapabilities: () => req<DiscoveryCapabilityCatalog>("/api/v1/discovery/capabilities"),
   previewDiscoveryPlan: (input) => mutate<DiscoveryPlanPreview>("POST", "/api/v1/discovery/plans/preview", input),
   preflightDiscoverySource: (id) => req<DiscoveryPlanPreview>(`/api/v1/discovery/sources/${encodeURIComponent(id)}/preflight`),

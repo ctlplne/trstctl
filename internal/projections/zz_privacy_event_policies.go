@@ -37,6 +37,15 @@ type privacyConnectorDeliveryRecordedV1 struct {
 	AdoptedPredecessorFingerprint string `json:"adopted_predecessor_fingerprint,omitempty"`
 }
 
+// Version-one agent renewals predate the renewed certificate's roles (A191).
+// Keep their payload closed so schema one cannot carry a role claim.
+type privacyAgentCertRenewedV1 struct {
+	ID        string `json:"id"`
+	Agent     string `json:"agent"`
+	OldSerial string `json:"old_serial"`
+	NewSerial string `json:"new_serial"`
+}
+
 // Version-one member events predate explicit provisioning identities. Keep
 // their historical payloads closed instead of silently extending schema one.
 type privacyTenantMemberUpsertedV1 struct {
@@ -607,6 +616,16 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/old_serial", opaque), privacyRule("/new_serial", opaque),
 	)
+	agentCertRenewedRoles := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/agent", exact),
+		privacyRule("/old_serial", opaque), privacyRule("/new_serial", opaque),
+		privacyRule("/roles", opaque), privacyRule("/role_grant_event_id", opaque),
+	)
+	agentRolesGranted := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/agent", exact),
+		privacyRule("/roles", opaque), privacyRule("/reason", clear),
+		privacyRule("/granted_by", exact),
+	)
 	agentCertRevoked := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/serial", opaque), privacyRule("/fingerprint", opaque),
@@ -997,6 +1016,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:  agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:          agentHeartbeat,
 		{EventAgentCertRenewed, 1}:                                        agentCertRenewed,
+		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:       agentCertRenewedRoles,
+		{EventAgentRolesGranted, 1}:                                       agentRolesGranted,
 		{EventAgentCertRevoked, 1}:                                        agentCertRevoked,
 		{EventAgentOffboarded, 1}:                                         agentOffboarded,
 		{EventProfileCreated, 1}: privacyRules(
@@ -1533,7 +1554,9 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}:                    privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:                     privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:                             privacyPayloadShape[AgentHeartbeat](),
-		{EventAgentCertRenewed, 1}:                                                           privacyPayloadShape[AgentCertRenewed](),
+		{EventAgentCertRenewed, 1}:                                                           privacyPayloadShape[privacyAgentCertRenewedV1](),
+		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:                          privacyPayloadShape[AgentCertRenewed](),
+		{EventAgentRolesGranted, 1}:                                                          privacyPayloadShape[AgentRolesGranted](),
 		{EventAgentCertRevoked, 1}:                                                           privacyPayloadShape[AgentCertRevoked](),
 		{EventAgentOffboarded, 1}:                                                            privacyPayloadShape[AgentOffboarded](),
 		{EventProfileCreated, 1}:                                                             privacyPayloadShape[privacyProfileV1](),

@@ -98,7 +98,7 @@ func relayLoopFor(o agentOptions, a *agent.Agent, conn *grpc.ClientConn) (*time.
 	if !hasNetwork {
 		fmt.Fprintf(os.Stderr,
 			"trstctl-agent: --relay-claim was set but this agent's certificate carries roles %v, not %q; "+
-				"relay work will not be claimed. Re-enroll with a network-role bootstrap token to make this agent a relay.\n",
+				"relay work will not be claimed. An operator can grant it the network role (trstctl agents roles grant); the agent takes it at its next renewal.\n",
 			roles, mtls.AgentRoleNetwork)
 		if o.selfUpgrade {
 			// The relay grant is missing but the self-upgrade opt-in stands on

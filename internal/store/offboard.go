@@ -236,6 +236,8 @@ var TenantScopedTables = []string{
 	"deployment_target_revisions",
 	"deployment_targets",
 	"agent_cert_revocations",
+	// A191: the roles operators granted its agents.
+	"agent_role_grants",
 	// A91: the event-derived first-seen / offboarded record behind the agents gauge.
 	"agent_lifecycle_receipts",
 	// A95: the customer's Provider-access policy, the requests it saw and its decisions.

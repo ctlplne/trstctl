@@ -14,6 +14,7 @@ const { apiMock } = vi.hoisted(() => ({
     agentUpgradeCampaign: vi.fn(),
     agentJobPosture: vi.fn(),
     revokeAgentCert: vi.fn(),
+    grantAgentRoles: vi.fn(),
   },
 }));
 
@@ -224,6 +225,38 @@ describe("agent fleet surface", () => {
         fingerprint: undefined,
       }),
     );
+  });
+
+  it("records a role change and shows it as what the next renewal signs, not as the agent's roles", async () => {
+    apiMock.grantAgentRoles.mockReset().mockImplementation(async (id: string, input: { roles: string[] }) => ({
+      ...(await apiMock.agents())[0],
+      id,
+      role_grant: {
+        roles: input.roles,
+        state: "pending",
+        granted_at: "2026-10-27T10:00:00Z",
+        event_id: "ev-191",
+        detail: "The agent's next certificate renewal signs these roles.",
+      },
+    }));
+    renderAgents();
+    await screen.findByRole("heading", { name: /1 of 3 active agents/i });
+    fireEvent.click(screen.getByText("Fleet status and safe actions"));
+    await screen.findByRole("table", { name: "Registered in-network agents" });
+    fireEvent.click(screen.getAllByRole("button", { name: "Change roles" })[0]);
+    const dialog = screen.getByRole("dialog", { name: "Change roles for edge-01" });
+    expect(dialog).toHaveTextContent(/next certificate renewal signs them/i);
+    expect(dialog).toHaveTextContent(/agents:relay\.grant/);
+    const network = within(dialog).getByRole("checkbox", { name: /network/i });
+    expect(within(dialog).getByRole("checkbox", { name: /host/i })).toBeChecked();
+    expect(network).not.toBeChecked();
+    fireEvent.click(network);
+    fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "front the plant 7 appliances" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Record role change" }));
+    await waitFor(() => expect(apiMock.grantAgentRoles).toHaveBeenCalledWith("ag-1", { roles: ["host", "network"], reason: "front the plant 7 appliances" }));
+    expect(await screen.findByText(/role change recorded for edge-01/i)).toHaveTextContent(/next certificate renewal signs these roles/i);
+    const row = screen.getByRole("row", { name: /edge-01/ });
+    expect(row).toHaveTextContent(/next renewal: host, network/i);
   });
 
   it("shows a host agent's served job capabilities and distinguishes them from completed work", async () => {

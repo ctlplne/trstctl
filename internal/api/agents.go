@@ -101,8 +101,8 @@ type agentResponse struct {
 	DiscoveryCapabilities []agentDiscoveryCapabilityResponse `json:"discovery_capabilities"`
 	// Roles is the capability grant read off the certificate the agent last
 	// presented (epic A2): host, network, or both. It is a projection of the
-	// certificate, not an editable field — changing an agent's role is a
-	// re-enrollment, because the role lives in a signed SAN.
+	// certificate, not an editable field — the role lives in a signed SAN, so an
+	// operator changes it with a grant the agent's next renewal signs (A191).
 	//
 	// Empty means the agent has not heartbeated since roles shipped, which is not
 	// the same as host-only and is shown differently.
@@ -110,6 +110,10 @@ type agentResponse struct {
 	// RoleSource says where the roles above came from, so the console never
 	// presents a projection as if it were the authority.
 	RoleSource string `json:"role_source"`
+	// RoleGrant is the newest operator change to the roles this agent's next
+	// certificate carries (A191) and whether a renewal has signed it; absent
+	// when no operator changed them after enrollment.
+	RoleGrant *agentRoleGrantStatus `json:"role_grant,omitempty"`
 	// RelayCapabilities is what this server's agent build can claim for the
 	// roles last reported from this agent's certificate. It is not a report of
 	// the enrolled binary's version, configured flags, or completed work.
@@ -651,6 +655,10 @@ func (a *API) listAgents(w http.ResponseWriter, r *http.Request) {
 		items = append(items, a.agentResponseAt(ag, evaluatedAt))
 	}
 	if err := a.attachLiveClaims(r.Context(), tenantID, items, evaluatedAt); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if err := a.attachRoleGrants(r.Context(), tenantID, items); err != nil {
 		a.writeError(w, err)
 		return
 	}

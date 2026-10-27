@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -898,6 +899,42 @@ func AgentRolesFromClientCert(der []byte) ([]string, error) {
 		return []string{AgentRoleHost}, nil
 	}
 	return NormalizeAgentRoles(roles), nil
+}
+
+// AgentRolesFromCSR reads the capability SANs a renewal CSR asks for (A191).
+// Roles are never taken from a CSR: the renewal signs the roles the agent holds
+// or an operator granted it, and a CSR asking for any other role is refused
+// (see AgentRolesBeyond). The agent's own CSR asks for none. Unknown role names
+// are returned as they are, so the refusal can name them.
+func AgentRolesFromCSR(csrDER []byte) ([]string, error) {
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: parse agent CSR: %w", err)
+	}
+	var roles []string
+	for _, uri := range csr.URIs {
+		if uri == nil || uri.Scheme != "spiffe" {
+			continue
+		}
+		if _, role, found := strings.Cut(uri.Path, "/role/"); found && strings.TrimSpace(role) != "" {
+			roles = append(roles, strings.TrimSpace(role))
+		}
+	}
+	return roles, nil
+}
+
+// AgentRolesBeyond returns, sorted and once each, the requested roles that
+// signed does not contain: what a renewal CSR asked for that the renewal is not
+// giving the agent.
+func AgentRolesBeyond(requested, signed []string) []string {
+	var beyond []string
+	for _, role := range requested {
+		if !slices.Contains(signed, role) && !slices.Contains(beyond, role) {
+			beyond = append(beyond, role)
+		}
+	}
+	slices.Sort(beyond)
+	return beyond
 }
 
 // validateAgentCommonName rejects a CSR subject that would change the STRUCTURE

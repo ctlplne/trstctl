@@ -6082,10 +6082,11 @@ func componentSchemas() map[string]*Schema {
 		"inventory_report_path":  str(),
 		"discovery_capabilities": {Type: "array", Items: ref("AgentDiscoveryCapability")},
 		// Capability grant projected from the agent's certificate SANs (epic A2).
-		// Not editable: the role lives in a signed SAN, so changing it is a
-		// re-enrollment.
+		// Not editable here: the role lives in a signed SAN, so an operator
+		// changes it with a grant the agent's next renewal signs (A191).
 		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
 		"role_source": {Type: "string", Enum: []string{"certificate", "unreported"}},
+		"role_grant":  ref("AgentRoleGrant"),
 		// A3: what a relay build executes, derived from the agent's shipped
 		// census so the console cannot advertise an executor the binary lacks.
 		"relay_capabilities": {Type: "array", Items: ref("AgentRelayCapability")},
@@ -6193,6 +6194,21 @@ func componentSchemas() map[string]*Schema {
 	agentOffboardReq := object(map[string]*Schema{
 		"reason": str(),
 	})
+	// A191: an operator's change to the roles an agent's next certificate
+	// carries. Requires agents:relay.grant.
+	agentRoleGrantReq := object(map[string]*Schema{
+		"roles":  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}, Description: "The complete role set the agent's next certificate carries; at least one."},
+		"reason": str(),
+	}, "roles")
+	agentRoleGrant := object(map[string]*Schema{
+		"roles":          {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
+		"state":          {Type: "string", Enum: []string{"pending", "applied"}, Description: "pending until a renewal signs the roles into the agent's certificate."},
+		"granted_at":     timestamp(),
+		"event_id":       str(),
+		"applied_serial": str(),
+		"applied_at":     timestamp(),
+		"detail":         str(),
+	}, "roles", "state", "granted_at", "event_id", "detail")
 	agentOffboardResp := object(map[string]*Schema{
 		"agent":               ref("Agent"),
 		"revocation_evidence": str(),
@@ -7458,6 +7474,8 @@ func componentSchemas() map[string]*Schema {
 		"AgentCertRevocationRequest":               agentCertRevocationReq,
 		"AgentCertRevocation":                      agentCertRevocation,
 		"AgentOffboardRequest":                     agentOffboardReq,
+		"AgentRoleGrantRequest":                    agentRoleGrantReq,
+		"AgentRoleGrant":                           agentRoleGrant,
 		"AgentOffboardResponse":                    agentOffboardResp,
 		"RiskComponents":                           riskComponents,
 		"CredentialRisk":                           credentialRisk,

@@ -881,6 +881,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agents/{id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the roles an agent's next certificate carries; its next renewal signs them */
+        post: operations["grantAgentRoles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ai/query": {
         parameters: {
             query?: never;
@@ -9274,6 +9291,7 @@ export interface components {
                 loaded_at: string;
                 sha256: string;
             };
+            role_grant?: components["schemas"]["AgentRoleGrant"];
             /** @enum {string} */
             role_source: "certificate" | "unreported";
             roles: ("host" | "network")[];
@@ -9412,6 +9430,26 @@ export interface components {
             agent_id: string;
             /** @enum {string} */
             ring?: "canary" | "early" | "broad" | "";
+        };
+        AgentRoleGrant: {
+            /** Format: date-time */
+            applied_at?: string;
+            applied_serial?: string;
+            detail: string;
+            event_id: string;
+            /** Format: date-time */
+            granted_at: string;
+            roles: ("host" | "network")[];
+            /**
+             * @description pending until a renewal signs the roles into the agent's certificate.
+             * @enum {string}
+             */
+            state: "pending" | "applied";
+        };
+        AgentRoleGrantRequest: {
+            reason?: string;
+            /** @description The complete role set the agent's next certificate carries; at least one. */
+            roles: ("host" | "network")[];
         };
         AgentUpgradeCampaign: {
             active: boolean;
@@ -21968,6 +22006,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentOffboardResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    grantAgentRoles: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRoleGrantRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
                 };
             };
             /** @description client error */

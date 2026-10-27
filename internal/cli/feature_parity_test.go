@@ -357,8 +357,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A187's `reports assurance`, `compliance report-signing-key` and the
 	// offline `compliance report-runs verify` raised it to 618, mapped onto the
 	// compliance reporting row.
-	if len(out) != 618 {
-		t.Fatalf("CLI commands = %d, want 618", len(out))
+	// A191's `agents roles grant` raised it to 619, mapped onto the agent row.
+	if len(out) != 619 {
+		t.Fatalf("CLI commands = %d, want 619", len(out))
 	}
 	return out
 }

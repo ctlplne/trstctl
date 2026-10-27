@@ -1860,8 +1860,16 @@ An agent enrolled before roles existed carries no role SAN, and is read as
 **host-only** rather than as capability-less. That is what those agents already
 were, and reading them any other way would strand a live fleet mid-upgrade. A
 renewal carries the roles across unchanged — it cannot gain a capability, and it
-cannot silently lose one either. Changing an agent's role is a re-enrollment,
-because the role lives in a signed SAN.
+cannot silently lose one either — unless an operator recorded a role change. An
+operator holding `agents:relay.grant` records the complete role set
+(`POST /api/v1/agents/{id}/roles`, **Change roles** on the Agents page); the
+agent's heartbeat asks it to renew, and the renewal over the agent channel signs
+exactly those roles, so a host agent becomes a relay without re-enrolling. Roles
+never come from the CSR: one asking for a role the renewal is not signing is
+refused by name. An agent built before this release ignores the renewal request
+and takes the roles at its scheduled renewal; the HTTP renewal endpoint carries
+roles over and does not apply a grant; and removing a role leaves the old
+certificate valid until it expires unless it is revoked.
 
 **Per-row locality is now gated at the kind the roles share.** `connector.deploy`
 and `connector.rollback` remain both roles' work at the kind level, and the row

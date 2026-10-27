@@ -727,14 +727,14 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
 	if strings.TrimSpace(o.enrollProxyListen) != "" && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
-		return fmt.Errorf("--enroll-proxy-listen requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
+		return fmt.Errorf("--enroll-proxy-listen requires a certificate carrying the %q role; have an operator grant it (trstctl agents roles grant) and let this agent renew, or enroll it with a network-role bootstrap token", mtls.AgentRoleNetwork)
 	}
 	if revocationCacheConfigured(o) && !agentCarriesRole(a.Roles(), mtls.AgentRoleNetwork) {
-		return fmt.Errorf("revocation caching requires a certificate carrying the %q role; re-enroll this agent with a network-role bootstrap token", mtls.AgentRoleNetwork)
+		return fmt.Errorf("revocation caching requires a certificate carrying the %q role; have an operator grant it (trstctl agents roles grant) and let this agent renew, or enroll it with a network-role bootstrap token", mtls.AgentRoleNetwork)
 	}
 	if w := o.sshKRLWatch; w != nil {
 		if !agentCarriesRole(a.Roles(), mtls.AgentRoleHost) {
-			return fmt.Errorf("--ssh-krl-watch beside an enrolled agent requires a certificate carrying the %q role; re-enroll this agent with a host-role bootstrap token", mtls.AgentRoleHost)
+			return fmt.Errorf("--ssh-krl-watch beside an enrolled agent requires a certificate carrying the %q role; have an operator grant it (trstctl agents roles grant) and let this agent renew, or enroll it with a host-role bootstrap token", mtls.AgentRoleHost)
 		}
 		if id := a.Identity(); id == nil || id.TenantID() != w.options.TenantID {
 			return errors.New("--ssh-krl-tenant must be this agent's own tenant: its KRL receipts are reported on the agent's heartbeat")
@@ -809,6 +809,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano())) // #nosec G404 -- reconnect jitter, not a security decision (CWE-338)
 	var nextHeartbeat time.Duration
 	heartbeatFailures := 0
+	// renewRequested is the control plane asking for a renewal now (A191): an
+	// operator changed the roles this agent's next certificate carries.
+	renewRequested := false
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial heartbeat failed:", herr)
 		nextHeartbeat = rotateBackoff(heartbeatFailures, rng)
@@ -816,6 +819,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	} else {
 		fmt.Printf("trstctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
 		nextHeartbeat = heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng)
+		renewRequested = resp.RenewCertificate
 	}
 	if len(o.inventoryCertRoots) > 0 {
 		if err := reportFilesystemInventory(ctx, a, ch, o.inventoryCertRoots); err != nil {
@@ -862,6 +866,10 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	defer heartbeatTimer.Stop()
 	rotateTimer := time.NewTimer(nextRotationDelay(o.rotateEvery, a.CertificateNotAfter(), time.Now(), rng))
 	defer rotateTimer.Stop()
+	if renewRequested {
+		fmt.Println("trstctl-agent: the control plane changed this agent's roles; renewing now")
+		resetTimer(rotateTimer, 0)
+	}
 	// The relay loop (epic A3) runs beside the heartbeat and renewal timers
 	// rather than as its own scheduler, so one agent has one cadence story. It
 	// is armed only when the operator asked for it AND this agent's certificate
@@ -990,6 +998,15 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			} else {
 				heartbeatFailures = 0
 				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
+				if resp.RenewCertificate && !renewRequested {
+					fmt.Println("trstctl-agent: the control plane changed this agent's roles; renewing now")
+					renewRequested = true
+					if relayDone != nil {
+						rotationPending = true
+					} else {
+						resetTimer(rotateTimer, 0)
+					}
+				}
 			}
 		case <-relayTimerChan(relayTimer):
 			// Leave half the channel certificate's remaining life for agent
@@ -1043,7 +1060,14 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			// control-plane outage during the refresh window must not be a single missed
 			// attempt that then waits a full rotate-every interval. The existing
 			// certificate stays valid until expiry and the identity survives restart.
-			if renewWithBackoff(ctx, a, ch, o.rotateEvery, rng) {
+			// A renewal the control plane asked for (A191) makes one attempt: while
+			// the grant is unsigned the next heartbeat asks again, and a renewal that
+			// keeps failing never holds up the heartbeats.
+			budget := o.rotateEvery
+			if renewRequested {
+				budget, renewRequested = 0, false
+			}
+			if renewWithBackoff(ctx, a, ch, budget, rng) {
 				fmt.Println("trstctl-agent: renewed identity adopted; reconnecting the agent channel with the new certificate")
 				return errAgentIdentityRotated
 			}
@@ -1650,7 +1674,7 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 	if err != nil {
 		return nil, err
 	}
-	return &agent.HeartbeatResponse{TenantID: resp.TenantID, NextHeartbeatSeconds: resp.NextHeartbeatSeconds}, nil
+	return &agent.HeartbeatResponse{TenantID: resp.TenantID, NextHeartbeatSeconds: resp.NextHeartbeatSeconds, RenewCertificate: resp.RenewCertificate}, nil
 }
 
 func nextMonotonicUnix(last *atomic.Int64, now int64) int64 {

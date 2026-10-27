@@ -108,7 +108,8 @@ const (
 
 	// AgentsGrantRelay authorizes minting an enrollment token that carries the
 	// NETWORK role (epic A2) — an agent that relays for devices which cannot host
-	// an agent themselves, and therefore holds the credentials that drive them.
+	// an agent themselves, and therefore holds the credentials that drive them —
+	// and changing an enrolled agent's roles, which its next renewal signs (A191).
 	//
 	// It is deliberately separate from AgentsWrite, on the same reasoning as
 	// KeysApprove being separate from KeysWrite: enrolling a host agent is

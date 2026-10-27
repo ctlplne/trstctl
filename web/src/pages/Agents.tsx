@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Copy, Loader2, RefreshCw, ShieldOff, UserX, X } from "lucide-react";
+import { Copy, Loader2, RefreshCw, ShieldOff, UserCog, UserX, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { CredentialChip } from "@/components/CredentialChip";
 import { Dialog } from "@/components/Dialog";
@@ -42,22 +42,39 @@ const AGENT_ROLE_CHOICES = [
   { value: "network", labelKey: "source.agent.role.network.a2r0le0005", helpKey: "source.agent.role.network.help.a2r0le0006" },
 ] as const satisfies readonly { value: AgentRole; labelKey: MessageKey; helpKey: MessageKey }[];
 
+function agentRoleLabel(role: string): string {
+  return role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003");
+}
+
 // AgentRoleBadges renders what an agent's CERTIFICATE says it may do. An agent
 // that has not heartbeated since roles shipped reports nothing, which is shown as
 // unreported rather than as host — the console should not fill a gap in evidence
-// with a guess.
+// with a guess. An operator's role change no renewal has signed yet is shown
+// beside them as what the next renewal signs, never as the agent's roles.
 function AgentRoleBadges({ agent }: { agent: Agent }) {
   const roles = agent.roles ?? [];
+  const pending = agent.role_grant?.state === "pending" ? agent.role_grant : undefined;
+  const pendingLine = pending && (
+    <span className="text-xs text-status-warning">{translateNow("agents.roles.pending", { roles: pending.roles.map(agentRoleLabel).join(", ") })}</span>
+  );
   if (agent.role_source !== "certificate" || roles.length === 0) {
-    return <span className="text-xs text-muted-foreground">{translateNow("source.agent.role.unreported.a2r0le0009")}</span>;
+    return (
+      <span className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">{translateNow("source.agent.role.unreported.a2r0le0009")}</span>
+        {pendingLine}
+      </span>
+    );
   }
   return (
-    <span className="flex flex-wrap gap-1">
-      {roles.map((role) => (
-        <span key={role} className={role === "network" ? "text-xs font-medium text-status-warning" : "text-xs font-medium text-muted-foreground"}>
-          {role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003")}
-        </span>
-      ))}
+    <span className="flex flex-col gap-1">
+      <span className="flex flex-wrap gap-1">
+        {roles.map((role) => (
+          <span key={role} className={role === "network" ? "text-xs font-medium text-status-warning" : "text-xs font-medium text-muted-foreground"}>
+            {agentRoleLabel(role)}
+          </span>
+        ))}
+      </span>
+      {pendingLine}
     </span>
   );
 }
@@ -85,6 +102,13 @@ export function Agents() {
   const [offboardError, setOffboardError] = useState<string | null>(null);
   const [offboardEvidence, setOffboardEvidence] = useState<string | null>(null);
   const offboardConfirmRef = useRef<HTMLButtonElement>(null);
+  // An operator's change to the roles an agent's next certificate carries.
+  const [roleTarget, setRoleTarget] = useState<Agent | null>(null);
+  const [roleChoice, setRoleChoice] = useState<AgentRole[]>(["host"]);
+  const [roleReason, setRoleReason] = useState("");
+  const [roleBusy, setRoleBusy] = useState(false);
+  const [roleError, setRoleError] = useState<string | null>(null);
+  const [roleRecorded, setRoleRecorded] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<Agent | null>(null);
   const [revokeReason, setRevokeReason] = useState("keyCompromise");
   const [revokeSerial, setRevokeSerial] = useState("");
@@ -251,6 +275,32 @@ export function Agents() {
     }
   }
 
+  function openRoleChange(agent: Agent) {
+    setSelectedID(agent.id);
+    setRoleTarget(agent);
+    const current = agent.role_grant?.roles ?? (agent.role_source === "certificate" ? (agent.roles ?? []) : []);
+    setRoleChoice(AGENT_ROLE_CHOICES.map((choice) => choice.value).filter((role) => current.includes(role)));
+    setRoleReason("");
+    setRoleError(null);
+  }
+
+  async function grantRoles() {
+    if (!roleTarget || roleChoice.length === 0) return;
+    setRoleBusy(true);
+    setRoleError(null);
+    try {
+      const result = await api.grantAgentRoles(roleTarget.id, { roles: roleChoice, reason: roleReason.trim() || undefined });
+      setAgents((current) => current.map((agent) => (agent.id === result.id ? result : agent)));
+      setSelectedID(result.id);
+      setRoleRecorded(t("agents.roles.recorded", { name: result.name, detail: result.role_grant?.detail ?? "" }));
+      setRoleTarget(null);
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRoleBusy(false);
+    }
+  }
+
   function openRevokeCert(agent: Agent) {
     setRevokeTarget(agent);
     setRevokeReason("keyCompromise");
@@ -327,6 +377,10 @@ export function Agents() {
           </Button>
           {!isOffboarded(agent) && (
             <>
+              <Button type="button" size="sm" variant="outline" onClick={() => openRoleChange(agent)}>
+                <UserCog className="h-4 w-4" aria-hidden="true" />
+                {t("agents.roles.change")}
+              </Button>
               <Button
                 type="button"
                 size="sm"
@@ -414,6 +468,11 @@ export function Agents() {
                   {translateNow("source.agent.fleet.ac46d1b700")}
                 </h2>
                 {offboardEvidence && <p className="mb-3 text-sm text-muted-foreground">{offboardEvidence}</p>}
+                {roleRecorded && (
+                  <p role="status" className="mb-3 text-sm text-muted-foreground">
+                    {roleRecorded}
+                  </p>
+                )}
                 <DataGrid ariaLabel="Registered in-network agents" rows={agents} columns={agentColumns} getRowId={(agent) => agent.id} state="ready" />
               </div>
               {selected && <AgentDetail agent={selected} />}
@@ -695,6 +754,82 @@ export function Agents() {
               <Button ref={offboardConfirmRef} type="submit" disabled={offboardBusy}>
                 {offboardBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 {translateNow("source.offboard.agent.f673bf87e3")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Dialog>
+
+      <Dialog
+        open={roleTarget !== null}
+        onClose={() => {
+          if (!roleBusy) setRoleTarget(null);
+        }}
+        titleId="agent-roles-title"
+        descriptionId="agent-roles-description"
+        closeOnBackdropClick={false}
+        panelAnimation="none"
+        panelClassName="fixed left-1/2 top-1/2 grid max-h-[calc(100dvh-2rem)] w-[min(92vw,30rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-panel border border-border bg-card p-5 shadow-elevation3"
+      >
+        {roleTarget && (
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void grantRoles();
+            }}
+          >
+            <div>
+              <h2 id="agent-roles-title" className="text-title font-semibold">
+                {t("agents.roles.title", { name: roleTarget.name })}
+              </h2>
+              <p id="agent-roles-description" className="mt-1 text-sm text-muted-foreground">
+                {t("agents.roles.description")}
+              </p>
+            </div>
+            <fieldset className="grid gap-2 rounded-md border border-border p-3">
+              <legend className="px-1 text-sm font-medium">{translateNow("source.agent.role.a2r0le0001")}</legend>
+              {AGENT_ROLE_CHOICES.map((choice) => (
+                <label key={choice.value} htmlFor={`agent-grant-role-${choice.value}`} className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    id={`agent-grant-role-${choice.value}`}
+                    className="mt-1"
+                    checked={roleChoice.includes(choice.value)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setRoleChoice((current) =>
+                        AGENT_ROLE_CHOICES.map((option) => option.value).filter((role) => (role === choice.value ? checked : current.includes(role))),
+                      );
+                    }}
+                    disabled={roleBusy}
+                  />
+                  <span>
+                    <span className="font-medium">{translateNow(choice.labelKey)}</span>
+                    <span className="block text-muted-foreground">{translateNow(choice.helpKey)}</span>
+                  </span>
+                </label>
+              ))}
+              {roleChoice.includes("network") && <p className="text-sm text-status-warning">{translateNow("source.agent.role.relay.warning.a2r0le0007")}</p>}
+              {roleChoice.length === 0 && <p className="text-sm text-muted-foreground">{t("agents.roles.empty")}</p>}
+              <p className="text-sm text-muted-foreground">{t("agents.roles.permission")}</p>
+            </fieldset>
+            <label className="grid gap-1 text-sm font-medium">
+              {translateNow("source.reason.f81ab834de")}
+              <textarea
+                className="min-h-20 rounded-control border border-border bg-background px-3 py-2 text-sm font-normal"
+                value={roleReason}
+                onChange={(event) => setRoleReason(event.target.value)}
+                disabled={roleBusy}
+              />
+            </label>
+            {roleError && <p className="text-sm font-medium text-risk-critical">{roleError}</p>}
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setRoleTarget(null)} disabled={roleBusy}>
+                {translateNow("source.cancel.19766ed6cc")}
+              </Button>
+              <Button type="submit" disabled={roleBusy || roleChoice.length === 0}>
+                {roleBusy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {t("agents.roles.confirm")}
               </Button>
             </div>
           </form>

@@ -71,6 +71,9 @@ func (e enrollAuthority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byt
 	if errors.Is(err, enroll.ErrRenewalIdentityChange) {
 		return nil, fmt.Errorf("%w: %s", api.ErrAgentRenewalRefused, strings.TrimPrefix(err.Error(), enroll.ErrRenewalIdentityChange.Error()+": "))
 	}
+	if errors.Is(err, enroll.ErrRenewalRoleNotGranted) {
+		return nil, fmt.Errorf("%w: %s", api.ErrAgentRenewalRefused, strings.TrimPrefix(err.Error(), "enroll: "))
+	}
 	if errors.Is(err, enroll.ErrUnauthenticatedRenewal) {
 		return nil, fmt.Errorf("%w", api.ErrUnauthenticatedAgentRenewal)
 	}

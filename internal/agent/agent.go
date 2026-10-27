@@ -222,10 +222,12 @@ type (
 		CertSerial string
 		Inventory  map[string]int64
 	}
-	// HeartbeatResponse is the control plane's acknowledgment.
+	// HeartbeatResponse is the control plane's acknowledgment. RenewCertificate
+	// asks for a renewal now: an operator changed the agent's roles (A191).
 	HeartbeatResponse struct {
 		TenantID             string
 		NextHeartbeatSeconds int64
+		RenewCertificate     bool
 	}
 	// RenewRequest carries the agent's rotation CSR (DER).
 	RenewRequest struct{ CSRDER []byte }

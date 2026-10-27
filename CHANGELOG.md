@@ -2,6 +2,16 @@
 
 ### Added
 
+- Operator-granted agent roles: an operator holding `agents:relay.grant`
+  changes an enrolled agent's roles (`POST /api/v1/agents/{id}/roles`,
+  `trstctl agents roles grant`, **Change roles** on the Agents page) without
+  re-enrolling it. The grant is recorded as an event; the agent's heartbeat asks
+  it to renew, the renewal signs exactly the granted roles and records which
+  grant it signed, and the agent reconnects with the new certificate. The agent
+  list shows the change as pending until a renewal signs it. Roles never come
+  from the CSR: a renewal CSR asking for a role the renewal is not signing is
+  refused with the role named, on the agent channel and the HTTP renewal
+  endpoint.
 - Relay egress policy: every connection an agent opens to run a job (appliance
   and API calls, endpoint checks, discovery scans, directory reads, TLS probes)
   refuses link-local addresses, cloud instance metadata, unspecified and

@@ -269,6 +269,11 @@
           "go_type": "int64",
           "name": "next_heartbeat_seconds",
           "presence": "required"
+        },
+        {
+          "go_type": "bool",
+          "name": "renew_certificate",
+          "presence": "optional"
         }
       ]
     },

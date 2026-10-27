@@ -250,6 +250,29 @@ agent address or TLS name is missing, preview says exactly what must be configur
 minting stays unavailable. Headless operators use `trstctl agents enroll-token-preview`
 with the same JSON body before `trstctl agents enroll-token`.
 
+**Changing an enrolled agent's roles.** The roles live in signed SANs on the
+agent's certificate, so they change at a renewal, never by editing a row, and no
+re-enrollment is needed. An operator holding `agents:relay.grant` records the
+complete role set with **Agents → Fleet status and safe actions → Change roles**,
+`POST /api/v1/agents/{id}/roles` with `{"roles": ["host", "network"], "reason": "…"}`,
+or `trstctl agents roles grant <agent-id>`. The grant is an `agent.roles.granted`
+event; `agents:write` alone cannot record one. The agent's next heartbeat asks it
+to renew, the renewal over the agent channel signs exactly the granted roles and
+records which grant it signed (`agent.cert.renewed`, schema 2, carries the new
+certificate's roles), and the agent reconnects with the new certificate. The agent
+list shows the change as `pending` ("Next renewal: …") until a renewal signs it and
+`applied`, with the new certificate's serial, after; the roles column keeps showing
+what the presented certificate carries. An agent built before this release ignores
+the request and takes the roles at its scheduled renewal, with about a third of its
+24-hour certificate left. Removing the network role works the same way; the old
+certificate stays valid until it expires, so revoke it as well when the change is
+urgent. An offboarded agent cannot take new roles.
+
+A renewal never takes roles from the CSR. A CSR that asks for a role the renewal is
+not signing is refused with the role named, on the agent channel and on the HTTP
+renewal endpoint (`/enroll/renewal`), which carries the presented certificate's roles
+over unchanged and does not apply grants.
+
 The agent's own discovery sources are `filesystem`, `pkcs11`, `windows-store`,
 `k8s-secret`, `trust-store`, and `private-key` — the read has to happen on the host,
 since only it can see its own files, tokens, Windows store, trust stores, browser

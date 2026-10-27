@@ -1234,6 +1234,7 @@ Agent = TypedDict(
         'reported_host_tls_probe': bool,
         'reported_pending_report_error': str,
         'reported_relay_ca_bundle': dict[str, Any],
+        'role_grant': dict[str, Any],
         'role_source': str,
         'roles': list[str],
         'status': str,
@@ -1451,6 +1452,29 @@ AgentRingInput = TypedDict(
     {
         'agent_id': str,
         'ring': str,
+    },
+    total=False,
+)
+
+AgentRoleGrant = TypedDict(
+    'AgentRoleGrant',
+    {
+        'applied_at': str,
+        'applied_serial': str,
+        'detail': str,
+        'event_id': str,
+        'granted_at': str,
+        'roles': list[str],
+        'state': str,
+    },
+    total=False,
+)
+
+AgentRoleGrantRequest = TypedDict(
+    'AgentRoleGrantRequest',
+    {
+        'reason': str,
+        'roles': list[str],
     },
     total=False,
 )

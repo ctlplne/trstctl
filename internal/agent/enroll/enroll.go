@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -345,6 +346,11 @@ var ErrUnauthenticatedRenewal = errors.New("enroll: renewal requires a verified 
 // agent a certificate names is a new enrollment.
 var ErrRenewalIdentityChange = errors.New("enroll: renewal keeps the agent's name")
 
+// ErrRenewalRoleNotGranted is returned when a renewal CSR asks for a role the
+// renewal is not signing (A191). Roles come from the certificate being renewed
+// or an operator's grant on the agent channel, never from the CSR.
+var ErrRenewalRoleNotGranted = errors.New("enroll: renewal CSR asks for a role this agent was not granted")
+
 // EnrollRenewal signs a rotation CSR into a fresh client certificate chain. The
 // caller MUST already be authenticated by its current mTLS client certificate:
 // peerCertsDER is the verified peer chain (leaf first), as produced by the TLS
@@ -379,10 +385,18 @@ func (a *Authority) EnrollRenewal(ctx context.Context, peerCertsDER [][]byte, cs
 	// and never taken from the CSR (epic A2). A renewal is a rotation of the same
 	// identity: it cannot gain a capability, and — just as importantly — it cannot
 	// lose one, which is what would happen if renewal signed with no roles at all.
-	// Changing an agent's role is a re-enrollment, not a rotation.
+	// An operator's role grant applies through the agent channel's renewal
+	// (A191); this endpoint carries the roles over unchanged.
 	roles, err := mtls.AgentRolesFromClientCert(peerCertsDER[0])
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnauthenticatedRenewal, err)
+	}
+	asked, err := mtls.AgentRolesFromCSR(csrDER)
+	if err != nil {
+		return nil, fmt.Errorf("%w: renewal CSR: %v", ErrRenewalIdentityChange, err)
+	}
+	if beyond := mtls.AgentRolesBeyond(asked, roles); len(beyond) > 0 {
+		return nil, fmt.Errorf("%w: the CSR asks for role %s; roles come from an operator's grant, never the CSR", ErrRenewalRoleNotGranted, strings.Join(beyond, ", "))
 	}
 	// A renewal keeps the presenting agent's name (F271): the CSR's common name
 	// becomes the new certificate's identity, so it must be the same agent.

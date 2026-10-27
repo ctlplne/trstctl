@@ -31,6 +31,7 @@ import (
 	cryptoboundary "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
+	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/custody"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
@@ -211,6 +212,7 @@ const (
 	EventAgentCertRenewed                    = "agent.cert.renewed"
 	EventAgentCertRevoked                    = "agent.cert.revoked"
 	EventAgentOffboarded                     = "agent.offboarded"
+	EventAgentRolesGranted                   = "agent.roles.granted" // A191; signed by agent.cert.renewed schema 2
 	EventProfileCreated                      = "profile.created"
 	EventProfileUpdated                      = "profile.updated"
 	EventDiscoverySegmentUpserted            = "discovery.segment.upserted"
@@ -2463,11 +2465,32 @@ type EnrollmentProxyReport struct {
 // AgentCertRenewed is the payload of an agent.cert.renewed event. The projector
 // uses it as a liveness touch; certificate inventory itself is represented by the
 // public renewal event and the renewed cert returned to the agent.
+//
+// Schema 2 (A191) adds the roles the renewed certificate carries and, when the
+// renewal signed an operator's grant, the grant's event ID, which marks that
+// grant applied. Schema 1 carries neither.
 type AgentCertRenewed struct {
-	ID        string `json:"id"`
-	Agent     string `json:"agent"`
-	OldSerial string `json:"old_serial"`
-	NewSerial string `json:"new_serial"`
+	ID               string   `json:"id"`
+	Agent            string   `json:"agent"`
+	OldSerial        string   `json:"old_serial"`
+	NewSerial        string   `json:"new_serial"`
+	Roles            []string `json:"roles,omitempty"`
+	RoleGrantEventID string   `json:"role_grant_event_id,omitempty"`
+}
+
+// AgentCertRenewedRolesSchemaVersion is the agent.cert.renewed schema that
+// records the renewed certificate's roles (A191).
+const AgentCertRenewedRolesSchemaVersion = 2
+
+// AgentRolesGranted is the payload of an agent.roles.granted event (A191): the
+// complete role set the agent's next certificate carries. It grants nothing by
+// itself; the served renewal signs the roles into the certificate's SANs.
+type AgentRolesGranted struct {
+	ID        string   `json:"id"`
+	Agent     string   `json:"agent"`
+	Roles     []string `json:"roles"`
+	Reason    string   `json:"reason,omitempty"`
+	GrantedBy string   `json:"granted_by,omitempty"`
 }
 
 // AgentCertRevoked is the payload of an agent.cert.revoked event. It projects a
@@ -4537,7 +4560,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
 	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true},
-	EventAgentCertRenewed:                         {1: true},
+	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true},
+	EventAgentRolesGranted:                        {1: true},
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
 	EventKubernetesControllerPostureReported:      {1: true},
@@ -6077,9 +6101,28 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		lastSeen := e.Time
-		return p.store.ApplyAgentCertRenewedTx(ctx, tx, store.Agent{
+		if err := p.store.ApplyAgentCertRenewedTx(ctx, tx, store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: "active",
 			LastSeenAt: &lastSeen, CreatedAt: e.Time,
+		}); err != nil {
+			return err
+		}
+		if e.SchemaVersion < AgentCertRenewedRolesSchemaVersion {
+			return nil
+		}
+		return p.store.ApplyAgentRoleGrantAppliedTx(ctx, tx, e.TenantID, pl.ID, pl.RoleGrantEventID, pl.NewSerial, e.Time)
+	case EventAgentRolesGranted:
+		var pl AgentRolesGranted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		roles := mtls.NormalizeAgentRoles(pl.Roles)
+		if pl.ID == "" || len(roles) == 0 || len(roles) != len(pl.Roles) {
+			return fmt.Errorf("projections: %s requires an agent id and known roles", e.Type)
+		}
+		return p.store.ApplyAgentRolesGrantedTx(ctx, tx, store.AgentRoleGrant{
+			TenantID: e.TenantID, AgentID: pl.ID, Roles: roles,
+			GrantedAt: e.Time, EventID: e.ID, EventSeq: e.Sequence,
 		})
 	case EventAgentCertRevoked:
 		if err := p.store.LockAgentRemovalEventTx(ctx, tx, e); err != nil {

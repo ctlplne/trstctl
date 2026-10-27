@@ -113,6 +113,8 @@ public final class OpenApiSchemas {
       "AgentRingAutoAssignedAgent",
       "AgentRingAutoAssignment",
       "AgentRingInput",
+      "AgentRoleGrant",
+      "AgentRoleGrantRequest",
       "AgentUpgradeCampaign",
       "AgentUpgradeCampaignInput",
       "AgentWorkloadAPIStatus",

@@ -1142,6 +1142,9 @@ trstctl-cli agents enroll-token
 printf '{"allowed_identity":"node-a"}\n' | trstctl-cli agents enroll-token -f -
 trstctl-cli agents list
 printf '{"reason":"host decommissioned"}\n' | trstctl-cli --idempotency-key agent-node-a-offboard-1 agents offboard <agent-id> -f - --force
+# Change an enrolled agent's roles (needs agents:relay.grant). The agent's next
+# renewal signs them; a current agent renews at its next heartbeat.
+printf '{"roles":["host","network"],"reason":"front the plant 7 appliances"}\n' | trstctl-cli --idempotency-key agent-node-a-roles-1 agents roles grant <agent-id> -f -
 
 # Issue a policy-gated short-lived credential for an AI/MCP agent.
 cat > broker-agent.json <<'JSON'

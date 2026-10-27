@@ -746,10 +746,17 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	if beat <= 0 {
 		beat = 30 * time.Second
 	}
-	return &transport.HeartbeatResponse{
+	resp := &transport.HeartbeatResponse{
 		TenantID:             info.TenantID,
 		NextHeartbeatSeconds: int64(beat / time.Second),
-	}, nil
+	}
+	// A191: an operator changed the roles this agent's next certificate
+	// carries. Ask it to renew now rather than at its scheduled rotation; a
+	// failed lookup only leaves the agent on its schedule.
+	if grant, found, gerr := a.store.AgentRoleGrant(ctx, info.TenantID, agentRowID(info.TenantID, name)); gerr == nil && found && grant.Pending() {
+		resp.RenewCertificate = true
+	}
+	return resp, nil
 }
 
 func (a *agentService) validatedSSHKRLReceipt(ctx context.Context, info mtls.PeerCertInfo,
@@ -952,9 +959,29 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 	spiffeURI := mtls.AgentSPIFFEID(info.TenantID, info.CommonName)
 	// Roles ride across the rotation unchanged (epic A2): they are read off the
 	// certificate the agent just authenticated with, so a renewal neither grants
-	// a capability nor — the likelier accident — strips one.
-	roleURIs := make([]string, 0, len(info.Roles))
-	for _, role := range mtls.NormalizeAgentRoles(info.Roles) {
+	// a capability nor — the likelier accident — strips one. The one exception is
+	// an operator's grant (A191): a pending agent.roles.granted names the complete
+	// role set this renewal signs instead, and the renewal event marks it applied.
+	roles := mtls.NormalizeAgentRoles(info.Roles)
+	grantEventID := ""
+	grant, granted, err := a.store.AgentRoleGrant(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName))
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, "agent role grants are unavailable; retry later")
+	}
+	if granted && grant.Pending() {
+		roles, grantEventID = mtls.NormalizeAgentRoles(grant.Roles), grant.EventID
+	}
+	// Roles never come from the CSR. One that asks for a role this renewal is
+	// not signing is refused by name rather than quietly signed without it.
+	asked, err := mtls.AgentRolesFromCSR(req.CSRDER)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "renewal CSR is not a valid certificate request")
+	}
+	if beyond := mtls.AgentRolesBeyond(asked, roles); len(beyond) > 0 {
+		return nil, status.Errorf(codes.PermissionDenied, "the renewal CSR asks for role %s, which this agent was not granted; roles come from an operator's grant (agents:relay.grant), never the CSR", strings.Join(beyond, ", "))
+	}
+	roleURIs := make([]string, 0, len(roles))
+	for _, role := range roles {
 		roleURIs = append(roleURIs, mtls.AgentRoleSPIFFEID(info.TenantID, info.CommonName, role))
 	}
 	bindings, err := agentCertificateAuthorityURIs(ctx, a.store, a.log, info.TenantID, info.LeafDER)
@@ -990,11 +1017,15 @@ func (a *agentService) Renew(ctx context.Context, req *transport.RenewRequest) (
 			}
 			payload, perr := json.Marshal(projections.AgentCertRenewed{
 				ID: agentRowID(info.TenantID, info.CommonName), Agent: info.CommonName, OldSerial: info.Serial, NewSerial: serial,
+				Roles: roles, RoleGrantEventID: grantEventID,
 			})
 			if perr != nil {
 				return nil, perr
 			}
-			ev, aerr := a.log.Append(ctx, events.Event{Type: projections.EventAgentCertRenewed, TenantID: info.TenantID, Data: payload})
+			ev, aerr := a.log.Append(ctx, events.Event{
+				Type: projections.EventAgentCertRenewed, TenantID: info.TenantID,
+				SchemaVersion: projections.AgentCertRenewedRolesSchemaVersion, Data: payload,
+			})
 			if aerr != nil {
 				return nil, aerr
 			}

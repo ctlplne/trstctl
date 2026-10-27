@@ -15792,6 +15792,27 @@ export const messages = {
       "Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy the command. Closing or dismissing this dialog clears the token from page memory; the console does not persist it.",
     description: "One-time bootstrap token handling guidance.",
   },
+  "agents.roles.change": { defaultMessage: "Change roles", description: "Agents table action that opens the role change dialog." },
+  "agents.roles.title": { defaultMessage: "Change roles for {name}", description: "Role change dialog title naming the agent." },
+  "agents.roles.description": {
+    defaultMessage:
+      "Choose every role this agent should hold. Its next certificate renewal signs them; a current agent renews at its next heartbeat, so no re-enrollment is needed. Until then it keeps the roles its current certificate carries.",
+    description: "What recording an agent role change does and when it takes effect.",
+  },
+  "agents.roles.permission": {
+    defaultMessage: "Changing an agent's roles needs the agents:relay.grant permission.",
+    description: "Authority required to record an agent role change.",
+  },
+  "agents.roles.empty": { defaultMessage: "Choose at least one role.", description: "Validation when no role is selected in the role change dialog." },
+  "agents.roles.confirm": { defaultMessage: "Record role change", description: "Confirm button of the role change dialog." },
+  "agents.roles.pending": {
+    defaultMessage: "Next renewal: {roles}",
+    description: "Under an agent's certificate roles: the roles its next renewal will sign after an operator's change.",
+  },
+  "agents.roles.recorded": {
+    defaultMessage: "Role change recorded for {name}. {detail}",
+    description: "Confirmation after recording a role change, with the server's account of when it applies.",
+  },
   "agents.enrollment.review": { defaultMessage: "Review exact enrollment plan", description: "Effect-free first step before an agent token exists." },
   "agents.enrollment.mint": { defaultMessage: "Mint one-time token", description: "Confirmed second step that creates the agent bootstrap token." },
   "agents.enrollment.planLabel": { defaultMessage: "Agent enrollment plan", description: "Accessible name for the exact agent enrollment preview." },

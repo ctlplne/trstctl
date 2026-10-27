@@ -910,6 +910,7 @@ export interface Agent {
   reported_host_tls_probe?: boolean;
   reported_pending_report_error?: string;
   reported_relay_ca_bundle?: { error?: string; loaded_at: string; sha256: string };
+  role_grant?: AgentRoleGrant;
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
   status: string;
@@ -1051,6 +1052,21 @@ export interface AgentRingAutoAssignment {
 export interface AgentRingInput {
   agent_id: string;
   ring?: "canary" | "early" | "broad" | "";
+}
+
+export interface AgentRoleGrant {
+  applied_at?: string;
+  applied_serial?: string;
+  detail: string;
+  event_id: string;
+  granted_at: string;
+  roles: ("host" | "network")[];
+  state: "pending" | "applied";
+}
+
+export interface AgentRoleGrantRequest {
+  reason?: string;
+  roles: ("host" | "network")[];
 }
 
 export interface AgentUpgradeCampaign {

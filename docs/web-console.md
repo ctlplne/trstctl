@@ -269,13 +269,18 @@ the console's selected time zone; API timestamps remain exact UTC values.
 The only default action is **Add agent**. It opens a viewport-bounded dialog that
 chooses host and/or network-relay capability, mints one bootstrap token, and shows
 the install command. The role is signed into the enrolled client certificate; it
-cannot change silently. Closing or dismissing the dialog clears the token from page
+cannot change silently, only through a recorded role change that the agent's next
+renewal signs. Closing or dismissing the dialog clears the token from page
 memory, and the console does not persist it.
 
 Exact work remains in three closed disclosures:
 
 - **Fleet status and safe actions** contains heartbeat and version rows, exact agent
-  details, certificate revocation, and offboarding. Each host or network agent's
+  details, role changes, certificate revocation, and offboarding. **Change roles**
+  records the complete role set an agent's next certificate carries (it needs
+  `agents:relay.grant`); the roles column keeps showing what the presented
+  certificate carries, with "Next renewal: …" beneath until a renewal signs the
+  change. A current agent renews at its next heartbeat. Each host or network agent's
   detail shows the job kinds this server build supports for the roles on its last
   reported certificate, including the matching connector families and required
   flags. This is a capability list, not proof that the enrolled binary has those
@@ -299,7 +304,8 @@ Exact work remains in three closed disclosures:
 
 Backed by `/api/v1/agents`, `/api/v1/agents/enrollment-tokens`,
 `/api/v1/agents/upgrade-campaign`, `/api/v1/operations/jobs`,
-`/api/v1/agents/{id}/offboard`, and `/api/v1/agents/{id}/cert-revocations`.
+`/api/v1/agents/{id}/offboard`, `/api/v1/agents/{id}/cert-revocations`, and
+`/api/v1/agents/{id}/roles`.
 
 ### Workloads (`/workloads`)
 

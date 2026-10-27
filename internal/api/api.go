@@ -1532,6 +1532,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/agents/enrollment-tokens", opID: "createEnrollmentToken", summary: "Mint a one-time agent bootstrap token", handler: a.createEnrollmentToken, reqSchema: "EnrollmentTokenRequest", reqOptional: true, resSchema: "EnrollmentToken", successCode: "201", mutation: true, sensitiveResponse: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/agents/{id}/cert-revocations", opID: "revokeAgentCertificate", summary: "Revoke an agent mTLS certificate", handler: a.revokeAgentCertificate, pathParams: idPath, reqSchema: "AgentCertRevocationRequest", resSchema: "AgentCertRevocation", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/agents/{id}/offboard", opID: "offboardAgent", summary: "Offboard an agent, leave a tombstone, and reject future mTLS RPCs", handler: a.offboardAgent, pathParams: idPath, reqSchema: "AgentOffboardRequest", resSchema: "AgentOffboardResponse", successCode: "200", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/agents/{id}/roles", opID: "grantAgentRoles", summary: "Set the roles an agent's next certificate carries; its next renewal signs them", handler: a.grantAgentRoles, pathParams: idPath, reqSchema: "AgentRoleGrantRequest", resSchema: "Agent", successCode: "200", mutation: true, perm: authz.AgentsGrantRelay},
 
 		// Served secrets/identity surface (GAP-006): the secret store (CRUD + rotation,
 		// secretsdk/F64), one-time secret sharing (secretshare/F60), and the dynamic PKI

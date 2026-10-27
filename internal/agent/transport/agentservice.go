@@ -192,6 +192,10 @@ type HeartbeatResponse struct {
 	TenantID string `json:"tenant_id"`
 	// NextHeartbeatSeconds is the server's requested beat interval.
 	NextHeartbeatSeconds int64 `json:"next_heartbeat_seconds"`
+	// RenewCertificate asks the agent to renew its certificate now (A191): an
+	// operator changed the roles its next certificate carries. An agent that
+	// predates the field ignores it and renews on its schedule.
+	RenewCertificate bool `json:"renew_certificate,omitempty"`
 }
 
 // RenewRequest carries the agent's rotation CSR (DER) for its own client

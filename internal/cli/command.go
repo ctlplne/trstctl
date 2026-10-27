@@ -609,6 +609,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"agents", "enroll-token"}, Method: "POST", Path: "/api/v1/agents/enrollment-tokens", Body: bodyOptionalFile, Summary: "Mint a one-time agent bootstrap token"},
 	{Name: []string{"agents", "revoke-cert"}, Method: "POST", Path: "/api/v1/agents/{id}/cert-revocations", Body: bodyFile, Summary: "Revoke an agent mTLS certificate"},
 	{Name: []string{"agents", "offboard"}, Method: "POST", Path: "/api/v1/agents/{id}/offboard", Body: bodyFile, Summary: "Offboard an agent and leave tombstone evidence"},
+	{Name: []string{"agents", "roles", "grant"}, Method: "POST", Path: "/api/v1/agents/{id}/roles", Body: bodyFile, Summary: "Set the roles an agent's next certificate carries; its next renewal signs them (needs agents:relay.grant)"},
 
 	// AI assistant + root-cause analysis (SURFACE-003).
 	{Name: []string{"ai", "status"}, Method: "GET", Path: "/api/v1/ai/status", Summary: "Show AI runtime and model status"},

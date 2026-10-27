@@ -752,6 +752,7 @@
                 "createEnrollmentToken",
                 "revokeAgentCertificate",
                 "offboardAgent",
+                "grantAgentRoles",
                 "listDiscoveryFindings",
                 "getGraph",
                 "getAgentJobPosture"
@@ -763,6 +764,7 @@
                 "agents enroll-token",
                 "agents revoke-cert",
                 "agents offboard",
+                "agents roles grant",
                 "discovery findings list",
                 "graph nodes"
             ],
