@@ -5731,6 +5731,7 @@ export interface ManagedKey {
   custody_status?: "not_checked" | "pending" | "verified" | "unavailable";
   extractable?: boolean;
   key_id: string;
+  provider: string;
   public_der?: string;
   state: string;
   version: number;
@@ -5738,6 +5739,7 @@ export interface ManagedKey {
 
 export interface ManagedKeyActionRequest {
   key_id: string;
+  provider?: string;
 }
 
 export interface ManagedKeyApproval {
@@ -5769,6 +5771,7 @@ export interface ManagedKeyCustodyPlan {
   blockers: string[];
   configuration_mode: "startup_static";
   configured_provider: "" | "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+  configured_providers: ("aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2")[];
   enabled: boolean;
   lifecycle_attached: boolean;
   providers: ManagedKeyCustodyProvider[];
@@ -5776,6 +5779,7 @@ export interface ManagedKeyCustodyPlan {
   restart_required: boolean;
   secret_delivery: "file_reference_only";
   security_boundary: string;
+  tenant_provider?: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
 }
 
 export interface ManagedKeyCustodyProvider {

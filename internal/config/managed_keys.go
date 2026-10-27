@@ -5,7 +5,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"trstctl.com/trstctl/internal/netsec"
 )
@@ -41,14 +44,75 @@ const (
 // when disabled, /api/v1/managed-keys/* remains registered but fails closed with
 // 501 until an operator supplies a custody backend.
 type ManagedKeys struct {
-	Enabled  bool                 `json:"enabled,omitempty"`
-	Provider string               `json:"provider,omitempty"`
-	AWS      ManagedKeysAWSKMS    `json:"aws,omitempty"`
-	Azure    ManagedKeysAzureKV   `json:"azure,omitempty"`
-	GCP      ManagedKeysGCPKMS    `json:"gcp,omitempty"`
-	PKCS11   ManagedKeysPKCS11HSM `json:"pkcs11,omitempty"`
-	TPM2     ManagedKeysTPM2      `json:"tpm2,omitempty"`
-	YubiHSM2 ManagedKeysPKCS11HSM `json:"yubihsm2,omitempty"`
+	Enabled bool `json:"enabled,omitempty"`
+	// Provider is the deployment's default provider: a key goes to it when
+	// neither the request nor the tenant names another.
+	Provider string `json:"provider,omitempty"`
+	// Providers lists every provider the deployment runs at once (A199). Each
+	// one's block below is validated and handed to the isolated signer, and a
+	// key may be generated under any of them. Empty means Provider alone.
+	Providers []string `json:"providers,omitempty"`
+	// TenantProviders pins a tenant's managed keys to one listed provider; an
+	// unpinned tenant chooses per key among the listed providers.
+	TenantProviders []ManagedKeyTenantProvider `json:"tenant_providers,omitempty"`
+	AWS             ManagedKeysAWSKMS          `json:"aws,omitempty"`
+	Azure           ManagedKeysAzureKV         `json:"azure,omitempty"`
+	GCP             ManagedKeysGCPKMS          `json:"gcp,omitempty"`
+	PKCS11          ManagedKeysPKCS11HSM       `json:"pkcs11,omitempty"`
+	TPM2            ManagedKeysTPM2            `json:"tpm2,omitempty"`
+	YubiHSM2        ManagedKeysPKCS11HSM       `json:"yubihsm2,omitempty"`
+}
+
+// ManagedKeyTenantProvider pins one tenant's managed keys to one provider.
+type ManagedKeyTenantProvider struct {
+	TenantID string `json:"tenant_id"`
+	Provider string `json:"provider"`
+}
+
+// normalizeManagedKeyProvider is a provider name as configuration compares it.
+func normalizeManagedKeyProvider(provider string) string {
+	return strings.ToLower(strings.TrimSpace(provider))
+}
+
+// EnabledProviders is every provider the deployment runs: Providers when set,
+// else Provider alone (AWS KMS when that is empty too), normalized, in
+// configured order, without duplicates.
+func (m ManagedKeys) EnabledProviders() []string {
+	var out []string
+	for _, raw := range m.Providers {
+		if provider := normalizeManagedKeyProvider(raw); provider != "" && !slices.Contains(out, provider) {
+			out = append(out, provider)
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, m.DefaultProvider())
+	}
+	return out
+}
+
+// DefaultProvider is the provider a key goes to when neither the request nor
+// the tenant names one: Provider when set, else the first listed provider,
+// else AWS KMS.
+func (m ManagedKeys) DefaultProvider() string {
+	if provider := normalizeManagedKeyProvider(m.Provider); provider != "" {
+		return provider
+	}
+	for _, raw := range m.Providers {
+		if provider := normalizeManagedKeyProvider(raw); provider != "" {
+			return provider
+		}
+	}
+	return ManagedKeyProviderAWS
+}
+
+// TenantProvider is the provider a tenant is pinned to, if any.
+func (m ManagedKeys) TenantProvider(tenantID string) (string, bool) {
+	for _, pin := range m.TenantProviders {
+		if pin.TenantID == tenantID {
+			return normalizeManagedKeyProvider(pin.Provider), true
+		}
+	}
+	return "", false
 }
 
 // ManagedKeysAWSKMS configures AWS KMS custody for managed keys. Secret credential
@@ -119,10 +183,42 @@ func validateManagedKeys(m ManagedKeys) []error {
 		return nil
 	}
 	var errs []error
-	provider := strings.ToLower(strings.TrimSpace(m.Provider))
-	if provider == "" {
-		provider = ManagedKeyProviderAWS
+	listed := map[string]bool{}
+	for i, raw := range m.Providers {
+		provider := normalizeManagedKeyProvider(raw)
+		switch {
+		case provider == "":
+			errs = append(errs, fmt.Errorf("managed_keys.providers[%d] is empty", i))
+		case listed[provider]:
+			errs = append(errs, fmt.Errorf("managed_keys.providers lists %q twice", provider))
+		}
+		listed[provider] = true
 	}
+	providers := m.EnabledProviders()
+	if len(m.Providers) > 0 && strings.TrimSpace(m.Provider) != "" && !slices.Contains(providers, m.DefaultProvider()) {
+		errs = append(errs, fmt.Errorf("managed_keys.provider %q must be one of managed_keys.providers", m.Provider))
+	}
+	for _, provider := range providers {
+		errs = append(errs, validateManagedKeyProvider(m, provider)...)
+	}
+	pinned := map[string]bool{}
+	for i, pin := range m.TenantProviders {
+		if err := uuid.Validate(pin.TenantID); err != nil {
+			errs = append(errs, fmt.Errorf("managed_keys.tenant_providers[%d].tenant_id must be a UUID", i))
+		} else if pinned[pin.TenantID] {
+			errs = append(errs, fmt.Errorf("managed_keys.tenant_providers pins tenant %s twice", pin.TenantID))
+		}
+		pinned[pin.TenantID] = true
+		if !slices.Contains(providers, normalizeManagedKeyProvider(pin.Provider)) {
+			errs = append(errs, fmt.Errorf("managed_keys.tenant_providers[%d].provider %q is not a configured provider", i, pin.Provider))
+		}
+	}
+	return errs
+}
+
+// validateManagedKeyProvider checks one provider's block.
+func validateManagedKeyProvider(m ManagedKeys, provider string) []error {
+	var errs []error
 	switch provider {
 	case ManagedKeyProviderAWS:
 		errs = append(errs, validateManagedKeyPrivateCIDRs("managed_keys.aws.private_egress_cidrs", m.AWS.PrivateEgressCIDRs)...)
@@ -222,7 +318,7 @@ func validateManagedKeys(m ManagedKeys) []error {
 			errs = append(errs, errors.New("managed_keys.yubihsm2.user_pin and user_pin_file are mutually exclusive"))
 		}
 	default:
-		errs = append(errs, fmt.Errorf("managed_keys.provider %q is invalid (want %q, %q, %q, %q, %q, or %q)", m.Provider, ManagedKeyProviderAWS, ManagedKeyProviderAzureKeyVault, ManagedKeyProviderGCPKMS, ManagedKeyProviderPKCS11, ManagedKeyProviderTPM2, ManagedKeyProviderYubiHSM2))
+		errs = append(errs, fmt.Errorf("managed-key provider %q is invalid (want %q, %q, %q, %q, %q, or %q)", provider, ManagedKeyProviderAWS, ManagedKeyProviderAzureKeyVault, ManagedKeyProviderGCPKMS, ManagedKeyProviderPKCS11, ManagedKeyProviderTPM2, ManagedKeyProviderYubiHSM2))
 	}
 	return errs
 }

@@ -23,16 +23,16 @@ const dualControlManagedKeyProvider = "test-managed-key-provider"
 
 type fakeManagedKeyService struct{}
 
-func (fakeManagedKeyService) Generate(_ context.Context, _ string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Generate(_ context.Context, _, _ string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
 	return api.ManagedKey{KeyID: "fake-managed-key-1", Algorithm: alg, Version: 1, State: "active"}, nil
 }
-func (fakeManagedKeyService) Rotate(context.Context, string, string, string, string, string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Rotate(context.Context, string, string, string, string, string, string) (api.ManagedKey, error) {
 	return api.ManagedKey{}, nil
 }
-func (fakeManagedKeyService) Revoke(context.Context, string, string, string, string, string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Revoke(context.Context, string, string, string, string, string, string) (api.ManagedKey, error) {
 	return api.ManagedKey{}, nil
 }
-func (fakeManagedKeyService) Zeroize(context.Context, string, string, string, string, string) (api.ManagedKey, error) {
+func (fakeManagedKeyService) Zeroize(context.Context, string, string, string, string, string, string) (api.ManagedKey, error) {
 	return api.ManagedKey{}, nil
 }
 
@@ -42,7 +42,7 @@ type dualControlManagedKeyService struct {
 	issued  int
 }
 
-func (s *dualControlManagedKeyService) Generate(_ context.Context, _ string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
+func (s *dualControlManagedKeyService) Generate(_ context.Context, _, _ string, alg crypto.Algorithm, _, _ string) (api.ManagedKey, error) {
 	s.issued++
 	return api.ManagedKey{
 		KeyID: fmt.Sprintf("https://managed-hsm.example.test/keys/tenant/root-%d/v1", s.issued), Algorithm: alg,
@@ -50,21 +50,21 @@ func (s *dualControlManagedKeyService) Generate(_ context.Context, _ string, alg
 	}, nil
 }
 
-func (s *dualControlManagedKeyService) Rotate(ctx context.Context, tenantID, keyID, requester, _, _ string) (api.ManagedKey, error) {
+func (s *dualControlManagedKeyService) Rotate(ctx context.Context, tenantID, _, keyID, requester, _, _ string) (api.ManagedKey, error) {
 	if err := s.authorize(ctx, tenantID, keyID, api.ManagedKeyActionRotate, requester); err != nil {
 		return api.ManagedKey{}, err
 	}
 	return api.ManagedKey{KeyID: keyID + "/successor", Algorithm: crypto.RSA2048, Version: 2, State: "active"}, nil
 }
 
-func (s *dualControlManagedKeyService) Revoke(ctx context.Context, tenantID, keyID, requester, _, _ string) (api.ManagedKey, error) {
+func (s *dualControlManagedKeyService) Revoke(ctx context.Context, tenantID, _, keyID, requester, _, _ string) (api.ManagedKey, error) {
 	if err := s.authorize(ctx, tenantID, keyID, api.ManagedKeyActionRevoke, requester); err != nil {
 		return api.ManagedKey{}, err
 	}
 	return api.ManagedKey{KeyID: keyID, Algorithm: crypto.RSA2048, Version: 2, State: "revoked"}, nil
 }
 
-func (s *dualControlManagedKeyService) Zeroize(ctx context.Context, tenantID, keyID, requester, _, _ string) (api.ManagedKey, error) {
+func (s *dualControlManagedKeyService) Zeroize(ctx context.Context, tenantID, _, keyID, requester, _, _ string) (api.ManagedKey, error) {
 	if err := s.authorize(ctx, tenantID, keyID, api.ManagedKeyActionZeroize, requester); err != nil {
 		return api.ManagedKey{}, err
 	}

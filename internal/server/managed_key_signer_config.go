@@ -28,7 +28,12 @@ func prepareManagedKeySignerConfig(cfg config.ManagedKeys) (string, func(), erro
 		cleanup()
 		return "", func() {}, err
 	}
-	raw, err := json.Marshal(cfg)
+	// The signer holds every listed provider (A199). Tenant pins are the
+	// control plane's policy, so they stay here.
+	signerCfg := cfg
+	signerCfg.Providers = cfg.EnabledProviders()
+	signerCfg.TenantProviders = nil
+	raw, err := json.Marshal(signerCfg)
 	if err != nil {
 		cleanup()
 		return "", func() {}, err

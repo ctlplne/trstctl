@@ -7911,6 +7911,7 @@ ManagedKey = TypedDict(
         'custody_status': str,
         'extractable': bool,
         'key_id': str,
+        'provider': str,
         'public_der': str,
         'state': str,
         'version': int,
@@ -7922,6 +7923,7 @@ ManagedKeyActionRequest = TypedDict(
     'ManagedKeyActionRequest',
     {
         'key_id': str,
+        'provider': str,
     },
     total=False,
 )
@@ -7969,6 +7971,7 @@ ManagedKeyCustodyPlan = TypedDict(
         'blockers': list[str],
         'configuration_mode': str,
         'configured_provider': str,
+        'configured_providers': list[str],
         'enabled': bool,
         'lifecycle_attached': bool,
         'providers': list[dict[str, Any]],
@@ -7976,6 +7979,7 @@ ManagedKeyCustodyPlan = TypedDict(
         'restart_required': bool,
         'secret_delivery': str,
         'security_boundary': str,
+        'tenant_provider': str,
     },
     total=False,
 )

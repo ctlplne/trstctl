@@ -2046,7 +2046,7 @@ The managed-key lifecycle is off by default and requires an Enterprise license p
 startup configuration. AWS KMS, Azure Key Vault / Managed HSM, GCP Cloud KMS,
 PKCS#11, TPM 2.0, and YubiHSM 2 are all required/census-served through the shipped
 cgo HSM signer artifact. “Conditional” means the route is inert until the operator
-selects and provisions one provider; it no longer means library-only. The control
+selects and provisions a provider; it no longer means library-only. The control
 plane records a tenant event and PostgreSQL outbox command, while the isolated signer
 constructs the provider and performs the private operation. The control-plane process
 never receives provider credentials.
@@ -2058,13 +2058,46 @@ all six providers; it does not accept their values. After startup configuration 
 applied and the control plane and isolated signer are restarted, the console calls
 `POST /api/v1/managed-keys/preview`. That request is effect-free: it writes no event or
 projection and makes no provider call. Generation stays locked until the preview
-confirms the selected provider matches the running provider, the lifecycle is
-attached, and the exact plan is ready.
+confirms the selected provider is one the deployment runs (and, for a pinned tenant,
+its pin), the lifecycle is attached, and the exact plan is ready.
+
+### Several providers at once
+
+A deployment can run several providers together, for example a PKCS#11 HSM for one
+tenant and AWS KMS for another. List them in `managed_keys.providers`
+(`TRSTCTL_MANAGED_KEYS_PROVIDERS=pkcs11,aws`) and configure each one's block;
+`managed_keys.provider` stays the default. The isolated signer builds every listed
+provider at startup and records each key's provider in its journal. A key is created
+under the provider its generate request names. `managed_keys.tenant_providers` pins a
+tenant to one provider (`TRSTCTL_MANAGED_KEYS_TENANT_PROVIDERS=<tenant-id>:pkcs11,...`):
+that tenant's preview and generate accept only its pin, and the console starts on it.
+Every key reports its provider in the response and the inventory. Rotate, revoke,
+zeroize and verify-custody find the key's provider from its handle, or take
+`provider` in the request when the same handle exists under two providers. An
+external signer's `--managed-keys-config` lists the same providers.
+
+```yaml
+managed_keys:
+  enabled: true
+  provider: pkcs11
+  providers: [pkcs11, aws]
+  tenant_providers:
+    - {tenant_id: 11111111-1111-4111-8111-111111111111, provider: pkcs11}
+    - {tenant_id: 22222222-2222-4222-8222-222222222222, provider: aws}
+  pkcs11: {module_path: /usr/lib/softhsm/libsofthsm2.so, token_label: trstctl, user_pin_file: /run/secrets/pkcs11-pin}
+  aws: {region: us-east-1, access_key_id: AKIA..., secret_access_key_file: /run/secrets/aws-kms-secret}
+```
+
+The providers are read at startup; adding or removing one needs a restart of the
+control plane and the signer. A key under a provider the deployment no longer runs
+stays in the inventory but cannot be changed until that provider returns.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TRSTCTL_MANAGED_KEYS_ENABLED` | `false` | Enables licensed managed-key event/outbox assembly. When false, the routes fail closed; no provider is constructed. |
-| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Custody provider: `aws`, `azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`. Selection is startup-static ordinary interface injection, not a runtime plugin engine. |
+| `TRSTCTL_MANAGED_KEYS_PROVIDER` | `aws` | Default custody provider: `aws`, `azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`; a key goes to it when the request does not name one. Selection is startup-static ordinary interface injection, not a runtime plugin engine. |
+| `TRSTCTL_MANAGED_KEYS_PROVIDERS` | the provider above | Comma-separated providers the deployment runs at once; each one's settings below are required. |
+| `TRSTCTL_MANAGED_KEYS_TENANT_PROVIDERS` | unset | Comma-separated `<tenant-id>:<provider>` pins; a pinned tenant's keys go only to its provider. |
 | `TRSTCTL_MANAGED_KEYS_AWS_REGION` | unset | AWS region for KMS, for example `us-east-1`. Required when enabled. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT` | unset | Optional absolute HTTPS endpoint override, used for VPC endpoints or partitions. Leave unset for regional AWS KMS. |
 | `TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK` | `false` | Development-only plaintext opt-in. It is accepted only when the AWS endpoint is `http://localhost`, `http://127.0.0.0/8`, or `http://[::1]`; resolved non-loopback addresses still fail at dial time. |

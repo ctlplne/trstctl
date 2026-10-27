@@ -85,7 +85,7 @@ describe("U7-4 ceremony + KMS custody console", () => {
 
     const rotate = await screen.findByRole("button", { name: "Rotate key key-1" });
     await user.click(rotate);
-    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("key-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("key-1", expect.any(String), "aws-kms"));
   });
 
   it("recovers a projected managed key after a fresh mount without replaying generation", async () => {

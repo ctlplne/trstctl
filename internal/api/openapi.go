@@ -7221,13 +7221,16 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "label", "custody", "requirements")
 	managedKeyCustodyPlan := object(map[string]*Schema{
 		"enabled": {Type: "boolean"}, "lifecycle_attached": {Type: "boolean"}, "ready": {Type: "boolean"},
-		"configured_provider": {Type: "string", Enum: append([]string{""}, managedKeyProviderIDs...)},
-		"configuration_mode":  {Type: "string", Enum: []string{"startup_static"}},
-		"secret_delivery":     {Type: "string", Enum: []string{"file_reference_only"}},
-		"restart_required":    {Type: "boolean"}, "security_boundary": str(),
+		"configured_provider": {Type: "string", Enum: append([]string{""}, managedKeyProviderIDs...), Description: "The default provider a key goes to when neither the request nor the tenant names one."},
+		"configured_providers": {Type: "array", Items: &Schema{Type: "string", Enum: managedKeyProviderIDs},
+			Description: "Every provider the deployment runs at once; a key may be generated under any of them unless the tenant is pinned."},
+		"tenant_provider":    {Type: "string", Enum: managedKeyProviderIDs, Description: "The provider the caller's tenant is pinned to; absent when the tenant chooses per key."},
+		"configuration_mode": {Type: "string", Enum: []string{"startup_static"}},
+		"secret_delivery":    {Type: "string", Enum: []string{"file_reference_only"}},
+		"restart_required":   {Type: "boolean"}, "security_boundary": str(),
 		"providers": {Type: "array", Items: &Schema{Ref: "#/components/schemas/ManagedKeyCustodyProvider"}},
 		"blockers":  {Type: "array", Items: str()},
-	}, "enabled", "lifecycle_attached", "ready", "configured_provider", "configuration_mode", "secret_delivery", "restart_required", "security_boundary", "providers", "blockers")
+	}, "enabled", "lifecycle_attached", "ready", "configured_provider", "configured_providers", "configuration_mode", "secret_delivery", "restart_required", "security_boundary", "providers", "blockers")
 	managedKeyGenerationPreviewReq := object(map[string]*Schema{
 		"provider":  {Type: "string", Enum: managedKeyProviderIDs},
 		"algorithm": {Type: "string", Enum: []string{"RSA-2048", "RSA-3072", "RSA-4096", "ECDSA-P256", "ECDSA-P384", "ECDSA-P521"}},
@@ -7243,7 +7246,8 @@ func componentSchemas() map[string]*Schema {
 		"proof": {Type: "array", Items: str()}, "blockers": {Type: "array", Items: str()},
 	}, "ready", "effect_free", "provider", "provider_label", "algorithm", "configuration_mode", "restart_required", "extractable", "private_key_location", "required_permission", "approval_required", "requirements", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "proof", "blockers")
 	managedKeyActionReq := object(map[string]*Schema{
-		"key_id": str(),
+		"key_id":   str(),
+		"provider": {Type: "string", Description: "The key's provider, as the inventory reports it; needed only when the handle exists under more than one provider."},
 	}, "key_id")
 	managedKeyApprovalReq := object(map[string]*Schema{
 		"key_id": str(), "action": {Type: "string", Enum: managedKeyApprovalActions},
@@ -7255,12 +7259,13 @@ func componentSchemas() map[string]*Schema {
 	}, "resource", "action", "approver", "approvals")
 	managedKeyState := &Schema{Type: "string", Description: "States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed."}
 	managedKey := object(map[string]*Schema{
-		"key_id": str(), "algorithm": str(), "version": {Type: "integer"}, "state": managedKeyState,
+		"provider": {Type: "string", Description: "The provider holding the key."},
+		"key_id":   str(), "algorithm": str(), "version": {Type: "integer"}, "state": managedKeyState,
 		"public_der":         {Type: "string", Format: "byte"},
 		"extractable":        {Type: "boolean"},
 		"custody_status":     {Type: "string", Enum: []string{"not_checked", "pending", "verified", "unavailable"}},
 		"custody_checked_at": timestamp(),
-	}, "key_id", "algorithm", "version", "state")
+	}, "provider", "key_id", "algorithm", "version", "state")
 	managedKeyRecord := object(map[string]*Schema{
 		"provider": str(), "key_id": str(), "algorithm": str(), "version": {Type: "integer"},
 		"state": managedKeyState, "public_der": {Type: "string", Format: "byte"},

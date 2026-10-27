@@ -3326,6 +3326,8 @@ func applyPCASEnv(getenv func(string) string, p *PCAS) {
 func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
 	setBool(getenv, "TRSTCTL_MANAGED_KEYS_ENABLED", &m.Enabled)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_PROVIDER", &m.Provider)
+	setCSV(getenv, "TRSTCTL_MANAGED_KEYS_PROVIDERS", &m.Providers)
+	setManagedKeyTenantProviders(getenv, "TRSTCTL_MANAGED_KEYS_TENANT_PROVIDERS", &m.TenantProviders)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_REGION", &m.AWS.Region)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ENDPOINT", &m.AWS.Endpoint)
 	setBool(getenv, "TRSTCTL_MANAGED_KEYS_AWS_ALLOW_INSECURE_LOOPBACK", &m.AWS.AllowInsecureLoopback)
@@ -3716,6 +3718,21 @@ func setBoolPtr(getenv func(string) string, key string, dst **bool) {
 // trimming surrounding whitespace and dropping empty entries (SEC-003 CORS
 // allow-list). A non-empty value replaces the destination; an empty/blank value
 // leaves the prior value (so the env can override but not blank out a file value).
+// setManagedKeyTenantProviders reads comma-separated tenant_id:provider pins.
+// A malformed pair is kept as written so validation names it.
+func setManagedKeyTenantProviders(getenv func(string) string, key string, dst *[]ManagedKeyTenantProvider) {
+	v := getenv(key)
+	if v == "" {
+		return
+	}
+	var out []ManagedKeyTenantProvider
+	for _, pair := range splitCSV(v) {
+		tenantID, provider, _ := strings.Cut(pair, ":")
+		out = append(out, ManagedKeyTenantProvider{TenantID: strings.TrimSpace(tenantID), Provider: strings.TrimSpace(provider)})
+	}
+	*dst = out
+}
+
 func setCSV(getenv func(string) string, key string, dst *[]string) {
 	v := getenv(key)
 	if v == "" {

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -36,6 +37,8 @@ import (
 // managed-key implementation. Core API owns this DTO so the route handlers do not
 // link the EE service package.
 type ManagedKey struct {
+	// Provider is the provider holding the key (A199: several may run at once).
+	Provider         string           `json:"provider,omitempty"`
 	KeyID            string           `json:"key_id"`
 	Algorithm        crypto.Algorithm `json:"algorithm"`
 	Version          int              `json:"version"`
@@ -48,8 +51,9 @@ type ManagedKey struct {
 
 // ManagedKeyCustodyVerifier is attached by the durable licensed service. A
 // fresh proof is a provider signature over a signer-generated challenge.
+// An empty provider resolves the key's provider from its handle.
 type ManagedKeyCustodyVerifier interface {
-	VerifyCustody(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+	VerifyCustody(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
 }
 
 // ManagedKeyOperationPendingError means the requested event and its outbox
@@ -97,6 +101,12 @@ var (
 	ErrManagedKeyNotApproved = errors.New("managedkeys: dual-control approval required")
 	ErrManagedKeyUnknown     = errors.New("managedkeys: unknown key for tenant")
 	ErrManagedKeyRefRequired = errors.New("managedkeys: key ref (id) is required")
+	// ErrManagedKeyProviderNotAllowed means the deployment does not run the
+	// provider, or the tenant's keys are pinned to another one (A199).
+	ErrManagedKeyProviderNotAllowed = errors.New("managedkeys: provider is not available to this tenant")
+	// ErrManagedKeyAmbiguous means a key handle exists under two providers and
+	// the request did not name which.
+	ErrManagedKeyAmbiguous = errors.New("managedkeys: key handle exists under several providers")
 )
 
 // ManagedKeyApprovalPendingError carries the exact immutable approval request
@@ -122,11 +132,13 @@ func (e *ManagedKeyApprovalPendingError) Unwrap() error { return ErrManagedKeyNo
 // authenticated principal before invoking the durable service (AN-5). The same raw
 // Idempotency-Key reaches both layers so the API owns byte-for-byte HTTP replay and
 // the durable receiver owns collapse of the event/outbox effect.
+// Generate names the provider the key is created under; the actions take the
+// key's provider, or empty to resolve it from the key handle.
 type ManagedKeyService interface {
-	Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (ManagedKey, error)
-	Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
-	Revoke(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
-	Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Generate(ctx context.Context, tenantID, provider string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Rotate(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Revoke(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
+	Zeroize(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (ManagedKey, error)
 }
 
 // ManagedKeyCustodyConfiguration is the intentionally tiny, secret-free part of
@@ -135,8 +147,12 @@ type ManagedKeyService interface {
 // seam. The full configuration remains owned by the composition root and isolated
 // signer (AN-4/AN-8).
 type ManagedKeyCustodyConfiguration struct {
-	Enabled  bool
-	Provider string
+	Enabled bool
+	// Provider is the deployment's default provider; Providers every provider
+	// it runs (A199); TenantProviders the tenants pinned to one of them.
+	Provider        string
+	Providers       []string
+	TenantProviders map[string]string
 }
 
 // ManagedKeyCustodyRequirement describes one deployment prerequisite without its
@@ -164,16 +180,21 @@ type ManagedKeyCustodyProvider struct {
 // configure each shipped provider. It is a plan/readiness surface, not a runtime
 // configuration mutation: changing custody requires a reviewed deployment restart.
 type ManagedKeyCustodyPlan struct {
-	Enabled            bool                        `json:"enabled"`
-	LifecycleAttached  bool                        `json:"lifecycle_attached"`
-	Ready              bool                        `json:"ready"`
-	ConfiguredProvider string                      `json:"configured_provider"`
-	ConfigurationMode  string                      `json:"configuration_mode"`
-	SecretDelivery     string                      `json:"secret_delivery"`
-	RestartRequired    bool                        `json:"restart_required"`
-	SecurityBoundary   string                      `json:"security_boundary"`
-	Providers          []ManagedKeyCustodyProvider `json:"providers"`
-	Blockers           []string                    `json:"blockers"`
+	Enabled            bool   `json:"enabled"`
+	LifecycleAttached  bool   `json:"lifecycle_attached"`
+	Ready              bool   `json:"ready"`
+	ConfiguredProvider string `json:"configured_provider"`
+	// ConfiguredProviders lists every provider the deployment runs; a key may
+	// be generated under any of them unless TenantProvider pins the caller's
+	// tenant to one.
+	ConfiguredProviders []string                    `json:"configured_providers"`
+	TenantProvider      string                      `json:"tenant_provider,omitempty"`
+	ConfigurationMode   string                      `json:"configuration_mode"`
+	SecretDelivery      string                      `json:"secret_delivery"`
+	RestartRequired     bool                        `json:"restart_required"`
+	SecurityBoundary    string                      `json:"security_boundary"`
+	Providers           []ManagedKeyCustodyProvider `json:"providers"`
+	Blockers            []string                    `json:"blockers"`
 }
 
 // ManagedKeyGenerationPreview is the exact effect-free review returned before a
@@ -217,10 +238,28 @@ func WithManagedKeys(svc ManagedKeyService) Option {
 func WithManagedKeyCustody(posture ManagedKeyCustodyConfiguration) Option {
 	return func(c *config) {
 		posture.Provider = normalizeManagedKeyProvider(posture.Provider)
+		providers := make([]string, 0, len(posture.Providers))
+		for _, provider := range posture.Providers {
+			if provider = normalizeManagedKeyProvider(provider); provider != "" && !slices.Contains(providers, provider) {
+				providers = append(providers, provider)
+			}
+		}
 		if posture.Enabled && posture.Provider == "" {
 			posture.Provider = "aws"
-		} else if !posture.Enabled {
-			posture.Provider = ""
+			if len(providers) > 0 {
+				posture.Provider = providers[0]
+			}
+		}
+		if posture.Enabled && len(providers) == 0 {
+			providers = []string{posture.Provider}
+		}
+		pins := make(map[string]string, len(posture.TenantProviders))
+		for tenantID, provider := range posture.TenantProviders {
+			pins[tenantID] = normalizeManagedKeyProvider(provider)
+		}
+		posture.Providers, posture.TenantProviders = providers, pins
+		if !posture.Enabled {
+			posture.Provider, posture.Providers, posture.TenantProviders = "", nil, nil
 		}
 		c.managedKeyCustody = posture
 	}
@@ -285,6 +324,15 @@ func normalizeManagedKeyProvider(provider string) string {
 	return strings.ToLower(strings.TrimSpace(provider))
 }
 
+// managedKeyCustodyID is the custody ID of a provider name as the inventory
+// reports it; only AWS differs ("aws-kms" is "aws").
+func managedKeyCustodyID(provider string) string {
+	if provider = normalizeManagedKeyProvider(provider); provider == "aws-kms" {
+		return "aws"
+	}
+	return provider
+}
+
 func managedKeyProvider(provider string) (ManagedKeyCustodyProvider, bool) {
 	provider = normalizeManagedKeyProvider(provider)
 	for _, candidate := range managedKeyCustodyProviders() {
@@ -295,10 +343,24 @@ func managedKeyProvider(provider string) (ManagedKeyCustodyProvider, bool) {
 	return ManagedKeyCustodyProvider{}, false
 }
 
-func (a *API) managedKeyCustodyPlan() ManagedKeyCustodyPlan {
+// managedKeyProviderBlocker says why a provider cannot take this tenant's new
+// key, or "" when it can: the deployment runs it, and the tenant is not pinned
+// to another provider.
+func (a *API) managedKeyProviderBlocker(tenantID, provider string) string {
+	if !slices.Contains(a.managedKeyCustody.Providers, provider) {
+		return "This deployment does not run " + provider + "; it runs " + strings.Join(a.managedKeyCustody.Providers, ", ") +
+			". Add the provider to the startup configuration and restart before generating a key under it."
+	}
+	if pinned, ok := a.managedKeyCustody.TenantProviders[tenantID]; ok && pinned != provider {
+		return "This tenant's managed keys are pinned to " + pinned + "."
+	}
+	return ""
+}
+
+func (a *API) managedKeyCustodyPlan(tenantID string) ManagedKeyCustodyPlan {
 	blockers := make([]string, 0, 2)
 	if !a.managedKeyCustody.Enabled {
-		blockers = append(blockers, "Managed-key custody is disabled. Enable it, select one provider, supply file-backed credentials where required, and restart the control plane and isolated signer.")
+		blockers = append(blockers, "Managed-key custody is disabled. Enable it, select a provider, supply file-backed credentials where required, and restart the control plane and isolated signer.")
 	}
 	if a.managedKeys == nil {
 		blockers = append(blockers, "The managed-key runtime is not attached. Verify the Enterprise BYOK license and provider configuration, then restart the deployment.")
@@ -307,14 +369,17 @@ func (a *API) managedKeyCustodyPlan() ManagedKeyCustodyPlan {
 	return ManagedKeyCustodyPlan{
 		Enabled: a.managedKeyCustody.Enabled, LifecycleAttached: a.managedKeys != nil, Ready: ready,
 		ConfiguredProvider: a.managedKeyCustody.Provider, ConfigurationMode: managedKeyConfigurationMode,
-		SecretDelivery: managedKeySecretDelivery, RestartRequired: !ready,
+		ConfiguredProviders: append([]string{}, a.managedKeyCustody.Providers...),
+		TenantProvider:      a.managedKeyCustody.TenantProviders[tenantID],
+		SecretDelivery:      managedKeySecretDelivery, RestartRequired: !ready,
 		SecurityBoundary: "Private keys stay in the selected provider. Provider credentials are startup file references consumed by the isolated signer; the browser never receives their values.",
 		Providers:        managedKeyCustodyProviders(), Blockers: blockers,
 	}
 }
 
-func (a *API) getManagedKeyCustody(w http.ResponseWriter, _ *http.Request) {
-	a.writeJSON(w, http.StatusOK, a.managedKeyCustodyPlan())
+func (a *API) getManagedKeyCustody(w http.ResponseWriter, r *http.Request) {
+	tenantID, _ := a.tenant(r)
+	a.writeJSON(w, http.StatusOK, a.managedKeyCustodyPlan(tenantID))
 }
 
 func (a *API) previewManagedKeyGeneration(w http.ResponseWriter, r *http.Request) {
@@ -334,10 +399,11 @@ func (a *API) previewManagedKeyGeneration(w http.ResponseWriter, r *http.Request
 		return
 	}
 	blockers := make([]string, 0, 2)
+	tenantID, _ := a.tenant(r)
 	if !a.managedKeyCustody.Enabled {
 		blockers = append(blockers, "Managed-key custody is disabled. Apply the selected provider's startup configuration and restart the control plane and isolated signer.")
-	} else if a.managedKeyCustody.Provider != provider.ID {
-		blockers = append(blockers, "This deployment is configured for "+a.managedKeyCustody.Provider+", not "+provider.ID+". Change the startup provider configuration and restart before generating a key.")
+	} else if blocker := a.managedKeyProviderBlocker(tenantID, provider.ID); blocker != "" {
+		blockers = append(blockers, blocker)
 	}
 	if a.managedKeys == nil {
 		blockers = append(blockers, "The managed-key runtime is not attached. Verify the Enterprise BYOK license and provider configuration, then restart the deployment.")
@@ -365,6 +431,9 @@ type managedKeyGenerateRequest struct {
 
 type managedKeyActionRequest struct {
 	KeyID string `json:"key_id"`
+	// Provider names the key's provider when its handle exists under more than
+	// one; empty resolves it from the handle.
+	Provider string `json:"provider,omitempty"`
 }
 
 type managedKeyApprovalRequest struct {
@@ -403,6 +472,7 @@ var managedKeyCanonicalApprovalActions = []string{
 // managedKeyResponse is the public view of a managed key: identity, algorithm,
 // version, state, and PKIX public key — never the private material.
 type managedKeyResponse struct {
+	Provider         string     `json:"provider"`
 	KeyID            string     `json:"key_id"`
 	Algorithm        string     `json:"algorithm"`
 	Version          int        `json:"version"`
@@ -414,7 +484,11 @@ type managedKeyResponse struct {
 }
 
 func toManagedKeyResponse(r ManagedKey, provider string) managedKeyResponse {
+	if r.Provider != "" {
+		provider = r.Provider
+	}
 	return managedKeyResponse{
+		Provider:      provider,
 		KeyID:         r.KeyID,
 		Algorithm:     string(r.Algorithm),
 		Version:       r.Version,
@@ -606,6 +680,10 @@ func mapManagedKeyError(err error) error {
 		return errStatus(http.StatusNotFound, "no such managed key for this tenant")
 	case errors.Is(err, ErrManagedKeyRefRequired):
 		return errStatus(http.StatusBadRequest, "key_id is required")
+	case errors.Is(err, ErrManagedKeyProviderNotAllowed):
+		return errStatus(http.StatusConflict, "this provider is not available to this tenant; review custody and preview again")
+	case errors.Is(err, ErrManagedKeyAmbiguous):
+		return errStatus(http.StatusConflict, "this key handle exists under more than one provider; name the provider")
 	default:
 		return err
 	}
@@ -643,8 +721,9 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, `provider must be "aws", "azure-key-vault", "gcp-kms", "pkcs11", "tpm2", or "yubihsm2"`))
 		return
 	}
-	if !a.managedKeyCustody.Enabled || a.managedKeys == nil || a.managedKeyCustody.Provider != provider.ID {
-		a.writeError(w, errStatus(http.StatusConflict, "selected managed-key provider is not configured and attached; review custody and preview again"))
+	callerTenant, _ := a.tenant(r)
+	if !a.managedKeyCustody.Enabled || a.managedKeys == nil || a.managedKeyProviderBlocker(callerTenant, provider.ID) != "" {
+		a.writeError(w, errStatus(http.StatusConflict, "selected managed-key provider is not configured, attached and available to this tenant; review custody and preview again"))
 		return
 	}
 	alg, err := parseManagedKeyAlgorithm(req.Algorithm)
@@ -663,14 +742,14 @@ func (a *API) generateManagedKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		res, err := a.managedKeys.Generate(ctx, tenantID, alg, idempotencyKey, binding)
+		res, err := a.managedKeys.Generate(ctx, tenantID, provider.ID, alg, idempotencyKey, binding)
 		if err != nil {
 			if pending, ok := managedKeyPendingResponse(err); ok {
 				return http.StatusAccepted, pending, nil
 			}
 			return 0, nil, mapManagedKeyError(err)
 		}
-		return http.StatusCreated, toManagedKeyResponse(res, a.managedKeyCustody.Provider), nil
+		return http.StatusCreated, toManagedKeyResponse(res, provider.ID), nil
 	})
 }
 
@@ -816,7 +895,7 @@ func canonicalManagedKeyApprovalAction(action string) (string, bool) {
 // a cached response, then binds both to the raw tenant-global idempotency key. A
 // changed key, action, or caller therefore receives 409 without reaching approval
 // or the durable service.
-func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempotencyKey, operation string, op func(ctx context.Context, tenantID, keyID, requester, idem, requestBinding string) (ManagedKey, error)) {
+func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempotencyKey, operation string, op func(ctx context.Context, tenantID, provider, keyID, requester, idem, requestBinding string) (ManagedKey, error)) {
 	if idempotencyKey == "" {
 		a.writeError(w, errStatus(http.StatusBadRequest, "Idempotency-Key header is required for mutations"))
 		return
@@ -830,6 +909,11 @@ func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempoten
 		a.writeError(w, errStatus(http.StatusBadRequest, "key_id is required"))
 		return
 	}
+	req.Provider = normalizeManagedKeyProvider(req.Provider)
+	if req.Provider != "" && !slices.Contains(a.managedKeyCustody.Providers, managedKeyCustodyID(req.Provider)) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "provider must be one of the providers this deployment runs"))
+		return
+	}
 	requester, err := requesterFor(r.Context())
 	if err != nil {
 		a.writeError(w, err)
@@ -841,14 +925,20 @@ func (a *API) managedKeyAction(w http.ResponseWriter, r *http.Request, idempoten
 		return
 	}
 	a.mutateDurableBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
-		res, err := op(ctx, tenantID, req.KeyID, requester, idempotencyKey, binding)
+		res, err := op(ctx, tenantID, req.Provider, req.KeyID, requester, idempotencyKey, binding)
 		if err != nil {
 			if pending, ok := managedKeyPendingResponse(err); ok {
 				return http.StatusAccepted, pending, nil
 			}
 			return 0, nil, mapManagedKeyError(err)
 		}
-		return http.StatusOK, toManagedKeyResponse(res, a.managedKeyCustody.Provider), nil
+		// The result names its key's provider; a service that does not is
+		// answered as the request's provider, else the deployment default.
+		provider := req.Provider
+		if provider == "" {
+			provider = a.managedKeyCustody.Provider
+		}
+		return http.StatusOK, toManagedKeyResponse(res, provider), nil
 	})
 }
 

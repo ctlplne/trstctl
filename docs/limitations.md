@@ -5596,7 +5596,7 @@ With an active BYOK license and `managed_keys.enabled`, the control-plane proces
 does not construct a provider or receive provider credentials. Its tagged EE attach
 seam installs the tenant-scoped event/projection factory and durable PostgreSQL
 outbox handler. A separate dispatcher delivers the lifecycle command over the
-authenticated signer transport. The isolated signer constructs exactly one selected
+authenticated signer transport. The isolated signer constructs every listed
 provider under the `ee/` fence and stores provider ownership, operation outcome, and
 consumed sign-authorization nonces in its fsync-backed journal. An `executing` operation
 is not abandoned after restart: every shipped receiver finds or reconciles the same
@@ -5659,9 +5659,12 @@ emulator loses the external key. Cold recovery of the AWS KMS demo lane is block
 on a durable, faithful KMS service (for example, a licensed LocalStack edition or
 a real isolated cloud account). SoftHSM and swtpm can prove their own provider
 recovery, but cannot stand in for native AWS KMS. Static no-cgo signer builds fail
-closed for native PKCS#11/YubiHSM selection; use the published HSM signer artifact. Provider selection
-is startup-static: this is ordinary Go interface injection, not a runtime crypto
-plugin engine or a policy-selected algorithm marketplace.
+closed for native PKCS#11/YubiHSM selection; use the published HSM signer artifact. Several
+providers run at once (`managed_keys.providers`): a key's provider is chosen per key
+by the generate request or per tenant by a `managed_keys.tenant_providers` pin, and
+every key reports its provider. The provider list is startup-static: this is ordinary
+Go interface injection, not a runtime crypto plugin engine or a policy-selected
+algorithm marketplace.
 
 The managed-key runtime proof qualifies each released platform on a native
 runner of that platform. `make dod-gate` proves the `linux/amd64` control plane

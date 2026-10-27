@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/editionseam"
 	"trstctl.com/trstctl/internal/events"
@@ -38,7 +40,7 @@ const managedKeyCommandDestination = "managedkey.command"
 type durableService struct {
 	store         *store.Store
 	log           *events.Log
-	provider      string
+	selection     ProviderSelection
 	approvals     api.ExactApprovalChecker
 	loadOperation func(context.Context, string, string) (store.ManagedKeyOperation, error)
 	loadKey       func(context.Context, string, string, string) (store.ManagedKey, error)
@@ -59,23 +61,108 @@ func (s *durableService) key(ctx context.Context, tenantID, provider, keyID stri
 	return s.store.GetManagedKey(ctx, tenantID, provider, keyID)
 }
 
+// ProviderSelection is the providers the deployment runs at once (A199), the
+// default a key goes to when neither the request nor its tenant names one, and
+// the tenants pinned to one provider. Names are the durable provider names.
+type ProviderSelection struct {
+	Default string
+	Enabled []string
+	Tenants map[string]string
+}
+
+// SelectionFromConfig is the deployment's managed_keys provider selection.
+func SelectionFromConfig(cfg config.ManagedKeys) ProviderSelection {
+	selection := ProviderSelection{Default: cfg.DefaultProvider(), Enabled: cfg.EnabledProviders(), Tenants: map[string]string{}}
+	for _, pin := range cfg.TenantProviders {
+		selection.Tenants[pin.TenantID] = pin.Provider
+	}
+	return selection
+}
+
+// normalized is the selection in durable provider names.
+func (p ProviderSelection) normalized() ProviderSelection {
+	out := ProviderSelection{Default: normalizeProvider(p.Default), Tenants: make(map[string]string, len(p.Tenants))}
+	for _, name := range p.Enabled {
+		if name = normalizeProvider(name); name != "" && !slices.Contains(out.Enabled, name) {
+			out.Enabled = append(out.Enabled, name)
+		}
+	}
+	if len(out.Enabled) == 0 && out.Default != "" {
+		out.Enabled = []string{out.Default}
+	}
+	for tenantID, name := range p.Tenants {
+		out.Tenants[tenantID] = normalizeProvider(name)
+	}
+	return out
+}
+
 // NewDurableFactory returns the production managed-key API service. It does not
 // receive a provider backend or signer client and therefore cannot make an
 // external call from the HTTP transaction.
-func NewDurableFactory(provider string) server.ManagedKeyServiceFactory {
-	provider = normalizeProvider(provider)
+func NewDurableFactory(selection ProviderSelection) server.ManagedKeyServiceFactory {
+	selection = selection.normalized()
 	return func(d server.ManagedKeyServiceDeps) (api.ManagedKeyService, error) {
 		if d.Store == nil || d.Log == nil {
 			return nil, errors.New("managedkeys: durable store and event log are required")
 		}
-		if provider == "" {
+		if selection.Default == "" || !slices.Contains(selection.Enabled, selection.Default) {
 			return nil, errors.New("managedkeys: a signer-local provider selection is required")
 		}
 		if d.ApprovalChecker == nil {
 			return nil, errors.New("managedkeys: durable destructive commands require exact one-shot approval authority")
 		}
-		svc := &durableService{store: d.Store, log: d.Log, provider: provider, approvals: d.ApprovalChecker}
+		svc := &durableService{store: d.Store, log: d.Log, selection: selection, approvals: d.ApprovalChecker}
 		return svc, nil
+	}
+}
+
+// generationProvider is the provider a tenant's new key goes to: the
+// requested one, else the tenant's pin, else the default. A pinned tenant may
+// name only its pin, and every provider must be one the deployment runs.
+func (s *durableService) generationProvider(tenantID, requested string) (string, error) {
+	provider := normalizeProvider(requested)
+	pinned, isPinned := s.selection.Tenants[tenantID]
+	switch {
+	case isPinned && strings.TrimSpace(requested) == "":
+		provider = pinned
+	case isPinned && provider != pinned:
+		return "", api.ErrManagedKeyProviderNotAllowed
+	case strings.TrimSpace(requested) == "":
+		provider = s.selection.Default
+	}
+	if !slices.Contains(s.selection.Enabled, provider) {
+		return "", api.ErrManagedKeyProviderNotAllowed
+	}
+	return provider, nil
+}
+
+// keyProvider is the provider an action's key is under: the named one, or the
+// only running provider that holds a key with this handle for the tenant.
+func (s *durableService) keyProvider(ctx context.Context, tenantID, requested, keyID string) (string, error) {
+	if strings.TrimSpace(requested) != "" {
+		provider := normalizeProvider(requested)
+		if !slices.Contains(s.selection.Enabled, provider) {
+			return "", api.ErrManagedKeyProviderNotAllowed
+		}
+		return provider, nil
+	}
+	var found []string
+	for _, candidate := range s.selection.Enabled {
+		_, err := s.key(ctx, tenantID, candidate, keyID)
+		switch {
+		case err == nil:
+			found = append(found, candidate)
+		case !errors.Is(err, pgx.ErrNoRows):
+			return "", err
+		}
+	}
+	switch len(found) {
+	case 0:
+		return "", ErrUnknownKey
+	case 1:
+		return found[0], nil
+	default:
+		return "", api.ErrManagedKeyAmbiguous
 	}
 }
 
@@ -109,27 +196,27 @@ func normalizeProvider(provider string) string {
 	}
 }
 
-func (s *durableService) Generate(ctx context.Context, tenantID string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (Result, error) {
-	return s.submit(ctx, tenantID, "", "", ActionGenerate, alg, idempotencyKey, requestBinding)
+func (s *durableService) Generate(ctx context.Context, tenantID, provider string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (Result, error) {
+	return s.submit(ctx, tenantID, provider, "", "", ActionGenerate, alg, idempotencyKey, requestBinding)
 }
 
-func (s *durableService) Rotate(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
-	return s.submit(ctx, tenantID, keyID, requester, ActionRotate, "", idempotencyKey, requestBinding)
+func (s *durableService) Rotate(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
+	return s.submit(ctx, tenantID, provider, keyID, requester, ActionRotate, "", idempotencyKey, requestBinding)
 }
 
-func (s *durableService) Revoke(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
-	return s.submit(ctx, tenantID, keyID, requester, ActionRevoke, "", idempotencyKey, requestBinding)
+func (s *durableService) Revoke(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
+	return s.submit(ctx, tenantID, provider, keyID, requester, ActionRevoke, "", idempotencyKey, requestBinding)
 }
 
-func (s *durableService) Zeroize(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
-	return s.submit(ctx, tenantID, keyID, requester, ActionZeroize, "", idempotencyKey, requestBinding)
+func (s *durableService) Zeroize(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
+	return s.submit(ctx, tenantID, provider, keyID, requester, ActionZeroize, "", idempotencyKey, requestBinding)
 }
 
-func (s *durableService) VerifyCustody(ctx context.Context, tenantID, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
-	return s.submit(ctx, tenantID, keyID, requester, ActionVerifyCustody, "", idempotencyKey, requestBinding)
+func (s *durableService) VerifyCustody(ctx context.Context, tenantID, provider, keyID, requester, idempotencyKey, requestBinding string) (Result, error) {
+	return s.submit(ctx, tenantID, provider, keyID, requester, ActionVerifyCustody, "", idempotencyKey, requestBinding)
 }
 
-func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester, action string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (Result, error) {
+func (s *durableService) submit(ctx context.Context, tenantID, requestedProvider, keyID, requester, action string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (Result, error) {
 	if tenantID == "" {
 		return Result{}, ErrTenantRequired
 	}
@@ -152,10 +239,16 @@ func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester,
 		return Result{}, err
 	}
 	command := projections.ManagedKeyCommand{
-		OperationID: operationID, Provider: s.provider, Action: strings.TrimPrefix(action, "managedkey:"),
+		OperationID: operationID, Action: strings.TrimPrefix(action, "managedkey:"),
 		KeyID: keyID, Algorithm: string(alg), RequestBinding: requestBinding,
 	}
 	if existing, getErr := s.operation(ctx, tenantID, operationID); getErr == nil {
+		// A replay is the original command: it keeps the provider the original
+		// resolved unless this request names one, which must then be the same.
+		command.Provider = existing.Provider
+		if strings.TrimSpace(requestedProvider) != "" {
+			command.Provider = normalizeProvider(requestedProvider)
+		}
 		if !managedKeyCommandMatches(existing, command, action == ActionGenerate) {
 			return Result{}, fmt.Errorf("%w: managed-key command differs", orchestrator.ErrIdempotencyConflict)
 		}
@@ -166,8 +259,16 @@ func (s *durableService) submit(ctx context.Context, tenantID, keyID, requester,
 	} else if !errors.Is(getErr, pgx.ErrNoRows) {
 		return Result{}, getErr
 	}
+	if action == ActionGenerate {
+		command.Provider, err = s.generationProvider(tenantID, requestedProvider)
+	} else {
+		command.Provider, err = s.keyProvider(ctx, tenantID, requestedProvider, keyID)
+	}
+	if err != nil {
+		return Result{}, err
+	}
 	if action != ActionGenerate {
-		key, err := s.key(ctx, tenantID, s.provider, keyID)
+		key, err := s.key(ctx, tenantID, command.Provider, keyID)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return Result{}, ErrUnknownKey
@@ -345,7 +446,7 @@ func (s *durableService) wait(ctx context.Context, tenantID, operationID string)
 			if err != nil {
 				return Result{}, err
 			}
-			return Result{KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: managedkeystate.PublicState(key.Provider, key.State), PublicDER: key.PublicDER,
+			return Result{Provider: key.Provider, KeyID: key.KeyID, Algorithm: crypto.Algorithm(key.Algorithm), Version: key.Version, State: managedkeystate.PublicState(key.Provider, key.State), PublicDER: key.PublicDER,
 				CustodyStatus: key.CustodyStatus, CustodyCheckedAt: key.CustodyCheckedAt}, nil
 		case "failed":
 			return Result{}, fmt.Errorf("managedkeys: signer operation failed: %s", op.LastError)

@@ -626,7 +626,14 @@ func runBreakglassConfig(
 // into the HTTP server. Provider credentials and file paths stay behind startup
 // and signer boundaries and can never appear in the readiness response.
 func managedKeyCustodyFromConfig(cfg config.ManagedKeys) api.ManagedKeyCustodyConfiguration {
-	return api.ManagedKeyCustodyConfiguration{Enabled: cfg.Enabled, Provider: cfg.Provider}
+	pins := make(map[string]string, len(cfg.TenantProviders))
+	for _, pin := range cfg.TenantProviders {
+		pins[pin.TenantID] = pin.Provider
+	}
+	return api.ManagedKeyCustodyConfiguration{
+		Enabled: cfg.Enabled, Provider: cfg.DefaultProvider(),
+		Providers: cfg.EnabledProviders(), TenantProviders: pins,
+	}
 }
 
 func ownershipAttestationCadenceFromConfig(cfg config.Lifecycle) (time.Duration, error) {

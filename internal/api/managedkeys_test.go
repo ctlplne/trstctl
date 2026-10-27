@@ -34,7 +34,7 @@ type stubManagedKeys struct {
 	err           error
 }
 
-func (s *stubManagedKeys) Generate(_ context.Context, _ string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
+func (s *stubManagedKeys) Generate(_ context.Context, _, _ string, alg crypto.Algorithm, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
 	s.generated = true
 	s.generateCalls++
 	s.lastAlgorithm = alg
@@ -45,7 +45,7 @@ func (s *stubManagedKeys) Generate(_ context.Context, _ string, alg crypto.Algor
 	}
 	return api.ManagedKey{KeyID: "fake-kms-key-0001", Algorithm: alg, Version: 1, State: "active"}, nil
 }
-func (s *stubManagedKeys) Rotate(_ context.Context, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
+func (s *stubManagedKeys) Rotate(_ context.Context, _, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
 	s.rotateCalls++
 	s.lastKeyID, s.lastRequester, s.lastIdem = keyID, requester, idempotencyKey
 	s.lastBinding = requestBinding
@@ -54,7 +54,7 @@ func (s *stubManagedKeys) Rotate(_ context.Context, _, keyID, requester, idempot
 	}
 	return api.ManagedKey{KeyID: "fake-kms-key-0002", Algorithm: crypto.ECDSAP256, Version: 2, State: "active"}, nil
 }
-func (s *stubManagedKeys) Revoke(_ context.Context, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
+func (s *stubManagedKeys) Revoke(_ context.Context, _, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
 	s.revokeCalls++
 	s.lastKeyID, s.lastRequester, s.lastIdem = keyID, requester, idempotencyKey
 	s.lastBinding = requestBinding
@@ -63,7 +63,7 @@ func (s *stubManagedKeys) Revoke(_ context.Context, _, keyID, requester, idempot
 	}
 	return api.ManagedKey{KeyID: "fake-kms-key-0001", Algorithm: crypto.ECDSAP256, Version: 1, State: "revoked"}, nil
 }
-func (s *stubManagedKeys) Zeroize(_ context.Context, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
+func (s *stubManagedKeys) Zeroize(_ context.Context, _, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
 	s.zeroizeCalls++
 	s.lastKeyID, s.lastRequester, s.lastIdem = keyID, requester, idempotencyKey
 	s.lastBinding = requestBinding
@@ -73,7 +73,7 @@ func (s *stubManagedKeys) Zeroize(_ context.Context, _, keyID, requester, idempo
 	return api.ManagedKey{KeyID: "fake-kms-key-0001", Algorithm: crypto.ECDSAP256, Version: 1, State: "zeroized"}, nil
 }
 
-func (s *stubManagedKeys) VerifyCustody(_ context.Context, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
+func (s *stubManagedKeys) VerifyCustody(_ context.Context, _, _, keyID, requester, idempotencyKey, requestBinding string) (api.ManagedKey, error) {
 	s.verifyCalls++
 	s.lastKeyID, s.lastRequester, s.lastIdem = keyID, requester, idempotencyKey
 	s.lastBinding = requestBinding

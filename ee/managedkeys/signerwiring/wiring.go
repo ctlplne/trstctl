@@ -46,14 +46,25 @@ const (
 // That control-plane package imports github.com/google/uuid, whose SQL scanner
 // support links database/sql/driver and violates the sacred signer closure.
 type managedKeyConfig struct {
-	Enabled  bool             `json:"enabled,omitempty"`
-	Provider string           `json:"provider,omitempty"`
-	AWS      awsConfig        `json:"aws,omitempty"`
-	Azure    cloudTokenConfig `json:"azure,omitempty"`
-	GCP      gcpConfig        `json:"gcp,omitempty"`
-	PKCS11   pkcs11Config     `json:"pkcs11,omitempty"`
-	TPM2     tpm2Config       `json:"tpm2,omitempty"`
-	YubiHSM2 pkcs11Config     `json:"yubihsm2,omitempty"`
+	Enabled  bool   `json:"enabled,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	// Providers is every provider the signer holds at once (A199); empty
+	// means Provider alone.
+	Providers []string `json:"providers,omitempty"`
+	// TenantProviders is control-plane policy. A shared configuration may
+	// carry it; the signer holds every listed provider regardless.
+	TenantProviders []tenantProviderPin `json:"tenant_providers,omitempty"`
+	AWS             awsConfig           `json:"aws,omitempty"`
+	Azure           cloudTokenConfig    `json:"azure,omitempty"`
+	GCP             gcpConfig           `json:"gcp,omitempty"`
+	PKCS11          pkcs11Config        `json:"pkcs11,omitempty"`
+	TPM2            tpm2Config          `json:"tpm2,omitempty"`
+	YubiHSM2        pkcs11Config        `json:"yubihsm2,omitempty"`
+}
+
+type tenantProviderPin struct {
+	TenantID string `json:"tenant_id"`
+	Provider string `json:"provider"`
 }
 
 type awsConfig struct {
@@ -103,9 +114,11 @@ type tpm2Config struct {
 	PersistentHandleBase uint32 `json:"persistent_handle_base,omitempty"`
 }
 
-// ProviderOption decodes signer-local configuration, constructs exactly one
-// licensed provider, and binds it to the signer's durable managed-key runtime.
-// Credential values must be file references; inline values fail closed.
+// ProviderOption decodes signer-local configuration, constructs every listed
+// licensed provider (one when only Provider is set), and binds them to the
+// signer's durable managed-key runtime, which keeps each key's provider in its
+// journal. Credential values must be file references; inline values fail
+// closed.
 func ProviderOption(path, journalDir string) (signing.ServerOption, error) {
 	raw, err := os.ReadFile(path) // #nosec G304 -- path is the signer operator's explicit local configuration file, never remote input (CWE-22).
 	if err != nil {
@@ -135,11 +148,39 @@ func ProviderOption(path, journalDir string) (signing.ServerOption, error) {
 	if strings.TrimSpace(journalDir) == "" {
 		return nil, fmt.Errorf("managed-key provider requires --keystore for a durable idempotency journal")
 	}
-	providerName, implementation, err := provider(cfg)
-	if err != nil {
-		return nil, err
+	providers := map[string]crypto.RemoteKeyLifecycle{}
+	for _, name := range enabledProviders(cfg) {
+		one := cfg
+		one.Provider = name
+		providerName, implementation, err := provider(one)
+		if err != nil {
+			return nil, fmt.Errorf("managed-key provider %s: %w", name, err)
+		}
+		if _, dup := providers[providerName]; dup {
+			return nil, fmt.Errorf("managed-key config lists provider %s twice", providerName)
+		}
+		providers[providerName] = implementation
 	}
-	return signing.WithManagedKeyProviders(journalDir, map[string]crypto.RemoteKeyLifecycle{providerName: implementation}), nil
+	return signing.WithManagedKeyProviders(journalDir, providers), nil
+}
+
+// enabledProviders is Providers when set, else Provider alone (AWS KMS when
+// that is empty too), lowercase and trimmed.
+func enabledProviders(cfg managedKeyConfig) []string {
+	var out []string
+	for _, raw := range cfg.Providers {
+		if name := strings.ToLower(strings.TrimSpace(raw)); name != "" {
+			out = append(out, name)
+		}
+	}
+	if len(out) == 0 {
+		name := strings.ToLower(strings.TrimSpace(cfg.Provider))
+		if name == "" {
+			name = providerAWS
+		}
+		out = append(out, name)
+	}
+	return out
 }
 
 func wipeConfigSecrets(cfg *managedKeyConfig) {

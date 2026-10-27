@@ -185,15 +185,15 @@ describe("SIMP-05 CA hierarchy ceremony and custody wiring", () => {
     expect(screen.queryByText(/BEGIN PRIVATE KEY|PRIVATE KEY-----/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
-    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String), "aws-kms"));
     expect(await screen.findByText("Version 2")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Revoke key kms/root-1" }));
-    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String), "aws-kms"));
     expect(await screen.findByText("revoked")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Request deletion kms/root-1" }));
-    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String), "aws-kms"));
     expect((await screen.findAllByText("Deletion pending")).length).toBeGreaterThan(0);
   });
 

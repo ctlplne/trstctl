@@ -1412,23 +1412,38 @@ describe("CA hierarchy and custody surface", () => {
     expect(screen.getByText("Version 1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Verify key" }));
-    await waitFor(() => expect(apiMock.verifyManagedKeyCustody).toHaveBeenCalledWith("kms/root-1", undefined));
+    await waitFor(() => expect(apiMock.verifyManagedKeyCustody).toHaveBeenCalledWith("kms/root-1", undefined, "gcp-kms"));
     expect(await screen.findByText(/Verified then/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Rotate key kms/root-1" }));
-    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.rotateManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String), "gcp-kms"));
     expect(await screen.findByText("Version 2")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Revoke key kms/root-1" }));
-    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.revokeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String), "gcp-kms"));
     expect(await screen.findByText("revoked")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Request deletion kms/root-1" }));
-    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String)));
+    await waitFor(() => expect(apiMock.zeroizeManagedKey).toHaveBeenCalledWith("kms/root-1", expect.any(String), "gcp-kms"));
     expect((await screen.findAllByText("Deletion pending")).length).toBeGreaterThan(0);
     expect(screen.getByText(/Provider may retain this key/)).toBeInTheDocument();
     expect(screen.queryByText(/BEGIN PRIVATE KEY/)).not.toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE KEY-----/)).not.toBeInTheDocument();
+  });
+
+  // A199: several providers run at once; a pinned tenant starts on its pin.
+  it("offers every running provider and starts a pinned tenant on its pin", async () => {
+    const base = await apiMock.managedKeyCustody();
+    apiMock.managedKeyCustody.mockResolvedValue({
+      ...base,
+      configured_provider: "pkcs11",
+      configured_providers: ["pkcs11", "aws"],
+      tenant_provider: "aws",
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=custody");
+    expect(await screen.findByText("Running now: PKCS#11 HSM, AWS KMS")).toBeInTheDocument();
+    expect(screen.getByText("This tenant's managed keys are pinned to AWS KMS.")).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "Custody provider" })).toHaveValue("aws");
   });
 
   it("shows an old active lifecycle key as unavailable when the last provider proof failed", async () => {

@@ -1245,6 +1245,14 @@ export const messages = {
     defaultMessage: "Configured now: {provider}",
     description: "Heading naming the provider configured in the running server.",
   },
+  "caHierarchy.custody.configuredMany": {
+    defaultMessage: "Running now: {providers}",
+    description: "A199: heading naming every provider the running server holds at once.",
+  },
+  "caHierarchy.custody.tenantPinned": {
+    defaultMessage: "This tenant's managed keys are pinned to {provider}.",
+    description: "A199: the caller's tenant may generate keys only under this provider.",
+  },
   "caHierarchy.custody.notConfigured": { defaultMessage: "No provider is configured yet", description: "Heading when managed-key custody is disabled." },
   "caHierarchy.custody.startupOnly": {
     defaultMessage: "Set host file refs; restart control plane and signer.",

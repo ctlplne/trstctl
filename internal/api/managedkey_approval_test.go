@@ -17,16 +17,16 @@ import (
 
 type managedKeyApprovalServiceStub struct{}
 
-func (managedKeyApprovalServiceStub) Generate(context.Context, string, crypto.Algorithm, string, string) (ManagedKey, error) {
+func (managedKeyApprovalServiceStub) Generate(context.Context, string, string, crypto.Algorithm, string, string) (ManagedKey, error) {
 	return ManagedKey{}, nil
 }
-func (managedKeyApprovalServiceStub) Rotate(context.Context, string, string, string, string, string) (ManagedKey, error) {
+func (managedKeyApprovalServiceStub) Rotate(context.Context, string, string, string, string, string, string) (ManagedKey, error) {
 	return ManagedKey{}, nil
 }
-func (managedKeyApprovalServiceStub) Revoke(context.Context, string, string, string, string, string) (ManagedKey, error) {
+func (managedKeyApprovalServiceStub) Revoke(context.Context, string, string, string, string, string, string) (ManagedKey, error) {
 	return ManagedKey{}, nil
 }
-func (managedKeyApprovalServiceStub) Zeroize(context.Context, string, string, string, string, string) (ManagedKey, error) {
+func (managedKeyApprovalServiceStub) Zeroize(context.Context, string, string, string, string, string, string) (ManagedKey, error) {
 	return ManagedKey{}, nil
 }
 

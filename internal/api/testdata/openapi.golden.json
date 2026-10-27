@@ -24286,6 +24286,10 @@
           "key_id": {
             "type": "string"
           },
+          "provider": {
+            "description": "The provider holding the key.",
+            "type": "string"
+          },
           "public_der": {
             "format": "byte",
             "type": "string"
@@ -24299,6 +24303,7 @@
           }
         },
         "required": [
+          "provider",
           "key_id",
           "algorithm",
           "version",
@@ -24309,6 +24314,10 @@
       "ManagedKeyActionRequest": {
         "properties": {
           "key_id": {
+            "type": "string"
+          },
+          "provider": {
+            "description": "The key's provider, as the inventory reports it; needed only when the handle exists under more than one provider.",
             "type": "string"
           }
         },
@@ -24425,6 +24434,7 @@
             "type": "string"
           },
           "configured_provider": {
+            "description": "The default provider a key goes to when neither the request nor the tenant names one.",
             "enum": [
               "",
               "aws",
@@ -24435,6 +24445,21 @@
               "yubihsm2"
             ],
             "type": "string"
+          },
+          "configured_providers": {
+            "description": "Every provider the deployment runs at once; a key may be generated under any of them unless the tenant is pinned.",
+            "items": {
+              "enum": [
+                "aws",
+                "azure-key-vault",
+                "gcp-kms",
+                "pkcs11",
+                "tpm2",
+                "yubihsm2"
+              ],
+              "type": "string"
+            },
+            "type": "array"
           },
           "enabled": {
             "type": "boolean"
@@ -24462,6 +24487,18 @@
           },
           "security_boundary": {
             "type": "string"
+          },
+          "tenant_provider": {
+            "description": "The provider the caller's tenant is pinned to; absent when the tenant chooses per key.",
+            "enum": [
+              "aws",
+              "azure-key-vault",
+              "gcp-kms",
+              "pkcs11",
+              "tpm2",
+              "yubihsm2"
+            ],
+            "type": "string"
           }
         },
         "required": [
@@ -24469,6 +24506,7 @@
           "lifecycle_attached",
           "ready",
           "configured_provider",
+          "configured_providers",
           "configuration_mode",
           "secret_delivery",
           "restart_required",

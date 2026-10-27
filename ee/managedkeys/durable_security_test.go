@@ -238,7 +238,7 @@ func TestManagedKeyDurableBindingSurvivesHTTPRecorderGC(t *testing.T) {
 	approval := &managedKeyApprovalSpy{}
 	keyLoads := 0
 	service := &durableService{
-		provider: "aws-kms", approvals: approval,
+		selection: ProviderSelection{Default: "aws-kms", Enabled: []string{"aws-kms"}}, approvals: approval,
 		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
 			return operation, nil
 		},
@@ -254,14 +254,14 @@ func TestManagedKeyDurableBindingSurvivesHTTPRecorderGC(t *testing.T) {
 		},
 	}
 
-	if _, err := service.Revoke(context.Background(), tenantID, keyID, "different-caller", rawKey, changedCaller); !errors.Is(err, orchestrator.ErrIdempotencyConflict) {
+	if _, err := service.Revoke(context.Background(), tenantID, "", keyID, "different-caller", rawKey, changedCaller); !errors.Is(err, orchestrator.ErrIdempotencyConflict) {
 		t.Fatalf("new-recorder changed caller error=%v, want ErrIdempotencyConflict", err)
 	}
 	if approval.calls != 0 || keyLoads != 0 {
 		t.Fatalf("changed caller touched approval/key state: approvals=%d key-loads=%d", approval.calls, keyLoads)
 	}
 
-	replay, err := service.Revoke(context.Background(), tenantID, keyID, "original-caller", rawKey, originalDigest)
+	replay, err := service.Revoke(context.Background(), tenantID, "", keyID, "original-caller", rawKey, originalDigest)
 	if err != nil {
 		t.Fatalf("new-recorder exact replay: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestDurableManagedKeyApprovalIntentBindsCurrentTargetAndCommandEvidence(t *
 	)
 	spy := &managedKeyExactIntentSpy{}
 	service := &durableService{
-		provider: "azure-key-vault", approvals: spy,
+		selection: ProviderSelection{Default: "azure-key-vault", Enabled: []string{"azure-key-vault"}}, approvals: spy,
 		loadOperation: func(context.Context, string, string) (store.ManagedKeyOperation, error) {
 			return store.ManagedKeyOperation{}, pgx.ErrNoRows
 		},
@@ -302,7 +302,7 @@ func TestDurableManagedKeyApprovalIntentBindsCurrentTargetAndCommandEvidence(t *
 	}
 
 	for _, idempotencyKey := range []string{"rotate-attempt-a", "rotate-attempt-a", "rotate-attempt-b"} {
-		_, err := service.Rotate(context.Background(), tenantID, keyID, "alice", idempotencyKey, "sha256:http-command")
+		_, err := service.Rotate(context.Background(), tenantID, "", keyID, "alice", idempotencyKey, "sha256:http-command")
 		if !errors.Is(err, ErrNotApproved) {
 			t.Fatalf("rotate %q error = %v, want ErrNotApproved", idempotencyKey, err)
 		}
@@ -347,7 +347,7 @@ func sameStrings(left, right []string) bool {
 }
 
 func TestDurableManagedKeyFactoryRequiresExactApprovalAuthority(t *testing.T) {
-	_, err := NewDurableFactory("aws-kms")(server.ManagedKeyServiceDeps{
+	_, err := NewDurableFactory(ProviderSelection{Default: "aws-kms", Enabled: []string{"aws-kms"}})(server.ManagedKeyServiceDeps{
 		Store: &store.Store{}, Log: &events.Log{}, ApprovalChecker: nil,
 	})
 	if err == nil {

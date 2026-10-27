@@ -149,7 +149,7 @@ func attachEEProviderBYOK(cfg *config.Config, log *slog.Logger, lic *license.Man
 	if managedKeysConfig.Enabled {
 		// Provider constructors and credentials live in trstctl-signer; the
 		// licensed outbox handler is the sole ManageKey RPC caller (AN-4/AN-6).
-		deps.ManagedKeyFactory = eemanagedkeys.NewDurableFactory(managedKeysConfig.Provider)
+		deps.ManagedKeyFactory = eemanagedkeys.NewDurableFactory(eemanagedkeys.SelectionFromConfig(managedKeysConfig))
 		deps.LicensedOutboxFactory = appendOutboxFactory(deps.LicensedOutboxFactory, eemanagedkeys.NewDurableOutboxFactory())
 	}
 	deps.KMIPFactory = eekmip.NewFactory()

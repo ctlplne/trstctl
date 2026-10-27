@@ -111,11 +111,13 @@ export function ManagedKeyCustodyWorkspace() {
         const normalized = {
           ...next,
           blockers: next.blockers ?? [],
+          configured_providers: next.configured_providers ?? (next.configured_provider ? [next.configured_provider] : []),
           providers: (next.providers ?? []).map((item) => ({ ...item, requirements: item.requirements ?? [] })),
         };
         setPlan(normalized);
         setPlanError(null);
-        const initialProvider = normalized.configured_provider || normalized.providers[0]?.id || "";
+        // A pinned tenant starts on its pin; otherwise on the deployment default.
+        const initialProvider = normalized.tenant_provider || normalized.configured_provider || normalized.providers[0]?.id || "";
         setProvider(initialProvider);
       })
       .catch((error) => {
@@ -239,7 +241,7 @@ export function ManagedKeyCustodyWorkspace() {
         await loadInventory();
         return;
       }
-      const generatedProvider = plan?.configured_provider === "aws" ? "aws-kms" : (plan?.configured_provider ?? "");
+      const generatedProvider = generated.provider || (preview.provider === "aws" ? "aws-kms" : preview.provider);
       setManagedKey(generated);
       setManagedKeyProvider(generatedProvider);
       await loadInventory();
@@ -267,13 +269,13 @@ export function ManagedKeyCustodyWorkspace() {
         setKeyError(t("caHierarchy.custody.intent.unavailable"));
         return;
       }
-      const actionMethods: Record<typeof action, (keyId: string, requestKey?: string) => Promise<ManagedKey | ManagedKeyOperation>> = {
+      const actionMethods: Record<typeof action, (keyId: string, requestKey?: string, provider?: string) => Promise<ManagedKey | ManagedKeyOperation>> = {
         rotate: api.rotateManagedKey,
         revoke: api.revokeManagedKey,
         zeroize: api.zeroizeManagedKey,
         verify_custody: api.verifyManagedKeyCustody,
       };
-      const next = await actionMethods[action](keyId, requestKey);
+      const next = await actionMethods[action](keyId, requestKey, managedKeyProvider || undefined);
       // A queued action retains this version's stable retry key until native
       // completion. A later rotation on the next version gets a new key.
       if (isManagedKeyOperation(next)) {
@@ -354,7 +356,7 @@ export function ManagedKeyCustodyWorkspace() {
               managedKey={managedKey}
               busy={keyBusy || operation?.status === "queued"}
               onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
-              actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_provider)}
+              actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_providers ?? [plan.configured_provider])}
             />
           ) : null}
           <StepShell
@@ -393,7 +395,7 @@ export function ManagedKeyCustodyWorkspace() {
                 preview={preview}
                 onGenerate={() => void generateManagedKey()}
                 onAction={(action, keyId) => void runManagedKeyAction(action, keyId)}
-                actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_provider)}
+                actionsDisabled={!isCurrentManagedKeyProvider(managedKeyProvider, plan.configured_providers ?? [plan.configured_provider])}
               />
             ) : null}
           </StepShell>
@@ -403,8 +405,9 @@ export function ManagedKeyCustodyWorkspace() {
   );
 }
 
-function isCurrentManagedKeyProvider(keyProvider: string, configuredProvider: string) {
-  return keyProvider === configuredProvider || (keyProvider === "aws-kms" && configuredProvider === "aws");
+// A199: an action needs the key's provider to be one the deployment runs now.
+function isCurrentManagedKeyProvider(keyProvider: string, configuredProviders: string[]) {
+  return configuredProviders.some((configured) => keyProvider === configured || (keyProvider === "aws-kms" && configured === "aws"));
 }
 
 function CustodyConfiguration({
@@ -426,6 +429,8 @@ function CustodyConfiguration({
 }) {
   const { t } = useTranslation();
   const configured = plan.providers.find((item) => item.id === plan.configured_provider);
+  const runningLabels = (plan.configured_providers ?? []).map((id) => plan.providers.find((item) => item.id === id)?.label ?? id).filter(Boolean);
+  const pinned = plan.tenant_provider ? plan.providers.find((item) => item.id === plan.tenant_provider) : undefined;
   return (
     <div className="grid gap-4">
       <Card>
@@ -474,9 +479,16 @@ function CustodyConfiguration({
       <div className="grid gap-3 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>{configured ? t("caHierarchy.custody.configured", { provider: configured.label }) : t("caHierarchy.custody.notConfigured")}</CardTitle>
+            <CardTitle>
+              {runningLabels.length > 1
+                ? t("caHierarchy.custody.configuredMany", { providers: runningLabels.join(", ") })
+                : configured
+                  ? t("caHierarchy.custody.configured", { provider: configured.label })
+                  : t("caHierarchy.custody.notConfigured")}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
+            {pinned ? <p className="font-medium text-foreground">{t("caHierarchy.custody.tenantPinned", { provider: pinned.label })}</p> : null}
             <p>{plan.security_boundary}</p>
             <p>{t("caHierarchy.custody.startupOnly")}</p>
             <p className="font-medium text-foreground">

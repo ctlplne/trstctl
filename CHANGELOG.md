@@ -2,6 +2,11 @@
 
 ### Added
 
+- Several managed-key providers at once: `managed_keys.providers` lists the
+  providers a deployment runs together (for example a PKCS#11 HSM and AWS KMS),
+  and the isolated signer builds them all. A key is created under the provider
+  its request names, `managed_keys.tenant_providers` pins a tenant to one, and
+  every key reports its provider. Actions find a key's provider from its handle.
 - Deployment KEK rotation: the operator tenant (`secrets.kek_operator_tenant_id`)
   rotates the deployment KEK, the key behind every credential of a tenant without
   its own key domain, from the local key file onto a key under an operator wrapper

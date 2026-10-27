@@ -14914,6 +14914,8 @@ export interface components {
             custody_status?: "not_checked" | "pending" | "verified" | "unavailable";
             extractable?: boolean;
             key_id: string;
+            /** @description The provider holding the key. */
+            provider: string;
             /** Format: byte */
             public_der?: string;
             /** @description States: active, superseded, revoked, deletion_pending, zeroized. deletion_pending means the provider accepted deletion and signing is blocked, but provider-held key material may remain during its retention window; zeroized means local device destruction was confirmed. */
@@ -14922,6 +14924,8 @@ export interface components {
         };
         ManagedKeyActionRequest: {
             key_id: string;
+            /** @description The key's provider, as the inventory reports it; needed only when the handle exists under more than one provider. */
+            provider?: string;
         };
         ManagedKeyApproval: {
             /** @enum {string} */
@@ -14954,8 +14958,13 @@ export interface components {
             blockers: string[];
             /** @enum {string} */
             configuration_mode: "startup_static";
-            /** @enum {string} */
+            /**
+             * @description The default provider a key goes to when neither the request nor the tenant names one.
+             * @enum {string}
+             */
             configured_provider: "" | "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
+            /** @description Every provider the deployment runs at once; a key may be generated under any of them unless the tenant is pinned. */
+            configured_providers: ("aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2")[];
             enabled: boolean;
             lifecycle_attached: boolean;
             providers: components["schemas"]["ManagedKeyCustodyProvider"][];
@@ -14964,6 +14973,11 @@ export interface components {
             /** @enum {string} */
             secret_delivery: "file_reference_only";
             security_boundary: string;
+            /**
+             * @description The provider the caller's tenant is pinned to; absent when the tenant chooses per key.
+             * @enum {string}
+             */
+            tenant_provider?: "aws" | "azure-key-vault" | "gcp-kms" | "pkcs11" | "tpm2" | "yubihsm2";
         };
         ManagedKeyCustodyProvider: {
             custody: string;

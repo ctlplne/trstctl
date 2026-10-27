@@ -870,11 +870,13 @@ create/list round trip; the PQC issuance proofs live under `internal/pqc` and
 The managed-key API spine is configuration- and license-gated for AWS KMS, Azure Key
 Vault/Managed HSM, GCP Cloud KMS, PKCS#11, TPM 2.0, and YubiHSM 2 custody: once
 `managed_keys.enabled` is true and `managed_keys.provider` selects `aws`,
-`azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2`, the control plane
-exposes:
+`azure-key-vault`, `gcp-kms`, `pkcs11`, `tpm2`, or `yubihsm2` (or
+`managed_keys.providers` lists several to run at once, with optional per-tenant pins),
+the control plane exposes:
 
 - `GET /api/v1/managed-keys/custody` — return a secret-free startup plan for all six
-  providers, the configured provider, signer attachment, and exact blockers;
+  providers, the default and every running provider, the caller tenant's pin, signer
+  attachment, and exact blockers;
 - `POST /api/v1/managed-keys/preview` — validate provider and algorithm without
   writing state or calling the signer/provider, then name the later execution effects
   and verification evidence;
@@ -1016,8 +1018,8 @@ external CA registry API, each of which calls the one issuance path with an
 
 - **Private-key custody is a deployment boundary.** All six managed-key backends are
   census-served through the separate HSM signer artifact, but the operator must still
-  provision an Enterprise BYOK license, one provider, credential files, IAM, network
-  egress, and device/module trust — see [configuration](../configuration.md) for the
+  provision an Enterprise BYOK license, the providers it runs (one, or several with
+  per-tenant pins), credential files, IAM, network egress, and device/module trust — see [configuration](../configuration.md) for the
   startup contract.
 - **Emulator proof is not deployment certification.** The cloud gate uses faithful
   vendor-protocol emulators, PKCS#11/YubiHSM use a SoftHSM-backed ABI target, and TPM

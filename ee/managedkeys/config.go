@@ -18,5 +18,5 @@ func FactoryFromConfig(_ context.Context, cfg config.ManagedKeys, _ *egress.Guar
 	if !cfg.Enabled {
 		return nil, nil
 	}
-	return NewDurableFactory(cfg.Provider), nil
+	return NewDurableFactory(SelectionFromConfig(cfg)), nil
 }
