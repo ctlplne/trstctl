@@ -644,6 +644,22 @@ credentials whose custodian is gone or inactive, and a blast-radius explorer at
 behind the same confirm and dual-control guards as the API. See
 [The web console](../web-console.md).
 
+### Agent key sets for authorization servers
+
+An agent can use its broker-issued identity to get access tokens from your own
+authorization server, as MCP authorization expects. trstctl publishes the public
+keys of each agent's valid broker certificates at a public key set:
+
+```http
+GET /agent-keys/<tenant_id>/<agent_id>/jwks.json
+```
+
+Register the agent at your authorization server as a client that authenticates
+with `private_key_jwt` against that URL. Each key's `kid` is the hex SHA-256 of
+its SubjectPublicKeyInfo; a revoked or expired certificate's key leaves the set at
+once, and an unknown agent gets the same empty set. See
+[MCP authorization with a trstctl agent identity](../guides/mcp-authorization.md).
+
 ## Use it
 
 Create and transition a managed identity:

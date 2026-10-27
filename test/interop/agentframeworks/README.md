@@ -39,6 +39,18 @@ The agent uses a scripted model in place of an LLM: it calls the one tool it is
 told to and reports the answer, so no model provider account is needed. A real
 deployment swaps in any ADK model; nothing else changes.
 
+## MCP authorization mode
+
+With `"authorization": "oauth"` the tool server is instead an OAuth resource
+server under MCP authorization: it publishes protected resource metadata and
+accepts only tokens your authorization server issued for it (issuer, audience,
+scope, allowed client). The agent, run with `--oauth-client-id`, follows the
+metadata to that server and authenticates there with a `private_key_jwt`
+assertion signed by its trstctl identity key, which the authorization server
+checks against trstctl's agent key set; `--oauth-exchange` adds the server's
+token exchange (`oauthclient/`). See
+[MCP authorization with a trstctl agent identity](../../../docs/guides/mcp-authorization.md).
+
 ## Run it
 
 ```sh

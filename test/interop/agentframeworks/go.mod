@@ -6,6 +6,7 @@ toolchain go1.26.10
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	golang.org/x/oauth2 v0.36.0
 	google.golang.org/adk v1.9.0
 	google.golang.org/genai v1.57.0
 	trstctl.com/trstctl v0.0.0-00010101000000-000000000000
@@ -40,7 +41,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect

@@ -5,7 +5,13 @@
 // when the agent's trstctl identity and delegated credential authorize it.
 //
 //	toolserver pin   --config server.json   # read and pin the tenant's issuing CA and roots
-//	toolserver serve --config server.json   # serve MCP over mutually authenticated HTTPS
+//	toolserver serve --config server.json   # serve MCP over HTTPS
+//
+// With "authorization": "agent-delegation" (the default) it admits agents by
+// their mutual-TLS identity and delegated credential. With "authorization":
+// "oauth" it is an OAuth resource server for the customer's authorization server
+// (MCP authorization): protected resource metadata, and bearer tokens issued for
+// this server only (oauth.go).
 package main
 
 import (
@@ -16,6 +22,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -46,6 +53,8 @@ type config struct {
 	Policy           relying.Policy `json:"policy"`
 	StatusTTLSeconds int            `json:"status_ttl_seconds"`
 	AuditFile        string         `json:"audit_file"`
+	Authorization    string         `json:"authorization"`
+	OAuth            oauthConfig    `json:"oauth"`
 }
 
 // pins is what `pin` records and `serve` trusts.
@@ -164,43 +173,25 @@ type deleteOut struct {
 }
 
 func serve(ctx context.Context, cfg config) error {
-	raw, err := os.ReadFile(cfg.PinsFile)
-	if err != nil {
-		return fmt.Errorf("read pins (run toolserver pin first): %w", err)
-	}
-	var pinned pins
-	if err := json.Unmarshal(raw, &pinned); err != nil {
-		return err
-	}
-	client, err := trstctlClient(cfg)
-	if err != nil {
-		return err
-	}
 	audit, err := os.OpenFile(cfg.AuditFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G304 -- operator-named audit log (CWE-22)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = audit.Close() }()
-	gate, err := relying.NewGate(relying.Config{
-		TenantID: cfg.TenantID, IssuingCADER: pinned.IssuingCADER, RootAnchorDERs: pinned.RootAnchorDERs,
-		Policy: cfg.Policy, Trstctl: client, StatusTTL: time.Duration(cfg.StatusTTLSeconds) * time.Second, Audit: audit,
-	})
-	if err != nil {
-		return err
+	var handler http.Handler
+	var tlsConfig *tls.Config
+	switch cfg.Authorization {
+	case "", "agent-delegation":
+		if handler, err = delegationHandler(cfg, audit); err == nil {
+			tlsConfig, err = serverTLS(cfg)
+		}
+	case "oauth":
+		if handler, err = oauthHandler(cfg, audit); err == nil {
+			tlsConfig, err = serverOnlyTLS(cfg)
+		}
+	default:
+		err = fmt.Errorf("unknown authorization %q", cfg.Authorization)
 	}
-
-	server := mcp.NewServer(&mcp.Implementation{Name: "trstctl-reference-tools", Version: "1.0.0"}, nil)
-	mcp.AddTool(server, &mcp.Tool{Name: "search", Description: "Search the record index (a read)."},
-		guarded(gate, "search", func(in searchIn) searchOut {
-			return searchOut{Results: []string{"result for " + in.Query}}
-		}))
-	mcp.AddTool(server, &mcp.Tool{Name: "delete_records", Description: "Delete matching records (a delete)."},
-		guarded(gate, "delete_records", func(deleteIn) deleteOut {
-			return deleteOut{Deleted: 1}
-		}))
-	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true})
-
-	tlsConfig, err := serverTLS(cfg)
 	if err != nil {
 		return err
 	}
@@ -209,7 +200,7 @@ func serve(ctx context.Context, cfg config) error {
 		return err
 	}
 	httpServer := &http.Server{
-		Handler:           withAgentIdentity(cfg.AgentIDPrefix, handler),
+		Handler:           handler,
 		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -226,21 +217,85 @@ func serve(ctx context.Context, cfg config) error {
 	return nil
 }
 
-// guarded runs a tool only when the gate honors the call; a refusal reaches the
-// agent as a tool error naming the reason.
-func guarded[In, Out any](gate *relying.Gate, tool string, run func(In) Out) mcp.ToolHandlerFor[In, Out] {
+// delegationHandler serves the tools to agents admitted by their mutual-TLS
+// identity, each call decided by the delegation gate.
+func delegationHandler(cfg config, audit io.Writer) (http.Handler, error) {
+	raw, err := os.ReadFile(cfg.PinsFile)
+	if err != nil {
+		return nil, fmt.Errorf("read pins (run toolserver pin first): %w", err)
+	}
+	var pinned pins
+	if err := json.Unmarshal(raw, &pinned); err != nil {
+		return nil, err
+	}
+	client, err := trstctlClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	gate, err := relying.NewGate(relying.Config{
+		TenantID: cfg.TenantID, IssuingCADER: pinned.IssuingCADER, RootAnchorDERs: pinned.RootAnchorDERs,
+		Policy: cfg.Policy, Trstctl: client, StatusTTL: time.Duration(cfg.StatusTTLSeconds) * time.Second, Audit: audit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	server := newToolServer(func(tool string) func(context.Context, *mcp.CallToolRequest) error {
+		return func(ctx context.Context, req *mcp.CallToolRequest) error {
+			header := requestHeader(req)
+			presentation := relying.PresentationFromHeaders(header.Get(verifiedAgentHeader), header.Get)
+			if decision := gate.Authorize(ctx, presentation, tool); !decision.Allowed {
+				return fmt.Errorf("refused by the relying service: %s", decision.Reason)
+			}
+			return nil
+		}
+	})
+	return withAgentIdentity(cfg.AgentIDPrefix, mcpHTTPHandler(server)), nil
+}
+
+// newToolServer registers the two tools, each behind the given check.
+func newToolServer(check func(tool string) func(context.Context, *mcp.CallToolRequest) error) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{Name: "trstctl-reference-tools", Version: "1.0.0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "search", Description: "Search the record index (a read)."},
+		guarded(check("search"), func(in searchIn) searchOut {
+			return searchOut{Results: []string{"result for " + in.Query}}
+		}))
+	mcp.AddTool(server, &mcp.Tool{Name: "delete_records", Description: "Delete matching records (a delete)."},
+		guarded(check("delete_records"), func(deleteIn) deleteOut {
+			return deleteOut{Deleted: 1}
+		}))
+	return server
+}
+
+func mcpHTTPHandler(server *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, &mcp.StreamableHTTPOptions{Stateless: true})
+}
+
+func requestHeader(req *mcp.CallToolRequest) http.Header {
+	if req != nil && req.Extra != nil && req.Extra.Header != nil {
+		return req.Extra.Header
+	}
+	return http.Header{}
+}
+
+// guarded runs a tool only when its check passes; a refusal reaches the agent as
+// a tool error naming the reason.
+func guarded[In, Out any](check func(context.Context, *mcp.CallToolRequest) error, run func(In) Out) mcp.ToolHandlerFor[In, Out] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		var zero Out
-		header := http.Header{}
-		if req != nil && req.Extra != nil && req.Extra.Header != nil {
-			header = req.Extra.Header
-		}
-		presentation := relying.PresentationFromHeaders(header.Get(verifiedAgentHeader), header.Get)
-		if decision := gate.Authorize(ctx, presentation, tool); !decision.Allowed {
-			return nil, zero, fmt.Errorf("refused by the relying service: %s", decision.Reason)
+		if err := check(ctx, req); err != nil {
+			return nil, zero, err
 		}
 		return nil, run(in), nil
 	}
+}
+
+// serverOnlyTLS authenticates the tool server; callers authenticate with tokens.
+func serverOnlyTLS(cfg config) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{cert}}, nil
 }
 
 func serverTLS(cfg config) (*tls.Config, error) {

@@ -128,6 +128,7 @@ nav:
           - SCEP enrollment: guides/scep-enrollment.md
           - Kubernetes agent (kind E2E): guides/kubernetes-agent.md
           - External observers: guides/external-observers.md
+          - MCP authorization with an agent identity: guides/mcp-authorization.md
   - Security and assurance:
       - Auditor:
           - Audit and compliance: compliance.md

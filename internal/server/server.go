@@ -2663,6 +2663,9 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 		mux.Handle("/ocsp/", revHandler)
 		mux.Handle("/crl/", revHandler)
 	}
+	// Public like /crl/ and /ocsp/: each agent's current public keys, for the
+	// customer's authorization server to check the agent's client assertions.
+	mux.Handle(agentKeySetPrefix, bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.agentKeySetHandler()))
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
 	}

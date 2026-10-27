@@ -5096,6 +5096,17 @@ This is a deliberate, documented trust boundary, not an accident.
   certificate controls. Fresh-image API/CLI/browser, negative-security and
   preserved-volume restart qualification is still required before this source
   workflow can be called a complete F61 vertical slice.
+- Agent key sets for authorization servers: `GET /agent-keys/{tenant}/{agent}/jwks.json`
+  is public, like the CRL and OCSP routes, and lists the public keys of the
+  agent's valid broker certificates (an unknown agent gets the same empty set);
+  a revoked certificate's key leaves it at once. An authorization server that
+  reads it can authenticate the agent with `private_key_jwt`, which is how an
+  agent with a trstctl identity obtains tokens under MCP authorization
+  ([guide](guides/mcp-authorization.md)); a lab test proves it against Keycloak
+  26.8 with token exchange. How long a revoked identity can still obtain tokens
+  is set by the authorization server's key cache (Keycloak: the `keys` cache
+  lifespan), and tokens already issued live until they expire. What comes next:
+  the same proof with a production identity provider.
 - Ephemeral / JIT issuance: effect-free `POST /api/v1/ephemeral/preview` and
   mutating `POST /api/v1/ephemeral` are served when
   ephemeral issuance is enabled with approval TTL/threshold, trust domain, and

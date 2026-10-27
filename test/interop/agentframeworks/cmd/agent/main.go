@@ -10,16 +10,25 @@
 //	      --server-ca ca.pem --credential credential.der --credential-id <id> \
 //	      --call search --args '{"query":"invoices"}'
 //
+// With --oauth-client-id it authenticates to an MCP server under MCP
+// authorization instead: the customer's authorization server issues it a token,
+// for which it authenticates with a private_key_jwt assertion signed by the key
+// of its trstctl certificate (--tls-key), optionally followed by that server's
+// token exchange (--oauth-exchange); see package oauthclient.
+//
 // It prints one JSON line: the tool it called and the tool's answer, which carries
-// an "error" field when the relying service refused the call.
+// an "error" field when the relying service refused the call, and the
+// authorization steps it took.
 package main
 
 import (
 	"context"
+	"crypto"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -38,6 +47,7 @@ import (
 	"google.golang.org/adk/tool/mcptoolset"
 	"google.golang.org/genai"
 
+	"trstctl.com/trstctl/test/interop/agentframeworks/oauthclient"
 	"trstctl.com/trstctl/test/interop/agentframeworks/present"
 )
 
@@ -50,30 +60,42 @@ func main() {
 	credentialID := flag.String("credential-id", "", "the delegated credential's ID")
 	call := flag.String("call", "", "the tool the scripted model calls")
 	rawArgs := flag.String("args", "{}", "the tool arguments (JSON object)")
+	oauthClientID := flag.String("oauth-client-id", "", "authenticate under MCP authorization as this client")
+	oauthExchange := flag.Bool("oauth-exchange", false, "exchange the client credentials token for the MCP server's scope")
 	flag.Parse()
 
 	var args map[string]any
 	if err := json.Unmarshal([]byte(*rawArgs), &args); err != nil {
 		fail(fmt.Errorf("--args: %w", err))
 	}
-	client, err := identityClient(*certFile, *keyFile, *serverCA, *credentialFile, *credentialID)
+	var client *http.Client
+	var handler *oauthclient.Handler
+	var steps []oauthclient.Step
+	var err error
+	if *oauthClientID != "" {
+		client, handler, err = oauthClient(*keyFile, *serverCA, *oauthClientID, *oauthExchange, func(s oauthclient.Step) { steps = append(steps, s) })
+	} else {
+		client, err = identityClient(*certFile, *keyFile, *serverCA, *credentialFile, *credentialID)
+	}
 	if err != nil {
 		fail(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	answer, err := run(ctx, *server, client, *call, args)
+	answer, err := run(ctx, *server, client, handler, *call, args)
 	if err != nil {
-		fail(err)
+		answer = map[string]any{"error": err.Error()}
 	}
-	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"tool": *call, "answer": answer})
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"tool": *call, "answer": answer, "authorization": steps})
 }
 
 // run drives one agent turn and returns the tool's answer as the agent saw it.
-func run(ctx context.Context, endpoint string, client *http.Client, call string, args map[string]any) (map[string]any, error) {
-	tools, err := mcptoolset.New(mcptoolset.Config{
-		Transport: &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: client, DisableStandaloneSSE: true},
-	})
+func run(ctx context.Context, endpoint string, client *http.Client, handler *oauthclient.Handler, call string, args map[string]any) (map[string]any, error) {
+	transport := &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: client, DisableStandaloneSSE: true}
+	if handler != nil {
+		transport.OAuthHandler = handler
+	}
+	tools, err := mcptoolset.New(mcptoolset.Config{Transport: transport})
 	if err != nil {
 		return nil, err
 	}
@@ -174,6 +196,37 @@ func identityClient(certFile, keyFile, serverCA, credentialFile, credentialID st
 			id:         credentialID,
 		},
 	}, nil
+}
+
+// oauthClient trusts the tool server's CA and signs client assertions with the
+// agent's certificate key.
+func oauthClient(keyFile, serverCA, clientID string, exchange bool, record func(oauthclient.Step)) (*http.Client, *oauthclient.Handler, error) {
+	keyPEM, err := os.ReadFile(keyFile) // #nosec G304 G703 -- operator-named key file (CWE-22)
+	if err != nil {
+		return nil, nil, err
+	}
+	block, _ := pem.Decode(keyPEM)
+	if block == nil {
+		return nil, nil, errors.New("the agent key file holds no PEM key")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("agent key: %w", err)
+	}
+	key, ok := parsed.(crypto.Signer)
+	if !ok {
+		return nil, nil, errors.New("the agent key cannot sign")
+	}
+	caPEM, err := os.ReadFile(serverCA) // #nosec G304 G703 -- operator-named CA file (CWE-22)
+	if err != nil {
+		return nil, nil, err
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caPEM) {
+		return nil, nil, errors.New("the server CA file holds no certificate")
+	}
+	client := &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool}}}
+	return client, &oauthclient.Handler{ClientID: clientID, Key: key, HTTPClient: client, Exchange: exchange, Record: record}, nil
 }
 
 type presentCredential struct {

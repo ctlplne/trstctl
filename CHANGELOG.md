@@ -2,6 +2,15 @@
 
 ### Added
 
+- MCP authorization with a trstctl agent identity: `GET /agent-keys/{tenant}/{agent}/jwks.json`
+  publishes the public keys of an agent's valid broker certificates (a revoked
+  certificate's key leaves at once), so the customer's authorization server can
+  authenticate the agent with `private_key_jwt` and issue it tokens for an MCP
+  server. The reference tool server gains an OAuth resource-server mode (protected
+  resource metadata, audience- and scope-checked bearer tokens) and the reference
+  agent a client that follows the metadata, authenticates with its identity key,
+  and uses the authorization server's token exchange. A lab test proves the flow
+  and the revocation against Keycloak; see `docs/guides/mcp-authorization.md`.
 - Agent delegation for relying services: each tenant has its own agent issuing
   CA in the signer, published at `GET /api/v1/agent-delegation/issuing-ca` with
   its SPKI SHA-256 so a relying service pins it (another tenant's credentials
