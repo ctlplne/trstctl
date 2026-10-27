@@ -78,6 +78,7 @@ var auditEvidenceKinds = map[string]bool{
 	jose.ArtifactRestoreDrill:       true,
 	jose.ArtifactAuditAnchorLog:     true,
 	jose.ArtifactAssuranceRecord:    true,
+	jose.ArtifactEvaluationPack:     true,
 }
 
 // signAuditEvidenceArtifact is the core, signer-owned evidence admission path.

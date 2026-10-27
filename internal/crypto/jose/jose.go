@@ -308,6 +308,9 @@ const (
 	// ArtifactAssuranceRecord signs one credential's lifecycle assurance
 	// record.
 	ArtifactAssuranceRecord = "trstctl.audit-evidence/credential-assurance-record/v1"
+	// ArtifactEvaluationPack signs a design-partner evaluation run's evidence
+	// pack (trstctl evaluate).
+	ArtifactEvaluationPack = "trstctl.audit-evidence/evaluation-pack/v1"
 )
 
 // GenerateRSASigningKey generates a 2048-bit RSA signing key tagged with kid.

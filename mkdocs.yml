@@ -87,6 +87,7 @@ nav:
           - Observability: observability.md
           - Operations and resilience: operations.md
           - Prove isolation (trstctl doctor): operations/doctor.md
+          - Evaluate on your endpoint (trstctl evaluate): operations/evaluate.md
           - Troubleshooting: troubleshooting.md
           - Uninstall: uninstall.md
       - On-call responder:

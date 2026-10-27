@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1804 annotated sites across 27 rules. Each row is
+1809 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -456,7 +456,7 @@ not this file.
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 | `internal/server/mcp_authorization_keycloak_test.go:274` | the lab container's own loopback URL (CWE-88) |
 
-### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (15 sites)
+### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (16 sites)
 
 | Location | Reason |
 |---|---|
@@ -468,6 +468,7 @@ not this file.
 | `internal/crypto/mtls/server_test.go:215` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:288` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
+| `internal/server/evaluate_served_test.go:65` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:530` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
@@ -1185,7 +1186,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (516 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (520 sites)
 
 | Location | Reason |
 |---|---|
@@ -1414,6 +1415,10 @@ not this file.
 | `internal/cli/cli_test.go:2158` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
+| `internal/cli/evaluate/cmd.go:69` | operator-named token file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:125` | the operator names the public trust-bundle path (CWE-22) |
+| `internal/cli/evaluate/cmd.go:176` | operator-named local file (CWE-22) |
+| `internal/cli/evaluate/cmd.go:181` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:67` | operator-named local file (CWE-22) |
 | `internal/cli/pcas_kem_envelope.go:80` | operator-named local file (CWE-22) |
 | `internal/cli/report_verify.go:44` | operator-named local file (CWE-22) |

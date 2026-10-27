@@ -2335,7 +2335,9 @@ until a tenant-authenticated operator activates them in the first-run wizard or 
 `POST /api/v1/setup/protocols/activate`. Activation appends an immutable tenant event
 before the HTTP routes and SPIFFE socket become reachable, and replay restores the gate
 after restart. The shortcut never enables KMIP. Production can omit `PROFILE` and use
-the individual toggles below.
+the individual toggles below. To try a full certificate journey against an endpoint
+of your own, from discovery to a signed audit export, run
+[`trstctl evaluate`](operations/evaluate.md).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

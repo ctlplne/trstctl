@@ -6200,6 +6200,28 @@ one certificate; it collects nothing new. Read it with these limits:
   `trstctl certificates verify-assurance-record` requires a JWK set you obtained
   separately and never trusts the file's own copy.
 
+## Evaluation kit
+
+`trstctl evaluate` runs one certificate journey against an endpoint you choose
+and writes a signed evidence pack. Read the pack with these limits:
+
+- **Discovery is a handshake, not a sweep.** The control plane connects to the
+  endpoint named for the run (a CBOM TLS scan); finding endpoints nobody listed
+  is what a network relay's discovery scan does, and the journey does not run
+  one.
+- **One vantage.** Verification and the renewal check are the command's own TLS
+  handshakes from the machine it ran on.
+- **OCSP, not CRL.** Revocation is checked over OCSP; CRL publication is
+  asynchronous and not checked. The issuing CA certificate for the OCSP check
+  comes from the issuance result or the chain the endpoint served; an endpoint
+  that serves only its leaf, with a host-generated key, cannot be checked.
+- **Keys from the same server.** The run checks the audit export with the keys
+  the server publishes; `trstctl evaluate verify` checks the pack and its export
+  again with a key set obtained separately.
+- **One run, and it changes the endpoint.** The journey creates an identity,
+  deploys two certificates and revokes the first. It is not a load, failover or
+  long-running test, and belongs on an endpoint under evaluation.
+
 ## Customer assurance reports
 
 `GET /api/v1/reports/assurance` and the `customer_assurance` scheduled report put

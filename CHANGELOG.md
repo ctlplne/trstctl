@@ -2,6 +2,17 @@
 
 ### Added
 
+- Evaluation kit: `trstctl evaluate` runs one certificate journey against an
+  endpoint the evaluating team chooses, through the control plane's own API:
+  discovery by the control plane's TLS handshake, ownership, issuance on the
+  platform CA (with the key generated on the host for an agent-executed target),
+  deployment, verification by the command's own TLS handshake, renewal,
+  revocation checked over OCSP, and a signed audit export. It writes an
+  evidence pack with each step's outcome and whether it was observed or only
+  recorded, a pass/fail verdict and the run's limits; a step after a failure is
+  skipped, never passed. `--sign` signs the pack with the audit-evidence key
+  under its own artifact domain, and `trstctl evaluate verify` checks it
+  offline with a pinned audit key set.
 - Customer assurance report: `GET /api/v1/reports/assurance` (`trstctl-cli
   reports assurance`) and the `customer_assurance` scheduled report type put a
   tenant's credential assurance into plain sentences in its white-label brand:
