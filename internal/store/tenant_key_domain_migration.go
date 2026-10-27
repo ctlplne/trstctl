@@ -28,6 +28,9 @@ var tenantKeyDomainCiphertextStages = []string{
 	"code_signing_operations.sealed_command",
 	"idempotency_keys.result",
 	"outbox.payload",
+	// A tenant's shared transit keyring is sealed through its key domain
+	// (the deployment KEK before migration) like every other tenant secret.
+	"transit_keyrings.sealed",
 }
 
 // TenantKeyDomainCiphertextMigrationStages returns a copy of the ordered
@@ -155,6 +158,11 @@ func tenantKeyDomainCiphertextStageSQL(stage string) (selectSQL, updateSQL strin
 	case "outbox.payload":
 		return `SELECT ctid::text, payload FROM outbox WHERE tenant_id = $1 AND octet_length(payload) > 0 FOR UPDATE`,
 			`UPDATE outbox SET payload = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND payload = $4`, true
+	case "transit_keyrings.sealed":
+		// Only the data key is re-wrapped, so the keyring's revision stays: a
+		// replica holding this revision already holds the same keys.
+		return `SELECT ctid::text, sealed FROM transit_keyrings WHERE tenant_id = $1 AND octet_length(sealed) > 0 FOR UPDATE`,
+			`UPDATE transit_keyrings SET sealed = $1 WHERE tenant_id = $2 AND ctid = $3::tid AND sealed = $4`, true
 	default:
 		return "", "", false
 	}

@@ -508,6 +508,11 @@
 
 ### Fixed
 
+- Moving a tenant into its own key domain, or rotating that domain, now re-wraps
+  the tenant's shared transit keyring with its other secrets. The keyring stayed
+  under the previous key, so a replica that started afterwards, or any replica
+  after a restart, could not open it, and the tenant's transit keys stopped
+  working.
 - A CA authority's leaf route (`POST /api/v1/ca/authorities/{id}/issue`) now
   refuses a subject key the tenant recorded as compromised (422, naming the
   compromise), as every other certifying path already did; it signed one before.

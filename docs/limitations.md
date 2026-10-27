@@ -4314,7 +4314,9 @@ denial, injection-inert + secret-redacted, MCP list+invoke).
 transit (encryption-as-a-service) keyring is one sealed row in PostgreSQL: AEAD,
 HMAC, and signing key material is sealed under the tenant's key domain (the
 deployment KEK for a tenant that has not migrated), and re-locked into protected
-memory on load (AN-8). A create or rotate is saved before it is reported, over the
+memory on load (AN-8). Moving the tenant into its own key domain, or rotating that
+domain, re-wraps the row with the tenant's other secrets; only its data key
+changes. A create or rotate is saved before it is reported, over the
 revision the replica last read, so two replicas changing one tenant's keys at once
 cannot overwrite each other: the replica that loses the save catches up and applies
 its change again. A failed save fails the mutation rather than handing back a key

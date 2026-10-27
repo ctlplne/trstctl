@@ -30,6 +30,7 @@ func TestTenantKeyDomainCiphertextMigrationStagesAreFixed(t *testing.T) {
 		"code_signing_operations.sealed_command",
 		"idempotency_keys.result",
 		"outbox.payload",
+		"transit_keyrings.sealed",
 	}
 	if got := store.TenantKeyDomainCiphertextMigrationStages(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("migration stages = %v, want %v", got, want)

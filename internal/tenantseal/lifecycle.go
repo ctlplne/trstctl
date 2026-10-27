@@ -109,6 +109,9 @@ func (l *Lifecycle) Migrate(
 		}
 
 		stages := store.TenantKeyDomainCiphertextMigrationStages()
+		// A migration a previous release started resumes over this release's
+		// inventory, which may have grown.
+		domain.ProgressTotal = int64(len(stages) + 1)
 		for index, stage := range stages {
 			if _, err := l.store.RewriteTenantKeyDomainCiphertextStage(
 				operationCtx, tenantID, stage,
