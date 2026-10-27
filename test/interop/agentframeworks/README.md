@@ -8,8 +8,9 @@ them:
 | --- | --- | --- | --- |
 | `cmd/toolserver` — an MCP tool server that is the relying service | [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk) | v1.8.0 | Apache-2.0 (earlier contributions MIT) |
 | `cmd/agent` — an agent that calls the tool server | [Agent Development Kit for Go](https://github.com/google/adk-go) | v1.9.0 | Apache-2.0 |
+| `cmd/a2aagent` — two agents exchanging an A2A task | [A2A Go SDK](https://github.com/a2aproject/a2a-go) | v2.7.0 | Apache-2.0 |
 
-`go.mod` pins both versions. This directory is its own Go module, so the
+`go.mod` pins all three versions. This directory is its own Go module, so the
 frameworks never enter the trstctl binaries' dependency graph.
 
 ## How a call is honored
@@ -50,6 +51,18 @@ assertion signed by its trstctl identity key, which the authorization server
 checks against trstctl's agent key set; `--oauth-exchange` adds the server's
 token exchange (`oauthclient/`). See
 [MCP authorization with a trstctl agent identity](../../../docs/guides/mcp-authorization.md).
+
+## Agent to agent (A2A)
+
+`cmd/a2aagent` is an A2A 1.0 pair on the official
+[A2A Go SDK](https://github.com/a2aproject/a2a-go) (v2.7.0, Apache-2.0). `serve`
+publishes a signed Agent Card (JWS over the JCS-canonical card, the agent's
+certificate key) whose security requirements are mutual TLS and the
+delegated-credential header, and authorizes every message with the delegation
+gate before any task exists. `call` verifies the serving agent's certificate chain
+and agent ID, accepts the card only if that certificate's key signed it, and sends
+the task with its own identity and credential. See
+[Agent delegation](../../../docs/features/agent-delegation.md#agents-calling-agents-a2a).
 
 ## Run it
 

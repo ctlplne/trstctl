@@ -2,6 +2,14 @@
 
 ### Added
 
+- Agent-to-agent identity over A2A 1.0: a reference pair on the official A2A Go
+  SDK (`test/interop/agentframeworks/cmd/a2aagent`). The serving agent's Agent Card
+  declares mutual TLS and the delegated-credential header as its security
+  requirements and is signed with its trstctl certificate key; the calling agent
+  verifies the certificate chain and agent ID, then the card signature with that
+  key; every request is authorized by the caller's delegated scope before a task
+  exists. The integration suite proves an in-scope task and refuses an
+  out-of-scope skill, a borrowed credential, an untrusted CA and a wrong agent.
 - MCP authorization with a trstctl agent identity: `GET /agent-keys/{tenant}/{agent}/jwks.json`
   publishes the public keys of an agent's valid broker certificates (a revoked
   certificate's key leaves at once), so the customer's authorization server can

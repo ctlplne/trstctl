@@ -304,7 +304,14 @@ func (labPolicy) Evaluate(context.Context, policy.Input) (policy.Decision, error
 
 func newLabIdentities(t *testing.T, h *harness) *labIdentities {
 	t.Helper()
-	ca, err := h.client.GenerateKeyHandle(h.ctx, crypto.ECDSAP256, "lab-agent-identity-ca")
+	return newLabIdentitiesUnder(t, h, "lab-agent-identity-ca")
+}
+
+// newLabIdentitiesUnder issues identities under a lab CA held in the signer under
+// handle; a second handle is a second CA that trusts nothing of the first.
+func newLabIdentitiesUnder(t *testing.T, h *harness, handle string) *labIdentities {
+	t.Helper()
+	ca, err := h.client.GenerateKeyHandle(h.ctx, crypto.ECDSAP256, handle)
 	if err != nil {
 		t.Fatal(err)
 	}

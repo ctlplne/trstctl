@@ -239,6 +239,31 @@ refused, a revocation stops calls within the two-second status window the lab
 configures, and the tool server's audit log records the delegation path behind
 every decision.
 
+### Agents calling agents (A2A)
+
+The same identity and delegation carry over the Agent2Agent (A2A) protocol, version
+1.0, using the identity mechanisms it defines. The receiving agent's Agent Card
+declares two security requirements every request must meet: `mtls` (the caller's
+trstctl agent certificate) and an `apiKey` header scheme naming
+`X-Trstctl-Agent-Credential` (the caller's delegated credential). The card is
+signed as A2A specifies, a JWS over the JCS-canonical card, with the receiving
+agent's certificate key.
+
+- The calling agent checks the receiving agent's certificate chain to the agent CA
+  and the agent ID it names (agent certificates name agents, not hosts), then
+  accepts the card only if its signature verifies with that certificate's key.
+- The receiving agent authenticates every request by the caller's mutual-TLS
+  identity and authorizes it before any task exists: the requested skill's tool
+  and operation must be within the caller's delegated scope, the credential must
+  be delegated to the connected agent, and its status must be `active`. A refusal
+  is A2A's authorization error.
+
+The reference pair (`cmd/a2aagent` in `test/interop/agentframeworks`, on the
+official A2A Go SDK) runs in the integration suite against the real signer: the
+task within scope completes; an out-of-scope skill, another agent presenting the
+credential, an agent from an untrusted CA, and a caller that reached a different
+agent than it meant to are refused. Finding A2A endpoints is not part of this.
+
 ## Pitfalls & limits
 
 - Provisioning-gated: the routes attach in every build, but a chain-bound request
