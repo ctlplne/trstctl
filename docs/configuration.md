@@ -2293,37 +2293,80 @@ two ways:
 | `TRSTCTL_SIGNER_MTLS_PEER_CA_FILE` | — | PEM CA bundle anchoring the **signer's** certificate. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_MTLS_PEER_PIN` | — | Hex SHA-256 of the **signer** certificate's public key, pinned by the control plane. Required with `…_MTLS_ADDRESS`. |
 | `TRSTCTL_SIGNER_TENANT_KEK_CONFIG` | — | Signer-local tenant KEK file a child signer receives as `--tenant-kek-config`: the PKCS#11 token and the HSM keys that wrap tenant domain KEKs (see [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)). Needs the cgo signer and the BYOK license; an external signer takes the flag directly. |
+| `TRSTCTL_KMS_WRAP_CONFIG` | — | The configuration file of `trstctl-kms-wrap`, the adapter the signer runs for `--kms-wrap-command`: one block per provider, credentials as file paths (see [Signer topology and CA custody](#signer-topology-and-ca-custody)). Set it in the signer's environment; Helm sets it from `externalKMS.adapterConfigSecret`. |
 | `TRSTCTL_CA_CERT_FILE` | `data/ca/issuing-ca.crt` | Where the issuing CA's self-signed certificate is persisted, so the control plane **reuses the same CA cert** across restarts. |
 | `TRSTCTL_CA_PUBLIC_CERT_FILE` | — | Optional certificate-only mirror of the issuing CA. Use this to give an unprivileged bootstrap client the public trust anchor without mounting the private control-plane data volume. The control plane republishes it from `TRSTCTL_CA_CERT_FILE` on every successful CA bind. |
 
 In Helm deployments, the signer key store uses local KEK custody by default:
 `kek.existingSecret` or eval-only `kek.generate=true` mounts
 `/etc/trstctl/kek/kek.bin` and the chart passes `--kek` to `trstctl-signer`.
-Regulated deployments can instead set:
+Regulated deployments can instead wrap the key store's data keys under a key
+held by AWS KMS, Google Cloud KMS, Azure Key Vault (or Managed HSM), or a
+PKCS#11 HSM:
 
 ```yaml
 externalKMS:
   enabled: true
   provider: awskms        # awskms | gcpkms | azurekv | pkcs11
-  keyRef: arn:aws:kms:us-east-1:111122223333:key/trstctl-signer
-  wrapCommand: /usr/local/bin/kms-wrap-adapter   # yours: trstctl ships no adapter
+  keyRef: arn:aws:kms:us-east-1:111122223333:key/0b1c2d3e-4f5a-6b7c-8d9e-0f1a2b3c4d5e
+  wrapCommand: /usr/local/bin/trstctl-kms-wrap   # the shipped adapter (the default)
+  adapterConfigSecret: trstctl-kms-wrap           # config.json plus credential files
   timeout: 10s
 ```
 
 With `externalKMS.enabled=true`, the chart passes `--kms-provider`,
 `--kms-key-ref`, `--kms-wrap-command`, and `--kms-timeout` to the signer and does
-not mount the local KEK Secret. trstctl does not ship a wrap adapter: `wrapCommand`
-names one you install in the signer image, against your provider's own client.
-The signer invokes it without a shell as
-`<wrapCommand> wrap|unwrap <provider> <keyRef>`, with DEK bytes only on
-stdin/stdout; a non-zero exit or a timeout fails the operation closed. Missing provider/keyRef/command values, unsupported provider names,
-or a relative command path fail at template time.
+not mount the local KEK Secret. The signer invokes the adapter without a shell
+as `<wrapCommand> wrap|unwrap <provider> <keyRef>`, with data-key bytes only on
+stdin/stdout; a non-zero exit or a timeout fails the operation closed. Missing
+provider/keyRef/command values, unsupported provider names, a relative command
+path, or the shipped adapter without `adapterConfigSecret` fail at template time.
+Before it serves, the signer wraps and unwraps a random value through the
+adapter, so a missing, disabled or unreachable key stops startup with the
+provider's own reason (for example AWS KMS's `DisabledException`) rather than a
+generic seal error at the first key load.
+
+The images ship that adapter as `/usr/local/bin/trstctl-kms-wrap`. The chart
+mounts `adapterConfigSecret` at `/etc/trstctl/kms-wrap` and points the adapter at
+its `config.json` through `TRSTCTL_KMS_WRAP_CONFIG` (outside Helm, set that
+variable for the signer, or put `--config <file>` in the wrap command). The file
+holds one block per provider, with credentials only as file paths:
+
+```json
+{
+  "aws":    {"access_key_id": "AKIA…", "secret_access_key_file": "/etc/trstctl/kms-wrap/aws-secret",
+             "session_token_file": "", "region": "", "endpoint": "", "private_egress_cidrs": []},
+  "gcp":    {"bearer_token_file": "/etc/trstctl/kms-wrap/gcp-token", "endpoint": ""},
+  "azure":  {"bearer_token_file": "/etc/trstctl/kms-wrap/azure-token", "algorithm": "RSA-OAEP-256"},
+  "pkcs11": {"module_path": "/usr/lib/softhsm/libsofthsm2.so", "token_label": "trstctl",
+             "user_pin_file": "/etc/trstctl/kms-wrap/pin"}
+}
+```
+
+| Provider | `keyRef` | What wraps | Credentials |
+|---|---|---|---|
+| `awskms` | a symmetric key's ARN (the region comes from it) or key ID with `region` set | KMS `Encrypt`/`Decrypt` with the encryption context `trstctl:purpose`; `Decrypt` names the key, so a blob from another key is refused | access key ID plus a secret file, optional session token file |
+| `gcpkms` | `projects/P/locations/L/keyRings/R/cryptoKeys/K` (the CryptoKey, not a version) | Cloud KMS `encrypt`/`decrypt` with associated data and CRC32C checks both ways | an OAuth access token file you keep fresh (workload identity) |
+| `azurekv` | `https://<vault>/keys/<name>[/<version>]` | `wrapkey`/`unwrapkey` with RSA-OAEP-256 for an RSA key, or `A256KW`/`CKM_AES_KEY_WRAP_PAD` for a Managed HSM AES key; without a version the current one wraps, and each data key records the version that wrapped it, so rotating the key's version keeps older ones opening | an access token file for `https://vault.azure.net` you keep fresh |
+| `pkcs11` | the `CKA_LABEL` of a non-extractable AES-256 key on the token | AES-256-GCM on the token, bound to the key store's purpose | the token's user PIN file |
+
+`pkcs11` needs the adapter's cgo build, which ships in the HSM signer image
+(`trstctl-signer-hsm`) next to the signer; the standard image's static adapter
+refuses `pkcs11` with that pointer. Endpoints follow the managed-key rules: HTTPS,
+or HTTP to loopback only with `allow_insecure_loopback`, and private addresses
+only inside `private_egress_cidrs`. You may still name your own adapter in
+`wrapCommand`; it must speak the same contract.
+
+Externally wrapped custody applies to a key store from its first key: moving a
+key store the local KEK already sealed onto a KMS or HSM key (re-wrapping each
+key's data key) is what comes next. Today, start the signer with `--kms-*` on an
+empty key store.
 
 Back up the sealed key store, the signer custody input, and the CA cert together
 (the CA-key recovery set) per the [disaster-recovery runbook](disaster-recovery.md).
 For local-KEK mode that custody input is the signer KEK Secret; for externalKMS
-mode it is access to the same provider keyRef plus the wrapper adapter and provider
-credentials. The
+mode it is access to the same provider keyRef plus the adapter, its configuration
+and the provider credentials. The
 `deploy/docker/docker-compose.yml` in the source checkout
 runs the signer as its **own service** in `external` mode.
 

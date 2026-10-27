@@ -611,7 +611,8 @@ is back. (The drilled step-by-step procedure is the
    --auth-secret <sign-auth>`. External-KMS deployments restore access to the same
    HSM/KMS key reference and wrapper adapter, then start `trstctl-signer
    --keystore <dir> --kms-provider <provider> --kms-key-ref <keyRef>
-   --kms-wrap-command <adapter> --auth-secret <sign-auth>`.
+   --kms-wrap-command /usr/local/bin/trstctl-kms-wrap --auth-secret <sign-auth>`
+   with `TRSTCTL_KMS_WRAP_CONFIG` naming the adapter's restored configuration.
 4. Restore `TRSTCTL_CA_CERT_FILE` so the control plane reuses the same CA
    certificate. The signer reloads the sealed CA key, enforces content
    authorization, and the CA identity is unchanged; already-issued certificates keep

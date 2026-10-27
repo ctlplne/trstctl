@@ -11,7 +11,7 @@ SHELL := /usr/bin/env bash
 
 MODULE  := trstctl.com/trstctl
 BIN_DIR := bin
-CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli trstctl-license trstctl-spire-upstream-authority
+CMDS    := trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli trstctl-license trstctl-spire-upstream-authority trstctl-kms-wrap
 
 GO          ?= go
 CGO_ENABLED ?= 0
@@ -788,7 +788,7 @@ reproducible-check: ## Build shipped binaries and image layers twice; verify byt
 	@set -euo pipefail; \
 	tmp=$$(mktemp -d); \
 	trap 'rm -rf "$$tmp"' EXIT; \
-	reproducible_cmds="trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli trstctl-license trstctl-spire-upstream-authority"; \
+	reproducible_cmds="trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-cli trstctl-license trstctl-spire-upstream-authority trstctl-kms-wrap"; \
 	for cmd in $$reproducible_cmds; do \
 		a="$$tmp/$$cmd.a"; b="$$tmp/$$cmd.b"; \
 		echo ">> reproducible binary $$cmd"; \

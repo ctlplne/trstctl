@@ -843,6 +843,37 @@ func keys(m map[string]bool) []string {
 // e.g. a TRSTCTL_KMS_* contract no Go code reads) is caught. It also recognizes
 // TRSTCTL_CONFIG_FILE (consulted by Load before applyEnv runs) and direct
 // getenv calls in the control-plane entrypoint (for example its FIPS assertion).
+// wrapAdapterEnvKeys are the TRSTCTL_* keys internal/kms/wrapadapter declares
+// as string constants it reads (ConfigEnv).
+func wrapAdapterEnvKeys(t *testing.T, root string) map[string]bool {
+	t.Helper()
+	src, err := os.ReadFile(filepath.Join(root, "internal", "kms", "wrapadapter", "adapter.go")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
+	if err != nil {
+		t.Fatalf("read internal/kms/wrapadapter/adapter.go: %v", err)
+	}
+	f, err := parser.ParseFile(token.NewFileSet(), "adapter.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse adapter.go: %v", err)
+	}
+	keys := map[string]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		spec, ok := n.(*ast.ValueSpec)
+		if !ok || len(spec.Names) != 1 || spec.Names[0].Name != "ConfigEnv" || len(spec.Values) != 1 {
+			return true
+		}
+		if lit, ok := spec.Values[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+			if key, err := strconv.Unquote(lit.Value); err == nil && strings.HasPrefix(key, "TRSTCTL_") {
+				keys[key] = true
+			}
+		}
+		return true
+	})
+	if len(keys) == 0 {
+		t.Fatal("internal/kms/wrapadapter declares no ConfigEnv key — the extractor is broken")
+	}
+	return keys
+}
+
 func loaderEnvKeys(t *testing.T, root string) map[string]bool {
 	t.Helper()
 	src, err := os.ReadFile(filepath.Join(root, "internal", "config", "config.go")) // #nosec G304 -- test reads its own fixture/tempdir path (CWE-22)
@@ -1020,6 +1051,12 @@ func configMapDataKeys(body string) map[string]bool {
 func TestManifestEnvKeysAreReadByTheBinary(t *testing.T) {
 	root := repoRoot(t)
 	known := loaderEnvKeys(t, root)
+	// The chart's signer container also carries the configuration key of the
+	// signer's wrap adapter (trstctl-kms-wrap), which that binary reads; it is
+	// taken from the adapter's source, so it stays known only while read there.
+	for k := range wrapAdapterEnvKeys(t, root) {
+		known[k] = true
+	}
 
 	// Sources whose TRSTCTL_* env the CONTROL-PLANE binary reads directly:
 	//   - the Helm configMap data (loaded via envFrom into the control-plane pod);

@@ -237,6 +237,8 @@ to a local KEK.
 {{- fail "CRYPTO-002: externalKMS.wrapCommand is required when externalKMS.enabled=true; it must be an absolute signer-container path to the KMS/HSM wrapper adapter." -}}
 {{- else if not (hasPrefix "/" .wrapCommand) -}}
 {{- fail "CRYPTO-002: externalKMS.wrapCommand must be an absolute signer-container path; the signer does not run it through a shell or PATH lookup." -}}
+{{- else if and (eq .wrapCommand "/usr/local/bin/trstctl-kms-wrap") (not .adapterConfigSecret) -}}
+{{- fail "CRYPTO-002: externalKMS.adapterConfigSecret is required with the shipped adapter /usr/local/bin/trstctl-kms-wrap: a Secret holding its config.json and the credential files it names." -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

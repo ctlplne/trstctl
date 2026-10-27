@@ -5558,9 +5558,13 @@ binding; the default static control-plane artifact does not load native
 modules. The conditional managed-key path has required launched-binary
 receipts for all six advertised providers, while the sealed local signer
 key store remains the default when no provider is configured. Helm
-`externalKMS` separately wraps signer key-store DEKs through an
-operator-supplied AWS KMS, GCP KMS, Azure Key Vault, or PKCS#11 adapter
-instead of mounting the local signer KEK. Online break-glass issue,
+`externalKMS` separately wraps signer key-store DEKs through the shipped
+`trstctl-kms-wrap` adapter (AWS KMS, Cloud KMS, Azure Key Vault or Managed HSM,
+and, in the HSM signer image, PKCS#11) or an operator's own adapter instead of
+mounting the local signer KEK. A key store the local KEK already sealed is not
+re-wrapped onto the adapter; external custody starts from an empty key store.
+The chart runs the standard image, so a PKCS#11 HSM behind the adapter needs the
+HSM signer image outside the chart today. Online break-glass issue,
 signer-backed CA rotation with bidirectional overlap cross-certificates,
 and target-CA cross-signing are production-assembled when the online
 block is configured. Approvals come from authenticated immutable ceremony
@@ -5712,8 +5716,9 @@ long history takes correspondingly long; it inherits the tenant rotation's
 refusal of a certificate-dependent history record, which stops the rotation for
 an explicit migration. The key file remains the evidence-MAC and backup-HMAC
 key and the signer key store's default seal. Wrapping the deployment KEK under
-a cloud KMS key arrives with the signer's KMS wrap adapter; today the wrappers
-are a local file or a PKCS#11 HSM key (proven against SoftHSM). Break-glass
+a cloud KMS key is what comes next: the signer's KMS wrap adapter now seals the
+signer key store, but the deployment KEK's wrappers are still a local file or a
+PKCS#11 HSM key (proven against SoftHSM). Break-glass
 issue/rotation/cross-sign and offline-root public re-key/cross-sign import
 have served, ceremony-gated verbs; reconciliation remains served at
 `POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still

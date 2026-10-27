@@ -2,6 +2,15 @@
 
 ### Added
 
+- `trstctl-kms-wrap`, the signer key store's KMS/HSM wrap adapter, ships in the
+  images. With `--kms-provider`/`--kms-key-ref`/`--kms-wrap-command` (Helm
+  `externalKMS`), the signer's data keys are wrapped under an AWS KMS key, a
+  Cloud KMS CryptoKey, an Azure Key Vault or Managed HSM key, or (in the HSM
+  signer image) a PKCS#11 token AES key, and the key store no longer opens
+  without that key. Helm's `wrapCommand` defaults to the adapter and
+  `adapterConfigSecret` carries its configuration. The signer checks the adapter
+  before it serves, so an unreachable or disabled key stops startup with the
+  provider's reason.
 - Several managed-key providers at once: `managed_keys.providers` lists the
   providers a deployment runs together (for example a PKCS#11 HSM and AWS KMS),
   and the isolated signer builds them all. A key is created under the provider

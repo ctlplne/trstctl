@@ -99,12 +99,13 @@ RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstc
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS} -X trstctl.com/trstctl/internal/license.builtinPubKeysB64=${LICENSE_KEYS_B64}" -o /out/trstctl-signer   ./cmd/trstctl-signer
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-agent    ./cmd/trstctl-agent
 RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-operator ./cmd/trstctl-operator
+RUN go build -trimpath -buildvcs=false -ldflags "${LDFLAGS}" -o /out/trstctl-kms-wrap ./cmd/trstctl-kms-wrap
 RUN if [ "${GOFIPS140}" != "off" ]; then \
       if [ "${TARGETOS}/${TARGETARCH}" = "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" ]; then \
         /out/trstctl --check-config 2>/dev/null | grep -qx 'crypto.fips.module_active: true' \
           || { echo 'FIPS image control plane did not activate the Go module' >&2; exit 1; }; \
       fi; \
-      for binary in trstctl trstctl-signer trstctl-agent trstctl-operator; do \
+      for binary in trstctl trstctl-signer trstctl-agent trstctl-operator trstctl-kms-wrap; do \
         go version -m "/out/${binary}" | grep -Fq "GOFIPS140=${GOFIPS140}" \
           || { echo "FIPS image ${binary} lacks the selected Go module" >&2; exit 1; }; \
       done; \
@@ -191,6 +192,10 @@ COPY --from=build /out/trstctl-agent    /usr/local/bin/trstctl-agent
 # overriding the entrypoint to /usr/local/bin/trstctl-operator
 # (deploy/operator/operator.yaml). One image still serves every topology (OPS-002).
 COPY --from=build /out/trstctl-operator /usr/local/bin/trstctl-operator
+# The signer key store's KMS/HSM wrap adapter (static build: AWS KMS, Cloud KMS,
+# Key Vault). trstctl-signer runs it for --kms-wrap-command; the HSM signer image
+# carries the cgo build that also speaks PKCS#11.
+COPY --from=build /out/trstctl-kms-wrap /usr/local/bin/trstctl-kms-wrap
 
 # The image's only trust file (distroless has no shell and no other store): Mozilla's current websites roots and nothing on the
 # distrust list, built by the trust stage above.

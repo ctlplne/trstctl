@@ -27,6 +27,7 @@ ARG DATE=1970-01-01T00:00:00Z
 ENV CGO_ENABLED=1 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOFLAGS=-mod=readonly
 ARG LDFLAGS="-s -w -buildid= -X trstctl.com/trstctl/internal/buildinfo.version=${VERSION} -X trstctl.com/trstctl/internal/buildinfo.commit=${COMMIT} -X trstctl.com/trstctl/internal/buildinfo.date=${DATE}"
 RUN go build -trimpath -buildvcs=false -tags=pkcs11cgo -ldflags "${LDFLAGS}" -o /out/trstctl-signer-hsm ./cmd/trstctl-signer
+RUN go build -trimpath -buildvcs=false -tags=pkcs11cgo -ldflags "${LDFLAGS}" -o /out/trstctl-kms-wrap ./cmd/trstctl-kms-wrap
 
 # One current trust list for every image (eMudhra incident, 2026-10): the
 # pinned, checksum-verified Alpine ca-certificates bundle (Mozilla's websites
@@ -65,5 +66,7 @@ RUN printf '%s\n' \
 COPY --from=trust /out/trust/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 COPY --from=build /out/trstctl-signer-hsm /usr/local/bin/trstctl-signer-hsm
+# The wrap adapter's cgo build: PKCS#11 as well as the cloud KMS providers.
+COPY --from=build /out/trstctl-kms-wrap /usr/local/bin/trstctl-kms-wrap
 USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/trstctl-signer-hsm"]

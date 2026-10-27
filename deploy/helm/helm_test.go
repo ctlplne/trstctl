@@ -951,12 +951,14 @@ func TestExternalKMSGuard(t *testing.T) {
 	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": map[string]any{"enabled": false, "provider": "", "keyRef": "", "wrapCommand": ""}}); err != nil {
 		t.Fatalf("externalKMS guard rejected the documented disabled default: %v", err)
 	}
-	enabled := map[string]any{
+	enabled := map[string]any{ // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
 		"enabled":     true,
 		"provider":    "awskms",
 		"keyRef":      "arn:aws:kms:us-east-1:111122223333:key/trstctl-signer",
 		"wrapCommand": "/usr/local/bin/trstctl-kms-wrap",
 		"timeout":     "15s",
+
+		"adapterConfigSecret": "trstctl-kms-wrap",
 	}
 	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": enabled}); err != nil {
 		t.Fatalf("externalKMS guard rejected valid KMS/HSM custody values: %v", err)
@@ -1010,6 +1012,74 @@ func TestExternalKMSGuard(t *testing.T) {
 	}
 	if strings.Contains(read(t, "templates", "_helpers.tpl"), "NOT yet wired") {
 		t.Fatal("externalKMS helper still claims the wired custody path is not wired")
+	}
+}
+
+// A200: the shipped adapter needs its configuration, so the chart refuses it
+// without adapterConfigSecret; with one, the signer container mounts the Secret
+// read-only and TRSTCTL_KMS_WRAP_CONFIG names its config.json. An operator's
+// own adapter needs no Secret.
+func TestExternalKMSShippedAdapterMountsItsConfiguration(t *testing.T) {
+	shipped := map[string]any{
+		"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:us-east-1:111122223333:key/trstctl-signer",
+		"wrapCommand": "/usr/local/bin/trstctl-kms-wrap",
+	}
+	err := renderExternalKMSGuard(t, map[string]any{"externalKMS": shipped})
+	if err == nil || !strings.Contains(err.Error(), "CRYPTO-002") || !strings.Contains(err.Error(), "adapterConfigSecret") {
+		t.Fatalf("the shipped adapter without its configuration Secret = %v, want a CRYPTO-002 refusal naming adapterConfigSecret", err)
+	}
+	own := map[string]any{
+		"enabled": true, "provider": "awskms", "keyRef": "arn:aws:kms:us-east-1:111122223333:key/trstctl-signer",
+		"wrapCommand": "/opt/vendor/bin/kms-wrap",
+	}
+	if err := renderExternalKMSGuard(t, map[string]any{"externalKMS": own}); err != nil {
+		t.Fatalf("an operator's own adapter without a Secret = %v, want accepted", err)
+	}
+
+	shipped["adapterConfigSecret"] = "trstctl-kms-wrap"
+	v := productionishValues()
+	v["externalKMS"] = shipped
+	objs := decodeAllYAML(t, renderControlPlaneDeployment(t, v))
+	var pod map[string]any
+	for _, o := range objs {
+		if o["kind"] != "Deployment" {
+			continue
+		}
+		spec, _ := o["spec"].(map[string]any)
+		tmpl, _ := spec["template"].(map[string]any)
+		pod, _ = tmpl["spec"].(map[string]any)
+	}
+	if pod == nil {
+		t.Fatal("rendered chart has no control-plane Deployment pod spec")
+	}
+	signer := containerNamed(asMaps(pod["containers"]), "signer")
+	if signer == nil {
+		t.Fatal("external KMS sidecar render must include the signer container")
+	}
+	var config string
+	for _, env := range asMaps(signer["env"]) {
+		if env["name"] == "TRSTCTL_KMS_WRAP_CONFIG" {
+			config = asString(env["value"])
+		}
+	}
+	if config != "/etc/trstctl/kms-wrap/config.json" {
+		t.Fatalf("signer TRSTCTL_KMS_WRAP_CONFIG = %q, want the mounted config.json", config)
+	}
+	if !hasMountPath(signer, "/etc/trstctl/kms-wrap") {
+		t.Fatal("the signer container does not mount the adapter configuration")
+	}
+	var secretName any
+	for _, vol := range asMaps(pod["volumes"]) {
+		if vol["name"] == "kms-wrap" {
+			secret, _ := vol["secret"].(map[string]any)
+			secretName = secret["secretName"]
+		}
+	}
+	if secretName != "trstctl-kms-wrap" { // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+		t.Fatalf("kms-wrap volume Secret = %v, want trstctl-kms-wrap", secretName)
+	}
+	if trstctl := containerNamed(asMaps(pod["containers"]), "trstctl"); trstctl != nil && hasMountPath(trstctl, "/etc/trstctl/kms-wrap") {
+		t.Fatal("the control-plane container mounts the signer's adapter configuration")
 	}
 }
 

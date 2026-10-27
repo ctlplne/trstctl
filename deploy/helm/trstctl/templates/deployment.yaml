@@ -6,6 +6,8 @@
 {{- include "trstctl.requiredInputs.guard" . -}}
 {{- include "trstctl.signer.guardMode" . -}}
 {{- $signerAuthKey := "sign-auth.bin" -}}
+{{- $kmsWrapSecret := "" -}}
+{{- with .Values.externalKMS }}{{- if .enabled }}{{- if .adapterConfigSecret }}{{- $kmsWrapSecret = .adapterConfigSecret }}{{- end }}{{- end }}{{- end }}
 {{- with .Values.signer }}
 {{- with .auth }}
 {{- with .existingSecretKey }}{{- $signerAuthKey = . }}{{- end }}
@@ -70,11 +72,19 @@ spec:
           image: {{ include "trstctl.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/usr/local/bin/trstctl-signer"]
-          {{- with .Values.fips }}{{- if .required }}
+          {{- $signerFIPS := false }}
+          {{- with .Values.fips }}{{- if .required }}{{- $signerFIPS = true }}{{- end }}{{- end }}
+          {{- if or $signerFIPS $kmsWrapSecret }}
           env:
+            {{- if $signerFIPS }}
             - name: TRSTCTL_FIPS
               value: "1"
-          {{- end }}{{- end }}
+            {{- end }}
+            {{- if $kmsWrapSecret }}
+            - name: TRSTCTL_KMS_WRAP_CONFIG
+              value: /etc/trstctl/kms-wrap/config.json
+            {{- end }}
+          {{- end }}
           args:
             - "--socket=/run/trstctl/signer.sock"
             - "--keystore=/data/signer/keys"
@@ -97,6 +107,11 @@ spec:
             {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
             - name: kek
               mountPath: /etc/trstctl/kek
+              readOnly: true
+            {{- end }}
+            {{- if $kmsWrapSecret }}
+            - name: kms-wrap
+              mountPath: /etc/trstctl/kms-wrap
               readOnly: true
             {{- end }}
             - name: signer-auth
@@ -209,6 +224,12 @@ spec:
         {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if and (eq .Values.signer.mode "sidecar") $kmsWrapSecret }}
+        - name: kms-wrap
+          secret:
+            secretName: {{ $kmsWrapSecret }}
+            defaultMode: 0440
+        {{- end }}
         - name: kek
           secret:
             secretName: {{ include "trstctl.kekSecretName" . }}

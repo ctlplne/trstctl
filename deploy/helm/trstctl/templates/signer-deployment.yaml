@@ -1,6 +1,8 @@
 {{- include "trstctl.signer.guardMode" . -}}
 {{- if eq .Values.signer.mode "isolated" }}
 {{- $signerAuthKey := "sign-auth.bin" -}}
+{{- $kmsWrapSecret := "" -}}
+{{- with .Values.externalKMS }}{{- if .enabled }}{{- if .adapterConfigSecret }}{{- $kmsWrapSecret = .adapterConfigSecret }}{{- end }}{{- end }}{{- end }}
 {{- with .Values.signer }}
 {{- with .auth }}
 {{- with .existingSecretKey }}{{- $signerAuthKey = . }}{{- end }}
@@ -62,6 +64,10 @@ spec:
             - name: TRSTCTL_FIPS
               value: "1"
             {{- end }}{{- end }}
+            {{- if $kmsWrapSecret }}
+            - name: TRSTCTL_KMS_WRAP_CONFIG
+              value: /etc/trstctl/kms-wrap/config.json
+            {{- end }}
             - name: SIGNER_MTLS_PEER_PIN
               valueFrom:
                 secretKeyRef:
@@ -81,6 +87,11 @@ spec:
             {{- if not (and .Values.externalKMS .Values.externalKMS.enabled) }}
             - name: kek
               mountPath: /etc/trstctl/kek
+              readOnly: true
+            {{- end }}
+            {{- if $kmsWrapSecret }}
+            - name: kms-wrap
+              mountPath: /etc/trstctl/kms-wrap
               readOnly: true
             {{- end }}
             - name: signer-auth
@@ -125,4 +136,10 @@ spec:
           secret:
             secretName: {{ include "trstctl.signerAuthSecretName" . }}
             defaultMode: 0440
+        {{- if $kmsWrapSecret }}
+        - name: kms-wrap
+          secret:
+            secretName: {{ $kmsWrapSecret }}
+            defaultMode: 0440
+        {{- end }}
 {{- end }}

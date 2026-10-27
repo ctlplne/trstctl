@@ -419,9 +419,14 @@ signer:
 # instead of the local --kek file. The command is invoked without a shell as:
 #   <wrapCommand> wrap|unwrap <provider> <keyRef>
 # DEK bytes move only on stdin/stdout; provider/keyRef are non-secret identifiers.
+# The image ships the adapter, /usr/local/bin/trstctl-kms-wrap; it reads config.json
+# (one block per provider, credentials as file paths) from adapterConfigSecret,
+# mounted read-only at /etc/trstctl/kms-wrap. Start with an empty signer key store:
+# keys the local KEK already sealed are not re-wrapped.
 externalKMS:
   enabled: false
-  provider: ""      # awskms | gcpkms | azurekv | pkcs11
-  keyRef: ""        # KMS key id/ARN/resource name, HSM object handle, or PKCS#11 URI
-  wrapCommand: ""   # absolute path of YOUR adapter inside the signer container (trstctl ships none), e.g. /usr/local/bin/kms-wrap-adapter
+  provider: ""      # awskms | gcpkms | azurekv | pkcs11 (pkcs11 needs the HSM signer image's cgo adapter)
+  keyRef: ""        # symmetric KMS key ARN, Cloud KMS CryptoKey name, Key Vault key identifier, or token AES key label
+  wrapCommand: /usr/local/bin/trstctl-kms-wrap   # the shipped adapter, or an absolute path to your own
+  adapterConfigSecret: ""   # Secret with config.json and the credential files it names (required with the shipped adapter)
   timeout: 10s

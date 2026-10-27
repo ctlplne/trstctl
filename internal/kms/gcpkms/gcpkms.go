@@ -280,23 +280,32 @@ func (s *kmsSigner) SignContext(ctx context.Context, message []byte, opts crypto
 // internal/cloudhttp (CODE-006). The per-op timeout is already applied by the caller via
 // withTimeout(ctx) (CODE-002), so the context carries the deadline and we pass 0 here.
 func (b *Backend) call(ctx context.Context, method, path string, in any, out any) error {
-	if b.initErr != nil || b.token == nil {
-		return fmt.Errorf("gcp-kms: credentials unavailable: %w", b.initErr)
-	}
-	var body io.Reader
+	var body []byte
 	if in != nil {
 		buf, err := json.Marshal(in)
 		if err != nil {
 			return err
 		}
-		body = bytes.NewReader(buf)
+		body = buf
+	}
+	return b.send(ctx, method, path, body, out)
+}
+
+// send is call with the JSON body already encoded; a nil body sends none.
+func (b *Backend) send(ctx context.Context, method, path string, body []byte, out any) error {
+	if b.initErr != nil || b.token == nil {
+		return fmt.Errorf("gcp-kms: credentials unavailable: %w", b.initErr)
+	}
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
 	}
 	url := b.endpoint + "/" + strings.TrimLeft(path, "/")
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
 		return err
 	}
-	if in != nil {
+	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))

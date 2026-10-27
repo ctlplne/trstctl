@@ -12,22 +12,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/netip"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/kms/awskms"
 	"trstctl.com/trstctl/internal/kms/azurekv"
 	"trstctl.com/trstctl/internal/kms/gcpkms"
+	"trstctl.com/trstctl/internal/kms/kmsconn"
 	"trstctl.com/trstctl/internal/kms/pkcs11"
 	"trstctl.com/trstctl/internal/kms/tpm"
 	"trstctl.com/trstctl/internal/kms/yubihsm"
-	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/signing"
 )
 
@@ -227,7 +223,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 	}
 	switch providerName {
 	case providerAWS:
-		if err := validateManagedKeyEndpoints("aws", cfg.AWS.AllowInsecureLoopback, cfg.AWS.Endpoint); err != nil {
+		if err := kmsconn.ValidateEndpoints("aws managed-key", cfg.AWS.AllowInsecureLoopback, cfg.AWS.Endpoint); err != nil {
 			return "", nil, err
 		}
 		secretKey, wipeSecret, err := credential("aws secret access key", cfg.AWS.SecretAccessKey, cfg.AWS.SecretAccessKeyFile, true)
@@ -240,7 +236,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 			return "", nil, err
 		}
 		defer wipeSession()
-		httpClient, err := egressClient(cfg.AWS.PrivateEgressCIDRs, cfg.AWS.Endpoint, cfg.AWS.AllowInsecureLoopback)
+		httpClient, err := kmsconn.EgressClient(cfg.AWS.PrivateEgressCIDRs, cfg.AWS.Endpoint, cfg.AWS.AllowInsecureLoopback)
 		if err != nil {
 			return "", nil, fmt.Errorf("aws managed-key egress: %w", err)
 		}
@@ -253,7 +249,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		}, opts...)
 		return "aws-kms", backend, err
 	case providerAzure:
-		if err := validateManagedKeyEndpoints("azure", cfg.Azure.AllowInsecureLoopback, cfg.Azure.VaultURL, cfg.Azure.Endpoint); err != nil {
+		if err := kmsconn.ValidateEndpoints("azure managed-key", cfg.Azure.AllowInsecureLoopback, cfg.Azure.VaultURL, cfg.Azure.Endpoint); err != nil {
 			return "", nil, err
 		}
 		token, wipe, err := credential("azure bearer token", cfg.Azure.BearerToken, cfg.Azure.BearerTokenFile, true)
@@ -265,7 +261,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		if strings.TrimSpace(azureEndpoint) == "" {
 			azureEndpoint = cfg.Azure.VaultURL
 		}
-		httpClient, err := egressClient(cfg.Azure.PrivateEgressCIDRs, azureEndpoint, cfg.Azure.AllowInsecureLoopback)
+		httpClient, err := kmsconn.EgressClient(cfg.Azure.PrivateEgressCIDRs, azureEndpoint, cfg.Azure.AllowInsecureLoopback)
 		if err != nil {
 			return "", nil, fmt.Errorf("azure managed-key egress: %w", err)
 		}
@@ -276,7 +272,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		backend, err := azurekv.NewSecure(cfg.Azure.VaultURL, azurekv.Credentials{BearerToken: token}, opts...)
 		return "azure-key-vault", backend, err
 	case providerGCP:
-		if err := validateManagedKeyEndpoints("gcp", cfg.GCP.AllowInsecureLoopback, cfg.GCP.Endpoint); err != nil {
+		if err := kmsconn.ValidateEndpoints("gcp managed-key", cfg.GCP.AllowInsecureLoopback, cfg.GCP.Endpoint); err != nil {
 			return "", nil, err
 		}
 		token, wipe, err := credential("gcp bearer token", cfg.GCP.BearerToken, cfg.GCP.BearerTokenFile, true)
@@ -284,7 +280,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 			return "", nil, err
 		}
 		defer wipe()
-		httpClient, err := egressClient(cfg.GCP.PrivateEgressCIDRs, cfg.GCP.Endpoint, cfg.GCP.AllowInsecureLoopback)
+		httpClient, err := kmsconn.EgressClient(cfg.GCP.PrivateEgressCIDRs, cfg.GCP.Endpoint, cfg.GCP.AllowInsecureLoopback)
 		if err != nil {
 			return "", nil, fmt.Errorf("gcp managed-key egress: %w", err)
 		}
@@ -346,102 +342,9 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 	}
 }
 
-func validateManagedKeyEndpoints(provider string, allowInsecureLoopback bool, endpoints ...string) error {
-	usedInsecureLoopback := false
-	for _, endpoint := range endpoints {
-		if strings.TrimSpace(endpoint) == "" {
-			continue
-		}
-		if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(endpoint, allowInsecureLoopback); err != nil {
-			return fmt.Errorf("%s managed-key endpoint: %w", provider, err)
-		}
-		usedInsecureLoopback = usedInsecureLoopback || netsec.IsInsecureLoopbackHTTPURL(endpoint)
-	}
-	if allowInsecureLoopback && !usedInsecureLoopback {
-		return fmt.Errorf("%s managed-key allow_insecure_loopback requires an HTTP localhost/loopback endpoint", provider)
-	}
-	return nil
-}
-
-func egressClient(rawCIDRs []string, endpoint string, allowInsecureLoopback bool) (*http.Client, error) {
-	allowPlaintext := allowInsecureLoopback && netsec.IsInsecureLoopbackHTTPURL(endpoint)
-	if strings.TrimSpace(endpoint) != "" {
-		if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(endpoint, allowPlaintext); err != nil {
-			return nil, err
-		}
-	}
-	if allowPlaintext {
-		return netsec.InsecureLoopbackClient(30 * time.Second), nil
-	}
-	prefixes := make([]netip.Prefix, 0, len(rawCIDRs))
-	for _, raw := range rawCIDRs {
-		prefix, err := netsec.ParseEgressAllowPrefix(raw)
-		if err != nil {
-			return nil, fmt.Errorf("invalid private egress CIDR %q: %w", raw, err)
-		}
-		prefixes = append(prefixes, prefix)
-	}
-	client := netsec.SafeClientWithOptions(30*time.Second, netsec.SafeClientOptions{AllowPrivateCIDRs: prefixes})
-	previousRedirect := client.CheckRedirect
-	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if req == nil || req.URL == nil {
-			return fmt.Errorf("managed-key redirect is missing a URL")
-		}
-		if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(req.URL.String(), false); err != nil {
-			return err
-		}
-		return previousRedirect(req, via)
-	}
-	return client, nil
-}
-
 func credential(name string, inline []byte, file string, required bool) ([]byte, func(), error) {
 	if len(inline) > 0 {
 		return nil, func() {}, fmt.Errorf("%s must use a file reference in trstctl-signer config; inline secrets are forbidden", name)
 	}
-	if strings.TrimSpace(file) == "" {
-		if required {
-			return nil, func() {}, fmt.Errorf("%s file is required", name)
-		}
-		return nil, func() {}, nil
-	}
-	raw, err := readCredentialFile(file)
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("read %s file: %w", name, err)
-	}
-	return lockCredentialBytes(name, raw, required)
-}
-
-// readCredentialFile reads a managed-key credential through a handle on its
-// parent directory instead of by name. These files carry authority-bearing key
-// material (cloud tokens, HSM PINs, TPM auth) that the isolated signer loads at
-// startup, so a symlink swapped in at the final component must not be able to
-// redirect the read somewhere else between the operator's configuration and the
-// open. os.Root resolves every component at the syscall layer and refuses one
-// that leaves the directory (CWE-22, CWE-367).
-func readCredentialFile(path string) ([]byte, error) {
-	root, err := os.OpenRoot(filepath.Dir(path))
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = root.Close() }()
-	return root.ReadFile(filepath.Base(path))
-}
-
-func lockCredentialBytes(name string, fileBuffer []byte, required bool) ([]byte, func(), error) {
-	// bytes.TrimSpace returns a subslice. Clone the useful payload first, then
-	// wipe the complete os.ReadFile allocation so bytes outside that subslice do
-	// not remain in the signer heap.
-	payload := bytes.Clone(bytes.TrimSpace(fileBuffer))
-	secret.Wipe(fileBuffer)
-	if required && len(payload) == 0 {
-		secret.Wipe(payload)
-		return nil, func() {}, fmt.Errorf("%s file is empty", name)
-	}
-	locked, err := secret.NewFrom(payload)
-	secret.Wipe(payload)
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("lock %s: %w", name, err)
-	}
-	return locked.Bytes(), locked.Destroy, nil
+	return kmsconn.CredentialFile(name, file, required)
 }

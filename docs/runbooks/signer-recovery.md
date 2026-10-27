@@ -13,8 +13,10 @@ key store healthy again, not silently making a new CA.
   Use [incident response](incident-response.md) for suspected compromise.
 - Confirm the signer PVC or configured key store, signer auth Secret, signer mTLS
   Secret, and the configured custody input still exist. Local-KEK installs need the
-  KEK Secret; externalKMS installs need the same provider, keyRef, wrapper adapter,
-  and provider credentials.
+  KEK Secret; externalKMS installs need the same provider, keyRef, wrapper adapter
+  (`trstctl-kms-wrap` and its `config.json` with the credential files it names),
+  and provider credentials. A signer that cannot reach the key stops at startup
+  with the provider's reason in its log.
 - Confirm the control plane can still answer `/healthz`; `/readyz` may be `503`
   because it checks the signer.
 - Before changing the signer, capture a redacted offline diagnostic:

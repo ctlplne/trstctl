@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/kmswrap"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/seal"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/signing"
@@ -282,6 +283,32 @@ func loadSignerLicense(path string, identity license.DeploymentIdentity, trusted
 	return license.LoadForDeployment(path, trustedPubPEMs, identity)
 }
 
+// probeKeystoreWrapper wraps and unwraps a random value through the external
+// KMS/HSM adapter before the signer serves. The key store reports any unwrap
+// failure as one generic seal error, so without the probe a missing, disabled
+// or unreachable key surfaces only at the first key load, without the
+// adapter's reason; with it, startup stops with that reason.
+func probeKeystoreWrapper(w seal.KeyWrapper) error {
+	probe, err := crypto.RandomBytes(32)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(probe)
+	wrapped, err := w.WrapDEK(probe)
+	if err != nil {
+		return fmt.Errorf("external KMS custody probe: %w", err)
+	}
+	opened, err := w.UnwrapDEK(wrapped)
+	if err != nil {
+		return fmt.Errorf("external KMS custody probe: %w", err)
+	}
+	defer secret.Wipe(opened)
+	if !crypto.ConstantTimeEqual(opened, probe) {
+		return errors.New("external KMS custody probe: the adapter unwrapped a different value than it wrapped")
+	}
+	return nil
+}
+
 func signerKeystoreWrapper(kekFile, provider, keyRef, wrapCommand string, timeout time.Duration) (seal.KeyWrapper, func(), error) {
 	external := provider != "" || keyRef != "" || wrapCommand != ""
 	if external {
@@ -295,6 +322,9 @@ func signerKeystoreWrapper(kekFile, provider, keyRef, wrapCommand string, timeou
 			Timeout:     timeout,
 		})
 		if err != nil {
+			return nil, func() {}, err
+		}
+		if err := probeKeystoreWrapper(wrapper); err != nil {
 			return nil, func() {}, err
 		}
 		return wrapper, func() {}, nil

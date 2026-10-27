@@ -249,9 +249,12 @@ func TestReadmeCapabilityInventoryCountsMatchCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Shared client plumbing (kmsconn) and the signer key store's wrap adapter
+	// (wrapadapter) sit beside the backends but are not backends.
+	notBackends := map[string]bool{"kmsconn": true, "wrapadapter": true}
 	kms := 0
 	for _, entry := range kmsEntries {
-		if entry.IsDir() {
+		if entry.IsDir() && !notBackends[entry.Name()] {
 			kms++
 		}
 	}
