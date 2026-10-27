@@ -2000,6 +2000,7 @@ func componentSchemas() map[string]*Schema {
 		"policy_module_sha256":     str(),
 		"policy_evaluated":         {Type: "integer"},
 		"policy_evaluation_errors": {Type: "integer"},
+		"read_limited":             {Type: "boolean", Description: "True when the posture read a full page (500) of certificates or of discovery findings, so a larger inventory is not fully rated."},
 	}, "capability", "generated_at", "coverage", "summary", "findings", "recommended_actions", "evidence_refs", "policy_evaluated", "policy_evaluation_errors")
 	crlDistributionShard := object(map[string]*Schema{
 		"index":         {Type: "integer"},
@@ -7265,10 +7266,22 @@ func componentSchemas() map[string]*Schema {
 		"rate_window_seconds":   {Type: "integer"},
 	}, "enabled", "model_configured", "model_mode", "egress", "pii_egress", "redaction", "residual_refusal_gate")
 	mcpToolList := object(map[string]*Schema{
-		"identity":  str(),
-		"read_only": {Type: "boolean"},
-		"tools":     {Type: "array", Items: str()},
+		"identity":      str(),
+		"read_only":     {Type: "boolean"},
+		"tools":         {Type: "array", Items: str()},
+		"descriptions":  {Type: "object", AdditionalProperties: str(), Description: "What each listed tool does."},
+		"result_schema": {Type: "object", AdditionalProperties: &Schema{}, Description: "The published JSON Schema (draft-07) every tool result conforms to; MCP clients use it as each tool's output schema."},
 	}, "read_only", "tools")
+	mcpFinding := object(map[string]*Schema{
+		"finding_id":   {Type: "string", Description: "Stable for the same fact: the same evidence yields the same ID on every call."},
+		"kind":         str(),
+		"summary":      str(),
+		"evidence_ids": {Type: "array", Items: str(), Description: "The records the finding rests on, as kind:id references a caller can read back."},
+		"source":       {Type: "string", Description: "The record set the finding was read from."},
+		"observed_at":  {Type: "string", Format: "date-time", Description: "When the evidence was recorded or observed; null when the record carries no time."},
+		"confidence":   {Type: "string", Enum: []string{"verified", "observed", "recorded", "inferred"}, Description: "verified: an observation whose signature the control plane checked; observed: reported from outside trstctl's own record without a checked signature; recorded: trstctl's record of its own action or an operator's statement; inferred: a correlation that can be wrong, such as a match by name only."},
+		"attributes":   {Type: "object", AdditionalProperties: str()},
+	}, "finding_id", "kind", "summary", "evidence_ids", "source", "observed_at", "confidence")
 	mcpToolCall := object(map[string]*Schema{
 		"subject":         str(),
 		"identity_id":     {Type: "string", Description: "The lifecycle identity issue_certificate and rotate_certificate act on, through the lifecycle gate (policy and dual control)."},
@@ -7279,6 +7292,11 @@ func componentSchemas() map[string]*Schema {
 		"previous_serial": {Type: "string", Description: "Unused since the write tools act on lifecycle identities."},
 	})
 	mcpToolResult := object(map[string]*Schema{
+		"schema":              {Type: "string", Description: "The published result schema this result conforms to (trstctl.mcp.tool-result/v1)."},
+		"generated_at":        timestamp(),
+		"findings":            {Type: "array", Items: ref("MCPFinding"), Description: "Structured findings behind the narrative, each with evidence IDs, source, time and confidence."},
+		"sufficient":          {Type: "boolean", Description: "False when the evidence does not support an answer, the token could not read part of it, or the findings were truncated."},
+		"truncated":           {Type: "boolean"},
 		"tool":                str(),
 		"citations":           {Type: "array", Items: str()},
 		"text":                str(),
@@ -7288,7 +7306,7 @@ func componentSchemas() map[string]*Schema {
 		"certificate_pem":     {Type: "string", Description: "Never set since the write tools act on lifecycle identities."},
 		"serial":              {Type: "string", Description: "Never set since the write tools act on lifecycle identities."},
 		"not_after":           timestamp(),
-	}, "tool", "text")
+	}, "schema", "tool", "text", "generated_at", "findings")
 
 	return map[string]*Schema{
 		"Problem":                                  problemSchema,
@@ -8260,6 +8278,7 @@ func componentSchemas() map[string]*Schema {
 		"MCPToolList":                        mcpToolList,
 		"MCPToolCall":                        mcpToolCall,
 		"MCPToolResult":                      mcpToolResult,
+		"MCPFinding":                         mcpFinding,
 		"EditionFeature":                     editionFeature,
 		"EditionPackaging":                   editionPackaging,
 		"EditionPackagingEntry":              editionPackagingEntry,

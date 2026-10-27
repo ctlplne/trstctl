@@ -4223,7 +4223,18 @@ off, so an upgrade does not silently expose it):
   identity through the identity transition route, so the policy gate and dual
   control apply: under dual control an issuance is proposed (`mcp.tool.proposed`)
   and runs only when repeated after approval, and a rotation is refused. MCP has
-  no route to direct CA issuance or to an approval decision.
+  no route to direct CA issuance or to an approval decision. Evidence tools
+  (`posture_findings`, `weak_key_exposure`, `distrust_exposure`,
+  `assurance_record`, `revocation_status`, `crypto_inventory`) read the served
+  routes with the caller's token, and every tool result carries findings under
+  the published result schema. Exposure covers what discovery and the inventory
+  have seen: hosts and trust stores no agent has scanned are not covered, and a
+  certificate known only by its issuer name is matched by name (confidence
+  `inferred`). A result lists at most 200 findings. The rated certificate
+  inventory behind `weak_key_exposure` and `distrust_exposure` reads at most 500
+  certificates and 500 discovery findings; the rogue-certificate posture reports
+  `read_limited` when it reached that, and the tool answer then says it may be
+  incomplete.
 
 Every route is auth-gated (API token or session, `graph:read`), tenant-scoped
 (the tenant is the authenticated principal's, never a request field), rate

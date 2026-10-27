@@ -146,6 +146,48 @@ server itself holds a [workload identity](workload-identity.md) from trstctl's o
 broker. **Served** at `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/tools/{tool}` when
 `ai.enable_api` is on.
 
+Six more read tools answer posture and exposure questions from the served read routes,
+entered with the agent's own credentials, so a token sees here exactly what it may read
+over REST:
+
+| Tool | Answers | `subject` |
+|---|---|---|
+| `posture_findings` | NHI posture: shadow, stale, static-credential, over-privileged and exposed identities | optional: a name, kind or inventory ID |
+| `weak_key_exposure` | certificates and trust anchors whose keys are weak | optional: a subject, issuer or host |
+| `distrust_exposure` | the certificates and host trust stores a distrust-list entry affects | the entry's name or SPKI SHA-256 |
+| `assurance_record` | a certificate's signed lifecycle assurance record, one finding per stage | the certificate ID |
+| `revocation_status` | a certificate's recorded revocation and the relay's CRL and OCSP observations of it | the certificate ID |
+| `crypto_inventory` | crypto inventory assets with strength, quantum exposure and migration target | optional: an algorithm, location or library |
+
+`distrust_exposure` answers "which of my certificates and hosts does this distrust entry
+affect?": each affected certificate cites `certificate:<id>` (and the discovery finding or
+connector target it was seen on), and each affected trust store cites the agent's
+`discovery_finding:<id>`, the store's graph node (`graph:ts:<host>:<kind>`) and the
+reporting agent. Hosts and stores no agent has scanned are not covered, and the answer
+says so.
+
+Every tool result, of every kind, has the same shape: `schema`
+(`trstctl.mcp.tool-result/v1`), the narrative `text`, `citations`, `generated_at` and
+`findings`. Each finding has a stable `finding_id`, a `kind`, a `summary`, `evidence_ids`
+(kind:id references a caller can read back, such as `certificate:<id>` or
+`discovery_finding:<id>`), the `source` record set, `observed_at` (null when the record
+carries no time) and a `confidence`:
+
+- `verified`: an observation whose signature the control plane checked, such as a relay's
+  signed revocation probe;
+- `observed`: reported from outside trstctl's own record, such as a discovery scan or an
+  agent's inventory;
+- `recorded`: trstctl's record of its own action or an operator's statement;
+- `inferred`: a correlation that can be wrong, such as a certificate matched to a
+  distrusted CA by issuer name only.
+
+The JSON Schema (draft-07) is published in the tool listing as `result_schema`, with a
+description of each tool; `trstctl-cli mcp serve` gives it to MCP clients as every tool's
+`outputSchema` and returns each result as structured content. A result says
+`sufficient: false` when the evidence does not support an answer, when the token could
+not read part of it (the text names what), or when the findings were cut at 200
+(`truncated: true`; narrow the subject).
+
 Write tools are a separate, explicit choice: with `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, the
 tool list also includes `issue_certificate` and `rotate_certificate`. Both act on a
 lifecycle identity (`identity_id`), never on a CA directly. The call enters the identity
@@ -273,6 +315,16 @@ Under dual control the answer is HTTP 202 with `"outcome":"proposed"` and an
 `approval_request_id`; send the same request again, with the same `Idempotency-Key`, after
 a distinct approver approved it.
 
+Ask which certificates and host trust stores a distrust-list entry affects:
+
+```sh
+curl -sS -X POST \
+  -H "Authorization: Bearer $TRSTCTL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"subject":"emSign ECC Root CA - G3"}' \
+  https://trstctl.example.com/api/v1/mcp/tools/distrust_exposure
+```
+
 ## Pitfalls & limits
 
 | Capability | Status today |
@@ -281,7 +333,7 @@ a distinct approver approved it.
 | Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, `/api/v1/graph/query`; saved prompts remain roadmap residuals |
 | AI model adapter (F76) | **Served optional adapter**; no model configured by default, cloud/local egress opt-in; self-service model settings editor remains a roadmap residual |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
-| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools read-only by default, write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, `Idempotency-Key`, and take the identity lifecycle gate (policy, dual control) |
+| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation and evidence tools read-only by default, every result carries findings under the published result schema; write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, `Idempotency-Key`, and take the identity lifecycle gate (policy, dual control) |
 
 The graph and query layer build per request, so very large tenants pay a bounded build
 cost. AI features are grounded and read-only by design: no actions, no answers beyond the

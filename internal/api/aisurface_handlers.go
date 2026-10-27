@@ -108,6 +108,10 @@ type mcpToolsResponse struct {
 	Identity string   `json:"identity,omitempty"`
 	ReadOnly bool     `json:"read_only"`
 	Tools    []string `json:"tools"`
+	// Descriptions says what each tool does; ResultSchema is the published JSON
+	// Schema (draft-07) every tool result conforms to.
+	Descriptions map[string]string `json:"descriptions,omitempty"`
+	ResultSchema json.RawMessage   `json:"result_schema,omitempty"`
 }
 
 // mcpCallRequest invokes one MCP tool (F78). Read tools use Subject. The guarded
@@ -133,9 +137,19 @@ type mcpCallRequest struct {
 
 // mcpCallResponse is the grounded, cited tool result (F78).
 type mcpCallResponse struct {
+	// Schema names the published result schema the response conforms to.
+	Schema    string   `json:"schema"`
 	Tool      string   `json:"tool"`
 	Citations []string `json:"citations,omitempty"`
 	Text      string   `json:"text"`
+	// GeneratedAt is when the result was assembled. Findings are the structured
+	// findings behind the narrative, each with evidence IDs, source, time and
+	// confidence. Sufficient is false when the evidence does not support an
+	// answer, the token could not read part of it, or the findings were truncated.
+	GeneratedAt time.Time           `json:"generated_at"`
+	Findings    []mcpserver.Finding `json:"findings"`
+	Sufficient  *bool               `json:"sufficient,omitempty"`
+	Truncated   bool                `json:"truncated,omitempty"`
 	// Outcome, IdentityID and ApprovalRequestID report a certificate write: queued
 	// (the lifecycle transition is recorded and its CA call is in the outbox) or
 	// proposed (dual control applies, and the write waits for a distinct approver
@@ -485,10 +499,17 @@ func (a *API) mcpTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	srv := a.mcpServerFor(principal)
+	tools := srv.Tools()
+	descriptions := make(map[string]string, len(tools))
+	for _, tool := range tools {
+		descriptions[tool] = srv.Describe(tool)
+	}
 	a.writeJSON(w, http.StatusOK, mcpToolsResponse{
-		Identity: srv.Identity(),
-		ReadOnly: !srv.HasWriteTool(),
-		Tools:    srv.Tools(),
+		Identity:     srv.Identity(),
+		ReadOnly:     !srv.HasWriteTool(),
+		Tools:        tools,
+		Descriptions: descriptions,
+		ResultSchema: mcpserver.ResultSchema(),
 	})
 }
 
@@ -524,6 +545,10 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 		a.mcpCallWrite(w, r, principal, tool, req)
 		return
 	}
+	if srv.IsEvidenceTool(tool) {
+		a.mcpCallEvidence(w, r, principal, tool, req)
+		return
+	}
 	// The caller key for rate limiting is the authenticated subject, so one principal's
 	// enumeration cannot exhaust another's budget.
 	res, err := srv.Call(r.Context(), principal.Subject, principal.TenantID, tool, req.Subject)
@@ -531,7 +556,9 @@ func (a *API) mcpCall(w http.ResponseWriter, r *http.Request) {
 		a.writeMCPCallError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, mcpCallResponse{Tool: res.Tool, Citations: res.Citations, Text: res.Text})
+	out := mcpResult(res.Tool, res.Text, res.Citations, res.Findings)
+	out.Sufficient = &res.Sufficient
+	a.writeJSON(w, http.StatusOK, out)
 }
 
 // mcpCallREST executes one route-backed MCP tool by re-entering the served API router
@@ -573,11 +600,12 @@ func (a *API) mcpCallREST(w http.ResponseWriter, r *http.Request, principal auth
 		_, _ = w.Write(rec.body.Bytes())
 		return
 	}
-	a.writeJSON(w, status, mcpCallResponse{
-		Tool:      tool,
-		Text:      mcpRESTResponseSummary(rt, status),
-		Citations: []string{rt.Method + " " + rt.Path},
-	})
+	text := mcpRESTResponseSummary(rt, status)
+	a.writeJSON(w, status, mcpResult(tool, text, []string{rt.Method + " " + rt.Path}, []mcpserver.Finding{{
+		FindingID: "rest_response:operation:" + rt.OperationID, Kind: "rest_response", Summary: text,
+		EvidenceIDs: []string{"operation:" + rt.OperationID}, Source: "rest", ObservedAt: mcpserver.At(time.Now()),
+		Confidence: mcpserver.ConfidenceRecorded,
+	}}))
 }
 
 func mcpRESTResponseSummary(rt mcpserver.RESTTool, status int) string {
@@ -651,12 +679,16 @@ func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal aut
 	if approvalID, ok := mcpApprovalProposal(status, rec.body.Bytes()); ok {
 		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.proposed", principal.TenantID,
 			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"identity_id":%q,"approval_request_id":%q}`, principal.Subject, tool, identityID, approvalID)))
-		a.writeJSON(w, http.StatusAccepted, mcpCallResponse{
-			Tool: tool, Outcome: mcpWriteProposed, IdentityID: identityID, ApprovalRequestID: approvalID,
-			Citations: append(citations, "approval_request:"+approvalID),
-			Text: "dual control applies: the write waits for a distinct approver on approval request " + approvalID +
-				"; nothing was executed. After it is approved, make the same call again with the same arguments and Idempotency-Key.",
-		})
+		res := mcpResult(tool, "dual control applies: the write waits for a distinct approver on approval request "+approvalID+
+			"; nothing was executed. After it is approved, make the same call again with the same arguments and Idempotency-Key.",
+			append(citations, "approval_request:"+approvalID), []mcpserver.Finding{{
+				FindingID: "write_proposed:approval_request:" + approvalID, Kind: "write_proposed",
+				Summary:     tool + " for identity " + identityID + " waits for approval request " + approvalID + "; nothing was executed.",
+				EvidenceIDs: []string{"approval_request:" + approvalID, "identity:" + identityID}, Source: "lifecycle",
+				ObservedAt: mcpserver.At(time.Now()), Confidence: mcpserver.ConfidenceRecorded,
+			}})
+		res.Outcome, res.IdentityID, res.ApprovalRequestID = mcpWriteProposed, identityID, approvalID
+		a.writeJSON(w, http.StatusAccepted, res)
 		return
 	}
 	if status < 200 || status >= 300 {
@@ -671,7 +703,14 @@ func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal aut
 	if tool == "rotate_certificate" {
 		text = "renewal of identity " + identityID + " is recorded and its CA call queued; the new certificate is deployed when the call completes"
 	}
-	a.writeJSON(w, http.StatusOK, mcpCallResponse{Tool: tool, Outcome: mcpWriteQueued, IdentityID: identityID, Citations: citations, Text: text})
+	to := fmt.Sprint(transition["to"])
+	res := mcpResult(tool, text, citations, []mcpserver.Finding{{
+		FindingID: "write_queued:identity:" + identityID + ":" + to, Kind: "write_queued", Summary: text,
+		EvidenceIDs: []string{"identity:" + identityID}, Source: "lifecycle", ObservedAt: mcpserver.At(time.Now()),
+		Confidence: mcpserver.ConfidenceRecorded, Attributes: map[string]string{"transition": to},
+	}})
+	res.Outcome, res.IdentityID = mcpWriteQueued, identityID
+	a.writeJSON(w, http.StatusOK, res)
 }
 
 // mcpApprovalProposal reports the approval request a dual-control refusal of the
@@ -716,7 +755,7 @@ func mcpExclusion(rt route) string {
 func (a *API) mcpServerFor(principal authz.Principal) *mcpserver.Server {
 	pipeline := rca.NewPipeline(engineQuery{engine: a.ai.be.Query, principal: principal}, a.ai.be.Audit)
 	synth := rca.NewSynthesizer(a.ai.be.Model)
-	opts := []mcpserver.Option{mcpserver.WithRESTTools(a.mcpRESTTools(), a.ai.be.MCPWriteTools)}
+	opts := []mcpserver.Option{mcpserver.WithRESTTools(a.mcpRESTTools(), a.ai.be.MCPWriteTools), mcpserver.WithEvidenceTools(mcpEvidenceTools)}
 	if a.ai.be.MCPWriteTools {
 		opts = append(opts, mcpserver.WithWriteTools())
 	}

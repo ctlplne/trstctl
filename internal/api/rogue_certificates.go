@@ -45,7 +45,15 @@ type rogueCertificatePostureResponse struct {
 	PolicyModuleSHA256     string `json:"policy_module_sha256,omitempty"`
 	PolicyEvaluated        int    `json:"policy_evaluated"`
 	PolicyEvaluationErrors int    `json:"policy_evaluation_errors"`
+	// ReadLimited says the posture read a full page of certificates or of
+	// discovery findings (rogueCertificateReadLimit each), so an inventory
+	// larger than that is not fully rated here.
+	ReadLimited bool `json:"read_limited,omitempty"`
 }
+
+// rogueCertificateReadLimit bounds the certificates and the discovery findings
+// one posture read rates.
+const rogueCertificateReadLimit = 500
 
 type rogueCertificatePolicyViolation struct {
 	Rule     string `json:"rule"`
@@ -156,7 +164,7 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 	// Discovery findings carry the key verdict their reader computed while the
 	// certificate's bytes were at hand (Part 4); an inventory row without bytes
 	// borrows it by fingerprint.
-	rows, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, 500)
+	rows, err := a.store.ListDiscoveryFindingsPage(ctx, tenantID, "", store.ZeroUUID, rogueCertificateReadLimit)
 	if err != nil {
 		return rogueCertificatePostureResponse{}, err
 	}
@@ -171,10 +179,11 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 			discovered[fp] = discovered[fp].Merge(v)
 		}
 	}
-	certs, err := a.store.ListCertificatesPage(ctx, tenantID, store.ZeroUUID, nil, 500, nil)
+	certs, err := a.store.ListCertificatesPage(ctx, tenantID, store.ZeroUUID, nil, rogueCertificateReadLimit, nil)
 	if err != nil {
 		return rogueCertificatePostureResponse{}, err
 	}
+	out.ReadLimited = len(rows) == rogueCertificateReadLimit || len(certs) == rogueCertificateReadLimit
 	posture, _ := a.gate.Policy.(PosturePolicyEvaluator)
 	moduleSHA := ""
 	if posture != nil {

@@ -21709,6 +21709,62 @@
         ],
         "type": "object"
       },
+      "MCPFinding": {
+        "properties": {
+          "attributes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "confidence": {
+            "description": "verified: an observation whose signature the control plane checked; observed: reported from outside trstctl's own record without a checked signature; recorded: trstctl's record of its own action or an operator's statement; inferred: a correlation that can be wrong, such as a match by name only.",
+            "enum": [
+              "verified",
+              "observed",
+              "recorded",
+              "inferred"
+            ],
+            "type": "string"
+          },
+          "evidence_ids": {
+            "description": "The records the finding rests on, as kind:id references a caller can read back.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "finding_id": {
+            "description": "Stable for the same fact: the same evidence yields the same ID on every call.",
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "observed_at": {
+            "description": "When the evidence was recorded or observed; null when the record carries no time.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "source": {
+            "description": "The record set the finding was read from.",
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "kind",
+          "summary",
+          "evidence_ids",
+          "source",
+          "observed_at",
+          "confidence"
+        ],
+        "type": "object"
+      },
       "MCPToolCall": {
         "properties": {
           "authority_id": {
@@ -21742,11 +21798,23 @@
       },
       "MCPToolList": {
         "properties": {
+          "descriptions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "What each listed tool does.",
+            "type": "object"
+          },
           "identity": {
             "type": "string"
           },
           "read_only": {
             "type": "boolean"
+          },
+          "result_schema": {
+            "additionalProperties": {},
+            "description": "The published JSON Schema (draft-07) every tool result conforms to; MCP clients use it as each tool's output schema.",
+            "type": "object"
           },
           "tools": {
             "items": {
@@ -21776,6 +21844,17 @@
             },
             "type": "array"
           },
+          "findings": {
+            "description": "Structured findings behind the narrative, each with evidence IDs, source, time and confidence.",
+            "items": {
+              "$ref": "#/components/schemas/MCPFinding"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "identity_id": {
             "type": "string"
           },
@@ -21791,20 +21870,34 @@
             ],
             "type": "string"
           },
+          "schema": {
+            "description": "The published result schema this result conforms to (trstctl.mcp.tool-result/v1).",
+            "type": "string"
+          },
           "serial": {
             "description": "Never set since the write tools act on lifecycle identities.",
             "type": "string"
+          },
+          "sufficient": {
+            "description": "False when the evidence does not support an answer, the token could not read part of it, or the findings were truncated.",
+            "type": "boolean"
           },
           "text": {
             "type": "string"
           },
           "tool": {
             "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
           }
         },
         "required": [
+          "schema",
           "tool",
-          "text"
+          "text",
+          "generated_at",
+          "findings"
         ],
         "type": "object"
       },
@@ -33439,6 +33532,10 @@
           },
           "policy_module_sha256": {
             "type": "string"
+          },
+          "read_limited": {
+            "description": "True when the posture read a full page (500) of certificates or of discovery findings, so a larger inventory is not fully rated.",
+            "type": "boolean"
           },
           "recommended_actions": {
             "items": {
@@ -51894,6 +51991,22 @@
             "description": "return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed",
             "in": "query",
             "name": "triage_status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only findings whose reader matched this distrust-list entry",
+            "in": "query",
+            "name": "distrust_entry",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "weak: return only findings whose reader rated the key weak",
+            "in": "query",
+            "name": "key_strength",
             "schema": {
               "type": "string"
             }

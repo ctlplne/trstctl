@@ -186,9 +186,11 @@ func (s *mcpStdioServer) dispatch(req jsonRPCRequest) (any, *jsonRPCError) {
 }
 
 type mcpToolsListing struct {
-	Identity string   `json:"identity"`
-	ReadOnly bool     `json:"read_only"`
-	Tools    []string `json:"tools"`
+	Identity     string            `json:"identity"`
+	ReadOnly     bool              `json:"read_only"`
+	Tools        []string          `json:"tools"`
+	Descriptions map[string]string `json:"descriptions"`
+	ResultSchema json.RawMessage   `json:"result_schema"`
 }
 
 // mcpToolInputSchema is the request contract of POST /api/v1/mcp/tools/{tool}:
@@ -223,11 +225,21 @@ func (s *mcpStdioServer) listTools() (any, *jsonRPCError) {
 	}
 	tools := make([]map[string]any, 0, len(listing.Tools))
 	for _, name := range listing.Tools {
-		desc := "trstctl tool " + name + " (tenant-scoped; answered by the control plane with this token's permissions)"
+		desc := "trstctl tool " + name
+		if d := strings.TrimSpace(listing.Descriptions[name]); d != "" {
+			desc += ": " + d
+		}
+		desc += " (tenant-scoped; answered by the control plane with this token's permissions)"
 		if listing.ReadOnly {
 			desc += "; read-only"
 		}
-		tools = append(tools, map[string]any{"name": name, "description": desc, "inputSchema": mcpToolInputSchema})
+		tool := map[string]any{"name": name, "description": desc, "inputSchema": mcpToolInputSchema}
+		if len(listing.ResultSchema) > 0 {
+			// Every result conforms to the published schema, so the model gets
+			// structured content it can check, not only text.
+			tool["outputSchema"] = listing.ResultSchema
+		}
+		tools = append(tools, tool)
 	}
 	return map[string]any{"tools": tools}, nil
 }
@@ -267,7 +279,12 @@ func (s *mcpStdioServer) callTool(params json.RawMessage) (any, *jsonRPCError) {
 	if text == "" {
 		text = fmt.Sprintf("HTTP %d with an empty body", status)
 	}
-	return map[string]any{"content": []map[string]any{{"type": "text", "text": text}}, "isError": false}, nil
+	result := map[string]any{"content": []map[string]any{{"type": "text", "text": text}}, "isError": false}
+	var structured map[string]any
+	if json.Unmarshal(resp, &structured) == nil && structured != nil {
+		result["structuredContent"] = structured
+	}
+	return result, nil
 }
 
 // mcpCallIdempotencyKey takes a caller-chosen idempotency_key out of the tool

@@ -323,7 +323,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"discovery", "drift-remediation", "decide"}, Method: "POST", Path: "/api/v1/discovery/drift-remediation/{id}/decision", Body: bodyFile, Summary: "Record an operator decision for a drift finding"},
 	{Name: []string{"discovery", "monitoring"}, Method: "GET", Path: "/api/v1/discovery/monitoring", Summary: "Get continuous monitoring and inventory posture"},
 	{Name: []string{"discovery", "coverage"}, Method: "GET", Path: "/api/v1/discovery/coverage", Query: []string{"class", "source_kind"}, Summary: "Get discovery coverage: observed, observable-unobserved, and structurally unobservable asset classes"},
-	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id", "source_kind", "kind", "triage_status"}, Summary: "List discovery findings"},
+	{Name: []string{"discovery", "findings", "list"}, Method: "GET", Path: "/api/v1/discovery/findings", Query: []string{"limit", "cursor", "run_id", "source_kind", "kind", "triage_status", "distrust_entry", "key_strength"}, Summary: "List discovery findings"},
 	{Name: []string{"discovery", "findings", "claim"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/claim", Body: bodyFile, Summary: "Claim a discovery finding as managed"},
 	{Name: []string{"discovery", "findings", "dismiss"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/dismiss", Body: bodyFile, Summary: "Dismiss a discovery finding"},
 	{Name: []string{"discovery", "findings", "resolve"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/resolution", Body: bodyFile, Summary: "Investigate, record remediated, accept the risk until a time, or reopen a discovery finding"},

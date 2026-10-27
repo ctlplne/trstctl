@@ -5227,6 +5227,17 @@ export interface LifecycleAutomationSummary {
   renewal_failed: number;
 }
 
+export interface MCPFinding {
+  attributes?: Record<string, unknown>;
+  confidence: "verified" | "observed" | "recorded" | "inferred";
+  evidence_ids: string[];
+  finding_id: string;
+  kind: string;
+  observed_at: string;
+  source: string;
+  summary: string;
+}
+
 export interface MCPToolCall {
   authority_id?: string;
   csr_pem?: string;
@@ -5238,8 +5249,10 @@ export interface MCPToolCall {
 }
 
 export interface MCPToolList {
+  descriptions?: Record<string, unknown>;
   identity?: string;
   read_only: boolean;
+  result_schema?: Record<string, unknown>;
   tools: string[];
 }
 
@@ -5247,12 +5260,17 @@ export interface MCPToolResult {
   approval_request_id?: string;
   certificate_pem?: string;
   citations?: string[];
+  findings: MCPFinding[];
+  generated_at: string;
   identity_id?: string;
   not_after?: string;
   outcome?: "queued" | "proposed";
+  schema: string;
   serial?: string;
+  sufficient?: boolean;
   text: string;
   tool: string;
+  truncated?: boolean;
 }
 
 export interface MDMDevice {
@@ -8117,6 +8135,7 @@ export interface RogueCertificatePosture {
   policy_evaluated: number;
   policy_evaluation_errors: number;
   policy_module_sha256?: string;
+  read_limited?: boolean;
   recommended_actions: string[];
   summary: RogueCertificateSummary;
 }

@@ -137,6 +137,12 @@ func trustStoreNodeID(host, kind, profile string) string {
 	return strings.Join(parts, ":")
 }
 
+// TrustStoreNodeID is the graph node ID of the trust store kind (and browser
+// profile) on host, so evidence elsewhere can point at the store's node.
+func TrustStoreNodeID(host, kind, profile string) string {
+	return trustStoreNodeID(host, kind, profile)
+}
+
 // trustStoreName is what an operator sees on the node.
 func trustStoreName(meta trustStoreMeta, host string) string {
 	label := meta.TrustStoreKind

@@ -509,6 +509,7 @@ public final class OpenApiSchemas {
       "LifecycleAutomationPlan",
       "LifecycleAutomationScheduler",
       "LifecycleAutomationSummary",
+      "MCPFinding",
       "MCPToolCall",
       "MCPToolList",
       "MCPToolResult",

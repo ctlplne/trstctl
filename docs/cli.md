@@ -1417,4 +1417,7 @@ transport failure. Write tools appear only when the control plane exposes them
 dual control holds comes back with `"outcome":"proposed"`, its approval request and the
 `idempotency_key` it is bound to; once a distinct approver approved it, repeat the same
 call with that `idempotency_key` argument, which the bridge sends as the
-`Idempotency-Key` header, and the approved write runs.
+`Idempotency-Key` header, and the approved write runs. The control plane publishes the
+result schema with its tool list; the bridge gives it to the client as every tool's
+`outputSchema`, passes each tool's description, and returns each result as
+`structuredContent` alongside its JSON text.

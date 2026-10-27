@@ -7213,6 +7213,21 @@ LifecycleAutomationSummary = TypedDict(
     total=False,
 )
 
+MCPFinding = TypedDict(
+    'MCPFinding',
+    {
+        'attributes': dict[str, Any],
+        'confidence': str,
+        'evidence_ids': list[str],
+        'finding_id': str,
+        'kind': str,
+        'observed_at': str,
+        'source': str,
+        'summary': str,
+    },
+    total=False,
+)
+
 MCPToolCall = TypedDict(
     'MCPToolCall',
     {
@@ -7230,8 +7245,10 @@ MCPToolCall = TypedDict(
 MCPToolList = TypedDict(
     'MCPToolList',
     {
+        'descriptions': dict[str, Any],
         'identity': str,
         'read_only': bool,
+        'result_schema': dict[str, Any],
         'tools': list[str],
     },
     total=False,
@@ -7243,12 +7260,17 @@ MCPToolResult = TypedDict(
         'approval_request_id': str,
         'certificate_pem': str,
         'citations': list[str],
+        'findings': list[dict[str, Any]],
+        'generated_at': str,
         'identity_id': str,
         'not_after': str,
         'outcome': str,
+        'schema': str,
         'serial': str,
+        'sufficient': bool,
         'text': str,
         'tool': str,
+        'truncated': bool,
     },
     total=False,
 )
@@ -11193,6 +11215,7 @@ RogueCertificatePosture = TypedDict(
         'policy_evaluated': int,
         'policy_evaluation_errors': int,
         'policy_module_sha256': str,
+        'read_limited': bool,
         'recommended_actions': list[str],
         'summary': dict[str, Any],
     },

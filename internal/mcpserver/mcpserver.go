@@ -64,11 +64,15 @@ func (r *RateLimiter) Allow(key string) bool {
 	return true
 }
 
-// ToolResult is a grounded, cited tool result.
+// ToolResult is a grounded, cited tool result. Findings are its structured
+// findings, one per cited record; Sufficient is false when the evidence does not
+// support an answer.
 type ToolResult struct {
-	Tool      string
-	Citations []string
-	Text      string
+	Tool       string
+	Citations  []string
+	Text       string
+	Findings   []Finding
+	Sufficient bool
 }
 
 // RESTTool is MCP metadata for one served REST route. It deliberately carries only
@@ -97,6 +101,7 @@ type Server struct {
 	identity string
 	tools    map[string]string // read-only tool -> question template
 	writes   map[string]string // explicit write tool -> description
+	evidence map[string]string // evidence tool (answered by the API layer) -> description
 	rest     map[string]RESTTool
 }
 
@@ -111,6 +116,18 @@ func WithWriteTools() Option {
 		s.writes = map[string]string{
 			"issue_certificate":  "issue a lifecycle identity's certificate through the lifecycle gate; under dual control it is proposed for approval",
 			"rotate_certificate": "renew a deployed lifecycle identity's certificate through the lifecycle gate",
+		}
+	}
+}
+
+// WithEvidenceTools exposes read tools the API layer answers from its own served
+// read routes (posture, exposure, assurance, revocation, crypto inventory). Like the
+// write tools, only the metadata lives here.
+func WithEvidenceTools(tools map[string]string) Option {
+	return func(s *Server) {
+		s.evidence = make(map[string]string, len(tools))
+		for name, desc := range tools {
+			s.evidence[name] = desc
 		}
 	}
 }
@@ -229,8 +246,11 @@ func (s *Server) Identity() string { return s.identity }
 // Tools lists every exposed tool name. By default this is the read-only set; guarded
 // write tools appear only when WithWriteTools is supplied.
 func (s *Server) Tools() []string {
-	out := make([]string, 0, len(s.tools)+len(s.writes)+len(s.rest))
+	out := make([]string, 0, len(s.tools)+len(s.writes)+len(s.evidence)+len(s.rest))
 	for n := range s.tools {
+		out = append(out, n)
+	}
+	for n := range s.evidence {
 		out = append(out, n)
 	}
 	for n := range s.rest {
@@ -243,6 +263,43 @@ func (s *Server) Tools() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// readToolDescriptions says what each investigation tool answers.
+var readToolDescriptions = map[string]string{
+	"query_credentials": "summarize what the records say about a subject (an identity, certificate, owner or workload), cited",
+	"get_blast_radius":  "what depends on a subject in the credential graph, cited",
+	"explain_incident":  "reconstruct what happened to a subject from the event log, cited",
+	"compliance_status": "compliance gaps for a subject from the crypto inventory, cited",
+}
+
+// Describe says what one exposed tool does, for an MCP client's tool list.
+func (s *Server) Describe(tool string) string {
+	if _, ok := s.tools[tool]; ok {
+		return readToolDescriptions[tool]
+	}
+	if desc, ok := s.evidence[tool]; ok {
+		return desc
+	}
+	if rt, ok := s.rest[tool]; ok {
+		return firstNonEmpty(rt.Summary, rt.Method+" "+rt.Path)
+	}
+	return s.writes[tool]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// IsEvidenceTool reports whether tool is an evidence tool the API layer answers.
+func (s *Server) IsEvidenceTool(tool string) bool {
+	_, ok := s.evidence[tool]
+	return ok
 }
 
 // HasWriteTool reports whether any guarded write/remediation tool is exposed.
@@ -285,5 +342,5 @@ func (s *Server) Call(ctx context.Context, caller, tenantID, tool, subject strin
 	}
 	_ = auditsink.Emit(ctx, s.audit, nil, "mcp.tool.call", s.tenantID,
 		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"scope":%q,"citations":%d,"outcome":"ok"}`, caller, tool, tenantID, len(ans.Citations))))
-	return ToolResult{Tool: tool, Citations: ans.Citations, Text: ans.Text}, nil
+	return ToolResult{Tool: tool, Citations: ans.Citations, Text: ans.Text, Findings: evidenceFindings(ev), Sufficient: ans.Sufficient}, nil
 }

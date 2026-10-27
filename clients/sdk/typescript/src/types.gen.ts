@@ -13975,6 +13975,29 @@ export interface components {
             outbox_processing: number;
             renewal_failed: number;
         };
+        MCPFinding: {
+            attributes?: {
+                [key: string]: string;
+            };
+            /**
+             * @description verified: an observation whose signature the control plane checked; observed: reported from outside trstctl's own record without a checked signature; recorded: trstctl's record of its own action or an operator's statement; inferred: a correlation that can be wrong, such as a match by name only.
+             * @enum {string}
+             */
+            confidence: "verified" | "observed" | "recorded" | "inferred";
+            /** @description The records the finding rests on, as kind:id references a caller can read back. */
+            evidence_ids: string[];
+            /** @description Stable for the same fact: the same evidence yields the same ID on every call. */
+            finding_id: string;
+            kind: string;
+            /**
+             * Format: date-time
+             * @description When the evidence was recorded or observed; null when the record carries no time.
+             */
+            observed_at: string;
+            /** @description The record set the finding was read from. */
+            source: string;
+            summary: string;
+        };
         MCPToolCall: {
             /** @description No longer accepted: the write tools never issue directly from a CA authority; a call that sends it is refused. */
             authority_id?: string;
@@ -13990,8 +14013,16 @@ export interface components {
             ttl_seconds?: number;
         };
         MCPToolList: {
+            /** @description What each listed tool does. */
+            descriptions?: {
+                [key: string]: string;
+            };
             identity?: string;
             read_only: boolean;
+            /** @description The published JSON Schema (draft-07) every tool result conforms to; MCP clients use it as each tool's output schema. */
+            result_schema?: {
+                [key: string]: unknown;
+            };
             tools: string[];
         };
         MCPToolResult: {
@@ -13999,6 +14030,10 @@ export interface components {
             /** @description Never set since the write tools act on lifecycle identities. */
             certificate_pem?: string;
             citations?: string[];
+            /** @description Structured findings behind the narrative, each with evidence IDs, source, time and confidence. */
+            findings: components["schemas"]["MCPFinding"][];
+            /** Format: date-time */
+            generated_at: string;
             identity_id?: string;
             /** Format: date-time */
             not_after?: string;
@@ -14007,10 +14042,15 @@ export interface components {
              * @enum {string}
              */
             outcome?: "queued" | "proposed";
+            /** @description The published result schema this result conforms to (trstctl.mcp.tool-result/v1). */
+            schema: string;
             /** @description Never set since the write tools act on lifecycle identities. */
             serial?: string;
+            /** @description False when the evidence does not support an answer, the token could not read part of it, or the findings were truncated. */
+            sufficient?: boolean;
             text: string;
             tool: string;
+            truncated?: boolean;
         };
         MDMDevice: {
             device_name?: string;
@@ -17118,6 +17158,8 @@ export interface components {
             policy_evaluated: number;
             policy_evaluation_errors: number;
             policy_module_sha256?: string;
+            /** @description True when the posture read a full page (500) of certificates or of discovery findings, so a larger inventory is not fully rated. */
+            read_limited?: boolean;
             recommended_actions: string[];
             summary: components["schemas"]["RogueCertificateSummary"];
         };
@@ -26550,6 +26592,10 @@ export interface operations {
                 kind?: string;
                 /** @description return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed */
                 triage_status?: string;
+                /** @description return only findings whose reader matched this distrust-list entry */
+                distrust_entry?: string;
+                /** @description weak: return only findings whose reader rated the key weak */
+                key_strength?: string;
             };
             header?: never;
             path?: never;

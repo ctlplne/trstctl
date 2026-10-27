@@ -57,6 +57,14 @@ func discoveryFindingFilterFromQuery(r *http.Request) (store.DiscoveryFindingFil
 			return filter, fmt.Errorf("%s must be a lowercase kind name", field.name)
 		}
 	}
+	filter.DistrustEntry = strings.TrimSpace(q.Get("distrust_entry"))
+	if len(filter.DistrustEntry) > 256 {
+		return filter, errors.New("distrust_entry must be at most 256 characters")
+	}
+	filter.KeyStrength = strings.TrimSpace(q.Get("key_strength"))
+	if filter.KeyStrength != "" && filter.KeyStrength != "weak" {
+		return filter, errors.New("key_strength must be weak")
+	}
 	status, err := discoveryTriageFilter(q.Get("triage_status"))
 	filter.TriageStatus = status
 	return filter, err

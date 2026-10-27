@@ -25,6 +25,10 @@ type DiscoveryFindingFilter struct {
 	SourceKind   string
 	Kind         string
 	TriageStatus string
+	// DistrustEntry and KeyStrength select by the key verdict a reader recorded
+	// in the finding's metadata: the distrust-list entry it matched, and "weak".
+	DistrustEntry string
+	KeyStrength   string
 }
 
 // MaxDiscoveryFindingTallyGroups bounds one count: the dashboards count one
@@ -56,6 +60,14 @@ func (f DiscoveryFindingFilter) where(args []any) (string, []any) {
 		} else {
 			fmt.Fprintf(&b, " AND f.triage_status = $%d", len(args))
 		}
+	}
+	if f.DistrustEntry != "" {
+		args = append(args, f.DistrustEntry)
+		fmt.Fprintf(&b, " AND f.metadata->>'distrust_entry' = $%d", len(args))
+	}
+	if f.KeyStrength != "" {
+		args = append(args, f.KeyStrength)
+		fmt.Fprintf(&b, " AND f.metadata->>'key_strength' = $%d", len(args))
 	}
 	if f.SourceKind != "" {
 		args = append(args, f.SourceKind)

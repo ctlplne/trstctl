@@ -212,7 +212,7 @@ func (e *Engine) readLog(ctx context.Context, tenant string, eq map[Field]string
 			if filter && ev.Type != want {
 				return nil
 			}
-			columns := map[string]string{"id": ev.ID, "type": ev.Type, "tenant_id": ev.TenantID}
+			columns := map[string]string{"id": ev.ID, "type": ev.Type, "tenant_id": ev.TenantID, "at": ev.Time.UTC().Format(time.RFC3339Nano)}
 			if reason := renewalFailureReason(ev); reason != "" {
 				columns["reason"] = reason
 			}

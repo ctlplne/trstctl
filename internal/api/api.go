@@ -1126,6 +1126,8 @@ func (a *API) routes() []route {
 		{name: "source_kind", typ: "string", desc: "return only findings recorded under sources of this kind (for example ct_log or drift)"},
 		{name: "kind", typ: "string", desc: "return only findings of this kind"},
 		{name: "triage_status", typ: "string", desc: "return only findings in this triage status: unmanaged (including never triaged), investigating, managed or dismissed"},
+		{name: "distrust_entry", typ: "string", desc: "return only findings whose reader matched this distrust-list entry"},
+		{name: "key_strength", typ: "string", desc: "weak: return only findings whose reader rated the key weak"},
 	}
 	discoveryDashboardQuery := []param{
 		{name: "limit", typ: "integer", desc: "maximum findings per page (1-100, default 50); the summary counts every finding"},

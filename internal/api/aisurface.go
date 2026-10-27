@@ -210,7 +210,7 @@ func (q engineQuery) Run(ctx context.Context, tenantID, kind, subject string) ([
 	all := make([]rca.Record, 0, len(res.Rows))
 	matched := make([]rca.Record, 0, len(res.Rows))
 	for _, row := range res.Rows {
-		rec := rca.Record{Source: string(row.Surface), ID: recordID(row), Summary: rowSummary(row)}
+		rec := rca.Record{Source: string(row.Surface), ID: recordID(row), Summary: rowSummary(row), At: rowTime(row)}
 		all = append(all, rec)
 		if subject != "" && rowMentions(row, subject) {
 			matched = append(matched, rec)
@@ -234,6 +234,16 @@ func rowMentions(row query.Row, subject string) bool {
 		}
 	}
 	return false
+}
+
+// rowTime is when a scoped row was recorded: an event's append time. Inventory and
+// graph rows carry no recording time and answer zero.
+func rowTime(row query.Row) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, row.Columns["at"])
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // recordID derives a stable citation id from a scoped row (prefers an "id" column,

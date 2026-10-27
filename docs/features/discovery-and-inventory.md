@@ -365,6 +365,12 @@ mistaking two same-name roots for the same authority. The control plane stamps t
 host from the reporting agent's verified mTLS identity, so several stores or anchor
 paths on one machine remain several stores across one host.
 
+**Finding exposure.** `GET /api/v1/discovery/findings?distrust_entry=<entry name>` lists
+the findings whose reader matched a distrust-list entry, and `?key_strength=weak` those
+whose key was rated weak (CLI `trstctl-cli discovery findings list --distrust_entry "<entry name>"` or
+`--key_strength weak`). The MCP `distrust_exposure` and `weak_key_exposure` tools answer
+from these and the rated certificate inventory.
+
 **Removing a distrusted root.** When the control plane's distrust list names a
 trust-store anchor itself (for example emSign ECC Root CA - G3, by key), the finding
 can be removed from the host through trust distribution:

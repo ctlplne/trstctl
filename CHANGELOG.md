@@ -2,6 +2,16 @@
 
 ### Added
 
+- MCP evidence tools and structured findings. Six read tools answer posture and
+  exposure questions from the served read routes with the agent's own token:
+  `posture_findings`, `weak_key_exposure`, `distrust_exposure` (the certificates
+  and host trust stores a distrust-list entry affects, each with evidence IDs),
+  `assurance_record`, `revocation_status` and `crypto_inventory`. Every MCP tool
+  result now carries structured findings (finding ID, evidence IDs, source, time,
+  confidence) beside its narrative, under a JSON Schema the tool listing publishes;
+  `trstctl-cli mcp serve` advertises it as each tool's output schema and returns
+  structured content. Discovery findings filter by `distrust_entry` and
+  `key_strength=weak`.
 - Agent-to-agent identity over A2A 1.0: a reference pair on the official A2A Go
   SDK (`test/interop/agentframeworks/cmd/a2aagent`). The serving agent's Agent Card
   declares mutual TLS and the delegated-credential header as its security

@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/auditsink"
@@ -24,17 +25,23 @@ type Query interface {
 	Run(ctx context.Context, tenantID, kind, subject string) ([]Record, error)
 }
 
-// Record is a source record returned by the query layer.
+// Record is a source record returned by the query layer. At is when the record
+// was recorded, zero when the surface carries no time.
 type Record struct {
 	Source  string // e.g. "audit", "graph", "inventory"
 	ID      string
 	Summary string
+	At      time.Time
 }
 
-// EvidenceItem is one cited piece of evidence (redacted).
+// EvidenceItem is one cited piece of evidence (redacted). Source, ID and At are
+// the cited record's, kept apart so a caller can structure the evidence.
 type EvidenceItem struct {
 	Citation string
 	Summary  string
+	Source   string
+	ID       string
+	At       time.Time
 }
 
 // Evidence is the gathered, cited evidence bundle for a question.
@@ -71,6 +78,7 @@ func (p *Pipeline) Gather(ctx context.Context, tenantID, subject, question strin
 			ev.Items = append(ev.Items, EvidenceItem{
 				Citation: r.Source + "#" + r.ID,
 				Summary:  aimodel.DefaultRedactor(r.Summary), // AN-8: redact any key material in evidence
+				Source:   r.Source, ID: r.ID, At: r.At,
 			})
 		}
 	}
