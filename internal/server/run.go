@@ -816,6 +816,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentClaimableJobKinds: cfg.AgentChannel.ClaimableJobKinds, AgentMaxLiveClaimsPerAgent: cfg.AgentChannel.MaxLiveClaimsPerAgent,
 		AgentUpgradePublisherKeyFile: cfg.AgentChannel.UpgradePublisherKeyFile,
 		AgentCACertFile:              agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg), AgentChannelServerName: cfg.AgentChannel.ServerName,
+		AgentClockSkewWarning: agentClockSkewWarning(cfg),
 	}, nil
 }
 
@@ -1704,6 +1705,16 @@ func agentCACertFile(cfg *config.Config) string {
 // unset.
 func agentHeartbeatInterval(cfg *config.Config) time.Duration {
 	d, _ := cfg.AgentChannel.HeartbeatIntervalDuration()
+	return d
+}
+
+// agentClockSkewWarning resolves agent_channel.clock_skew_warning (already
+// validated), defaulting to config.DefaultAgentClockSkewWarning.
+func agentClockSkewWarning(cfg *config.Config) time.Duration {
+	d, err := cfg.AgentChannel.ClockSkewWarningDuration()
+	if err != nil {
+		return config.DefaultAgentClockSkewWarning
+	}
 	return d
 }
 

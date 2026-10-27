@@ -85,10 +85,16 @@ type Agent struct {
 	SSHKRLSignature         []byte
 	SSHKRLSignerFingerprint string
 	SSHKRLReportedAt        *time.Time
-	CreatedAt               time.Time
-	OffboardedAt            *time.Time
-	OffboardedBy            string
-	OffboardReason          string
+	// ClockSkewMillis is the agent's clock reading minus the control plane's
+	// time when its newest clock-carrying heartbeat was recorded (A194);
+	// positive means the agent runs ahead. ClockSkewObservedAt is when that
+	// heartbeat was recorded; nil means the agent has never sent a reading.
+	ClockSkewMillis     *int64
+	ClockSkewObservedAt *time.Time
+	CreatedAt           time.Time
+	OffboardedAt        *time.Time
+	OffboardedBy        string
+	OffboardReason      string
 }
 
 // AgentFleetHealth is a cross-tenant aggregate used only for ops telemetry. It
@@ -96,6 +102,9 @@ type Agent struct {
 type AgentFleetHealth struct {
 	Total int64
 	Stale int64
+	// ClockSkewed counts agents whose newest heartbeat carried a clock reading
+	// further from the control plane's than the warning threshold (A194).
+	ClockSkewed int64
 }
 
 // AgentRevocationCache is one signed per-cache row flattened from the newest
@@ -190,13 +199,15 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		                     revocation_caches_signer_fingerprint, revocation_caches_reported_at,
 		                     executors, executors_reported_at,
 		                     ssh_krl, ssh_krl_statement, ssh_krl_signature,
-		                     ssh_krl_signer_fingerprint, ssh_krl_reported_at)
+		                     ssh_krl_signer_fingerprint, ssh_krl_reported_at,
+		                     clock_skew_ms, clock_skew_observed_at)
 		 VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10,
 		         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22,
 		         $23::jsonb, $24, $25, $26, $27,
 		         $28::jsonb, $29, $30, $31, $32,
 		         $33::jsonb, $34,
-		         $35::jsonb, $36, $37, $38, $39)
+		         $35::jsonb, $36, $37, $38, $39,
+		         $40, $41)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET name = CASE WHEN agents.status = 'offboarded' THEN agents.name ELSE EXCLUDED.name END,
 		        status = CASE WHEN agents.status = 'offboarded' THEN agents.status ELSE EXCLUDED.status END,
@@ -326,7 +337,17 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		        ssh_krl_reported_at = CASE
 		            WHEN EXCLUDED.ssh_krl_reported_at IS NULL OR agents.status = 'offboarded' THEN agents.ssh_krl_reported_at
 		            WHEN agents.ssh_krl_reported_at IS NOT NULL AND EXCLUDED.ssh_krl_reported_at <= agents.ssh_krl_reported_at THEN agents.ssh_krl_reported_at
-		            ELSE EXCLUDED.ssh_krl_reported_at END
+		            ELSE EXCLUDED.ssh_krl_reported_at END,
+		        -- A194: a beat without a clock reading leaves the last one, which
+		        -- then reads as older than last_seen_at, never as current.
+		        clock_skew_ms = CASE
+		            WHEN EXCLUDED.clock_skew_observed_at IS NULL OR agents.status = 'offboarded' THEN agents.clock_skew_ms
+		            WHEN agents.clock_skew_observed_at IS NOT NULL AND EXCLUDED.clock_skew_observed_at <= agents.clock_skew_observed_at THEN agents.clock_skew_ms
+		            ELSE EXCLUDED.clock_skew_ms END,
+		        clock_skew_observed_at = CASE
+		            WHEN EXCLUDED.clock_skew_observed_at IS NULL OR agents.status = 'offboarded' THEN agents.clock_skew_observed_at
+		            WHEN agents.clock_skew_observed_at IS NOT NULL AND EXCLUDED.clock_skew_observed_at <= agents.clock_skew_observed_at THEN agents.clock_skew_observed_at
+		            ELSE EXCLUDED.clock_skew_observed_at END
 		  WHERE agents.tenant_id = EXCLUDED.tenant_id`,
 		a.ID, a.TenantID, a.Name, a.Status, a.Version, agentRoleArray(a.Roles), a.LastSeenAt,
 		a.WorkloadAPIServed, a.WorkloadAPISVIDs, a.WorkloadAPIReportedAt,
@@ -340,7 +361,8 @@ func (s *Store) ApplyAgentHeartbeatTx(ctx context.Context, tx pgx.Tx, a Agent) e
 		a.RevocationCachesSignerFingerprint, a.RevocationCachesReportedAt,
 		executors, a.ExecutorsReportedAt,
 		sshKRL, a.SSHKRLStatement, a.SSHKRLSignature,
-		a.SSHKRLSignerFingerprint, a.SSHKRLReportedAt)
+		a.SSHKRLSignerFingerprint, a.SSHKRLReportedAt,
+		a.ClockSkewMillis, a.ClockSkewObservedAt)
 	if err != nil {
 		return err
 	}
@@ -572,7 +594,7 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 			        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 			        revocation_caches, revocation_caches_statement, revocation_caches_signature,
 			        revocation_caches_signer_fingerprint, revocation_caches_reported_at,
-			        executors, executors_reported_at
+			        executors, executors_reported_at, clock_skew_ms, clock_skew_observed_at
 			   FROM agents WHERE tenant_id = $1 AND id = $2`, tenantID, id).
 			Scan(&a.ID, &a.TenantID, &a.Name, &a.Status, &a.Version, &a.Roles, &a.LastSeenAt, &a.CreatedAt,
 				&a.OffboardedAt, &a.OffboardedBy, &a.OffboardReason,
@@ -585,7 +607,7 @@ func (s *Store) GetAgent(ctx context.Context, tenantID, id string) (Agent, error
 				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt,
 				&revocationCaches, &a.RevocationCachesStatement, &a.RevocationCachesSignature,
 				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt,
-				&a.Executors, &a.ExecutorsReportedAt)
+				&a.Executors, &a.ExecutorsReportedAt, &a.ClockSkewMillis, &a.ClockSkewObservedAt)
 	})
 	if err == nil {
 		err = json.Unmarshal(relayPlugins, &a.RelayPlugins)
@@ -676,7 +698,7 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 				        revocation_caches, revocation_caches_statement, revocation_caches_signature,
 				        revocation_caches_signer_fingerprint, revocation_caches_reported_at,
-				        executors, executors_reported_at
+				        executors, executors_reported_at, clock_skew_ms, clock_skew_observed_at
 				   FROM agents
 				  WHERE tenant_id = $1 AND (created_at, id) > ($2, $3)
 				  ORDER BY created_at, id
@@ -695,7 +717,7 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				        relay_plugins_signer_fingerprint, relay_plugins_reported_at,
 				        revocation_caches, revocation_caches_statement, revocation_caches_signature,
 				        revocation_caches_signer_fingerprint, revocation_caches_reported_at,
-				        executors, executors_reported_at
+				        executors, executors_reported_at, clock_skew_ms, clock_skew_observed_at
 				   FROM agents
 				  WHERE tenant_id = $1
 				  ORDER BY created_at, id
@@ -720,7 +742,7 @@ func (s *Store) ListAgentsPage(ctx context.Context, tenantID string, afterCreate
 				&a.RelayPluginsSignerFingerprint, &a.RelayPluginsReportedAt,
 				&revocationCaches, &a.RevocationCachesStatement, &a.RevocationCachesSignature,
 				&a.RevocationCachesSignerFingerprint, &a.RevocationCachesReportedAt,
-				&a.Executors, &a.ExecutorsReportedAt); err != nil {
+				&a.Executors, &a.ExecutorsReportedAt, &a.ClockSkewMillis, &a.ClockSkewObservedAt); err != nil {
 				return err
 			}
 			if err := json.Unmarshal(relayPlugins, &a.RelayPlugins); err != nil {
@@ -794,18 +816,23 @@ func (s *Store) ListAgentRevocationCaches(ctx context.Context, tenantID string, 
 	return out, err
 }
 
-// AgentFleetHealth counts all known agents and the subset whose last heartbeat is
-// older than staleBefore. It is a system query because the operator alert needs one
-// fleet-wide ratio; it returns only aggregate counts and does not expose tenant,
-// agent, or host identifiers.
-func (s *Store) AgentFleetHealth(ctx context.Context, staleBefore time.Time) (AgentFleetHealth, error) {
+// AgentFleetHealth counts all known agents, the subset whose last heartbeat is
+// older than staleBefore, and the active agents whose newest heartbeat carried a
+// clock reading more than skewWarning from the control plane's (A194). It is a
+// system query because the operator alerts need fleet-wide figures; it returns only
+// aggregate counts and does not expose tenant, agent, or host identifiers.
+func (s *Store) AgentFleetHealth(ctx context.Context, staleBefore time.Time, skewWarning time.Duration) (AgentFleetHealth, error) {
 	var out AgentFleetHealth
 	err := s.pool.QueryRow(ctx,
-		//trstctl:system-query — cross-tenant by design: Prometheus fleet-health gauges need aggregate total/stale counts across ALL agents; the query returns counts only, no tenant/agent rows or labels (AN-1 exemption).
+		//trstctl:system-query — cross-tenant by design: Prometheus fleet-health gauges need aggregate total/stale/clock-skewed counts across ALL agents; the query returns counts only, no tenant/agent rows or labels (AN-1 exemption).
 		`SELECT count(*)::bigint,
-		        count(*) FILTER (WHERE last_seen_at IS NULL OR last_seen_at < $1)::bigint
+		        count(*) FILTER (WHERE last_seen_at IS NULL OR last_seen_at < $1)::bigint,
+		        count(*) FILTER (WHERE status <> 'offboarded'
+		                           AND clock_skew_observed_at IS NOT NULL
+		                           AND clock_skew_observed_at = last_seen_at
+		                           AND abs(clock_skew_ms) > $2)::bigint
 		   FROM agents`,
-		staleBefore).Scan(&out.Total, &out.Stale)
+		staleBefore, skewWarning.Milliseconds()).Scan(&out.Total, &out.Stale, &out.ClockSkewed)
 	return out, err
 }
 

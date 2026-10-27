@@ -96,6 +96,7 @@ public final class OpenApiSchemas {
       "Agent",
       "AgentCertRevocation",
       "AgentCertRevocationRequest",
+      "AgentClockSkew",
       "AgentDiscoveryCapability",
       "AgentEnrollmentProxyStatus",
       "AgentJobPosture",

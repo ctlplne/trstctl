@@ -767,3 +767,12 @@ groups:
         annotations:
           summary: "trstctl stale-agent ratio above 2%"
           description: "More than 2% of known agents have missed two heartbeat intervals. For rollout or rollback, follow docs/runbooks/fleet-rollout.md and docs/runbooks/upgrade-rollback.md."
+
+      - alert: TrstctlAgentClockSkew
+        expr: trstctl_agents_clock_skewed_total > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "trstctl agents with clock skew"
+          description: "At least one agent's newest heartbeat carried a clock reading further from the control plane's than agent_channel.clock_skew_warning (default 2m). Agents time their own certificate renewal by their own clock, so a skewed host may renew early or late. The Agents page names each one; correct the host's time source (NTP)."

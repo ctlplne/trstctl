@@ -892,6 +892,7 @@ export interface Agent {
   capability_source: "reported" | "server_census";
   claim_quota?: number;
   claim_quota_reached?: boolean;
+  clock_skew?: AgentClockSkew;
   discovery_capabilities: AgentDiscoveryCapability[];
   enrollment_proxy: AgentEnrollmentProxyStatus;
   id: string;
@@ -932,6 +933,14 @@ export interface AgentCertRevocationRequest {
   fingerprint?: string;
   reason?: string;
   serial?: string;
+}
+
+export interface AgentClockSkew {
+  detail: string;
+  observed_at: string;
+  skew_seconds: number;
+  state: "ok" | "warning" | "unreported";
+  threshold_seconds: number;
 }
 
 export interface AgentDiscoveryCapability {

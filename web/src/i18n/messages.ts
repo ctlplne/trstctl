@@ -15792,6 +15792,15 @@ export const messages = {
       "Save the token to ./trstctl-bootstrap-token with 0600 permissions, then copy the command. Closing or dismissing this dialog clears the token from page memory; the console does not persist it.",
     description: "One-time bootstrap token handling guidance.",
   },
+  "agents.clock.heading": { defaultMessage: "Clock", description: "Agent detail label for the agent's clock against the control plane's." },
+  "agents.clock.ahead": {
+    defaultMessage: "Clock {drift} ahead of the control plane",
+    description: "Agents table warning when an agent's clock runs ahead of the control plane's past the threshold.",
+  },
+  "agents.clock.behind": {
+    defaultMessage: "Clock {drift} behind the control plane",
+    description: "Agents table warning when an agent's clock runs behind the control plane's past the threshold.",
+  },
   "agents.roles.change": { defaultMessage: "Change roles", description: "Agents table action that opens the role change dialog." },
   "agents.roles.title": { defaultMessage: "Change roles for {name}", description: "Role change dialog title naming the agent." },
   "agents.roles.description": {

@@ -189,6 +189,9 @@ agentChannel:
   serverName: ""
   # The next-beat hint returned to agents (a Go duration). Empty uses the server default.
   heartbeatInterval: ""
+  # How far an agent's clock may be from the control plane's before it is
+  # flagged (Go duration). Empty uses the default, 2m.
+  clockSkewWarning: ""
   # Extra CIDR blocks allowed to reach the agent port (:9443) through the NetworkPolicy,
   # for agents connecting from OUTSIDE the cluster. In-cluster peers admitted to the API
   # port are also admitted to the agent port. mTLS (not this rule) controls identity.

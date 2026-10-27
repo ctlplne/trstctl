@@ -1216,6 +1216,7 @@ Agent = TypedDict(
         'capability_source': str,
         'claim_quota': int,
         'claim_quota_reached': bool,
+        'clock_skew': dict[str, Any],
         'discovery_capabilities': list[dict[str, Any]],
         'enrollment_proxy': dict[str, Any],
         'id': str,
@@ -1264,6 +1265,18 @@ AgentCertRevocationRequest = TypedDict(
         'fingerprint': str,
         'reason': str,
         'serial': str,
+    },
+    total=False,
+)
+
+AgentClockSkew = TypedDict(
+    'AgentClockSkew',
+    {
+        'detail': str,
+        'observed_at': str,
+        'skew_seconds': float,
+        'state': str,
+        'threshold_seconds': float,
     },
     total=False,
 )

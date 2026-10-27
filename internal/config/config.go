@@ -2730,6 +2730,31 @@ type AgentChannel struct {
 	// every artifact a staged upgrade campaign publishes (A68). Empty, the default,
 	// accepts the operator-supplied sha256 pin alone.
 	UpgradePublisherKeyFile string `json:"upgrade_publisher_key_file,omitempty"`
+	// ClockSkewWarning is how far an agent's clock may be from the control
+	// plane's, measured on each heartbeat, before the agent is flagged (A194):
+	// a Go duration, default "2m". The agent still times its own certificate
+	// renewal by its own clock.
+	ClockSkewWarning string `json:"clock_skew_warning,omitempty"`
+}
+
+// DefaultAgentClockSkewWarning is the clock drift past which an agent is
+// flagged when agent_channel.clock_skew_warning is unset.
+const DefaultAgentClockSkewWarning = 2 * time.Minute
+
+// ClockSkewWarningDuration parses agent_channel.clock_skew_warning, returning
+// DefaultAgentClockSkewWarning when it is unset.
+func (a AgentChannel) ClockSkewWarningDuration() (time.Duration, error) {
+	if strings.TrimSpace(a.ClockSkewWarning) == "" {
+		return DefaultAgentClockSkewWarning, nil
+	}
+	d, err := time.ParseDuration(strings.TrimSpace(a.ClockSkewWarning))
+	if err != nil {
+		return 0, err
+	}
+	if d <= 0 {
+		return 0, errors.New("must be a positive duration")
+	}
+	return d, nil
 }
 
 // HeartbeatIntervalDuration parses the agent channel's next-beat hint. An empty value
@@ -3197,6 +3222,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_SERVER_NAME", &a.ServerName)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CA_CERT_FILE", &a.CACertFile)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL", &a.HeartbeatInterval)
+	setString(getenv, "TRSTCTL_AGENT_CHANNEL_CLOCK_SKEW_WARNING", &a.ClockSkewWarning)
 	// The claimable-job allowlist was the ONE AgentChannel field with no env key,
 	// so a container deployment could enable the channel and had no way to let an
 	// agent claim anything — the ledger is served, hands nothing out, and the
@@ -4531,6 +4557,9 @@ func validateServedSurfaces(c *Config) []error {
 		}
 		if _, err := c.AgentChannel.HeartbeatIntervalDuration(); err != nil {
 			errs = append(errs, fmt.Errorf("agent_channel.heartbeat_interval: %w", err))
+		}
+		if _, err := c.AgentChannel.ClockSkewWarningDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("agent_channel.clock_skew_warning: %w", err))
 		}
 		if c.AgentChannel.MaxLiveClaimsPerAgent < 0 {
 			errs = append(errs, errors.New("agent_channel.max_live_claims_per_agent must be zero (no quota) or a positive count"))

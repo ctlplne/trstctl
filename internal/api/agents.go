@@ -114,6 +114,9 @@ type agentResponse struct {
 	// certificate carries (A191) and whether a renewal has signed it; absent
 	// when no operator changed them after enrollment.
 	RoleGrant *agentRoleGrantStatus `json:"role_grant,omitempty"`
+	// ClockSkew is the agent's clock against the control plane's from its
+	// newest clock-carrying heartbeat (A194); absent when it never sent one.
+	ClockSkew *agentClockSkewResponse `json:"clock_skew,omitempty"`
 	// RelayCapabilities is what this server's agent build can claim for the
 	// roles last reported from this agent's certificate. It is not a report of
 	// the enrolled binary's version, configured flags, or completed work.
@@ -585,6 +588,7 @@ func (a *API) agentResponse(ag store.Agent) agentResponse {
 func (a *API) agentResponseAt(ag store.Agent, evaluatedAt time.Time) agentResponse {
 	out := toAgentResponseAt(ag, evaluatedAt, a.agentHeartbeatInterval)
 	out.ClaimQuota = a.agentClaimQuota
+	out.ClockSkew = agentClockSkewFor(ag, a.agentClockSkewWarning)
 	return out
 }
 

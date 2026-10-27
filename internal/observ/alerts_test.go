@@ -81,6 +81,7 @@ func TestAlertRulesReferenceRealMetrics(t *testing.T) {
 		"Credential redemptions refused, by closed-set reason.", []string{"reason"}).WithLabelValues("redemption_replayed").Inc()
 	reg.Gauge("trstctl_agents_total", "Total agents currently known to the control plane.").Set(10)
 	reg.Gauge("trstctl_agents_stale_total", "Agents whose last heartbeat is older than two heartbeat intervals.").Set(1)
+	reg.Gauge("trstctl_agents_clock_skewed_total", "Agents whose newest heartbeat carried a clock reading further from the control plane's than agent_channel.clock_skew_warning.").Set(1)
 
 	var sb strings.Builder
 	if err := reg.WriteProm(&sb); err != nil {
@@ -272,6 +273,7 @@ func opsCriticalMetrics() []string {
 		"trstctl_agent_bulkhead_rejections_total",
 		"trstctl_agents_total",
 		"trstctl_agents_stale_total",
+		"trstctl_agents_clock_skewed_total",
 	}
 }
 

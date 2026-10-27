@@ -683,6 +683,9 @@ type Deps struct {
 	// AgentHeartbeatInterval is the next-beat hint the channel returns to agents. Zero
 	// selects a conservative default (30s).
 	AgentHeartbeatInterval time.Duration
+	// AgentClockSkewWarning is how far an agent's clock may be from the control
+	// plane's before it is flagged (A194). Zero selects the default (2m).
+	AgentClockSkewWarning time.Duration
 	// AgentChannelServerName is the DNS SAN the agent-channel server certificate
 	// carries (the service name agents set as --server-name). Loopback is always added
 	// so a co-located agent / the acceptance test can verify a localhost connection.
@@ -767,6 +770,7 @@ type Server struct {
 	agentHTTPRenewalHandler http.Handler
 	agentChannelServerName  string        // SAN the agent verifies (server-name); from config
 	agentHeartbeatInterval  time.Duration // next-beat hint and stale-heartbeat threshold base
+	agentClockSkewWarning   time.Duration // A194: clock drift that flags an agent
 	// agentUpgradePublisherKeyDER is the pinned upgrade publisher key (A68), loaded
 	// from Deps.AgentUpgradePublisherKeyFile; nil accepts the sha256 pin alone.
 	agentUpgradePublisherKeyDER []byte
@@ -990,6 +994,7 @@ type Server struct {
 	mAgentEnrollments *observ.CounterVec
 	mAgentsTotal      *observ.Gauge
 	mAgentsStale      *observ.Gauge
+	mAgentsSkewed     *observ.Gauge
 	// Application-secret crash recovery is tenant-isolated. A custody outage
 	// leaves only that tenant's commands fenced, degrades readiness, and increments
 	// this unlabeled gauge without exposing tenant or secret names.
@@ -1720,6 +1725,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithAgentEnrollment(ea), api.WithAgentEnrollmentConnection(d.AgentChannelPublicAddress, d.AgentChannelServerName),
 		api.WithAgentEnrollmentRenewal(d.EnableAgentChannel && s.agentCASigner != nil && len(s.agentCACertDER) > 0),
 		api.WithAgentHeartbeatInterval(d.AgentHeartbeatInterval),
+		api.WithAgentClockSkewWarning(s.clockSkewWarning()),
 		api.WithAgentClaimQuota(d.AgentMaxLiveClaimsPerAgent),
 		api.WithAgentUpgradePublisherKey(s.agentUpgradePublisherKeyDER),
 		api.WithAgentEnroller(ea), api.WithAgentEnrollmentObserver(s.observeAgentEnrollment),
@@ -2415,12 +2421,14 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	}
 	s.agentChannelServerName = d.AgentChannelServerName
 	s.agentHeartbeatInterval = d.AgentHeartbeatInterval
+	s.agentClockSkewWarning = d.AgentClockSkewWarning
 	agentSvc := &agentService{
 		tenantServiceCheck: d.TenantServiceCheck,
 		logger:             s.logger,
 		store:              d.Store, log: d.Log, orch: s.orch, idem: idem, caSigner: s.agentCASigner,
 		caCertDER: s.agentCACertDER, beatInterval: d.AgentHeartbeatInterval,
-		metrics: s.agentMetrics,
+		clockSkewWarning: s.clockSkewWarning(),
+		metrics:          s.agentMetrics,
 		// A1: nothing is claimable until an operator enables a kind AND an
 		// agent-side executor for it exists. Empty is the honest default.
 		claimableJobKinds: AgentClaimableJobKinds(d.AgentClaimableJobKinds),
@@ -2499,6 +2507,7 @@ func (s *Server) configureObservability(ctx context.Context, d Deps, proj *proje
 	s.mEventLogReplicasActual = s.registry.Gauge("trstctl_event_log_replicas_actual", "Observed JetStream replica count on the source-of-truth event stream.")
 	s.mAgentsTotal = s.registry.Gauge("trstctl_agents_total", "Total agents currently known to the control plane.")
 	s.mAgentsStale = s.registry.Gauge("trstctl_agents_stale_total", "Agents whose last heartbeat is older than two heartbeat intervals.")
+	s.mAgentsSkewed = s.registry.Gauge("trstctl_agents_clock_skewed_total", "Agents whose newest heartbeat carried a clock reading further from the control plane's than agent_channel.clock_skew_warning.")
 	s.mApplicationSecretReconcileBlocked = s.registry.Gauge(
 		"trstctl_application_secret_reconcile_blocked",
 		"Durable application-secret commands whose crash recovery is blocked by tenant cryptographic custody.")
@@ -3652,16 +3661,27 @@ func (s *Server) agentStaleBefore() time.Time {
 	return time.Now().Add(-2 * interval)
 }
 
+// clockSkewWarning is the clock drift that flags an agent (A194).
+func (s *Server) clockSkewWarning() time.Duration {
+	if s.agentClockSkewWarning > 0 {
+		return s.agentClockSkewWarning
+	}
+	return config.DefaultAgentClockSkewWarning
+}
+
 func (s *Server) sampleAgentFleetHealth(ctx context.Context) error {
 	if s.store == nil || s.mAgentsTotal == nil || s.mAgentsStale == nil {
 		return nil
 	}
-	health, err := s.store.AgentFleetHealth(ctx, s.agentStaleBefore())
+	health, err := s.store.AgentFleetHealth(ctx, s.agentStaleBefore(), s.clockSkewWarning())
 	if err != nil {
 		return err
 	}
 	s.mAgentsTotal.Set(float64(health.Total))
 	s.mAgentsStale.Set(float64(health.Stale))
+	if s.mAgentsSkewed != nil {
+		s.mAgentsSkewed.Set(float64(health.ClockSkewed))
+	}
 	return nil
 }
 

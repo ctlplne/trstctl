@@ -582,9 +582,14 @@ never live in the API process. What you can do end to end against the running bi
   synchronized it.
   Local clock, deliberately: the agent that cannot reach the control plane is exactly
   the agent that most needs to renew early, and it has no other clock to consult. A
-  host with a badly wrong clock renews at the wrong time, which is a real limitation
-  and is stated here rather than defended against with machinery that would need the
-  network the agent does not have.
+  host with a badly wrong clock renews at the wrong time, so the wrong clock is now
+  made visible rather than corrected: every heartbeat carries the agent's clock and
+  its answer carries the control plane's, and a drift past
+  `agent_channel.clock_skew_warning` (default 2 minutes) is named on the Agents page
+  and in `GET /api/v1/agents` with the measured drift, counted by
+  `trstctl_agents_clock_skewed_total` for the `TrstctlAgentClockSkew` alert, and
+  logged by the agent itself. Renewal timing still uses the host's clock, and an
+  agent built before this release sends no reading.
   A5's other items have since landed and their honest scope lives with the
   staged-upgrade entry below: rings run as dispatched, per-agent-targeted jobs
   when a campaign publishes artifacts; the agent's `-self-upgrade` executor

@@ -98,6 +98,7 @@ type API struct {
 	agentConnection          agentEnrollmentConnection
 	agentRenewalReady        bool
 	agentHeartbeatInterval   time.Duration
+	agentClockSkewWarning    time.Duration
 	agentClaimQuota          int
 	agentUpgradePublisherKey []byte
 	agentEnroller            BootstrapEnroller
@@ -252,6 +253,7 @@ type config struct {
 	agentConnection             agentEnrollmentConnection
 	agentRenewalReady           bool
 	agentHeartbeatInterval      time.Duration
+	agentClockSkewWarning       time.Duration
 	agentClaimQuota             int
 	agentUpgradePublisherKey    []byte
 	agentEnroller               BootstrapEnroller
@@ -581,6 +583,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		agentConnection:             cfg.agentConnection,
 		agentRenewalReady:           cfg.agentRenewalReady,
 		agentHeartbeatInterval:      cfg.agentHeartbeatInterval,
+		agentClockSkewWarning:       cfg.agentClockSkewWarning,
 		agentClaimQuota:             cfg.agentClaimQuota,
 		agentUpgradePublisherKey:    cfg.agentUpgradePublisherKey,
 		agentEnroller:               cfg.agentEnroller,

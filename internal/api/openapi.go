@@ -6087,6 +6087,8 @@ func componentSchemas() map[string]*Schema {
 		"roles":       {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
 		"role_source": {Type: "string", Enum: []string{"certificate", "unreported"}},
 		"role_grant":  ref("AgentRoleGrant"),
+		// A194: the agent's clock against the control plane's.
+		"clock_skew": ref("AgentClockSkew"),
 		// A3: what a relay build executes, derived from the agent's shipped
 		// census so the console cannot advertise an executor the binary lacks.
 		"relay_capabilities": {Type: "array", Items: ref("AgentRelayCapability")},
@@ -6200,6 +6202,13 @@ func componentSchemas() map[string]*Schema {
 		"roles":  {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}, Description: "The complete role set the agent's next certificate carries; at least one."},
 		"reason": str(),
 	}, "roles")
+	agentClockSkew := object(map[string]*Schema{
+		"state":             {Type: "string", Enum: []string{"ok", "warning", "unreported"}, Description: "warning past agent_channel.clock_skew_warning; unreported when the newest heartbeat carried no clock reading."},
+		"skew_seconds":      {Type: "number", Description: "The agent's clock minus the control plane's at the heartbeat; positive is ahead."},
+		"threshold_seconds": {Type: "number"},
+		"observed_at":       timestamp(),
+		"detail":            str(),
+	}, "state", "skew_seconds", "threshold_seconds", "observed_at", "detail")
 	agentRoleGrant := object(map[string]*Schema{
 		"roles":          {Type: "array", Items: &Schema{Type: "string", Enum: []string{"host", "network"}}},
 		"state":          {Type: "string", Enum: []string{"pending", "applied"}, Description: "pending until a renewal signs the roles into the agent's certificate."},
@@ -7476,6 +7485,7 @@ func componentSchemas() map[string]*Schema {
 		"AgentOffboardRequest":                     agentOffboardReq,
 		"AgentRoleGrantRequest":                    agentRoleGrantReq,
 		"AgentRoleGrant":                           agentRoleGrant,
+		"AgentClockSkew":                           agentClockSkew,
 		"AgentOffboardResponse":                    agentOffboardResp,
 		"RiskComponents":                           riskComponents,
 		"CredentialRisk":                           credentialRisk,

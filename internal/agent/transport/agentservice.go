@@ -116,6 +116,10 @@ type HeartbeatRequest struct {
 	// enforces (A109), read back from the RevokedKeys file after the KRL
 	// watcher's latest attempt. Nil when this agent runs no KRL watcher.
 	SSHKRL *sshkrlreceipt.Report `json:"ssh_krl,omitempty"`
+	// AgentTimeUnixMilli is the agent's clock when it sent the heartbeat
+	// (A194). The control plane records how far it is from its own clock and
+	// warns past a threshold; the agent still times renewal by its own clock.
+	AgentTimeUnixMilli int64 `json:"agent_time_unix_ms,omitempty"`
 }
 
 // ExecutorReport is one agent process's executor census.
@@ -196,6 +200,12 @@ type HeartbeatResponse struct {
 	// operator changed the roles its next certificate carries. An agent that
 	// predates the field ignores it and renews on its schedule.
 	RenewCertificate bool `json:"renew_certificate,omitempty"`
+	// ServerTimeUnixMilli is the control plane's clock when it recorded the
+	// heartbeat (A194), so the agent can tell how far its own clock is off.
+	ServerTimeUnixMilli int64 `json:"server_time_unix_ms,omitempty"`
+	// ClockSkewWarning says the agent's clock reading is further from the
+	// control plane's than the configured warning threshold (A194).
+	ClockSkewWarning bool `json:"clock_skew_warning,omitempty"`
 }
 
 // RenewRequest carries the agent's rotation CSR (DER) for its own client

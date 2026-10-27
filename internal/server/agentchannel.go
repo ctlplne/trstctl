@@ -268,6 +268,9 @@ type agentService struct {
 	caSigner         crypto.DigestSigner
 	caCertDER        []byte
 	beatInterval     time.Duration
+	// clockSkewWarning is the clock drift past which a heartbeat's response
+	// tells the agent its clock is off (A194).
+	clockSkewWarning time.Duration
 	metrics          *agentChannelMetrics
 	// claimableJobKinds is the operator-enabled set of estate-touching job kinds
 	// agents may claim (A1). Empty means the fabric is served but hands out
@@ -728,6 +731,12 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		beatPayload.SSHKRL = report
 		eventSchemaVersion = projections.AgentHeartbeatSSHKRLSchemaVersion
 	}
+	if req.AgentTimeUnixMilli > 0 {
+		// A194: the agent's clock reading. The projection compares it with
+		// the event's time; nothing here trusts it for anything else.
+		beatPayload.AgentTimeUnixMilli = req.AgentTimeUnixMilli
+		eventSchemaVersion = projections.AgentHeartbeatClockSchemaVersion
+	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "encode agent heartbeat event: %v", err)
@@ -742,6 +751,13 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	if err := projections.New(a.store).Apply(ctx, ev); err != nil {
 		return nil, status.Errorf(codes.Internal, "project agent heartbeat: %v", err)
 	}
+	return a.heartbeatResponse(ctx, info, req, ev), nil
+}
+
+// heartbeatResponse answers a recorded heartbeat: the next-beat hint, the
+// control plane's clock and whether the agent's is past the warning threshold
+// (A194), and whether an operator's role grant awaits a renewal (A191).
+func (a *agentService) heartbeatResponse(ctx context.Context, info mtls.PeerCertInfo, req *transport.HeartbeatRequest, ev events.Event) *transport.HeartbeatResponse {
 	beat := a.beatInterval
 	if beat <= 0 {
 		beat = 30 * time.Second
@@ -749,14 +765,19 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 	resp := &transport.HeartbeatResponse{
 		TenantID:             info.TenantID,
 		NextHeartbeatSeconds: int64(beat / time.Second),
+		ServerTimeUnixMilli:  ev.Time.UnixMilli(),
 	}
-	// A191: an operator changed the roles this agent's next certificate
-	// carries. Ask it to renew now rather than at its scheduled rotation; a
-	// failed lookup only leaves the agent on its schedule.
-	if grant, found, gerr := a.store.AgentRoleGrant(ctx, info.TenantID, agentRowID(info.TenantID, name)); gerr == nil && found && grant.Pending() {
+	if req.AgentTimeUnixMilli > 0 && a.clockSkewWarning > 0 {
+		skew := time.Duration(req.AgentTimeUnixMilli-ev.Time.UnixMilli()) * time.Millisecond
+		resp.ClockSkewWarning = skew > a.clockSkewWarning || skew < -a.clockSkewWarning
+	}
+	// An operator changed the roles this agent's next certificate carries. Ask
+	// it to renew now rather than at its scheduled rotation; a failed lookup
+	// only leaves the agent on its schedule.
+	if grant, found, gerr := a.store.AgentRoleGrant(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName)); gerr == nil && found && grant.Pending() {
 		resp.RenewCertificate = true
 	}
-	return resp, nil
+	return resp
 }
 
 func (a *agentService) validatedSSHKRLReceipt(ctx context.Context, info mtls.PeerCertInfo,

@@ -255,6 +255,11 @@
           "go_type": "*sshkrlreceipt.Report",
           "name": "ssh_krl",
           "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "agent_time_unix_ms",
+          "presence": "optional"
         }
       ]
     },
@@ -273,6 +278,16 @@
         {
           "go_type": "bool",
           "name": "renew_certificate",
+          "presence": "optional"
+        },
+        {
+          "go_type": "int64",
+          "name": "server_time_unix_ms",
+          "presence": "optional"
+        },
+        {
+          "go_type": "bool",
+          "name": "clock_skew_warning",
           "presence": "optional"
         }
       ]

@@ -92,6 +92,11 @@ The control plane emits, at minimum:
 - `trstctl_agents_total` and `trstctl_agents_stale_total` — fleet-wide aggregate
   counts; stale means two missed configured heartbeat intervals (counts only, no
   per-agent labels).
+- `trstctl_agents_clock_skewed_total` — agents whose newest heartbeat carried a
+  clock reading further from the control plane's than
+  `agent_channel.clock_skew_warning` (default 2 minutes). Each heartbeat carries the
+  agent's clock and its answer carries the control plane's; the Agents page names
+  each skewed agent with the measured drift.
 
 The signer is a separate, HTTP-less process with no `/metrics` of its own; the
 control plane samples its health and restart count on a fixed cadence onto the same
@@ -227,6 +232,7 @@ Baseline operator assets ship under
 | Agents reach the channel but heartbeat fails | `trstctl_agent_heartbeats_total{result="failed"}` | `TrstctlAgentHeartbeatFailures` |
 | Fleet wave is too large for the agent bulkhead | `trstctl_agent_bulkhead_rejections_total` | `TrstctlAgentBulkheadSaturated` |
 | Agents stop reporting after rollout or upgrade | `trstctl_agents_total`, `trstctl_agents_stale_total` | `TrstctlAgentFleetStale` |
+| An agent's clock drifts from the control plane's | `trstctl_agents_clock_skewed_total` | `TrstctlAgentClockSkew` |
 
 ## Plugging a new component in
 

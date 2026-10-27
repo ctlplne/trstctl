@@ -611,6 +611,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/ssh_krl/signature", opaque),
 		privacyRule("/ssh_krl/statement", opaque),
 		privacyRule("/ssh_krl/signer_fingerprint", opaque),
+		privacyRule("/agent_time_unix_ms", opaque),
 	)
 	agentCertRenewed := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
@@ -1015,6 +1016,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}: agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:  agentHeartbeat,
 		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:          agentHeartbeat,
+		{EventAgentHeartbeat, AgentHeartbeatClockSchemaVersion}:           agentHeartbeat,
 		{EventAgentCertRenewed, 1}:                                        agentCertRenewed,
 		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:       agentCertRenewedRoles,
 		{EventAgentRolesGranted, 1}:                                       agentRolesGranted,
@@ -1554,6 +1556,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}:                    privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:                     privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:                             privacyPayloadShape[AgentHeartbeat](),
+		{EventAgentHeartbeat, AgentHeartbeatClockSchemaVersion}:                              privacyPayloadShape[AgentHeartbeat](),
 		{EventAgentCertRenewed, 1}:                                                           privacyPayloadShape[privacyAgentCertRenewedV1](),
 		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:                          privacyPayloadShape[AgentCertRenewed](),
 		{EventAgentRolesGranted, 1}:                                                          privacyPayloadShape[AgentRolesGranted](),

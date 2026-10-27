@@ -42,6 +42,24 @@ const AGENT_ROLE_CHOICES = [
   { value: "network", labelKey: "source.agent.role.network.a2r0le0005", helpKey: "source.agent.role.network.help.a2r0le0006" },
 ] as const satisfies readonly { value: AgentRole; labelKey: MessageKey; helpKey: MessageKey }[];
 
+// A194: the agent's clock against the control plane's, as a short drift.
+function clockDrift(seconds: number): string {
+  const total = Math.abs(seconds);
+  if (total >= 60) {
+    const minutes = Math.floor(total / 60);
+    return `${minutes}m ${Math.round(total - minutes * 60)}s`;
+  }
+  return `${total.toFixed(1)}s`;
+}
+
+function clockSkewWarning(agent: Agent): string | null {
+  const skew = agent.clock_skew;
+  if (!skew || skew.state !== "warning") return null;
+  return skew.skew_seconds >= 0
+    ? translateNow("agents.clock.ahead", { drift: clockDrift(skew.skew_seconds) })
+    : translateNow("agents.clock.behind", { drift: clockDrift(skew.skew_seconds) });
+}
+
 function agentRoleLabel(role: string): string {
   return role === "network" ? translateNow("source.agent.role.network.a2r0le0005") : translateNow("source.agent.role.host.a2r0le0003");
 }
@@ -359,10 +377,12 @@ export function Agents() {
           );
         }
         const presence = agentPresence(agent);
+        const clockWarning = clockSkewWarning(agent);
         return (
           <>
             <p>{formatAgentTime(agent.last_seen_at)}</p>
             <p className={presence.online ? "text-xs text-muted-foreground" : "text-xs font-medium text-status-warning"}>{presence.detail}</p>
+            {clockWarning && <p className="text-xs font-medium text-status-warning">{clockWarning}</p>}
           </>
         );
       },
@@ -1073,6 +1093,12 @@ function AgentDetail({ agent }: { agent: Agent }) {
         <div>
           <dt className="font-medium text-muted-foreground">{translateNow("source.status.920e413c7d")}</dt>
           <dd>{agent.status}</dd>
+          {agent.clock_skew && (
+            <>
+              <dt className="font-medium text-muted-foreground">{t("agents.clock.heading")}</dt>
+              <dd className={agent.clock_skew.state === "warning" ? "font-medium text-status-warning" : undefined}>{agent.clock_skew.detail}</dd>
+            </>
+          )}
           <dt className="font-medium text-muted-foreground">{translateNow("source.agent.role.a2r0le0001")}</dt>
           <dd>
             <AgentRoleBadges agent={agent} />

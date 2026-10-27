@@ -115,4 +115,7 @@ data:
   {{- with .Values.agentChannel.heartbeatInterval }}
   TRSTCTL_AGENT_CHANNEL_HEARTBEAT_INTERVAL: {{ . | quote }}
   {{- end }}
+  {{- with .Values.agentChannel.clockSkewWarning }}
+  TRSTCTL_AGENT_CHANNEL_CLOCK_SKEW_WARNING: {{ . | quote }}
+  {{- end }}
   {{- end }}

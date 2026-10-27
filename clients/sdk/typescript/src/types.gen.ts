@@ -9262,6 +9262,7 @@ export interface components {
             capability_source: "reported" | "server_census";
             claim_quota?: number;
             claim_quota_reached?: boolean;
+            clock_skew?: components["schemas"]["AgentClockSkew"];
             discovery_capabilities: components["schemas"]["AgentDiscoveryCapability"][];
             enrollment_proxy: components["schemas"]["AgentEnrollmentProxyStatus"];
             /** Format: uuid */
@@ -9314,6 +9315,19 @@ export interface components {
             fingerprint?: string;
             reason?: string;
             serial?: string;
+        };
+        AgentClockSkew: {
+            detail: string;
+            /** Format: date-time */
+            observed_at: string;
+            /** @description The agent's clock minus the control plane's at the heartbeat; positive is ahead. */
+            skew_seconds: number;
+            /**
+             * @description warning past agent_channel.clock_skew_warning; unreported when the newest heartbeat carried no clock reading.
+             * @enum {string}
+             */
+            state: "ok" | "warning" | "unreported";
+            threshold_seconds: number;
         };
         AgentDiscoveryCapability: {
             enable_flags?: string[];

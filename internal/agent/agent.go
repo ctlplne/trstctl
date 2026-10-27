@@ -224,10 +224,15 @@ type (
 	}
 	// HeartbeatResponse is the control plane's acknowledgment. RenewCertificate
 	// asks for a renewal now: an operator changed the agent's roles (A191).
+	// ServerTimeUnixMilli is the control plane's clock, and ClockSkewWarning
+	// says this agent's clock is further from it than the warning threshold
+	// (A194).
 	HeartbeatResponse struct {
 		TenantID             string
 		NextHeartbeatSeconds int64
 		RenewCertificate     bool
+		ServerTimeUnixMilli  int64
+		ClockSkewWarning     bool
 	}
 	// RenewRequest carries the agent's rotation CSR (DER).
 	RenewRequest struct{ CSRDER []byte }

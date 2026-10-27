@@ -834,6 +834,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	// renewRequested is the control plane asking for a renewal now (A191): an
 	// operator changed the roles this agent's next certificate carries.
 	renewRequested := false
+	var clock clockSkewNotice
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial heartbeat failed:", herr)
 		nextHeartbeat = rotateBackoff(heartbeatFailures, rng)
@@ -842,6 +843,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		fmt.Printf("trstctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
 		nextHeartbeat = heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng)
 		renewRequested = resp.RenewCertificate
+		if notice := clock.observe(resp, time.Now()); notice != "" {
+			fmt.Fprintln(os.Stderr, notice)
+		}
 	}
 	if len(o.inventoryCertRoots) > 0 {
 		if err := reportFilesystemInventory(ctx, a, ch, o.inventoryCertRoots); err != nil {
@@ -1020,6 +1024,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			} else {
 				heartbeatFailures = 0
 				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
+				if notice := clock.observe(resp, time.Now()); notice != "" {
+					fmt.Fprintln(os.Stderr, notice)
+				}
 				if resp.RenewCertificate && !renewRequested {
 					fmt.Println("trstctl-agent: the control plane changed this agent's roles; renewing now")
 					renewRequested = true
@@ -1643,6 +1650,8 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 	wire := &transport.HeartbeatRequest{
 		AgentID: req.AgentID, Version: req.Version, Status: req.Status,
 		CertSerial: req.CertSerial, Inventory: workloadAPICounters(req.Inventory),
+		// A194: this host's clock, for the control plane to compare.
+		AgentTimeUnixMilli: time.Now().UnixMilli(),
 	}
 	if a.enrollmentProxy != nil {
 		wire.EnrollmentProxy = a.enrollmentProxy()
@@ -1696,7 +1705,10 @@ func (a channelAdapter) Heartbeat(ctx context.Context, req *agent.HeartbeatReque
 	if err != nil {
 		return nil, err
 	}
-	return &agent.HeartbeatResponse{TenantID: resp.TenantID, NextHeartbeatSeconds: resp.NextHeartbeatSeconds, RenewCertificate: resp.RenewCertificate}, nil
+	return &agent.HeartbeatResponse{
+		TenantID: resp.TenantID, NextHeartbeatSeconds: resp.NextHeartbeatSeconds, RenewCertificate: resp.RenewCertificate,
+		ServerTimeUnixMilli: resp.ServerTimeUnixMilli, ClockSkewWarning: resp.ClockSkewWarning,
+	}, nil
 }
 
 func nextMonotonicUnix(last *atomic.Int64, now int64) int64 {

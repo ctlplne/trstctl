@@ -259,6 +259,28 @@ describe("agent fleet surface", () => {
     expect(row).toHaveTextContent(/next renewal: host, network/i);
   });
 
+  it("names an agent whose clock is past the skew threshold in the table and its details", async () => {
+    const [first] = await apiMock.agents();
+    apiMock.agents.mockResolvedValueOnce([
+      {
+        ...first,
+        clock_skew: {
+          state: "warning",
+          skew_seconds: 432,
+          threshold_seconds: 120,
+          observed_at: "2999-01-01T00:00:00Z",
+          detail: "This agent's clock is 7m12s ahead of the control plane's, past the 2m0s warning threshold.",
+        },
+      },
+    ]);
+    renderAgents();
+    fireEvent.click(await screen.findByText("Fleet status and safe actions"));
+    const row = await screen.findByRole("row", { name: /edge-01/ });
+    expect(row).toHaveTextContent("Clock 7m 12s ahead of the control plane");
+    fireEvent.click(within(row).getByRole("button", { name: "View details" }));
+    expect(await screen.findByText(/past the 2m0s warning threshold/)).toBeInTheDocument();
+  });
+
   it("shows a host agent's served job capabilities and distinguishes them from completed work", async () => {
     apiMock.agents.mockResolvedValueOnce([
       {

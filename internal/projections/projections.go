@@ -2197,6 +2197,34 @@ type AgentHeartbeat struct {
 	// OpenSSH KRL its sshd enforces (A109), verified against the exact mTLS
 	// peer certificate and freshness window before it is recorded.
 	SSHKRL *AgentSSHKRLReceipt `json:"ssh_krl,omitempty"`
+	// AgentTimeUnixMilli is the agent's clock when it sent the heartbeat, on
+	// v6 events (A194). The projection compares it with the event's time to
+	// record how far the agent's clock is from the control plane's.
+	AgentTimeUnixMilli int64 `json:"agent_time_unix_ms,omitempty"`
+}
+
+// AgentHeartbeatClockSchemaVersion adds the agent's clock reading (A194). It is
+// introduced by that reading; every earlier report stays independently
+// optional.
+const AgentHeartbeatClockSchemaVersion = 6
+
+// validateAgentHeartbeatClock binds the clock reading to the schema version
+// that introduced it.
+func validateAgentHeartbeatClock(schemaVersion int, heartbeat AgentHeartbeat) error {
+	switch schemaVersion {
+	case events.DefaultSchemaVersion, AgentHeartbeatPluginCensusSchemaVersion, AgentHeartbeatRevocationCacheSchemaVersion,
+		AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion:
+		if heartbeat.AgentTimeUnixMilli != 0 {
+			return fmt.Errorf("projections: agent.heartbeat v%d cannot carry a clock reading", schemaVersion)
+		}
+	case AgentHeartbeatClockSchemaVersion:
+		if heartbeat.AgentTimeUnixMilli <= 0 {
+			return errors.New("projections: agent.heartbeat v6 requires the agent's clock reading")
+		}
+	default:
+		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
+	}
+	return nil
 }
 
 // AgentSSHKRLReceipt preserves a host's KRL receipt with the evidence needed
@@ -2225,6 +2253,12 @@ func validateAgentHeartbeatSSHKRL(schemaVersion int, tenantID string, heartbeat 
 	case AgentHeartbeatSSHKRLSchemaVersion:
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v5 requires an SSH KRL receipt")
+		}
+	case AgentHeartbeatClockSchemaVersion:
+		// A v6 heartbeat is introduced by the agent's clock reading; the KRL
+		// receipt stays independently optional.
+		if report == nil {
+			return nil
 		}
 	default:
 		return fmt.Errorf("projections: unsupported agent heartbeat schema v%d", schemaVersion)
@@ -2309,9 +2343,10 @@ func validateAgentHeartbeatExecutors(schemaVersion int, heartbeat AgentHeartbeat
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v4 requires an executor census")
 		}
-	case AgentHeartbeatSSHKRLSchemaVersion:
-		// A v5 heartbeat is introduced by an SSH KRL receipt; the executor
-		// census stays independently optional.
+	case AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion:
+		// A v5 heartbeat is introduced by an SSH KRL receipt and a v6 by the
+		// agent's clock reading; the executor census stays independently
+		// optional.
 		if report == nil {
 			return nil
 		}
@@ -2379,9 +2414,10 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
 		}
-	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion:
+	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion:
 		// A v3 heartbeat is introduced by revocation-cache posture, a v4 by
-		// the executor census, and a v5 by an SSH KRL receipt. Plugin census
+		// the executor census, a v5 by an SSH KRL receipt and a v6 by the
+		// agent's clock reading. Plugin census
 		// remains independently optional so a compatible relay need not
 		// invent a plugin report merely to publish other state.
 		if report == nil {
@@ -2419,9 +2455,10 @@ func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, 
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v3 requires revocation cache posture")
 		}
-	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion:
-		// A v4 heartbeat is introduced by the executor census and a v5 by an
-		// SSH KRL receipt; cache posture stays independently optional.
+	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion:
+		// A v4 heartbeat is introduced by the executor census, a v5 by an SSH
+		// KRL receipt and a v6 by the agent's clock reading; cache posture stays
+		// independently optional.
 		if report == nil {
 			return nil
 		}
@@ -4559,7 +4596,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true},
 	EventAgentRolesGranted:                        {1: true},
 	EventAgentCertRevoked:                         {1: true},
@@ -6026,10 +6063,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := validateAgentHeartbeatSSHKRL(schemaVersionOf(e), e.TenantID, pl); err != nil {
 			return err
 		}
+		if err := validateAgentHeartbeatClock(schemaVersionOf(e), pl); err != nil {
+			return err
+		}
 		lastSeen := e.Time
 		row := store.Agent{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Agent, Status: pl.Status,
 			Version: pl.Version, Roles: pl.Roles, LastSeenAt: &lastSeen, CreatedAt: e.Time,
+		}
+		// A194: the agent's clock against the time this heartbeat was
+		// recorded. Both come off the event, so a replay records the same
+		// skew.
+		if pl.AgentTimeUnixMilli > 0 {
+			skew := pl.AgentTimeUnixMilli - e.Time.UnixMilli()
+			observed := e.Time
+			row.ClockSkewMillis, row.ClockSkewObservedAt = &skew, &observed
 		}
 		// B3: posture is written only when the beat carried it. A nil pointer
 		// leaves ReportedAt nil, and the upsert reads that as "this beat says

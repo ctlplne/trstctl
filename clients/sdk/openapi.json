@@ -3677,6 +3677,9 @@
           "claim_quota_reached": {
             "type": "boolean"
           },
+          "clock_skew": {
+            "$ref": "#/components/schemas/AgentClockSkew"
+          },
           "discovery_capabilities": {
             "items": {
               "$ref": "#/components/schemas/AgentDiscoveryCapability"
@@ -3855,6 +3858,41 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "AgentClockSkew": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "skew_seconds": {
+            "description": "The agent's clock minus the control plane's at the heartbeat; positive is ahead.",
+            "type": "number"
+          },
+          "state": {
+            "description": "warning past agent_channel.clock_skew_warning; unreported when the newest heartbeat carried no clock reading.",
+            "enum": [
+              "ok",
+              "warning",
+              "unreported"
+            ],
+            "type": "string"
+          },
+          "threshold_seconds": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "state",
+          "skew_seconds",
+          "threshold_seconds",
+          "observed_at",
+          "detail"
+        ],
         "type": "object"
       },
       "AgentDiscoveryCapability": {

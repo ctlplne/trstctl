@@ -428,6 +428,10 @@
         {
           "expr": "trstctl_agents_stale_total",
           "legendFormat": "stale agents"
+        },
+        {
+          "expr": "trstctl_agents_clock_skewed_total",
+          "legendFormat": "agents with clock skew"
         }
       ]
     },

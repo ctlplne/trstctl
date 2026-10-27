@@ -276,7 +276,10 @@ memory, and the console does not persist it.
 Exact work remains in three closed disclosures:
 
 - **Fleet status and safe actions** contains heartbeat and version rows, exact agent
-  details, role changes, certificate revocation, and offboarding. **Change roles**
+  details, clock warnings, role changes, certificate revocation, and offboarding. An
+  agent whose clock is past `agent_channel.clock_skew_warning` from the control
+  plane's shows "Clock … ahead of (or behind) the control plane" under its last
+  heartbeat, with the measured drift in its details. **Change roles**
   records the complete role set an agent's next certificate carries (it needs
   `agents:relay.grant`); the roles column keeps showing what the presented
   certificate carries, with "Next renewal: …" beneath until a renewal signs the

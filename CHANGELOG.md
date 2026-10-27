@@ -2,6 +2,12 @@
 
 ### Added
 
+- Agent clock-skew warning: every heartbeat carries the agent's clock and its
+  answer carries the control plane's. An agent more than
+  `agent_channel.clock_skew_warning` (default 2 minutes) off is named on the
+  Agents page and in `GET /api/v1/agents` with the measured drift, counted by
+  `trstctl_agents_clock_skewed_total` (alert `TrstctlAgentClockSkew`), and warned
+  in the agent's own log. Agents still time renewal by their own clock.
 - Relay connector plugins: a module reads its deploy's certificate, fingerprint
   and target (`input.read`) and asks the relay to make its HTTP calls
   (`net.http`). The relay adds the target's credential, splices the private key

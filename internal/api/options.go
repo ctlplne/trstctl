@@ -141,6 +141,13 @@ func WithAgentHeartbeatInterval(interval time.Duration) Option {
 	return func(c *config) { c.agentHeartbeatInterval = interval }
 }
 
+// WithAgentClockSkewWarning gives the REST read model the clock drift past
+// which an agent is flagged (A194), so the Agents page names the same warning
+// the fleet gauge counts.
+func WithAgentClockSkewWarning(d time.Duration) Option {
+	return func(c *config) { c.agentClockSkewWarning = d }
+}
+
 // WithAgentClaimQuota gives the REST read model the per-agent lease quota the
 // channel enforces (A66), so the Agents page can say "holding N of M" and why a
 // claim is withheld. Zero means no quota.
