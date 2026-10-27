@@ -73,68 +73,48 @@ func (s *Server) handleFrame(ctx context.Context, clientCertDER []byte, frame []
 
 	items := make([]wireResponseItem, 0, len(msg.BatchItems))
 	for _, item := range msg.BatchItems {
-		switch item.Operation {
-		case OperationCreate:
-			resp, err := s.handleCreate(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationRegister:
-			resp, err := s.handleRegister(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationLocate:
-			resp, err := s.handleLocate(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationGet:
-			resp, err := s.handleGet(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationRevoke:
-			resp, err := s.handleRevoke(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationDestroy:
-			resp, err := s.handleDestroy(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationQuery:
-			resp, err := s.handleQuery(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		case OperationDiscoverVersions:
-			resp, err := s.handleDiscoverVersions(ctx, clientCertDER, item.Payload)
-			if err != nil {
-				items = append(items, errorItem(item.Operation, err))
-				continue
-			}
-			items = append(items, resp)
-		default:
+		handle, served := operationHandlers[item.Operation]
+		if !served {
 			items = append(items, failureItem(item.Operation, resultReasonUnsupported, "KMIP operation is not served yet"))
+			continue
 		}
+		resp, err := handle(s, ctx, clientCertDER, item.Payload)
+		if err != nil {
+			items = append(items, errorItem(item.Operation, err))
+			continue
+		}
+		items = append(items, resp)
 	}
 	return encodeResponse(msg.ProtocolMajor, msg.ProtocolMinor, items), nil
+}
+
+// servedOperations are the operations Query lists, in order; each has a
+// handler in operationHandlers.
+var servedOperations = []Operation{
+	OperationCreate, OperationCreateKeyPair, OperationRegister, OperationLocate, OperationGet,
+	OperationGetAttributes, OperationGetAttributeList, OperationAddAttribute, OperationModifyAttribute,
+	OperationDeleteAttribute, OperationActivate, OperationRevoke, OperationDestroy, OperationQuery,
+	OperationDiscoverVersions, OperationSign, OperationSignatureVerify,
+}
+
+var operationHandlers = map[Operation]func(*Server, context.Context, []byte, TTLV) (wireResponseItem, error){
+	OperationCreate:           (*Server).handleCreate,
+	OperationCreateKeyPair:    (*Server).handleCreateKeyPair,
+	OperationRegister:         (*Server).handleRegister,
+	OperationLocate:           (*Server).handleLocate,
+	OperationGet:              (*Server).handleGet,
+	OperationGetAttributes:    (*Server).handleGetAttributes,
+	OperationGetAttributeList: (*Server).handleGetAttributeList,
+	OperationAddAttribute:     (*Server).handleAddAttribute,
+	OperationModifyAttribute:  (*Server).handleModifyAttribute,
+	OperationDeleteAttribute:  (*Server).handleDeleteAttribute,
+	OperationActivate:         (*Server).handleActivate,
+	OperationRevoke:           (*Server).handleRevoke,
+	OperationDestroy:          (*Server).handleDestroy,
+	OperationQuery:            (*Server).handleQuery,
+	OperationDiscoverVersions: (*Server).handleDiscoverVersions,
+	OperationSign:             (*Server).handleSign,
+	OperationSignatureVerify:  (*Server).handleSignatureVerify,
 }
 
 func (s *Server) handleCreate(ctx context.Context, clientCertDER []byte, payload TTLV) (wireResponseItem, error) {
@@ -201,14 +181,15 @@ func (s *Server) handleQuery(ctx context.Context, clientCertDER []byte, payload 
 		seen[value] = true
 		switch value {
 		case queryFunctionOperations:
-			for _, operation := range []Operation{
-				OperationCreate, OperationRegister, OperationLocate, OperationGet,
-				OperationRevoke, OperationDestroy, OperationQuery, OperationDiscoverVersions,
-			} {
+			for _, operation := range servedOperations {
 				children = append(children, encodeEnumeration(TagOperation, int32(operation)))
 			}
 		case queryFunctionObjects:
-			children = append(children, encodeEnumeration(TagObjectType, objectTypeSymmetricKey))
+			children = append(children,
+				encodeEnumeration(TagObjectType, objectTypeSymmetricKey),
+				encodeEnumeration(TagObjectType, objectTypePublicKey),
+				encodeEnumeration(TagObjectType, objectTypePrivateKey),
+			)
 		case queryFunctionServerInformation:
 			children = append(children,
 				encodeText(TagVendorIdentification, "trstctl"),
@@ -308,11 +289,11 @@ func encodeProtocolVersion(version protocolVersion) []byte {
 }
 
 func (s *Server) handleLocate(ctx context.Context, clientCertDER []byte, payload TTLV) (wireResponseItem, error) {
-	algorithm, err := parseLocateAlgorithm(payload)
+	filter, err := parseLocateFilter(payload)
 	if err != nil {
 		return wireResponseItem{}, err
 	}
-	ids, err := s.Locate(ctx, clientCertDER, algorithm)
+	ids, err := s.LocateMatching(ctx, clientCertDER, filter)
 	if err != nil {
 		return wireResponseItem{}, err
 	}
@@ -331,11 +312,17 @@ func (s *Server) handleGet(ctx context.Context, clientCertDER []byte, payload TT
 	if err != nil {
 		return wireResponseItem{}, err
 	}
+	if objectType, ok := s.objectType(id); ok && objectType != ObjectSymmetricKey {
+		return s.handleGetKey(ctx, clientCertDER, id, payload)
+	}
 	obj, err := s.GetObject(ctx, clientCertDER, id)
 	if err != nil {
 		return wireResponseItem{}, err
 	}
 	defer secret.Wipe(obj.Key)
+	if !obj.Extractable {
+		return wireResponseItem{}, wireError{reason: resultReasonNotExtractable, message: "the key is not extractable"}
+	}
 
 	keyValue := encodeStructure(TagKeyValue, encodeBytes(TagKeyMaterial, obj.Key))
 	wrappingData := []byte(nil)
@@ -559,7 +546,16 @@ func (s *Server) handleRevoke(ctx context.Context, clientCertDER []byte, payload
 	if err != nil {
 		return wireResponseItem{}, err
 	}
-	if err := s.Revoke(ctx, clientCertDER, id); err != nil {
+	revoke := s.Revoke
+	// A197: a revocation for key or CA compromise leaves the object
+	// Compromised; any other reason, Deactivated.
+	if reason, ok := payload.FirstChild(TagRevocationReason); ok {
+		if code, err := enumChild(reason, TagRevocationReasonCode); err == nil &&
+			(code == revocationReasonKeyCompromise || code == revocationReasonCACompromise) {
+			revoke = s.RevokeCompromised
+		}
+	}
+	if err := revoke(ctx, clientCertDER, id); err != nil {
 		return wireResponseItem{}, err
 	}
 	return wireResponseItem{
@@ -637,32 +633,64 @@ func normalizedAttributeName(name string) string {
 	return strings.ToLower(strings.NewReplacer(" ", "_", ".", "_", "-", "_").Replace(name))
 }
 
-func parseLocateAlgorithm(payload TTLV) (string, error) {
+// parseLocateFilter reads Locate's attributes: Object Type, Cryptographic
+// Algorithm and Name narrow the result; other attributes are not matched.
+// KMIP 1.x sends them as Attributes in the payload, older clients inside a
+// Template-Attribute.
+func parseLocateFilter(payload TTLV) (LocateFilter, error) {
+	var filter LocateFilter
 	if payload.Tag == 0 {
-		return "", nil
+		return filter, nil
 	}
 	if payload.Tag != TagRequestPayload || payload.Type != TTLVStructure {
-		return "", wireError{reason: resultReasonInvalidMessage, message: "Locate request payload malformed"}
+		return filter, wireError{reason: resultReasonInvalidMessage, message: "Locate request payload malformed"}
 	}
+	attrs := payload.ChildrenByTag(TagAttribute)
 	if tmpl, ok := payload.FirstChild(TagTemplateAttribute); ok && tmpl.Type == TTLVStructure {
-		for _, attr := range tmpl.Children {
-			if attr.Tag != TagAttribute || attr.Type != TTLVStructure {
-				continue
-			}
-			name, value, ok := parseAttribute(attr)
-			if !ok || normalizedAttributeName(name) != "cryptographic_algorithm" {
-				continue
-			}
+		attrs = append(attrs, tmpl.ChildrenByTag(TagAttribute)...)
+	}
+	for _, attr := range attrs {
+		if attr.Type != TTLVStructure {
+			continue
+		}
+		name, value, ok := parseAttribute(attr)
+		if !ok {
+			continue
+		}
+		switch normalizedAttributeName(name) {
+		case "cryptographic_algorithm":
 			if value.Type != TTLVEnumeration || len(value.Value) != 4 {
-				return "", wireError{reason: resultReasonInvalidField, message: "Cryptographic Algorithm must be an enumeration"}
+				return filter, wireError{reason: resultReasonInvalidField, message: "Cryptographic Algorithm must be an enumeration"}
 			}
-			if wireInt32(binary.BigEndian.Uint32(value.Value)) != cryptographicAlgorithmAES {
-				return "", wireError{reason: resultReasonInvalidField, message: "only AES SymmetricKey Locate is served"}
+			switch wireInt32(binary.BigEndian.Uint32(value.Value)) {
+			case cryptographicAlgorithmAES:
+				filter.Algorithm = "AES"
+			case cryptographicAlgorithmRSA:
+				filter.Algorithm = "RSA"
+			case cryptographicAlgorithmECDSA:
+				filter.Algorithm = "ECDSA"
+			default:
+				return filter, wireError{reason: resultReasonInvalidField, message: "Locate is served for AES, RSA and ECDSA objects"}
 			}
-			return "AES", nil
+		case "object_type":
+			if value.Type != TTLVEnumeration || len(value.Value) != 4 {
+				return filter, wireError{reason: resultReasonInvalidField, message: "Object Type must be an enumeration"}
+			}
+			objectType, ok := map[int32]ObjectType{objectTypeSymmetricKey: ObjectSymmetricKey, objectTypePublicKey: ObjectPublicKey,
+				objectTypePrivateKey: ObjectPrivateKey}[wireInt32(binary.BigEndian.Uint32(value.Value))]
+			if !ok {
+				return filter, wireError{reason: resultReasonInvalidField, message: "Locate is served for symmetric, public and private keys"}
+			}
+			filter.Type = &objectType
+		case "name":
+			v, err := nameValue(requestedAttribute{name: name, value: value})
+			if err != nil {
+				return filter, err
+			}
+			filter.Name = v
 		}
 	}
-	return "", nil
+	return filter, nil
 }
 
 func parseUniqueIdentifierPayload(payload TTLV) (string, error) {

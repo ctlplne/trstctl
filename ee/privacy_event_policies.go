@@ -173,11 +173,33 @@ type licensedAgentRevocationTerminal struct {
 }
 
 type licensedKMIPStateEvent struct {
-	ID        string `json:"id"`
-	Algorithm string `json:"algorithm,omitempty"`
-	State     string `json:"state,omitempty"`
-	Version   int    `json:"version,omitempty"`
-	SealedKey []byte `json:"sealed_key,omitempty"`
+	ID          string `json:"id"`
+	Algorithm   string `json:"algorithm,omitempty"`
+	State       string `json:"state,omitempty"`
+	Version     int    `json:"version,omitempty"`
+	SealedKey   []byte `json:"sealed_key,omitempty"`
+	ObjectType  string `json:"object_type,omitempty"`
+	Length      int    `json:"length,omitempty"`
+	UsageMask   int32  `json:"usage_mask,omitempty"`
+	Link        string `json:"link,omitempty"`
+	PublicKey   []byte `json:"public_key,omitempty"`
+	Extractable *bool  `json:"extractable,omitempty"`
+}
+
+// licensedKMIPAttributesEvent is the set of attributes a KMIP client gave an
+// object: names, contact information and x- custom values are client text,
+// which erasure clears.
+type licensedKMIPAttributesEvent struct {
+	ID          string                        `json:"id"`
+	Names       []string                      `json:"names,omitempty"`
+	Contact     string                        `json:"contact_information,omitempty"`
+	Custom      []licensedKMIPCustomAttribute `json:"custom,omitempty"`
+	Extractable *bool                         `json:"extractable,omitempty"`
+}
+
+type licensedKMIPCustomAttribute struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type licensedKMIPUnauthenticated struct {
@@ -599,6 +621,16 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 			rejectingTypedLicensedPrivacyPolicy[licensedKMIPStateEvent]()),
 		entry("kmip.state.object.destroyed", 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedKMIPStateEvent]()),
+		entry("kmip.state.object.activated", 1,
+			rejectingTypedLicensedPrivacyPolicy[licensedKMIPStateEvent]()),
+		entry("kmip.state.object.attributes", 1,
+			typedLicensedPrivacyPolicy[licensedKMIPAttributesEvent](
+				licensedPrivacyRule("/id", events.PrivacyFieldOpaqueExact),
+				licensedPrivacyRule("/names/*", events.PrivacyFieldFreeTextClear),
+				licensedPrivacyRule("/contact_information", events.PrivacyFieldFreeTextClear),
+				licensedPrivacyRule("/custom/*/name", events.PrivacyFieldFreeTextClear),
+				licensedPrivacyRule("/custom/*/value", events.PrivacyFieldFreeTextClear),
+			)),
 		entry("kmip.unauthenticated", 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedKMIPUnauthenticated]()),
 		entry("kmip.object.created", 1,
@@ -610,6 +642,10 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		entry("kmip.object.revoke", 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedKMIPObjectTransitioned]()),
 		entry("kmip.object.destroyed", 1,
+			rejectingTypedLicensedPrivacyPolicy[licensedKMIPObjectDestroyed]()),
+		entry("kmip.object.activated", 1,
+			rejectingTypedLicensedPrivacyPolicy[licensedKMIPObjectTransitioned]()),
+		entry("kmip.object.attributes_changed", 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedKMIPObjectDestroyed]()),
 
 		entry(silo.LaneProbeEventType, 1,

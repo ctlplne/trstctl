@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto"
@@ -31,6 +32,9 @@ const (
 	kmipStateRekeyedEventType    = "kmip.state.object.rekeyed"
 	kmipStateRevokedEventType    = "kmip.state.object.revoked"
 	kmipStateDestroyedEventType  = "kmip.state.object.destroyed"
+	// A197: activation and the attributes a client sets.
+	kmipStateActivatedEventType  = "kmip.state.object.activated"
+	kmipStateAttributesEventType = "kmip.state.object.attributes"
 )
 
 // Authenticator authenticates a KMIP client by its TLS client certificate.
@@ -57,26 +61,67 @@ type ObjectState string
 
 const (
 	StateActive    ObjectState = "active"
-	StateRevoked   ObjectState = "revoked"
+	StateRevoked   ObjectState = "revoked" // KMIP Deactivated
 	StateDestroyed ObjectState = "destroyed"
+	// A197: a key pair starts Pre-Active and is used only once activated; a
+	// revocation for key or CA compromise leaves it Compromised.
+	StatePreActive   ObjectState = "pre-active"
+	StateCompromised ObjectState = "compromised"
 )
 
-// ManagedObject is a KMIP managed cryptographic object (a symmetric key).
+// ObjectType is a managed object's KMIP object type (A197). The zero value is
+// the symmetric key, the original profile's only type, so every earlier event
+// replays unchanged.
+type ObjectType string
+
+const (
+	ObjectSymmetricKey ObjectType = ""
+	ObjectPublicKey    ObjectType = "public_key"
+	ObjectPrivateKey   ObjectType = "private_key"
+)
+
+// ManagedObject is a KMIP managed cryptographic object: a symmetric key, or
+// one half of a key pair the server generated (A197).
 type ManagedObject struct {
 	ID        string
-	Algorithm string
+	Algorithm string // AES, RSA or ECDSA
 	State     ObjectState
 	Version   int
 	sealedKey []byte // ciphertext only; plaintext is opened for one fenced request
+
+	Type      ObjectType
+	Length    int    // bits: 256 for AES, the RSA modulus, the ECDSA curve
+	UsageMask int32  // KMIP Cryptographic Usage Mask; zero places no limit
+	Link      string // the other half of a key pair
+	PublicDER []byte // a public key's SubjectPublicKeyInfo; public, never sealed
+	// Extractable is whether Get may return the key; NeverExtractable records
+	// that it never was.
+	Extractable      bool
+	NeverExtractable bool
+	Initial          time.Time
+	Activated        time.Time
+	LastChange       time.Time
+	// The attributes a client sets (A197): names, contact information and
+	// x- custom attributes with text values.
+	Names   []string
+	Contact string
+	Custom  []CustomAttribute
+}
+
+// CustomAttribute is one client-created x- attribute with a text value.
+type CustomAttribute struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 // ManagedObjectView is a copy-safe view of an active KMIP object. Key must be
 // wiped by the caller after encoding or using it.
 type ManagedObjectView struct {
-	ID        string
-	Algorithm string
-	Version   int
-	Key       []byte
+	ID          string
+	Algorithm   string
+	Version     int
+	Key         []byte
+	Extractable bool
 }
 
 // Server is the KMIP server.
@@ -157,6 +202,26 @@ type kmipStateEvent struct {
 	State     ObjectState `json:"state,omitempty"`
 	Version   int         `json:"version,omitempty"`
 	SealedKey []byte      `json:"sealed_key,omitempty"`
+	// A197: a key pair's halves. An event without object_type is a symmetric
+	// key, extractable, 256 bits.
+	ObjectType  ObjectType `json:"object_type,omitempty"`
+	Length      int        `json:"length,omitempty"`
+	UsageMask   int32      `json:"usage_mask,omitempty"`
+	Link        string     `json:"link,omitempty"`
+	PublicKey   []byte     `json:"public_key,omitempty"`
+	Extractable *bool      `json:"extractable,omitempty"`
+}
+
+// kmipAttributesEvent is the whole set of client attributes after a change
+// (A197). Names, contact information and custom values are client text, so
+// they live in their own event, whose privacy policy can clear them, and never
+// beside sealed key material.
+type kmipAttributesEvent struct {
+	ID          string            `json:"id"`
+	Names       []string          `json:"names,omitempty"`
+	Contact     string            `json:"contact_information,omitempty"`
+	Custom      []CustomAttribute `json:"custom,omitempty"`
+	Extractable *bool             `json:"extractable,omitempty"`
 }
 
 func (s *Server) authClient(ctx context.Context, op string, clientCertDER []byte) (string, error) {
@@ -210,7 +275,9 @@ func (s *Server) register(ctx context.Context, algorithm string, key []byte, aud
 	defer s.mu.Unlock()
 	s.n++
 	id := fmt.Sprintf("kmip-%d", s.n)
-	obj := &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1}
+	now := time.Now().UTC()
+	obj := &ManagedObject{ID: id, Algorithm: algorithm, State: StateActive, Version: 1,
+		Length: 256, Extractable: true, Initial: now, Activated: now, LastChange: now}
 	sealedKey, err := s.persistKeyState(ctx, stateEventType, obj, key)
 	if err != nil {
 		s.n--
@@ -240,7 +307,7 @@ func (s *Server) GetObject(ctx context.Context, clientCertDER []byte, id string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	obj, ok := s.objects[id]
-	if !ok || obj.State != StateActive {
+	if !ok || obj.State != StateActive || obj.Type != ObjectSymmetricKey {
 		return ManagedObjectView{}, fmt.Errorf("kmip: object %q not available", id)
 	}
 	var key []byte
@@ -262,27 +329,18 @@ func (s *Server) GetObject(ctx context.Context, clientCertDER []byte, id string)
 		return ManagedObjectView{}, errors.New("kmip: managed AES key has invalid length")
 	}
 	return ManagedObjectView{
-		ID:        obj.ID,
-		Algorithm: obj.Algorithm,
-		Version:   obj.Version,
-		Key:       key,
+		ID:          obj.ID,
+		Algorithm:   obj.Algorithm,
+		Version:     obj.Version,
+		Key:         key,
+		Extractable: obj.Extractable,
 	}, nil
 }
 
-// Locate returns the ids of active objects of the given algorithm.
+// Locate returns the ids of active and pre-active objects of the given
+// algorithm.
 func (s *Server) Locate(ctx context.Context, clientCertDER []byte, algorithm string) ([]string, error) {
-	if _, err := s.authClient(ctx, "locate", clientCertDER); err != nil {
-		return nil, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	var out []string
-	for id, o := range s.objects {
-		if o.State == StateActive && (algorithm == "" || o.Algorithm == algorithm) {
-			out = append(out, id)
-		}
-	}
-	return out, nil
+	return s.LocateMatching(ctx, clientCertDER, LocateFilter{Algorithm: algorithm})
 }
 
 // ReKey rotates an object's key material, returning the new version.
@@ -297,12 +355,12 @@ func (s *Server) ReKey(ctx context.Context, clientCertDER []byte, id string) (in
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	obj, ok := s.objects[id]
-	if !ok || obj.State != StateActive {
+	if !ok || obj.State != StateActive || obj.Type != ObjectSymmetricKey {
 		secret.Wipe(key)
 		return 0, fmt.Errorf("kmip: object %q not active", id)
 	}
 	version := obj.Version + 1
-	sealedKey, err := s.persistKeyState(ctx, kmipStateRekeyedEventType, &ManagedObject{ID: obj.ID, Algorithm: obj.Algorithm, State: obj.State, Version: version}, key)
+	sealedKey, err := s.persistKeyState(ctx, kmipStateRekeyedEventType, &ManagedObject{ID: obj.ID, Algorithm: obj.Algorithm, State: obj.State, Version: version, Length: obj.Length, Extractable: true}, key)
 	secret.Wipe(key)
 	if err != nil {
 		return 0, err
@@ -310,6 +368,7 @@ func (s *Server) ReKey(ctx context.Context, clientCertDER []byte, id string) (in
 	secret.Wipe(obj.sealedKey)
 	obj.sealedKey = sealedKey
 	obj.Version = version
+	obj.LastChange = time.Now().UTC()
 	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.rekeyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"version":%d}`, id, obj.Version)))
 	return obj.Version, nil
 }
@@ -317,6 +376,12 @@ func (s *Server) ReKey(ctx context.Context, clientCertDER []byte, id string) (in
 // Revoke marks an object revoked (no longer usable, still present).
 func (s *Server) Revoke(ctx context.Context, clientCertDER []byte, id string) error {
 	return s.transition(ctx, clientCertDER, "revoke", id, StateRevoked)
+}
+
+// RevokeCompromised revokes an object for key or CA compromise (A197): the
+// KMIP Compromised state, which no operation may use.
+func (s *Server) RevokeCompromised(ctx context.Context, clientCertDER []byte, id string) error {
+	return s.transition(ctx, clientCertDER, "revoke", id, StateCompromised)
 }
 
 // Destroy zeroizes and removes an object's key material.
@@ -336,6 +401,7 @@ func (s *Server) Destroy(ctx context.Context, clientCertDER []byte, id string) e
 	secret.Wipe(obj.sealedKey)
 	obj.sealedKey = nil
 	obj.State = StateDestroyed
+	obj.LastChange = time.Now().UTC()
 	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object.destroyed", s.tenantID, []byte(fmt.Sprintf(`{"id":%q}`, id)))
 	return nil
 }
@@ -363,11 +429,15 @@ func (s *Server) transition(ctx context.Context, clientCertDER []byte, op, id st
 	if !ok {
 		return fmt.Errorf("kmip: object %q not found", id)
 	}
+	if obj.State == StateDestroyed {
+		return wireError{reason: resultReasonPermissionDenied, message: "a destroyed object cannot be revoked"}
+	}
 	stateEventType := kmipStateRevokedEventType
 	if err := s.persistState(ctx, stateEventType, kmipStateEvent{ID: id, State: to, Version: obj.Version}); err != nil {
 		return err
 	}
 	obj.State = to
+	obj.LastChange = time.Now().UTC()
 	_ = auditsink.Emit(ctx, s.audit, nil, "kmip.object."+op, s.tenantID, []byte(fmt.Sprintf(`{"id":%q,"state":%q}`, id, to)))
 	return nil
 }
@@ -385,17 +455,14 @@ func (s *Server) persistKeyState(ctx context.Context, eventType string, obj *Man
 		secret.Wipe(sealed)
 		return nil, fmt.Errorf("kmip: seal state key: %w", err)
 	}
-	if err := s.persistState(ctx, eventType, kmipStateEvent{
-		ID: obj.ID, Algorithm: obj.Algorithm, State: obj.State, Version: obj.Version,
-		SealedKey: sealed,
-	}); err != nil {
+	if err := s.persistState(ctx, eventType, stateEventFor(obj, sealed)); err != nil {
 		secret.Wipe(sealed)
 		return nil, err
 	}
 	return sealed, nil
 }
 
-func (s *Server) persistState(ctx context.Context, eventType string, payload kmipStateEvent) error {
+func (s *Server) persistState(ctx context.Context, eventType string, payload any) error {
 	if s.log == nil {
 		return nil
 	}
@@ -420,15 +487,19 @@ func (s *Server) replay(ctx context.Context) error {
 			if err := json.Unmarshal(ev.Data, &payload); err != nil {
 				return fmt.Errorf("kmip: replay key state: %w", err)
 			}
-			if payload.ID == "" || payload.Algorithm != "AES" || payload.Version < 1 || len(payload.SealedKey) == 0 {
-				return errors.New("kmip: replay key state is malformed")
+			obj, err := replayedObject(payload, ev.Time)
+			if err != nil {
+				return err
 			}
 			if old := s.objects[payload.ID]; old != nil {
 				secret.Wipe(old.sealedKey)
+				if ev.Type == kmipStateRekeyedEventType {
+					obj.Initial, obj.Activated, obj.Names, obj.Contact, obj.Custom = old.Initial, old.Activated, old.Names, old.Contact, old.Custom
+				}
 			}
-			s.objects[payload.ID] = &ManagedObject{ID: payload.ID, Algorithm: payload.Algorithm, State: StateActive, Version: payload.Version, sealedKey: append([]byte(nil), payload.SealedKey...)}
+			s.objects[payload.ID] = obj
 			s.observeNumericID(payload.ID)
-		case kmipStateRevokedEventType, kmipStateDestroyedEventType:
+		case kmipStateRevokedEventType, kmipStateDestroyedEventType, kmipStateActivatedEventType:
 			var payload kmipStateEvent
 			if err := json.Unmarshal(ev.Data, &payload); err != nil {
 				return fmt.Errorf("kmip: replay lifecycle state: %w", err)
@@ -437,13 +508,18 @@ func (s *Server) replay(ctx context.Context) error {
 			if obj == nil {
 				return fmt.Errorf("kmip: replay lifecycle references unknown object %q", payload.ID)
 			}
-			if ev.Type == kmipStateDestroyedEventType {
-				secret.Wipe(obj.sealedKey)
-				obj.sealedKey = nil
-				obj.State = StateDestroyed
-			} else {
-				obj.State = StateRevoked
+			replayLifecycle(obj, ev.Type, payload.State, ev.Time)
+		case kmipStateAttributesEventType:
+			var payload kmipAttributesEvent
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				return fmt.Errorf("kmip: replay attributes: %w", err)
 			}
+			obj := s.objects[payload.ID]
+			if obj == nil {
+				return fmt.Errorf("kmip: replay attributes reference unknown object %q", payload.ID)
+			}
+			applyAttributes(obj, payload)
+			obj.LastChange = ev.Time.UTC()
 		}
 		return nil
 	})

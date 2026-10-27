@@ -4649,7 +4649,19 @@ Query and DiscoverVersions, AES-256 `SymmetricKey` Create/Register/Get
 (including AES-GCM wrapped Get/Register), plus Locate/Revoke/Destroy over the
 wire for stock clients, records `kmip.object.created`, `kmip.object.revoke`,
 and `kmip.object.destroyed`, and zeroizes in-memory key material on
-rekey/destroy/shutdown. Appliance-specific templates and tenant self-service
+rekey/destroy/shutdown. It also serves RSA (2048/3072/4096) and ECDSA
+(P-256/P-384) key pairs: Create Key Pair (both halves Pre-Active and linked),
+Activate, single-part Sign and Signature Verify (PKCS#1 v1.5, PSS, ECDSA;
+SHA-256/384/512), Get of the public key, and Get Attributes, Get Attribute
+List and Add/Modify/Delete Attribute for names, contact information and `x-`
+text attributes. A generated private key is not extractable unless the
+client created the pair with Extractable set, so by default it never leaves
+the server; KMIP 1.4 would default Extractable to true, and trstctl
+deliberately does not. Not served: Register of asymmetric keys, certificates,
+Re-key Key Pair, Encrypt/Decrypt, digested or streamed signing, Sensitive
+objects, templates, and the ID Placeholder (each request names its object).
+PyKMIP 0.10 drives the key-pair path in an opt-in proof
+(`TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`). Appliance-specific templates and tenant self-service
 listener management remain deliberate product-scope boundaries. Production
 Transit durability remains conditional on the deployment KEK; the KMIP listener additionally remains conditional on its licensed runtime,
 one tenant binding, and configured mTLS trust.

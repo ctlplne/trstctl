@@ -2,6 +2,14 @@
 
 ### Added
 
+- KMIP key pairs: the KMIP listener creates RSA and ECDSA key pairs (Create Key
+  Pair), activates them (Activate), signs and verifies with them (Sign, Signature
+  Verify), and serves Get Attributes, Get Attribute List and Add, Modify and Delete
+  Attribute for names, contact information and `x-` text attributes. Both halves
+  start Pre-Active; the private key stays sealed in the server and is not returned
+  to Get unless the client created the pair with Extractable set. A revocation for
+  key or CA compromise leaves an object Compromised. PyKMIP 0.10 drives the path in
+  an opt-in proof.
 - Kubernetes CSR approver (opt-in): with `--k8s-csr-approver`, the agent asks
   the issuing CA whether it would issue each pending native
   `CertificateSigningRequest` for a trstctl signer name

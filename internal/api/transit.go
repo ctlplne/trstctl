@@ -306,11 +306,12 @@ func buildTransitPosture(runtime TransitRuntimePosture) TransitPosture {
 	kmip := KMIPPosture{
 		State: "not_configured", Configured: runtime.KMIPConfigured, Served: runtime.KMIPServed,
 		Listening: runtime.KMIPListening, TenantBound: runtime.KMIPTenantBound,
-		Transport: "mTLS", Profile: "KMIP 1.x AES-256 SymmetricKey appliance profile",
-		Objects:    []string{"AES-256 SymmetricKey"},
-		Operations: []string{"Create", "Get", "Locate", "Revoke", "Destroy"},
-		Detail:     "KMIP is not configured for this tenant. Transit API operations remain independent.",
-		Recovery:   "Enable the licensed KMIP listener, bind it to this tenant, configure server and client trust, and restart the reviewed candidate.",
+		Transport: "mTLS", Profile: "KMIP 1.4: AES-256 symmetric keys and RSA/ECDSA key pairs",
+		Objects: []string{"AES-256 SymmetricKey", "RSA and ECDSA PrivateKey/PublicKey pairs"},
+		Operations: []string{"Create", "Create Key Pair", "Register", "Get", "Get Attributes", "Get Attribute List",
+			"Add/Modify/Delete Attribute", "Activate", "Locate", "Sign", "Signature Verify", "Revoke", "Destroy"},
+		Detail:   "KMIP is not configured for this tenant. Transit API operations remain independent.",
+		Recovery: "Enable the licensed KMIP listener, bind it to this tenant, configure server and client trust, and restart the reviewed candidate.",
 	}
 	if runtime.KMIPConfigured && runtime.KMIPServed && runtime.KMIPTenantBound {
 		kmip.State = "starting"

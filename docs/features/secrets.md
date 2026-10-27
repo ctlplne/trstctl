@@ -25,7 +25,8 @@ master key (encryption-as-a-service). And every action needs ID and is logged
 > values. Transit encryption-as-a-service is served separately at `/api/v1/transit/*`
 > (`transit` CLI group, `keys:*` RBAC scopes). KMIP is served as an opt-in mTLS
 > listener (`protocols.kmip.*`) for AES-256 SymmetricKey Create/Get/Locate/Revoke/Destroy
-> interop; remaining gaps are in [Current limitations](../limitations.md).
+> and for RSA and ECDSA key pairs that are activated, sign and verify on the server,
+> with client attributes; remaining gaps are in [Current limitations](../limitations.md).
 
 ## Why it exists
 
@@ -695,6 +696,22 @@ rekey, and shutdown. The served OASIS 1.4 profile is stock-client-tested: Query,
 DiscoverVersions, Create/Register an AES-256 `SymmetricKey`, Get it plain or
 AES-GCM-wrapped (and register the wrapped value back), Locate, Revoke, and Destroy over
 TTLV. Unsupported operations get a KMIP failure response, not an unframed TCP close.
+
+The listener also serves key pairs. Create Key Pair generates an RSA (2048, 3072 or
+4096 bits) or ECDSA (P-256 or P-384) pair inside the server; each half links to the
+other and starts Pre-Active, so it neither signs nor verifies until Activate. Sign
+runs with the private key (RSA PKCS#1 v1.5 or PSS, or ECDSA, over SHA-256, -384 or
+-512, single-part Data) and Signature Verify with the public key, which Get returns as
+an X.509 SubjectPublicKeyInfo. The private key is sealed like every key the server
+holds and Get refuses it (Not Extractable) unless the client set Extractable when it
+created the pair, so by default it never leaves the server; a key a client makes
+unextractable stays unextractable. Get Attributes, Get Attribute List, Add, Modify
+and Delete Attribute serve names, contact information and `x-` custom attributes with
+text values; the server's own attributes (state, dates, links, usage mask) are
+read-only. A revocation for key or CA compromise leaves the object Compromised, and
+it signs and verifies nothing after that. Locate narrows by object type, algorithm and
+name. A stock client drives all of this in an opt-in proof that builds PyKMIP 0.10:
+`TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`.
 The Transit status endpoint and console report `not_configured`, `starting`, or
 `listening` from the assembled tenant binding and live listener state. That status is
 not a conformance claim: use a stock KMIP client to prove the complete mTLS wire path.
@@ -1343,8 +1360,9 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 - **Transit:** `/api/v1/transit/{keys,encrypt,decrypt,rewrap,hmac,sign,verify}`,
   `trstctl-cli transit ...`, versioned `trv:<n>:` ciphertext.
 - **KMIP:** opt-in mTLS listener (`TRSTCTL_PROTOCOLS_KMIP_ENABLED=true`) for AES-256
-  SymmetricKey Create/Get/Locate/Revoke/Destroy, default address `:5696`, tenant bound by
-  `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
+  SymmetricKey Create/Register/Get/Locate/Revoke/Destroy and RSA/ECDSA Create Key Pair,
+  Activate, Sign, Signature Verify and the attribute operations, default address
+  `:5696`, tenant bound by `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
 - **Sync targets:** AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub
   Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu, HashiCorp
   Vault/OpenBao KV v2, generic CI/JSON.

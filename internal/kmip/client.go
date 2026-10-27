@@ -13,10 +13,9 @@ import (
 // reads its responses with the same bounded encoder and parser the served
 // listener uses, so trstctl keeps one TTLV implementation.
 
-// Client operations and tags beyond the served listener's own set.
+// Client tags beyond the served listener's own set. Get Attributes, which
+// the client sends, is served too (A197).
 const (
-	OperationGetAttributes Operation = 0x0000000b
-
 	TagCertificate      uint32 = 0x420013
 	TagCertificateType  uint32 = 0x42001d
 	TagCertificateValue uint32 = 0x42001e

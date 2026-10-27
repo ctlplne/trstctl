@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1818 annotated sites across 27 rules. Each row is
+1822 annotated sites across 28 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -446,6 +446,12 @@ not this file.
 | `tools/dodcensus/runtime.go:39` | developer-tool constant matching the secret-name heuristic; no credential value (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:51` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `tools/trstctllint/keymaterial/keymaterial_test.go:87` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+
+### G102 — CWE-? (unmapped rule) (1 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/kmip/pykmip_client_test.go:108` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 
 ### G107 — CWE-88 Argument injection (variable URL request) (7 sites)
 
@@ -871,7 +877,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (206 sites)
+### G204 — CWE-78 OS command injection (207 sites)
 
 | Location | Reason |
 |---|---|
@@ -961,6 +967,7 @@ not this file.
 | `internal/decommission/conformance/release_test.go:22` | goBin is derived from runtime.GOROOT and every argument is fixed (CWE-78). |
 | `internal/decommission/conformance/release_test.go:416` | fixed argv, no user input (CWE-78) |
 | `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
+| `internal/kmip/pykmip_client_test.go:49` | fixed docker subcommands with test-owned arguments (CWE-78) |
 | `internal/kms/pkcs11/softhsm_container_test.go:184` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:101` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/perf/live.go:755` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
@@ -1191,7 +1198,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (524 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (525 sites)
 
 | Location | Reason |
 |---|---|
@@ -1486,6 +1493,7 @@ not this file.
 | `internal/featureparity/mcp_rest_coverage.go:57` | fixed repo-relative catalog path read by tools and tests (CWE-22) |
 | `internal/fsatomic/fsatomic.go:19` | the caller's own state directory (CWE-22) |
 | `internal/keyposture/keyposture_test.go:14` | a fixed test fixture directory, named by the test itself (CWE-22) |
+| `internal/kmip/pykmip_client_test.go:65` | test-generated TLS material in the test's temp dir (CWE-22) |
 | `internal/license/license.go:352` | operator-supplied license file path (CWE-22) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/objectstore/config.go:38` | operator-configured CA bundle path (CWE-22) |
@@ -1720,7 +1728,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (103 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (104 sites)
 
 | Location | Reason |
 |---|---|
@@ -1776,6 +1784,7 @@ not this file.
 | `internal/crypto/secretfile/secretfile_test.go:48` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/tenantwrap/tenantwrap_test.go:110` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/crypto/tlsprobe/native_fallback_test.go:49` | fixture executable written by this test (CWE-276) |
+| `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/projections/cbom_store_test.go:38` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/discovery_store_test.go:93` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/projections/discovery_store_test.go:96` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1941,7 +1950,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (98 sites)
+### G703 — CWE-22 Path traversal (taint) (99 sites)
 
 | Location | Reason |
 |---|---|
@@ -1980,6 +1989,7 @@ not this file.
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
+| `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:275` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:308` | test reads its own fixture/tempdir path (CWE-22) |
