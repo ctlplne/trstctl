@@ -14325,6 +14325,171 @@
         ],
         "type": "object"
       },
+      "DeploymentKEKRotateRequest": {
+        "properties": {
+          "wrapper_id": {
+            "type": "string"
+          },
+          "wrapper_kind": {
+            "enum": [
+              "local_file",
+              "pkcs11"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "wrapper_kind",
+          "wrapper_id"
+        ],
+        "type": "object"
+      },
+      "DeploymentKEKRotation": {
+        "properties": {
+          "containers_rewrapped": {
+            "description": "Stored data keys moved to the next generation.",
+            "type": "integer"
+          },
+          "containers_verified": {
+            "description": "Deployment KEK containers read back by the verify pass.",
+            "type": "integer"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "failure_code": {
+            "type": "string"
+          },
+          "files_rewrapped": {
+            "description": "Deployment-scoped sealed files moved to the next generation.",
+            "type": "integer"
+          },
+          "history_events_rewrapped": {
+            "description": "Event-history records whose data keys moved to the next generation.",
+            "type": "integer"
+          },
+          "next_generation": {
+            "type": "integer"
+          },
+          "next_wrapper_id": {
+            "type": "string"
+          },
+          "next_wrapper_kind": {
+            "type": "string"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "settling",
+              "hot_state",
+              "history",
+              "files",
+              "verify",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "failed",
+              "completed"
+            ],
+            "type": "string"
+          },
+          "tenants_done": {
+            "type": "integer"
+          },
+          "tenants_total": {
+            "type": "integer"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "verify_passes": {
+            "description": "Verify passes that found a data key still under a previous generation.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "operation_id",
+          "status",
+          "stage",
+          "tenants_total",
+          "tenants_done",
+          "containers_rewrapped",
+          "history_events_rewrapped",
+          "files_rewrapped",
+          "containers_verified",
+          "verify_passes"
+        ],
+        "type": "object"
+      },
+      "DeploymentKEKStatus": {
+        "properties": {
+          "can_rotate": {
+            "type": "boolean"
+          },
+          "custody": {
+            "enum": [
+              "key_file",
+              "local_file",
+              "pkcs11"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "generation": {
+            "description": "0 is the local key file (secrets.kek_file).",
+            "type": "integer"
+          },
+          "previous_generation": {
+            "type": "integer"
+          },
+          "rotated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "rotation": {
+            "$ref": "#/components/schemas/DeploymentKEKRotation"
+          },
+          "rotation_authority": {
+            "enum": [
+              "operator_tenant",
+              "another_tenant",
+              "not_configured"
+            ],
+            "type": "string"
+          },
+          "served": {
+            "type": "boolean"
+          },
+          "wrapper_id": {
+            "type": "string"
+          },
+          "wrapper_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "served",
+          "generation",
+          "custody",
+          "rotation_authority",
+          "can_rotate",
+          "detail"
+        ],
+        "type": "object"
+      },
       "DeploymentTarget": {
         "properties": {
           "config": {
@@ -66020,6 +66185,121 @@
         ],
         "summary": "List NHI ownership attribution across human, team, vendor, and orphaned records",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/platform/deployment-kek": {
+      "get": {
+        "operationId": "getDeploymentKEK",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentKEKStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get the deployment KEK's custody, generation and latest rotation",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
+    "/api/v1/platform/deployment-kek/rotate": {
+      "post": {
+        "operationId": "rotateDeploymentKEK",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentKEKRotateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentKEKStatus"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Rotate the deployment KEK to a new generation under a configured wrapper, re-wrapping every stored data key",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/platform/distribution": {

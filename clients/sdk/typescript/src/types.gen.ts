@@ -5680,6 +5680,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/deployment-kek": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the deployment KEK's custody, generation and latest rotation */
+        get: operations["getDeploymentKEK"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/deployment-kek/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate the deployment KEK to a new generation under a configured wrapper, re-wrapping every stored data key */
+        post: operations["rotateDeploymentKEK"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/distribution": {
         parameters: {
             query?: never;
@@ -12222,6 +12256,56 @@ export interface components {
             non_production_slots_remaining: number;
             production_units_consumed: number;
             registered_non_production_deployments: number;
+        };
+        DeploymentKEKRotateRequest: {
+            wrapper_id: string;
+            /** @enum {string} */
+            wrapper_kind: "local_file" | "pkcs11";
+        };
+        DeploymentKEKRotation: {
+            /** @description Stored data keys moved to the next generation. */
+            containers_rewrapped: number;
+            /** @description Deployment KEK containers read back by the verify pass. */
+            containers_verified: number;
+            failure?: string;
+            failure_code?: string;
+            /** @description Deployment-scoped sealed files moved to the next generation. */
+            files_rewrapped: number;
+            /** @description Event-history records whose data keys moved to the next generation. */
+            history_events_rewrapped: number;
+            next_generation?: number;
+            next_wrapper_id?: string;
+            next_wrapper_kind?: string;
+            operation_id: string;
+            /** @enum {string} */
+            stage: "settling" | "hot_state" | "history" | "files" | "verify" | "completed";
+            /** Format: date-time */
+            started_at?: string;
+            /** @enum {string} */
+            status: "running" | "failed" | "completed";
+            tenants_done: number;
+            tenants_total: number;
+            /** Format: date-time */
+            verified_at?: string;
+            /** @description Verify passes that found a data key still under a previous generation. */
+            verify_passes: number;
+        };
+        DeploymentKEKStatus: {
+            can_rotate: boolean;
+            /** @enum {string} */
+            custody: "key_file" | "local_file" | "pkcs11";
+            detail: string;
+            /** @description 0 is the local key file (secrets.kek_file). */
+            generation: number;
+            previous_generation?: number;
+            /** Format: date-time */
+            rotated_at?: string;
+            rotation?: components["schemas"]["DeploymentKEKRotation"];
+            /** @enum {string} */
+            rotation_authority: "operator_tenant" | "another_tenant" | "not_configured";
+            served: boolean;
+            wrapper_id?: string;
+            wrapper_kind?: string;
         };
         DeploymentTarget: {
             config: Record<string, never>;
@@ -35905,6 +35989,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnershipAttribution"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDeploymentKEK: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentKEKStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    rotateDeploymentKEK: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeploymentKEKRotateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentKEKStatus"];
                 };
             };
             /** @description client error */

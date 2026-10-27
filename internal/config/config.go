@@ -2357,6 +2357,21 @@ type Migrate struct {
 	Auto bool `json:"auto"`
 }
 
+// defaultKEKRotationSettle is the deployment KEK rotation's default wait.
+const defaultKEKRotationSettle = 2 * time.Minute
+
+// KEKRotationSettleDuration parses secrets.kek_rotation_settle.
+func (s Secrets) KEKRotationSettleDuration() (time.Duration, error) {
+	if strings.TrimSpace(s.KEKRotationSettle) == "" {
+		return defaultKEKRotationSettle, nil
+	}
+	d, err := time.ParseDuration(s.KEKRotationSettle)
+	if err != nil || d < 0 || d > 24*time.Hour {
+		return 0, errors.New("secrets.kek_rotation_settle must be a duration from 0s to 24h")
+	}
+	return d, nil
+}
+
 // Secrets configures credentials-at-rest (R3.1). KEKFile is the key-encryption
 // key that wraps every stored CA/connector credential (envelope encryption). It
 // is the root of trust for secrets at rest: back it up with the same care as the
@@ -2364,6 +2379,16 @@ type Migrate struct {
 // absent it is created (random, 0600) on first boot.
 type Secrets struct {
 	KEKFile string `json:"kek_file"`
+	// KEKOperatorTenantID is the one tenant whose keys:write principals may
+	// rotate the deployment KEK (A198): the rotation re-wraps every tenant's
+	// data, so no tenant holds that authority by default. Unset, the
+	// deployment KEK's status stays readable and a rotation is refused.
+	KEKOperatorTenantID string `json:"kek_operator_tenant_id,omitempty"`
+	// KEKRotationSettle is how long a deployment KEK rotation waits after
+	// recording its next generation before it re-wraps anything, so every
+	// request and delivery that sealed under the previous generation first
+	// finishes (default 2m; at most 24h).
+	KEKRotationSettle string `json:"kek_rotation_settle,omitempty"`
 	// TenantSealLocalWrappers are operator-provisioned local custody keys that may
 	// independently wrap tenant data-domain KEKs. The database stores only the
 	// stable ID; paths stay in operator configuration. Multiple entries are
@@ -3051,6 +3076,8 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	applyBulkheadEnv(getenv, &c.Bulkheads)
 	setBool(getenv, "TRSTCTL_MIGRATE_AUTO", &c.Migrate.Auto)
 	setString(getenv, "TRSTCTL_SECRETS_KEK_FILE", &c.Secrets.KEKFile)
+	setString(getenv, "TRSTCTL_SECRETS_KEK_OPERATOR_TENANT_ID", &c.Secrets.KEKOperatorTenantID)
+	setString(getenv, "TRSTCTL_SECRETS_KEK_ROTATION_SETTLE", &c.Secrets.KEKRotationSettle)
 	setBool(getenv, "TRSTCTL_SECRETS_ENABLE_API", &c.Secrets.EnableAPI)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_SECRET_FILE", &c.Secrets.AuthSecretFile)
 	setString(getenv, "TRSTCTL_SECRETS_AUTH_TOKEN_TENANT_ID", &c.Secrets.AuthTokenTenantID)
@@ -4505,6 +4532,14 @@ func validateServedSurfaces(c *Config) []error {
 	}
 	if c.Breakglass.Enabled || c.Breakglass.OnlineEnabled {
 		errs = append(errs, c.Breakglass.validate()...)
+	}
+	if c.Secrets.KEKOperatorTenantID != "" {
+		if err := uuid.Validate(c.Secrets.KEKOperatorTenantID); err != nil {
+			errs = append(errs, errors.New("secrets.kek_operator_tenant_id must be a UUID"))
+		}
+	}
+	if _, err := c.Secrets.KEKRotationSettleDuration(); err != nil {
+		errs = append(errs, err)
 	}
 	if c.Secrets.AuthSecretFile != "" {
 		if err := uuid.Validate(c.Secrets.AuthTokenTenantID); err != nil {

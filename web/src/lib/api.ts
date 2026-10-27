@@ -548,6 +548,8 @@ import type {
   TenantKeyDomainRotateRequest,
   TenantKeyDomainSealReceipt,
   TenantKeyDomainStatus,
+  DeploymentKEKRotateRequest,
+  DeploymentKEKStatus,
   SSHAttestedUserCert,
   SSHAttestedUserCertPreview,
   SSHAttestedUserCertRequest,
@@ -1392,6 +1394,8 @@ export type {
   TenantKeyDomainRotateRequest,
   TenantKeyDomainSealReceipt,
   TenantKeyDomainStatus,
+  DeploymentKEKRotateRequest,
+  DeploymentKEKStatus,
   SSHAttestedUserCert,
   SSHAttestedUserCertPreview,
   SSHAttestedUserCertRequest,
@@ -1871,6 +1875,10 @@ export interface Api {
   unsealTenantKeyDomain(): Promise<TenantKeyDomainStatus>;
   /** A129: rotate the tenant domain key; an empty input keeps the current wrapper. */
   rotateTenantKeyDomain(input?: TenantKeyDomainRotateRequest): Promise<TenantKeyDomainStatus>;
+  /** A198: the deployment KEK's custody and latest rotation. */
+  deploymentKEK(): Promise<DeploymentKEKStatus>;
+  /** A198: rotate the deployment KEK under a configured wrapper (the operator tenant only). */
+  rotateDeploymentKEK(input: DeploymentKEKRotateRequest): Promise<DeploymentKEKStatus>;
   activeActiveIssuance(): Promise<ActiveActiveIssuancePlan>;
   provisionManagedTenant(
     input: ManagedTenantProvisionRequest,
@@ -2617,6 +2625,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   sealTenantKeyDomain: () => mutate<TenantKeyDomainSealReceipt>("POST", "/api/v1/platform/tenant-key-domain/seal"),
   unsealTenantKeyDomain: () => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/unseal"),
   rotateTenantKeyDomain: (input) => mutate<TenantKeyDomainStatus>("POST", "/api/v1/platform/tenant-key-domain/rotate", input ?? {}),
+  deploymentKEK: () => req<DeploymentKEKStatus>("/api/v1/platform/deployment-kek"),
+  rotateDeploymentKEK: (input) => mutate<DeploymentKEKStatus>("POST", "/api/v1/platform/deployment-kek/rotate", input),
   activeActiveIssuance: () => req<ActiveActiveIssuancePlan>("/api/v1/scale/ha-issuance"),
   provisionManagedTenant: (input, idempotencyKey = newIdempotencyKey(), expectedPrincipal) =>
     req<ManagedTenant>("/api/v1/managed-offering/tenants", {

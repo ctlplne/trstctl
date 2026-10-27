@@ -4779,6 +4779,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantKeyDomainRotationFailed:            {1: true},
 	EventTransitKeyCreated:                        {1: true, transit.FactSchemaVersion: true},
 	EventTransitKeyRotated:                        {1: true, transit.FactSchemaVersion: true},
+	EventDeploymentKEKRotationStarted:             {1: true},
+	EventDeploymentKEKRotationProgressed:          {1: true},
+	EventDeploymentKEKRotationCompleted:           {1: true},
+	EventDeploymentKEKRotationFailed:              {1: true},
 }
 
 func init() {
@@ -8215,6 +8219,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		})
 	case EventTransitKeyCreated, EventTransitKeyRotated:
 		return p.applyTransitKeyFactTx(ctx, tx, e)
+	case EventDeploymentKEKRotationStarted, EventDeploymentKEKRotationProgressed,
+		EventDeploymentKEKRotationCompleted, EventDeploymentKEKRotationFailed:
+		return p.applyDeploymentKEKSnapshotTx(ctx, tx, e)
 	case EventTenantKeyDomainMigrationStarted,
 		EventTenantKeyDomainMigrationProgressed,
 		EventTenantKeyDomainMigrationCompleted,

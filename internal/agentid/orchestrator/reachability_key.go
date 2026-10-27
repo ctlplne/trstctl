@@ -99,11 +99,15 @@ func openReachabilityKey(floorDir string, wrapper seal.KeyWrapper) (*crypto.Lock
 	return locked, nil
 }
 
+// ReachabilityKeyPath is the sealed verdict key's file under floorDir; a
+// deployment KEK rotation re-wraps it in place (A198).
+func ReachabilityKeyPath(floorDir string) string { return filepath.Join(floorDir, reachKeyFile) }
+
 // loadOrCreateReachabilityKey seals private PKCS#8 under the deployment wrapper.
 // A synced temporary file plus no-replace link makes concurrent startup choose
 // one first writer; a loser reopens the winner instead of rotating trust.
 func loadOrCreateReachabilityKey(floorDir string, wrapper seal.KeyWrapper) (*crypto.LockedSigner, error) {
-	path := filepath.Join(floorDir, reachKeyFile)
+	path := ReachabilityKeyPath(floorDir)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}

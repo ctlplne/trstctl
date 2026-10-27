@@ -9,11 +9,12 @@ import { asRFC3339UTCMinute, defaultBillingPeriod, validUTCPeriod } from "@/lib/
 import { useRuntimeOperationExecution } from "@/lib/capabilities";
 import type { StatusTone } from "@/lib/statusVocab";
 
-type TenantWrapperKind = "local_file" | "pkcs11";
+export type TenantWrapperKind = "local_file" | "pkcs11";
 
 // The wrapper kind and ID a migration or rotation targets. A migration that has
-// started resumes only with the kind it began with (lockedKind).
-function TenantWrapperFields({
+// started resumes only with the kind it began with (lockedKind). The deployment
+// key's rotation (A198) names its wrapper the same way.
+export function TenantWrapperFields({
   idPrefix,
   kind,
   onKind,

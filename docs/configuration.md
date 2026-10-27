@@ -1463,7 +1463,9 @@ cryptography lives behind the platform's single crypto boundary.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `TRSTCTL_SECRETS_KEK_FILE` | `data/secrets/kek.bin` | Path to the 256-bit KEK that wraps every stored credential. It is **created `0600` on first boot** if absent, and is the root of trust for credentials at rest. |
+| `TRSTCTL_SECRETS_KEK_FILE` | `data/secrets/kek.bin` | Path to the 256-bit KEK that wraps every stored credential. It is **created `0600` on first boot** if absent, and is the root of trust for credentials at rest until a rotation moves the deployment KEK to a key under an operator wrapper (see [Rotating the deployment KEK](#rotating-the-deployment-kek)). |
+| `TRSTCTL_SECRETS_KEK_OPERATOR_TENANT_ID` | unset | The one tenant whose `keys:write` principals may rotate the deployment KEK. A rotation re-wraps every tenant's data, so no tenant holds that authority by default; unset, the status stays readable and a rotation is refused (`403`). |
+| `TRSTCTL_SECRETS_KEK_ROTATION_SETTLE` | `2m` | How long a deployment KEK rotation waits after recording its next generation before it re-wraps anything, so requests and deliveries that sealed under the previous generation finish first (`0s` to `24h`). |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_ID` | unset | Stable non-secret ID for one operator-provisioned local tenant-domain wrapper. Both this variable and the file variable below are required together. The database stores this ID, never the path or wrapper key. |
 | `TRSTCTL_TENANT_SEAL_LOCAL_WRAPPER_FILE` | unset | Existing local wrapper-key file for the ID above. trstctl does **not** create it or fall back to the deployment KEK when it is missing/wrong. Configure multiple wrappers with `secrets.tenant_seal_local_wrappers` in JSON/YAML. |
 | `TRSTCTL_TENANT_SEAL_PKCS11_WRAPPER_ID` | unset | Stable non-secret ID of one `pkcs11` wrapper the signer holds under an HSM key (see [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)). The signer's tenant KEK file maps the same ID to its HSM key. Configure several with `secrets.tenant_seal_pkcs11_wrappers`. |
@@ -1606,6 +1608,55 @@ archives, and exports taken before the rotation still open with the previous
 generation through its wrapper, and that generation's wrapped key stays in the
 tenant's event history. To retire a generation everywhere, rotate onto another
 wrapper and then retire the old wrapper's key or file.
+
+### Rotating the deployment KEK
+
+The deployment KEK (`secrets.kek_file`) protects every stored credential of a
+tenant that has not moved to its own key domain, and the deployment's sealed
+files. A rotation moves it to a new generation: a key created under an operator
+wrapper, either a local wrapper file (`secrets.tenant_seal_local_wrappers`) or
+an HSM key the isolated signer holds (`secrets.tenant_seal_pkcs11_wrappers`,
+set up as in [Tenant domain keys under an HSM](#tenant-domain-keys-under-an-hsm)).
+Only the wrapped key is stored; for an HSM key the signer wraps and unwraps
+every data key, so stored credentials decrypt only through the signer and the
+HSM key.
+
+1. Name the operator tenant: `secrets.kek_operator_tenant_id`
+   (`TRSTCTL_SECRETS_KEK_OPERATOR_TENANT_ID`). Only its `keys:write` principals
+   may rotate.
+2. Configure the target wrapper on the control plane (and, for `pkcs11`, in the
+   signer's tenant KEK file).
+3. Rotate from the console's deployment key panel (Admin, System), or with
+   `trstctl-cli platform deployment-kek rotate -f rotate.json` where
+   `rotate.json` is `{"wrapper_kind":"pkcs11","wrapper_id":"hsm-a"}`. The request
+   returns `202` once the next generation is recorded.
+
+From that moment every new data key is wrapped under the next generation. After
+`secrets.kek_rotation_settle` (default two minutes), the elected leader re-wraps
+every stored data key in bounded steps: each tenant's stored ciphertext, the
+event history of every tenant that has not completed its own key-domain
+migration, and the deployment's sealed files (the SAML encryption identity, the
+SCEP/CMP RA identity, a transit keyring checkpoint, and the agent reachability
+verdict key). Payloads are never decrypted. A verify pass then reads every
+stored data key back and must find none under the previous generation before
+the next generation is promoted and the previous one retired; the key file then
+opens none of them. Requests are served throughout, and a new leader resumes a
+rotation from its recorded step. `GET /api/v1/platform/deployment-kek`
+(`trstctl-cli platform deployment-kek status`) reports the step, progress, and
+the counts re-wrapped and read back.
+
+A rotation that stops (for example on a history record that needs an explicit
+migration) keeps writing new data under the next generation, so it resumes only
+with the same wrapper. A later rotation moves the deployment KEK onto another
+wrapper the same way.
+
+The key file stays in use after a rotation: it is the key for request evidence
+MACs and the backup HMAC, and it seals the signer's key store unless Helm
+`externalKMS` is set. Backups, archives, and exports taken before a rotation still
+open with the previous generation (the key file for the first rotation), so keep
+it, and any retired wrapper, as long as such backups. The deployment's sealed
+files must be on storage every replica shares; a replica's private copy left
+under a retired generation fails to open.
 
 Dynamic-secret providers and outbound sync targets use structured JSON/YAML because
 each entry is bound to exactly one tenant. Authority-bearing values are references,
@@ -1871,8 +1922,10 @@ always use the same verifier and permission source.
 Treat the credential-store KEK as the root that also protects the signer's sealed
 audit-evidence handle: **protect it and back it up** (a lost KEK means sealed
 credentials and software-backed signer keys cannot be opened) with the same care
-described in the [disaster-recovery runbook](disaster-recovery.md). This
-credential-store KEK is still a local key file. Do not confuse it with Helm
+described in the [disaster-recovery runbook](disaster-recovery.md). The
+credential-store KEK is a local key file until a
+[rotation](#rotating-the-deployment-kek) moves it under an operator wrapper; the
+file still seals the signer's key store afterwards. Do not confuse it with Helm
 `externalKMS`, which applies to the signer's CA key-store DEK wrapping described in
 [Signer topology and CA custody](#signer-topology-and-ca-custody).
 On reload, local KEK, auth-secret, and session-secret files are accepted only if

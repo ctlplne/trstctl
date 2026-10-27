@@ -822,6 +822,10 @@ func seedRecoveredFromPostgresTables(
 			{`INSERT INTO agent_job_attempt_bindings (tenant_id, job_id, attempt, agent_id, destination) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(4242), 1, "b9445160-dbc6-48fa-9c13-f078943486a9", "connector.deploy"}},
 			{`INSERT INTO agent_job_appliance_references (tenant_id, job_id, reference, recorded_attempt, recorded_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, int64(4242), "full-dr-ise-csr-id", 1, now}},
 			{`INSERT INTO transit_keyrings (tenant_id, sealed, revision, updated_at) VALUES ($1, $2, $3, $4)`, []any{tenantA, []byte("full-dr-sealed-transit-keyring"), int64(1), now}},
+			// A198: the deployment KEK's wrapped generation. One deployment-wide
+			// row: without it, every data key a rotation moved would be
+			// undecryptable after the restore.
+			{`INSERT INTO deployment_kek_domain (singleton, domain_id, generation, wrapper_kind, wrapper_id, wrapped_kek, operator_tenant_id, last_transition_sequence, created_at, updated_at) VALUES (true, $1, 1, 'local_file', 'full-dr-wrapper', $2, $3, 1, $4, $4)`, []any{"00000000-0000-4000-8000-00000000a198", []byte("full-dr-wrapped-deployment-kek"), tenantA, now}},
 			// C3: declared segments. Operator declarations that no replay
 			// rebuilds — a restore that lost them would silently discard real
 			// operator work and make an estate look unmeasured.

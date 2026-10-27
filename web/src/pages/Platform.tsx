@@ -6,6 +6,7 @@ import { AdminHeaderActions } from "@/components/AdminHeaderActions";
 import { PageHeader } from "@/components/PageHeader";
 import { DRPosturePanel } from "@/components/DRPosturePanel";
 import { DetailDrawer } from "@/components/DetailDrawer";
+import { DeploymentKEKPanel } from "@/components/DeploymentKEKPanel";
 import { IdempotencyResultProtectionPanel, TenantKeyDomainPanel, UsageEvidencePanel } from "@/components/TenantCustodyPanels";
 import { Eyebrow } from "@/components/typography";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -362,6 +363,7 @@ export function AdminSystem() {
         >
           <div className="grid gap-6">
             <TenantKeyDomainPanel canWrite={Boolean(user?.permissions?.includes("keys:write"))} />
+            <DeploymentKEKPanel />
             <IdempotencyResultProtectionPanel readout={systemReadout} loading={protectionLoading} requestError={protectionError} />
             <UsageEvidencePanel />
             <ProviderAccessConsentPanel />

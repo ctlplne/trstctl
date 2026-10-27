@@ -144,123 +144,161 @@ func (r *Resolver) WithTenant(
 	if fn == nil {
 		return errors.New("tenantseal: cipher callback is required")
 	}
-	return r.domains.WithTenantKeyDomainShared(
+	if fenced, ok := r.domains.(sharedDeploymentDomainStore); ok {
+		return fenced.WithTenantKeyDomainSharedDeployment(ctx, tenantID,
+			func(domain *store.TenantKeyDomain, deployment *store.DeploymentKEKDomain) error {
+				wrapper, release := r.deploymentWrapper(deployment, true)
+				defer release()
+				return r.withDomain(ctx, tenantID, domain, wrapper, fn)
+			})
+	}
+	return r.domains.WithTenantKeyDomainShared(ctx, tenantID, func(domain *store.TenantKeyDomain) error {
+		wrapper, release := r.deploymentWrapper(nil, false)
+		defer release()
+		return r.withDomain(ctx, tenantID, domain, wrapper, fn)
+	})
+}
+
+// sharedDeploymentDomainStore is the store that also reads the deployment KEK
+// state inside the tenant's fence (A198).
+type sharedDeploymentDomainStore interface {
+	WithTenantKeyDomainSharedDeployment(
+		ctx context.Context,
+		tenantID string,
+		fn func(*store.TenantKeyDomain, *store.DeploymentKEKDomain) error,
+	) error
+}
+
+// deploymentWrapper is the deployment KEK a fenced callback seals with: for a
+// keyring, exactly the state the fence read, so a seal and a deployment KEK
+// rotation's re-wrap of this tenant cannot interleave.
+func (r *Resolver) deploymentWrapper(state *store.DeploymentKEKDomain, fenced bool) (seal.KeyWrapper, func()) {
+	ring, ok := r.deployment.(*DeploymentKeyring)
+	if !ok || !fenced {
+		return r.deployment, func() {}
+	}
+	view := ring.View(state)
+	return view, view.Destroy
+}
+
+func (r *Resolver) withDomain(
+	ctx context.Context,
+	tenantID string,
+	domain *store.TenantKeyDomain,
+	deployment seal.KeyWrapper,
+	fn func(Cipher) error,
+) error {
+	if domain == nil {
+		cipher := newLeasedCipher(
+			func(plaintext, aad []byte) ([]byte, error) {
+				return seal.Seal(deployment, plaintext, aad)
+			},
+			func(container, aad []byte) ([]byte, error) {
+				containerDomain, err := seal.Domain(container)
+				if err != nil {
+					return nil, err
+				}
+				if containerDomain != nil {
+					return nil, seal.ErrDomain
+				}
+				return seal.Open(deployment, container, aad)
+			},
+		)
+		defer cipher.invalidate()
+		return fn(cipher)
+	}
+
+	mode, status := resolveDomainAccessMode(tenantID, *domain)
+	if mode == domainAccessDenied {
+		return statusError(status, nil)
+	}
+	binding, err := DomainBinding(domain.TenantID, domain.DomainID, domain.Generation)
+	if err != nil {
+		return statusError(StatusCorrupt, err)
+	}
+	domainKey, err := r.registry.OpenDomainKEK(
 		ctx,
-		tenantID,
-		func(domain *store.TenantKeyDomain) error {
-			if domain == nil {
-				cipher := newLeasedCipher(
-					func(plaintext, aad []byte) ([]byte, error) {
-						return seal.Seal(r.deployment, plaintext, aad)
-					},
-					func(container, aad []byte) ([]byte, error) {
-						containerDomain, err := seal.Domain(container)
-						if err != nil {
-							return nil, err
-						}
-						if containerDomain != nil {
-							return nil, seal.ErrDomain
-						}
-						return seal.Open(r.deployment, container, aad)
-					},
-				)
-				defer cipher.invalidate()
-				return fn(cipher)
-			}
-
-			mode, status := resolveDomainAccessMode(tenantID, *domain)
-			if mode == domainAccessDenied {
-				return statusError(status, nil)
-			}
-			binding, err := DomainBinding(domain.TenantID, domain.DomainID, domain.Generation)
-			if err != nil {
-				return statusError(StatusCorrupt, err)
-			}
-			domainKey, err := r.registry.OpenDomainKEK(
-				ctx,
-				WrapperRef{Kind: domain.WrapperKind, ID: domain.WrapperID},
-				domain.WrappedDomainKEK,
-				binding,
-			)
-			if err != nil {
-				return classifyDomainOpenError(err)
-			}
-			if domainKey == nil {
-				return statusError(
-					StatusCustodyUnavailable,
-					errors.New("tenantseal: wrapper registry returned no domain key"),
-				)
-			}
-			defer domainKey.Destroy()
-
-			sealKey, sealBinding := domainKey, binding
-			open := func(container, aad []byte) ([]byte, error) {
-				return seal.OpenDomain(domainKey, container, aad, binding)
-			}
-			switch mode {
-			case domainAccessDualMigration:
-				open = func(container, aad []byte) ([]byte, error) {
-					containerDomain, err := seal.Domain(container)
-					if err != nil {
-						return nil, err
-					}
-					if containerDomain == nil {
-						return seal.Open(r.deployment, container, aad)
-					}
-					if !bytes.Equal(containerDomain, binding) {
-						return nil, seal.ErrDomain
-					}
-					return seal.OpenDomain(domainKey, container, aad, binding)
-				}
-			case domainAccessDualRotation:
-				// New data seals under the next generation; a container opens
-				// with the key its own domain label names, and only those two.
-				nextBinding, err := DomainBinding(domain.TenantID, domain.DomainID, domain.NextGeneration)
-				if err != nil {
-					return statusError(StatusCorrupt, err)
-				}
-				nextKey, err := r.registry.OpenDomainKEK(
-					ctx,
-					WrapperRef{Kind: domain.NextWrapperKind, ID: domain.NextWrapperID},
-					domain.NextWrappedDomainKEK,
-					nextBinding,
-				)
-				if err != nil {
-					return classifyDomainOpenError(err)
-				}
-				if nextKey == nil {
-					return statusError(
-						StatusCustodyUnavailable,
-						errors.New("tenantseal: wrapper registry returned no next-generation domain key"),
-					)
-				}
-				defer nextKey.Destroy()
-				sealKey, sealBinding = nextKey, nextBinding
-				open = func(container, aad []byte) ([]byte, error) {
-					containerDomain, err := seal.Domain(container)
-					if err != nil {
-						return nil, err
-					}
-					switch {
-					case containerDomain != nil && bytes.Equal(containerDomain, nextBinding):
-						return seal.OpenDomain(nextKey, container, aad, nextBinding)
-					case containerDomain != nil && bytes.Equal(containerDomain, binding):
-						return seal.OpenDomain(domainKey, container, aad, binding)
-					default:
-						return nil, seal.ErrDomain
-					}
-				}
-			}
-			cipher := newLeasedCipher(
-				func(plaintext, aad []byte) ([]byte, error) {
-					return seal.SealDomain(sealKey, plaintext, aad, sealBinding)
-				},
-				open,
-			)
-			defer cipher.invalidate()
-			return fn(cipher)
-		},
+		WrapperRef{Kind: domain.WrapperKind, ID: domain.WrapperID},
+		domain.WrappedDomainKEK,
+		binding,
 	)
+	if err != nil {
+		return classifyDomainOpenError(err)
+	}
+	if domainKey == nil {
+		return statusError(
+			StatusCustodyUnavailable,
+			errors.New("tenantseal: wrapper registry returned no domain key"),
+		)
+	}
+	defer domainKey.Destroy()
+
+	sealKey, sealBinding := domainKey, binding
+	open := func(container, aad []byte) ([]byte, error) {
+		return seal.OpenDomain(domainKey, container, aad, binding)
+	}
+	switch mode {
+	case domainAccessDualMigration:
+		open = func(container, aad []byte) ([]byte, error) {
+			containerDomain, err := seal.Domain(container)
+			if err != nil {
+				return nil, err
+			}
+			if containerDomain == nil {
+				return seal.Open(deployment, container, aad)
+			}
+			if !bytes.Equal(containerDomain, binding) {
+				return nil, seal.ErrDomain
+			}
+			return seal.OpenDomain(domainKey, container, aad, binding)
+		}
+	case domainAccessDualRotation:
+		// New data seals under the next generation; a container opens
+		// with the key its own domain label names, and only those two.
+		nextBinding, err := DomainBinding(domain.TenantID, domain.DomainID, domain.NextGeneration)
+		if err != nil {
+			return statusError(StatusCorrupt, err)
+		}
+		nextKey, err := r.registry.OpenDomainKEK(
+			ctx,
+			WrapperRef{Kind: domain.NextWrapperKind, ID: domain.NextWrapperID},
+			domain.NextWrappedDomainKEK,
+			nextBinding,
+		)
+		if err != nil {
+			return classifyDomainOpenError(err)
+		}
+		if nextKey == nil {
+			return statusError(
+				StatusCustodyUnavailable,
+				errors.New("tenantseal: wrapper registry returned no next-generation domain key"),
+			)
+		}
+		defer nextKey.Destroy()
+		sealKey, sealBinding = nextKey, nextBinding
+		open = func(container, aad []byte) ([]byte, error) {
+			containerDomain, err := seal.Domain(container)
+			if err != nil {
+				return nil, err
+			}
+			switch {
+			case containerDomain != nil && bytes.Equal(containerDomain, nextBinding):
+				return seal.OpenDomain(nextKey, container, aad, nextBinding)
+			case containerDomain != nil && bytes.Equal(containerDomain, binding):
+				return seal.OpenDomain(domainKey, container, aad, binding)
+			default:
+				return nil, seal.ErrDomain
+			}
+		}
+	}
+	cipher := newLeasedCipher(
+		func(plaintext, aad []byte) ([]byte, error) {
+			return seal.SealDomain(sealKey, plaintext, aad, sealBinding)
+		},
+		open,
+	)
+	defer cipher.invalidate()
+	return fn(cipher)
 }
 
 type domainAccessMode uint8

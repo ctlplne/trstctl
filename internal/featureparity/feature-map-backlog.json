@@ -21773,7 +21773,9 @@
                 "migrateTenantKeyDomain",
                 "sealTenantKeyDomain",
                 "unsealTenantKeyDomain",
-                "rotateTenantKeyDomain"
+                "rotateTenantKeyDomain",
+                "getDeploymentKEK",
+                "rotateDeploymentKEK"
             ],
             "api_na": "",
             "cli_surface": [
@@ -21789,6 +21791,8 @@
                 "platform tenant-key-domain seal",
                 "platform tenant-key-domain unseal",
                 "platform tenant-key-domain rotate",
+                "platform deployment-kek status",
+                "platform deployment-kek rotate",
                 "usage evidence"
             ],
             "cli_na": "",

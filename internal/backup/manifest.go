@@ -189,6 +189,11 @@ var RecoveredFromPostgresBackup = []string{
 	// cannot rebuild them, and losing them would leave every transit
 	// ciphertext undecryptable.
 	"transit_keyrings",
+	// A198: the deployment KEK's generations, wrapped. Losing the row would
+	// leave every data key a rotation moved to a later generation
+	// undecryptable. The operator tenant's deployment.kek.* history carries
+	// the same snapshots, and replaying it re-applies them in sequence order.
+	"deployment_kek_domain",
 	// L2: provider-plane billing meters. RecoveredFromPostgresBackup, NOT a log
 	// projection — usage is counted from live activity, never replayed from the
 	// event log, so a rebuild cannot reconstruct it. Losing these to a

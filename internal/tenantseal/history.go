@@ -45,6 +45,12 @@ type HistoryRewrapper struct {
 	sourceDomain []byte
 	tenant       seal.KeyWrapper
 	domain       []byte
+	// deployment, when set, makes this a deployment KEK rotation pass (A198):
+	// every unlabeled container's data key moves to the deployment KEK's
+	// writing generation, and every tenant-domain container stays as it is.
+	deployment *DeploymentView
+	containers int64
+	rewrapped  int64
 }
 
 // NewHistoryRewrapper binds a migration pass to exactly one destination domain.
@@ -84,6 +90,23 @@ func NewRotationRewrapper(
 		tenant:       destination,
 		domain:       append([]byte(nil), destinationDomain...),
 	}, nil
+}
+
+// NewDeploymentRewrapper binds a deployment KEK rotation pass to one state of
+// the deployment KEK: unlabeled (deployment KEK) containers move to the view's
+// writing generation without their payload being opened; a container a tenant
+// domain labels is not the deployment KEK's and is left byte-identical.
+func NewDeploymentRewrapper(view *DeploymentView) (*HistoryRewrapper, error) {
+	if view == nil {
+		return nil, errors.New("tenantseal: a deployment KEK view is required")
+	}
+	return &HistoryRewrapper{deployment: view}, nil
+}
+
+// DeploymentCounts reports, for a deployment pass, how many deployment KEK
+// containers the pass read and how many it re-wrapped.
+func (r *HistoryRewrapper) DeploymentCounts() (containers, rewrapped int64) {
+	return r.containers, r.rewrapped
 }
 
 // fromSource reports whether a container's domain label is this pass's source:
@@ -253,6 +276,9 @@ func (r *HistoryRewrapper) validateValuePair(before, after any, depth int) (bool
 }
 
 func (r *HistoryRewrapper) validateContainerPair(before, after []byte) error {
+	if r.deployment != nil {
+		return r.validateDeploymentPair(before, after)
+	}
 	beforeDomain, err := seal.Domain(before)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
@@ -375,6 +401,20 @@ func (r *HistoryRewrapper) rewriteContainer(container []byte) ([]byte, bool, err
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %v", ErrCorruptContainer, err)
 	}
+	if r.deployment != nil {
+		if domain != nil {
+			return container, false, nil
+		}
+		r.containers++
+		next, changed, err := seal.RewrapContainerDEK(container, r.deployment.Rewrap)
+		if err != nil {
+			return nil, false, err
+		}
+		if changed {
+			r.rewrapped++
+		}
+		return next, changed, nil
+	}
 	if r.fromSource(domain) {
 		next, err := seal.RewrapDomain(r.source, r.tenant, container, r.domain)
 		if err != nil {
@@ -389,6 +429,40 @@ func (r *HistoryRewrapper) rewriteContainer(container []byte) ([]byte, bool, err
 		return nil, false, err
 	}
 	return container, false, nil
+}
+
+// validateDeploymentPair proves a deployment pass changed only an unlabeled
+// container's wrapped data key, to the writing generation, with the same data
+// key and payload bytes.
+func (r *HistoryRewrapper) validateDeploymentPair(before, after []byte) error {
+	beforeDomain, err := seal.Domain(before)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
+	}
+	if beforeDomain != nil {
+		// A tenant domain's container is not the deployment KEK's: the pass
+		// leaves it byte-identical, even inside an event it changed.
+		if !bytes.Equal(before, after) {
+			return ErrUnexpectedDomain
+		}
+		return nil
+	}
+	afterDomain, err := seal.Domain(after)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
+	}
+	if afterDomain != nil {
+		return ErrUnexpectedDomain
+	}
+	wrapped, _, err := seal.ContainerWrappedDEK(after)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrCorruptContainer, err)
+	}
+	generation, _, err := seal.WrappedGeneration(wrapped)
+	if err != nil || int64(generation) != r.deployment.WritingGeneration() {
+		return errors.New("tenantseal: a re-wrapped container is not in the deployment KEK's writing generation")
+	}
+	return seal.ValidateRewrappedDEK(r.deployment, before, after)
 }
 
 func decodeHistoryJSON(data []byte) (any, error) {

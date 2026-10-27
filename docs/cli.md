@@ -364,6 +364,7 @@ exhaustive subcommand list:
 | `platform`                        | Show self-hostable run-anywhere distribution posture (`distribution`)                                                                                                                                                                                                                                               |
 | `platform`                        | Running build, uptime, signer topology, and spine reachability (`system`)                                                                                                                                                                                                                                           |
 | `platform`                        | Tenant cryptographic custody: status, migration into a tenant key domain, seal, unseal, and key rotation (`tenant-key-domain status/migrate/seal/unseal/rotate`)                                                                                                                                                    |
+| `platform`                        | Deployment KEK custody and rotation by the operator tenant (`deployment-kek status/rotate`)                                                                                                                                                                                                                         |
 | `policy`                          | Author, list, activate, and roll back lifecycle policy versions; dry-run a candidate module (`versions create/list/activate/rollback` · `dry-run`)                                                                                                                                                                  |
 | `privacy`                         | Subject erasure, retention runs, archive-erasure attestations, export, personal-data catalog (`erasures` · `retention` · `archives` · `export` · `catalog`)                                                                                                                                                         |
 | `profiles`                        | Certificate profile versions and append-only recovery (`create` · `list` · `get-version` · `restore-preview` · `restore`)                                                                                                                                                                                           |
@@ -855,6 +856,14 @@ cat > rotate.json <<'JSON'
 JSON
 trstctl-cli platform tenant-key-domain rotate -f rotate.json
 trstctl-cli platform tenant-key-domain status
+
+# Rotate the deployment KEK (the operator tenant only) onto an HSM key the
+# signer holds; the rotation re-wraps every stored data key in the background.
+cat > deployment-kek.json <<'JSON'
+{"wrapper_kind":"pkcs11","wrapper_id":"hsm-a"}
+JSON
+trstctl-cli platform deployment-kek rotate -f deployment-kek.json
+trstctl-cli platform deployment-kek status
 
 cat > offline-intermediate-ceremony.json <<'JSON'
 {"operation":"create_offline_intermediate","parent_id":"<offline-root-authority-id>","threshold":2,"spec":{"common_name":"Example Issuing Intermediate","ttl_seconds":71280000,"signature_algorithm":"ECDSA-P256","max_path_len":0,"permitted_dns_domains":["example.internal"]}}

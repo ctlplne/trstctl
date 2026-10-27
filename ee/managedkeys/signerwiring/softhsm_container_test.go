@@ -13,7 +13,8 @@ import (
 )
 
 // A123: the tenant KEK custody against SoftHSM, run in the SoftHSM container
-// with keys an operator provisions with pkcs11-tool. Beyond the in-container
+// with keys an operator provisions with pkcs11-tool; A198's deployment KEK
+// generation runs through the same custody in the same container. Beyond the in-container
 // test, the token itself is checked: the signer's tenant domain KEKs are never
 // HSM objects, so the token holds exactly the operator's two keys afterwards.
 func TestSoftHSMContainerSignerKeepsTenantDomainKEKs(t *testing.T) {
@@ -55,7 +56,7 @@ func TestSoftHSMContainerSignerKeepsTenantDomainKEKs(t *testing.T) {
 		"objects() { tool --list-objects | grep -c 'Object;' || true; }",
 		"before=$(objects)",
 		"export TRSTCTL_SOFTHSM_TOKEN_LABEL=trstctl-a123 TRSTCTL_SOFTHSM_USER_PIN=987654 TRSTCTL_SOFTHSM_AES_KEYS=1",
-		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./ee/managedkeys/signerwiring -run 'TestSoftHSMSignerKeepsTenantDomainKEKs' -count=1 -v",
+		"CGO_ENABLED=1 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test -tags=pkcs11cgo ./ee/managedkeys/signerwiring -run 'TestSoftHSMSignerKeepsTenantDomainKEKs|TestSoftHSMSignerHoldsTheDeploymentKEK' -count=1 -v",
 		"after=$(objects)",
 		"test \"$before\" = 2 && test \"$after\" = 2 && echo SOFTHSM_TOKEN_HOLDS_ONLY_OPERATOR_KEYS",
 	}, "\n")
@@ -68,7 +69,7 @@ func TestSoftHSMContainerSignerKeepsTenantDomainKEKs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SoftHSM tenant KEK integration failed: %v\n%s", err, out)
 	}
-	for _, marker := range []string{"SOFTHSM_TENANT_KEK_OK", "SOFTHSM_TOKEN_HOLDS_ONLY_OPERATOR_KEYS"} {
+	for _, marker := range []string{"SOFTHSM_TENANT_KEK_OK", "SOFTHSM_DEPLOYMENT_KEK_OK", "SOFTHSM_TOKEN_HOLDS_ONLY_OPERATOR_KEYS"} {
 		if !strings.Contains(string(out), marker) {
 			t.Fatalf("SoftHSM tenant KEK integration did not report %s:\n%s", marker, out)
 		}

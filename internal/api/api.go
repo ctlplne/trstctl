@@ -171,6 +171,7 @@ type API struct {
 	systemReadout                      SystemReadoutProvider
 	idemProtection                     IdempotencyResultProtectionProvider
 	tenantKeyDomains                   TenantKeyDomainLifecycle
+	deploymentKEK                      DeploymentKEKService
 	tenantCrypto                       tenantseal.Access
 	connectorRegistry                  *connector.Registry
 	connectorGrantCensus               func(name string) []string
@@ -314,6 +315,7 @@ type config struct {
 	systemReadout               SystemReadoutProvider
 	idemProtection              IdempotencyResultProtectionProvider
 	tenantKeyDomains            TenantKeyDomainLifecycle
+	deploymentKEK               DeploymentKEKService
 	tenantCrypto                tenantseal.Access
 	connectorRegistry           *connector.Registry
 	connectorGrantCensus        func(name string) []string
@@ -490,25 +492,12 @@ func WithPrincipalResolver(fn func(*http.Request) (authz.Principal, error)) Opti
 	return func(c *config) { c.principalFn = fn }
 }
 
-// WithCommandMAC wires the deployment-wide, crypto-boundary keyed digest used
-// to bind an effect-free review to one authenticated command. It is independent
-// of the optional native secret store and never exposes the underlying key.
-func WithCommandMAC(fn func(domain, material []byte) ([]byte, error)) Option {
-	return func(c *config) { c.commandMAC = fn }
-}
-
 // RateLimiter sheds load per authenticated tenant (R2.3). Allow takes one unit of
 // quota for tenantID; allowed is false when the tenant is over budget, with
 // retryAfter indicating when to retry. The API depends only on this interface so
 // it does not import the PostgreSQL-backed implementation (no datastore coupling).
 type RateLimiter interface {
 	Allow(ctx context.Context, tenantID string) (allowed bool, retryAfter time.Duration, err error)
-}
-
-// WithRateLimiter wires a per-tenant rate limiter onto the guarded routes. When
-// unset, no rate limiting is applied.
-func WithRateLimiter(rl RateLimiter) Option {
-	return func(c *config) { c.rateLimiter = rl }
 }
 
 // WithPrivacyRetentionPolicy sets the policy used by the served manual privacy
@@ -647,6 +636,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		systemReadout:               cfg.systemReadout,
 		idemProtection:              cfg.idemProtection,
 		tenantKeyDomains:            cfg.tenantKeyDomains,
+		deploymentKEK:               cfg.deploymentKEK,
 		tenantCrypto:                cfg.tenantCrypto,
 		connectorRegistry:           cfg.connectorRegistry,
 		connectorGrantCensus:        cfg.connectorGrantCensus,

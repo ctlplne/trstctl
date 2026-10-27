@@ -5347,6 +5347,90 @@ export const messages = {
     defaultMessage: "No signature: this document is not billable evidence. The reason above says which ingredient is missing.",
     description: "L2: an unsigned document must not read as attested; absence of the signature is itself information.",
   },
+  "platform.deploymentKEK.heading": { defaultMessage: "Deployment key", description: "A198: deployment KEK panel heading." },
+  "platform.deploymentKEK.description": {
+    defaultMessage:
+      "The key that protects every stored credential of tenants that have not moved to their own key domain, and the deployment's sealed files. Rotating it moves every stored data key to a new generation under an operator wrapper while requests continue.",
+    description: "A198: what the deployment KEK protects and what a rotation does.",
+  },
+  "platform.deploymentKEK.loading": { defaultMessage: "Loading the deployment key\u2026", description: "A198: loading state." },
+  "platform.deploymentKEK.requestFailed": {
+    defaultMessage: "The deployment key status could not be loaded or changed.",
+    description: "A198: request error heading.",
+  },
+  "platform.deploymentKEK.requestRecovery": {
+    defaultMessage: "Check that the control plane and its database are reachable, then refresh.",
+    description: "A198: request error recovery.",
+  },
+  "platform.deploymentKEK.noticeStarted": {
+    defaultMessage: "Rotation recorded. It re-wraps every stored data key in the background; this panel refreshes until it finishes.",
+    description: "A198: notice after a rotation starts.",
+  },
+  "platform.deploymentKEK.stoppedRecovery": {
+    defaultMessage: "New data is still wrapped under the next generation. Fix the cause, then resume with the same wrapper.",
+    description: "A198: recovery for a stopped rotation.",
+  },
+  "platform.deploymentKEK.custody": { defaultMessage: "Held by", description: "A198: who holds the deployment key." },
+  "platform.deploymentKEK.custodyKeyFile": { defaultMessage: "Local key file", description: "A198: custody is the local key file (secrets.kek_file)." },
+  "platform.deploymentKEK.custodyLocalFile": {
+    defaultMessage: "Operator wrapper file",
+    description: "A198: custody is a key under an operator local wrapper file.",
+  },
+  "platform.deploymentKEK.custodyPKCS11": { defaultMessage: "HSM key in the signer", description: "A198: custody is a key under an HSM key the signer holds." },
+  "platform.deploymentKEK.wrapper": { defaultMessage: "Wrapper", description: "A198: wrapper identifier label." },
+  "platform.deploymentKEK.keyFileOnly": { defaultMessage: "secrets.kek_file", description: "A198: no wrapper; the key file itself." },
+  "platform.deploymentKEK.generation": { defaultMessage: "Generation", description: "A198: generation label." },
+  "platform.deploymentKEK.generationValue": { defaultMessage: "Generation {generation}", description: "A198: current generation." },
+  "platform.deploymentKEK.generationRotating": {
+    defaultMessage: "Generation {generation}, moving to {next}",
+    description: "A198: generation during a rotation.",
+  },
+  "platform.deploymentKEK.rotatedAt": { defaultMessage: "Last rotated", description: "A198: last completed rotation time label." },
+  "platform.deploymentKEK.neverRotated": { defaultMessage: "Never rotated", description: "A198: the deployment key has never rotated." },
+  "platform.deploymentKEK.stage": { defaultMessage: "Rotation step", description: "A198: current rotation step label." },
+  "platform.deploymentKEK.stageSettling": {
+    defaultMessage: "Waiting for in-flight requests",
+    description: "A198: the rotation waits for requests sealed under the previous generation.",
+  },
+  "platform.deploymentKEK.stageHotState": { defaultMessage: "Re-wrapping stored data keys", description: "A198: re-wrapping stored data keys." },
+  "platform.deploymentKEK.stageHistory": { defaultMessage: "Re-wrapping event history", description: "A198: re-wrapping event history." },
+  "platform.deploymentKEK.stageFiles": { defaultMessage: "Re-wrapping sealed files", description: "A198: re-wrapping deployment sealed files." },
+  "platform.deploymentKEK.stageVerify": { defaultMessage: "Reading every data key back", description: "A198: the verify pass." },
+  "platform.deploymentKEK.stageCompleted": { defaultMessage: "Completed", description: "A198: the rotation completed." },
+  "platform.deploymentKEK.stateRotating": { defaultMessage: "Rotating", description: "A198: badge while a rotation runs." },
+  "platform.deploymentKEK.stateStopped": { defaultMessage: "Rotation stopped", description: "A198: badge for a stopped rotation." },
+  "platform.deploymentKEK.tenants": { defaultMessage: "Tenants", description: "A198: tenants progress label." },
+  "platform.deploymentKEK.tenantsValue": { defaultMessage: "{done} of {total}", description: "A198: tenants done of total." },
+  "platform.deploymentKEK.rewrapped": { defaultMessage: "Re-wrapped", description: "A198: re-wrap evidence label." },
+  "platform.deploymentKEK.rewrappedValue": {
+    defaultMessage: "{stored} stored, {history} history records, {files} files",
+    description: "A198: re-wrap counts.",
+  },
+  "platform.deploymentKEK.verified": { defaultMessage: "Read back", description: "A198: verify evidence label." },
+  "platform.deploymentKEK.verifiedValue": { defaultMessage: "{count} data keys, {at}", description: "A198: data keys read back by the verify pass, and when." },
+  "platform.deploymentKEK.notVerified": { defaultMessage: "Not yet", description: "A198: the verify pass has not completed." },
+  "platform.deploymentKEK.rotateHeading": { defaultMessage: "Rotate the deployment key", description: "A198: rotate form heading." },
+  "platform.deploymentKEK.resumeHeading": { defaultMessage: "Resume the rotation", description: "A198: resume form heading." },
+  "platform.deploymentKEK.rotateHelp": {
+    defaultMessage:
+      "The new generation is created under the wrapper you name; the previous one is retired once every stored data key has moved and been read back.",
+    description: "A198: rotate form help.",
+  },
+  "platform.deploymentKEK.wrapperHelp": {
+    defaultMessage: "A wrapper configured for this deployment: a local wrapper file, or an HSM key the signer holds.",
+    description: "A198: wrapper field help.",
+  },
+  "platform.deploymentKEK.rotate": { defaultMessage: "Rotate", description: "A198: rotate button." },
+  "platform.deploymentKEK.resume": { defaultMessage: "Resume", description: "A198: resume button." },
+  "platform.deploymentKEK.authorityNotConfigured": {
+    defaultMessage: "No tenant can rotate the deployment key until secrets.kek_operator_tenant_id names one.",
+    description: "A198: no operator tenant is configured.",
+  },
+  "platform.deploymentKEK.authorityOther": {
+    defaultMessage: "Only the deployment's operator tenant can rotate this key.",
+    description: "A198: the caller is not the operator tenant.",
+  },
+  "platform.deploymentKEK.refresh": { defaultMessage: "Refresh", description: "A198: refresh button." },
   "platform.tenantSeal.heading": { defaultMessage: "Tenant cryptographic custody", description: "Tenant key-domain lifecycle panel heading." },
   "platform.tenantSeal.description": {
     defaultMessage:

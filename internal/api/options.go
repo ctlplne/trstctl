@@ -203,6 +203,19 @@ func WithTenantKeyDomainLifecycle(service TenantKeyDomainLifecycle) Option {
 	return func(c *config) { c.tenantKeyDomains = service }
 }
 
+// WithCommandMAC wires the deployment-wide, crypto-boundary keyed digest used
+// to bind an effect-free review to one authenticated command. It is independent
+// of the optional native secret store and never exposes the underlying key.
+func WithCommandMAC(fn func(domain, material []byte) ([]byte, error)) Option {
+	return func(c *config) { c.commandMAC = fn }
+}
+
+// WithRateLimiter wires a per-tenant rate limiter onto the guarded routes. When
+// unset, no rate limiting is applied.
+func WithRateLimiter(rl RateLimiter) Option {
+	return func(c *config) { c.rateLimiter = rl }
+}
+
 // WithConnectorRegistry wires the native connector registry so the catalog can
 // report each connector's live sandbox grant and replay contract (B-6) instead
 // of a description that could drift from what the process enforces.

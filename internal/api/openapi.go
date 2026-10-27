@@ -3807,6 +3807,36 @@ func componentSchemas() map[string]*Schema {
 		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}, Description: "Omit with wrapper_id to keep the current wrapper."},
 		"wrapper_id":   str(),
 	})
+	deploymentKEKRotateRequest := object(map[string]*Schema{
+		"wrapper_kind": {Type: "string", Enum: []string{"local_file", "pkcs11"}},
+		"wrapper_id":   str(),
+	}, "wrapper_kind", "wrapper_id")
+	deploymentKEKRotation := object(map[string]*Schema{
+		"operation_id": str(), "status": {Type: "string", Enum: []string{"running", "failed", "completed"}},
+		"stage":             {Type: "string", Enum: []string{"settling", "hot_state", "history", "files", "verify", "completed"}},
+		"next_generation":   {Type: "integer"},
+		"next_wrapper_kind": str(), "next_wrapper_id": str(),
+		"started_at": timestamp(), "verified_at": timestamp(),
+		"tenants_total": {Type: "integer"}, "tenants_done": {Type: "integer"},
+		"containers_rewrapped":     {Type: "integer", Description: "Stored data keys moved to the next generation."},
+		"history_events_rewrapped": {Type: "integer", Description: "Event-history records whose data keys moved to the next generation."},
+		"files_rewrapped":          {Type: "integer", Description: "Deployment-scoped sealed files moved to the next generation."},
+		"containers_verified":      {Type: "integer", Description: "Deployment KEK containers read back by the verify pass."},
+		"verify_passes":            {Type: "integer", Description: "Verify passes that found a data key still under a previous generation."},
+		"failure_code":             str(), "failure": str(),
+	}, "operation_id", "status", "stage", "tenants_total", "tenants_done", "containers_rewrapped",
+		"history_events_rewrapped", "files_rewrapped", "containers_verified", "verify_passes")
+	deploymentKEKStatus := object(map[string]*Schema{
+		"served":       {Type: "boolean"},
+		"generation":   {Type: "integer", Description: "0 is the local key file (secrets.kek_file)."},
+		"custody":      {Type: "string", Enum: []string{"key_file", "local_file", "pkcs11"}},
+		"wrapper_kind": str(), "wrapper_id": str(),
+		"previous_generation": {Type: "integer"}, "rotated_at": timestamp(),
+		"rotation":           ref("DeploymentKEKRotation"),
+		"rotation_authority": {Type: "string", Enum: []string{"operator_tenant", "another_tenant", "not_configured"}},
+		"can_rotate":         {Type: "boolean"},
+		"detail":             str(),
+	}, "served", "generation", "custody", "rotation_authority", "can_rotate", "detail")
 	tenantKeyDomainSealReceipt := object(map[string]*Schema{
 		"accepted": {Type: "boolean"}, "operation_id": uuid(),
 		"state": str(), "status_url": str(),
@@ -7768,6 +7798,9 @@ func componentSchemas() map[string]*Schema {
 		"TenantKeyDomainRotateRequest":             tenantKeyDomainRotateRequest,
 		"TenantKeyDomainSealReceipt":               tenantKeyDomainSealReceipt,
 		"TenantKeyDomainStatus":                    tenantKeyDomainStatus,
+		"DeploymentKEKRotateRequest":               deploymentKEKRotateRequest,
+		"DeploymentKEKRotation":                    deploymentKEKRotation,
+		"DeploymentKEKStatus":                      deploymentKEKStatus,
 		"SystemReadout":                            systemReadout,
 		"BulkheadPool":                             bulkheadPool,
 		"BulkheadStats":                            bulkheadStats,

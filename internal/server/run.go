@@ -698,12 +698,13 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	if err != nil {
 		return Deps{}, err
 	}
-	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, err := runTenantCustodyFromConfig(
-		cfg.Secrets, st, log, sec.kek, signer.signer, securityGuards.auditKey,
+	resultProtector, resultMigrator, tenantKeyDomains, tenantCrypto, deploymentKEK, err := runTenantCustodyFromConfig(
+		cfg, st, log, sec.kek, signer.signer, securityGuards.auditKey,
 	)
 	if err != nil {
 		return Deps{}, err
 	}
+	sec.kek = deploymentKEK.keyring
 	breakglassCACertDER, breakglassPublicKeyDER, breakglassOfflineKit, breakglassRuntime, err := runBreakglassConfig(ctx, cfg, st, log, signer)
 	if err != nil {
 		return Deps{}, err
@@ -796,7 +797,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecurityHeaders: SecurityHeaders{TLS: cfg.Server.TLS.Mode != config.TLSDisabled, AllowedOrigins: cfg.Server.CORSAllowedOrigins},
 		Protocols:       protocols, Plugins: pluginCfg,
 		OIDC: cfg.Auth.OIDC, SAML: cfg.Auth.SAML, LDAP: cfg.Auth.LDAP, Kerberos: cfg.Auth.Kerberos, NTLM: cfg.Auth.NTLM, SCIM: cfg.Auth.SCIM,
-		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek,
+		EnableSecretsAPI: vaultCompatRuntimeFromConfig(cfg), KEK: sec.kek, DeploymentKEK: deploymentKEK.rotation, DeploymentKEKOperatorTenantID: cfg.Secrets.KEKOperatorTenantID,
 		// A1/V2: without this assignment the sealed keyring never ran in production.
 		TransitKeyringDir:           cfg.Transit.KeyringDir,
 		TenantCrypto:                tenantCrypto,
@@ -914,42 +915,59 @@ func runNotifications(cfg config.Notifications, guard *egress.Guard) ([]notify.N
 // share the exact registry and access resolver; constructing either through a
 // parallel path would make a sealed tenant readable through the other.
 func runTenantCustodyFromConfig(
-	cfg config.Secrets,
+	cfg *config.Config,
 	st *store.Store,
 	log *events.Log,
 	deployment sealKeyWrapper,
 	signer SignerProvider,
 	auditKey *jose.SigningKey,
-) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.Lifecycle, tenantseal.Access, error) {
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, *tenantseal.Lifecycle, tenantseal.Access, runDeploymentKEK, error) {
 	if st == nil {
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, runDeploymentKEK{keyring: deployment}, nil
 	}
-	protector, migrator, registry, access, err := idempotencyResultProtectionFromConfig(cfg, st, deployment, signer)
+	protector, migrator, registry, access, keyring, err := idempotencyResultProtectionFromConfig(cfg.Secrets, st, deployment, signer)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("tenant result protection: %w", err)
+		return nil, nil, nil, nil, runDeploymentKEK{}, fmt.Errorf("tenant result protection: %w", err)
 	}
+	out := runDeploymentKEK{keyring: keyring}
 	if log == nil {
-		return protector, migrator, nil, access, nil
+		return protector, migrator, nil, access, out, nil
 	}
 	lifecycle, err := tenantseal.NewLifecycle(
-		st, log, deployment, registry,
+		st, log, keyring, registry,
 		historyRewriteProofOptions(st, auditKey)...,
 	)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("tenant key-domain lifecycle: %w", err)
+		return nil, nil, nil, nil, runDeploymentKEK{}, fmt.Errorf("tenant key-domain lifecycle: %w", err)
 	}
-	return protector, migrator, lifecycle, access, nil
+	// A198: the deployment KEK's served rotation runs over the same registry.
+	if ring, ok := keyring.(*tenantseal.DeploymentKeyring); ok {
+		settle, err := cfg.Secrets.KEKRotationSettleDuration()
+		if err != nil {
+			return nil, nil, nil, nil, runDeploymentKEK{}, err
+		}
+		out.rotation, err = tenantseal.NewDeploymentRotation(st, log, ring, registry,
+			tenantseal.WithDeploymentSettle(settle),
+			tenantseal.WithDeploymentSealedFiles(deploymentSealedFiles(cfg)...),
+			tenantseal.WithDeploymentHistoryRewriteOptions(historyRewriteProofOptions(st, auditKey)...))
+		if err != nil {
+			return nil, nil, nil, nil, runDeploymentKEK{}, fmt.Errorf("deployment KEK rotation: %w", err)
+		}
+	}
+	return protector, migrator, lifecycle, access, out, nil
 }
 
 // idempotencyResultProtectionFromConfig builds the one wrapper registry every
 // tenant-crypto path shares: local_file wrappers from operator files, and
-// pkcs11 wrappers held by the isolated signer under HSM keys (A123).
+// pkcs11 wrappers held by the isolated signer under HSM keys (A123). The
+// deployment key file becomes the deployment KEK keyring over that registry
+// (A198), which it returns for every other path to use.
 func idempotencyResultProtectionFromConfig(
 	cfg config.Secrets,
 	st *store.Store,
 	deployment sealKeyWrapper,
 	signer SignerProvider,
-) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, tenantseal.DomainKEKManager, tenantseal.Access, error) {
+) (*tenantseal.ResultProtector, *tenantseal.ResultMigrator, tenantseal.DomainKEKManager, tenantseal.Access, sealKeyWrapper, error) {
 	wrappers := make([]tenantseal.LocalWrapper, 0, len(cfg.TenantSealLocalWrappers))
 	for _, wrapper := range cfg.TenantSealLocalWrappers {
 		wrappers = append(wrappers, tenantseal.LocalWrapper{
@@ -958,28 +976,31 @@ func idempotencyResultProtectionFromConfig(
 	}
 	local, err := tenantseal.NewLocalWrapperRegistry(wrappers)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	hsm, err := pkcs11WrapperRegistryFromConfig(cfg.TenantSealPKCS11Wrappers, signer)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	registry := tenantseal.NewRoutedWrapperRegistry(local, hsm)
+	if deployment, err = deploymentKeyringFromFile(deployment, st, registry); err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
 	access, err := tenantseal.NewAccess(st, deployment, registry)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	protector, err := tenantseal.NewResultProtector(access)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	migrator, err := tenantseal.NewResultMigrator(
 		st, protector, 0, cfg.IdempotencyResultFleetReady,
 	)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	return protector, migrator, registry, access, nil
+	return protector, migrator, registry, access, deployment, nil
 }
 
 func loadRunAuditSigningKey(
@@ -1490,6 +1511,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			// Owner decision 2026-10-24: decide, once, the control-plane key
 			// generation switch of every tenant that predates it.
 			startRuntimeWorker(workCtx, srv.RunControlPlaneKeygenUpgrade),
+			// A198: a recorded deployment KEK rotation advances on the leader.
+			startRuntimeWorker(workCtx, srv.RunDeploymentKEKRotation),
 			startRuntimeWorker(workCtx, srv.RunDiscoveryScheduler),
 			// I2: the tenant CMDB reconcile ticker. Without this line a configured
 			// schedule would sit in the table and never fire, and the epic's

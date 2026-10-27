@@ -3350,6 +3350,45 @@ export interface DeploymentEntitlementInfo {
   registered_non_production_deployments: number;
 }
 
+export interface DeploymentKEKRotateRequest {
+  wrapper_id: string;
+  wrapper_kind: "local_file" | "pkcs11";
+}
+
+export interface DeploymentKEKRotation {
+  containers_rewrapped: number;
+  containers_verified: number;
+  failure?: string;
+  failure_code?: string;
+  files_rewrapped: number;
+  history_events_rewrapped: number;
+  next_generation?: number;
+  next_wrapper_id?: string;
+  next_wrapper_kind?: string;
+  operation_id: string;
+  stage: "settling" | "hot_state" | "history" | "files" | "verify" | "completed";
+  started_at?: string;
+  status: "running" | "failed" | "completed";
+  tenants_done: number;
+  tenants_total: number;
+  verified_at?: string;
+  verify_passes: number;
+}
+
+export interface DeploymentKEKStatus {
+  can_rotate: boolean;
+  custody: "key_file" | "local_file" | "pkcs11";
+  detail: string;
+  generation: number;
+  previous_generation?: number;
+  rotated_at?: string;
+  rotation?: DeploymentKEKRotation;
+  rotation_authority: "operator_tenant" | "another_tenant" | "not_configured";
+  served: boolean;
+  wrapper_id?: string;
+  wrapper_kind?: string;
+}
+
 export interface DeploymentTarget {
   config: Record<string, unknown>;
   connector: string;

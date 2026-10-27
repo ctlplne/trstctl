@@ -2,6 +2,16 @@
 
 ### Added
 
+- Deployment KEK rotation: the operator tenant (`secrets.kek_operator_tenant_id`)
+  rotates the deployment KEK, the key behind every credential of a tenant without
+  its own key domain, from the local key file onto a key under an operator wrapper
+  file or an HSM key the isolated signer holds (console deployment key panel,
+  `trstctl-cli platform deployment-kek`, `/api/v1/platform/deployment-kek`). New
+  data is wrapped under the new generation at once; the leader re-wraps every
+  stored data key, unmigrated tenants' history and the deployment's sealed files
+  while requests are served, reads them all back, then retires the previous
+  generation. Under an HSM key, stored credentials decrypt only through the
+  signer.
 - KMIP client registrations: with `protocols.kmip.client_registrations`, one KMIP
   listener serves every tenant's own clients. A tenant registers a client (Transit
   page, `trstctl-cli kmip clients`, `/api/v1/kmip/clients`) and gets a one-time

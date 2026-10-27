@@ -567,6 +567,11 @@ type Deps struct {
 	// lifecycle. Production Run wires it from the same wrapper registry and
 	// result-protection resolver used by every cached mutation response.
 	TenantKeyDomains api.TenantKeyDomainLifecycle
+	// DeploymentKEK is the deployment KEK's served rotation (A198): nil in a
+	// composition without a database and event log. Only principals of
+	// DeploymentKEKOperatorTenantID (secrets.kek_operator_tenant_id) may rotate.
+	DeploymentKEK                 *tenantseal.DeploymentRotation
+	DeploymentKEKOperatorTenantID string
 	// SecretsAuthSecret is the HMAC key the served machine-login token method
 	// (authmethod.TokenMethod) verifies a workload token against (F58). It is []byte and
 	// never logged (AN-8). When empty, the login route reports the method is not
@@ -738,6 +743,11 @@ type Server struct {
 	// kek is the deployment key wrapper the tenant secret store seals under; the
 	// ACME mount reads rotated EAB MAC keys through it (A54).
 	kek sealKeyWrapper
+	// deploymentKEK drives a recorded deployment KEK rotation (A198); the wake
+	// channel lets a rotation request start it at once.
+	deploymentKEK         *tenantseal.DeploymentRotation
+	deploymentKEKWake     chan struct{}
+	deploymentKEKWakeOnce sync.Once
 
 	signer SignerProvider
 	// signerTopology is explicit because both child and external runtimes expose
@@ -1102,7 +1112,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		cloudTokenMinter:          d.CloudTokenMinter,
 		tenantCrypto:              d.TenantCrypto,
 		kek:                       d.KEK,
-		restoreDrillSigner:        d.AuditSigningKey,
+		restoreDrillSigner:        d.AuditSigningKey, deploymentKEK: d.DeploymentKEK,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",
@@ -1757,6 +1767,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithLifecycleAutomationPlan(s),
 		api.WithValidityReadiness(s),
 		api.WithTenantKeyDomainLifecycle(d.TenantKeyDomains),
+		api.WithDeploymentKEK(s.deploymentKEKAPI(d)),
 		api.WithTenantCrypto(d.TenantCrypto),
 		api.WithOwnershipAttestationCadence(d.OwnershipAttestationCadence),
 		api.WithAPITokenMaxLifetime(apiTokenMaxLifetime(d)),

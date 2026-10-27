@@ -4644,6 +4644,57 @@ DeploymentEntitlementInfo = TypedDict(
     total=False,
 )
 
+DeploymentKEKRotateRequest = TypedDict(
+    'DeploymentKEKRotateRequest',
+    {
+        'wrapper_id': str,
+        'wrapper_kind': str,
+    },
+    total=False,
+)
+
+DeploymentKEKRotation = TypedDict(
+    'DeploymentKEKRotation',
+    {
+        'containers_rewrapped': int,
+        'containers_verified': int,
+        'failure': str,
+        'failure_code': str,
+        'files_rewrapped': int,
+        'history_events_rewrapped': int,
+        'next_generation': int,
+        'next_wrapper_id': str,
+        'next_wrapper_kind': str,
+        'operation_id': str,
+        'stage': str,
+        'started_at': str,
+        'status': str,
+        'tenants_done': int,
+        'tenants_total': int,
+        'verified_at': str,
+        'verify_passes': int,
+    },
+    total=False,
+)
+
+DeploymentKEKStatus = TypedDict(
+    'DeploymentKEKStatus',
+    {
+        'can_rotate': bool,
+        'custody': str,
+        'detail': str,
+        'generation': int,
+        'previous_generation': int,
+        'rotated_at': str,
+        'rotation': dict[str, Any],
+        'rotation_authority': str,
+        'served': bool,
+        'wrapper_id': str,
+        'wrapper_kind': str,
+    },
+    total=False,
+)
+
 DeploymentTarget = TypedDict(
     'DeploymentTarget',
     {

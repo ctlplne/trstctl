@@ -575,6 +575,10 @@ var systemTables = []string{
 	// events (SPINE-003). The event sequence is global, so the cursor is system
 	// state rather than tenant data.
 	"outbox_reconciliation_checkpoint",
+	// deployment_kek_domain is the deployment KEK's single generation record
+	// (A198): one deployment-wide row that every tenant's key-domain fence
+	// reads, so it is system state, not tenant data.
+	"deployment_kek_domain",
 }
 
 // referencesSystemTable reports whether a query targets a known system table.

@@ -1305,6 +1305,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// A125: sealed transit keyrings. No foreign keys; they restore beside
 		// the other sealed tenant state.
 		"transit_keyrings",
+		// A198: the deployment KEK's wrapped generations. No foreign keys; the
+		// sealed state above opens only once this row is back.
+		"deployment_kek_domain",
 		// L2: provider billing meters. No foreign keys, so placement is free —
 		// but they restore LAST on purpose: they are the provider's record of
 		// what to invoice, and if a restore fails partway the absence of these

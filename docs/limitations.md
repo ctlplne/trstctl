@@ -5566,7 +5566,9 @@ and target-CA cross-signing are production-assembled when the online
 block is configured. Approvals come from authenticated immutable ceremony
 events, not caller-supplied names. Break-glass bundle reconciliation
 remains served at `POST /api/v1/breakglass/reconcile`. The credential-store
-key-encryption key is a local file by default. See the
+key-encryption key is a local file by default; a served rotation moves it to a
+key under an operator wrapper file or an HSM key the signer holds (see the
+deployment KEK passage below). See the
 [key-ceremony runbook](runbooks/key-ceremony.md),
 [incident response](runbooks/incident-response.md), and
 [disaster recovery](disaster-recovery.md).
@@ -5693,7 +5695,22 @@ and the tenant's event history), and a reversible revoke as seal and unseal.
 Rotation re-wraps data keys, not payloads, so backups, archives, and exports
 taken before it still open with the previous generation. Destroying a tenant's
 key (crypto-shred) and importing an operator-supplied tenant KEK are what comes
-next. Break-glass
+next. The deployment KEK, which protects every tenant that has not migrated and
+the deployment's sealed files, rotates too (`POST
+/api/v1/platform/deployment-kek/rotate`, only by the tenant
+`secrets.kek_operator_tenant_id` names): a new generation under a local wrapper
+file or a signer-held HSM key, from which every new data key is wrapped, then a
+leader re-wraps every stored data key (each tenant's stored ciphertext, the
+history of every tenant that has not migrated, and the sealed files) in bounded
+steps while requests are served, and a verify pass reads them all back before
+the previous generation is retired. The history pass copies the event stream
+once per tenant it re-wraps, so a deployment with many unmigrated tenants and a
+long history takes correspondingly long; it inherits the tenant rotation's
+refusal of a certificate-dependent history record, which stops the rotation for
+an explicit migration. The key file remains the evidence-MAC and backup-HMAC
+key and the signer key store's default seal. Wrapping the deployment KEK under
+a cloud KMS key arrives with the signer's KMS wrap adapter; today the wrappers
+are a local file or a PKCS#11 HSM key (proven against SoftHSM). Break-glass
 issue/rotation/cross-sign and offline-root public re-key/cross-sign import
 have served, ceremony-gated verbs; reconciliation remains served at
 `POST /api/v1/breakglass/reconcile`. The signer's at-rest CA key is still

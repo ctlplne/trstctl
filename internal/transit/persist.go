@@ -84,7 +84,11 @@ func NewStore(dir string, wrapper seal.KeyWrapper) *Store {
 	return &Store{dir: dir, wrapper: wrapper}
 }
 
-func (s *Store) path() string { return filepath.Join(s.dir, transitStateFile) }
+func (s *Store) path() string { return CheckpointPath(s.dir) }
+
+// CheckpointPath is the sealed keyring checkpoint a keyring directory holds;
+// a deployment KEK rotation re-wraps it in place (A198).
+func CheckpointPath(dir string) string { return filepath.Join(dir, transitStateFile) }
 
 // HasState reports whether a sealed keyring checkpoint exists. Callers use it
 // only during startup to distinguish a first boot from a successful restore;

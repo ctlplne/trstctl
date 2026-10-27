@@ -361,9 +361,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A195's `ca authorities evaluate-leaf` raised it to 620, mapped onto the
 	// CA hierarchy row.
 	// A197's `kmip clients list|register|enroll|remove` raised it to 624,
-	// mapped onto the Transit/KMIP row.
-	if len(out) != 624 {
-		t.Fatalf("CLI commands = %d, want 624", len(out))
+	// mapped onto the Transit/KMIP row; A198's `platform deployment-kek
+	// status|rotate` to 626, on the platform custody row.
+	if len(out) != 626 {
+		t.Fatalf("CLI commands = %d, want 626", len(out))
 	}
 	return out
 }

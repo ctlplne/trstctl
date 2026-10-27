@@ -63,6 +63,16 @@ readable until the switch). Rotation re-wraps DEKs, not payloads, so backups,
 archives, and exports taken before it still open with the previous generation
 through its wrapper. See [configuration](../configuration.md#rotating-a-tenant-domain-key).
 
+The deployment KEK itself rotates as well. The operator tenant
+(`secrets.kek_operator_tenant_id`) moves it from the local key file to a key under
+an operator wrapper file or an HSM key the signer holds, from the console's
+deployment key panel or with `trstctl-cli platform deployment-kek rotate`. New
+data is wrapped under the new generation at once; a background pass re-wraps every
+stored data key, the history of tenants that have not moved to their own domain,
+and the deployment's sealed files, then reads them all back before the previous
+generation is retired. Credentials stay readable throughout, and afterwards only
+through the wrapper. See [configuration](../configuration.md#rotating-the-deployment-kek).
+
 ### The native secret store (F63)
 
 A served, tenant-isolated key-value store for application secrets: `POST

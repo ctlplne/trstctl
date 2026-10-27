@@ -89,7 +89,7 @@ func newStore(t *testing.T) *store.Store {
 		          application_secret_tenant_epochs, application_secret_mutation_receipts,
 		          privacy_subject_erasures, privacy_subject_erasure_preparations, privacy_subject_erasure_operations,
 		          secret_sync_jobs, dynamic_secret_operations, dynamic_secret_leases,
-		          secret_rotation_schedule_ticks, tenants, tenant_key_domains, idempotency_keys, outbox, rate_limits,
+		          secret_rotation_schedule_ticks, tenants, tenant_key_domains, deployment_kek_domain, idempotency_keys, outbox, rate_limits,
 		          enrollment_diagnostic_observations, enrollment_diagnostics, migration_runs,
 		          audit_feed_deliveries, audit_feed_destinations,
 		          owners, issuers, identities, identity_transitions, deployment_targets,
