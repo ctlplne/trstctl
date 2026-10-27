@@ -556,6 +556,46 @@ with non-secret NHI/resource/entitlement items, then records each item decision 
 under [Reference](#reference). The request body accepts identifiers and evidence refs
 only; inline secrets and credential values are rejected.
 
+### Credential assurance records (A179)
+
+`GET /api/v1/certificates/{id}/assurance-record` (`certs:read`; CLI `trstctl
+certificates assurance-record <id>`) returns one certificate's lifecycle as a single
+signed record (format `trstctl.credential-assurance-record/v1`). It joins every
+stage with its evidence ID:
+
+- **discovery**: each discovery finding of the certificate's fingerprint (source,
+  location, time), or the inventory's last observation when no finding remains;
+- **owner** and **issuance**: the issuing CA, the issuance event (or the
+  transition that decided a lifecycle issuance or renewal), the profile revision
+  and approval that command carried, and the key origin;
+- **deployments**: every connector delivery receipt for the certificate;
+- **verifications**: verification receipts — marked `signed_observation` when the
+  agent or relay that reported them signed a job receipt the server verified — and
+  the latest endpoint observation per listener and vantage (local or relay): the
+  served fingerprint, which comparisons ran, any mismatch, and the signed
+  transcript digest;
+- **renewals**: the run that produced it or replaced it, and the certificates on
+  either side; **revocation**; and the tenant **audit** entries that name it, with
+  their chain hashes.
+
+Each stage is classified: `independently_observed` when evidence came from outside
+trstctl's own record (a discovery scan, an endpoint seen serving this certificate),
+`recorded_only` when only trstctl's record of its own action stands behind it, and
+`absent` when there is none. A delivery counts as observed only when an endpoint was
+then seen serving the certificate.
+
+The response carries the record, a compact JWS over its exact bytes (artifact domain
+`trstctl.audit-evidence/credential-assurance-record/v1`, signed by the isolated
+signer's `audit-export` key), its SHA-256, the signer's public JWK set, and a
+Markdown rendering. `trstctl certificates verify-assurance-record --record <file>
+--audit-jwks <pinned file>` checks a saved record offline: the signature and its
+domain against a JWK set you pinned separately (the file's own copy is never
+trusted), and that the record beside the signature is exactly the signed one; a
+changed value fails. Compliance evidence packs carry the records of the
+certificates whose lifecycle changed inside the pack's window (up to 50, newest
+first; `credential_assurance_truncated` says when there were more), under the pack's
+own signature.
+
 ### Privacy and data-subject controls (F79)
 
 Privacy controls are first-class governance surfaces, not hidden compliance helpers.
@@ -741,6 +781,11 @@ auth:
   configured controls. External auditors decide whether your whole program meets
   a framework — see also [Audit & compliance](../compliance.md).
 - Notifications are at-least-once, so design channel handlers to tolerate a duplicate.
+- An assurance record states what trstctl holds about a certificate; it does not
+  observe anything new. A certificate no scan found and no endpoint was seen serving
+  has no independently observed stage, and a scheduler renewal that bound no profile
+  says so instead of naming one. See
+  [Current limitations](../limitations.md#credential-assurance-records).
 
 ## Reference
 

@@ -1662,7 +1662,7 @@ func (s *Server) appendAuditAPIOptions(d Deps, options *[]api.Option) *audit.Ser
 	}
 	auditSvc := audit.NewService(d.Log, d.AuditSigningKey, audit.WithCheckpoints(d.Store), audit.WithPrivacyErasures(d.Store))
 	s.audit = auditSvc
-	*options = append(*options, api.WithAudit(auditSvc))
+	*options = append(*options, api.WithAudit(auditSvc), api.WithAssurance(s.assuranceAssembler(d.Store, auditSvc)))
 	anchorInterval, anchorOff := auditAnchorCadence(d)
 	var anchoring editionseam.AuditAnchorWorker
 	if d.AuditComplianceFactory != nil {

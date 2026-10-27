@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1773 annotated sites across 27 rules. Each row is
+1776 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -474,7 +474,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (271 sites)
+### G115 — CWE-190 Integer overflow or wraparound (272 sites)
 
 | Location | Reason |
 |---|---|
@@ -625,6 +625,7 @@ not this file.
 | `internal/store/acme_upstream_ari.go:361` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
 | `internal/store/acme_upstream_ari.go:388` | DB CHECK keeps event_sequence positive (CWE-190) |
 | `internal/store/application_secret_approval_test.go:49` | the binding validator proved this fixture version is positive (CWE-190). |
+| `internal/store/assurance_evidence.go:242` | non-negative by construction (CWE-190) |
 | `internal/store/audit_anchor.go:47` | tenant-local audit ordinal fits a Postgres bigint (CWE-190) |
 | `internal/store/audit_anchor.go:49` | event-log sequence fits a Postgres bigint (CWE-190) |
 | `internal/store/audit_anchor.go:96` | the table CHECKs keep both positive (CWE-190) |
@@ -1163,7 +1164,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (510 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (512 sites)
 
 | Location | Reason |
 |---|---|
@@ -1377,6 +1378,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:79` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
+| `internal/cli/assurance_verify.go:41` | operator-named local file (CWE-22) |
+| `internal/cli/assurance_verify.go:46` | operator-named local file (CWE-22) |
 | `internal/cli/audit_verify.go:203` | path is the explicit read-only local artifact selected by this CLI command (CWE-22). |
 | `internal/cli/ca_key_wrap.go:66` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap.go:85` | operator-named local file (CWE-22) |
@@ -1385,8 +1388,8 @@ not this file.
 | `internal/cli/certificate_key_attestation.go:71` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:81` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:87` | operator-named local file (CWE-22) |
-| `internal/cli/cli.go:212` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `internal/cli/cli.go:570` | operator-passed local file argument on their own command line (CWE-22) |
+| `internal/cli/cli.go:219` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `internal/cli/cli.go:577` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:2158` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
@@ -1843,7 +1846,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
 | `internal/agent/k8s/informer.go:208` | reconnect jitter, not a security decision (CWE-338) |
-| `internal/cli/cli.go:578` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
+| `internal/cli/cli.go:585` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/sshkeys/property_test.go:100` | deterministic property-test stream, not security randomness (CWE-338) |

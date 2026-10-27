@@ -6,12 +6,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/assurance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/config"
@@ -128,6 +130,15 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 			}
 			return g, nil
 		},
+		// A179: the pack carries the window's credential assurance records,
+		// asked for under the requesting tenant and the pack's own window.
+		assuranceRecords: func(_ context.Context, tenantID string, from, until time.Time) ([]assurance.Record, bool, error) {
+			if !until.Equal(through) || !from.Equal(through.Add(-DefaultEvidenceWindow)) {
+				return nil, false, errors.New("assurance records asked for another window")
+			}
+			return []assurance.Record{assurance.Build(assurance.Inputs{TenantID: tenantID, Now: through,
+				Evidence: store.CredentialEvidence{Certificate: store.Certificate{ID: "cert-" + tenantID, Fingerprint: "fp-" + tenantID, Status: "active"}}})}, tenantID == servedTenantB, nil
+		},
 	}
 
 	handler := api.New(nil, nil, nil,
@@ -161,6 +172,10 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 		mustHaveControl(t, reportA.Controls, id, "gap")
 	}
 	assertReportExcludesEventIDs(t, reportA, bPolicyID, bLifecycleID, bMonitoringID)
+	if len(reportA.CredentialAssurance) != 1 || reportA.CredentialAssurance[0].Credential.CertificateID != "cert-"+servedTenantA ||
+		reportA.CredentialAssurance[0].TenantID != servedTenantA || reportA.CredentialAssuranceTruncated {
+		t.Fatalf("tenant A signed assurance records = %+v (truncated %v)", reportA.CredentialAssurance, reportA.CredentialAssuranceTruncated)
+	}
 	assertReportIncludesEventID(t, reportA, unrelatedID, false)
 	if len(reportA.ADCS.Observations) != 1 || reportA.ADCS.Observations[0].Domain != "CORP-A" ||
 		reportA.ADCS.Observations[0].Reference.EventID != adcsAID ||
@@ -178,6 +193,9 @@ func TestEvidencePackServedTenantScopedExactClaimsAUD76(t *testing.T) {
 	_, reportB := serveEvidencePack(t, handler, signer, servedTenantB, servedTenantA)
 	if reportB.TenantID != servedTenantB {
 		t.Fatalf("tenant B signed manifest tenant = %q", reportB.TenantID)
+	}
+	if len(reportB.CredentialAssurance) != 1 || reportB.CredentialAssurance[0].Credential.CertificateID != "cert-"+servedTenantB || !reportB.CredentialAssuranceTruncated {
+		t.Fatalf("tenant B signed assurance records = %+v (truncated %v)", reportB.CredentialAssurance, reportB.CredentialAssuranceTruncated)
 	}
 	if reportB.Custody.Total != 1 || reportB.Custody.Recorded != 1 || reportB.Custody.Unrecorded != 0 {
 		t.Fatalf("tenant B custody evidence = %+v", reportB.Custody)

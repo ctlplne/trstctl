@@ -6111,6 +6111,29 @@ it does not see:
   first and says when there are more; ephemeral certificates, issued per use and
   never renewed, are left out as the expiry views leave them out.
 
+## Credential assurance records
+
+`GET /api/v1/certificates/{id}/assurance-record` signs what trstctl already holds about
+one certificate; it collects nothing new. Read it with these limits:
+
+- **Independent observation is what scans and endpoint checks saw.** Discovery
+  findings and endpoint observations (local or relay) are independent of trstctl's
+  record of its own actions; a connector's delivery receipt is not, so a delivery
+  counts as observed only when an endpoint was then seen serving the certificate. An
+  external observer reporting what it saw at an endpoint is what comes next (A180).
+- **Endpoint observations are the latest per listener and vantage.** Earlier
+  observations of the same listener are not retained, so the record cites the
+  newest one; the verification receipts carry the history of each delivery's check.
+- **A profile appears only when the issuing command bound one.** Scheduler renewals
+  that bound no profile, imported and discovered certificates, and history older
+  than reviewed profile bindings have no profile entry, and the rendering says so.
+- **Bounded.** Each evidence list holds up to 200 entries and the audit references up
+  to 100 (`truncated` names any list that hit its bound); an evidence pack carries
+  up to 50 records, those whose lifecycle changed in its window.
+- **Verify against keys you pinned.** The response's `public_jwks` is a convenience;
+  `trstctl certificates verify-assurance-record` requires a JWK set you obtained
+  separately and never trusts the file's own copy.
+
 ## Endpoint verification
 
 Every other record in this product reports what trstctl DID. An outbox row

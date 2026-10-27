@@ -98,7 +98,8 @@
                 "listCertificates",
                 "getCertificateHealth",
                 "getCertificate",
-                "getCertificateKeyAttestation"
+                "getCertificateKeyAttestation",
+                "getCertificateAssuranceRecord"
             ],
             "api_na": "",
             "cli_surface": [
@@ -107,7 +108,9 @@
                 "certificates health",
                 "certificates get",
                 "certificates key-attestation",
-                "certificates verify-key-attestation"
+                "certificates verify-key-attestation",
+                "certificates assurance-record",
+                "certificates verify-assurance-record"
             ],
             "cli_na": "",
             "facet_evidence": {

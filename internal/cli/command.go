@@ -262,6 +262,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"certificates", "get"}, Method: "GET", Path: "/api/v1/certificates/{id}", Summary: "Get an inventoried certificate"},
 	{Name: []string{"certificates", "key-attestation"}, Method: "GET", Path: "/api/v1/certificates/{id}/key-attestation", Summary: "Print a certificate's device-bound custody evidence for offline re-verification"},
 	{Name: []string{"certificates", "verify-key-attestation"}, Summary: "Re-check a certificate's device-bound custody claim on this machine against TPM roots you choose"},
+	{Name: []string{"certificates", "assurance-record"}, Method: "GET", Path: "/api/v1/certificates/{id}/assurance-record", Summary: "Get a certificate's signed lifecycle assurance record: every stage with its evidence, and which stages were independently observed"},
+	{Name: []string{"certificates", "verify-assurance-record"}, Summary: "Verify a saved assurance record offline against an audit JWK set you pinned"},
 	{Name: []string{"certificates", "inventory-pki-secret"}, Method: "POST", Path: "/api/v1/certificates/pki-secret-recoveries", Body: bodyFile, ContentType: "application/x-pem-file", ExampleFile: "leaf.pem", Summary: "Give a historical PKI-secret leaf its inventory row from its public certificate"},
 	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Revoke exact certificates or explicitly selected lifecycle identities"},
 

@@ -305,6 +305,9 @@ const (
 	ArtifactRestoreDrill       = "trstctl.audit-evidence/restore-drill/v1"
 	// ArtifactAuditAnchorLog signs a tenant's audit anchor log tree head.
 	ArtifactAuditAnchorLog = "trstctl.audit-evidence/audit-anchor-log/v1"
+	// ArtifactAssuranceRecord signs one credential's lifecycle assurance
+	// record.
+	ArtifactAssuranceRecord = "trstctl.audit-evidence/credential-assurance-record/v1"
 )
 
 // GenerateRSASigningKey generates a 2048-bit RSA signing key tagged with kid.

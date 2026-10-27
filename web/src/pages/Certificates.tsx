@@ -45,7 +45,7 @@ import {
   certificateIdentityPath,
 } from "@/lib/certificatePresentation";
 import type { MessageKey } from "@/i18n/messages";
-import { ReadinessPanel, ValidityReadinessPanel, DeploymentReceipts, RenewalHistory } from "@/components/certs";
+import { ReadinessPanel, ValidityReadinessPanel, DeploymentReceipts, RenewalHistory, AssuranceRecordPanel } from "@/components/certs";
 import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
 import { revocationReasons } from "@/lib/revocation";
@@ -1671,6 +1671,12 @@ function CertificateWorkspace() {
                 <dt className="sr-only">{t("certificateCockpit.detail.activity")}</dt>
                 <dd>
                   <CertificateActivityEvidence key={detail.id} certificate={detail} />
+                </dd>
+              </div>
+              <div className="md:col-span-2">
+                <dt className="font-medium text-muted-foreground">{t("certificates.assurance.heading")}</dt>
+                <dd>
+                  <AssuranceRecordPanel key={detail.id} certificateId={detail.id} />
                 </dd>
               </div>
             </dl>

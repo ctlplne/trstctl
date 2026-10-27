@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/assurance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/compliance"
 	"trstctl.com/trstctl/internal/crypto"
@@ -77,6 +78,11 @@ type Report struct {
 	FIPSProfile      *compliance.FIPSRegulatedDeploymentProfile `json:"fips_regulated_deployment_profile,omitempty"`
 	ADCS             api.ADCSComplianceEvidence                 `json:"adcs"`
 	CryptoReadiness  cryptoreadiness.Dataset                    `json:"crypto_readiness"`
+	// CredentialAssurance carries the lifecycle assurance records (A179) of the
+	// certificates whose lifecycle changed inside the evidence window, newest
+	// first and bounded; the pack's signature covers them.
+	CredentialAssurance          []assurance.Record `json:"credential_assurance"`
+	CredentialAssuranceTruncated bool               `json:"credential_assurance_truncated"`
 }
 
 // Reporter generates and signs reports.

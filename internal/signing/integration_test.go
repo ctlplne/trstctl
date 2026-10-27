@@ -117,6 +117,20 @@ func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
 	if _, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAuditExport); err == nil {
 		t.Fatal("an anchor log head verified as an audit export")
 	}
+	// A179: a credential assurance record is admitted under its own domain.
+	res, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: jose.ArtifactAssuranceRecord, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("sign an assurance record through the isolated signer: %v", err)
+	}
+	if got, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAssuranceRecord); err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("verify the assurance record: payload=%q err=%v", got, err)
+	}
+	if _, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAuditAnchorLog); err == nil {
+		t.Fatal("an assurance record verified as an anchor log head")
+	}
 	_, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
 		Kind: "trstctl.audit-evidence/forged-kind/v1", TenantID: "deployment", AuthorityID: "audit-evidence",
 		KeyID: "audit-export", Payload: payload,

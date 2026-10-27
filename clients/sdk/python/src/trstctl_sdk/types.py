@@ -1578,6 +1578,213 @@ ApprovalRequestList = TypedDict(
     total=False,
 )
 
+AssuranceApproval = TypedDict(
+    'AssuranceApproval',
+    {
+        'evidence_id': str,
+        'intent_digest': str,
+        'request_id': str,
+        'requester': str,
+        'required_approvals': int,
+    },
+    total=False,
+)
+
+AssuranceAuditReference = TypedDict(
+    'AssuranceAuditReference',
+    {
+        'at': str,
+        'event_id': str,
+        'hash': str,
+        'sequence': int,
+        'type': str,
+    },
+    total=False,
+)
+
+AssuranceCredential = TypedDict(
+    'AssuranceCredential',
+    {
+        'certificate_id': str,
+        'fingerprint': str,
+        'identity_ids': list[str],
+        'issuer': str,
+        'not_after': str,
+        'not_before': str,
+        'sans': list[str],
+        'serial': str,
+        'status': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+AssuranceDeployment = TypedDict(
+    'AssuranceDeployment',
+    {
+        'at': str,
+        'basis': str,
+        'connector': str,
+        'destination': str,
+        'evidence_id': str,
+        'identity_id': str,
+        'reason': str,
+        'rollback_ref': str,
+        'status': str,
+        'target': str,
+    },
+    total=False,
+)
+
+AssuranceDiscovery = TypedDict(
+    'AssuranceDiscovery',
+    {
+        'basis': str,
+        'evidence_id': str,
+        'location': str,
+        'observed_at': str,
+        'provenance': str,
+        'source': str,
+        'source_kind': str,
+    },
+    total=False,
+)
+
+AssuranceIssuance = TypedDict(
+    'AssuranceIssuance',
+    {
+        'approval': dict[str, Any],
+        'basis': str,
+        'ca': str,
+        'evidence_id': str,
+        'external_ca_id': str,
+        'issued_at': str,
+        'issued_by_trstctl': bool,
+        'key_origin': str,
+        'profile': dict[str, Any],
+        'source': str,
+    },
+    total=False,
+)
+
+AssuranceLink = TypedDict(
+    'AssuranceLink',
+    {
+        'certificate_id': str,
+        'fingerprint': str,
+        'not_after': str,
+        'status': str,
+    },
+    total=False,
+)
+
+AssuranceOwner = TypedDict(
+    'AssuranceOwner',
+    {
+        'basis': str,
+        'evidence_id': str,
+        'kind': str,
+        'name': str,
+        'owner_id': str,
+    },
+    total=False,
+)
+
+AssuranceProfile = TypedDict(
+    'AssuranceProfile',
+    {
+        'evidence_id': str,
+        'name': str,
+        'spec_digest': str,
+        'version': int,
+    },
+    total=False,
+)
+
+AssuranceRecord = TypedDict(
+    'AssuranceRecord',
+    {
+        'absent': list[str],
+        'audit': list[dict[str, Any]],
+        'credential': dict[str, Any],
+        'deployments': list[dict[str, Any]],
+        'discovery': list[dict[str, Any]],
+        'format': str,
+        'generated_at': str,
+        'independently_observed': list[str],
+        'issuance': dict[str, Any],
+        'owner': dict[str, Any],
+        'recorded_only': list[str],
+        'renewals': dict[str, Any],
+        'revocation': dict[str, Any],
+        'tenant_id': str,
+        'truncated': list[str],
+        'verifications': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AssuranceRenewalRun = TypedDict(
+    'AssuranceRenewalRun',
+    {
+        'basis': str,
+        'completed_at': str,
+        'evidence_id': str,
+        'identity_id': str,
+        'predecessor_fingerprint': str,
+        'role': str,
+        'started_at': str,
+        'status': str,
+        'successor_fingerprint': str,
+        'trigger': str,
+    },
+    total=False,
+)
+
+AssuranceRenewals = TypedDict(
+    'AssuranceRenewals',
+    {
+        'predecessor': dict[str, Any],
+        'runs': list[dict[str, Any]],
+        'successors': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+AssuranceRevocation = TypedDict(
+    'AssuranceRevocation',
+    {
+        'basis': str,
+        'evidence_id': str,
+        'reason': str,
+        'revoked_at': str,
+    },
+    total=False,
+)
+
+AssuranceVerification = TypedDict(
+    'AssuranceVerification',
+    {
+        'address': str,
+        'agent': str,
+        'at': str,
+        'basis': str,
+        'checked_chain': bool,
+        'checked_sans': bool,
+        'endpoint': str,
+        'evidence_id': str,
+        'expected_fingerprint': str,
+        'mismatch': str,
+        'outcome': str,
+        'served_fingerprint': str,
+        'signer_fingerprint': str,
+        'target': str,
+        'transcript_digest': str,
+        'vantage': str,
+    },
+    total=False,
+)
+
 Attestation = TypedDict(
     'Attestation',
     {
@@ -3328,6 +3535,18 @@ Certificate = TypedDict(
         'status': str,
         'subject': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+CertificateAssuranceRecord = TypedDict(
+    'CertificateAssuranceRecord',
+    {
+        'public_jwks': dict[str, Any],
+        'record': dict[str, Any],
+        'record_sha256': str,
+        'rendering': str,
+        'signed_record': str,
     },
     total=False,
 )

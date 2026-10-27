@@ -30324,6 +30324,78 @@ export const messages = {
       "Publicly trusted TLS certificates issued from 2026-03-15 may be valid at most 200 days, from 2027-03-15 100 days, and from 2029-03-15 47 days. The lifetime-readiness report flags a longer maximum validity, or none.",
     description: "Hint under the public TLS checkbox naming the dated maxima.",
   },
+  "certificates.assurance.heading": {
+    defaultMessage: "Assurance record",
+    description: "Credential assurance record (A179): Heading of the certificate drawer section for its signed lifecycle assurance record.",
+  },
+  "certificates.assurance.build": {
+    defaultMessage: "Build the signed assurance record",
+    description: "Credential assurance record (A179): Builds and signs the record on request.",
+  },
+  "certificates.assurance.building": {
+    defaultMessage: "Building the signed record…",
+    description: "Credential assurance record (A179): Shown while the record is built and signed.",
+  },
+  "certificates.assurance.failed": {
+    defaultMessage: "The assurance record could not be built.",
+    description: "Credential assurance record (A179): Shown when building the record failed.",
+  },
+  "certificates.assurance.observed": {
+    defaultMessage: "Independently observed: {stages}",
+    description: "Credential assurance record (A179): Stages with evidence from outside trstctl's own record.",
+  },
+  "certificates.assurance.recorded": {
+    defaultMessage: "Recorded by trstctl only: {stages}",
+    description: "Credential assurance record (A179): Stages known only from trstctl's own record.",
+  },
+  "certificates.assurance.absent": {
+    defaultMessage: "No evidence: {stages}",
+    description: "Credential assurance record (A179): Stages with no evidence.",
+  },
+  "certificates.assurance.none": {
+    defaultMessage: "none",
+    description: "Credential assurance record (A179): Shown when a stage list is empty.",
+  },
+  "certificates.assurance.signed": {
+    defaultMessage: "Signed with the audit evidence key; record {digest}.",
+    description: "Credential assurance record (A179): Names the digest of the signed record.",
+  },
+  "certificates.assurance.download": {
+    defaultMessage: "Download the signed record",
+    description: "Credential assurance record (A179): Saves the signed record as JSON.",
+  },
+  "certificates.assurance.verifyHint": {
+    defaultMessage: "Verify the saved file offline with the CLI's verify-assurance-record command and the audit keys you pinned.",
+    description: "Credential assurance record (A179): How to check the saved file offline.",
+  },
+  "certificates.assurance.stage.discovery": {
+    defaultMessage: "discovery",
+    description: "Credential assurance record (A179): Stage name.",
+  },
+  "certificates.assurance.stage.owner": {
+    defaultMessage: "owner",
+    description: "Credential assurance record (A179): Stage name.",
+  },
+  "certificates.assurance.stage.issuance": {
+    defaultMessage: "issuance",
+    description: "Credential assurance record (A179): Stage name.",
+  },
+  "certificates.assurance.stage.deployment": {
+    defaultMessage: "deployment",
+    description: "Credential assurance record (A179): Stage name.",
+  },
+  "certificates.assurance.stage.verification": {
+    defaultMessage: "verification",
+    description: "Credential assurance record (A179): Stage name.",
+  },
+  "certificates.assurance.stage.renewal": {
+    defaultMessage: "renewal",
+    description: "Credential assurance record (A179): Stage name.",
+  },
+  "certificates.assurance.stage.revocation": {
+    defaultMessage: "revocation",
+    description: "Credential assurance record (A179): Stage name.",
+  },
   "certificates.validityReadiness.title": {
     defaultMessage: "Lifetime-reduction readiness",
     description:

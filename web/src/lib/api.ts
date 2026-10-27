@@ -489,6 +489,7 @@ import type {
   RogueCertificateTakedownRequest,
   RoleList,
   LifecycleAutomationPlan,
+  CertificateAssuranceRecord,
   ValidityReadinessExport,
   ValidityReadinessReport,
   RotationRun,
@@ -706,6 +707,7 @@ export interface DiscoveryFindingListOptions {
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
+export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.gen";
 export type {
   ValidityReadinessCertificate,
   ValidityReadinessExport,
@@ -1968,6 +1970,7 @@ export interface Api {
   getCertificate(id: string): Promise<Certificate>;
   /** A131: a certificate's device-bound custody evidence, complete for offline re-verification. */
   certificateKeyAttestation(id: string): Promise<CertificateKeyAttestation>;
+  certificateAssuranceRecord(id: string): Promise<CertificateAssuranceRecord>;
   ingestCertificate(input: CertificateIngestRequest): Promise<Certificate>;
   owners(): Promise<Owner[]>;
   createOwner(input: OwnerRequest): Promise<Owner>;
@@ -2668,6 +2671,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
   certificateKeyAttestation: (id) => req<CertificateKeyAttestation>(`/api/v1/certificates/${encodeURIComponent(id)}/key-attestation`),
+  certificateAssuranceRecord: (id) => req<CertificateAssuranceRecord>(`/api/v1/certificates/${encodeURIComponent(id)}/assurance-record`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),
   owners: allOwners,
   createOwner: (input) => mutate<Owner>("POST", "/api/v1/owners", input),

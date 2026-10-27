@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api/problem"
+	"trstctl.com/trstctl/internal/assurance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
@@ -186,6 +187,7 @@ type API struct {
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
 	lifecycleAutomationPlan            LifecycleAutomationPlanProvider
 	validityReadiness                  ValidityReadinessProvider
+	assurance                          *assurance.Assembler
 	firstIssuanceRetry                 FirstIssuanceRetryService
 	agentJobPosture                    AgentJobPostureProvider
 	agentJobClaimable                  func(string) bool
@@ -326,6 +328,7 @@ type config struct {
 	acmeOperatorPlan            ACMEOperatorPlanProvider
 	lifecycleAutomationPlan     LifecycleAutomationPlanProvider
 	validityReadiness           ValidityReadinessProvider
+	assurance                   *assurance.Assembler
 	firstIssuanceRetry          FirstIssuanceRetryService
 	agentJobPosture             AgentJobPostureProvider
 	agentJobClaimable           func(string) bool
@@ -656,6 +659,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
 		lifecycleAutomationPlan:     cfg.lifecycleAutomationPlan,
 		validityReadiness:           cfg.validityReadiness,
+		assurance:                   cfg.assurance,
 		firstIssuanceRetry:          cfg.firstIssuanceRetry,
 		agentJobPosture:             cfg.agentJobPosture,
 		agentJobClaimable:           cfg.agentJobClaimable,
@@ -1338,6 +1342,7 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/identities/{id}/issuance-retry", opID: "retryFirstIssuance", summary: "Grant one audited retry of the exact failed issuance when retained recovery evidence is available", handler: a.retryFirstIssuance, pathParams: idPath, reqSchema: "FirstIssuanceRetryRequest", resSchema: "FirstIssuanceRetry", successCode: "202", mutation: true, perm: authz.CertsIssue},
 		{method: "GET", path: "/api/v1/identities/{id}/deployment-evidence", opID: "getIdentityDeploymentEvidence", summary: "Read the exact certificate and historical receipt of an identity's last completed deployment or rollback", handler: a.getIdentityDeploymentEvidence, pathParams: idPath, resSchema: "IdentityDeploymentEvidence", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/{id}", opID: "getCertificate", summary: "Get an inventoried certificate", handler: a.getCertificate, pathParams: idPath, resSchema: "Certificate", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/certificates/{id}/assurance-record", opID: "getCertificateAssuranceRecord", summary: "Get a certificate's signed lifecycle assurance record: every stage with its evidence, and which stages were independently observed", handler: a.getCertificateAssuranceRecord, pathParams: idPath, resSchema: "CertificateAssuranceRecord", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/{id}/key-attestation", opID: "getCertificateKeyAttestation", summary: "Get a certificate's device-bound custody evidence for offline re-verification", handler: a.getCertificateKeyAttestation, pathParams: idPath, resSchema: "CertificateKeyAttestation", successCode: "200", perm: authz.CertsRead},
 
 		{method: "POST", path: "/api/v1/discovery/sources", opID: "createDiscoverySource", summary: "Create a discovery source", handler: a.createDiscoverySource, reqSchema: "DiscoverySourceRequest", resSchema: "DiscoverySource", successCode: "201", mutation: true, perm: authz.DiscoveryWrite},

@@ -2,6 +2,19 @@
 
 ### Added
 
+- Credential assurance records: `GET /api/v1/certificates/{id}/assurance-record`
+  (`trstctl certificates assurance-record`) joins one certificate's discovery,
+  owner, issuance (CA, the deciding event, profile revision and approval),
+  every delivery and verification (served fingerprint, which comparisons ran,
+  vantage, the agent or relay and its signed receipt), renewals, revocation and
+  the audit entries that name it, each with an evidence ID, and states which
+  stages were independently observed, recorded only, or absent. The isolated
+  signer signs it under its own artifact domain;
+  `trstctl certificates verify-assurance-record` verifies a saved record offline
+  against a pinned audit JWK set, and any changed value fails. The response
+  includes a Markdown rendering; compliance evidence packs carry the records of
+  the certificates whose lifecycle changed in their window; the certificate
+  drawer builds and saves the record.
 - Lifetime-reduction readiness: `GET /api/v1/certificates/validity-readiness`
   (`trstctl certificates validity-readiness`) evaluates every active certificate
   under the CA/Browser Forum TLS Baseline Requirements 2.3.1 section 6.3.2 steps

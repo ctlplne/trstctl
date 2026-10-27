@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/assurance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/cryptoreadiness"
@@ -28,16 +29,19 @@ func NewFactory() server.GovernanceFactory {
 		if d.Signer == nil {
 			return nil, errors.New("governance: compliance evidence signer is required")
 		}
-		return &evidenceService{audit: d.Audit, store: d.Store, signer: d.Signer}, nil
+		return &evidenceService{audit: d.Audit, store: d.Store, signer: d.Signer, assuranceRecords: d.AssuranceRecords}, nil
 	}
 }
 
 type evidenceService struct {
-	audit      *audit.Service
-	store      *store.Store
-	signer     crypto.DigestSigner
-	now        func() time.Time
-	buildGraph func(context.Context, *store.Store, string) (*graph.Graph, error)
+	audit  *audit.Service
+	store  *store.Store
+	signer crypto.DigestSigner
+	// assuranceRecords returns the credential assurance records a pack
+	// carries; nil carries none.
+	assuranceRecords func(ctx context.Context, tenantID string, from, through time.Time) ([]assurance.Record, bool, error)
+	now              func() time.Time
+	buildGraph       func(context.Context, *store.Store, string) (*graph.Graph, error)
 }
 
 func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID string, framework api.ComplianceFramework) (api.ComplianceEvidencePack, error) {
@@ -76,6 +80,14 @@ func (s *evidenceService) ExportEvidencePack(ctx context.Context, tenantID strin
 			return api.ComplianceEvidencePack{}, fmt.Errorf("governance: join crypto readiness actions: %w", err)
 		}
 		report.CryptoReadiness = readiness
+	}
+	report.CredentialAssurance = []assurance.Record{}
+	if s.assuranceRecords != nil {
+		records, truncated, err := s.assuranceRecords(ctx, tenantID, window.From, window.Through)
+		if err != nil {
+			return api.ComplianceEvidencePack{}, fmt.Errorf("governance: build credential assurance records: %w", err)
+		}
+		report.CredentialAssurance, report.CredentialAssuranceTruncated = records, truncated
 	}
 	signed, err := reporter.Export(report)
 	if err != nil {

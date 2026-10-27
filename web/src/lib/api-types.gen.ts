@@ -1136,6 +1136,157 @@ export interface ApprovalRequestList {
   next_cursor?: string;
 }
 
+export interface AssuranceApproval {
+  evidence_id: string;
+  intent_digest: string;
+  request_id: string;
+  requester: string;
+  required_approvals: number;
+}
+
+export interface AssuranceAuditReference {
+  at: string;
+  event_id: string;
+  hash: string;
+  sequence: number;
+  type: string;
+}
+
+export interface AssuranceCredential {
+  certificate_id: string;
+  fingerprint: string;
+  identity_ids: string[];
+  issuer: string;
+  not_after?: string;
+  not_before?: string;
+  sans: string[];
+  serial: string;
+  status: string;
+  subject: string;
+}
+
+export interface AssuranceDeployment {
+  at: string;
+  basis: "recorded" | "observed" | "signed_observation";
+  connector: string;
+  destination: string;
+  evidence_id: string;
+  identity_id?: string;
+  reason?: string;
+  rollback_ref?: string;
+  status: string;
+  target: string;
+}
+
+export interface AssuranceDiscovery {
+  basis: "recorded" | "observed" | "signed_observation";
+  evidence_id: string;
+  location: string;
+  observed_at: string;
+  provenance?: string;
+  source: string;
+  source_kind: string;
+}
+
+export interface AssuranceIssuance {
+  approval?: AssuranceApproval;
+  basis: "recorded" | "observed" | "signed_observation";
+  ca: string;
+  evidence_id: string;
+  external_ca_id?: string;
+  issued_at?: string;
+  issued_by_trstctl: boolean;
+  key_origin?: string;
+  profile?: AssuranceProfile;
+  source: string;
+}
+
+export interface AssuranceLink {
+  certificate_id: string;
+  fingerprint: string;
+  not_after?: string;
+  status: string;
+}
+
+export interface AssuranceOwner {
+  basis: "recorded" | "observed" | "signed_observation";
+  evidence_id: string;
+  kind: string;
+  name: string;
+  owner_id: string;
+}
+
+export interface AssuranceProfile {
+  evidence_id: string;
+  name: string;
+  spec_digest: string;
+  version: number;
+}
+
+export interface AssuranceRecord {
+  absent: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
+  audit: AssuranceAuditReference[];
+  credential: AssuranceCredential;
+  deployments: AssuranceDeployment[];
+  discovery: AssuranceDiscovery[];
+  format: "trstctl.credential-assurance-record/v1";
+  generated_at: string;
+  independently_observed: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
+  issuance: AssuranceIssuance;
+  owner?: AssuranceOwner;
+  recorded_only: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
+  renewals: AssuranceRenewals;
+  revocation?: AssuranceRevocation;
+  tenant_id: string;
+  truncated: string[];
+  verifications: AssuranceVerification[];
+}
+
+export interface AssuranceRenewalRun {
+  basis: "recorded" | "observed" | "signed_observation";
+  completed_at?: string;
+  evidence_id: string;
+  identity_id: string;
+  predecessor_fingerprint: string;
+  role: "predecessor" | "successor";
+  started_at: string;
+  status: string;
+  successor_fingerprint: string;
+  trigger: string;
+}
+
+export interface AssuranceRenewals {
+  predecessor?: AssuranceLink;
+  runs: AssuranceRenewalRun[];
+  successors: AssuranceLink[];
+}
+
+export interface AssuranceRevocation {
+  basis: "recorded" | "observed" | "signed_observation";
+  evidence_id: string;
+  reason: string;
+  revoked_at: string;
+}
+
+export interface AssuranceVerification {
+  address?: string;
+  agent?: string;
+  at: string;
+  basis: "recorded" | "observed" | "signed_observation";
+  checked_chain: boolean;
+  checked_sans: boolean;
+  endpoint?: string;
+  evidence_id: string;
+  expected_fingerprint: string;
+  mismatch?: string;
+  outcome: "verified" | "verify_failed" | "mismatch" | "unreachable";
+  served_fingerprint?: string;
+  signer_fingerprint?: string;
+  target?: string;
+  transcript_digest?: string;
+  vantage: "local" | "relay" | "agent" | "connector";
+}
+
 export interface Attestation {
   claims?: Record<string, unknown>;
   id: string;
@@ -2384,6 +2535,14 @@ export interface Certificate {
   status: "active" | "superseded" | "revoked";
   subject: string;
   tenant_id: string;
+}
+
+export interface CertificateAssuranceRecord {
+  public_jwks: Record<string, unknown>;
+  record: AssuranceRecord;
+  record_sha256: string;
+  rendering: string;
+  signed_record: string;
 }
 
 export interface CertificateCustodySummary {

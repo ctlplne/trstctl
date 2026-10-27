@@ -2056,6 +2056,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/{id}/assurance-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a certificate's signed lifecycle assurance record: every stage with its evidence, and which stages were independently observed */
+        get: operations["getCertificateAssuranceRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{id}/key-attestation": {
         parameters: {
             query?: never;
@@ -9364,6 +9381,193 @@ export interface components {
             items: components["schemas"]["PendingApprovalRequest"][];
             next_cursor?: string;
         };
+        AssuranceApproval: {
+            evidence_id: string;
+            intent_digest: string;
+            request_id: string;
+            requester: string;
+            required_approvals: number;
+        };
+        AssuranceAuditReference: {
+            /** Format: date-time */
+            at: string;
+            event_id: string;
+            hash: string;
+            sequence: number;
+            type: string;
+        };
+        AssuranceCredential: {
+            /** Format: uuid */
+            certificate_id: string;
+            fingerprint: string;
+            identity_ids: string[];
+            issuer: string;
+            /** Format: date-time */
+            not_after?: string;
+            /** Format: date-time */
+            not_before?: string;
+            sans: string[];
+            serial: string;
+            status: string;
+            subject: string;
+        };
+        AssuranceDeployment: {
+            /** Format: date-time */
+            at: string;
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            connector: string;
+            destination: string;
+            evidence_id: string;
+            /** Format: uuid */
+            identity_id?: string;
+            reason?: string;
+            rollback_ref?: string;
+            status: string;
+            target: string;
+        };
+        AssuranceDiscovery: {
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            evidence_id: string;
+            location: string;
+            /** Format: date-time */
+            observed_at: string;
+            provenance?: string;
+            source: string;
+            source_kind: string;
+        };
+        AssuranceIssuance: {
+            approval?: components["schemas"]["AssuranceApproval"];
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            ca: string;
+            evidence_id: string;
+            external_ca_id?: string;
+            /** Format: date-time */
+            issued_at?: string;
+            issued_by_trstctl: boolean;
+            key_origin?: string;
+            profile?: components["schemas"]["AssuranceProfile"];
+            source: string;
+        };
+        AssuranceLink: {
+            /** Format: uuid */
+            certificate_id: string;
+            fingerprint: string;
+            /** Format: date-time */
+            not_after?: string;
+            status: string;
+        };
+        AssuranceOwner: {
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            evidence_id: string;
+            kind: string;
+            name: string;
+            /** Format: uuid */
+            owner_id: string;
+        };
+        AssuranceProfile: {
+            evidence_id: string;
+            name: string;
+            spec_digest: string;
+            version: number;
+        };
+        AssuranceRecord: {
+            absent: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
+            audit: components["schemas"]["AssuranceAuditReference"][];
+            credential: components["schemas"]["AssuranceCredential"];
+            deployments: components["schemas"]["AssuranceDeployment"][];
+            discovery: components["schemas"]["AssuranceDiscovery"][];
+            /** @enum {string} */
+            format: "trstctl.credential-assurance-record/v1";
+            /** Format: date-time */
+            generated_at: string;
+            independently_observed: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
+            issuance: components["schemas"]["AssuranceIssuance"];
+            owner?: components["schemas"]["AssuranceOwner"];
+            recorded_only: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
+            renewals: components["schemas"]["AssuranceRenewals"];
+            revocation?: components["schemas"]["AssuranceRevocation"];
+            /** Format: uuid */
+            tenant_id: string;
+            truncated: string[];
+            verifications: components["schemas"]["AssuranceVerification"][];
+        };
+        AssuranceRenewalRun: {
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            /** Format: date-time */
+            completed_at?: string;
+            evidence_id: string;
+            /** Format: uuid */
+            identity_id: string;
+            predecessor_fingerprint: string;
+            /** @enum {string} */
+            role: "predecessor" | "successor";
+            /** Format: date-time */
+            started_at: string;
+            status: string;
+            successor_fingerprint: string;
+            trigger: string;
+        };
+        AssuranceRenewals: {
+            predecessor?: components["schemas"]["AssuranceLink"];
+            runs: components["schemas"]["AssuranceRenewalRun"][];
+            successors: components["schemas"]["AssuranceLink"][];
+        };
+        AssuranceRevocation: {
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            evidence_id: string;
+            reason: string;
+            /** Format: date-time */
+            revoked_at: string;
+        };
+        AssuranceVerification: {
+            address?: string;
+            agent?: string;
+            /** Format: date-time */
+            at: string;
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            checked_chain: boolean;
+            checked_sans: boolean;
+            endpoint?: string;
+            evidence_id: string;
+            expected_fingerprint: string;
+            mismatch?: string;
+            /** @enum {string} */
+            outcome: "verified" | "verify_failed" | "mismatch" | "unreachable";
+            served_fingerprint?: string;
+            signer_fingerprint?: string;
+            target?: string;
+            transcript_digest?: string;
+            /** @enum {string} */
+            vantage: "local" | "relay" | "agent" | "connector";
+        };
         Attestation: {
             claims?: Record<string, never>;
             id: string;
@@ -10765,6 +10969,16 @@ export interface components {
             subject: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        CertificateAssuranceRecord: {
+            /** @description The signer's public JWK set, for convenience; an offline verifier pins its own copy */
+            public_jwks: Record<string, never>;
+            record: components["schemas"]["AssuranceRecord"];
+            record_sha256: string;
+            /** @description Markdown rendering of the signed record */
+            rendering: string;
+            /** @description Compact JWS over the record's exact bytes under the trstctl.audit-evidence/credential-assurance-record/v1 artifact domain; verify it with the audit JWK set you pinned */
+            signed_record: string;
         };
         CertificateCustodySummary: {
             exportability: components["schemas"]["CustodyExportabilityCounts"];
@@ -24349,6 +24563,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Certificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCertificateAssuranceRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateAssuranceRecord"];
                 };
             };
             /** @description client error */

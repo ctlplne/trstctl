@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"trstctl.com/trstctl/internal/api"
+	"trstctl.com/trstctl/internal/assurance"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/signing"
@@ -30,6 +32,10 @@ type GovernanceFactoryDeps struct {
 	Audit  *audit.Service
 	Store  *store.Store
 	Signer crypto.DigestSigner
+	// AssuranceRecords returns the credential assurance records (A179) of the
+	// certificates whose lifecycle changed in a window, for evidence packs to
+	// carry; nil carries none.
+	AssuranceRecords func(ctx context.Context, tenantID string, from, through time.Time) ([]assurance.Record, bool, error)
 }
 
 func (s *Server) buildComplianceEvidenceService(ctx context.Context, d Deps, auditSvc *audit.Service) (api.ComplianceEvidenceService, error) {
@@ -47,7 +53,11 @@ func (s *Server) buildComplianceEvidenceService(ctx context.Context, d Deps, aud
 			return nil, fmt.Errorf("server: bind compliance evidence signer: %w", err)
 		}
 	}
-	return d.GovernanceFactory(GovernanceFactoryDeps{Audit: auditSvc, Store: d.Store, Signer: signer})
+	deps := GovernanceFactoryDeps{Audit: auditSvc, Store: d.Store, Signer: signer}
+	if assembler := s.assuranceAssembler(d.Store, auditSvc); assembler != nil {
+		deps.AssuranceRecords = assembler.Recent
+	}
+	return d.GovernanceFactory(deps)
 }
 
 // bindComplianceEvidenceSigner gives every restart the same independently

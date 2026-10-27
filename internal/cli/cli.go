@@ -103,6 +103,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runSecretScanStagedDiff(ctx, rest[3:], stdout, stderr)
 	}
+	if len(rest) >= 2 && hasPrefix(rest, []string{"certificates", "verify-assurance-record"}) {
+		if commandHelpRequested(rest[2:]) {
+			certificateVerifyAssuranceRecordUsage(stdout)
+			return 0
+		}
+		return runCertificateVerifyAssuranceRecord(rest[2:], stdout, stderr)
+	}
 	if len(rest) >= 2 && hasPrefix(rest, []string{"certificates", "verify-key-attestation"}) {
 		if commandHelpRequested(rest[2:]) {
 			certificateVerifyKeyAttestationUsage(stdout)

@@ -124,11 +124,15 @@ Graph links use `cert:<certificate-id>` for the leaf and `id:<identity-id>` for
 the lifecycle identity; incident response receives the actual managing identity.
 The same workspace also contains the tenant CRL distribution panel (full CRL, shard
 count, delta base, freshness window), a Certificate Transparency queueing form, and a
-per-certificate renewal-history timeline in the detail drawer. See
+per-certificate renewal-history timeline in the detail drawer. The drawer's
+**Assurance record** section builds the certificate's signed lifecycle assurance
+record on request, shows which stages were independently observed, recorded only, or
+absent, and saves the signed file for offline verification. See
 [Lifecycle & PQC](features/lifecycle-and-pqc.md)
 and the [47-day journey](journeys/crypto-agility-pqc.md). Backed by
 `/api/v1/certificates`, `/api/v1/certificates/health`,
-`/api/v1/certificates/validity-readiness` (and its `/export`), `/api/v1/revocation/crls`,
+`/api/v1/certificates/validity-readiness` (and its `/export`),
+`/api/v1/certificates/{id}/assurance-record`, `/api/v1/revocation/crls`,
 `/api/v1/revocation/health`, `/api/v1/revocation/ct-submissions`,
 `/api/v1/identities/{id}/transitions/preview`, `/api/v1/identities/{id}/transitions`,
 `/api/v1/graph/nodes/{id}/blast-radius`, `/api/v1/lifecycle/rotation-runs`, and

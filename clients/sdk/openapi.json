@@ -4632,6 +4632,659 @@
         ],
         "type": "object"
       },
+      "AssuranceApproval": {
+        "properties": {
+          "evidence_id": {
+            "type": "string"
+          },
+          "intent_digest": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "request_id",
+          "intent_digest",
+          "requester",
+          "required_approvals"
+        ],
+        "type": "object"
+      },
+      "AssuranceAuditReference": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "event_id",
+          "type",
+          "at",
+          "hash"
+        ],
+        "type": "object"
+      },
+      "AssuranceCredential": {
+        "properties": {
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "identity_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sans": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "fingerprint",
+          "serial",
+          "subject",
+          "sans",
+          "issuer",
+          "status",
+          "identity_ids"
+        ],
+        "type": "object"
+      },
+      "AssuranceDeployment": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "destination": {
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "rollback_ref": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "destination",
+          "connector",
+          "target",
+          "status",
+          "at"
+        ],
+        "type": "object"
+      },
+      "AssuranceDiscovery": {
+        "properties": {
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provenance": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "source",
+          "source_kind",
+          "location",
+          "observed_at"
+        ],
+        "type": "object"
+      },
+      "AssuranceIssuance": {
+        "properties": {
+          "approval": {
+            "$ref": "#/components/schemas/AssuranceApproval"
+          },
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "ca": {
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "external_ca_id": {
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "issued_by_trstctl": {
+            "type": "boolean"
+          },
+          "key_origin": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/AssuranceProfile"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "issued_by_trstctl",
+          "source",
+          "ca"
+        ],
+        "type": "object"
+      },
+      "AssuranceLink": {
+        "properties": {
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "fingerprint",
+          "status"
+        ],
+        "type": "object"
+      },
+      "AssuranceOwner": {
+        "properties": {
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "owner_id",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "AssuranceProfile": {
+        "properties": {
+          "evidence_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "spec_digest": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "name",
+          "version",
+          "spec_digest"
+        ],
+        "type": "object"
+      },
+      "AssuranceRecord": {
+        "properties": {
+          "absent": {
+            "items": {
+              "enum": [
+                "discovery",
+                "owner",
+                "issuance",
+                "deployment",
+                "verification",
+                "renewal",
+                "revocation"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "audit": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceAuditReference"
+            },
+            "type": "array"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/AssuranceCredential"
+          },
+          "deployments": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceDeployment"
+            },
+            "type": "array"
+          },
+          "discovery": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceDiscovery"
+            },
+            "type": "array"
+          },
+          "format": {
+            "enum": [
+              "trstctl.credential-assurance-record/v1"
+            ],
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "independently_observed": {
+            "items": {
+              "enum": [
+                "discovery",
+                "owner",
+                "issuance",
+                "deployment",
+                "verification",
+                "renewal",
+                "revocation"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "issuance": {
+            "$ref": "#/components/schemas/AssuranceIssuance"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/AssuranceOwner"
+          },
+          "recorded_only": {
+            "items": {
+              "enum": [
+                "discovery",
+                "owner",
+                "issuance",
+                "deployment",
+                "verification",
+                "renewal",
+                "revocation"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "renewals": {
+            "$ref": "#/components/schemas/AssuranceRenewals"
+          },
+          "revocation": {
+            "$ref": "#/components/schemas/AssuranceRevocation"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "truncated": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "verifications": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceVerification"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "tenant_id",
+          "generated_at",
+          "credential",
+          "discovery",
+          "issuance",
+          "deployments",
+          "verifications",
+          "renewals",
+          "audit",
+          "independently_observed",
+          "recorded_only",
+          "absent",
+          "truncated"
+        ],
+        "type": "object"
+      },
+      "AssuranceRenewalRun": {
+        "properties": {
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "predecessor_fingerprint": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "predecessor",
+              "successor"
+            ],
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "successor_fingerprint": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "identity_id",
+          "role",
+          "status",
+          "trigger",
+          "predecessor_fingerprint",
+          "successor_fingerprint",
+          "started_at"
+        ],
+        "type": "object"
+      },
+      "AssuranceRenewals": {
+        "properties": {
+          "predecessor": {
+            "$ref": "#/components/schemas/AssuranceLink"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceRenewalRun"
+            },
+            "type": "array"
+          },
+          "successors": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceLink"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "successors",
+          "runs"
+        ],
+        "type": "object"
+      },
+      "AssuranceRevocation": {
+        "properties": {
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "revoked_at",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "AssuranceVerification": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "checked_chain": {
+            "type": "boolean"
+          },
+          "checked_sans": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "mismatch": {
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "verified",
+              "verify_failed",
+              "mismatch",
+              "unreachable"
+            ],
+            "type": "string"
+          },
+          "served_fingerprint": {
+            "type": "string"
+          },
+          "signer_fingerprint": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "transcript_digest": {
+            "type": "string"
+          },
+          "vantage": {
+            "enum": [
+              "local",
+              "relay",
+              "agent",
+              "connector"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "vantage",
+          "outcome",
+          "expected_fingerprint",
+          "checked_sans",
+          "checked_chain",
+          "at"
+        ],
+        "type": "object"
+      },
       "Attestation": {
         "properties": {
           "claims": {
@@ -9764,6 +10417,36 @@
           "subject",
           "fingerprint",
           "status"
+        ],
+        "type": "object"
+      },
+      "CertificateAssuranceRecord": {
+        "properties": {
+          "public_jwks": {
+            "description": "The signer's public JWK set, for convenience; an offline verifier pins its own copy",
+            "type": "object"
+          },
+          "record": {
+            "$ref": "#/components/schemas/AssuranceRecord"
+          },
+          "record_sha256": {
+            "type": "string"
+          },
+          "rendering": {
+            "description": "Markdown rendering of the signed record",
+            "type": "string"
+          },
+          "signed_record": {
+            "description": "Compact JWS over the record's exact bytes under the trstctl.audit-evidence/credential-assurance-record/v1 artifact domain; verify it with the audit JWK set you pinned",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record",
+          "signed_record",
+          "record_sha256",
+          "public_jwks",
+          "rendering"
         ],
         "type": "object"
       },
@@ -48167,6 +48850,64 @@
           }
         ],
         "summary": "Get an inventoried certificate",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/certificates/{id}/assurance-record": {
+      "get": {
+        "operationId": "getCertificateAssuranceRecord",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateAssuranceRecord"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a certificate's signed lifecycle assurance record: every stage with its evidence, and which stages were independently observed",
         "x-trstctl-permission": "certs:read"
       }
     },

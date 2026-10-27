@@ -8,6 +8,7 @@ import type { RiskItem } from "@/components/risk";
 import { translateNow } from "@/i18n/I18nProvider";
 import { daysUntil as libDaysUntil, expiresWithinDays, remainingMs } from "@/lib/expiry";
 export { ValidityReadinessPanel } from "./ValidityReadinessPanel";
+export { AssuranceRecordPanel } from "./AssuranceRecordPanel";
 
 const DAY = 86_400_000;
 

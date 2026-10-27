@@ -3940,6 +3940,89 @@ func componentSchemas() map[string]*Schema {
 		"filename": str(), "content_type": str(), "requirements": ref("ValidityReadinessRequirements"),
 		"generated_at": timestamp(), "truncated": boolean(), "csv": str(),
 	}, "filename", "content_type", "requirements", "generated_at", "truncated", "csv")
+	basis := func() *Schema {
+		return &Schema{Type: "string", Enum: []string{"recorded", "observed", "signed_observation"}, Description: "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified"}
+	}
+	stageList := func() *Schema {
+		return &Schema{Type: "array", Items: &Schema{Type: "string", Enum: []string{"discovery", "owner", "issuance", "deployment", "verification", "renewal", "revocation"}}}
+	}
+	assuranceCredential := object(map[string]*Schema{
+		"certificate_id": uuid(), "fingerprint": str(), "serial": str(), "subject": str(),
+		"sans": {Type: "array", Items: str()}, "issuer": str(), "not_before": timestamp(), "not_after": timestamp(),
+		"status": str(), "identity_ids": {Type: "array", Items: uuid()},
+	}, "certificate_id", "fingerprint", "serial", "subject", "sans", "issuer", "status", "identity_ids")
+	assuranceDiscovery := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "source": str(), "source_kind": str(), "location": str(),
+		"provenance": str(), "observed_at": timestamp(),
+	}, "evidence_id", "basis", "source", "source_kind", "location", "observed_at")
+	assuranceOwner := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "owner_id": uuid(), "name": str(), "kind": str(),
+	}, "evidence_id", "basis", "owner_id", "name", "kind")
+	assuranceProfile := object(map[string]*Schema{
+		"evidence_id": str(), "name": str(), "version": {Type: "integer"}, "spec_digest": str(),
+	}, "evidence_id", "name", "version", "spec_digest")
+	assuranceApproval := object(map[string]*Schema{
+		"evidence_id": str(), "request_id": str(), "intent_digest": str(), "requester": str(), "required_approvals": {Type: "integer"},
+	}, "evidence_id", "request_id", "intent_digest", "requester", "required_approvals")
+	assuranceIssuance := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "issued_by_trstctl": {Type: "boolean"}, "source": str(), "ca": str(),
+		"external_ca_id": str(), "issued_at": timestamp(), "key_origin": str(),
+		"profile": ref("AssuranceProfile"), "approval": ref("AssuranceApproval"),
+	}, "evidence_id", "basis", "issued_by_trstctl", "source", "ca")
+	assuranceDeployment := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "identity_id": uuid(), "destination": str(), "connector": str(),
+		"target": str(), "status": str(), "reason": str(), "rollback_ref": str(), "at": timestamp(),
+	}, "evidence_id", "basis", "destination", "connector", "target", "status", "at")
+	assuranceVerification := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(),
+		"vantage": {Type: "string", Enum: []string{"local", "relay", "agent", "connector"}},
+		"agent":   str(), "endpoint": str(), "address": str(), "target": str(),
+		"outcome":              {Type: "string", Enum: []string{"verified", "verify_failed", "mismatch", "unreachable"}},
+		"expected_fingerprint": str(), "served_fingerprint": str(), "mismatch": str(),
+		"checked_sans": {Type: "boolean"}, "checked_chain": {Type: "boolean"},
+		"transcript_digest": str(), "signer_fingerprint": str(), "at": timestamp(),
+	}, "evidence_id", "basis", "vantage", "outcome", "expected_fingerprint", "checked_sans", "checked_chain", "at")
+	assuranceLink := object(map[string]*Schema{
+		"certificate_id": uuid(), "fingerprint": str(), "status": str(), "not_after": timestamp(),
+	}, "certificate_id", "fingerprint", "status")
+	assuranceRenewalRun := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "identity_id": uuid(),
+		"role":   {Type: "string", Enum: []string{"predecessor", "successor"}},
+		"status": str(), "trigger": str(), "predecessor_fingerprint": str(), "successor_fingerprint": str(),
+		"started_at": timestamp(), "completed_at": timestamp(),
+	}, "evidence_id", "basis", "identity_id", "role", "status", "trigger", "predecessor_fingerprint", "successor_fingerprint", "started_at")
+	assuranceRenewals := object(map[string]*Schema{
+		"predecessor": ref("AssuranceLink"),
+		"successors":  {Type: "array", Items: ref("AssuranceLink")},
+		"runs":        {Type: "array", Items: ref("AssuranceRenewalRun")},
+	}, "successors", "runs")
+	assuranceRevocation := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "revoked_at": timestamp(), "reason": str(),
+	}, "evidence_id", "basis", "revoked_at", "reason")
+	assuranceAuditReference := object(map[string]*Schema{
+		"sequence": {Type: "integer"}, "event_id": str(), "type": str(), "at": timestamp(), "hash": str(),
+	}, "sequence", "event_id", "type", "at", "hash")
+	assuranceRecord := object(map[string]*Schema{
+		"format": {Type: "string", Enum: []string{"trstctl.credential-assurance-record/v1"}}, "tenant_id": uuid(), "generated_at": timestamp(),
+		"credential":             ref("AssuranceCredential"),
+		"discovery":              {Type: "array", Items: ref("AssuranceDiscovery")},
+		"owner":                  ref("AssuranceOwner"),
+		"issuance":               ref("AssuranceIssuance"),
+		"deployments":            {Type: "array", Items: ref("AssuranceDeployment")},
+		"verifications":          {Type: "array", Items: ref("AssuranceVerification")},
+		"renewals":               ref("AssuranceRenewals"),
+		"revocation":             ref("AssuranceRevocation"),
+		"audit":                  {Type: "array", Items: ref("AssuranceAuditReference")},
+		"independently_observed": stageList(), "recorded_only": stageList(), "absent": stageList(),
+		"truncated": {Type: "array", Items: str()},
+	}, "format", "tenant_id", "generated_at", "credential", "discovery", "issuance", "deployments", "verifications", "renewals", "audit", "independently_observed", "recorded_only", "absent", "truncated")
+	certificateAssuranceRecord := object(map[string]*Schema{
+		"record":        ref("AssuranceRecord"),
+		"signed_record": {Type: "string", Description: "Compact JWS over the record's exact bytes under the trstctl.audit-evidence/credential-assurance-record/v1 artifact domain; verify it with the audit JWK set you pinned"},
+		"record_sha256": str(),
+		"public_jwks":   {Type: "object", Description: "The signer's public JWK set, for convenience; an offline verifier pins its own copy"},
+		"rendering":     {Type: "string", Description: "Markdown rendering of the signed record"},
+	}, "record", "signed_record", "record_sha256", "public_jwks", "rendering")
 	incidentExecutionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
@@ -7514,6 +7597,21 @@ func componentSchemas() map[string]*Schema {
 		"ValidityReadinessProfile":                 validityProfile,
 		"ValidityReadinessReport":                  validityReport,
 		"ValidityReadinessExport":                  validityExport,
+		"AssuranceCredential":                      assuranceCredential,
+		"AssuranceDiscovery":                       assuranceDiscovery,
+		"AssuranceOwner":                           assuranceOwner,
+		"AssuranceProfile":                         assuranceProfile,
+		"AssuranceApproval":                        assuranceApproval,
+		"AssuranceIssuance":                        assuranceIssuance,
+		"AssuranceDeployment":                      assuranceDeployment,
+		"AssuranceVerification":                    assuranceVerification,
+		"AssuranceLink":                            assuranceLink,
+		"AssuranceRenewalRun":                      assuranceRenewalRun,
+		"AssuranceRenewals":                        assuranceRenewals,
+		"AssuranceRevocation":                      assuranceRevocation,
+		"AssuranceAuditReference":                  assuranceAuditReference,
+		"AssuranceRecord":                          assuranceRecord,
+		"CertificateAssuranceRecord":               certificateAssuranceRecord,
 		"IncidentExecutionRequest":                 incidentExecutionReq,
 		"IncidentExecution":                        incidentExecution,
 		"IncidentExecutionList":                    list("IncidentExecution"),
