@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/netsec"
 )
 
 const (
@@ -137,15 +138,15 @@ func relayLeaseFor(poll time.Duration) time.Duration {
 
 // relayHTTPClient is the relay's client for appliance APIs.
 //
-// It deliberately carries neither the control plane's egress guard nor its
-// SSRF-blocking transport. A relay exists to reach devices on private,
-// non-routable addresses inside its own segment — the exact destinations those
-// controls are built to refuse. Keeping admission-time endpoint validation on
-// the control plane and NOT re-running it here is the correct split, and it is
-// a real reduction in what the control plane can promise about where a relay
-// connects; docs/limitations.md says so plainly rather than leaving it to be
-// discovered.
-func relayHTTPClient(caBundlePath string) (*http.Client, error) {
+// It does not carry the control plane's SSRF-blocking transport: a relay exists
+// to reach devices on private, non-routable addresses inside its own segment,
+// the exact destinations that guard refuses. It carries the agent's egress
+// policy instead (A190): link-local, cloud metadata, unspecified and multicast
+// destinations are always refused, and an operator allowlist, when set, refuses
+// everything it does not name. Each request's destination is checked before it
+// is sent (a proxy would otherwise hide it) and each dial's resolved address
+// when it connects.
+func relayHTTPClient(caBundlePath string, policy *netsec.RelayEgress) (*http.Client, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
@@ -155,12 +156,16 @@ func relayHTTPClient(caBundlePath string) (*http.Client, error) {
 		},
 	}
 	if caBundlePath != "" {
-		transport, err := newRelayCATransport(caBundlePath)
+		transport, err := newRelayCATransport(caBundlePath, policy)
 		if err != nil {
 			return nil, err
 		}
 		client.Transport = transport
+		return client, nil
 	}
+	base := netsec.HardenedDefaultTransport()
+	policy.GuardTransport(base)
+	client.Transport = policy.RoundTripper(base)
 	return client, nil
 }
 
@@ -174,6 +179,8 @@ func relayHTTPClient(caBundlePath string) (*http.Client, error) {
 type relayCATransport struct {
 	path       string
 	checkEvery time.Duration
+	// policy is the agent's egress policy, applied to every loaded transport.
+	policy *netsec.RelayEgress
 
 	mu        sync.Mutex
 	current   *http.Transport
@@ -187,8 +194,8 @@ type relayCATransport struct {
 
 const relayCACheckEvery = 5 * time.Second
 
-func newRelayCATransport(path string) (*relayCATransport, error) {
-	t := &relayCATransport{path: path, checkEvery: relayCACheckEvery}
+func newRelayCATransport(path string, policy *netsec.RelayEgress) (*relayCATransport, error) {
+	t := &relayCATransport{path: path, checkEvery: relayCACheckEvery, policy: policy}
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("read relay CA bundle: %w", err)
@@ -215,6 +222,7 @@ func (t *relayCATransport) load(info os.FileInfo) error {
 	if err != nil {
 		return fmt.Errorf("build relay HTTPS trust: %w", err)
 	}
+	t.policy.GuardTransport(next)
 	previous := t.current
 	t.current, t.sha256, t.loadedAt, t.lastErr = next, digest, time.Now().UTC(), ""
 	t.modTime, t.size = info.ModTime(), info.Size()
@@ -261,6 +269,9 @@ func (t *relayCATransport) noteReloadError(msg string) {
 
 // RoundTrip implements http.RoundTripper over the bundle currently in force.
 func (t *relayCATransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if err := t.policy.CheckRequest(r); err != nil {
+		return nil, err
+	}
 	t.mu.Lock()
 	t.refresh()
 	current := t.current

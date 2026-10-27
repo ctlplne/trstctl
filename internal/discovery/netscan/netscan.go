@@ -20,6 +20,7 @@ import (
 	"net"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -57,7 +58,11 @@ const maxObservedIssuers = 8
 // issuer's key and certificate hashes, and the weak-key checks that fire on
 // the leaf.
 func DefaultChainProber(ctx context.Context, addr string) (certinfo.Info, KeyObservation, error) {
-	chain, err := probeChain(ctx, addr)
+	return chainProbe(ctx, addr)
+}
+
+func chainProbe(ctx context.Context, addr string, opts ...tlsprobe.Option) (certinfo.Info, KeyObservation, error) {
+	chain, err := probeChain(ctx, addr, opts...)
 	if err != nil {
 		return certinfo.Info{}, KeyObservation{}, err
 	}
@@ -97,7 +102,11 @@ type Prober func(ctx context.Context, addr string) (certinfo.Info, error)
 // DefaultProber performs a non-invasive TLS handshake and returns the presented
 // leaf certificate's metadata.
 func DefaultProber(ctx context.Context, addr string) (certinfo.Info, error) {
-	chain, err := probeChain(ctx, addr)
+	return leafProbe(ctx, addr)
+}
+
+func leafProbe(ctx context.Context, addr string, opts ...tlsprobe.Option) (certinfo.Info, error) {
+	chain, err := probeChain(ctx, addr, opts...)
 	if err != nil {
 		return certinfo.Info{}, err
 	}
@@ -105,10 +114,10 @@ func DefaultProber(ctx context.Context, addr string) (certinfo.Info, error) {
 }
 
 // probeChain performs the handshake and returns the served chain, leaf first.
-func probeChain(ctx context.Context, addr string) ([][]byte, error) {
-	res, err := tlsprobe.Probe(ctx, addr)
+func probeChain(ctx context.Context, addr string, opts ...tlsprobe.Option) ([][]byte, error) {
+	res, err := tlsprobe.Probe(ctx, addr, opts...)
 	if err != nil {
-		negotiated, retryErr := probeWithNegotiation(ctx, addr, err)
+		negotiated, retryErr := probeWithNegotiation(ctx, addr, err, opts...)
 		if retryErr != nil {
 			return nil, err
 		}
@@ -123,7 +132,7 @@ func probeChain(ctx context.Context, addr string) ([][]byte, error) {
 // probeWithNegotiation retries a reachable listener that rejected a bare
 // ClientHello with the application-level TLS negotiations the scanner knows
 // (PostgreSQL's SSLRequest today). Unreachable targets are not retried.
-func probeWithNegotiation(ctx context.Context, addr string, first error) (tlsprobe.Result, error) {
+func probeWithNegotiation(ctx context.Context, addr string, first error, opts ...tlsprobe.Option) (tlsprobe.Result, error) {
 	var stage *tlsprobe.StageError
 	if errors.As(first, &stage) && stage.Stage == tlsprobe.StageDial {
 		return tlsprobe.Result{}, first
@@ -131,7 +140,7 @@ func probeWithNegotiation(ctx context.Context, addr string, first error) (tlspro
 	if ctx.Err() != nil {
 		return tlsprobe.Result{}, first
 	}
-	return tlsprobe.Probe(ctx, addr, tlsprobe.WithPreHandshake(tlsprobe.PostgresSSLRequest))
+	return tlsprobe.Probe(ctx, addr, append(opts, tlsprobe.WithPreHandshake(tlsprobe.PostgresSSLRequest))...)
 }
 
 // Target outcome statuses carried in Report.TargetResults.
@@ -170,6 +179,8 @@ type TargetResult struct {
 type config struct {
 	prober        Prober
 	chainProber   ChainProber
+	injected      bool
+	dialControl   func(network, address string, c syscall.RawConn) error
 	workers       int
 	queue         int
 	backoff       time.Duration
@@ -196,6 +207,7 @@ func WithProber(p Prober) Option {
 		if p != nil {
 			c.prober = p
 			c.chainProber = nil
+			c.injected = true
 		}
 	}
 }
@@ -205,8 +217,15 @@ func WithChainProber(p ChainProber) Option {
 	return func(c *config) {
 		if p != nil {
 			c.chainProber = p
+			c.injected = true
 		}
 	}
+}
+
+// WithDialControl checks the resolved address of every handshake's dial, after
+// the scanner's own target checks. It applies to the default probers only.
+func WithDialControl(control func(network, address string, c syscall.RawConn) error) Option {
+	return func(c *config) { c.dialControl = control }
 }
 
 // WithWorkers sets the maximum number of concurrent handshakes (default 16).
@@ -277,6 +296,13 @@ func New(sink Sink, opts ...Option) *Scanner {
 	cfg := config{prober: DefaultProber, chainProber: DefaultChainProber, workers: 16, queue: 256, backoff: 5 * time.Millisecond}
 	for _, o := range opts {
 		o(&cfg)
+	}
+	if cfg.dialControl != nil && !cfg.injected {
+		dial := tlsprobe.WithDialControl(cfg.dialControl)
+		cfg.prober = func(ctx context.Context, addr string) (certinfo.Info, error) { return leafProbe(ctx, addr, dial) }
+		cfg.chainProber = func(ctx context.Context, addr string) (certinfo.Info, KeyObservation, error) {
+			return chainProbe(ctx, addr, dial)
+		}
 	}
 	return &Scanner{
 		sink:          sink,

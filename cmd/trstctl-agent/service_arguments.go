@@ -77,6 +77,10 @@ func serviceArguments(o agentOptions) []string {
 		if o.relayCABundle != "" {
 			args = append(args, "--relay-ca-bundle", o.relayCABundle)
 		}
+		// A190: a restart must not widen what the relay may reach.
+		if o.relayEgressAllow != "" {
+			args = append(args, "--relay-egress-allow", o.relayEgressAllow)
+		}
 		if o.relayPollEvery > 0 {
 			args = append(args, "--relay-poll-every", o.relayPollEvery.String())
 		}

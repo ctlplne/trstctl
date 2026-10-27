@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -36,7 +37,10 @@ type Result struct {
 	FingerprintSHA256 string
 }
 
-type config struct{ timeout time.Duration }
+type config struct {
+	timeout     time.Duration
+	dialControl func(network, address string, c syscall.RawConn) error
+}
 
 // Option configures a probe.
 type Option func(*config)
@@ -48,6 +52,11 @@ func WithTimeout(d time.Duration) Option {
 			c.timeout = d
 		}
 	}
+}
+
+// WithDialControl checks the resolved address of the dial before it connects.
+func WithDialControl(control func(network, address string, c syscall.RawConn) error) Option {
+	return func(c *config) { c.dialControl = control }
 }
 
 // Probe dials addr (host:port), performs an SSH handshake far enough to receive
@@ -69,7 +78,7 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 		Timeout: cfg.timeout,
 	}
 
-	dialer := net.Dialer{Timeout: cfg.timeout}
+	dialer := net.Dialer{Timeout: cfg.timeout, Control: cfg.dialControl}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return Result{}, fmt.Errorf("sshprobe: dial %s: %w", addr, err)

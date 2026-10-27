@@ -138,7 +138,7 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	// LDAP library.
 	tlsConfig := mtls.DirectoryClientTLSConfig(intent.InsecureSkipVerify)
 	conn, err := ldap.DialURL(url,
-		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout}),
+		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout, Control: egressControl(nil)}),
 		ldap.DialWithTLSConfig(tlsConfig))
 	if err != nil {
 		return ADCSReport{}, fmt.Errorf("relay: connect to the directory: %w", err)
@@ -198,6 +198,10 @@ func newADCSEndpointClient(intent ADCSInventoryIntent) (*http.Client, error) {
 	// could leave the exact operator-scoped endpoint and erase its real status.
 	transport.TLSClientConfig = mtls.DirectoryClientTLSConfig(false)
 	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+	// The agent's egress policy applies on top of the SSRF dial check. This
+	// transport uses no proxy, so the dial sees every destination.
+	dialer := &net.Dialer{Timeout: adcsDialTimeout, Control: egressControl(netsec.SafeDialControlWithOptions(netsec.SafeClientOptions{AllowPrivateCIDRs: prefixes}))}
+	transport.DialContext = dialer.DialContext
 	return client, nil
 }
 

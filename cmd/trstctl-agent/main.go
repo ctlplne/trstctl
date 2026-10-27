@@ -69,6 +69,7 @@ func main() {
 	allowLoopbackEnrollment := flag.Bool("allow-insecure-loopback-enrollment", false, "allow bootstrap over plain HTTP only when --enroll-url is a loopback address; the resolved address is rechecked before every dial")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
 	relayCABundle := flag.String("relay-ca-bundle", "", "optional PEM CA bundle for private HTTPS appliance APIs reached by this network relay; adds to OS roots, does not change control-plane trust")
+	relayEgressAllow := flag.String("relay-egress-allow", "", "comma-separated CIDRs, addresses and address:port pairs the connections this agent opens to run jobs may reach; everything else is refused. Link-local, cloud metadata, unspecified and multicast addresses are always refused")
 	connectorIsolation := flag.String("connector-isolation", connector.IsolationWASM, "where this agent runs the shipped connector families: wasm (each operation in a fresh instance of the embedded connector module, reaching only its capability-gated sandbox) or in_process")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
 	serverName := flag.String("server-name", "", "expected control-plane server name (defaults to --name)")
@@ -418,7 +419,7 @@ func main() {
 	}
 
 	o := agentOptions{
-		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle, relayCABundle: *relayCABundle,
+		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle, relayCABundle: *relayCABundle, relayEgressAllow: *relayEgressAllow,
 		connectorIsolation: *connectorIsolation,
 		tokenFile:          *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
@@ -534,19 +535,21 @@ func checkedTPMPersistentHandleBase(value uint) (uint32, error) {
 
 type agentOptions struct {
 	enrollURL, inlineToken, tokenFile, caBundle, relayCABundle, serverAddr, serverName, commonName, keyPath, certPath string
-	connectorIsolation                                                                                                string
-	rotateEvery                                                                                                       time.Duration
-	allowInsecureDevBootstrapTokenArg                                                                                 bool
-	allowInsecureLoopbackEnrollment                                                                                   bool
-	inventoryCertRoots                                                                                                []string
-	inventoryOSTrustRoots                                                                                             []string
-	inventoryJavaTrustStores                                                                                          []string
-	inventoryJavaTrustStorePassword                                                                                   string
-	inventoryNSSTrustRoots                                                                                            []string
-	inventoryBrowserTrustRoots                                                                                        []string
-	inventoryPrivateKeyRoots                                                                                          []string
-	inventorySSH                                                                                                      sshdiscovery.Config
-	inventoryK8sSecrets                                                                                               bool
+	// relayEgressAllow is the operator's egress allowlist for job connections (A190).
+	relayEgressAllow                  string
+	connectorIsolation                string
+	rotateEvery                       time.Duration
+	allowInsecureDevBootstrapTokenArg bool
+	allowInsecureLoopbackEnrollment   bool
+	inventoryCertRoots                []string
+	inventoryOSTrustRoots             []string
+	inventoryJavaTrustStores          []string
+	inventoryJavaTrustStorePassword   string
+	inventoryNSSTrustRoots            []string
+	inventoryBrowserTrustRoots        []string
+	inventoryPrivateKeyRoots          []string
+	inventorySSH                      sshdiscovery.Config
+	inventoryK8sSecrets               bool
 	// inventoryK8sNamespaces widens the k8s-secret source beyond the pod's own
 	// namespace: "all", or a comma-separated list (A19).
 	inventoryK8sNamespaces string
@@ -683,10 +686,19 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if o.relayCABundle != "" && !o.relayClaim {
 		return errors.New("--relay-ca-bundle requires --relay-claim")
 	}
+	if o.relayEgressAllow != "" && !o.relayClaim {
+		return errors.New("--relay-egress-allow requires --relay-claim")
+	}
 	var relayClient *http.Client
 	var relayCAStatus func() *transport.RelayCABundleReport
 	if o.relayClaim {
-		relayClient, err = relayHTTPClient(o.relayCABundle)
+		egress, err := netsec.ParseRelayEgress(strings.Split(o.relayEgressAllow, ","))
+		if err != nil {
+			return fmt.Errorf("--relay-egress-allow: %w", err)
+		}
+		relay.SetEgressPolicy(egress)
+		fmt.Fprintln(os.Stderr, "trstctl-agent: relay egress policy:", egress.String())
+		relayClient, err = relayHTTPClient(o.relayCABundle, egress)
 		if err != nil {
 			return err
 		}

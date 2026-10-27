@@ -158,7 +158,7 @@ func runEndpointVerify(ctx context.Context, ch Channel, job Job) bool {
 			Vantage:      transport.VantageRelay,
 			Timeout:      timeout,
 			PreHandshake: connectorTLSNegotiation(want.Connector),
-			DialControl:  dialControl,
+			DialControl:  egressControl(dialControl),
 			Expect: certinfo.Expectation{
 				SHA256Fingerprint: want.Fingerprint,
 				DNSNames:          want.DNSNames,

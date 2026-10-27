@@ -2487,14 +2487,30 @@ separately from `connector.deploy` on purpose — an operator should be able to
 enable undoing a deployment without enabling deploying, and during an incident
 that is the order they will want.
 
-**Egress policy does not travel with the work.** The control plane validates a
-target's endpoint at admission and drives it through an SSRF-blocking,
-egress-guarded transport. A relay does neither: it exists to reach devices on
-private, non-routable addresses inside its own segment, which is precisely what
-those controls refuse. Keeping validation at admission and not re-running it on
-the relay is the correct split, and it is a real reduction in what the control
-plane can promise about where a relay connects. An operator granting the network
-role is granting that.
+**A relay runs its own egress policy, not the control plane's.** The control
+plane validates a target's endpoint at admission and drives it through an
+SSRF-blocking, egress-guarded transport. A relay cannot run that guard: it exists
+to reach devices on private, non-routable addresses inside its own segment, which
+is precisely what the guard refuses. Instead every connection a relay opens to
+run a job refuses link-local addresses, cloud instance metadata, unspecified and
+multicast addresses, and `--relay-egress-allow` refuses everything it does not
+list (see [Configuration](configuration.md)). What that does not cover:
+
+- **Without an allowlist, the rest of the network is reachable.** The always-on
+  refusal covers only the addresses no job needs. An operator granting the
+  network role without an allowlist grants every other address the relay's own
+  network can reach.
+- **Addresses, not names.** An allowlist names addresses and ranges; a host name
+  cannot be listed, because a connection sees only the address it resolved to.
+- **Two probes are checked before they run, not at the dial.** The PQC posture
+  and dry-run listener probes may fall back to the system `openssl`, which dials
+  outside the agent, so their destination is resolved and checked first; a name
+  that resolves elsewhere between that check and the connection is not caught for
+  those probes.
+- **Plugins keep their own grants.** A plugin's dials follow its grant and the
+  reserved-address refusal plugins always had, not the relay allowlist.
+- **The Agents page does not show it yet.** The policy in force is printed at the
+  agent's startup; the agent census does not report it.
 
 ### The agent job ledger: served executors and signed receipts
 

@@ -18,6 +18,7 @@ import (
 	"net"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"trstctl.com/trstctl/internal/bulkhead"
@@ -32,7 +33,11 @@ type Prober func(ctx context.Context, addr string) (sshinv.Found, error)
 
 // DefaultProber performs a non-invasive SSH handshake and returns the host key.
 func DefaultProber(ctx context.Context, addr string) (sshinv.Found, error) {
-	res, err := sshprobe.Probe(ctx, addr)
+	return hostKeyProbe(ctx, addr)
+}
+
+func hostKeyProbe(ctx context.Context, addr string, opts ...sshprobe.Option) (sshinv.Found, error) {
+	res, err := sshprobe.Probe(ctx, addr, opts...)
 	if err != nil {
 		return sshinv.Found{}, err
 	}
@@ -76,6 +81,8 @@ const (
 
 type config struct {
 	prober        Prober
+	injected      bool
+	dialControl   func(network, address string, c syscall.RawConn) error
 	workers       int
 	queue         int
 	backoff       time.Duration
@@ -101,8 +108,15 @@ func WithProber(p Prober) Option {
 	return func(c *config) {
 		if p != nil {
 			c.prober = p
+			c.injected = true
 		}
 	}
+}
+
+// WithDialControl checks the resolved address of every probe's dial, after the
+// scanner's own target checks. It applies to the default prober only.
+func WithDialControl(control func(network, address string, c syscall.RawConn) error) Option {
+	return func(c *config) { c.dialControl = control }
 }
 
 // WithWorkers sets the maximum number of concurrent handshakes (default 16).
@@ -172,6 +186,10 @@ func New(sink sshinv.Sink, opts ...Option) *Scanner {
 	cfg := config{prober: DefaultProber, workers: 16, queue: 256, backoff: 5 * time.Millisecond}
 	for _, o := range opts {
 		o(&cfg)
+	}
+	if cfg.dialControl != nil && !cfg.injected {
+		dial := sshprobe.WithDialControl(cfg.dialControl)
+		cfg.prober = func(ctx context.Context, addr string) (sshinv.Found, error) { return hostKeyProbe(ctx, addr, dial) }
 	}
 	return &Scanner{
 		sink:          sink,

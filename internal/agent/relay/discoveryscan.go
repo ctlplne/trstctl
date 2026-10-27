@@ -133,6 +133,7 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 		opts = append(opts,
 			netscan.WithAllowRFC1918Targets(intent.AllowRFC1918 || intent.AllowReservedRanges),
 			netscan.WithAllowLoopbackTargets(intent.AllowLoopback || intent.AllowReservedRanges),
+			netscan.WithDialControl(egressControl(nil)),
 		)
 		// Close the scanner: it owns a worker pool, and dropping the reference
 		// without closing leaks those goroutines for every discovery job the
@@ -158,6 +159,7 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 		opts = append(opts,
 			sshscan.WithAllowRFC1918Targets(intent.AllowRFC1918 || intent.AllowReservedRanges),
 			sshscan.WithAllowLoopbackTargets(intent.AllowLoopback || intent.AllowReservedRanges),
+			sshscan.WithDialControl(egressControl(nil)),
 		)
 		scanner := sshscan.New(sink, opts...)
 		defer scanner.Close()

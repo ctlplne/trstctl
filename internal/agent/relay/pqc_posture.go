@@ -355,6 +355,12 @@ func probePQCServed(ctx context.Context, intent PQCPostureIntent, hybrid bool, n
 	if hybrid {
 		options = append(options, tlsprobe.WithRequiredHybridGroup())
 	}
+	// The probe may fall back to the system OpenSSL, which dials outside the
+	// agent (a dial control would turn the fallback off), so the destination is
+	// resolved and checked before either attempt.
+	if err := egress().CheckHostPort(ctx, intent.VerifyAddress); err != nil {
+		return PQCPostureServed{}, fmt.Errorf("relay: PQC listener handshake failed: %w", err)
+	}
 	result, err := tlsprobe.ProbeWithNativeFallback(ctx, nativeProbe, intent.VerifyAddress, options...)
 	if err != nil {
 		return PQCPostureServed{}, fmt.Errorf("relay: PQC listener handshake failed: %w", err)

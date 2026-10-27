@@ -2495,6 +2495,28 @@ control-plane CA and appliance CA in separate files so adding appliance trust
 does not silently expand bootstrap trust. Windows service installation retains
 the relay CA path across service restarts.
 
+**What a relay may reach.** A relay does not run the control plane's SSRF guard,
+because the private devices in its segment are exactly what that guard refuses.
+It runs its own egress policy on every connection it opens to run a job:
+appliance and API calls, endpoint checks, discovery scans, directory (LDAP)
+reads and its TLS probes. Link-local addresses, cloud instance metadata
+(`169.254.169.254`, `100.100.100.200`, `fd00:ec2::254`), unspecified and
+multicast addresses are always refused. To refuse everything else as well, list
+what the relay may reach:
+
+```bash
+trstctl-agent --relay-claim --relay-egress-allow 10.20.0.0/16,192.0.2.7,198.51.100.9:8443 ...
+```
+
+Entries are CIDRs, addresses and `address:port` pairs (`[fd00::5]:443` for IPv6).
+Host names are refused, since a connection sees only the address a name resolved
+to. Each request's named destination is checked before it is sent, so a request
+carried by `HTTPS_PROXY` is checked too, and each dial's resolved address when it
+connects. A refusal is reported with the job, naming the address and the reason.
+With an allowlist, list the local listeners a host job reloads (`127.0.0.1`) as
+well. The agent prints the policy in force at startup, and Windows service
+installation retains it across restarts.
+
 ### Relay-local CRL and OCSP cache
 
 A certificate enrolled with the `network` role may serve revocation data to an

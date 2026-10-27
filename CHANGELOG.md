@@ -2,6 +2,14 @@
 
 ### Added
 
+- Relay egress policy: every connection an agent opens to run a job (appliance
+  and API calls, endpoint checks, discovery scans, directory reads, TLS probes)
+  refuses link-local addresses, cloud instance metadata, unspecified and
+  multicast addresses, and `trstctl-agent --relay-egress-allow` refuses everything
+  the operator does not list (CIDRs, addresses, `address:port`). The check runs
+  on each request's named destination, so a proxied request is covered, and on
+  each dial's resolved address. Windows service installation keeps the
+  allowlist across restarts.
 - Outcome pages: three pages in the docs (certificate automation and assurance,
   agent and workload identity assurance, and cryptographic risk and migration
   assurance) list each outcome's end-to-end workflow, the evidence every step

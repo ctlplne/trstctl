@@ -43,7 +43,7 @@ func TestRelayCABundleReloadsWithoutRestartA86(t *testing.T) {
 	if err := os.WriteFile(bundle, firstPEM, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	client, err := relayHTTPClient(bundle)
+	client, err := relayHTTPClient(bundle, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

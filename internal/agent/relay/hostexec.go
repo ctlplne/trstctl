@@ -576,6 +576,13 @@ func probeHostListenerWithNative(ctx context.Context, address, serverName string
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, dryRunProbeTimeout)
 	defer cancel()
+	// The probe may fall back to the system OpenSSL, which dials outside the
+	// agent (a dial control would turn the fallback off), so the destination is
+	// resolved and checked before either attempt.
+	if err := egress().CheckHostPort(probeCtx, address); err != nil {
+		return PlanStep{Name: "reachability", Status: StepFailed,
+			Detail: "could not handshake the configured listener: " + transport.SanitizeProbeError(err)}
+	}
 	observed, err := tlsprobe.ProbeWithNativeFallback(probeCtx, executable, address,
 		tlsprobe.WithTimeout(dryRunProbeTimeout), tlsprobe.WithServerName(serverName), tlsprobe.WithPreHandshake(negotiate))
 	if err != nil {

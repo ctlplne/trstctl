@@ -54,7 +54,7 @@ type ldapCRLDirectory struct {
 func dialCRLDirectory(binding revocationhealth.LDAPBinding, password []byte) (crlDirectory, error) {
 	tlsConfig := mtls.DirectoryClientTLSConfig(binding.InsecureSkipVerify)
 	conn, err := ldap.DialURL(binding.URL,
-		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout}),
+		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout, Control: egressControl(nil)}),
 		ldap.DialWithTLSConfig(tlsConfig))
 	if err != nil {
 		if reason := tlsFailureReason(err); reason != "" {
