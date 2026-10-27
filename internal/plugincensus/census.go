@@ -61,6 +61,10 @@ type Statement struct {
 // Normalize validates bounds and returns one deterministic copy. The relay
 // calls it before signing; the server requires the received body to already be
 // in this form so normalization cannot change the meaning after signature.
+// knownCapabilities are the grants a relay can report (A193 added input.read
+// and net.http).
+var knownCapabilities = map[string]bool{"fs.read": true, "fs.write": true, "net.dial": true, "input.read": true, "net.http": true}
+
 func Normalize(entries []Entry) ([]Entry, error) {
 	if len(entries) > MaxPlugins {
 		return nil, fmt.Errorf("plugin census has %d entries; maximum is %d", len(entries), MaxPlugins)
@@ -82,13 +86,13 @@ func Normalize(entries []Entry) ([]Entry, error) {
 			return nil, fmt.Errorf("plugin %q has unsupported execution context %q", in.Name, in.ExecutionContext)
 		}
 		out[i] = Entry{Name: in.Name, Digest: in.Digest, Publisher: in.Publisher, ExecutionContext: in.ExecutionContext}
-		if len(in.Grants) > 3 {
+		if len(in.Grants) > 5 {
 			return nil, fmt.Errorf("plugin %q has too many grants", in.Name)
 		}
 		grantSeen := map[string]bool{}
 		out[i].Grants = make([]Grant, len(in.Grants))
 		for j, grant := range in.Grants {
-			if grant.Capability != "fs.read" && grant.Capability != "fs.write" && grant.Capability != "net.dial" {
+			if !knownCapabilities[grant.Capability] {
 				return nil, fmt.Errorf("plugin %q has unknown capability %q", in.Name, grant.Capability)
 			}
 			if grantSeen[grant.Capability] {

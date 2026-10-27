@@ -412,7 +412,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// checks also matters: connector.test intentionally carries no certificate
 		// fingerprint, because it is testing a target path rather than claiming a
 		// credential was deployed.
-		return runConnectorTest(ctx, ch, client, hostProfile, job, intent, hostJob, pluginJob)
+		return runConnectorTest(ctx, ch, client, hostProfile, plugins, job, intent, hostJob, pluginJob)
 	}
 	if job.Kind == KindADCSInventory {
 		// An AD CS inventory names no connector; its executor is the directory
@@ -472,10 +472,12 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	var execErr error
 	if pluginJob {
 		// The module runs under the operator's grant, on this machine, inside
-		// the customer's network. It never receives the redeemed credential
-		// material: a third-party module that could read the appliance password
-		// would make the sandbox a formality.
-		execErr = plugins.Deploy(ctx, intent.Connector)
+		// the customer's network. It never reads the redeemed credential
+		// material: the relay adds the credential to the module's HTTP requests
+		// and splices the key into the body by reference (A193), because a
+		// third-party module that could read the appliance password would make
+		// the sandbox a formality.
+		execErr = plugins.Deploy(ctx, intent.Connector, PluginCall{Intent: intent, Material: material, Client: client})
 	} else if hostJob {
 		stats, execErr = ExecuteOnHost(ctx, hostProfile, intent, material, client)
 	} else {
@@ -575,18 +577,13 @@ func runConnectorTest(
 	ch Channel,
 	client *http.Client,
 	hostProfile connector.LocalOpsConfig,
+	plugins *PluginRuntime,
 	job Job,
 	intent DeployIntent,
 	hostJob, pluginJob bool,
 ) bool {
 	if pluginJob {
-		return reportConnectorTestPlan(ctx, ch, job, Plan{
-			Connector: intent.Connector, Target: intent.Target,
-			Steps: []PlanStep{{
-				Name: "connector", Status: StepFailed,
-				Detail: "this verified plugin has no zero-write target-test contract; no credential was redeemed and the plugin was not invoked",
-			}},
-		})
+		return runPluginTest(ctx, ch, client, plugins, job, intent)
 	}
 	if !hostJob && !executesIntent(intent.Connector, intent.TargetConfig) {
 		return reportConnectorTestPlan(ctx, ch, job, Plan{

@@ -92,7 +92,7 @@ func TestASignedThirdPartyConnectorDeploysFromTheRelay(t *testing.T) {
 	if !rt.Has("partner") {
 		t.Fatalf("the signed module did not load; names = %v", rt.Names())
 	}
-	if err := rt.Deploy(ctx, "partner"); err != nil {
+	if err := rt.Deploy(ctx, "partner", relay.PluginCall{}); err != nil {
 		t.Fatalf("deploy through the relay sandbox: %v", err)
 	}
 }
@@ -252,7 +252,7 @@ func TestAnOutOfGrantOperationDeniesTheDeploy(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = rt.Close(ctx) })
 
-	err = rt.Deploy(ctx, "partner")
+	err = rt.Deploy(ctx, "partner", relay.PluginCall{})
 	if err == nil {
 		t.Fatal("a plugin that reached outside its capability grant reported a successful " +
 			"deploy; the sandbox denial must fail the deploy, or an out-of-grant connector " +

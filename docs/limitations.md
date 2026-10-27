@@ -1021,6 +1021,14 @@ never live in the API process. What you can do end to end against the running bi
   missing precisely the one somebody tampered with. An out-of-grant operation is
   denied at runtime and FAILS the deploy, so a module reaching outside its grant
   cannot report success. Both properties are mutation-verified.
+  A module reads its deploy's public inputs (`input.read`: the certificate, the
+  fingerprint, the target and its configuration) and asks the relay to make its
+  HTTP calls (`net.http`): the relay adds the target's credential, splices the
+  private key into the body by reference, and removes every redeemed value from
+  the reply, so the module deploys as the appliance's administrator without
+  holding the password or the key. The control-plane plugin path does not offer
+  these two capabilities; third-party connectors that call appliances run on
+  relays.
   Everything is operator-owned: the modules, the publisher keys, the pinned build
   digests and the capability grant. None is read from the module or pushed from the
   control plane, because a publisher who could widen their own grant by editing a
@@ -2736,8 +2744,10 @@ name the first failed step as `dry_run_blocked`. Zero writes is structural rathe
 than promised: this path never calls a connector's `Deploy`, never writes a file,
 and never executes a reload. A deterministic block is reported as a completed
 test answer, so an unavailable listener or insufficient host profile does not
-become a rapid retry and credential-redemption storm. Signed connector plugins
-without an explicit zero-write test contract are blocked before the plugin is
+become a rapid retry and credential-redemption storm. A signed connector plugin
+answers the test through its `test` entry point under a read-only grant: no file
+writes, and HTTP requests limited to `GET` and `HEAD`, a write being refused
+before it is sent. A plugin without a `test` entry point is blocked before it is
 invoked or any credential is redeemed. Without an eligible agent path enabled,
 the route keeps the honest local answer, `config_validated`, rather than queueing
 work nothing will claim.

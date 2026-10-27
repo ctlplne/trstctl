@@ -17179,7 +17179,7 @@ export interface components {
         };
         RelayPluginGrant: {
             /** @enum {string} */
-            capability: "fs.read" | "fs.write" | "net.dial";
+            capability: "fs.read" | "fs.write" | "net.dial" | "input.read" | "net.http";
             constraints: string[];
         };
         RelayPluginRuntime: {

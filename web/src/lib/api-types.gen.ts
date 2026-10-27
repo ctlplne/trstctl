@@ -7947,7 +7947,7 @@ export interface RelayPluginEntry {
 }
 
 export interface RelayPluginGrant {
-  capability: "fs.read" | "fs.write" | "net.dial";
+  capability: "fs.read" | "fs.write" | "net.dial" | "input.read" | "net.http";
   constraints: string[];
 }
 

@@ -714,8 +714,10 @@ instead redeem the appliance-management credential and perform the connector's
 read-only probe. A ready
 test returns `dry_run_planned` with the later mutation list; an unreachable target,
 missing grant, or other deterministic prerequisite returns terminal
-`dry_run_blocked` rather than retrying forever. Signed plugins that do not declare a
-zero-write testing contract fail closed without being invoked.
+`dry_run_blocked` rather than retrying forever. A signed relay plugin that exports
+`test` runs it under a read-only grant (no file writes; HTTP `GET` and `HEAD` only,
+a write refused before it is sent); one that does not fails closed without being
+invoked.
 
 For a `postgresql` destination, the agent first sends PostgreSQL's SSLRequest
 and requires the server to accept TLS before starting the handshake. This applies

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -220,6 +221,17 @@ func (r *PluginRuntime) Census() []plugincensus.Entry {
 	return normalized
 }
 
+// PluginCall is what one deploy or test gives a third-party connector (A193):
+// the intent, the attempt's redeemed material, which the module never reads
+// (the relay splices the key and adds the credential to the module's HTTP
+// requests), and the agent's HTTP client, so the requests follow its egress
+// policy.
+type PluginCall struct {
+	Intent   DeployIntent
+	Material Material
+	Client   *http.Client
+}
+
 // Deploy runs a third-party connector's deploy entrypoint.
 //
 // The three failure modes are kept apart because they mean different things to
@@ -227,19 +239,52 @@ func (r *PluginRuntime) Census() []plugincensus.Entry {
 // its grant, or the module reported failure. Collapsing them would lose the one
 // that matters most — a grant denial is a supply-chain signal, not a bad day on
 // an appliance.
-func (r *PluginRuntime) Deploy(ctx context.Context, name string) error {
+func (r *PluginRuntime) Deploy(ctx context.Context, name string, call PluginCall) error {
+	p, err := r.plugin(name)
+	if err != nil {
+		return err
+	}
+	return r.invoke(ctx, p, name, pluginEntrypoint(p), call, false)
+}
+
+// Test runs a third-party connector's test entry point under the read-only
+// grant (A193): no filesystem writes, and HTTP requests limited to GET and
+// HEAD. A request that would change the target is refused before it is sent,
+// and fails the test as an operation outside the grant.
+func (r *PluginRuntime) Test(ctx context.Context, name string, call PluginCall) error {
+	p, err := r.plugin(name)
+	if err != nil {
+		return err
+	}
+	if !p.HasExport("test") {
+		return fmt.Errorf("relay: plugin %q has no test entry point", name)
+	}
+	return r.invoke(ctx, p, name, "test", call, true)
+}
+
+// HasTest reports whether the loaded plugin for a connector exports a test
+// entry point.
+func (r *PluginRuntime) HasTest(name string) bool {
+	p, err := r.plugin(name)
+	return err == nil && p.HasExport("test")
+}
+
+func (r *PluginRuntime) plugin(name string) (*pluginhost.Plugin, error) {
 	if r == nil {
-		return ErrPluginsNotConfigured
+		return nil, ErrPluginsNotConfigured
 	}
 	r.mu.RLock()
 	p := r.plugins[name]
 	r.mu.RUnlock()
 	if p == nil {
-		return fmt.Errorf("relay: no verified plugin for connector %q", name)
+		return nil, fmt.Errorf("relay: no verified plugin for connector %q", name)
 	}
+	return p, nil
+}
 
+func (r *PluginRuntime) invoke(ctx context.Context, p *pluginhost.Plugin, name, fn string, call PluginCall, readOnly bool) error {
 	before := p.Stats()
-	rc, invErr := r.host.Invoke(ctx, p, pluginEntrypoint(p))
+	rc, invErr := r.host.InvokeWith(ctx, p, fn, pluginInvocation(call.Client, call.Intent, call.Material, readOnly))
 	denied := p.Stats().Denied - before.Denied
 
 	switch {
@@ -247,7 +292,7 @@ func (r *PluginRuntime) Deploy(ctx context.Context, name string) error {
 		// The error can carry text the module chose. It is not forwarded to the
 		// control plane: the relay reports a closed phrase, exactly as it does
 		// for a native connector's error.
-		return fmt.Errorf("relay: plugin %q deploy failed", name)
+		return fmt.Errorf("relay: plugin %q %s failed", name, fn)
 	case denied > 0:
 		// The sandbox refused something the module tried. A deploy that
 		// continued past this would be reporting success for a connector that
@@ -255,7 +300,7 @@ func (r *PluginRuntime) Deploy(ctx context.Context, name string) error {
 		return fmt.Errorf("relay: plugin %q attempted %d operation(s) outside its capability grant",
 			name, denied)
 	case rc != 0:
-		return fmt.Errorf("relay: plugin %q deploy returned non-zero status %d", name, rc)
+		return fmt.Errorf("relay: plugin %q %s returned non-zero status %d", name, fn, rc)
 	default:
 		return nil
 	}

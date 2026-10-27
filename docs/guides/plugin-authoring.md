@@ -46,6 +46,22 @@ _, err = host.Invoke(ctx, plugin, "deploy")
 Each `Load` gets its own wazero runtime, and each `Invoke` runs on the host's
 bounded worker pool, so concurrency and blast radius stay contained.
 
+## Deploying to an appliance from a relay
+
+A connector plugin running on a relay gets two more capabilities. With
+`input.read` it reads its deploy's public inputs through `input_read`:
+`certificate_pem`, `fingerprint`, `target` and `target_config`. With `net.http`
+(constrained to the appliance's `host:port`) it asks the relay to make an HTTP
+request through `cap_http`, a JSON request in and a JSON response out. Ask for
+the target's credential by name (`"auth": "basic"`, `"bearer"` or `"header"`) and
+for the private key by reference (`{"$input": "private_key_pem"}` in a `json`
+body, or `"body_input"`): the relay adds them, sends the request, and removes
+every redeemed value from the reply, so the plugin never holds the password or
+the key. Export `test` to answer connector tests: it runs under a read-only grant,
+with HTTP limited to `GET` and `HEAD`. Start from
+`plugins/connectors/reference/reference-http-connector.wat`; the full contract is
+in [Extensibility and plugins](../features/extensibility-plugins.md).
+
 ## Conformance
 
 Before a plugin is admitted, run it through the host's **conformance suite**,

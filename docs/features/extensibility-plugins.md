@@ -34,14 +34,42 @@ plugin's reach is closed by construction. Every gated call (write a file, dial a
 checks the [capability grant](../glossary.md) first, including path/host prefix matching,
 and denials are counted.
 
-The ABI is three functions, each returning `0` (ok), `1` (denied by the grant) or `2`
+The ABI is five functions, each returning `0` (ok), `1` (denied by the grant) or `2`
 (error). Arguments are offsets and lengths into the plugin's own exported memory:
 
 ```wat
-(import "env" "cap_read"  (func (param i32 i32 i32 i32 i32) (result i32)))  ;; path, out, cap, out_len
-(import "env" "cap_write" (func (param i32 i32 i32 i32)     (result i32)))  ;; path, data
-(import "env" "cap_dial"  (func (param i32 i32)             (result i32)))  ;; host:port
+(import "env" "cap_read"   (func (param i32 i32 i32 i32 i32) (result i32)))  ;; path, out, cap, out_len
+(import "env" "cap_write"  (func (param i32 i32 i32 i32)     (result i32)))  ;; path, data
+(import "env" "cap_dial"   (func (param i32 i32)             (result i32)))  ;; host:port
+(import "env" "input_read" (func (param i32 i32 i32 i32 i32) (result i32)))  ;; name, out, cap, out_len
+(import "env" "cap_http"   (func (param i32 i32 i32 i32 i32) (result i32)))  ;; request, out, cap, out_len
 ```
+
+**Inputs and HTTP calls the host makes (relay connectors).** A connector plugin
+running on a relay reads its deploy's inputs with `input_read` (grant `input.read`):
+`certificate_pem`, `fingerprint`, `target` and `target_config`. It never reads the
+private key or a credential. It calls the appliance with `cap_http` (grant
+`net.http`, constrained to `host:port` authorities like `net.dial`): the request is
+JSON (`method`, `url`, `headers`, and one of `body`, `body_input` or `json`; `auth`
+`basic`, `bearer` or `header` with `auth_header`), and the response written back is
+JSON (`status`, `headers`, `body`, `truncated`). The relay makes the request itself.
+It adds the target's credential (`basic` uses the target's `username` and the
+redeemed `password_ref`; `bearer` and `header` use `token_ref`), splices the
+certificate or private key into the body where the request names it
+(`{"$input": "private_key_pem"}` in a `json` body, or `body_input`), sends it
+through the agent's egress policy, and removes every redeemed value from the
+response before the plugin reads it. A plugin may not set `Authorization`,
+`Proxy-Authorization`, `Cookie`, or the `auth_header` it asked the relay to set.
+So a plugin deploys as the appliance's administrator without ever holding the
+password or the key. `plugins/connectors/reference/reference-http-connector.wat`
+is the reference.
+
+**A test entry point under a read-only grant.** A connector plugin that exports
+`test` answers a connector test (`POST /api/v1/connectors/targets/{id}/test`): the
+relay redeems the attempt's credentials and invokes `test` with filesystem writes
+refused and HTTP limited to `GET` and `HEAD`. A request that would change the target
+is refused before it is sent and fails the test, as an operation outside the grant.
+A plugin without `test` is not invoked and no credential is redeemed.
 
 **Two things enforce a path grant, not one.** The grant check is *lexical*: it cleans
 both sides and requires the match to land on a separator boundary, so `/etc/nginx/certs`

@@ -33261,7 +33261,9 @@
             "enum": [
               "fs.read",
               "fs.write",
-              "net.dial"
+              "net.dial",
+              "input.read",
+              "net.http"
             ],
             "type": "string"
           },

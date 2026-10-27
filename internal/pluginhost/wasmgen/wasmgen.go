@@ -227,3 +227,37 @@ func DialGuest(addr string, entries ...string) []byte {
 func WriteArgs(path, content string) []int32 {
 	return []int32{0, i32(len(path)), i32(len(path)), i32(len(content))}
 }
+
+// HTTPGuest builds a connector plugin whose deploy and test entry points each
+// call cap_http with one constant JSON request (A193): deployReq at offset 0,
+// testReq after it, a response buffer at 16384 (32 KiB) and its length cell at
+// 60000, all inside the single page this module owns. An empty testReq leaves
+// the module without a test entry point.
+func HTTPGuest(deployReq, testReq string) []byte {
+	const outPtr, outCap, outLenPtr = 16384, 32768, 60000
+	if len(deployReq)+len(testReq) > outPtr {
+		panic("wasmgen: HTTP guest requests overlap the response buffer")
+	}
+	exports := []Export{
+		{Name: "run", Const: 0},
+		{Name: "deploy", Args: []int32{0, i32(len(deployReq)), outPtr, outCap, outLenPtr}},
+	}
+	if testReq != "" {
+		exports = append(exports, Export{Name: "test", Args: []int32{i32(len(deployReq)), i32(len(testReq)), outPtr, outCap, outLenPtr}})
+	}
+	return Module("cap_http", 5, []byte(deployReq+testReq), exports)
+}
+
+// InputGuest builds a plugin that calls input_read(name, out=1024, cap=8192,
+// outLen=9300).
+func InputGuest(name string, entries ...string) []byte {
+	if len(entries) == 0 {
+		entries = []string{"run"}
+	}
+	args := []int32{0, i32(len(name)), 1024, 8192, 9300}
+	exports := make([]Export, 0, len(entries))
+	for _, e := range entries {
+		exports = append(exports, Export{Name: e, Args: args})
+	}
+	return Module("input_read", 5, []byte(name), exports)
+}

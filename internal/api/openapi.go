@@ -3068,7 +3068,7 @@ func componentSchemas() map[string]*Schema {
 		"unknown_count":  {Type: "integer"},
 	}, "schema_version", "rows", "unknown_count")
 	relayPluginGrant := object(map[string]*Schema{
-		"capability":  {Type: "string", Enum: []string{"fs.read", "fs.write", "net.dial"}},
+		"capability":  {Type: "string", Enum: []string{"fs.read", "fs.write", "net.dial", "input.read", "net.http"}},
 		"constraints": {Type: "array", Items: str()},
 	}, "capability", "constraints")
 	relayPluginEntry := object(map[string]*Schema{

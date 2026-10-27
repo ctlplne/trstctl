@@ -147,6 +147,10 @@ func pluginCapability(name string) (pluginhost.Capability, bool) {
 		return pluginhost.CapFSWrite, true
 	case "net.dial":
 		return pluginhost.CapNetDial, true
+	case "input.read":
+		return pluginhost.CapInputRead, true
+	case "net.http":
+		return pluginhost.CapHTTP, true
 	default:
 		return "", false
 	}

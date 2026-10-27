@@ -4,9 +4,11 @@ package pluginhost_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,15 +19,18 @@ import (
 // referenceWATs are the plugin sources this repository ships for authors to copy.
 var referenceWATs = []string{
 	"../../plugins/connectors/reference/reference-connector.wat",
+	"../../plugins/connectors/reference/reference-http-connector.wat",
 	"../../plugins/ca/reference/reference-ca.wat",
 }
 
 // abiArity is the published signature of each capability function: the number of
 // i32 arguments a guest must declare on its import.
 var abiArity = map[string]int{
-	"cap_read":  5,
-	"cap_write": 4,
-	"cap_dial":  2,
+	"cap_read":   5,
+	"cap_write":  4,
+	"cap_dial":   2,
+	"cap_http":   5,
+	"input_read": 5,
 }
 
 // TestReferencePluginsDeclareTheCurrentABI keeps the shipped reference plugins in
@@ -132,5 +137,62 @@ func TestReferencePluginShapeInstantiates(t *testing.T) {
 	}
 	if string(got) != "deployed" {
 		t.Errorf("reference plugin wrote %q, want %q", got, "deployed")
+	}
+}
+
+// TestReferenceHTTPConnectorRunsThroughTheHost (A193) keeps the shipped HTTP
+// reference connector honest: its two requests are well-formed, the lengths
+// its entry points pass match its data, and the same module shape, built with
+// wasmgen because wat2wasm is not a build dependency, deploys through the
+// host's HTTP service with the credential asked for by name and the
+// certificate and key spliced by reference, and tests read-only.
+func TestReferenceHTTPConnectorRunsThroughTheHost(t *testing.T) {
+	ctx := context.Background()
+	src, err := os.ReadFile("../../plugins/connectors/reference/reference-http-connector.wat")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := regexp.MustCompile(`\(data \(i32\.const (\d+)\) "((?:[^"\\]|\\.)*)"\)`).FindAllStringSubmatch(string(src), -1)
+	if len(data) != 2 || data[0][1] != "0" {
+		t.Fatalf("the reference connector should hold its deploy request at 0 and its test request after it: %v", data)
+	}
+	unescape := strings.NewReplacer(`\"`, `"`, `\\`, `\`)
+	deployReq, testReq := unescape.Replace(data[0][2]), unescape.Replace(data[1][2])
+	if data[1][1] != strconv.Itoa(len(deployReq)) {
+		t.Fatalf("the test request starts at %s, want %d", data[1][1], len(deployReq))
+	}
+	lengths := regexp.MustCompile(`i32\.const (\d+)\s+;; req_len`).FindAllStringSubmatch(string(src), -1)
+	if len(lengths) != 2 || lengths[0][1] != strconv.Itoa(len(deployReq)) || lengths[1][1] != strconv.Itoa(len(testReq)) {
+		t.Fatalf("the entry points pass request lengths %v, want %d and %d", lengths, len(deployReq), len(testReq))
+	}
+	for _, req := range []string{deployReq, testReq} {
+		var parsed pluginhost.HTTPRequest
+		if err := json.Unmarshal([]byte(req), &parsed); err != nil {
+			t.Fatalf("reference request %s does not parse: %v", req, err)
+		}
+	}
+
+	h := pluginhost.New()
+	t.Cleanup(func() { _ = h.Close(ctx) })
+	grant := pluginhost.NewGrant(pluginhost.CapHTTP).WithPathPrefix(pluginhost.CapHTTP, "appliance.example:443")
+	p, err := h.Load(ctx, wasmgen.HTTPGuest(deployReq, testReq), grant)
+	if err != nil {
+		t.Fatalf("the reference HTTP connector shape does not instantiate: %v", err)
+	}
+	t.Cleanup(func() { _ = p.Close(ctx) })
+	var sent []pluginhost.HTTPRequest
+	doer := func(_ context.Context, req pluginhost.HTTPRequest) (pluginhost.HTTPResponse, error) {
+		sent = append(sent, req)
+		return pluginhost.HTTPResponse{Status: 200, Body: "{}"}, nil
+	}
+	if status, err := h.InvokeWith(ctx, p, "deploy", pluginhost.Invocation{HTTP: doer}); err != nil || status != abiOK {
+		t.Fatalf("deploy() = %d, %v", status, err)
+	}
+	if status, err := h.InvokeWith(ctx, p, "test", pluginhost.Invocation{HTTP: doer, ReadOnly: true}); err != nil || status != abiOK {
+		t.Fatalf("test() under the read-only grant = %d, %v", status, err)
+	}
+	if len(sent) != 2 || sent[0].Method != "PUT" || sent[0].Auth != "basic" || !strings.Contains(string(sent[0].JSON), `"$input":"private_key_pem"`) ||
+		sent[1].Method != "GET" {
+		t.Fatalf("the host was asked for %+v", sent)
 	}
 }

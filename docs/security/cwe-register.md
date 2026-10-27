@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1817 annotated sites across 27 rules. Each row is
+1818 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (383 sites)
+### G101 — CWE-798 Use of hardcoded credentials (384 sites)
 
 | Location | Reason |
 |---|---|
@@ -102,6 +102,7 @@ not this file.
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
+| `internal/agent/relay/plugin_call_test.go:65` | a reference name (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:37` | a credential reference name, not a credential (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:45` | a credential reference name, not a credential (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:51` | a credential reference name, not a credential (CWE-798) |
@@ -1217,9 +1218,9 @@ not this file.
 | `cmd/trstctl-agent/main.go:1249` | operator-supplied PIN file path, read at their instruction (CWE-22) |
 | `cmd/trstctl-agent/main.go:1903` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
-| `cmd/trstctl-agent/pluginruntime.go:403` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:350` | operator-supplied runtime configuration path (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:377` | operator-supplied public issuer certificate (CWE-22) |
+| `cmd/trstctl-agent/pluginruntime.go:407` | operator-supplied public issuer certificate (CWE-22) |
 | `cmd/trstctl-agent/relayloop.go:212` | explicit operator-supplied CA path, parsed as public PEM trust only (CWE-22). |
 | `cmd/trstctl-agent/role_grant_renewal_test.go:149` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/sshkrl.go:51` | operator-selected public KRL input |
@@ -1342,8 +1343,8 @@ not this file.
 | `internal/agent/relay/hostrollback_test.go:193` | test-owned state root (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:300` | test-owned state root (CWE-22) |
 | `internal/agent/relay/mysql_verification_test.go:177` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
-| `internal/agent/relay/plugins.go:141` | operator-configured plugin directory (CWE-22) |
-| `internal/agent/relay/plugins.go:145` | sibling of an operator-configured module (CWE-22) |
+| `internal/agent/relay/plugins.go:142` | operator-configured plugin directory (CWE-22) |
+| `internal/agent/relay/plugins.go:146` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
 | `internal/agent/relay/relay_test.go:681` | certPath is created beneath this test's private t.TempDir, |
 | `internal/agent/relay/relay_test.go:1112` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
@@ -1490,8 +1491,8 @@ not this file.
 | `internal/objectstore/config.go:38` | operator-configured CA bundle path (CWE-22) |
 | `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |
 | `internal/pluginhost/containment_test.go:122` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/pluginhost/reference_plugin_test.go:49` | fixed in-repo reference plugin path (CWE-22) |
-| `internal/pluginhost/reference_plugin_test.go:129` | test reads the path it granted (CWE-22) |
+| `internal/pluginhost/reference_plugin_test.go:54` | fixed in-repo reference plugin path (CWE-22) |
+| `internal/pluginhost/reference_plugin_test.go:134` | test reads the path it granted (CWE-22) |
 | `internal/pluginhost/sandbox_test.go:95` | test reads the fixture path it just granted (CWE-22) |
 | `internal/pluginhost/sandbox_test.go:171` | test reads the fixture it created (CWE-22) |
 | `internal/pqc/prepared_leaf_openssl_test.go:58` | fixed server.log filename in this test's private TempDir; no user path. |

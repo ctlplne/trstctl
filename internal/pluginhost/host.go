@@ -48,18 +48,20 @@ func (h *Host) Close(_ context.Context) error {
 
 // Stats records what a plugin's gated host calls did.
 type Stats struct {
-	reads  int64
-	writes int64
-	dials  int64
-	denied int64
+	reads    int64
+	writes   int64
+	dials    int64
+	requests int64
+	denied   int64
 }
 
 // Snapshot is an immutable view of a plugin's host-call counters.
 type Snapshot struct {
-	Reads  int64
-	Writes int64
-	Dials  int64
-	Denied int64
+	Reads    int64
+	Writes   int64
+	Dials    int64
+	Requests int64
+	Denied   int64
 }
 
 // Plugin is a loaded, sandboxed WASM plugin bound to a grant. The module is
@@ -81,10 +83,11 @@ type Plugin struct {
 // Stats returns a snapshot of the plugin's gated host-call activity.
 func (p *Plugin) Stats() Snapshot {
 	return Snapshot{
-		Reads:  atomic.LoadInt64(&p.stats.reads),
-		Writes: atomic.LoadInt64(&p.stats.writes),
-		Dials:  atomic.LoadInt64(&p.stats.dials),
-		Denied: atomic.LoadInt64(&p.stats.denied),
+		Reads:    atomic.LoadInt64(&p.stats.reads),
+		Writes:   atomic.LoadInt64(&p.stats.writes),
+		Dials:    atomic.LoadInt64(&p.stats.dials),
+		Requests: atomic.LoadInt64(&p.stats.requests),
+		Denied:   atomic.LoadInt64(&p.stats.denied),
 	}
 }
 
@@ -153,9 +156,14 @@ func (h *Host) Load(ctx context.Context, wasm []byte, grant Grant) (*Plugin, err
 // The ABI, all arguments i32 offsets/lengths into the guest's exported memory,
 // all returning a status code (0 ok, 1 denied by grant, 2 error):
 //
-//	cap_read(path_ptr, path_len, out_ptr, out_cap, out_len_ptr) -> i32
-//	cap_write(path_ptr, path_len, data_ptr, data_len)           -> i32
-//	cap_dial(addr_ptr, addr_len)                                -> i32
+//	cap_read(path_ptr, path_len, out_ptr, out_cap, out_len_ptr)  -> i32
+//	cap_write(path_ptr, path_len, data_ptr, data_len)            -> i32
+//	cap_dial(addr_ptr, addr_len)                                 -> i32
+//	input_read(name_ptr, name_len, out_ptr, out_cap, out_len_ptr) -> i32
+//	cap_http(req_ptr, req_len, out_ptr, out_cap, out_len_ptr)    -> i32
+//
+// input_read and cap_http (A193) serve the call's Invocation; see
+// invocation.go.
 //
 // When the grant is empty the "env" module is not instantiated at all, so any
 // import a guest declares fails to resolve. That is what makes the empty-grant
@@ -174,6 +182,14 @@ func (h *Host) registerEnv(ctx context.Context, rt wazero.Runtime, sb *sandbox) 
 	}
 	if sb.grant.Has(CapNetDial) {
 		b = b.NewFunctionBuilder().WithFunc(sb.hostDial).Export("cap_dial")
+		exported++
+	}
+	if sb.grant.Has(CapInputRead) {
+		b = b.NewFunctionBuilder().WithFunc(sb.hostInputRead).Export("input_read")
+		exported++
+	}
+	if sb.grant.Has(CapHTTP) {
+		b = b.NewFunctionBuilder().WithFunc(sb.hostHTTP).Export("cap_http")
 		exported++
 	}
 	if exported == 0 {
@@ -200,7 +216,10 @@ func guestBytes(m api.Module, ptr, size, limit uint32) ([]byte, bool) {
 
 // hostWrite implements cap_write: read the path and the payload from guest
 // memory, then let the sandbox decide and perform the write.
-func (s *sandbox) hostWrite(_ context.Context, m api.Module, pathPtr, pathLen, dataPtr, dataLen uint32) uint32 {
+func (s *sandbox) hostWrite(ctx context.Context, m api.Module, pathPtr, pathLen, dataPtr, dataLen uint32) uint32 {
+	if inv := invocationFrom(ctx); inv != nil && inv.ReadOnly {
+		return s.refuse(errReadOnly)
+	}
 	p, ok := guestBytes(m, pathPtr, pathLen, maxPathBytes)
 	if !ok {
 		return s.refuse(errBadGuestPointer)

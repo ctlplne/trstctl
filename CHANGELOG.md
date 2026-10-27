@@ -2,6 +2,14 @@
 
 ### Added
 
+- Relay connector plugins: a module reads its deploy's certificate, fingerprint
+  and target (`input.read`) and asks the relay to make its HTTP calls
+  (`net.http`). The relay adds the target's credential, splices the private key
+  into the body by reference and removes every redeemed value from the reply, so
+  the module deploys as the appliance's administrator without holding the
+  password or the key. A module that exports `test` answers connector tests under
+  a read-only grant (no file writes, HTTP `GET` and `HEAD` only). A reference
+  module ships in `plugins/connectors/reference/`.
 - Relay failure log: an agent that claims jobs keeps its newest 200 failed
   deploys in a file on its own host (`--deploy-failure-log`, beside `--key` by
   default, mode 0600): when, the job and attempt, the connector and target, the

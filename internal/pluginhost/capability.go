@@ -17,6 +17,7 @@ const (
 	CapFSRead  Capability = "fs.read"
 	CapFSWrite Capability = "fs.write"
 	CapNetDial Capability = "net.dial"
+	// CapInputRead and CapHTTP (A193) are declared in invocation.go.
 )
 
 // Grant is the set of capabilities a plugin holds, with optional per-capability
@@ -102,7 +103,7 @@ func (g Grant) PathPrefixes(cap Capability) []string {
 //
 // Matching depends on the kind of resource, because a hostname is not a path:
 //
-//   - CapNetDial constraints are host[:port] authorities, matched on an exact
+//   - CapNetDial and CapHTTP constraints are host[:port] authorities, matched on an exact
 //     hostname (case-insensitive, trailing root dot and IPv6 brackets ignored).
 //     A constraint that names a port also requires that exact port; one with no
 //     port accepts any port. Exactness is the point: a prefix match would let
@@ -132,7 +133,7 @@ func (g Grant) Allows(cap Capability, resource string) bool {
 		return true
 	}
 	for _, c := range constraints {
-		if cap == CapNetDial {
+		if cap == CapNetDial || cap == CapHTTP {
 			if authorityAllows(c, resource) {
 				return true
 			}
