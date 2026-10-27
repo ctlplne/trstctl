@@ -3119,6 +3119,10 @@ export const messages = {
   },
   "secrets.kmipClients.failed": { defaultMessage: "The KMIP client change failed", description: "KMIP client action error title." },
   "secrets.kmipClients.unavailable": { defaultMessage: "KMIP clients are unavailable", description: "KMIP client list error title." },
+  "secrets.kmipClients.certificate": {
+    defaultMessage: "{subject} · {fingerprint}",
+    description: "A KMIP client's enrolled certificate: its subject, then its SHA-256 fingerprint.",
+  },
   "secrets.kmipClients.empty": { defaultMessage: "No KMIP clients are registered for this tenant.", description: "Empty KMIP client list." },
   "secrets.kmipClients.newEnrollment": { defaultMessage: "New enrollment", description: "Issues a KMIP client a new enrollment for a new certificate." },
   "secrets.kmipClients.remove": { defaultMessage: "Remove", description: "Removes a KMIP client registration." },

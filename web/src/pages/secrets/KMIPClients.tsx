@@ -130,8 +130,7 @@ export function KMIPClients() {
               </div>
               {client.fingerprint ? (
                 <p className="break-all font-mono text-caption text-muted-foreground">
-                  {client.subject ? `${client.subject} ${String.fromCharCode(183)} ` : ""}
-                  {client.fingerprint}
+                  {client.subject ? t("secrets.kmipClients.certificate", { subject: client.subject, fingerprint: client.fingerprint }) : client.fingerprint}
                 </p>
               ) : null}
               <p className="text-muted-foreground">{client.detail}</p>
