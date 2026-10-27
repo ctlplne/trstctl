@@ -8951,6 +8951,29 @@
         ],
         "type": "object"
       },
+      "CALeafEvaluation": {
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "ca_id": {
+            "type": "string"
+          },
+          "effective_ttl_seconds": {
+            "description": "The lifetime a signing would use, clamped to the issuer and the profile.",
+            "type": "integer"
+          },
+          "reason": {
+            "description": "Why the authority would refuse the request; absent when allowed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "allowed",
+          "ca_id"
+        ],
+        "type": "object"
+      },
       "CAOfflineCrossSignImportRequest": {
         "properties": {
           "ceremony_id": {
@@ -48482,6 +48505,75 @@
         ],
         "summary": "Issue a leaf certificate from a served CA authority",
         "x-trstctl-permission": "certs:issue"
+      }
+    },
+    "/api/v1/ca/authorities/{id}/issue/evaluate": {
+      "post": {
+        "operationId": "evaluateHierarchyLeaf",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CAIssueLeafRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CALeafEvaluation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Decide a leaf request by the checks issuance makes, without signing or recording anything",
+        "x-trstctl-permission": "certs:issue",
+        "x-trstctl-read-only": true
       }
     },
     "/api/v1/ca/authorities/{id}/offline-cross-signs": {

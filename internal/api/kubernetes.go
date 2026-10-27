@@ -145,6 +145,7 @@ type KubernetesTrustBundleDistribution struct {
 
 var kubernetesCSRControllerFlow = []string{
 	"the in-cluster agent controller lists and watches certificates.k8s.io/v1 CertificateSigningRequests, converging each one as its watch event arrives",
+	"with --k8s-csr-approver it first asks the issuing CA about each pending CSR whose spec.signerName maps to an installed trstctl Issuer or ClusterIssuer (POST /api/v1/ca/authorities/{id}/issue/evaluate, the checks issuance makes, without signing) and writes Approved, or Denied with the CA's reason, through the approval subresource (condition reason TrstctlProfilePolicy)",
 	"it selects unfinished, Approved CSRs whose spec.signerName maps to an installed trstctl Issuer or ClusterIssuer",
 	"spec.request travels OUTBOUND to the control plane's issuance URL; the certificate travels back (CSR up, certificate down)",
 	"the signed chain is patched into status.certificate and the CSR conditions are updated",
@@ -166,7 +167,7 @@ var kubernetesCSREvidenceRefs = []string{
 }
 
 var kubernetesCSRResiduals = []string{
-	"the controller signs Approved CSRs; approval itself remains a cluster RBAC decision this control plane does not make",
+	"by default the controller signs only CSRs a Kubernetes approver approved; the opt-in --k8s-csr-approver (with deploy/kubernetes/rbac-csr-approver.yaml) lets the issuing CA's profile approve or deny trstctl signer names, and cert-manager CertificateRequests keep their own approver",
 	"CSRs for signer names outside the trstctl prefix are never touched",
 	"a CSR bridged while its Issuer/ClusterIssuer is not installed is left for the owning controller",
 }

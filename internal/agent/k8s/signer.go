@@ -114,6 +114,53 @@ func (s *HTTPSigner) Sign(ctx context.Context, csrDER []byte, ttl time.Duration)
 	return []byte(cert), nil
 }
 
+// Evaluate asks the CA whether it would issue the request (A195): it posts the
+// same body to the signer URL's /evaluate, which decides by the checks issuance
+// makes without signing anything. It makes HTTPSigner an Approver.
+func (s *HTTPSigner) Evaluate(ctx context.Context, csrDER []byte, ttl time.Duration) (ApprovalDecision, error) {
+	if ttl < time.Second || ttl%time.Second != 0 {
+		return ApprovalDecision{}, fmt.Errorf("k8s: requested certificate lifetime must be positive whole seconds")
+	}
+	body, err := json.Marshal(map[string]any{
+		"csr_pem":     string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})),
+		"ttl_seconds": int64(ttl / time.Second),
+	})
+	if err != nil {
+		return ApprovalDecision{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimSuffix(s.url, "/")+"/evaluate", bytes.NewReader(body))
+	if err != nil {
+		return ApprovalDecision{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if len(s.bearerToken) > 0 {
+		req.Header.Set("Authorization", "Bearer "+string(s.bearerToken))
+	}
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return ApprovalDecision{}, fmt.Errorf("k8s: evaluation request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, signerResponseLimit))
+	if err != nil {
+		return ApprovalDecision{}, fmt.Errorf("k8s: read evaluation response: %w", err)
+	}
+	if resp.StatusCode/100 != 2 {
+		return ApprovalDecision{}, fmt.Errorf("k8s: evaluation status %d: %s", resp.StatusCode, signerErrorContext(data, ""))
+	}
+	var out struct {
+		Allowed bool   `json:"allowed"`
+		Reason  string `json:"reason"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return ApprovalDecision{}, fmt.Errorf("k8s: decode evaluation response: %w", err)
+	}
+	if !out.Allowed && strings.TrimSpace(out.Reason) == "" {
+		out.Reason = "the issuing CA refused the request without a reason"
+	}
+	return ApprovalDecision{Allowed: out.Allowed, Reason: out.Reason}, nil
+}
+
 func signerIdempotencyKey(endpoint string, csrDER []byte, ttl time.Duration) string {
 	// Idempotency is scoped by tenant, not by CA endpoint. Bind the selected
 	// authority as well as the CSR and lifetime to prevent a retry against a

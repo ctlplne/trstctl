@@ -485,7 +485,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:543` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:545` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1144,7 +1144,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:658` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:660` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1215,8 +1215,8 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:335` | exact test tempdir sentinel |
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
-| `cmd/trstctl-agent/main.go:1256` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1915` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1258` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1917` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:350` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:377` | operator-supplied public issuer certificate (CWE-22) |
@@ -1833,7 +1833,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:421` | display/lookup fingerprint in the industry-standard form; not a security control (CWE-328) |
-| `internal/crypto/leafca.go:683` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
+| `internal/crypto/leafca.go:728` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/opaque_x509.go:274` | RFC 5280 4.2.1.2 method-1 SKID: an identifier, not integrity (CWE-328) |
 | `internal/crypto/pqc_x509.go:96` | key identifier, not integrity (CWE-328) |
 | `internal/crypto/tsa.go:187` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |
@@ -1880,7 +1880,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:831` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:833` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

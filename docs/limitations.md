@@ -6695,9 +6695,16 @@ as the default, a default-deny `NetworkPolicy`, and TLS.
   others idle, and a follower takes over within one lease duration if the
   holder dies. If the Lease RBAC is absent the agent logs once and reconciles
   anyway — duplicated idempotent work beats no controller. The namespaced
-  cert-manager bridge does not contend. CSR approval policy remains a
-  Kubernetes approver responsibility — operational/governance boundaries, not
-  missing signing functionality.
+  cert-manager bridge does not contend. CSR approval stays a Kubernetes
+  approver's by default. The opt-in `--k8s-csr-approver` (with
+  `deploy/kubernetes/rbac-csr-approver.yaml`) has the agent ask the issuing CA
+  about each pending native CSR for a trstctl signer name —
+  `POST /api/v1/ca/authorities/{id}/issue/evaluate`, the checks issuance makes,
+  without signing — and write Approved, or Denied with the CA's reason
+  (condition reason `TrstctlProfilePolicy`); an approved request is signed in
+  the same pass. A post-quantum subject key is evaluated on its names and
+  lifetime. cert-manager `CertificateRequest`s keep their own approver. The kind
+  proof of the approver runs in the Kubernetes e2e job.
 - Multi-replica HA: the Helm chart runs the control plane multi-replica by
   default (`replicaCount: 2`, `RollingUpdate maxUnavailable: 0`,
   PodDisruptionBudget, pod anti-affinity), and running >1 replica is safe:

@@ -25,6 +25,10 @@ in-cluster CA — no `client-go` dependency.
   Secrets) for TrustBundle Secret targets outside the agent's namespace; it
   lets the agent read any Secret by name, so apply it only where that is
   acceptable.
+- `rbac-csr-approver.yaml` — opt-in cluster grant (update on
+  `certificatesigningrequests/approval`, approve on the trstctl signer names) for
+  `--k8s-csr-approver`, which approves or denies native CSRs for trstctl signer
+  names by the issuing CA's profile.
 - `csi-trust.yaml` — opt-in CSI node plugin (driver `trust.csi.trstctl.com`)
   that serves TrustBundles to pods as inline volumes; render its image digest
   like the DaemonSet's, with `TRSTCTL_AGENT_DAEMONSET_TEMPLATE` pointing at it.

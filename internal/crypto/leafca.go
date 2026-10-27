@@ -180,46 +180,91 @@ func SignLeafFromCSRWithValidity(caCertDER []byte, caSigner DigestSigner, csrDER
 	return signLeafFromCSRWithPreparation(caCertDER, caSigner, csrDER, ttl, prof, nil)
 }
 
-func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile, prepared *LeafPreparation) (IssuedLeaf, error) {
+// EvaluateLeafRequest makes every check SignLeafFromCSRWithProfile makes
+// before it signs: the issuer's remaining lifetime when the profile clamps to
+// it, the CSR's signature, the weak-key refusal and the profile's constraints.
+// It signs nothing and returns the TTL a signing would use (A195), so an
+// approver can decide on exactly the rules the CA will apply.
+func EvaluateLeafRequest(caCertDER, csrDER []byte, ttl time.Duration, prof LeafProfile) (time.Duration, error) {
 	caCert, err := x509.ParseCertificate(caCertDER)
 	if err != nil {
-		return IssuedLeaf{}, fmt.Errorf("crypto: parse CA cert: %w", err)
+		return 0, fmt.Errorf("crypto: parse CA cert: %w", err)
 	}
+	_, effective, err := checkLeafRequest(caCert, csrDER, ttl, prof, nil)
+	return effective, err
+}
+
+// ClampLeafTTLToIssuer returns the TTL a profile that clamps to its issuer
+// would sign for caCertDER: ttl, or the issuer's remaining lifetime when ttl
+// is zero or longer. An expired issuer is a profile violation.
+func ClampLeafTTLToIssuer(caCertDER []byte, ttl time.Duration) (time.Duration, error) {
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		return 0, fmt.Errorf("crypto: parse CA cert: %w", err)
+	}
+	return clampLeafTTL(caCert, ttl, nil)
+}
+
+func clampLeafTTL(caCert *x509.Certificate, ttl time.Duration, prepared *LeafPreparation) (time.Duration, error) {
+	remaining := time.Until(caCert.NotAfter)
+	if remaining <= 0 {
+		return 0, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf",
+			caCert.NotAfter.UTC().Format(time.RFC3339))}
+	}
+	if prepared != nil {
+		remaining = caCert.NotAfter.Sub(prepared.ValidityAnchor)
+		if remaining <= 0 {
+			return 0, &leafProfileError{"retained leaf validity starts after issuer expiry"}
+		}
+	}
+	if ttl <= 0 || ttl > remaining {
+		ttl = remaining
+	}
+	return ttl, nil
+}
+
+// checkLeafRequest is the part of signing that decides: it returns the parsed
+// CSR and the effective TTL, or the refusal. Signing and evaluation share it,
+// so an approver can never approve what the CA would refuse.
+func checkLeafRequest(caCert *x509.Certificate, csrDER []byte, ttl time.Duration, prof LeafProfile, prepared *LeafPreparation) (*x509.CertificateRequest, time.Duration, error) {
 	if prof.ClampTTLToIssuer {
 		// Clamp BEFORE profile enforcement, matching the order the served
 		// hierarchy always used (clamp first, then constraints see the
 		// effective TTL). The issuer certificate is already in hand here, so
 		// the clamp costs nothing extra.
-		remaining := time.Until(caCert.NotAfter)
-		if remaining <= 0 {
-			return IssuedLeaf{}, &leafProfileError{fmt.Sprintf("issuing CA expired at %s; it cannot vouch for a new leaf",
-				caCert.NotAfter.UTC().Format(time.RFC3339))}
+		clamped, err := clampLeafTTL(caCert, ttl, prepared)
+		if err != nil {
+			return nil, 0, err
 		}
-		if prepared != nil {
-			remaining = caCert.NotAfter.Sub(prepared.ValidityAnchor)
-			if remaining <= 0 {
-				return IssuedLeaf{}, &leafProfileError{"retained leaf validity starts after issuer expiry"}
-			}
-		}
-		if ttl <= 0 || ttl > remaining {
-			ttl = remaining
-		}
+		ttl = clamped
 	}
 	csr, err := x509.ParseCertificateRequest(csrDER)
 	if err != nil {
-		return IssuedLeaf{}, fmt.Errorf("crypto: parse CSR: %w", err)
+		return nil, 0, fmt.Errorf("crypto: parse CSR: %w", err)
 	}
 	if err := csr.CheckSignature(); err != nil {
-		return IssuedLeaf{}, fmt.Errorf("crypto: CSR signature: %w", err)
+		return nil, 0, fmt.Errorf("crypto: CSR signature: %w", err)
 	}
 	// A subject key that fails a structural weak-key check is refused before
 	// anything is signed, naming the check (owner decision, batch 11).
 	if err := RefuseWeakSubjectKey(csr.RawSubjectPublicKeyInfo); err != nil {
-		return IssuedLeaf{}, newSubjectKeyRefusal(err)
+		return nil, 0, newSubjectKeyRefusal(err)
 	}
 	// Enforce the profile's constraints before signing (PKIGOV-002): an
 	// out-of-profile request is rejected, never minted.
 	if err := enforceLeafProfile(csr, ttl, prof); err != nil {
+		return nil, 0, err
+	}
+	return csr, ttl, nil
+}
+
+func signLeafFromCSRWithPreparation(caCertDER []byte, caSigner DigestSigner, csrDER []byte, ttl time.Duration, prof LeafProfile, prepared *LeafPreparation) (IssuedLeaf, error) {
+	caCert, err := x509.ParseCertificate(caCertDER)
+	if err != nil {
+		return IssuedLeaf{}, fmt.Errorf("crypto: parse CA cert: %w", err)
+	}
+	csr, ttl, err := checkLeafRequest(caCert, csrDER, ttl, prof, prepared)
+	if err != nil {
 		return IssuedLeaf{}, err
 	}
 	if _, pure := pureX509Signer(caSigner); pure {

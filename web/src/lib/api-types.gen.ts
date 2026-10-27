@@ -2177,6 +2177,13 @@ export interface CAKeyImportOfferRequest {
   spec: CASpec;
 }
 
+export interface CALeafEvaluation {
+  allowed: boolean;
+  ca_id: string;
+  effective_ttl_seconds?: number;
+  reason?: string;
+}
+
 export interface CAOfflineCrossSignImportRequest {
   ceremony_id: string;
   cross_certificate_pem: string;

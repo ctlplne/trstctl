@@ -44,6 +44,9 @@ type CAHierarchyService interface {
 	ImportOfflineIntermediate(ctx context.Context, tenantID, caID string, req CAImportOfflineIntermediateRequest) (CAAuthority, error)
 	IssueIntermediateCSR(ctx context.Context, tenantID, caID string, req CAIssueIntermediateRequest) (CAIssuedIntermediate, error)
 	IssueLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CAIssuedLeaf, error)
+	// EvaluateLeaf decides a leaf request as IssueLeaf would, without signing
+	// (A195).
+	EvaluateLeaf(ctx context.Context, tenantID, caID string, req CAIssueLeafRequest) (CALeafEvaluation, error)
 	PreviewRotation(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotationPlanPreview, error)
 	RotateAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRotationRequest) (CAAuthorityRotation, error)
 	RekeyAuthority(ctx context.Context, tenantID, caID string, req CAAuthorityRekeyRequest) (CAAuthorityRotation, error)
@@ -436,6 +439,17 @@ type CAIssuedLeaf struct {
 	NotAfter       time.Time `json:"not_after"`
 }
 
+// CALeafEvaluation is a CA authority's decision on a leaf request, made by the
+// checks issuance makes without signing anything (A195). Reason says why a
+// request would be refused. CAID is the authority that would sign: a
+// superseded authority's active successor.
+type CALeafEvaluation struct {
+	Allowed             bool   `json:"allowed"`
+	Reason              string `json:"reason,omitempty"`
+	CAID                string `json:"ca_id"`
+	EffectiveTTLSeconds int64  `json:"effective_ttl_seconds,omitempty"`
+}
+
 type CAIssuedIntermediate struct {
 	CertificatePEM string    `json:"certificate_pem"`
 	Serial         string    `json:"serial"`
@@ -780,6 +794,40 @@ func (a *API) issueHierarchyIntermediateCSR(w http.ResponseWriter, r *http.Reque
 		}
 		return http.StatusCreated, issued, nil
 	})
+}
+
+// evaluateHierarchyLeaf answers whether the authority would issue a leaf for
+// the request, by the checks issuance makes, without signing or recording
+// anything (A195). The Kubernetes agent's opt-in CSR approver asks it before
+// it approves or denies.
+func (a *API) evaluateHierarchyLeaf(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	if a.caHierarchy == nil {
+		a.writeError(w, ErrCAHierarchyUnavailable)
+		return
+	}
+	var req caIssueLeafJSON
+	if err := decodeJSON(r, &req); err != nil {
+		a.writeError(w, errWithStatus(http.StatusBadRequest, err))
+		return
+	}
+	block, _ := pem.Decode([]byte(req.CSRPem))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "csr_pem must contain one CERTIFICATE REQUEST PEM block"))
+		return
+	}
+	evaluation, err := a.caHierarchy.EvaluateLeaf(r.Context(), tenantID, r.PathValue("id"), CAIssueLeafRequest{
+		CSRDER: block.Bytes, TTLSeconds: req.TTLSeconds,
+	})
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, evaluation)
 }
 
 //trstctl:mutation

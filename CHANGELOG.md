@@ -2,6 +2,13 @@
 
 ### Added
 
+- Kubernetes CSR approver (opt-in): with `--k8s-csr-approver`, the agent asks
+  the issuing CA whether it would issue each pending native
+  `CertificateSigningRequest` for a trstctl signer name
+  (`POST /api/v1/ca/authorities/{id}/issue/evaluate`, the checks issuance makes,
+  without signing; `trstctl-cli ca authorities evaluate-leaf`) and writes
+  Approved, or Denied with the CA's reason. A Kubernetes approver still decides
+  by default. `deploy/kubernetes/rbac-csr-approver.yaml` carries the grant.
 - Agent clock-skew warning: every heartbeat carries the agent's clock and its
   answer carries the control plane's. An agent more than
   `agent_channel.clock_skew_warning` (default 2 minutes) off is named on the

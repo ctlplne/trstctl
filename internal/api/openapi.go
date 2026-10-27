@@ -962,6 +962,12 @@ func componentSchemas() map[string]*Schema {
 	caIssueLeafReq := object(map[string]*Schema{
 		"csr_pem": str(), "ttl_seconds": {Type: "integer"},
 	}, "csr_pem", "ttl_seconds")
+	caLeafEvaluation := object(map[string]*Schema{
+		"allowed":               {Type: "boolean"},
+		"reason":                {Type: "string", Description: "Why the authority would refuse the request; absent when allowed."},
+		"ca_id":                 str(),
+		"effective_ttl_seconds": {Type: "integer", Description: "The lifetime a signing would use, clamped to the issuer and the profile."},
+	}, "allowed", "ca_id")
 	caIssuedLeaf := object(map[string]*Schema{
 		"certificate_pem": str(), "serial": str(), "not_after": timestamp(),
 	}, "certificate_pem", "serial", "not_after")
@@ -8162,6 +8168,7 @@ func componentSchemas() map[string]*Schema {
 		"CAIssueLeafRequest":                    caIssueLeafReq,
 		"CAIssuedIntermediate":                  caIssuedIntermediate,
 		"CAIssuedLeaf":                          caIssuedLeaf,
+		"CALeafEvaluation":                      caLeafEvaluation,
 		"ExternalCA":                            externalCA,
 		"ExternalCAList":                        list("ExternalCA"),
 		"ExternalCAIssueRequest":                externalCAIssueReq,

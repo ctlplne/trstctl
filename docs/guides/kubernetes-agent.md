@@ -58,8 +58,21 @@ spec:
 ```
 
 cert-manager creates the `CertificateRequest`. A separate Kubernetes approver
-must set `Approved=True` first; the trstctl agent does not approve its own
-requests and ignores unapproved or denied requests. Put the same exact HTTPS
+must set `Approved=True` first; the trstctl agent does not approve
+cert-manager requests and ignores unapproved or denied ones.
+
+**Native CSRs approved by the CA's profile (opt-in).** For native
+`CertificateSigningRequest`s addressed to a trstctl signer name
+(`trstctl.com/trstctl`, `trstctl.com/<issuer-name>`), the agent can decide
+approval itself: start it with `--k8s-csr-approver` beside
+`--cert-manager-controller`, and apply `deploy/kubernetes/rbac-csr-approver.yaml`
+(update on `certificatesigningrequests/approval`, approve on the trstctl signer
+names; add your named issuers' signer names to it). For each pending request the
+agent asks the issuing CA whether it would issue it — the CA authority's
+`/issue/evaluate`, the checks issuance makes, without signing — and writes
+`Approved`, or `Denied` with the CA's reason, both with condition reason
+`TrstctlProfilePolicy`. An approved request is signed in the same pass. Without
+the flag a Kubernetes approver decides, as before. Put the same exact HTTPS
 issuance endpoint in the operator-owned `Secret/trstctl-cert-manager-issuer`'s
 `signer-url` value and in the Issuer's `spec.signerURL`. A mismatch, an invalid
 `ttlSeconds`, or a `caAuthorityID` that differs from the URL leaves the Issuer

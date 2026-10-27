@@ -1596,6 +1596,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ca/authorities/{id}/issue/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide a leaf request by the checks issuance makes, without signing or recording anything */
+        post: operations["evaluateHierarchyLeaf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities/{id}/offline-cross-signs": {
         parameters: {
             query?: never;
@@ -10733,6 +10750,14 @@ export interface components {
             /** Format: uuid */
             parent_id?: string;
             spec: components["schemas"]["CASpec"];
+        };
+        CALeafEvaluation: {
+            allowed: boolean;
+            ca_id: string;
+            /** @description The lifetime a signing would use, clamped to the issuer and the profile. */
+            effective_ttl_seconds?: number;
+            /** @description Why the authority would refuse the request; absent when allowed. */
+            reason?: string;
         };
         CAOfflineCrossSignImportRequest: {
             /** Format: uuid */
@@ -23933,6 +23958,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CAIssuedLeaf"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    evaluateHierarchyLeaf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CAIssueLeafRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CALeafEvaluation"];
                 };
             };
             /** @description client error */

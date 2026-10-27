@@ -58,6 +58,10 @@ type IssuerController struct {
 	// clusterTrustBundles remembers which API version serves
 	// ClusterTrustBundle targets (A139).
 	clusterTrustBundles clusterTrustBundleAPI
+	// approver, when set, decides pending native CSRs for trstctl signer
+	// names by the issuing CA's answer (A195); nil leaves approval to a
+	// Kubernetes approver.
+	approver Approver
 }
 
 type issuerConfig struct {

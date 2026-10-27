@@ -30,6 +30,9 @@ type k8sOptions struct {
 	reconcileEvery  time.Duration
 	resync          time.Duration // the controller's full re-check beyond its watches
 	trustRollouts   bool          // apply TrustBundles the control plane rolls out here
+	// csrApprover lets the issuing CA approve or deny native CSRs for trstctl
+	// signer names (A195); off leaves approval to a Kubernetes approver.
+	csrApprover bool
 }
 
 func (k k8sOptions) validateIssuerConfig() error {
@@ -54,6 +57,9 @@ func (k k8sOptions) validateIssuerConfig() error {
 	}
 	if k.controller && k.resync < 0 {
 		return fmt.Errorf("the Kubernetes controller resync interval must not be negative")
+	}
+	if k.csrApprover && !k.controller {
+		return fmt.Errorf("--k8s-csr-approver requires --cert-manager-controller")
 	}
 	return nil
 }
@@ -140,6 +146,10 @@ func runKubernetes(ctx context.Context, o agentOptions, k k8sOptions) error {
 				return err
 			}
 			fmt.Printf("trstctl-agent: trstctl Issuer/ClusterIssuer/Certificate controller active for group %q\n", k.group)
+			if k.csrApprover {
+				issuerController.WithCSRApprover(signer)
+				fmt.Printf("trstctl-agent: native CSRs for %s/* signer names are approved or denied by the issuing CA's profile\n", k.group)
+			}
 		}
 	}
 

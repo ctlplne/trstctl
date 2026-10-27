@@ -3047,6 +3047,17 @@ CAKeyImportOfferRequest = TypedDict(
     total=False,
 )
 
+CALeafEvaluation = TypedDict(
+    'CALeafEvaluation',
+    {
+        'allowed': bool,
+        'ca_id': str,
+        'effective_ttl_seconds': int,
+        'reason': str,
+    },
+    total=False,
+)
+
 CAOfflineCrossSignImportRequest = TypedDict(
     'CAOfflineCrossSignImportRequest',
     {

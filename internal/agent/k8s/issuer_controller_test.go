@@ -50,6 +50,7 @@ type fakeIssuerAPI struct {
 	certificateStatus     map[string]map[string]any
 	certificateStatusPath map[string]string
 	kubernetesCSRStatus   map[string]map[string]any
+	kubernetesCSRApproval map[string]map[string]any
 	trustBundleStatus     map[string]map[string]any
 	secrets               map[string]map[string]any
 	secretWritePath       map[string]string
@@ -66,6 +67,7 @@ func newFakeIssuerAPI() *fakeIssuerAPI {
 		certificateStatus:     map[string]map[string]any{},
 		certificateStatusPath: map[string]string{},
 		kubernetesCSRStatus:   map[string]map[string]any{},
+		kubernetesCSRApproval: map[string]map[string]any{},
 		trustBundleStatus:     map[string]map[string]any{},
 		secrets:               map[string]map[string]any{},
 		secretWritePath:       map[string]string{},
@@ -125,6 +127,12 @@ func (f *fakeIssuerAPI) handler() http.Handler {
 				"kind":       "CertificateSigningRequestList",
 				"items":      f.kubernetesCSRs,
 			})
+		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/certificates.k8s.io/v1/certificatesigningrequests/") && strings.HasSuffix(path, "/approval"):
+			name := strings.TrimSuffix(strings.TrimPrefix(path, "/apis/certificates.k8s.io/v1/certificatesigningrequests/"), "/approval")
+			var obj map[string]any
+			_ = json.Unmarshal(body, &obj)
+			f.kubernetesCSRApproval[name] = obj
+			_ = json.NewEncoder(w).Encode(obj)
 		case r.Method == http.MethodPut && strings.HasPrefix(path, "/apis/certificates.k8s.io/v1/certificatesigningrequests/") && strings.HasSuffix(path, "/status"):
 			name := nameBeforeStatus(path)
 			var obj map[string]any

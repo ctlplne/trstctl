@@ -60,6 +60,16 @@ func (c *IssuerController) reconcileKubernetesCSRs(ctx context.Context, issuers,
 func (c *IssuerController) syncKubernetesCSR(ctx context.Context, csr map[string]any, issuers, clusterIssuers map[string]issuerConfig) (bool, PostureResource, error) {
 	config, backed, bindingReason := c.csrIssuerConfig(csr, issuers, clusterIssuers)
 	current := kubernetesCSRPosture(csr, backed, bindingReason)
+	// A195: with the opt-in approver, the issuing CA decides a pending request
+	// before anyone else has; an approved one is then signed in this pass.
+	if c.approver != nil && backed && !isKubernetesCSRFinished(csr) && !isKubernetesCSRApproved(csr) {
+		decided, err := c.decideKubernetesCSR(ctx, csr, config)
+		if err != nil {
+			return false, failedPosture(current), err
+		}
+		csr = decided
+		current = kubernetesCSRPosture(csr, backed, bindingReason)
+	}
 	if isKubernetesCSRFinished(csr) || !isKubernetesCSRApproved(csr) || !backed {
 		return false, current, nil
 	}

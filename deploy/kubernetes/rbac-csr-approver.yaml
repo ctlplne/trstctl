@@ -1,0 +1,34 @@
+# Opt-in: lets the trstctl agent approve or deny native Kubernetes
+# CertificateSigningRequests addressed to trstctl signer names, by asking the
+# issuing CA whether its profile allows each request (agent flag
+# --k8s-csr-approver). Without it, a Kubernetes approver decides and the agent
+# only signs what was approved.
+#
+# Kubernetes authorizes approval twice: update on the approval subresource, and
+# approve on the signer name. Keep resourceNames to the trstctl signers this
+# deployment serves; add trstctl.com/<issuer-name> for each named ClusterIssuer.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: trstctl-agent-csr-approver
+rules:
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["certificatesigningrequests/approval"]
+    verbs: ["update"]
+  - apiGroups: ["certificates.k8s.io"]
+    resources: ["signers"]
+    resourceNames: ["trstctl.com/trstctl"]
+    verbs: ["approve"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: trstctl-agent-csr-approver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: trstctl-agent-csr-approver
+subjects:
+  - kind: ServiceAccount
+    name: trstctl-agent
+    namespace: trstctl

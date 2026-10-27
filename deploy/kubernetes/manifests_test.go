@@ -1023,3 +1023,37 @@ func TestTrustSecretRBACIsOptInAndWriteOnlyWhereNeeded(t *testing.T) {
 		t.Fatal("the agent ClusterRole must allow ClusterTrustBundle targets")
 	}
 }
+
+// A195: approving native CSRs is its own opt-in grant: update on the approval
+// subresource and approve on named trstctl signers only, and the agent's own
+// ClusterRole never carries either.
+func TestCSRApproverRBACIsOptInAndScopedToTrstctlSigners(t *testing.T) {
+	raw, err := kubernetes.Manifests.ReadFile("rbac-csr-approver.yaml")
+	if err != nil || !bytes.Contains(raw, []byte("--k8s-csr-approver")) {
+		t.Fatalf("rbac-csr-approver.yaml must ship and name the flag it serves (err=%v)", err)
+	}
+	grant := namedClusterRole(t, "trstctl-agent-csr-approver")
+	if !hasClusterRoleRule(grant, "certificates.k8s.io", "certificatesigningrequests/approval", "update") ||
+		!hasNamedClusterRoleRule(grant, "certificates.k8s.io", "signers", "trstctl.com/trstctl", "approve") {
+		t.Fatalf("CSR approver grant = %v", grant["rules"])
+	}
+	for _, rule := range asMaps(grant["rules"]) {
+		if !contains(asStringSlice(rule["resources"]), "signers") {
+			continue
+		}
+		names := asStringSlice(rule["resourceNames"])
+		if len(names) == 0 {
+			t.Fatal("the approver grant must name the signers it approves for")
+		}
+		for _, name := range names {
+			if !strings.HasPrefix(name, "trstctl.com/") || strings.Contains(name, "*") {
+				t.Fatalf("the approver grant names signer %q; only exact trstctl signer names", name)
+			}
+		}
+	}
+	agent := clusterRole(t)
+	if hasClusterRoleRule(agent, "certificates.k8s.io", "certificatesigningrequests/approval", "update") ||
+		hasClusterRoleRule(agent, "certificates.k8s.io", "signers", "approve") {
+		t.Fatal("the agent ClusterRole must not carry CSR approval; the approver grant is opt-in")
+	}
+}

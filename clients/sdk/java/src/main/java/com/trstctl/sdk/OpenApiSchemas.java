@@ -230,6 +230,7 @@ public final class OpenApiSchemas {
       "CAKeyCeremony",
       "CAKeyImportOffer",
       "CAKeyImportOfferRequest",
+      "CALeafEvaluation",
       "CAOfflineCrossSignImportRequest",
       "CAOfflineRootRekey",
       "CAOfflineRootRekeyRequest",

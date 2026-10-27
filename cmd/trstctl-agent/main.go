@@ -125,6 +125,7 @@ func main() {
 	cmIssuer := flag.String("cert-manager-issuer", "", "standalone legacy cert-manager bridge for one issuerRef name; cannot combine with --cert-manager-controller")
 	cmGroup := flag.String("cert-manager-group", "trstctl.com", "cert-manager issuerRef group")
 	cmController := flag.Bool("cert-manager-controller", false, "run the trstctl Issuer/ClusterIssuer/Certificate Kubernetes controller")
+	k8sCSRApprover := flag.Bool("k8s-csr-approver", false, "with --cert-manager-controller, approve or deny pending native Kubernetes CertificateSigningRequests for trstctl signer names by asking the issuing CA whether its profile allows them, writing Denied with the CA's reason. Off by default: a Kubernetes approver decides. Needs deploy/kubernetes/rbac-csr-approver.yaml")
 	bridgeSignerURL := flag.String("bridge-signer-url", "", "control-plane issuance URL the cert-manager bridge forwards CSRs to")
 	bridgeSignerTokenFile := flag.String("bridge-signer-token-file", "", "file containing the API token used by the cert-manager bridge signer")
 	reconcileEvery := flag.Duration("reconcile-every", 30*time.Second, "how often the cert-manager bridge reconciles, and the Kubernetes controller's posture heartbeat")
@@ -527,6 +528,7 @@ func main() {
 			secret: *k8sSecret, issuer: *cmIssuer, group: *cmGroup,
 			controller: *cmController, signerURL: *bridgeSignerURL, signerTokenFile: *bridgeSignerTokenFile,
 			reconcileEvery: *reconcileEvery, resync: *k8sResync, trustRollouts: *k8sTrustRollouts,
+			csrApprover: *k8sCSRApprover,
 		}
 		run = func(ctx context.Context, o agentOptions) error { return runKubernetes(ctx, o, kopts) }
 	}
