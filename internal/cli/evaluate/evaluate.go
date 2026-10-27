@@ -9,12 +9,14 @@
 // shows. The pack is signed by the deployment's audit-evidence key and checks
 // offline with `trstctl evaluate verify`.
 //
-// A step that cannot run because an earlier one failed is skipped, never
-// passed, so a failed journey can never read as a passed one.
+// A step that cannot run because an earlier one failed, or that finds nothing
+// to work on, is skipped, never passed, so a failed journey can never read as a
+// passed one.
 package evaluate
 
 import (
 	"context"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -254,12 +256,21 @@ func (j *journey) resolveTarget(ctx context.Context) error {
 	return nil
 }
 
+// skippedStep is a step that found nothing to work on. It is reported as
+// skipped with its reason, never as passed, and does not stop later steps.
+type skippedStep struct{ reason string }
+
+func (s skippedStep) Error() string { return s.reason }
+
 // step runs one step unless an earlier one failed.
 func (j *journey) step(ctx context.Context, name string, fn func(context.Context, *Step) error) {
 	s := Step{Name: name, StartedAt: j.opts.Now().UTC(), Evidence: map[string]string{}}
+	var skip skippedStep
 	if j.failed != "" {
 		s.Status, s.Detail = StatusSkipped, "Skipped because the "+strings.ReplaceAll(j.failed, "_", " ")+" step failed."
-	} else if err := fn(ctx, &s); err != nil {
+	} else if err := fn(ctx, &s); errors.As(err, &skip) {
+		s.Status, s.Detail, s.Basis = StatusSkipped, skip.reason, ""
+	} else if err != nil {
 		s.Status, s.Detail, s.Basis = StatusFail, sentence(err.Error()), ""
 		j.failed = name
 	} else {
@@ -618,6 +629,20 @@ func (j *journey) awaitServed(ctx context.Context, fingerprint string) error {
 // renew asks for the identity's renewal and waits until the endpoint serves
 // the renewed certificate.
 func (j *journey) renew(ctx context.Context, s *Step) error {
+	// Renewal starts from deployed. When a host agent made the key, the
+	// identity reaches deployed when its delivery receipt is recorded, which
+	// can trail the certificate being served by a moment.
+	if err := j.poll(ctx, "the identity did not reach deployed", func(ctx context.Context) (bool, error) {
+		var identity struct {
+			Status string `json:"status"`
+		}
+		if err := j.api.get(ctx, "/api/v1/identities/"+url.PathEscape(j.identity), &identity); err != nil {
+			return false, err
+		}
+		return identity.Status == "deployed", nil
+	}); err != nil {
+		return err
+	}
 	key := j.key("renew")
 	if err := j.api.post(ctx, "/api/v1/identities/"+url.PathEscape(j.identity)+"/transitions",
 		map[string]any{"to": "renewing", "reason": "design-partner evaluation renewal"}, key, nil); err != nil {
@@ -697,15 +722,23 @@ func (j *journey) revoke(ctx context.Context, s *Step) error {
 }
 
 // exportAudit downloads the signed audit export of the journey and verifies
-// it with the published audit keys.
+// it with the published audit keys. The export starts at the journey's exact
+// start, so no earlier record is read as the journey's.
 func (j *journey) exportAudit(ctx context.Context, s *Step, since time.Time) error {
-	query := url.Values{"format": {"jws"}, "since": {since.Format(time.RFC3339)}}
-	if j.identity != "" {
-		query.Set("q", j.identity)
+	if j.identity == "" {
+		// Without the journey's identity the export cannot be narrowed to the
+		// journey: it would hold whatever else the tenant recorded meanwhile,
+		// background work from an earlier run included.
+		return skippedStep{"Skipped because the journey stopped before it created an identity, so the audit log holds no record that is the journey's own."}
 	}
+	query := url.Values{"format": {"jws"}, "since": {since.Format(time.RFC3339Nano)}, "q": {j.identity}}
 	export, err := j.api.do(ctx, http.MethodGet, "/api/v1/audit/export?"+query.Encode(), nil, "")
 	if err != nil {
 		return fmt.Errorf("the audit export was refused: %w", err)
+	}
+	var envelope auditanchor.EvidenceEnvelope
+	if json.Unmarshal(export, &envelope) == nil && envelope.ChainHead == "" {
+		return errors.New("the audit log holds no record of the journey's identity since the journey started")
 	}
 	jwks, err := j.api.do(ctx, http.MethodGet, "/api/v1/audit/verification-keys", nil, "")
 	if err != nil {

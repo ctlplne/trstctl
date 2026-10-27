@@ -201,9 +201,13 @@ func TestServedEvaluationJourneyA188(t *testing.T) {
 	for _, s := range failed.Steps {
 		outcome[s.Name] = s.Status
 	}
+	// A journey that stopped before it created an identity has no record of
+	// its own to export: skipped and saying why, never passed on other records
+	// the tenant made meanwhile (an earlier run's background work included).
 	if failed.Verdict != evaluate.StatusFail || outcome[evaluate.StepDiscovery] != evaluate.StatusFail ||
 		outcome[evaluate.StepIssuance] != evaluate.StatusSkipped || outcome[evaluate.StepRevocation] != evaluate.StatusSkipped ||
-		outcome[evaluate.StepAuditExport] != evaluate.StatusPass || failed.Summary.Failed != 1 || failed.Summary.Skipped != 6 {
+		outcome[evaluate.StepAuditExport] != evaluate.StatusSkipped || failed.AuditExport != nil ||
+		failed.Summary.Failed != 1 || failed.Summary.Skipped != 7 {
 		t.Fatalf("unreachable endpoint = %+v", failed)
 	}
 }

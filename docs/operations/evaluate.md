@@ -62,9 +62,9 @@ product's own record of what it did) or **recorded** (the product's record).
 | `issuance` | The endpoint is bound to a new identity on the platform CA after the reviewed preview, and the certificate is issued. With an agent-executed target the key is generated on the host. | recorded |
 | `deployment` | The connector's receipt for the issued certificate says delivered or verified. | recorded |
 | `verification` | This command completes its own TLS handshake with the endpoint, from where it runs, and is served the issued certificate. | observed |
-| `renewal` | The identity is renewed and redeployed, and this command is then served the renewed certificate. | observed |
+| `renewal` | Once the identity is deployed, it is renewed and redeployed, and this command is then served the renewed certificate. | observed |
 | `revocation` | The superseded certificate is revoked, and an OCSP request returns a signed answer saying revoked. | observed |
-| `audit_export` | The signed audit export of the journey verifies with the published audit keys. It runs even after a failure, to record what was tried. | recorded |
+| `audit_export` | The signed audit export of the journey's identity, from the moment the journey started, verifies with the published audit keys. It runs even after a failure, to record what was tried. A journey that stopped before it created an identity has no record of its own, so this step is skipped, saying so, rather than passed on other records the tenant made meanwhile. | recorded |
 
 ## Check a pack offline
 
