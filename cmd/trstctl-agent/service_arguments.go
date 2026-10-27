@@ -81,6 +81,10 @@ func serviceArguments(o agentOptions) []string {
 		if o.relayEgressAllow != "" {
 			args = append(args, "--relay-egress-allow", o.relayEgressAllow)
 		}
+		// A192: and must keep the failure log where the operator reads it.
+		if o.deployFailureLog != "" {
+			args = append(args, "--deploy-failure-log", o.deployFailureLog)
+		}
 		if o.relayPollEvery > 0 {
 			args = append(args, "--relay-poll-every", o.relayPollEvery.String())
 		}

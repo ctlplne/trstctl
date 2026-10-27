@@ -662,7 +662,10 @@ may still have issued one, so inspect the retained issuance result before retryi
 If any attempt of the job redeemed credentials, arbitrary free-text errors stay
 withheld from permanent history. Only the exact known host-signing marker is
 classified into fixed public text. The redemption audit reference and attached
-evidence remain available; a local agent transcript is not guaranteed.
+evidence remain available. An agent that claims jobs (`--relay-claim`) keeps each
+failed connector deploy's step and scrubbed reason in its own failure log on its
+host, read there with `trstctl-agent --show-deploy-failures`; a failed host
+renewal's underlying error stays in the agent's process log.
 
 When an external CA returns a certificate, trstctl saves that response before
 recording the issuance locally. A recording failure can then retry with the same

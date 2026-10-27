@@ -69,6 +69,8 @@ func main() {
 	allowLoopbackEnrollment := flag.Bool("allow-insecure-loopback-enrollment", false, "allow bootstrap over plain HTTP only when --enroll-url is a loopback address; the resolved address is rechecked before every dial")
 	caBundle := flag.String("ca-bundle", "", "path to the control-plane CA certificate (PEM)")
 	relayCABundle := flag.String("relay-ca-bundle", "", "optional PEM CA bundle for private HTTPS appliance APIs reached by this network relay; adds to OS roots, does not change control-plane trust")
+	deployFailureLog := flag.String("deploy-failure-log", "", "file where this relay keeps its newest failed deploys: when, the job, the step that failed and why, with redeemed values, private keys and credential-shaped tokens removed (the control plane receives only a closed phrase). Empty keeps it beside --key as deploy-failures.jsonl")
+	showDeployFailures := flag.Bool("show-deploy-failures", false, "print this relay's deploy failure log (--deploy-failure-log, or beside --key) and exit")
 	relayEgressAllow := flag.String("relay-egress-allow", "", "comma-separated CIDRs, addresses and address:port pairs the connections this agent opens to run jobs may reach; everything else is refused. Link-local, cloud metadata, unspecified and multicast addresses are always refused")
 	connectorIsolation := flag.String("connector-isolation", connector.IsolationWASM, "where this agent runs the shipped connector families: wasm (each operation in a fresh instance of the embedded connector module, reaching only its capability-gated sandbox) or in_process")
 	serverAddr := flag.String("server", "", "control-plane gRPC address")
@@ -269,6 +271,13 @@ func main() {
 		fmt.Println(buildinfo.String("trstctl-agent"))
 		return
 	}
+	if *showDeployFailures {
+		if err := printDeployFailures(os.Stdout, deployFailureLogPath(*deployFailureLog, *keyPath)); err != nil {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if handled, err := runTomcatReload(context.Background(), tomcatReloadOptions{
 		url: *tomcatReloadURL, user: *tomcatReloadUser, passwordFile: *tomcatReloadPasswordFile, tlsHost: *tomcatReloadTLSHost,
 	}); handled {
@@ -420,6 +429,7 @@ func main() {
 
 	o := agentOptions{
 		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle, relayCABundle: *relayCABundle, relayEgressAllow: *relayEgressAllow,
+		deployFailureLog:   strings.TrimSpace(*deployFailureLog),
 		connectorIsolation: *connectorIsolation,
 		tokenFile:          *tokenFile, serverAddr: *serverAddr, serverName: *serverName, commonName: *commonName,
 		keyPath: *keyPath, certPath: *certPath, rotateEvery: *rotateEvery,
@@ -536,7 +546,10 @@ func checkedTPMPersistentHandleBase(value uint) (uint32, error) {
 type agentOptions struct {
 	enrollURL, inlineToken, tokenFile, caBundle, relayCABundle, serverAddr, serverName, commonName, keyPath, certPath string
 	// relayEgressAllow is the operator's egress allowlist for job connections (A190).
-	relayEgressAllow                  string
+	relayEgressAllow string
+	// deployFailureLog is where the relay keeps its failed deploys (A192);
+	// empty is beside keyPath.
+	deployFailureLog                  string
 	connectorIsolation                string
 	rotateEvery                       time.Duration
 	allowInsecureDevBootstrapTokenArg bool
@@ -689,6 +702,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if o.relayEgressAllow != "" && !o.relayClaim {
 		return errors.New("--relay-egress-allow requires --relay-claim")
 	}
+	if o.deployFailureLog != "" && !o.relayClaim {
+		return errors.New("--deploy-failure-log requires --relay-claim")
+	}
 	var relayClient *http.Client
 	var relayCAStatus func() *transport.RelayCABundleReport
 	if o.relayClaim {
@@ -698,6 +714,12 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		}
 		relay.SetEgressPolicy(egress)
 		fmt.Fprintln(os.Stderr, "trstctl-agent: relay egress policy:", egress.String())
+		failures, err := relay.OpenDeployFailureLog(deployFailureLogPath(o.deployFailureLog, o.keyPath), relay.DefaultDeployFailureEntries)
+		if err != nil {
+			return fmt.Errorf("--deploy-failure-log: %w", err)
+		}
+		relay.SetDeployFailureLog(failures)
+		fmt.Fprintln(os.Stderr, "trstctl-agent: failed deploys are kept in", failures.Path())
 		relayClient, err = relayHTTPClient(o.relayCABundle, egress)
 		if err != nil {
 			return err

@@ -385,7 +385,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 
 	var intent DeployIntent
 	if err := decodeIntent(job.Payload, &intent); err != nil {
-		report(ctx, ch, job, OutcomeFailed, "job payload is not a deploy intent")
+		failDeploy(ctx, ch, job, intent, DeployStepIntent, "job payload is not a deploy intent", err, nil)
 		return false
 	}
 	// Refuse work this build cannot perform BEFORE redeeming anything. A
@@ -420,19 +420,19 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// naming one it has no use for.
 		hostJob = false
 	} else if !hostJob && !pluginJob && !executesIntent(intent.Connector, intent.TargetConfig) {
-		report(ctx, ch, job, OutcomeFailed, "connector is not executable by this agent")
+		failDeploy(ctx, ch, job, intent, DeployStepExecutor, "connector is not executable by this agent", nil, nil)
 		return false
 	}
 	if RequiresHostExecProfile(intent.Connector) && len(hostProfile.AllowedRoots) == 0 {
 		// The connector is host-executable but this agent has no operator
 		// profile, so it has no authorized command set. Saying so is the point:
 		// silently doing nothing would look identical to a healthy agent.
-		report(ctx, ch, job, OutcomeFailed, "this agent has no host exec profile configured for file and reload deploys")
+		failDeploy(ctx, ch, job, intent, DeployStepExecutor, "this agent has no host exec profile configured for file and reload deploys", nil, nil)
 		return false
 	}
 	if hostJob && hostRollback != nil &&
 		(strings.TrimSpace(intent.TargetID) == "" || strings.TrimSpace(intent.Fingerprint) == "") {
-		report(ctx, ch, job, OutcomeFailed, "host deploy is missing target or fingerprint rollback identity")
+		failDeploy(ctx, ch, job, intent, DeployStepIntent, "host deploy is missing target or fingerprint rollback identity", nil, nil)
 		return false
 	}
 
@@ -440,13 +440,14 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	if err != nil {
 		// A refused or unavailable redemption is not this relay's failure to
 		// explain: the control plane holds the reason and has already recorded
-		// it. Reporting a closed phrase keeps the relay from guessing.
-		report(ctx, ch, job, OutcomeFailed, "credential redemption was not granted")
+		// it. Reporting a closed phrase keeps the relay from guessing; the
+		// channel's answer stays in this host's failure log.
+		failDeploy(ctx, ch, job, intent, DeployStepRedeem, "credential redemption was not granted", err, nil)
 		return false
 	}
 	material, destroy, err := AdoptMaterial(items)
 	if err != nil {
-		report(ctx, ch, job, OutcomeFailed, "redeemed material could not be taken into locked memory")
+		failDeploy(ctx, ch, job, intent, DeployStepMaterial, "redeemed material could not be taken into locked memory", err, nil)
 		return false
 	}
 	// The material's life ends here, on every path out — including a panic
@@ -483,23 +484,22 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	if execErr != nil {
 		// The connector's own error text can contain whatever the appliance
 		// echoed back, including the credential. It is never forwarded: the
-		// relay reports a closed phrase and keeps the detail in its own log,
-		// redacted (B2).
-		logDeployFailure(job, intent, execErr, material)
-		report(ctx, ch, job, OutcomeFailed, "connector deploy failed against the target")
+		// relay reports a closed phrase and keeps the step and the scrubbed
+		// detail in its own failure log.
+		failDeploy(ctx, ch, job, intent, DeployStepConnector, "connector deploy failed against the target", execErr, material)
 		return false
 	}
 	if stats.Denied > 0 {
 		// The sandbox refused something the connector tried. That is a
 		// capability-declaration bug, not a target problem, and it must not read
 		// as a clean deploy.
-		report(ctx, ch, job, OutcomeFailed, "connector attempted an operation outside its declared capabilities")
+		failDeploy(ctx, ch, job, intent, DeployStepSandbox, "connector attempted an operation outside its declared capabilities", nil, nil)
 		return false
 	}
 	if hostJob && hostRollback != nil {
 		servingCertPEM, servingErr := servingCertificatePEM(material)
 		if servingErr != nil {
-			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be assembled")
+			failDeploy(ctx, ch, job, intent, DeployStepPredecessor, "host predecessor state could not be assembled", servingErr, material)
 			return false
 		}
 		if err := hostRollback.RecordDeploy(intent.Connector, intent.TargetID, intent.Fingerprint,
@@ -507,7 +507,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 			// The target changed but its predecessor could not be retained. Do not
 			// claim a complete deploy: a retry is idempotent and gets another chance
 			// to durably bind the rollback state before verification is reported.
-			report(ctx, ch, job, OutcomeFailed, "host predecessor state could not be committed")
+			failDeploy(ctx, ch, job, intent, DeployStepPredecessor, "host predecessor state could not be committed", err, material)
 			return false
 		}
 		if adopted.ok {
@@ -548,6 +548,11 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		}
 	}
 
+	if outcome == transport.OutcomeVerifyFailed {
+		// The deploy applied and did not verify. The detail goes to the control
+		// plane as it always has; the relay keeps the step beside it.
+		recordDeployFailure(job, intent, DeployStepVerify, scrubFailure(detail, material))
+	}
 	if adopted.ok {
 		if adoptive, ok := ch.(AdoptionReceiptChannel); ok {
 			accepted, err := adoptive.ReportJobResultWithAdoption(ctx, job.JobID, job.Attempt, outcome, detail, evidence, adopted.fingerprint, adopted.certPEM)

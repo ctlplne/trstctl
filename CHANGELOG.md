@@ -2,6 +2,13 @@
 
 ### Added
 
+- Relay failure log: an agent that claims jobs keeps its newest 200 failed
+  deploys in a file on its own host (`--deploy-failure-log`, beside `--key` by
+  default, mode 0600): when, the job and attempt, the connector and target, the
+  step that failed and why, with redeemed values, PEM blocks and the values of
+  authorization headers and credential-shaped fields removed.
+  `trstctl-agent --show-deploy-failures` prints it. The control plane still
+  receives only a closed phrase for a failed deploy.
 - Operator-granted agent roles: an operator holding `agents:relay.grant`
   changes an enrolled agent's roles (`POST /api/v1/agents/{id}/roles`,
   `trstctl agents roles grant`, **Change roles** on the Agents page) without

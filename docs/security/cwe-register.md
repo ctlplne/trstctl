@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1812 annotated sites across 27 rules. Each row is
+1817 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (381 sites)
+### G101 — CWE-798 Use of hardcoded credentials (383 sites)
 
 | Location | Reason |
 |---|---|
@@ -96,6 +96,8 @@ not this file.
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/agent/relay/deploy_failure_log_keep_test.go:34` | a canary the log must not keep, not a credential (CWE-798) |
+| `internal/agent/relay/deploy_failure_log_keep_test.go:42` | "password_ref" is a reference NAME, not a credential (CWE-798) |
 | `internal/agent/relay/deploy_failure_log_test.go:35` | "password_ref" is a reference NAME the test asserts on, not a credential (CWE-798) |
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
@@ -482,7 +484,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:533` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:543` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1708` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1141,7 +1143,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:645` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:658` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1188,7 +1190,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (521 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (524 sites)
 
 | Location | Reason |
 |---|---|
@@ -1212,8 +1214,8 @@ not this file.
 | `cmd/trstctl-agent/edgeca_test.go:335` | exact test tempdir sentinel |
 | `cmd/trstctl-agent/edgeca_test.go:338` | exact test tempdir output |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
-| `cmd/trstctl-agent/main.go:1227` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1881` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1249` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1903` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:346` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:373` | operator-supplied public issuer certificate (CWE-22) |
@@ -1326,6 +1328,9 @@ not this file.
 | `internal/agent/drift/drift_test.go:184` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:209` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:244` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
+| `internal/agent/relay/deploy_failure_log.go:148` | the operator's own flag (CWE-22) |
+| `internal/agent/relay/deploy_failure_log_keep_test.go:72` | the test's own temp file (CWE-22) |
 | `internal/agent/relay/host_pqc_predecessor_test.go:47` | test-owned directory (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:143` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending.go:261` | validated agent-local state directory |
@@ -1874,7 +1879,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:809` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:831` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

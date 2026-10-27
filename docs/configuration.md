@@ -2517,6 +2517,21 @@ With an allowlist, list the local listeners a host job reloads (`127.0.0.1`) as
 well. The agent prints the policy in force at startup, and Windows service
 installation retains it across restarts.
 
+**Why a deploy failed.** The control plane receives a closed phrase for a failed
+deploy, because an appliance can echo the credential it received back in an
+error. The agent keeps the rest on its own host, in a failure log of its newest
+200 failed deploys: when, the job and attempt, the connector and target, the
+step that failed (`intent`, `executor`, `redeem`, `material`, `connector`,
+`sandbox`, `predecessor` or `verify`) and why. Redeemed values, PEM blocks and the
+values of authorization headers and credential-shaped fields are removed before
+anything is written. The file is mode 0600, beside `--key` as
+`deploy-failures.jsonl` unless `--deploy-failure-log` names it, and Windows
+service installation retains that flag. Read it on the host:
+
+```bash
+trstctl-agent --show-deploy-failures --key /var/lib/trstctl-agent/agent.key
+```
+
 ### Relay-local CRL and OCSP cache
 
 A certificate enrolled with the `network` role may serve revocation data to an
