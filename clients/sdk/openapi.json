@@ -11863,7 +11863,8 @@
               "inventory_snapshot",
               "cbom_posture",
               "audit_summary",
-              "nhi_compliance_mapping"
+              "nhi_compliance_mapping",
+              "crypto_risk"
             ],
             "type": "string"
           },
@@ -12052,7 +12053,8 @@
               "inventory_snapshot",
               "cbom_posture",
               "audit_summary",
-              "nhi_compliance_mapping"
+              "nhi_compliance_mapping",
+              "crypto_risk"
             ],
             "type": "string"
           }
@@ -13027,6 +13029,422 @@
           "unlocated",
           "recommendation",
           "actions"
+        ],
+        "type": "object"
+      },
+      "CryptoRiskChange": {
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "CryptoRiskDeadline": {
+        "properties": {
+          "assumed": {
+            "description": "What the rule had to assume, such as an unknown key size.",
+            "type": "string"
+          },
+          "deprecated_after": {
+            "description": "The year after which the key is deprecated (112-bit strength); absent when none applies.",
+            "type": "integer"
+          },
+          "disallowed_after": {
+            "description": "The year after which the key is disallowed; absent when none applies.",
+            "type": "integer"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "security_bits": {
+            "type": "integer"
+          },
+          "source": {
+            "description": "Where the deadline comes from: NIST IR 8547, cited as the initial public draft of November 2024.",
+            "type": "string"
+          },
+          "status": {
+            "description": "replace_now: a weak or distrusted key, one below 112-bit strength, or a passed disallow year; deprecated: past the deprecation year; upcoming: its dates are ahead; none: no IR 8547 transition applies.",
+            "enum": [
+              "replace_now",
+              "deprecated",
+              "upcoming",
+              "none"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "rule",
+          "status"
+        ],
+        "type": "object"
+      },
+      "CryptoRiskExport": {
+        "properties": {
+          "content_type": {
+            "type": "string"
+          },
+          "csv": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "generated_at",
+          "truncated",
+          "csv"
+        ],
+        "type": "object"
+      },
+      "CryptoRiskItem": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "deadline": {
+            "$ref": "#/components/schemas/CryptoRiskDeadline"
+          },
+          "dependents": {
+            "properties": {
+              "by_kind": {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              "count": {
+                "type": "integer"
+              },
+              "names": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "source": {
+                "enum": [
+                  "crypto_readiness",
+                  "blast_radius"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "count",
+              "by_kind",
+              "names",
+              "source"
+            ],
+            "type": "object"
+          },
+          "distrust": {
+            "properties": {
+              "entry": {
+                "type": "string"
+              },
+              "how": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "entry",
+              "how"
+            ],
+            "type": "object"
+          },
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "exposures": {
+            "items": {
+              "enum": [
+                "distrusted",
+                "weak",
+                "quantum_vulnerable",
+                "out_of_policy"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "key": {
+            "description": "certificate:\u003cid\u003e or crypto:\u003casset id\u003e; stable across reports.",
+            "type": "string"
+          },
+          "key_bits": {
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "certificate",
+              "crypto_asset"
+            ],
+            "type": "string"
+          },
+          "owners": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "plan": {
+            "properties": {
+              "actions": {
+                "items": {
+                  "$ref": "#/components/schemas/CryptoRiskPlanAction"
+                },
+                "type": "array"
+              },
+              "recommended": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "actions"
+            ],
+            "type": "object"
+          },
+          "priority": {
+            "description": "1 is the key to act on first.",
+            "type": "integer"
+          },
+          "priority_reason": {
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "subject",
+          "algorithm",
+          "exposures",
+          "dependents",
+          "owners",
+          "deadline",
+          "plan",
+          "priority",
+          "priority_reason",
+          "evidence_ids"
+        ],
+        "type": "object"
+      },
+      "CryptoRiskPlanAction": {
+        "properties": {
+          "campaign_id": {
+            "type": "string"
+          },
+          "deadline": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "status": {
+            "description": "The migration campaign's status, as the campaign recorded it.",
+            "type": "string"
+          },
+          "wave": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "campaign_id",
+          "name",
+          "status",
+          "deadline",
+          "stale"
+        ],
+        "type": "object"
+      },
+      "CryptoRiskReport": {
+        "properties": {
+          "changes": {
+            "properties": {
+              "added": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "comparable": {
+                "type": "boolean"
+              },
+              "deadline_changed": {
+                "items": {
+                  "$ref": "#/components/schemas/CryptoRiskChange"
+                },
+                "type": "array"
+              },
+              "note": {
+                "type": "string"
+              },
+              "plan_changed": {
+                "items": {
+                  "$ref": "#/components/schemas/CryptoRiskChange"
+                },
+                "type": "array"
+              },
+              "previous_generated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "priority_changed": {
+                "items": {
+                  "$ref": "#/components/schemas/CryptoRiskChange"
+                },
+                "type": "array"
+              },
+              "resolved": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "comparable",
+              "added",
+              "resolved",
+              "priority_changed",
+              "deadline_changed",
+              "plan_changed"
+            ],
+            "type": "object"
+          },
+          "cnsa_2_0": {
+            "description": "What the report does not encode for national security systems.",
+            "type": "string"
+          },
+          "coverage": {
+            "description": "What the report can and cannot see.",
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "input_limit": {
+            "description": "Which inputs were read only in part.",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CryptoRiskItem"
+            },
+            "type": "array"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "properties": {
+              "deprecated": {
+                "type": "integer"
+              },
+              "distrusted": {
+                "type": "integer"
+              },
+              "items": {
+                "type": "integer"
+              },
+              "quantum_vulnerable": {
+                "type": "integer"
+              },
+              "replace_now": {
+                "type": "integer"
+              },
+              "upcoming": {
+                "type": "integer"
+              },
+              "weak": {
+                "type": "integer"
+              },
+              "with_plan": {
+                "type": "integer"
+              },
+              "without_plan": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "distrusted",
+              "weak",
+              "quantum_vulnerable",
+              "replace_now",
+              "deprecated",
+              "upcoming",
+              "with_plan",
+              "without_plan"
+            ],
+            "type": "object"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "More keys qualified than the report lists; the summary and changes count every key.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "format",
+          "tenant_id",
+          "generated_at",
+          "sources",
+          "coverage",
+          "cnsa_2_0",
+          "summary",
+          "items",
+          "changes"
         ],
         "type": "object"
       },
@@ -68232,6 +68650,110 @@
         ],
         "summary": "Run an automated remediation playbook",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/reports/crypto-risk": {
+      "get": {
+        "operationId": "getCryptoRiskReport",
+        "parameters": [
+          {
+            "description": "maximum keys listed (1-1000, default 1000); the summary and the changes still count every key",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CryptoRiskReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report every weak, distrusted or quantum-vulnerable key with its dependents, its NIST IR 8547 deadline and its migration plan, in the order to act on, with changes since the last scheduled report",
+        "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/reports/crypto-risk/export": {
+      "get": {
+        "operationId": "exportCryptoRiskReport",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CryptoRiskExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export the cryptographic risk report as CSV, one row per key in priority order",
+        "x-trstctl-permission": "risk:read"
       }
     },
     "/api/v1/revocation/caches": {

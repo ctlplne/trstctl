@@ -29,6 +29,8 @@ type DiscoveryFindingFilter struct {
 	// in the finding's metadata: the distrust-list entry it matched, and "weak".
 	DistrustEntry string
 	KeyStrength   string
+	// KeyVerdict selects every finding a reader rated distrusted or weak.
+	KeyVerdict bool
 }
 
 // MaxDiscoveryFindingTallyGroups bounds one count: the dashboards count one
@@ -68,6 +70,9 @@ func (f DiscoveryFindingFilter) where(args []any) (string, []any) {
 	if f.KeyStrength != "" {
 		args = append(args, f.KeyStrength)
 		fmt.Fprintf(&b, " AND f.metadata->>'key_strength' = $%d", len(args))
+	}
+	if f.KeyVerdict {
+		b.WriteString(" AND (COALESCE(f.metadata->>'distrust_entry', '') <> '' OR f.metadata->>'key_strength' = 'weak')")
 	}
 	if f.SourceKind != "" {
 		args = append(args, f.SourceKind)

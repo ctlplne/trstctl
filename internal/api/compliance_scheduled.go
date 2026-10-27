@@ -191,6 +191,8 @@ func (a *API) scheduledCompliancePayload(ctx context.Context, tenantID string, s
 		return json.Marshal(readiness)
 	case "audit_summary":
 		return a.buildScheduledAuditSummary(ctx, tenantID, schedule)
+	case cryptoRiskReportType:
+		return a.scheduledCryptoRiskReport(ctx, tenantID, schedule)
 	case "nhi_compliance_mapping":
 		report, err := a.buildNHIComplianceReport(ctx, tenantID)
 		if err != nil {

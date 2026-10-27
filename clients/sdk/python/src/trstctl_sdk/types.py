@@ -4363,6 +4363,95 @@ CryptoReadinessRow = TypedDict(
     total=False,
 )
 
+CryptoRiskChange = TypedDict(
+    'CryptoRiskChange',
+    {
+        'from': str,
+        'key': str,
+        'to': str,
+    },
+    total=False,
+)
+
+CryptoRiskDeadline = TypedDict(
+    'CryptoRiskDeadline',
+    {
+        'assumed': str,
+        'deprecated_after': int,
+        'disallowed_after': int,
+        'rule': str,
+        'security_bits': int,
+        'source': str,
+        'status': str,
+    },
+    total=False,
+)
+
+CryptoRiskExport = TypedDict(
+    'CryptoRiskExport',
+    {
+        'content_type': str,
+        'csv': str,
+        'filename': str,
+        'generated_at': str,
+        'truncated': bool,
+    },
+    total=False,
+)
+
+CryptoRiskItem = TypedDict(
+    'CryptoRiskItem',
+    {
+        'algorithm': str,
+        'deadline': dict[str, Any],
+        'dependents': dict[str, Any],
+        'distrust': dict[str, Any],
+        'evidence_ids': list[str],
+        'exposures': list[str],
+        'key': str,
+        'key_bits': int,
+        'kind': str,
+        'owners': list[str],
+        'plan': dict[str, Any],
+        'priority': int,
+        'priority_reason': str,
+        'reasons': list[str],
+        'subject': str,
+    },
+    total=False,
+)
+
+CryptoRiskPlanAction = TypedDict(
+    'CryptoRiskPlanAction',
+    {
+        'campaign_id': str,
+        'deadline': str,
+        'name': str,
+        'stale': bool,
+        'status': str,
+        'wave': str,
+    },
+    total=False,
+)
+
+CryptoRiskReport = TypedDict(
+    'CryptoRiskReport',
+    {
+        'changes': dict[str, Any],
+        'cnsa_2_0': str,
+        'coverage': str,
+        'format': str,
+        'generated_at': str,
+        'input_limit': str,
+        'items': list[dict[str, Any]],
+        'sources': list[str],
+        'summary': dict[str, Any],
+        'tenant_id': str,
+        'truncated': bool,
+    },
+    total=False,
+)
+
 CustodyExportabilityCounts = TypedDict(
     'CustodyExportabilityCounts',
     {

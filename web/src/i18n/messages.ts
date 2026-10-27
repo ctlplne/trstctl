@@ -14088,6 +14088,10 @@ export const messages = {
     defaultMessage: "NHI compliance mapping",
     description: "Compliance report type option for non-human identity framework mappings.",
   },
+  "policy.reportType.cryptoRisk": {
+    defaultMessage: "Cryptographic risk",
+    description: "Compliance report type option for the prioritized report of weak, distrusted and quantum-vulnerable keys with their deadlines and plans.",
+  },
   "policy.reporting.loading": {
     defaultMessage: "Loading report coverage.",
     description: "Loading state for compliance inventory reporting coverage.",

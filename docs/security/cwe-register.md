@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1794 annotated sites across 27 rules. Each row is
+1796 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -476,7 +476,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (276 sites)
+### G115 — CWE-190 Integer overflow or wraparound (277 sites)
 
 | Location | Reason |
 |---|---|
@@ -603,6 +603,7 @@ not this file.
 | `internal/server/backup.go:220` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:388` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
+| `internal/server/crypto_risk_report_served_test.go:58` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:720` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:991` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
@@ -1131,7 +1132,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:225` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (43 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (44 sites)
 
 | Location | Reason |
 |---|---|
@@ -1158,6 +1159,7 @@ not this file.
 | `internal/server/compliance_report_dispatch_served_test.go:40` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:67` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:221` | owner execute is required to traverse this private test directory. |
+| `internal/server/crypto_risk_report_served_test.go:39` | owner execute is required to traverse this private test directory. |
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/managed_key_signer_config.go:27` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |

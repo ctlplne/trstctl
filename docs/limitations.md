@@ -6137,6 +6137,32 @@ it does not see:
   first and says when there are more; ephemeral certificates, issued per use and
   never renewed, are left out as the expiry views leave them out.
 
+## Cryptographic risk report
+
+`GET /api/v1/reports/crypto-risk` (and the `crypto_risk` scheduled report,
+`trstctl-cli reports crypto-risk`) lists each weak, distrusted or
+quantum-vulnerable key with its dependents, its NIST IR 8547 deadline and its
+plan, and what changed since the previous scheduled report. What it decides
+from, and what it does not see:
+
+- **IR 8547 is a draft.** The deadlines come from the initial public draft of
+  November 2024 (Tables 2 and 4), and the report cites it as such; a final
+  version may move them.
+- **CNSA 2.0 is not encoded.** The report does not state the CNSA 2.0 milestones
+  for national security systems, and says so.
+- **Only what has been seen.** It covers the certificates trstctl holds or has
+  discovered and the crypto assets discovery has inventoried. A key with no
+  recorded dependents may be one nothing has scanned around.
+- **Name matches are matches by name.** A certificate trstctl knows only by its
+  recorded issuer name is matched to a distrusted CA by that name.
+- **Bounded.** It rates up to 50,000 certificates and reads up to 100,000 rated
+  discovery findings, and says when it read less; the on-demand report lists
+  up to 1,000 keys and the scheduled one up to 20,000, while its summary and
+  changes count every key.
+- **A certificate without bytes** is sized from its recorded algorithm name
+  (`RSA-2048`, `ECDSA P-256`); when that names no size, the 112-bit rule
+  applies and the report says it assumed it.
+
 ## Credential assurance records
 
 `GET /api/v1/certificates/{id}/assurance-record` signs what trstctl already holds about

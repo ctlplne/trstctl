@@ -69,6 +69,9 @@ func TestDiscoveryFindingFilterSelectsByKeyVerdict(t *testing.T) {
 	if got := list(store.DiscoveryFindingFilter{DistrustEntry: "Another Entry", KeyStrength: "weak"}); len(got) != 1 || got[0] != uuid(tenantA, 1852) {
 		t.Fatalf("both filters = %v", got)
 	}
+	if got := list(store.DiscoveryFindingFilter{KeyVerdict: true}); len(got) != 3 || got[0] != uuid(tenantA, 1850) || got[2] != uuid(tenantA, 1852) {
+		t.Fatalf("any key verdict = %v", got)
+	}
 	if got := list(store.DiscoveryFindingFilter{}); len(got) != len(metas) {
 		t.Fatalf("no verdict filter = %v", got)
 	}

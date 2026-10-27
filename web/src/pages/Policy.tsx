@@ -71,6 +71,7 @@ const complianceReportTypes: Array<{ id: ComplianceReportType; labelKey: Message
   { id: "cbom_posture", labelKey: "policy.reportType.cbomPosture" },
   { id: "audit_summary", labelKey: "policy.reportType.auditSummary" },
   { id: "nhi_compliance_mapping", labelKey: "policy.reportType.nhiComplianceMapping" },
+  { id: "crypto_risk", labelKey: "policy.reportType.cryptoRisk" },
 ];
 
 function hasUnsafeHrefChar(href: string): boolean {

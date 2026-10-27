@@ -319,7 +319,7 @@ function complianceInventoryReport() {
       "eidas",
       "nis2",
     ],
-    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
+    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"],
     routes: [
       "GET /api/v1/compliance/inventory-report",
       "GET /api/v1/compliance/nhi-report",
@@ -413,7 +413,7 @@ function nhiComplianceReport() {
         finding_count: 12,
       },
     ],
-    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"],
+    report_types: ["framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"],
     routes: ["GET /api/v1/compliance/nhi-report", "GET /api/v1/nhi/inventory", "GET /api/v1/nhi/posture/static-credentials"],
     evidence_refs: ["api:GET /api/v1/compliance/nhi-report"],
     residuals: ["trstctl maps tenant evidence to controls but does not certify compliance."],

@@ -3213,7 +3213,9 @@
                 "setPQCMigrationCampaignReadiness",
                 "dispositionPQCMigrationFinding",
                 "closePQCMigrationCampaign",
-                "getPQCMigrationCampaignEvidence"
+                "getPQCMigrationCampaignEvidence",
+                "getCryptoRiskReport",
+                "exportCryptoRiskReport"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3227,7 +3229,9 @@
                 "pqc campaigns readiness",
                 "pqc campaigns disposition",
                 "pqc campaigns close",
-                "pqc campaigns evidence"
+                "pqc campaigns evidence",
+                "reports crypto-risk",
+                "reports crypto-risk export"
             ],
             "cli_na": "",
             "facet_evidence": {

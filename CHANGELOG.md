@@ -2,6 +2,14 @@
 
 ### Added
 
+- Cryptographic risk report: `GET /api/v1/reports/crypto-risk` (CSV through
+  `/export`, `trstctl-cli reports crypto-risk`, and the `crypto_risk` scheduled
+  report type) lists every weak, distrusted or quantum-vulnerable key with what
+  depends on it, the NIST IR 8547 deadline that applies (initial public draft:
+  112-bit keys deprecated after 2030, all disallowed after 2035) and the
+  crypto-readiness action or recommended next step, in the order to act on. Each
+  scheduled run lists what changed since the previous one, read back from the
+  archive and signature-checked first.
 - MCP evidence tools and structured findings. Six read tools answer posture and
   exposure questions from the served read routes with the agent's own token:
   `posture_findings`, `weak_key_exposure`, `distrust_exposure` (the certificates

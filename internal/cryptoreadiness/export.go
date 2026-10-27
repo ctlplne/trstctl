@@ -131,3 +131,7 @@ func spreadsheetSafe(value string) string {
 		return value
 	}
 }
+
+// SpreadsheetSafe is spreadsheetSafe for other exports that write CSV cells an
+// operator opens in a spreadsheet.
+func SpreadsheetSafe(value string) string { return spreadsheetSafe(value) }

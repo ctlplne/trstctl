@@ -471,6 +471,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"compliance", "report-runs", "download"}, Method: "GET", Path: "/api/v1/compliance/report-runs/{id}/artifact", RawResponse: true, Summary: "Write exact signed report bytes to stdout"},
 	{Name: []string{"compliance", "report-runs", "requeue"}, Method: "POST", Path: "/api/v1/compliance/report-runs/{id}/requeue", Summary: "Requeue one failed report due edge"},
 	{Name: []string{"compliance", "evidence-pack"}, Method: "GET", Path: "/api/v1/compliance/evidence-packs/{framework}", Summary: "Export a signed compliance evidence pack"},
+	{Name: []string{"reports", "crypto-risk"}, Method: "GET", Path: "/api/v1/reports/crypto-risk", Query: []string{"limit"}, Summary: "Report every weak, distrusted or quantum-vulnerable key with its dependents, NIST IR 8547 deadline and migration plan, in priority order"},
+	{Name: []string{"reports", "crypto-risk", "export"}, Method: "GET", Path: "/api/v1/reports/crypto-risk/export", Summary: "Export the cryptographic risk report as CSV, one row per key"},
 
 	{Name: []string{"privacy", "erasures", "erase"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures", Body: bodyFile, Summary: "Erase direct subject personal data", RequestTimeout: 10 * time.Minute},
 	{Name: []string{"privacy", "erasures", "preview"}, Method: "POST", Path: "/api/v1/privacy/subject-erasures/preview", Body: bodyFile, Summary: "Review direct subject erasure without writes"},

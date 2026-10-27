@@ -3937,6 +3937,71 @@ func componentSchemas() map[string]*Schema {
 		"certificates": {Type: "array", Items: ref("ValidityReadinessCertificate")},
 		"truncated":    boolean(), "limit": integer(),
 	}, "requirements", "generated_at", "scheduler", "steps", "profiles", "certificates", "truncated", "limit")
+	cryptoRiskDeadline := object(map[string]*Schema{
+		"source":           {Type: "string", Description: "Where the deadline comes from: NIST IR 8547, cited as the initial public draft of November 2024."},
+		"rule":             str(),
+		"security_bits":    {Type: "integer"},
+		"deprecated_after": {Type: "integer", Description: "The year after which the key is deprecated (112-bit strength); absent when none applies."},
+		"disallowed_after": {Type: "integer", Description: "The year after which the key is disallowed; absent when none applies."},
+		"status":           {Type: "string", Enum: []string{"replace_now", "deprecated", "upcoming", "none"}, Description: "replace_now: a weak or distrusted key, one below 112-bit strength, or a passed disallow year; deprecated: past the deprecation year; upcoming: its dates are ahead; none: no IR 8547 transition applies."},
+		"assumed":          {Type: "string", Description: "What the rule had to assume, such as an unknown key size."},
+	}, "source", "rule", "status")
+	cryptoRiskPlanAction := object(map[string]*Schema{
+		"campaign_id": str(), "name": str(), "wave": str(), "deadline": timestamp(), "stale": boolean(),
+		"status": {Type: "string", Description: "The migration campaign's status, as the campaign recorded it."},
+	}, "campaign_id", "name", "status", "deadline", "stale")
+	cryptoRiskItem := object(map[string]*Schema{
+		"key":       {Type: "string", Description: "certificate:<id> or crypto:<asset id>; stable across reports."},
+		"kind":      {Type: "string", Enum: []string{"certificate", "crypto_asset"}},
+		"subject":   str(),
+		"algorithm": str(),
+		"key_bits":  {Type: "integer"},
+		"exposures": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"distrusted", "weak", "quantum_vulnerable", "out_of_policy"}}},
+		"reasons":   {Type: "array", Items: str()},
+		"distrust":  object(map[string]*Schema{"entry": str(), "how": str()}, "entry", "how"),
+		"dependents": object(map[string]*Schema{
+			"count": {Type: "integer"}, "by_kind": {Type: "object", AdditionalProperties: &Schema{Type: "integer"}},
+			"names":  {Type: "array", Items: str()},
+			"source": {Type: "string", Enum: []string{"crypto_readiness", "blast_radius"}},
+		}, "count", "by_kind", "names", "source"),
+		"owners":   {Type: "array", Items: str()},
+		"deadline": ref("CryptoRiskDeadline"),
+		"plan": object(map[string]*Schema{
+			"actions":     {Type: "array", Items: ref("CryptoRiskPlanAction")},
+			"recommended": str(),
+		}, "actions"),
+		"priority":        {Type: "integer", Description: "1 is the key to act on first."},
+		"priority_reason": str(),
+		"evidence_ids":    {Type: "array", Items: str()},
+	}, "key", "kind", "subject", "algorithm", "exposures", "dependents", "owners", "deadline", "plan", "priority", "priority_reason", "evidence_ids")
+	cryptoRiskChange := object(map[string]*Schema{"key": str(), "from": str(), "to": str()}, "key", "from", "to")
+	cryptoRiskReport := object(map[string]*Schema{
+		"format": str(), "tenant_id": uuid(), "generated_at": timestamp(),
+		"sources":  {Type: "array", Items: str()},
+		"coverage": {Type: "string", Description: "What the report can and cannot see."},
+		"cnsa_2_0": {Type: "string", Description: "What the report does not encode for national security systems."},
+		"summary": object(map[string]*Schema{
+			"items": {Type: "integer"}, "distrusted": {Type: "integer"}, "weak": {Type: "integer"}, "quantum_vulnerable": {Type: "integer"},
+			"replace_now": {Type: "integer"}, "deprecated": {Type: "integer"}, "upcoming": {Type: "integer"},
+			"with_plan": {Type: "integer"}, "without_plan": {Type: "integer"},
+		}, "items", "distrusted", "weak", "quantum_vulnerable", "replace_now", "deprecated", "upcoming", "with_plan", "without_plan"),
+		"items":       {Type: "array", Items: ref("CryptoRiskItem")},
+		"truncated":   {Type: "boolean", Description: "More keys qualified than the report lists; the summary and changes count every key."},
+		"input_limit": {Type: "string", Description: "Which inputs were read only in part."},
+		"changes": object(map[string]*Schema{
+			"comparable":            boolean(),
+			"note":                  str(),
+			"previous_generated_at": timestamp(),
+			"added":                 {Type: "array", Items: str()},
+			"resolved":              {Type: "array", Items: str()},
+			"priority_changed":      {Type: "array", Items: ref("CryptoRiskChange")},
+			"deadline_changed":      {Type: "array", Items: ref("CryptoRiskChange")},
+			"plan_changed":          {Type: "array", Items: ref("CryptoRiskChange")},
+		}, "comparable", "added", "resolved", "priority_changed", "deadline_changed", "plan_changed"),
+	}, "format", "tenant_id", "generated_at", "sources", "coverage", "cnsa_2_0", "summary", "items", "changes")
+	cryptoRiskExport := object(map[string]*Schema{
+		"filename": str(), "content_type": str(), "generated_at": timestamp(), "truncated": boolean(), "csv": str(),
+	}, "filename", "content_type", "generated_at", "truncated", "csv")
 	validityExport := object(map[string]*Schema{
 		"filename": str(), "content_type": str(), "requirements": ref("ValidityReadinessRequirements"),
 		"generated_at": timestamp(), "truncated": boolean(), "csv": str(),
@@ -4490,7 +4555,7 @@ func componentSchemas() map[string]*Schema {
 	complianceReportScheduleReq := object(map[string]*Schema{
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
-		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}},
+		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"}},
 		"interval_seconds": {Type: "integer"},
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
@@ -4533,7 +4598,7 @@ func componentSchemas() map[string]*Schema {
 		"tenant_id":        uuid(),
 		"framework":        {Type: "string", Enum: complianceFrameworkValues()},
 		"name":             str(),
-		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping"}},
+		"report_type":      {Type: "string", Enum: []string{"framework_evidence_pack", "inventory_snapshot", "cbom_posture", "audit_summary", "nhi_compliance_mapping", "crypto_risk"}},
 		"interval_seconds": {Type: "integer"},
 		"enabled":          {Type: "boolean"},
 		"delivery":         {Type: "string", Enum: []string{"audit_export"}},
@@ -7658,6 +7723,12 @@ func componentSchemas() map[string]*Schema {
 		"ValidityReadinessProfile":                 validityProfile,
 		"ValidityReadinessReport":                  validityReport,
 		"ValidityReadinessExport":                  validityExport,
+		"CryptoRiskDeadline":                       cryptoRiskDeadline,
+		"CryptoRiskPlanAction":                     cryptoRiskPlanAction,
+		"CryptoRiskItem":                           cryptoRiskItem,
+		"CryptoRiskChange":                         cryptoRiskChange,
+		"CryptoRiskReport":                         cryptoRiskReport,
+		"CryptoRiskExport":                         cryptoRiskExport,
 		"AssuranceCredential":                      assuranceCredential,
 		"AssuranceDiscovery":                       assuranceDiscovery,
 		"AssuranceOwner":                           assuranceOwner,

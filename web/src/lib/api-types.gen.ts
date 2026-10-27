@@ -2883,7 +2883,7 @@ export interface ComplianceReportSchedule {
   name: string;
   next_run_at: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
   tenant_id: string;
   updated_at: string;
 }
@@ -2920,7 +2920,7 @@ export interface ComplianceReportScheduleRequest {
   interval_seconds: number;
   name: string;
   recipient_ref?: string;
-  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
+  report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
 }
 
 export interface ComplianceReportTicket {
@@ -3143,6 +3143,71 @@ export interface CryptoReadinessRow {
   quantum_vulnerable: boolean;
   recommendation: string;
   unlocated: boolean;
+}
+
+export interface CryptoRiskChange {
+  from: string;
+  key: string;
+  to: string;
+}
+
+export interface CryptoRiskDeadline {
+  assumed?: string;
+  deprecated_after?: number;
+  disallowed_after?: number;
+  rule: string;
+  security_bits?: number;
+  source: string;
+  status: "replace_now" | "deprecated" | "upcoming" | "none";
+}
+
+export interface CryptoRiskExport {
+  content_type: string;
+  csv: string;
+  filename: string;
+  generated_at: string;
+  truncated: boolean;
+}
+
+export interface CryptoRiskItem {
+  algorithm: string;
+  deadline: CryptoRiskDeadline;
+  dependents: { by_kind: Record<string, unknown>; count: number; names: string[]; source: "crypto_readiness" | "blast_radius" };
+  distrust?: { entry: string; how: string };
+  evidence_ids: string[];
+  exposures: ("distrusted" | "weak" | "quantum_vulnerable" | "out_of_policy")[];
+  key: string;
+  key_bits?: number;
+  kind: "certificate" | "crypto_asset";
+  owners: string[];
+  plan: { actions: CryptoRiskPlanAction[]; recommended?: string };
+  priority: number;
+  priority_reason: string;
+  reasons?: string[];
+  subject: string;
+}
+
+export interface CryptoRiskPlanAction {
+  campaign_id: string;
+  deadline: string;
+  name: string;
+  stale: boolean;
+  status: string;
+  wave?: string;
+}
+
+export interface CryptoRiskReport {
+  changes: { added: string[]; comparable: boolean; deadline_changed: CryptoRiskChange[]; note?: string; plan_changed: CryptoRiskChange[]; previous_generated_at?: string; priority_changed: CryptoRiskChange[]; resolved: string[] };
+  cnsa_2_0: string;
+  coverage: string;
+  format: string;
+  generated_at: string;
+  input_limit?: string;
+  items: CryptoRiskItem[];
+  sources: string[];
+  summary: { deprecated: number; distrusted: number; items: number; quantum_vulnerable: number; replace_now: number; upcoming: number; weak: number; with_plan: number; without_plan: number };
+  tenant_id: string;
+  truncated?: boolean;
 }
 
 export interface CustodyExportabilityCounts {

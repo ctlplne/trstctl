@@ -6454,6 +6454,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/crypto-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report every weak, distrusted or quantum-vulnerable key with its dependents, its NIST IR 8547 deadline and its migration plan, in the order to act on, with changes since the last scheduled report */
+        get: operations["getCryptoRiskReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/crypto-risk/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the cryptographic risk report as CSV, one row per key in priority order */
+        get: operations["exportCryptoRiskReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/caches": {
         parameters: {
             query?: never;
@@ -11406,7 +11440,7 @@ export interface components {
             next_run_at: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
             /** Format: uuid */
             tenant_id: string;
             /** Format: date-time */
@@ -11445,7 +11479,7 @@ export interface components {
             name: string;
             recipient_ref?: string;
             /** @enum {string} */
-            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping";
+            report_type: "framework_evidence_pack" | "inventory_snapshot" | "cbom_posture" | "audit_summary" | "nhi_compliance_mapping" | "crypto_risk";
         };
         ComplianceReportTicket: {
             instance_url: string;
@@ -11693,6 +11727,119 @@ export interface components {
             quantum_vulnerable: boolean;
             recommendation: string;
             unlocated: boolean;
+        };
+        CryptoRiskChange: {
+            from: string;
+            key: string;
+            to: string;
+        };
+        CryptoRiskDeadline: {
+            /** @description What the rule had to assume, such as an unknown key size. */
+            assumed?: string;
+            /** @description The year after which the key is deprecated (112-bit strength); absent when none applies. */
+            deprecated_after?: number;
+            /** @description The year after which the key is disallowed; absent when none applies. */
+            disallowed_after?: number;
+            rule: string;
+            security_bits?: number;
+            /** @description Where the deadline comes from: NIST IR 8547, cited as the initial public draft of November 2024. */
+            source: string;
+            /**
+             * @description replace_now: a weak or distrusted key, one below 112-bit strength, or a passed disallow year; deprecated: past the deprecation year; upcoming: its dates are ahead; none: no IR 8547 transition applies.
+             * @enum {string}
+             */
+            status: "replace_now" | "deprecated" | "upcoming" | "none";
+        };
+        CryptoRiskExport: {
+            content_type: string;
+            csv: string;
+            filename: string;
+            /** Format: date-time */
+            generated_at: string;
+            truncated: boolean;
+        };
+        CryptoRiskItem: {
+            algorithm: string;
+            deadline: components["schemas"]["CryptoRiskDeadline"];
+            dependents: {
+                by_kind: {
+                    [key: string]: number;
+                };
+                count: number;
+                names: string[];
+                /** @enum {string} */
+                source: "crypto_readiness" | "blast_radius";
+            };
+            distrust?: {
+                entry: string;
+                how: string;
+            };
+            evidence_ids: string[];
+            exposures: ("distrusted" | "weak" | "quantum_vulnerable" | "out_of_policy")[];
+            /** @description certificate:<id> or crypto:<asset id>; stable across reports. */
+            key: string;
+            key_bits?: number;
+            /** @enum {string} */
+            kind: "certificate" | "crypto_asset";
+            owners: string[];
+            plan: {
+                actions: components["schemas"]["CryptoRiskPlanAction"][];
+                recommended?: string;
+            };
+            /** @description 1 is the key to act on first. */
+            priority: number;
+            priority_reason: string;
+            reasons?: string[];
+            subject: string;
+        };
+        CryptoRiskPlanAction: {
+            campaign_id: string;
+            /** Format: date-time */
+            deadline: string;
+            name: string;
+            stale: boolean;
+            /** @description The migration campaign's status, as the campaign recorded it. */
+            status: string;
+            wave?: string;
+        };
+        CryptoRiskReport: {
+            changes: {
+                added: string[];
+                comparable: boolean;
+                deadline_changed: components["schemas"]["CryptoRiskChange"][];
+                note?: string;
+                plan_changed: components["schemas"]["CryptoRiskChange"][];
+                /** Format: date-time */
+                previous_generated_at?: string;
+                priority_changed: components["schemas"]["CryptoRiskChange"][];
+                resolved: string[];
+            };
+            /** @description What the report does not encode for national security systems. */
+            cnsa_2_0: string;
+            /** @description What the report can and cannot see. */
+            coverage: string;
+            format: string;
+            /** Format: date-time */
+            generated_at: string;
+            /** @description Which inputs were read only in part. */
+            input_limit?: string;
+            items: components["schemas"]["CryptoRiskItem"][];
+            sources: string[];
+            summary: {
+                deprecated: number;
+                distrusted: number;
+                items: number;
+                quantum_vulnerable: number;
+                replace_now: number;
+                upcoming: number;
+                weak: number;
+                with_plan: number;
+                without_plan: number;
+            };
+            /** Format: uuid */
+            tenant_id: string;
+            /** @description More keys qualified than the report lists; the summary and changes count every key. */
+            truncated?: boolean;
         };
         CustodyExportabilityCounts: {
             exportable: number;
@@ -37729,6 +37876,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RemediationPlaybookRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCryptoRiskReport: {
+        parameters: {
+            query?: {
+                /** @description maximum keys listed (1-1000, default 1000); the summary and the changes still count every key */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CryptoRiskReport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportCryptoRiskReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CryptoRiskExport"];
                 };
             };
             /** @description client error */

@@ -223,7 +223,7 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
 
 The response is intentionally mechanical: framework ids, report types
 (`framework_evidence_pack`, `inventory_snapshot`, `cbom_posture`,
-`audit_summary`, `nhi_compliance_mapping`), served routes, evidence
+`audit_summary`, `nhi_compliance_mapping`, `crypto_risk`), served routes, evidence
 references, inventory counts, and the first page of tenant report schedules.
 
 Before enabling a schedule, set `audit.archive_dir` (or

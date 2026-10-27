@@ -473,6 +473,42 @@ name the BR version. `trstctl certificates validity-readiness [export]` reads
 both. The rogue-certificate posture applies the same dated maximum to a public
 TLS certificate's own lifetime, by its issuance date.
 
+### Cryptographic risk report
+
+`GET /api/v1/reports/crypto-risk` lists every weak, distrusted or quantum-vulnerable
+key trstctl holds or has discovered, in the order to act on, with:
+
+- **what depends on it**: for a crypto inventory asset, the parties the
+  crypto-readiness graph shows depending on the resources that use it; for a
+  certificate, its blast radius in the credential graph;
+- **the deadline that applies**, from NIST IR 8547 (Transition to Post-Quantum
+  Cryptography Standards, initial public draft, November 2024, Tables 2 and 4):
+
+  | Key | Security strength | Transition |
+  | --- | --- | --- |
+  | RSA, ECDSA, EC and finite-field Diffie-Hellman | 112 bits (RSA/DH 2048, P-224) | deprecated after 2030, disallowed after 2035 |
+  | RSA, ECDSA, EdDSA, EC and finite-field Diffie-Hellman | 128 bits or more | disallowed after 2035 |
+  | any | below 112 bits, or rated weak or distrusted | replace now |
+
+  The status says `replace_now`, `deprecated`, `upcoming` or `none` (a
+  post-quantum or symmetric algorithm). A key whose size is unknown gets the
+  112-bit rule and says so;
+- **the plan**: the crypto-readiness campaign actions bound to the key's asset,
+  or the recommended next step when nothing addresses it yet.
+
+Distrusted keys come first, then weak ones, then by deadline; keys with more
+dependents come first within each. Every certificate is rated (its bytes when
+trstctl kept them, else its recorded algorithm and issuer), not one page of
+them. `GET /api/v1/reports/crypto-risk/export` returns the same report as CSV,
+one row per key; `trstctl-cli reports crypto-risk [export]` reads both.
+
+Schedule it as the `crypto_risk` report type (see [Compliance reporting](../compliance.md)):
+each run is signed and archived, and lists what changed since the schedule's
+previous run (keys added and resolved, priority, deadline and plan changes),
+after reading that run back from the archive and checking its signature. The
+on-demand report compares itself with the newest archived one. CNSA 2.0
+milestones for national security systems are not encoded; the report says so.
+
 ### In the console
 
 In the web console, the certificate inventory at `/certificates` is also a lifecycle
