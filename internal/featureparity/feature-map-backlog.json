@@ -10206,6 +10206,8 @@
                 "revokeAgentDelegation",
                 "getAgentDelegationChain",
                 "getAgentDelegationCredential",
+                "getAgentDelegationCredentialStatus",
+                "getAgentDelegationIssuingCA",
                 "getRevocationIncompleteJobs",
                 "getRevocationEvidence"
             ],
@@ -10224,6 +10226,8 @@
                 "agent-delegation revoke",
                 "agent-delegation chain get",
                 "agent-delegation credential get",
+                "agent-delegation credential status",
+                "agent-delegation issuing-ca get",
                 "agent-delegation revocations incomplete-jobs",
                 "agent-delegation revocations evidence"
             ],

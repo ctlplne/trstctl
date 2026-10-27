@@ -55,6 +55,7 @@ type LicensedAPIOptionsDeps struct {
 	SignerKeyStoreDir  string
 	AGIDRootAnchors    AgentRootAnchorProvisioner
 	AGIDAttestors      AgentAttestorProvisioner
+	AGIDIssuingCA      AgentIssuingCAReader
 	KEMCustody         KEMCustody
 	PCASLeafIssuer     PCASLeafIssuer
 }
@@ -72,6 +73,12 @@ type AgentRootAnchorProvisioner interface {
 type AgentAttestorProvisioner interface {
 	ProvisionAgentAttestor(context.Context, string, string, []byte, string) error
 	ReadAgentAttestor(context.Context, string, string) ([]byte, string, error)
+}
+
+// AgentIssuingCAReader reads a tenant's agent issuing CA certificate through the
+// authenticated signer channel, so relying services can pin it. Public material only.
+type AgentIssuingCAReader interface {
+	AgentIssuingCA(ctx context.Context, tenantID string) ([]byte, error)
 }
 
 // AgentReachabilityKeyProvisioner binds the control plane's public verdict key

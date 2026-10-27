@@ -155,6 +155,12 @@ service SignerService {
   rpc ProvisionAgentAttestor(ProvisionAgentAttestorRequest) returns (ProvisionAgentAttestorResponse);
   // GetAgentAttestor reads the exact signer-held public attestor key.
   rpc GetAgentAttestor(GetAgentAttestorRequest) returns (GetAgentAttestorResponse);
+  // GetAgentIssuingCA returns the certificate of a tenant's issuing CA, the CA
+  // that certifies the tenant's chain-bound agent credentials, so the tenant's
+  // relying services can pin it. Each tenant has its own CA key, signer-held
+  // under a fixed per-tenant handle that survives restarts; the certificate is
+  // public material and is re-issued over the same key before it expires.
+  rpc GetAgentIssuingCA(GetAgentIssuingCARequest) returns (GetAgentIssuingCAResponse);
 
   // Tenant domain KEK custody (A123). The signer creates a tenant's domain
   // key-encryption key and keeps it wrapped by an operator-provisioned HSM key
@@ -693,6 +699,14 @@ message GetAgentAttestorRequest {
 message GetAgentAttestorResponse {
   bytes public_der = 1;
   string method = 2;
+}
+
+message GetAgentIssuingCARequest {
+  string tenant_id = 1;
+}
+
+message GetAgentIssuingCAResponse {
+  bytes certificate_der = 1;
 }
 
 message CreateTenantDomainKEKRequest {

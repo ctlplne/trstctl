@@ -556,10 +556,10 @@ connector-support-docs-check: ## Verify docs/features/connector-support-matrix.m
 	@$(GO) run ./tools/connectorsupportdoc -check
 
 .PHONY: security-review
-security-review: editions-gate ## Security-focused local review for signer, remediation, connectors, XREC, and VDEC delivery paths
-	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC package tests)"
+security-review: editions-gate ## Security-focused local review for signer, remediation, connectors, XREC, VDEC, and agent delegation delivery paths
+	@echo ">> security-review (privileged signer/server/orchestrator/connectors/XREC/VDEC/agent delegation package tests)"
 	@$(GO) test ./internal/signing ./internal/server ./internal/orchestrator ./internal/connector/... ./internal/reconcile/... ./internal/decommission/... -count=1
-	@$(GO) test -tags integration ./internal/reconcile/intwire/... ./internal/reconcile/conformance/... ./internal/decommission/intwire/... ./internal/decommission/conformance/... -count=1 -timeout=12m
+	@$(GO) test -tags integration ./internal/reconcile/intwire/... ./internal/reconcile/conformance/... ./internal/decommission/intwire/... ./internal/decommission/conformance/... ./internal/agentid/intwire/... -count=1 -timeout=15m
 
 .PHONY: web-typecheck web-lint web-format-check web-check
 web-typecheck: ## Run the frontend TypeScript no-emit check from the repository root (CODE-002)

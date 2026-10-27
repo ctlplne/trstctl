@@ -32,11 +32,12 @@ import (
 // attaches) and imports NO datastore / NATS / HTTP; it uses only internal/crypto (AN-3) and
 // the core signing seam. The issuing CA private key is signer-held (a crypto.DigestSigner
 // backed by locked material); only digests cross into the crypto boundary. When no issuing
-// CA is provisioned at attach time, the key op bootstraps a signer-INTERNAL issuing CA
-// (a locked key generated inside the boundary, self-signed) so gated issuance works
-// end-to-end -- production provisions the real, durable issuing-CA handle (a remaining
-// AGID-INT-WIRE hardening item), but issuance is never fail-OPEN: without a gate approval
-// this key op is never reached.
+// CA is provisioned at attach time, the key op bootstraps one signer-INTERNAL issuing CA
+// PER TENANT (a locked key generated inside the boundary under a fixed per-tenant handle,
+// self-signed), so a relying service that pins its tenant's CA never honors another
+// tenant's credentials. The key survives restarts through the sealed key store; the
+// self-signed certificate is re-issued over the same key before it expires. Issuance is
+// never fail-OPEN: without a gate approval this key op is never reached.
 //
 // CUSTODY BOUNDARY -- independent AGID-claim-35, limb (a). This file is the custody half
 // of the claim-35 boundary: the issuance key material (the signer-held issuing CA key,
@@ -53,13 +54,13 @@ import (
 // is optional; the zero value yields a working key op that bootstraps a signer-internal
 // issuing CA and generates ECDSA-P256 agent keys.
 type IssuanceKeyOpConfig struct {
-	// SignerID names this signer (used to derive the bootstrap issuing-CA common name).
+	// SignerID names this signer.
 	SignerID string
-	// IssuingCACertDER + IssuingCASigner are the signer-held issuing CA the key op certifies
-	// agent credentials under. Both must be set to use a provisioned CA; when either is
-	// empty the key op bootstraps a signer-internal CA inside the boundary (locked material,
-	// self-signed). The CA private key is signer-held: only digests cross into the crypto
-	// boundary (AN-4).
+	// IssuingCACertDER + IssuingCASigner are a provisioned signer-held issuing CA the key
+	// op certifies every tenant's agent credentials under. Both must be set to use a
+	// provisioned CA; when either is empty the key op bootstraps a signer-internal CA per
+	// tenant inside the boundary (locked material, self-signed). The CA private key is
+	// signer-held: only digests cross into the crypto boundary (AN-4).
 	IssuingCACertDER []byte
 	IssuingCASigner  crypto.DigestSigner
 	// AgentKeyAlgorithm is the default algorithm for a generated agent credential key when
@@ -80,9 +81,19 @@ type IssuanceKeyOp struct {
 
 	mu       sync.Mutex
 	custody  signing.SignerCustody // injected by the signer at construction
-	caDER    []byte
+	caDER    []byte                // the provisioned CA, when configured
 	caSigner crypto.DigestSigner
 	caReady  bool
+	// tenantCAs caches each tenant's bootstrapped issuing CA.
+	tenantCAs map[string]*tenantIssuingCA
+}
+
+// tenantIssuingCA is one tenant's bootstrapped issuing CA: its current self-signed
+// certificate and the signer-held key behind it.
+type tenantIssuingCA struct {
+	der      []byte
+	signer   crypto.DigestSigner
+	notAfter time.Time
 }
 
 // Compile-time assertions that the key op satisfies the core seam and opts into custody.
@@ -90,10 +101,15 @@ var (
 	_ signing.IssuanceKeyOp = (*IssuanceKeyOp)(nil)
 )
 
-// bootstrapCATTL is the validity of a bootstrap signer-internal issuing CA (used only when
-// no durable CA is provisioned). Long enough to outlive short-lived agent credentials many
-// times over; production replaces it with a provisioned CA.
+// bootstrapCATTL is the validity of a bootstrap signer-internal issuing CA certificate
+// (used only when no CA is provisioned). Long enough to outlive short-lived agent
+// credentials many times over.
 const bootstrapCATTL = 90 * 24 * time.Hour
+
+// bootstrapCARenewBefore re-issues a tenant's bootstrap CA certificate over the same key
+// this long before it expires, so a long-running signer never certifies under an expired
+// CA certificate.
+const bootstrapCARenewBefore = 30 * 24 * time.Hour
 
 // NewIssuanceKeyOp builds the in-signer issuance key op with fail-closed defaults. It does
 // NOT itself perform any key op; the agent keygen/certify happens per issuance inside
@@ -155,8 +171,8 @@ func (op *IssuanceKeyOp) MintApprovedCredential(_ context.Context, req signing.I
 		return signing.IssuedCredential{}, fmt.Errorf("delegation: issuance key op has no signer custody bound")
 	}
 
-	// Resolve (or bootstrap) the signer-held issuing CA.
-	caDER, caSigner, err := op.issuingCA()
+	// Resolve (or bootstrap) the tenant's signer-held issuing CA.
+	caDER, caSigner, err := op.issuingCA(req.TenantID)
 	if err != nil {
 		return signing.IssuedCredential{}, err
 	}
@@ -197,55 +213,87 @@ func (op *IssuanceKeyOp) MintApprovedCredential(_ context.Context, req signing.I
 	}, nil
 }
 
-// issuingCA returns the signer-held issuing CA (cert DER + signer), bootstrapping a
-// signer-internal one the first time when none was provisioned. The bootstrap CA key is
-// generated inside the signer boundary as locked material via custody; the returned signer
-// is the custody's message-Signer view of it, so its private key never leaves the signer.
-func (op *IssuanceKeyOp) issuingCA() ([]byte, crypto.DigestSigner, error) {
+// issuingCA returns the issuing CA (cert DER + signer) for a tenant's credentials: the
+// provisioned CA when one is configured, else the tenant's signer-internal CA,
+// bootstrapped the first time. The bootstrap CA key is generated inside the signer
+// boundary as locked material via custody under a fixed per-tenant handle, so a restart
+// re-loads the SAME key from the sealed key store; the returned signer is the custody's
+// digest view of it, so its private key never leaves the signer. The self-signed
+// certificate is re-issued over the same key when it nears expiry.
+func (op *IssuanceKeyOp) issuingCA(tenantID string) ([]byte, crypto.DigestSigner, error) {
 	op.mu.Lock()
 	defer op.mu.Unlock()
 	if op.caReady {
 		return op.caDER, op.caSigner, nil
 	}
+	if tenantID == "" {
+		return nil, nil, fmt.Errorf("delegation: an agent issuing CA is per tenant and the request names no tenant")
+	}
 	if op.custody == nil {
 		return nil, nil, fmt.Errorf("delegation: cannot bootstrap issuing CA without signer custody")
 	}
-	// Generate the bootstrap issuing-CA key inside the signer under a fixed handle so a
-	// restart re-loads the SAME CA from the sealed key store (rather than rotating it).
-	caSigner, err := op.custody.GenerateSuccessorKey(bootstrapCAHandle, op.cfg.IssuingCAAlgorithm)
-	if err != nil {
-		// If the handle already exists (a prior boot generated it), resolve it instead of
-		// failing -- a restart-durable CA.
-		resolved, rerr := op.custody.ResolvePredecessor(bootstrapCAHandle)
-		if rerr != nil {
-			return nil, nil, fmt.Errorf("delegation: bootstrap issuing CA key: %w", err)
+	now := op.cfg.Clock()
+	ca := op.tenantCAs[tenantID]
+	if ca != nil && now.Before(ca.notAfter.Add(-bootstrapCARenewBefore)) {
+		return ca.der, ca.signer, nil
+	}
+	var caDigestSigner crypto.DigestSigner
+	if ca != nil {
+		caDigestSigner = ca.signer
+	} else {
+		handle := tenantCAHandle(tenantID)
+		caSigner, err := op.custody.GenerateSuccessorKey(handle, op.cfg.IssuingCAAlgorithm)
+		if err != nil {
+			// The handle already exists (a prior boot generated it): resolve it instead of
+			// failing -- a restart-durable CA.
+			resolved, rerr := op.custody.ResolvePredecessor(handle)
+			if rerr != nil {
+				return nil, nil, fmt.Errorf("delegation: bootstrap issuing CA key: %w", err)
+			}
+			caSigner = resolved
 		}
-		caSigner = resolved
+		caDigestSigner, err = digestSignerOf(caSigner)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	caDigestSigner, err := digestSignerOf(caSigner)
-	if err != nil {
-		return nil, nil, err
-	}
-	caDER, err := crypto.SelfSignedCACert(caDigestSigner, op.bootstrapCACommonName(), bootstrapCATTL)
+	caDER, err := crypto.SelfSignedCACert(caDigestSigner, bootstrapCACommonName(tenantID), bootstrapCATTL)
 	if err != nil {
 		return nil, nil, fmt.Errorf("delegation: self-sign bootstrap issuing CA: %w", err)
 	}
-	op.caDER = caDER
-	op.caSigner = caDigestSigner
-	op.caReady = true
-	return op.caDER, op.caSigner, nil
+	_, notAfter, err := crypto.CertValidity(caDER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("delegation: read bootstrap issuing CA validity: %w", err)
+	}
+	if op.tenantCAs == nil {
+		op.tenantCAs = make(map[string]*tenantIssuingCA)
+	}
+	op.tenantCAs[tenantID] = &tenantIssuingCA{der: caDER, signer: caDigestSigner, notAfter: notAfter}
+	return caDER, caDigestSigner, nil
 }
 
-// bootstrapCAHandle is the fixed signer keystore handle for the bootstrap issuing-CA key,
-// so a restart re-loads the same CA rather than rotating it.
-const bootstrapCAHandle = "agid-issuing-ca"
-
-func (op *IssuanceKeyOp) bootstrapCACommonName() string {
-	id := op.cfg.SignerID
-	if id == "" {
-		id = "trstctl-signer"
+// IssuingCACertificate publishes the certificate of the CA that certifies a tenant's agent
+// credentials, the trust root that tenant's relying services pin. It bootstraps the
+// tenant's CA on first use exactly as the tenant's first issuance would. Relying services
+// verify a credential's signature with the pinned CA's key, which stays the same across
+// signer restarts and certificate re-issues.
+func (op *IssuanceKeyOp) IssuingCACertificate(tenantID string) ([]byte, error) {
+	caDER, _, err := op.issuingCA(tenantID)
+	if err != nil {
+		return nil, err
 	}
-	return "AGID Issuing CA (" + id + ")"
+	return append([]byte(nil), caDER...), nil
+}
+
+// tenantCAHandle is the fixed signer keystore handle for a tenant's bootstrap issuing-CA
+// key, so a restart re-loads the same CA rather than rotating it. Tenant IDs are UUIDs, so
+// the handle is already a valid key-store file stem.
+func tenantCAHandle(tenantID string) string {
+	return "agid-issuing-ca-" + tenantID
+}
+
+func bootstrapCACommonName(tenantID string) string {
+	return "AGID Issuing CA " + tenantID
 }
 
 // agentKeyHandle derives a stable, unguessable-collision-resistant keystore handle for the

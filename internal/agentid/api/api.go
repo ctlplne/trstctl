@@ -265,6 +265,10 @@ type Service interface {
 	// RevocationEvidence returns a directive's aggregate revocation-evidence artifact and
 	// terminal verdict (AGID-11).
 	RevocationEvidence(ctx context.Context, tenantID, directiveID string) (RevocationEvidenceResponse, error)
+	// IssuingCA returns the tenant's agent issuing CA for relying services to pin.
+	IssuingCA(ctx context.Context, tenantID string) (IssuingCAResponse, error)
+	// CredentialStatus returns an issued credential's status for relying services.
+	CredentialStatus(ctx context.Context, tenantID, credentialID string) (CredentialStatusResponse, error)
 }
 
 // NewAPIOptionsFactory returns the licensed-route factory that attaches the AGID API
@@ -273,7 +277,9 @@ type Service interface {
 // NewAPIOptionsFactory.
 func NewAPIOptionsFactory() editionseam.LicensedAPIOptionsFactory {
 	return func(d editionseam.LicensedAPIOptionsDeps) ([]api.Option, error) {
-		svc := NewServiceWithSignerFloors(d.Store, d.Log, d.Outbox, SignerFloors{RootAnchors: d.AGIDRootAnchors, Attestors: d.AGIDAttestors})
+		svc := NewServiceWithSignerFloors(d.Store, d.Log, d.Outbox, SignerFloors{
+			RootAnchors: d.AGIDRootAnchors, Attestors: d.AGIDAttestors, IssuingCA: d.AGIDIssuingCA,
+		})
 		return []api.Option{
 			api.WithLicensedRoutes(Routes(svc)...),
 			api.WithLicensedSchemas(schemas()),
@@ -363,6 +369,19 @@ func Routes(svc Service) []api.LicensedRoute {
 			Handler:        func(a *api.API) http.HandlerFunc { return evidenceHandler(a, svc) },
 			Query:          []api.RouteParam{{Name: "directive_id", Type: "string", Description: "revocation directive id", Required: true}},
 			ResponseSchema: "AGIDRevocationEvidence", SuccessCode: "200", Permission: authz.AgentsRead,
+		},
+		{
+			Method: "GET", Path: "/api/v1/agent-delegation/issuing-ca", OperationID: "getAgentDelegationIssuingCA",
+			Summary:        "Fetch the tenant's agent issuing CA for relying services to pin",
+			Handler:        func(a *api.API) http.HandlerFunc { return issuingCAHandler(a, svc) },
+			ResponseSchema: "AGIDIssuingCA", SuccessCode: "200", Permission: authz.AgentsRead,
+		},
+		{
+			Method: "GET", Path: "/api/v1/agent-delegation/credential-status", OperationID: "getAgentDelegationCredentialStatus",
+			Summary:        "Fetch an issued agent credential's status (active, revoked, expired or unknown) for relying services",
+			Handler:        func(a *api.API) http.HandlerFunc { return credentialStatusHandler(a, svc) },
+			Query:          []api.RouteParam{{Name: "credential_id", Type: "string", Description: "stable issued-credential identifier", Required: true}},
+			ResponseSchema: "AGIDCredentialStatus", SuccessCode: "200", Permission: authz.AgentsRead,
 		},
 	}
 }
@@ -725,6 +744,14 @@ func writeProblem(w http.ResponseWriter, status int, detail string) {
 }
 
 func schemas() map[string]*api.Schema {
+	out := baseSchemas()
+	for name, schema := range relyingPartySchemas() {
+		out[name] = schema
+	}
+	return out
+}
+
+func baseSchemas() map[string]*api.Schema {
 	rootRequest := api.ObjectSchema(map[string]*api.Schema{
 		"key_id":     api.StringSchema(),
 		"public_der": {Type: "string", MinLength: 56, Description: "Base64-encoded PKIX SubjectPublicKeyInfo DER for the public delegation root; supply exactly one public key source."},

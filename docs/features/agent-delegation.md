@@ -159,13 +159,15 @@ GET  /api/v1/agent-delegation/root-anchors
 GET  /api/v1/agent-delegation/attestors
 GET  /api/v1/agent-delegation/issuance?issuance_id=...  # follow the POST receipt to status and credential_id
 GET  /api/v1/agent-delegation/credential?credential_id=...
+GET  /api/v1/agent-delegation/credential-status?credential_id=...  # active, revoked, expired or unknown
 GET  /api/v1/agent-delegation/chain?credential_id=...
+GET  /api/v1/agent-delegation/issuing-ca         # the tenant's issuing CA, for relying services to pin
 POST /api/v1/agent-delegation/revocations        # {"subject":"agent:...","reason":"compromise","publish_downstream":true}
 GET  /api/v1/agent-delegation/revocations/incomplete-jobs?directive_id=...
 GET  /api/v1/agent-delegation/revocations/evidence?directive_id=...
 ```
 
-The downloadable `trstctl-cli` exposes the same eleven routes. Set
+The downloadable `trstctl-cli` exposes the same thirteen routes. Set
 `TRSTCTL_SERVER`, `TRSTCTL_TOKEN`, `TRSTCTL_TENANT`, and `TRSTCTL_CA_FILE` for
 the deployment, then use a stable idempotency key for each mutation. Request
 JSON can be supplied from a private file or standard input; the CLI does not
@@ -180,11 +182,62 @@ trstctl-cli --idempotency-key attestor-qa-1 agent-delegation attestors register 
 trstctl-cli --idempotency-key issue-qa-1 agent-delegation issue -f issuance.json
 trstctl-cli agent-delegation issuance get --issuance_id '<issuance_id from the 202 receipt>'
 trstctl-cli agent-delegation credential get --credential_id '<credential_id from the issued result>'
+trstctl-cli agent-delegation credential status --credential_id '<credential_id from the issued result>'
+trstctl-cli agent-delegation issuing-ca get
 trstctl-cli agent-delegation chain get --credential_id '<credential_id from the issued result>'
 trstctl-cli --idempotency-key revoke-qa-1 agent-delegation revoke -f revocation.json --force
 trstctl-cli agent-delegation revocations incomplete-jobs --directive_id directive-1
 trstctl-cli agent-delegation revocations evidence --directive_id directive-1
 ```
+
+## Relying services
+
+A relying service is whatever an agent calls with its credential: a tool
+server, an API, another agent. It decides each call itself, from material it
+pinned and two reads:
+
+1. **Pin the tenant's issuing CA.** `GET /api/v1/agent-delegation/issuing-ca`
+   returns the certificate of the CA that certifies this tenant's agent
+   credentials, and its `spki_sha256`. Each tenant has its own CA, so a pinned
+   CA never honors another tenant's credentials. Its key is held by the signer
+   and survives restarts; the certificate is re-issued over the same key before
+   it expires, so `spki_sha256` is the durable pin. Pin the tenant's root
+   anchors (`GET /api/v1/agent-delegation/root-anchors`) too.
+2. **Verify offline.** Check the presented credential (X.509 DER) against the
+   pinned CA with trstctl's relying-party verifier
+   (`internal/agentid/verify`): it confirms the signature, that the bound agent
+   stack is one you approved, that the requested tool is in the bound tool
+   manifest, and that the bound authority class may perform the operation.
+3. **Bind the credential to the caller.** The credential's key stays in the
+   signer, so it is not a proof of possession. Authenticate the agent with its
+   own identity (an X.509-SVID from the agent identity broker, over mutual
+   TLS), read the credential's chain once
+   (`GET /api/v1/agent-delegation/chain`), verify it hop by hop from a pinned
+   root to the chain head the credential binds, and require its final delegate
+   to be the authenticated agent.
+4. **Check status.** `GET /api/v1/agent-delegation/credential-status` reports
+   `active`, `revoked` (a revocation's cascade recorded a job against the
+   credential; `revocation_evidenced` turns true once the job's effect is
+   recorded with signed evidence), `expired`, or `unknown`. Honor only
+   `active`, and compare `credential_sha256` with the credential presented.
+   The answer is never cached by HTTP (`Cache-Control: no-store`); reuse it for
+   a bounded window you choose.
+
+A revoked delegation stops working at a relying service within the time the
+revocation's cascade takes to reach the credential (the outbox dispatcher sweeps
+once a second, so normally a second or two) plus that service's status reuse
+window. Without a status check, an outstanding credential stays usable until it
+expires, at most its sub-hour TTL. The relying service needs a token scoped
+only to `agents:read`.
+
+Two reference integrations do all of the above with open-source agent
+frameworks, unmodified: an MCP tool server on the MCP Go SDK and an agent on the
+Agent Development Kit for Go, under `test/interop/agentframeworks`. Their lab
+test runs them against the real signer: the in-scope call is honored, an
+out-of-scope call and the same credential presented by another agent are
+refused, a revocation stops calls within the two-second status window the lab
+configures, and the tool server's audit log records the delegation path behind
+every decision.
 
 ## Pitfalls & limits
 
@@ -231,9 +284,10 @@ trstctl-cli agent-delegation revocations evidence --directive_id directive-1
   `POST /api/v1/agent-delegation/root-anchors`, `.../attestors`,
   `.../issuances`, `.../revocations`.
 - **Reads:** `.../root-anchors`, `.../attestors`, `.../issuance?issuance_id=`, `.../credential?credential_id=`,
-  `.../chain?credential_id=`, `.../revocations/incomplete-jobs?directive_id=`,
-  `.../revocations/evidence?directive_id=`.
-- **Outbox job:** `agentid.issue-chain-bound`; signer call: `GatedIssue`.
+  `.../credential-status?credential_id=`, `.../chain?credential_id=`, `.../issuing-ca`,
+  `.../revocations/incomplete-jobs?directive_id=`, `.../revocations/evidence?directive_id=`.
+- **Outbox job:** `agentid.issue-chain-bound`; signer calls: `GatedIssue`,
+  `GetAgentIssuingCA`.
 - **Trust floors:** the key-store layout above; all tenant-scoped storage is
   RLS-isolated, and key material never leaves the signing boundary.
 

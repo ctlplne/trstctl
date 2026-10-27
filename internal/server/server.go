@@ -1529,6 +1529,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 			Store: d.Store, Log: d.Log, Outbox: s.outbox, SignerKeyStoreDir: d.SignerKeyStoreDir,
 			AGIDRootAnchors: s.agidRootAnchors(),
 			AGIDAttestors:   s.agidAttestors(),
+			AGIDIssuingCA:   s.agidIssuingCA(),
 			DefaultProfile:  d.DefaultProfile,
 			KEMCustody:      s.kemCustody(), PCASLeafIssuer: pcasLeafIssuer,
 			TLSPostureDeployer: d.ConnectorRegistry,
@@ -2230,6 +2231,13 @@ func (s *Server) agidRootAnchors() editionseam.AgentRootAnchorProvisioner {
 }
 
 func (s *Server) agidAttestors() editionseam.AgentAttestorProvisioner {
+	if s.signer == nil {
+		return nil
+	}
+	return s.signer.Client()
+}
+
+func (s *Server) agidIssuingCA() editionseam.AgentIssuingCAReader {
 	if s.signer == nil {
 		return nil
 	}

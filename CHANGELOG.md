@@ -2,6 +2,19 @@
 
 ### Added
 
+- Agent delegation for relying services: each tenant has its own agent issuing
+  CA in the signer, published at `GET /api/v1/agent-delegation/issuing-ca` with
+  its SPKI SHA-256 so a relying service pins it (another tenant's credentials
+  never verify against it), and `GET /api/v1/agent-delegation/credential-status`
+  reports `active`, `revoked`, `expired` or `unknown` with the credential's
+  SHA-256, so a revoked delegation stops working at a relying service within its
+  status window instead of at expiry. CLI: `agent-delegation issuing-ca get`,
+  `agent-delegation credential status`. Reference integrations under
+  `test/interop/agentframeworks`: an MCP tool server on the MCP Go SDK that honors
+  a tool call only within the calling agent's delegated scope, and an agent built
+  with the Agent Development Kit for Go (with a scripted model) that calls it with
+  its agent identity and delegated credential; the agent delegation integration
+  suite runs both against the real signer, and now runs in CI.
 - External observers: `POST /api/v1/observers` registers a monitor outside trstctl
   (probectl or any other), and `POST /api/v1/observations` takes what it saw at an
   endpoint — vantage, time, reachability, health, served leaf and chain

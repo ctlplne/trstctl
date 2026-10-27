@@ -350,8 +350,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `verify-assurance-record` raised it to 606.
 	// A180's `observers register|list|update` and `observations record|list`
 	// raised it to 611.
-	if len(out) != 611 {
-		t.Fatalf("CLI commands = %d, want 611", len(out))
+	// A181's `agent-delegation issuing-ca get` and `credential status` raised it
+	// to 613, mapped onto the agent-delegation row.
+	if len(out) != 613 {
+		t.Fatalf("CLI commands = %d, want 613", len(out))
 	}
 	return out
 }

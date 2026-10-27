@@ -56,6 +56,8 @@ func TestRoutes_Surface(t *testing.T) {
 		{"GET /api/v1/agent-delegation/chain", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/revocations/incomplete-jobs", false, "200", authz.AgentsRead},
 		{"GET /api/v1/agent-delegation/revocations/evidence", false, "200", authz.AgentsRead},
+		{"GET /api/v1/agent-delegation/issuing-ca", false, "200", authz.AgentsRead},
+		{"GET /api/v1/agent-delegation/credential-status", false, "200", authz.AgentsRead},
 	}
 	if len(routes) != len(want) {
 		t.Fatalf("route count = %d, want %d", len(routes), len(want))
@@ -104,6 +106,8 @@ func TestOpenAPI_Surface(t *testing.T) {
 		"/api/v1/agent-delegation/chain",
 		"/api/v1/agent-delegation/revocations/incomplete-jobs",
 		"/api/v1/agent-delegation/revocations/evidence",
+		"/api/v1/agent-delegation/issuing-ca",
+		"/api/v1/agent-delegation/credential-status",
 	} {
 		if _, ok := paths[p]; !ok {
 			t.Fatalf("path %q missing from the AGID OpenAPI document", p)
@@ -195,8 +199,8 @@ func TestOpenAPIRequiredReadIdentifiers(t *testing.T) {
 			}
 		}
 	}
-	if checked != 5 {
-		t.Errorf("keyed AGID read routes = %d, want 5", checked)
+	if checked != 6 {
+		t.Errorf("keyed AGID read routes = %d, want 6", checked)
 	}
 }
 

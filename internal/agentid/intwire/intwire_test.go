@@ -547,7 +547,7 @@ func (h *harness) restartControlPlane(t *testing.T) {
 	t.Helper()
 	h.outbox = newTestOutbox(h.store)
 	h.api = agidapi.NewServiceWithSignerFloors(h.store, h.log, h.outbox, agidapi.SignerFloors{
-		RootAnchors: delegation.NewDurableAnchorStore(h.keystore), Attestors: h.client,
+		RootAnchors: delegation.NewDurableAnchorStore(h.keystore), Attestors: h.client, IssuingCA: h.client,
 	})
 	licensed, err := agidorch.NewLicensedOutboxFactory()(editionseam.LicensedOutboxDeps{
 		Store:                h.store,

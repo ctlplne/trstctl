@@ -21,6 +21,8 @@ func TestAgentDelegationCommandsCoverServedRouteFamily(t *testing.T) {
 		"agent-delegation revoke":                      "POST /api/v1/agent-delegation/revocations",
 		"agent-delegation chain get":                   "GET /api/v1/agent-delegation/chain",
 		"agent-delegation credential get":              "GET /api/v1/agent-delegation/credential",
+		"agent-delegation credential status":           "GET /api/v1/agent-delegation/credential-status",
+		"agent-delegation issuing-ca get":              "GET /api/v1/agent-delegation/issuing-ca",
 		"agent-delegation revocations incomplete-jobs": "GET /api/v1/agent-delegation/revocations/incomplete-jobs",
 		"agent-delegation revocations evidence":        "GET /api/v1/agent-delegation/revocations/evidence",
 	}

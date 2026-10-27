@@ -66,6 +66,7 @@ type service struct {
 
 	anchorProvisioner   RootAnchorProvisioner
 	attestorProvisioner AttestorProvisioner
+	issuingCA           IssuingCAReader
 }
 
 // NewService builds the store/log/outbox-backed AGID API Service. It is exported so the
@@ -86,6 +87,7 @@ func NewService(store *corestore.Store, log *events.Log, outbox *orchestrator.Ou
 type SignerFloors struct {
 	RootAnchors RootAnchorProvisioner
 	Attestors   AttestorProvisioner
+	IssuingCA   IssuingCAReader
 }
 
 // NewServiceWithSignerFloors builds the AGID API service with the signer's
@@ -95,6 +97,7 @@ func NewServiceWithSignerFloors(store *corestore.Store, log *events.Log, outbox 
 	if s, ok := svc.(*service); ok {
 		s.anchorProvisioner = floors.RootAnchors
 		s.attestorProvisioner = floors.Attestors
+		s.issuingCA = floors.IssuingCA
 	}
 	return svc
 }

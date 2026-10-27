@@ -138,6 +138,12 @@ jobs:
           go test ./internal/decommission/conformance/... -count=1
           go test -tags integration ./internal/decommission/conformance/... -count=1 -timeout=12m
 
+      # Agent delegation over PostgreSQL/RLS, embedded NATS, the outbox and the real
+      # signer process, including the agent framework reference integrations
+      # (test/interop/agentframeworks, built from their own pinned module).
+      - name: Core agent delegation wire integration
+        run: go test -tags integration ./internal/agentid/intwire/... -count=1 -timeout=15m
+
       - name: Editions gate
         run: make editions-gate
 
