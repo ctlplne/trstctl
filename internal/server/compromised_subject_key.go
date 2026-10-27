@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
@@ -24,6 +25,24 @@ func refuseCompromisedCSRKey(ctx context.Context, st *store.Store, tenantID stri
 		return fmt.Errorf("server: CSR does not parse: %w", err)
 	}
 	return orchestrator.RefuseCompromisedSubjectKeyIn(ctx, st, tenantID, inspected.RawSubjectPublicKeyInfo)
+}
+
+// refuseCompromisedLeafKey is the same refusal on a CA authority's leaf route:
+// a CSR that does not parse, or whose key the tenant recorded as compromised,
+// is a request the authority refuses, answered as an invalid request that
+// names why.
+func refuseCompromisedLeafKey(ctx context.Context, st *store.Store, tenantID string, csrDER []byte) error {
+	inspected, err := crypto.InspectOpaqueCSR(csrDER)
+	if err != nil {
+		return fmt.Errorf("%w: the CSR does not parse: %v", api.ErrCAHierarchyInvalid, err)
+	}
+	if err := refuseCompromisedPublicKey(ctx, st, tenantID, inspected.RawSubjectPublicKeyInfo); err != nil {
+		if crypto.RefusedSubjectKey(err) {
+			return fmt.Errorf("%w: %s", api.ErrCAHierarchyInvalid, crypto.SubjectKeyRefusalDetail(err))
+		}
+		return err
+	}
+	return nil
 }
 
 // refuseCompromisedPublicKey is the same refusal for a bare public key (an

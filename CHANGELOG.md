@@ -486,6 +486,9 @@
 
 ### Fixed
 
+- A CA authority's leaf route (`POST /api/v1/ca/authorities/{id}/issue`) now
+  refuses a subject key the tenant recorded as compromised (422, naming the
+  compromise), as every other certifying path already did; it signed one before.
 - A staged agent upgrade's soak window now ends when its reason says. Recording
   the soak cleared the ring's dispatch, so the next sweep sent the ring's agents
   a second round of upgrade jobs and the window started over; a campaign that

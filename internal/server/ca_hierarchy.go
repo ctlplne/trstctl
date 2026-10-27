@@ -964,6 +964,11 @@ func (h *caHierarchyService) IssueLeaf(ctx context.Context, tenantID, caID strin
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
 	}
+	// A key the tenant recorded as compromised is refused before the authority
+	// is asked to sign, as on every other certifying path.
+	if err := refuseCompromisedLeafKey(ctx, h.store, tenantID, req.CSRDER); err != nil {
+		return api.CAIssuedLeaf{}, err
+	}
 	signer, err := h.signerForAuthority(ctx, ca)
 	if err != nil {
 		return api.CAIssuedLeaf{}, err
