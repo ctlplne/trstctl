@@ -345,8 +345,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// mapped onto F51.
 	// A150's `agent-delegation attestors register|list` raised it to 602,
 	// mapped onto the agent-delegation row.
-	if len(out) != 602 {
-		t.Fatalf("CLI commands = %d, want 602", len(out))
+	// A178's `certificates validity-readiness [export]` raised it to 604.
+	if len(out) != 604 {
+		t.Fatalf("CLI commands = %d, want 604", len(out))
 	}
 	return out
 }

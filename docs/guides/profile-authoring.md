@@ -97,6 +97,17 @@ A profile spec is JSON:
 | `allowed_protocols` | enrollment protocols that may use this profile, e.g. `["api","acme"]` |
 | `allowed_dns_suffixes` | name constraint on SAN dNSNames (empty = unconstrained) |
 | `acme_device_attestation` | explicit, default-off TPM `device-attest-01` policy: operator roots, device identifier allowlist, COSE algorithms, and maximum proof age |
+| `public_tls` | the profile issues publicly trusted TLS server certificates (default `false`); requires `serverAuth` to be allowed, and the [lifetime-reduction readiness report](../features/lifecycle-and-pqc.md#lifetime-reduction-readiness-a178) flags a `max_validity` over the CA/Browser Forum's dated maximum, or none |
+
+### Public TLS profiles and the dated maximum
+
+trstctl's own CA is never publicly trusted, so `public_tls` is your statement
+about the CA behind the profile. Publicly trusted TLS certificates issued from
+2026-03-15 may be valid at most 200 days, from 2027-03-15 100 days, and from
+2029-03-15 47 days, counting notBefore through notAfter inclusive: a ceiling of
+exactly `4800h` is 201 days. Use `4799h59m59s` for 200 days, `2399h59m59s` for
+100 and `1127h59m59s` for 47. Issuance does not refuse a longer ceiling; the
+readiness report flags the profile under every step it exceeds.
 
 ### RSA floor below the default
 

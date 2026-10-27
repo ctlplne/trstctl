@@ -2495,6 +2495,7 @@ export interface CertificateProfileSpec {
   min_ecdsa_bits?: number;
   min_rsa_bits?: number;
   name?: string;
+  public_tls?: boolean;
   requires_approval?: boolean;
   version?: number;
 }
@@ -9443,6 +9444,98 @@ export interface UsageMeterDefinition {
   name: string;
   notes?: string;
   primary_billable: boolean;
+}
+
+export interface ValidityReadinessCertificate {
+  automation: "scheduled" | "client" | "none";
+  certificate_id: string;
+  deployment: "verified" | "delivered" | "failed" | "none" | "not_applicable";
+  exceeds_maximum_at_issuance: boolean;
+  identity_id?: string;
+  identity_name?: string;
+  issuer: string;
+  max_days_at_issuance: number;
+  not_after: string;
+  not_before: string;
+  renewal_lead_days?: number;
+  renewal_lifetime_days?: number;
+  scope: "public_tls" | "private_tls" | "not_tls_server" | "ca_certificate" | "unknown";
+  steps: ValidityReadinessCertificateStep[];
+  subject: string;
+  validity_days: number;
+}
+
+export interface ValidityReadinessCertificateStep {
+  effective: string;
+  max_days: number;
+  reasons: ("scheduler_disabled" | "no_automated_renewal" | "client_renewal_unobserved" | "renewal_failed" | "renewal_paused" | "target_conflict" | "delivery_failed" | "deployment_unverified" | "no_automated_deployment" | "approval_required" | "profile_unavailable" | "renewal_lifetime_exceeds_maximum")[];
+  verdict: "renews" | "at_risk" | "manual";
+}
+
+export interface ValidityReadinessExport {
+  content_type: string;
+  csv: string;
+  filename: string;
+  generated_at: string;
+  requirements: ValidityReadinessRequirements;
+  truncated: boolean;
+}
+
+export interface ValidityReadinessProfile {
+  max_validity: string;
+  name: string;
+  public_tls: boolean;
+  requested_days: number;
+  server_auth: boolean;
+  steps: ValidityReadinessProfileStep[];
+  version: number;
+}
+
+export interface ValidityReadinessProfileStep {
+  effective: string;
+  flagged: boolean;
+  max_days: number;
+  reason?: "no_validity_ceiling" | "requested_validity_exceeds_maximum";
+}
+
+export interface ValidityReadinessReport {
+  certificates: ValidityReadinessCertificate[];
+  generated_at: string;
+  limit: number;
+  profiles: ValidityReadinessProfile[];
+  requirements: ValidityReadinessRequirements;
+  scheduler: ValidityReadinessScheduler;
+  steps: ValidityReadinessStep[];
+  truncated: boolean;
+}
+
+export interface ValidityReadinessRequirements {
+  name: string;
+  published: string;
+  section: string;
+  url: string;
+  version: string;
+}
+
+export interface ValidityReadinessScheduler {
+  enabled: boolean;
+  renew_before: string;
+  renew_before_seconds: number;
+}
+
+export interface ValidityReadinessStep {
+  at_risk: number;
+  effective: string;
+  flagged_profiles: number;
+  in_effect: boolean;
+  manual: number;
+  manual_renewals_per_year: number;
+  max_days: number;
+  public_tls: number;
+  public_tls_at_risk: number;
+  public_tls_manual: number;
+  renews: number;
+  should_days: number;
 }
 
 export interface WorkloadAttesterTrustSource {

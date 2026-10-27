@@ -307,8 +307,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// the audit row.
 	// A145's TSA certificate list, rotation and revocation raised it to 544,
 	// mapped onto F51.
-	if len(out) != 544 {
-		t.Fatalf("OpenAPI operationIds = %d, want 544", len(out))
+	// A178's validity-readiness report and its export raised it to 546,
+	// mapped onto the F6 lifecycle automation row.
+	if len(out) != 546 {
+		t.Fatalf("OpenAPI operationIds = %d, want 546", len(out))
 	}
 	return out
 }

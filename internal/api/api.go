@@ -185,6 +185,7 @@ type API struct {
 	acmeEAB                            ACMEEABProvider
 	acmeOperatorPlan                   ACMEOperatorPlanProvider
 	lifecycleAutomationPlan            LifecycleAutomationPlanProvider
+	validityReadiness                  ValidityReadinessProvider
 	firstIssuanceRetry                 FirstIssuanceRetryService
 	agentJobPosture                    AgentJobPostureProvider
 	agentJobClaimable                  func(string) bool
@@ -324,6 +325,7 @@ type config struct {
 	acmeEAB                     ACMEEABProvider
 	acmeOperatorPlan            ACMEOperatorPlanProvider
 	lifecycleAutomationPlan     LifecycleAutomationPlanProvider
+	validityReadiness           ValidityReadinessProvider
 	firstIssuanceRetry          FirstIssuanceRetryService
 	agentJobPosture             AgentJobPostureProvider
 	agentJobClaimable           func(string) bool
@@ -653,6 +655,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		acmeEAB:                     cfg.acmeEAB,
 		acmeOperatorPlan:            cfg.acmeOperatorPlan,
 		lifecycleAutomationPlan:     cfg.lifecycleAutomationPlan,
+		validityReadiness:           cfg.validityReadiness,
 		firstIssuanceRetry:          cfg.firstIssuanceRetry,
 		agentJobPosture:             cfg.agentJobPosture,
 		agentJobClaimable:           cfg.agentJobClaimable,
@@ -1325,6 +1328,8 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/certificates/bulk-revoke", opID: "bulkRevokeCertificates", summary: "Revoke exact certificates or explicitly selected lifecycle identities", handler: a.bulkRevoke, reqSchema: "BulkRevokeRequest", resSchema: "BulkRevokeResult", successCode: "200", mutation: true, perm: authz.IdentitiesWrite},
 		{method: "GET", path: "/api/v1/certificates", opID: "listCertificates", summary: "Query the certificate inventory", handler: a.listCertificates, query: certQuery, resSchema: "CertificateList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/certificates/health", opID: "getCertificateHealth", summary: "Get estate-wide certificate expiry and source health", handler: a.getCertificateHealth, resSchema: "CertificateHealthDashboard", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/certificates/validity-readiness", opID: "getValidityReadiness", summary: "Report whether each certificate keeps renewing, and which public TLS profiles request too long a validity, under the CA/Browser Forum's dated maximum validity", handler: a.getValidityReadiness, resSchema: "ValidityReadinessReport", successCode: "200", perm: authz.CertsRead},
+		{method: "GET", path: "/api/v1/certificates/validity-readiness/export", opID: "exportValidityReadiness", summary: "Export the validity-readiness report as CSV naming its Baseline Requirements version", handler: a.exportValidityReadiness, resSchema: "ValidityReadinessExport", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/revocation/crls", opID: "listCRLDistributions", summary: "List published full, sharded, and delta CRL distribution artifacts", handler: a.listCRLDistributions, resSchema: "CRLDistributionList", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/revocation/rogue-certificates", opID: "listRogueCertificates", summary: "List rogue and non-compliant certificate detection findings", handler: a.listRogueCertificates, resSchema: "RogueCertificatePosture", successCode: "200", perm: authz.CertsRead},
 		{method: "POST", path: "/api/v1/revocation/rogue-certificates/takedown", opID: "takedownRogueCertificate", summary: "Queue removal of a rogue certificate from a connector target where trstctl installed it", handler: a.takedownRogueCertificate, reqSchema: "RogueCertificateTakedownRequest", resSchema: "ConnectorDelivery", successCode: "202", mutation: true, perm: authz.ConnectorsWrite},

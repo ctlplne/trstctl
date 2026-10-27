@@ -2005,6 +2005,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/validity-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report whether each certificate keeps renewing, and which public TLS profiles request too long a validity, under the CA/Browser Forum's dated maximum validity */
+        get: operations["getValidityReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certificates/validity-readiness/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the validity-readiness report as CSV naming its Baseline Requirements version */
+        get: operations["exportValidityReadiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{id}": {
         parameters: {
             query?: never;
@@ -10858,6 +10892,8 @@ export interface components {
             /** @description RSA key floor in bits; unset enforces 2048, and an explicit lower value is honored but raises a profile-rsa-floor-below-default finding */
             min_rsa_bits?: number;
             name?: string;
+            /** @description The profile issues publicly trusted TLS server certificates; requires serverAuth, and the validity-readiness report flags a max_validity over the CA/Browser Forum's dated maximum */
+            public_tls?: boolean;
             requires_approval?: boolean;
             version?: number;
         };
@@ -18417,6 +18453,105 @@ export interface components {
             notes?: string;
             primary_billable: boolean;
         };
+        ValidityReadinessCertificate: {
+            /** @enum {string} */
+            automation: "scheduled" | "client" | "none";
+            /** Format: uuid */
+            certificate_id: string;
+            /** @enum {string} */
+            deployment: "verified" | "delivered" | "failed" | "none" | "not_applicable";
+            exceeds_maximum_at_issuance: boolean;
+            /** Format: uuid */
+            identity_id?: string;
+            identity_name?: string;
+            issuer: string;
+            max_days_at_issuance: number;
+            /** Format: date-time */
+            not_after: string;
+            /** Format: date-time */
+            not_before: string;
+            renewal_lead_days?: number;
+            renewal_lifetime_days?: number;
+            /** @enum {string} */
+            scope: "public_tls" | "private_tls" | "not_tls_server" | "ca_certificate" | "unknown";
+            steps: components["schemas"]["ValidityReadinessCertificateStep"][];
+            subject: string;
+            validity_days: number;
+        };
+        ValidityReadinessCertificateStep: {
+            /** Format: date */
+            effective: string;
+            max_days: number;
+            reasons: ("scheduler_disabled" | "no_automated_renewal" | "client_renewal_unobserved" | "renewal_failed" | "renewal_paused" | "target_conflict" | "delivery_failed" | "deployment_unverified" | "no_automated_deployment" | "approval_required" | "profile_unavailable" | "renewal_lifetime_exceeds_maximum")[];
+            /** @enum {string} */
+            verdict: "renews" | "at_risk" | "manual";
+        };
+        ValidityReadinessExport: {
+            content_type: string;
+            csv: string;
+            filename: string;
+            /** Format: date-time */
+            generated_at: string;
+            requirements: components["schemas"]["ValidityReadinessRequirements"];
+            truncated: boolean;
+        };
+        ValidityReadinessProfile: {
+            max_validity: string;
+            name: string;
+            public_tls: boolean;
+            requested_days: number;
+            server_auth: boolean;
+            steps: components["schemas"]["ValidityReadinessProfileStep"][];
+            version: number;
+        };
+        ValidityReadinessProfileStep: {
+            /** Format: date */
+            effective: string;
+            flagged: boolean;
+            max_days: number;
+            /** @enum {string} */
+            reason?: "no_validity_ceiling" | "requested_validity_exceeds_maximum";
+        };
+        ValidityReadinessReport: {
+            certificates: components["schemas"]["ValidityReadinessCertificate"][];
+            /** Format: date-time */
+            generated_at: string;
+            limit: number;
+            profiles: components["schemas"]["ValidityReadinessProfile"][];
+            requirements: components["schemas"]["ValidityReadinessRequirements"];
+            scheduler: components["schemas"]["ValidityReadinessScheduler"];
+            steps: components["schemas"]["ValidityReadinessStep"][];
+            truncated: boolean;
+        };
+        ValidityReadinessRequirements: {
+            name: string;
+            /** Format: date */
+            published: string;
+            section: string;
+            url: string;
+            version: string;
+        };
+        ValidityReadinessScheduler: {
+            enabled: boolean;
+            renew_before: string;
+            renew_before_seconds: number;
+        };
+        ValidityReadinessStep: {
+            at_risk: number;
+            /** Format: date */
+            effective: string;
+            flagged_profiles: number;
+            in_effect: boolean;
+            manual: number;
+            /** @description Hand renewals a year the public TLS certificates nothing renews need at this step's maximum lifetime */
+            manual_renewals_per_year: number;
+            max_days: number;
+            public_tls: number;
+            public_tls_at_risk: number;
+            public_tls_manual: number;
+            renews: number;
+            should_days: number;
+        };
         WorkloadAttesterTrustSource: {
             /** @description Lower-cased GitHub repository owners this source admits. */
             allowed_owners: string[];
@@ -24098,6 +24233,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PKISecretLeafRecovery"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getValidityReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidityReadinessReport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportValidityReadiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidityReadinessExport"];
                 };
             };
             /** @description client error */

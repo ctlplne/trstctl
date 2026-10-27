@@ -18,6 +18,40 @@ import (
 	"time"
 )
 
+// TLSLeaf returns a self-signed TLS server certificate for commonName, valid
+// from notBefore to notAfter, asserting the given certificate policy OIDs in
+// dotted form — a CA/Browser Forum reserved identifier makes it read as
+// publicly trusted.
+func TLSLeaf(commonName string, notBefore, notAfter time.Time, policyOIDs ...string) ([]byte, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	policies := make([]x509.OID, 0, len(policyOIDs))
+	for _, dotted := range policyOIDs {
+		oid, err := x509.ParseOID(dotted)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, oid)
+	}
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 62))
+	if err != nil {
+		return nil, err
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: serial.Add(serial, big.NewInt(1)),
+		Subject:      pkix.Name{CommonName: commonName},
+		DNSNames:     []string{commonName},
+		NotBefore:    notBefore,
+		NotAfter:     notAfter,
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		Policies:     policies,
+	}
+	return x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+}
+
 // DistinctLeaves returns n self-signed certificates, each over its own fresh
 // P-256 key, so each carries a distinct SubjectPublicKeyInfo.
 func DistinctLeaves(n int, commonNamePrefix string) ([][]byte, error) {

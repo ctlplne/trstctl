@@ -52,6 +52,18 @@ type CertificateProfile struct {
 	AllowedEmailDomains   []string                    `json:"allowed_email_domains"`             // rfc822Name domains; set to permit email SANs under a SAN policy
 	AllowedURIPrefixes    []string                    `json:"allowed_uri_prefixes"`              // URI string prefixes; set to permit URI SANs under a SAN policy
 	ACMEDeviceAttestation ACMEDeviceAttestationPolicy `json:"acme_device_attestation,omitempty"` // explicit, default-off device-attest-01 policy
+	// PublicTLS says the profile issues publicly trusted TLS server
+	// certificates, which the CA/Browser Forum's dated maximum validity binds.
+	// trstctl's own CA is never publicly trusted, so this is the operator's
+	// statement about the CA behind the profile; the validity-readiness report
+	// flags such a profile whose max_validity exceeds a step's maximum.
+	PublicTLS bool `json:"public_tls,omitempty"`
+}
+
+// AllowsServerAuth reports whether the profile permits the serverAuth extended
+// key usage; an empty allow-list permits any.
+func (p CertificateProfile) AllowsServerAuth() bool {
+	return len(p.AllowedEKUs) == 0 || contains(p.AllowedEKUs, "serverAuth")
 }
 
 // DefaultMinRSABits is the RSA floor a profile enforces when it sets none
@@ -144,6 +156,9 @@ func (p CertificateProfile) ValidateDefinition() error {
 	}
 	if err := p.ACMEDeviceAttestation.validate(id); err != nil {
 		return err
+	}
+	if p.PublicTLS && !p.AllowsServerAuth() {
+		return fmt.Errorf("%s: public_tls requires serverAuth in allowed_ekus", id)
 	}
 	for _, label := range p.AllowedKeyAlgorithms {
 		classification, err := crypto.ClassifyAlgorithmLabel(label)

@@ -250,6 +250,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"certificates", "ingest"}, Method: "POST", Path: "/api/v1/certificates", Body: bodyCertificateFile, Summary: "Ingest a PEM certificate or JSON import request"},
 	{Name: []string{"certificates", "list"}, Method: "GET", Path: "/api/v1/certificates", Query: []string{"limit", "cursor", "expiring_before"}, Summary: "Query the certificate inventory"},
 	{Name: []string{"certificates", "health"}, Method: "GET", Path: "/api/v1/certificates/health", Summary: "Show estate-wide certificate expiry and source health"},
+	{Name: []string{"certificates", "validity-readiness"}, Method: "GET", Path: "/api/v1/certificates/validity-readiness", Summary: "Report whether each certificate keeps renewing, and which public TLS profiles request too long a validity, under the CA/Browser Forum's dated maximum validity"},
+	{Name: []string{"certificates", "validity-readiness", "export"}, Method: "GET", Path: "/api/v1/certificates/validity-readiness/export", Summary: "Export the validity-readiness report as CSV naming its Baseline Requirements version"},
 	{Name: []string{"revocation", "crls"}, Method: "GET", Path: "/api/v1/revocation/crls", Summary: "List published full, sharded, and delta CRL distribution artifacts"},
 	{Name: []string{"revocation", "caches"}, Method: "GET", Path: "/api/v1/revocation/caches", Summary: "List signed segment-local CRL and OCSP cache freshness evidence"},
 	{Name: []string{"revocation", "health"}, Method: "GET", Path: "/api/v1/revocation/health", Summary: "List signed network-relay CRL and OCSP endpoint health evidence"},

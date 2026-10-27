@@ -369,6 +369,33 @@ describe("operational console surface", () => {
     );
   });
 
+  it("A178 marks a rule as issuing publicly trusted TLS certificates and requires serverAuth for it", async () => {
+    apiMock.profiles.mockResolvedValue([]);
+    apiMock.createProfile.mockResolvedValue({ id: "public", name: "web-public", version: 1, active: true });
+    const user = userEvent.setup();
+    renderAt("/profiles");
+    await user.click(await screen.findByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "web-public");
+    const publicTLS = screen.getByRole("checkbox", { name: "Issues publicly trusted TLS server certificates" });
+    expect(publicTLS).not.toBeChecked();
+    expect(screen.getByText(/from 2027-03-15 100 days, and from 2029-03-15 47 days/)).toBeInTheDocument();
+    await user.click(publicTLS);
+    await user.click(screen.getByLabelText("serverAuth"));
+    await user.click(screen.getByLabelText("clientAuth"));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("A public TLS profile must allow serverAuth.");
+    expect(apiMock.createProfile).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText("serverAuth"));
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    await waitFor(() =>
+      expect(apiMock.createProfile).toHaveBeenCalledWith({
+        name: "web-public",
+        spec: expect.objectContaining({ public_tls: true, allowed_ekus: ["clientAuth", "serverAuth"], max_validity: "2160h" }),
+      }),
+    );
+  });
+
   it("fails closed in the profile console when TPM roots are missing", async () => {
     apiMock.profiles.mockResolvedValue([]);
     const user = userEvent.setup();

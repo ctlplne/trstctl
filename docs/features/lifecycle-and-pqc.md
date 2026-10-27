@@ -415,12 +415,72 @@ PEM, bearer credentials, trstctl API tokens, and non-empty password/secret/token
 JSON fields. The command deletes only its own private runtime directory; the
 receipt archive is the only retained output.
 
+### Lifetime-reduction readiness (A178)
+
+The CA/Browser Forum's TLS Baseline Requirements shorten the maximum validity of
+a publicly trusted TLS server certificate in dated steps. trstctl encodes
+version 2.3.1 (published 2026-10-04), section 6.3.2, by issuance date:
+
+| Issued | SHOULD NOT exceed | MUST NOT exceed |
+| --- | --- | --- |
+| before 2026-03-15 | 397 days | 398 days |
+| 2026-03-15 to 2027-03-14 | 199 days | 200 days |
+| 2027-03-15 to 2029-03-14 | 99 days | 100 days |
+| from 2029-03-15 | 46 days | 47 days |
+
+The Validity Period runs from notBefore through notAfter **inclusive**, counted
+in 86,400-second days, and any part of a day is a day. A certificate whose
+notAfter is exactly 200 days after its notBefore is therefore 201 days long. A
+profile ceiling of `4800h` asks for 201 days; use `4799h59m59s` for 200, and
+`1127h59m59s` for 47.
+
+`GET /api/v1/certificates/validity-readiness` evaluates every active certificate
+under each of the three dated reductions, from the scheduler's own view of it:
+
+- **automation**: `scheduled` (the served certificate of a renewable lifecycle
+  identity, or bound to one by its issuance evidence), `client` (issued over
+  ACME, EST, SCEP, CMP, in-cluster Kubernetes issuance, an attested workload or
+  the agent broker, so its client renews it) or `none`;
+- **deployment** of a scheduled certificate: `verified` (delivered and the
+  served certificate read back), `delivered`, `failed` (the latest delivery or
+  verification failed, which holds renewal) or `none` (no connector delivers a
+  renewal);
+- the **renewal lead**: a scheduled renewal requests 30 days (less when the
+  profile's `max_validity` is lower) and starts when one third of the lifetime
+  remains, or `lifecycle.renew_before` before expiry if that comes first and is
+  shorter than the lifetime.
+
+Each step gets a verdict — `renews`, `at_risk` or `manual` — with reasons:
+`scheduler_disabled`, `no_automated_renewal`, `client_renewal_unobserved`,
+`renewal_failed`, `renewal_paused`, `target_conflict`, `delivery_failed`,
+`deployment_unverified`, `no_automated_deployment`, `approval_required`,
+`profile_unavailable` or `renewal_lifetime_exceeds_maximum`. Each step's summary
+counts the verdicts and the hand renewals a year the public TLS certificates
+nothing renews would need at that step's maximum.
+
+A certificate's `scope` says whether the maximum binds it: `public_tls` when it
+permits TLS server authentication and asserts a CA/Browser Forum reserved
+policy identifier, else `private_tls`, `not_tls_server`, `ca_certificate` or
+`unknown`. A profile says it issues publicly trusted TLS server certificates
+with `public_tls: true` (see [Authoring certificate profiles](../guides/profile-authoring.md));
+the report flags such a profile under each step whose maximum its
+`max_validity` exceeds, or under every step when it has none. A 397-day public
+profile is flagged for 2026, 2027 and 2029.
+
+`GET /api/v1/certificates/validity-readiness/export` returns the same report as
+CSV, one row per certificate or profile and step; the file name and every row
+name the BR version. `trstctl certificates validity-readiness [export]` reads
+both. The rogue-certificate posture applies the same dated maximum to a public
+TLS certificate's own lifetime, by its issuance date.
+
 ### In the console
 
 In the web console, the certificate inventory at `/certificates` is also a lifecycle
-command center: expiry bands, a 47-day renewal-readiness simulator (does each certificate
-renew inside the shrinking CA/Browser Forum maximum lifetime?), deployment receipts, and
-a per-certificate renewal-history timeline. The crypto-agility work surfaces at
+command center: expiry bands, the **Lifetime-reduction readiness** panel (the
+server's verdicts under each dated step, the public TLS profiles over its maximum,
+and the CSV export), deployment receipts, and a per-certificate renewal-history
+timeline. The profile builder's **Issues publicly trusted TLS server
+certificates** checkbox sets `public_tls`. The crypto-agility work surfaces at
 `/posture` as CBOM-backed algorithm posture, the complete core campaign/evidence
 workflow, and the Core migration executor. See [The web console](../web-console.md).
 
@@ -481,9 +541,17 @@ every build through `internal/pqcmigration`.
   retirement; direct pure enrollment is served.
 - **SLH-DSA** signatures are large — the conservative choice for long-lived roots, not
   high-volume leaf issuance; pick the algorithm per profile.
+- **Lifetime-reduction readiness** reads what trstctl can see. A client-renewed
+  certificate's renewal lead is its client's, so it reads `at_risk`; a public TLS
+  profile over the maximum is flagged, not refused, at issuance; the report covers
+  the 5,000 active certificates that expire first. See
+  [Current limitations](../limitations.md#dated-lifetime-reduction-readiness).
 
 ## Reference
 
+- **Lifetime-reduction readiness:** `GET /api/v1/certificates/validity-readiness`,
+  `GET /api/v1/certificates/validity-readiness/export` (`certs:read`);
+  `trstctl certificates validity-readiness [export]`; profile field `public_tls`.
 - **Config:** `lifecycle.renew_before` (default `720h`), `lifecycle.alert_before`
   (default `336h`; Go duration strings); `TRSTCTL_LIFECYCLE_RENEW_BEFORE`,
   `TRSTCTL_LIFECYCLE_ALERT_BEFORE`.

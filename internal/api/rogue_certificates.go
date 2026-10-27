@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/policy"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/tlsvalidity"
 )
 
 const rogueCertificateCapability = "CAP-REV-05"
@@ -455,11 +457,10 @@ func rogueCertificateFindingForCertificate(cert store.Certificate, now time.Time
 		types = append(types, "expired_active_certificate")
 		risk = maxInt(risk, 92)
 	}
-	lifetimeDays := 0
-	const maxPublicTLSLifetimeDays = 398
+	lifetimeDays, policyMaxDays := 0, longLifetimeDays
 	if cert.NotBefore != nil && cert.NotAfter != nil && cert.NotAfter.After(*cert.NotBefore) {
-		lifetimeDays = int(cert.NotAfter.Sub(*cert.NotBefore).Hours() / 24)
-		if lifetimeDays > maxPublicTLSLifetimeDays {
+		lifetimeDays, policyMaxDays = lifetimePolicy(cert)
+		if lifetimeDays > policyMaxDays {
 			types = append(types, "lifetime_exceeds_policy")
 			risk = maxInt(risk, 65)
 		}
@@ -497,7 +498,7 @@ func rogueCertificateFindingForCertificate(cert store.Certificate, now time.Time
 		Severity:       severity,
 		RiskScore:      risk,
 		LifetimeDays:   lifetimeDays,
-		PolicyMaxDays:  maxPublicTLSLifetimeDays,
+		PolicyMaxDays:  policyMaxDays,
 		Recommendation: rogueCertificateRecommendation(types),
 		EvidenceRefs: []string{
 			"projection:certificates:" + cert.ID,
@@ -586,6 +587,30 @@ func rogueCertificateSeverity(risk int) string {
 	default:
 		return "low"
 	}
+}
+
+// longLifetimeDays is the ceiling every certificate is held to: the longest
+// validity a publicly trusted TLS certificate has ever been allowed.
+const longLifetimeDays = 398
+
+// lifetimePolicy is a certificate's lifetime in days and the ceiling it is held
+// to. A publicly trusted TLS server certificate is held to the Baseline
+// Requirements maximum for the date it was issued, counted the BR way (A178);
+// any other certificate keeps the long-standing 398-day ceiling. The caller
+// guarantees both validity bounds.
+func lifetimePolicy(cert store.Certificate) (days, maxDays int) {
+	notBefore, notAfter := *cert.NotBefore, *cert.NotAfter
+	raw := cert.CertificateDER
+	if len(raw) == 0 {
+		raw = cert.CertificatePEM
+	}
+	if len(raw) > 0 {
+		if info, err := certinfo.Inspect(raw); err == nil &&
+			tlsvalidity.ClassifyCertificate(info.IsCA, info.ExtKeyUsages, info.PolicyOIDs) == tlsvalidity.ScopePublicTLS {
+			return tlsvalidity.ValidityDays(notBefore, notAfter), tlsvalidity.StepFor(notBefore).MaxDays
+		}
+	}
+	return int(notAfter.Sub(notBefore).Hours() / 24), longLifetimeDays
 }
 
 func rogueCertificateRecommendation(types []string) string {

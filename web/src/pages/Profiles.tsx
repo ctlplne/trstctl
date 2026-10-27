@@ -26,6 +26,7 @@ interface BuilderFields {
   minEcdsaBits: number;
   allowedEkus: string[];
   maxValidity: string;
+  publicTLS: boolean;
   allowedProtocols: string[];
   trustEABAccounts: boolean;
   allowedDnsSuffixes: string;
@@ -46,6 +47,7 @@ const defaultBuilder: BuilderFields = {
   minEcdsaBits: 256,
   allowedEkus: ["serverAuth"],
   maxValidity: "2160h",
+  publicTLS: false,
   allowedProtocols: ["api", "acme"],
   trustEABAccounts: false,
   allowedDnsSuffixes: "example.com",
@@ -352,6 +354,13 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
         />
       </label>
+      <div className="space-y-1 text-sm md:col-span-2">
+        <label className="inline-flex items-center gap-2 font-medium">
+          <Checkbox checked={fields.publicTLS} onChange={(event) => onChange({ ...fields, publicTLS: event.target.checked })} />
+          {translateNow("profiles.publicTLS.label")}
+        </label>
+        <p className="text-xs text-muted-foreground">{translateNow("profiles.publicTLS.hint")}</p>
+      </div>
       <label className="space-y-1 text-sm font-medium">
         <span>{translateNow("source.allowed.dns.suffixes.c2747c3707")}</span>
         <input
@@ -816,6 +825,7 @@ function buildProfileSpec(fields: BuilderFields): ProfileSpec {
   if (fields.allowedKeyAlgorithms.includes("ECDSA") && fields.minEcdsaBits > 0) spec.min_ecdsa_bits = fields.minEcdsaBits;
   if (fields.allowedEkus.length > 0) spec.allowed_ekus = fields.allowedEkus;
   if (fields.maxValidity.trim()) spec.max_validity = fields.maxValidity.trim();
+  if (fields.publicTLS) spec.public_tls = true;
   if (fields.allowedProtocols.length > 0) spec.allowed_protocols = fields.allowedProtocols;
   if (fields.allowedProtocols.includes("acme") && fields.trustEABAccounts) {
     spec.acme_auth_mode = "trust_authenticated";
@@ -845,6 +855,9 @@ function validateBuilder(fields: BuilderFields): string | null {
   }
   if (!/^\d+(ns|us|ms|s|m|h)$/.test(fields.maxValidity.trim())) {
     return "Maximum validity must be a Go-style duration such as 2160h.";
+  }
+  if (fields.publicTLS && fields.allowedEkus.length > 0 && !fields.allowedEkus.includes("serverAuth")) {
+    return "A public TLS profile must allow serverAuth.";
   }
   if (fields.deviceAttestationEnabled) {
     if (splitPEMCertificates(fields.deviceAttestationRootsPEM).length === 0) {

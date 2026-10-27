@@ -37,6 +37,11 @@ type LifecycleAutomationInventory struct {
 	DeliveryUnverified bool
 	TargetID           string
 	PredecessorID      string
+	// DeployedStatus is the status of the receipt that selected the served
+	// certificate: verified (read back from the endpoint), delivered,
+	// rolled_back, or empty when an identity with no delivery history matched
+	// by owner and SAN.
+	DeployedStatus string
 }
 
 // LifecycleAutomationOutboxSummary reports only aggregate command state for the
@@ -57,6 +62,21 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 	if limit <= 0 || limit > 500 {
 		limit = 500
 	}
+	return s.listLifecycleAutomationInventory(ctx, tenantID, limit)
+}
+
+// LifecycleAutomationReportLimit bounds the inventory a report reads in one
+// pass: the validity-readiness report needs every renewable identity, not the
+// automation plan's first page.
+const LifecycleAutomationReportLimit = 5000
+
+// ListLifecycleAutomationInventoryForReport is ListLifecycleAutomationInventory
+// for reports, bounded by LifecycleAutomationReportLimit instead of a page.
+func (s *Store) ListLifecycleAutomationInventoryForReport(ctx context.Context, tenantID string) ([]LifecycleAutomationInventory, error) {
+	return s.listLifecycleAutomationInventory(ctx, tenantID, LifecycleAutomationReportLimit)
+}
+
+func (s *Store) listLifecycleAutomationInventory(ctx context.Context, tenantID string, limit int) ([]LifecycleAutomationInventory, error) {
 	var out []LifecycleAutomationInventory
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `
@@ -71,12 +91,13 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 			       EXISTS (SELECT 1 FROM outbox job WHERE job.tenant_id = $1 AND job.tenant_id = i.tenant_id
 			         AND job.status IN ('pending', 'processing')
 			         AND CASE WHEN job.destination IN ('ca.renew', 'endpoint.renew')
-			         THEN convert_from(job.payload, 'UTF8')::jsonb->>'identity_id' = i.id::text ELSE false END)
+			         THEN convert_from(job.payload, 'UTF8')::jsonb->>'identity_id' = i.id::text ELSE false END),
+			       coalesce(deployed.status, '')
 			  FROM identities AS i
 			  JOIN owners AS o
 			    ON o.tenant_id = $1 AND o.tenant_id = i.tenant_id AND o.id = i.owner_id
 			  LEFT JOIN LATERAL (
-			       SELECT receipt.fingerprint, receipt.updated_at,
+			       SELECT receipt.fingerprint, receipt.updated_at, receipt.status,
 			              coalesce(receipt.latest_event_sequence, 0) AS sequence
 			         FROM connector_delivery_receipts receipt
 			         JOIN certificates served
@@ -167,7 +188,7 @@ func (s *Store) ListLifecycleAutomationInventory(ctx context.Context, tenantID s
 				&item.CertificateFingerprint, &item.CertificateExternalCAID,
 				&item.LatestRunID, &item.LatestRunStatus, &item.RollbackRef,
 				&item.TargetID, &item.PredecessorID, &item.DeliveryUnverified,
-				&item.PendingRenewal,
+				&item.PendingRenewal, &item.DeployedStatus,
 			); err != nil {
 				return err
 			}

@@ -93,9 +93,10 @@ elements and is never changed in the certificate itself.
 The certificate inventory is also a CLM dashboard: alongside the tenant-scoped,
 cursor-paginated, expiry-filtered table it renders issuer/profile/team/environment
 filters with URL-resident state, a Team column, estate-wide expiry/source health,
-expiry bands, a 47-day renewal-readiness simulator (does each cert renew comfortably
-inside the shrinking CA/Browser-Forum maximum lifetime?), deployment receipts from
-the connectors, and one guided revocation center under **Revocation & CT**. Expiry
+expiry bands, the lifetime-reduction readiness panel (the server's verdict for each
+active certificate under the CA/Browser Forum's 200-, 100- and 47-day steps, the
+public TLS profiles that request more, and a CSV export naming the Baseline
+Requirements version), deployment receipts from the connectors, and one guided revocation center under **Revocation & CT**. Expiry
 action counts and bands cover active certificates; historical revoked and
 superseded rows remain in inventory without creating new expiry warnings. The
 **Expiring** inventory filter also selects active certificates only. The expiry
@@ -126,7 +127,8 @@ count, delta base, freshness window), a Certificate Transparency queueing form, 
 per-certificate renewal-history timeline in the detail drawer. See
 [Lifecycle & PQC](features/lifecycle-and-pqc.md)
 and the [47-day journey](journeys/crypto-agility-pqc.md). Backed by
-`/api/v1/certificates`, `/api/v1/certificates/health`, `/api/v1/revocation/crls`,
+`/api/v1/certificates`, `/api/v1/certificates/health`,
+`/api/v1/certificates/validity-readiness` (and its `/export`), `/api/v1/revocation/crls`,
 `/api/v1/revocation/health`, `/api/v1/revocation/ct-submissions`,
 `/api/v1/identities/{id}/transitions/preview`, `/api/v1/identities/{id}/transitions`,
 `/api/v1/graph/nodes/{id}/blast-radius`, `/api/v1/lifecycle/rotation-runs`, and

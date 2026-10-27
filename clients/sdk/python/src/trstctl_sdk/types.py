@@ -3479,6 +3479,7 @@ CertificateProfileSpec = TypedDict(
         'min_ecdsa_bits': int,
         'min_rsa_bits': int,
         'name': str,
+        'public_tls': bool,
         'requires_approval': bool,
         'version': int,
     },
@@ -13027,6 +13028,134 @@ UsageMeterDefinition = TypedDict(
         'name': str,
         'notes': str,
         'primary_billable': bool,
+    },
+    total=False,
+)
+
+ValidityReadinessCertificate = TypedDict(
+    'ValidityReadinessCertificate',
+    {
+        'automation': str,
+        'certificate_id': str,
+        'deployment': str,
+        'exceeds_maximum_at_issuance': bool,
+        'identity_id': str,
+        'identity_name': str,
+        'issuer': str,
+        'max_days_at_issuance': int,
+        'not_after': str,
+        'not_before': str,
+        'renewal_lead_days': int,
+        'renewal_lifetime_days': int,
+        'scope': str,
+        'steps': list[dict[str, Any]],
+        'subject': str,
+        'validity_days': int,
+    },
+    total=False,
+)
+
+ValidityReadinessCertificateStep = TypedDict(
+    'ValidityReadinessCertificateStep',
+    {
+        'effective': str,
+        'max_days': int,
+        'reasons': list[str],
+        'verdict': str,
+    },
+    total=False,
+)
+
+ValidityReadinessExport = TypedDict(
+    'ValidityReadinessExport',
+    {
+        'content_type': str,
+        'csv': str,
+        'filename': str,
+        'generated_at': str,
+        'requirements': dict[str, Any],
+        'truncated': bool,
+    },
+    total=False,
+)
+
+ValidityReadinessProfile = TypedDict(
+    'ValidityReadinessProfile',
+    {
+        'max_validity': str,
+        'name': str,
+        'public_tls': bool,
+        'requested_days': int,
+        'server_auth': bool,
+        'steps': list[dict[str, Any]],
+        'version': int,
+    },
+    total=False,
+)
+
+ValidityReadinessProfileStep = TypedDict(
+    'ValidityReadinessProfileStep',
+    {
+        'effective': str,
+        'flagged': bool,
+        'max_days': int,
+        'reason': str,
+    },
+    total=False,
+)
+
+ValidityReadinessReport = TypedDict(
+    'ValidityReadinessReport',
+    {
+        'certificates': list[dict[str, Any]],
+        'generated_at': str,
+        'limit': int,
+        'profiles': list[dict[str, Any]],
+        'requirements': dict[str, Any],
+        'scheduler': dict[str, Any],
+        'steps': list[dict[str, Any]],
+        'truncated': bool,
+    },
+    total=False,
+)
+
+ValidityReadinessRequirements = TypedDict(
+    'ValidityReadinessRequirements',
+    {
+        'name': str,
+        'published': str,
+        'section': str,
+        'url': str,
+        'version': str,
+    },
+    total=False,
+)
+
+ValidityReadinessScheduler = TypedDict(
+    'ValidityReadinessScheduler',
+    {
+        'enabled': bool,
+        'renew_before': str,
+        'renew_before_seconds': int,
+    },
+    total=False,
+)
+
+ValidityReadinessStep = TypedDict(
+    'ValidityReadinessStep',
+    {
+        'at_risk': int,
+        'effective': str,
+        'flagged_profiles': int,
+        'in_effect': bool,
+        'manual': int,
+        'manual_renewals_per_year': int,
+        'max_days': int,
+        'public_tls': int,
+        'public_tls_at_risk': int,
+        'public_tls_manual': int,
+        'renews': int,
+        'should_days': int,
     },
     total=False,
 )

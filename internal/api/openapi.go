@@ -3882,6 +3882,64 @@ func componentSchemas() map[string]*Schema {
 		"execution_external_effects": {Type: "array", Items: str()},
 		"verification_steps":         {Type: "array", Items: str()},
 	}, "capability", "ready", "generated_at", "scheduler", "summary", "items", "controls", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps")
+	date := func() *Schema { return &Schema{Type: "string", Format: "date"} }
+	integer := func() *Schema { return &Schema{Type: "integer"} }
+	boolean := func() *Schema { return &Schema{Type: "boolean"} }
+	validityRequirements := object(map[string]*Schema{
+		"name": str(), "version": str(), "published": date(), "section": str(), "url": str(),
+	}, "name", "version", "published", "section", "url")
+	validityScheduler := object(map[string]*Schema{
+		"enabled": boolean(), "renew_before": str(), "renew_before_seconds": integer(),
+	}, "enabled", "renew_before", "renew_before_seconds")
+	validityStep := object(map[string]*Schema{
+		"effective": date(), "should_days": integer(), "max_days": integer(), "in_effect": boolean(),
+		"renews": integer(), "at_risk": integer(), "manual": integer(),
+		"public_tls": integer(), "public_tls_at_risk": integer(), "public_tls_manual": integer(),
+		"manual_renewals_per_year": {Type: "integer", Description: "Hand renewals a year the public TLS certificates nothing renews need at this step's maximum lifetime"},
+		"flagged_profiles":         integer(),
+	}, "effective", "should_days", "max_days", "in_effect", "renews", "at_risk", "manual", "public_tls", "public_tls_at_risk", "public_tls_manual", "manual_renewals_per_year", "flagged_profiles")
+	validityCertificateStep := object(map[string]*Schema{
+		"effective": date(), "max_days": integer(),
+		"verdict": {Type: "string", Enum: []string{"renews", "at_risk", "manual"}},
+		"reasons": {Type: "array", Items: &Schema{Type: "string", Enum: []string{
+			"scheduler_disabled", "no_automated_renewal", "client_renewal_unobserved", "renewal_failed",
+			"renewal_paused", "target_conflict", "delivery_failed", "deployment_unverified",
+			"no_automated_deployment", "approval_required", "profile_unavailable", "renewal_lifetime_exceeds_maximum",
+		}}},
+	}, "effective", "max_days", "verdict", "reasons")
+	validityCertificate := object(map[string]*Schema{
+		"certificate_id": uuid(), "subject": str(), "issuer": str(),
+		"not_before": timestamp(), "not_after": timestamp(), "validity_days": integer(),
+		"scope":                       {Type: "string", Enum: []string{"public_tls", "private_tls", "not_tls_server", "ca_certificate", "unknown"}},
+		"max_days_at_issuance":        integer(),
+		"exceeds_maximum_at_issuance": boolean(),
+		"automation":                  {Type: "string", Enum: []string{"scheduled", "client", "none"}},
+		"identity_id":                 uuid(), "identity_name": str(),
+		"deployment":            {Type: "string", Enum: []string{"verified", "delivered", "failed", "none", "not_applicable"}},
+		"renewal_lifetime_days": integer(), "renewal_lead_days": integer(),
+		"steps": {Type: "array", Items: ref("ValidityReadinessCertificateStep")},
+	}, "certificate_id", "subject", "issuer", "not_before", "not_after", "validity_days", "scope", "max_days_at_issuance", "exceeds_maximum_at_issuance", "automation", "deployment", "steps")
+	validityProfileStep := object(map[string]*Schema{
+		"effective": date(), "max_days": integer(), "flagged": boolean(),
+		"reason": {Type: "string", Enum: []string{"no_validity_ceiling", "requested_validity_exceeds_maximum"}},
+	}, "effective", "max_days", "flagged")
+	validityProfile := object(map[string]*Schema{
+		"name": str(), "version": integer(), "public_tls": boolean(), "server_auth": boolean(),
+		"max_validity": str(), "requested_days": integer(),
+		"steps": {Type: "array", Items: ref("ValidityReadinessProfileStep")},
+	}, "name", "version", "public_tls", "server_auth", "max_validity", "requested_days", "steps")
+	validityReport := object(map[string]*Schema{
+		"requirements": ref("ValidityReadinessRequirements"), "generated_at": timestamp(),
+		"scheduler":    ref("ValidityReadinessScheduler"),
+		"steps":        {Type: "array", Items: ref("ValidityReadinessStep")},
+		"profiles":     {Type: "array", Items: ref("ValidityReadinessProfile")},
+		"certificates": {Type: "array", Items: ref("ValidityReadinessCertificate")},
+		"truncated":    boolean(), "limit": integer(),
+	}, "requirements", "generated_at", "scheduler", "steps", "profiles", "certificates", "truncated", "limit")
+	validityExport := object(map[string]*Schema{
+		"filename": str(), "content_type": str(), "requirements": ref("ValidityReadinessRequirements"),
+		"generated_at": timestamp(), "truncated": boolean(), "csv": str(),
+	}, "filename", "content_type", "requirements", "generated_at", "truncated", "csv")
 	incidentExecutionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
@@ -6097,6 +6155,7 @@ func componentSchemas() map[string]*Schema {
 		"allowed_email_domains":   {Type: "array", Items: str()},
 		"allowed_uri_prefixes":    {Type: "array", Items: str()},
 		"acme_device_attestation": ref("ACMEDeviceAttestationPolicy"),
+		"public_tls":              {Type: "boolean", Description: "The profile issues publicly trusted TLS server certificates; requires serverAuth, and the validity-readiness report flags a max_validity over the CA/Browser Forum's dated maximum"},
 	})
 	profile := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "version": {Type: "integer"},
@@ -7446,6 +7505,15 @@ func componentSchemas() map[string]*Schema {
 		"LifecycleAutomationItem":                  lifecycleAutomationItem,
 		"LifecycleAutomationControl":               lifecycleAutomationControl,
 		"LifecycleAutomationPlan":                  lifecycleAutomationPlan,
+		"ValidityReadinessRequirements":            validityRequirements,
+		"ValidityReadinessScheduler":               validityScheduler,
+		"ValidityReadinessStep":                    validityStep,
+		"ValidityReadinessCertificateStep":         validityCertificateStep,
+		"ValidityReadinessCertificate":             validityCertificate,
+		"ValidityReadinessProfileStep":             validityProfileStep,
+		"ValidityReadinessProfile":                 validityProfile,
+		"ValidityReadinessReport":                  validityReport,
+		"ValidityReadinessExport":                  validityExport,
 		"IncidentExecutionRequest":                 incidentExecutionReq,
 		"IncidentExecution":                        incidentExecution,
 		"IncidentExecutionList":                    list("IncidentExecution"),

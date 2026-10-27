@@ -6071,6 +6071,46 @@ control-plane assertion as endpoint proof. A deployment executed only by a
 control-plane connector therefore cannot advance this signed-receipt gate; it
 remains `waiting_verification` until a bound agent reports the endpoint result.
 
+## Dated lifetime-reduction readiness
+
+`GET /api/v1/certificates/validity-readiness` (and `trstctl certificates
+validity-readiness`, the **Lifetime-reduction readiness** panel on the
+Certificates renewal tab) evaluates the CA/Browser Forum TLS Baseline
+Requirements 2.3.1 (published 2026-10-04), section 6.3.2: 200 days for
+certificates issued from 2026-03-15, 100 from 2027-03-15, 47 from 2029-03-15.
+Every active certificate gets a verdict under each step (`renews`, `at_risk`
+or `manual`, with reasons), and every public TLS profile whose `max_validity`
+exceeds a step's maximum, or that has none, is flagged. The export names the
+BR version in its file name and on every row. What it decides from, and what
+it does not see:
+
+- **Publicly trusted means a reserved policy OID.** A certificate counts as
+  public TLS when it permits TLS server authentication and asserts a CA/Browser
+  Forum reserved certificate policy identifier (2.23.140.1.2.1–3 or
+  2.23.140.1.1). trstctl's own CA is never publicly trusted, so a profile is
+  public TLS only when it says so (`public_tls: true`). Other certificates are
+  still evaluated, for planning, with `scope` saying the maximum does not bind
+  them.
+- **Scheduled means the scheduler's own inventory.** A certificate is
+  `scheduled` when it is the served certificate of a renewable identity, or its
+  issuance evidence binds it to one — the same set the automation plan and the
+  scheduler use. Its verdict follows that identity's delivery evidence (a
+  delivery whose served certificate was read back is `verified`), its holds
+  (failed renewal, an operator's pause, a destination conflict, a profile
+  renewal cannot resolve) and whether each renewal waits for approval.
+- **Client renewals are not observed.** Certificates issued over ACME, EST,
+  SCEP, CMP, Kubernetes in-cluster issuance, attested workloads or the agent
+  broker are renewed by their client; trstctl does not see that client's renewal
+  lead, so they read `at_risk` with `client_renewal_unobserved`. Measuring a
+  client's observed renewal lead from its issuance history is what comes next.
+- **Flagged, not refused.** Issuance does not yet hold a public TLS profile to
+  the maximum for the issuance date; the report flags it and a publicly trusted
+  CA refuses or shortens the request. Holding issuance to the dated maximum is
+  what comes next.
+- **Bounded.** The report covers the 5,000 active certificates that expire
+  first and says when there are more; ephemeral certificates, issued per use and
+  never renewed, are left out as the expiry views leave them out.
+
 ## Endpoint verification
 
 Every other record in this product reports what trstctl DID. An outbox row

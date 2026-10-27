@@ -10216,6 +10216,10 @@
           "name": {
             "type": "string"
           },
+          "public_tls": {
+            "description": "The profile issues publicly trusted TLS server certificates; requires serverAuth, and the validity-readiness report flags a max_validity over the CA/Browser Forum's dated maximum",
+            "type": "boolean"
+          },
           "requires_approval": {
             "type": "boolean"
           },
@@ -38892,6 +38896,395 @@
         ],
         "type": "object"
       },
+      "ValidityReadinessCertificate": {
+        "properties": {
+          "automation": {
+            "enum": [
+              "scheduled",
+              "client",
+              "none"
+            ],
+            "type": "string"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "deployment": {
+            "enum": [
+              "verified",
+              "delivered",
+              "failed",
+              "none",
+              "not_applicable"
+            ],
+            "type": "string"
+          },
+          "exceeds_maximum_at_issuance": {
+            "type": "boolean"
+          },
+          "identity_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "identity_name": {
+            "type": "string"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "max_days_at_issuance": {
+            "type": "integer"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "renewal_lead_days": {
+            "type": "integer"
+          },
+          "renewal_lifetime_days": {
+            "type": "integer"
+          },
+          "scope": {
+            "enum": [
+              "public_tls",
+              "private_tls",
+              "not_tls_server",
+              "ca_certificate",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ValidityReadinessCertificateStep"
+            },
+            "type": "array"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "validity_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "subject",
+          "issuer",
+          "not_before",
+          "not_after",
+          "validity_days",
+          "scope",
+          "max_days_at_issuance",
+          "exceeds_maximum_at_issuance",
+          "automation",
+          "deployment",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessCertificateStep": {
+        "properties": {
+          "effective": {
+            "format": "date",
+            "type": "string"
+          },
+          "max_days": {
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "enum": [
+                "scheduler_disabled",
+                "no_automated_renewal",
+                "client_renewal_unobserved",
+                "renewal_failed",
+                "renewal_paused",
+                "target_conflict",
+                "delivery_failed",
+                "deployment_unverified",
+                "no_automated_deployment",
+                "approval_required",
+                "profile_unavailable",
+                "renewal_lifetime_exceeds_maximum"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "renews",
+              "at_risk",
+              "manual"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "effective",
+          "max_days",
+          "verdict",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessExport": {
+        "properties": {
+          "content_type": {
+            "type": "string"
+          },
+          "csv": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/ValidityReadinessRequirements"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "requirements",
+          "generated_at",
+          "truncated",
+          "csv"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessProfile": {
+        "properties": {
+          "max_validity": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public_tls": {
+            "type": "boolean"
+          },
+          "requested_days": {
+            "type": "integer"
+          },
+          "server_auth": {
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ValidityReadinessProfileStep"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "public_tls",
+          "server_auth",
+          "max_validity",
+          "requested_days",
+          "steps"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessProfileStep": {
+        "properties": {
+          "effective": {
+            "format": "date",
+            "type": "string"
+          },
+          "flagged": {
+            "type": "boolean"
+          },
+          "max_days": {
+            "type": "integer"
+          },
+          "reason": {
+            "enum": [
+              "no_validity_ceiling",
+              "requested_validity_exceeds_maximum"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "effective",
+          "max_days",
+          "flagged"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessReport": {
+        "properties": {
+          "certificates": {
+            "items": {
+              "$ref": "#/components/schemas/ValidityReadinessCertificate"
+            },
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ValidityReadinessProfile"
+            },
+            "type": "array"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/ValidityReadinessRequirements"
+          },
+          "scheduler": {
+            "$ref": "#/components/schemas/ValidityReadinessScheduler"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/ValidityReadinessStep"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "requirements",
+          "generated_at",
+          "scheduler",
+          "steps",
+          "profiles",
+          "certificates",
+          "truncated",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessRequirements": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "published": {
+            "format": "date",
+            "type": "string"
+          },
+          "section": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "published",
+          "section",
+          "url"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessScheduler": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "renew_before": {
+            "type": "string"
+          },
+          "renew_before_seconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "renew_before",
+          "renew_before_seconds"
+        ],
+        "type": "object"
+      },
+      "ValidityReadinessStep": {
+        "properties": {
+          "at_risk": {
+            "type": "integer"
+          },
+          "effective": {
+            "format": "date",
+            "type": "string"
+          },
+          "flagged_profiles": {
+            "type": "integer"
+          },
+          "in_effect": {
+            "type": "boolean"
+          },
+          "manual": {
+            "type": "integer"
+          },
+          "manual_renewals_per_year": {
+            "description": "Hand renewals a year the public TLS certificates nothing renews need at this step's maximum lifetime",
+            "type": "integer"
+          },
+          "max_days": {
+            "type": "integer"
+          },
+          "public_tls": {
+            "type": "integer"
+          },
+          "public_tls_at_risk": {
+            "type": "integer"
+          },
+          "public_tls_manual": {
+            "type": "integer"
+          },
+          "renews": {
+            "type": "integer"
+          },
+          "should_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "effective",
+          "should_days",
+          "max_days",
+          "in_effect",
+          "renews",
+          "at_risk",
+          "manual",
+          "public_tls",
+          "public_tls_at_risk",
+          "public_tls_manual",
+          "manual_renewals_per_year",
+          "flagged_profiles"
+        ],
+        "type": "object"
+      },
       "WorkloadAttesterTrustSource": {
         "properties": {
           "allowed_owners": {
@@ -47623,6 +48016,100 @@
         ],
         "summary": "Give a historical PKI-secret leaf its inventory row from its public certificate",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/certificates/validity-readiness": {
+      "get": {
+        "operationId": "getValidityReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidityReadinessReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report whether each certificate keeps renewing, and which public TLS profiles request too long a validity, under the CA/Browser Forum's dated maximum validity",
+        "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/certificates/validity-readiness/export": {
+      "get": {
+        "operationId": "exportValidityReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidityReadinessExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export the validity-readiness report as CSV naming its Baseline Requirements version",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/certificates/{id}": {

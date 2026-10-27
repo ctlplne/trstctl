@@ -2,6 +2,21 @@
 
 ### Added
 
+- Lifetime-reduction readiness: `GET /api/v1/certificates/validity-readiness`
+  (`trstctl certificates validity-readiness`) evaluates every active certificate
+  under the CA/Browser Forum TLS Baseline Requirements 2.3.1 section 6.3.2 steps
+  (200 days from 2026-03-15, 100 from 2027-03-15, 47 from 2029-03-15). Each step
+  gets a verdict per certificate (`renews`, `at_risk` or `manual`, with reasons)
+  from the scheduler's own inventory: what renews it, how its renewal is
+  deployed and verified, what holds it, and when the scheduler starts it. A new
+  profile field, `public_tls`, says a profile issues publicly trusted TLS server
+  certificates; the report flags such a profile whose `max_validity` exceeds a
+  step's maximum, or that has none. `.../export` returns CSV naming the BR
+  version in its file name and on every row. The console's renewal tab shows the
+  report in place of the client-side 47-day simulator, and the profile builder
+  sets `public_tls`. The rogue-certificate posture holds a public TLS
+  certificate's lifetime to the dated maximum for its issuance date, counted the
+  BR way (notBefore through notAfter inclusive).
 - The control plane runs the shipped connector families in the WASM sandbox by
   default (`connectors.isolation: wasm`, `TRSTCTL_CONNECTORS_ISOLATION`). The
   binary embeds one digest-pinned first-party connector module; each deploy,

@@ -365,3 +365,35 @@ func TestDeviceAttestTPMProfileRequiresExplicitRootsIdentifiersAlgorithmsAndFres
 		t.Fatalf("default-disabled profile rejected: %v", err)
 	}
 }
+
+// A178: a profile that says it issues publicly trusted TLS server certificates
+// must allow serverAuth, and the flag round-trips through the stored spec.
+func TestPublicTLSProfileMustAllowServerAuth(t *testing.T) {
+	p := webProfile()
+	p.PublicTLS = true
+	if err := p.ValidateDefinition(); err != nil {
+		t.Fatalf("serverAuth-allowing public TLS profile rejected: %v", err)
+	}
+	p.AllowedEKUs = nil
+	if err := p.ValidateDefinition(); err != nil {
+		t.Fatalf("an empty EKU allow-list permits serverAuth: %v", err)
+	}
+	p.AllowedEKUs = []string{"clientAuth"}
+	if err := p.ValidateDefinition(); err == nil || !strings.Contains(err.Error(), "public_tls requires serverAuth") {
+		t.Fatalf("clientAuth-only public TLS profile accepted: %v", err)
+	}
+	spec, err := json.Marshal(webProfile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(spec), "public_tls") {
+		t.Fatalf("an unset flag must not appear in the stored spec: %s", spec)
+	}
+	if err := profile.ValidateSpec(json.RawMessage(`{"name":"web","version":1,"public_tls":true,"allowed_ekus":["clientAuth"]}`)); err == nil {
+		t.Fatal("ValidateSpec accepted a clientAuth-only public TLS spec")
+	}
+	var decoded profile.CertificateProfile
+	if err := json.Unmarshal([]byte(`{"public_tls":true,"max_validity":"4800h"}`), &decoded); err != nil || !decoded.PublicTLS || time.Duration(decoded.MaxValidity) != 200*24*time.Hour {
+		t.Fatalf("decoded = %+v, %v", decoded, err)
+	}
+}

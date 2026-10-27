@@ -1,5 +1,4 @@
-import { useState, type ReactNode } from "react";
-import { cn } from "@/lib/utils";
+import { type ReactNode } from "react";
 import { StatTile, Meter, BucketBar, type BucketDatum } from "@/components/charts";
 import { DashboardGrid, SectionCard, AttentionList, AttentionRow } from "@/components/dashboard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -8,6 +7,7 @@ import type { Certificate, ConnectorDelivery, RotationRun } from "@/lib/api";
 import type { RiskItem } from "@/components/risk";
 import { translateNow } from "@/i18n/I18nProvider";
 import { daysUntil as libDaysUntil, expiresWithinDays, remainingMs } from "@/lib/expiry";
+export { ValidityReadinessPanel } from "./ValidityReadinessPanel";
 
 const DAY = 86_400_000;
 
@@ -79,11 +79,6 @@ function rotationFingerprints(runs: RotationRun[]): Set<string> {
     if (run.predecessor_fingerprint) fingerprints.add(run.predecessor_fingerprint);
   }
   return fingerprints;
-}
-
-export function autoRenewingCount(certificates: Certificate[], runs: RotationRun[]): number {
-  const fingerprints = rotationFingerprints(runs);
-  return certificates.filter((certificate) => isLive(certificate) && fingerprints.has(certificate.fingerprint)).length;
 }
 
 export function CertKpis({ certificates, risks }: { certificates: Certificate[]; risks: RiskItem[] }) {
@@ -175,40 +170,6 @@ export function ReadinessPanel({
         <span>{translateNow("certificates.readiness.100DayModel")}</span>
         <span>{translateNow("certificates.readiness.47DayTarget")}</span>
       </div>
-    </SectionCard>
-  );
-}
-
-export function ReadinessSimulator({ certificates, autoRenewing }: { certificates: Certificate[]; autoRenewing: number }) {
-  const [cap, setCap] = useState(47);
-  const active = certificates.filter((certificate) => isLive(certificate)).length;
-  const manual = Math.max(active - autoRenewing, 0);
-  const renewalsPerYear = Math.ceil(365 / cap);
-  const manualLoad = manual * renewalsPerYear;
-  return (
-    <SectionCard title={translateNow("source.47.day.readiness.simulator.6c79ae6d09")} description="model your fleet against shorter validity caps">
-      <div role="group" aria-label={translateNow("source.validity.cap.1e61e889d2")} className="flex gap-2">
-        {[200, 100, 47].map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={cap === value}
-            onClick={() => setCap(value)}
-            className={cn(
-              "min-h-9 rounded-control border px-3 text-body",
-              cap === value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background",
-            )}
-          >
-            {value}
-            {translateNow("source.day.b396878953")}
-          </button>
-        ))}
-      </div>
-      <DashboardGrid className="mt-3">
-        <StatTile label="Renewals per cert / year" value={renewalsPerYear} />
-        <StatTile label="Manual renewal load / year" value={manualLoad} tone={manualLoad ? "warning" : undefined} />
-        <StatTile label="Certs that would lapse" value={manual} tone={manual ? "critical" : undefined} hint="without automation" />
-      </DashboardGrid>
     </SectionCard>
   );
 }

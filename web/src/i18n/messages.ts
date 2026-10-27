@@ -24260,10 +24260,6 @@ export const messages = {
     defaultMessage: "31-90d",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
-  "source.47.day.readiness.simulator.6c79ae6d09": {
-    defaultMessage: "47-day readiness simulator",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
-  },
   "source.47.day.renewal.readiness.971543ca36": {
     defaultMessage: "47-day renewal readiness",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
@@ -24477,10 +24473,6 @@ export const messages = {
   "source.customer.uri.8360e5ff63": {
     defaultMessage: "Customer URI",
     description: "DA-14 sweep: migrated hardcoded copy from src/lib/issuerCatalog.ts.",
-  },
-  "source.day.b396878953": {
-    defaultMessage: "-day",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
   "source.decrypt.2e4629449b": {
     defaultMessage: "Decrypt",
@@ -25020,10 +25012,6 @@ export const messages = {
   "source.transit.key.1.7ffe9d6686": {
     defaultMessage: "transit-key-1",
     description: "DA-14 sweep: migrated hardcoded copy from src/components/secrets/transit.tsx.",
-  },
-  "source.validity.cap.1e61e889d2": {
-    defaultMessage: "Validity cap",
-    description: "DA-14 sweep: migrated hardcoded copy from src/components/certs/index.tsx.",
   },
   "source.vault.address.dad7f7adc2": {
     defaultMessage: "Vault Address",
@@ -30325,6 +30313,158 @@ export const messages = {
   "certificates.readiness.47DayTarget": {
     defaultMessage: "47-day target",
     description: "Target endpoint of the certificate lifetime-readiness planning scale.",
+  },
+  "profiles.publicTLS.label": {
+    defaultMessage: "Issues publicly trusted TLS server certificates",
+    description:
+      "Profile builder checkbox: the profile's public_tls statement, which the validity-readiness report checks against the CA/Browser Forum's dated maximum validity.",
+  },
+  "profiles.publicTLS.hint": {
+    defaultMessage:
+      "Publicly trusted TLS certificates issued from 2026-03-15 may be valid at most 200 days, from 2027-03-15 100 days, and from 2029-03-15 47 days. The lifetime-readiness report flags a longer maximum validity, or none.",
+    description: "Hint under the public TLS checkbox naming the dated maxima.",
+  },
+  "certificates.validityReadiness.title": {
+    defaultMessage: "Lifetime-reduction readiness",
+    description:
+      "Validity-readiness report (A178): Title of the panel that evaluates every certificate and public TLS profile under the CA/Browser Forum's dated maximum validity.",
+  },
+  "certificates.validityReadiness.requirements": {
+    defaultMessage: "Evaluated against the CA/Browser Forum TLS Baseline Requirements {version} ({published}), section {section}",
+    description: "Validity-readiness report (A178): Names the requirements version the report applies.",
+  },
+  "certificates.validityReadiness.download": {
+    defaultMessage: "Download CSV",
+    description: "Validity-readiness report (A178): Downloads the report as a CSV file that names its Baseline Requirements version.",
+  },
+  "certificates.validityReadiness.steps": {
+    defaultMessage: "Dated maximum validity",
+    description: "Validity-readiness report (A178): Accessible name of the step selector.",
+  },
+  "certificates.validityReadiness.step": {
+    defaultMessage: "From {date}: {days} days",
+    description: "Validity-readiness report (A178): A future step: its effective date and maximum validity in days.",
+  },
+  "certificates.validityReadiness.stepInEffect": {
+    defaultMessage: "From {date}: {days} days (in effect)",
+    description: "Validity-readiness report (A178): The step that applies to certificates issued today.",
+  },
+  "certificates.validityReadiness.renews": {
+    defaultMessage: "Keep renewing",
+    description: "Validity-readiness report (A178): Certificates whose automation, renewal lead and deployment keep them renewing under the selected step.",
+  },
+  "certificates.validityReadiness.atRisk": {
+    defaultMessage: "At risk",
+    description: "Validity-readiness report (A178): Automated certificates with something that can stop renewal or deployment under the selected step.",
+  },
+  "certificates.validityReadiness.manual": {
+    defaultMessage: "Manual",
+    description: "Validity-readiness report (A178): Certificates nothing renews automatically.",
+  },
+  "certificates.validityReadiness.manualRenewals": {
+    defaultMessage: "Hand renewals a year",
+    description: "Validity-readiness report (A178): Renewals a year the public TLS certificates nothing renews need at the step's maximum lifetime.",
+  },
+  "certificates.validityReadiness.manualRenewalsHint": {
+    defaultMessage: "{count} public TLS certificates renewed by hand",
+    description: "Validity-readiness report (A178): Hint under the hand-renewal count.",
+  },
+  "certificates.validityReadiness.flaggedProfiles": {
+    defaultMessage: "Profiles over the maximum",
+    description: "Validity-readiness report (A178): Public TLS profiles whose requested validity exceeds the selected step's maximum.",
+  },
+  "certificates.validityReadiness.flaggedProfilesList": {
+    defaultMessage: "Public TLS profiles over the maximum",
+    description: "Validity-readiness report (A178): Accessible name of the flagged profile list.",
+  },
+  "certificates.validityReadiness.noFlaggedProfiles": {
+    defaultMessage: "No public TLS profile requests more than this step allows.",
+    description: "Validity-readiness report (A178): Shown when no profile is flagged for the selected step.",
+  },
+  "certificates.validityReadiness.profileTooLong": {
+    defaultMessage: "Requests {requested} days; the maximum is {max}",
+    description: "Validity-readiness report (A178): A flagged profile's requested validity against the step maximum.",
+  },
+  "certificates.validityReadiness.profileNoCeiling": {
+    defaultMessage: "Has no validity ceiling; the maximum is {max} days",
+    description: "Validity-readiness report (A178): A public TLS profile without max_validity.",
+  },
+  "certificates.validityReadiness.needingWork": {
+    defaultMessage: "Certificates at risk or renewed by hand",
+    description: "Validity-readiness report (A178): Accessible name of the list of certificates that do not keep renewing under the selected step.",
+  },
+  "certificates.validityReadiness.scheduler": {
+    defaultMessage:
+      "Scheduled renewals start when one third of a certificate's lifetime remains, or {lead} before expiry if that comes first and is shorter than the lifetime.",
+    description: "Validity-readiness report (A178): How the renewal scheduler's lead applies to the verdicts.",
+  },
+  "certificates.validityReadiness.schedulerDisabled": {
+    defaultMessage: "Automatic renewal is off, so nothing here renews on its own.",
+    description: "Validity-readiness report (A178): Shown when lifecycle.renew_before is zero.",
+  },
+  "certificates.validityReadiness.truncated": {
+    defaultMessage: "Showing the {limit} certificates that expire first; the export covers the same set.",
+    description: "Validity-readiness report (A178): Shown when the tenant has more active certificates than the report covers.",
+  },
+  "certificates.validityReadiness.verdict.renews": {
+    defaultMessage: "Keeps renewing",
+    description: "Validity-readiness report (A178): Verdict badge.",
+  },
+  "certificates.validityReadiness.verdict.at_risk": {
+    defaultMessage: "At risk",
+    description: "Validity-readiness report (A178): Verdict badge.",
+  },
+  "certificates.validityReadiness.verdict.manual": {
+    defaultMessage: "Manual",
+    description: "Validity-readiness report (A178): Verdict badge.",
+  },
+  "certificates.validityReadiness.reason.scheduler_disabled": {
+    defaultMessage: "automatic renewal is off",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.no_automated_renewal": {
+    defaultMessage: "nothing renews it automatically",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.client_renewal_unobserved": {
+    defaultMessage: "its client renews it; trstctl does not see that schedule",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.renewal_failed": {
+    defaultMessage: "the last renewal failed",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.renewal_paused": {
+    defaultMessage: "an operator rollback paused renewal",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.target_conflict": {
+    defaultMessage: "another identity can write the same destination",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.delivery_failed": {
+    defaultMessage: "the latest delivery or verification failed",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.deployment_unverified": {
+    defaultMessage: "delivered, but nothing read the certificate back from the endpoint",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.no_automated_deployment": {
+    defaultMessage: "no connector deploys a renewal",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.approval_required": {
+    defaultMessage: "each renewal waits for approval",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.profile_unavailable": {
+    defaultMessage: "renewal cannot resolve its profile",
+    description: "Validity-readiness report (A178): Verdict reason.",
+  },
+  "certificates.validityReadiness.reason.renewal_lifetime_exceeds_maximum": {
+    defaultMessage: "a renewal requests more than the maximum",
+    description: "Validity-readiness report (A178): Verdict reason.",
   },
   "source.this.value.is.the.exact.once.redeem.result.ed19b63953": {
     defaultMessage:

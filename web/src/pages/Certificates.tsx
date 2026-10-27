@@ -45,7 +45,7 @@ import {
   certificateIdentityPath,
 } from "@/lib/certificatePresentation";
 import type { MessageKey } from "@/i18n/messages";
-import { ReadinessPanel, ReadinessSimulator, DeploymentReceipts, RenewalHistory, autoRenewingCount } from "@/components/certs";
+import { ReadinessPanel, ValidityReadinessPanel, DeploymentReceipts, RenewalHistory } from "@/components/certs";
 import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
 import { revocationReasons } from "@/lib/revocation";
@@ -1132,10 +1132,8 @@ function CertificateWorkspace() {
           )}
           {tab === "renewal" && (
             <div {...tabPanelProps("certs", "renewal")} className="grid gap-4">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />
-                <ReadinessSimulator certificates={certificates} autoRenewing={autoRenewingCount(certificates, rotationRuns)} />
-              </div>
+              <ReadinessPanel certificates={certificates} rotationRuns={rotationRuns} />
+              <ValidityReadinessPanel />
               <DeploymentReceipts deliveries={deliveries} />
             </div>
           )}

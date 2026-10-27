@@ -489,6 +489,8 @@ import type {
   RogueCertificateTakedownRequest,
   RoleList,
   LifecycleAutomationPlan,
+  ValidityReadinessExport,
+  ValidityReadinessReport,
   RotationRun,
   RotationRunList,
   ScaleOrchestrationPlan,
@@ -704,6 +706,13 @@ export interface DiscoveryFindingListOptions {
 }
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
+export type {
+  ValidityReadinessCertificate,
+  ValidityReadinessExport,
+  ValidityReadinessProfile,
+  ValidityReadinessReport,
+  ValidityReadinessStep,
+} from "./api-types.gen";
 export type { OwnershipConflictList, OwnershipConflict, OwnershipImportResult } from "./api-types.gen";
 export type { CMDBReconcileRunNow, CMDBReconcileSchedule, CMDBReconcileScheduleInput } from "./api-types.gen";
 export type { ControlPlaneKeygen, ControlPlaneKeygenInput } from "./api-types.gen";
@@ -2073,6 +2082,8 @@ export interface Api {
   containEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
+  validityReadiness(): Promise<ValidityReadinessReport>;
+  validityReadinessExport(): Promise<ValidityReadinessExport>;
   rotationRuns(options?: { limit?: number; cursor?: string; identityId?: string }): Promise<RotationRunList>;
   executeIncident(input: IncidentExecutionRequest): Promise<IncidentExecution>;
   dispatchResponseIntegrations(input: ResponseIntegrationDispatchRequest): Promise<ResponseIntegrationDispatch>;
@@ -2845,6 +2856,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     return req<ConnectorDeliveryList>(`/api/v1/connectors/deliveries${query.size ? `?${query}` : ""}`);
   },
   lifecycleAutomationPlan: () => req<LifecycleAutomationPlan>("/api/v1/lifecycle/automation-plan"),
+  validityReadiness: () => req<ValidityReadinessReport>("/api/v1/certificates/validity-readiness"),
+  validityReadinessExport: () => req<ValidityReadinessExport>("/api/v1/certificates/validity-readiness/export"),
   rotationRuns: (options) => req<RotationRunList>(`/api/v1/lifecycle/rotation-runs${pageQueryString(options, options?.identityId)}`),
   executeIncident: (input) => mutate<IncidentExecution>("POST", "/api/v1/incidents/executions", input),
   dispatchResponseIntegrations: (input) => mutate<ResponseIntegrationDispatch>("POST", "/api/v1/incidents/response-integrations/dispatch", input),
