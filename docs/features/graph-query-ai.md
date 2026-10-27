@@ -147,16 +147,38 @@ broker. **Served** at `GET /api/v1/mcp/tools` and `POST /api/v1/mcp/tools/{tool}
 `ai.enable_api` is on.
 
 Write tools are a separate, explicit choice: with `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, the
-tool list also includes `issue_certificate` and `rotate_certificate`, each still hitting
-the served CA hierarchy, requiring `certs:issue` and an `Idempotency-Key`, and recording
-`mcp.tool.write`. Without the flag, write tools are not listed and calls fail closed.
+tool list also includes `issue_certificate` and `rotate_certificate`. Both act on a
+lifecycle identity (`identity_id`), never on a CA directly. The call enters the identity
+transition route with the agent's own credentials, so it meets the same lifecycle gate an
+operator does: RBAC and separation of duties, attribute rules, the policy gate and dual
+control. It needs `certs:issue` and an `Idempotency-Key`. `issue_certificate` signs the
+agent's own request (`csr_pem`; the key stays with the agent) and `rotate_certificate`
+renews a deployed identity.
+
+The result's `outcome` says what happened:
+
+- `queued`: the transition is recorded and its CA call is queued. The certificate is
+  recorded when the call completes; read it from the identity, not from the tool result.
+- `proposed`: dual control applies. Nothing ran; the result names the approval request a
+  distinct approver decides. After approval, the agent repeats the same call with the same
+  arguments and `Idempotency-Key`, and the approved request runs exactly once.
+
+A rotation cannot carry an approval, so under dual control `rotate_certificate` is
+refused and an operator renews instead. A deny-all policy refuses both tools. Every write
+is recorded as `mcp.tool.write` and every proposal as `mcp.tool.proposed`. A call that
+names `authority_id` is refused: direct CA issuance is not available to MCP. Without the
+flag, write tools are not listed and calls fail closed.
 
 Beyond that, route-backed REST MCP tools expand the surface further, named
 `rest_<operationId>` (e.g. `rest_list_notifications` maps to the notifications list
 route): read routes are exposed by default when RBAC permits, while REST-backed
-mutations stay behind the same write-tool flag and idempotency checks. The MCP-vs-REST
-parity CI guard fails when a served REST route has neither an MCP tool nor an allowlist
-entry.
+mutations stay behind the same write-tool flag and idempotency checks. Two kinds of route
+are never MCP tools: approval decisions (an agent never approves or denies a dual-control
+request) and certificate mutations outside the lifecycle gate, such as direct CA, SSH,
+attested and agent-identity issuance, attester trust changes, issuance retries and
+break-glass ceremonies. The MCP-vs-REST parity CI guard reads that exclusion from the
+served route table and fails when any other served REST route has neither an MCP tool
+nor an allowlist entry.
 
 ## Use it
 
@@ -243,9 +265,13 @@ curl -sS -X POST \
   -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: mcp-issue-payments-2026-06-26" \
-  -d '{"authority_id":"ca_123","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","ttl_seconds":7200}' \
+  -d '{"identity_id":"<identity id>","csr_pem":"-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----\n","reason":"payments rollout"}' \
   https://trstctl.example.com/api/v1/mcp/tools/issue_certificate
 ```
+
+Under dual control the answer is HTTP 202 with `"outcome":"proposed"` and an
+`approval_request_id`; send the same request again, with the same `Idempotency-Key`, after
+a distinct approver approved it.
 
 ## Pitfalls & limits
 
@@ -255,7 +281,7 @@ curl -sS -X POST \
 | Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, `/api/v1/graph/query`; saved prompts remain roadmap residuals |
 | AI model adapter (F76) | **Served optional adapter**; no model configured by default, cloud/local egress opt-in; self-service model settings editor remains a roadmap residual |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
-| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools read-only by default, write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, `Idempotency-Key` |
+| MCP server (F78) | **Served** — `GET /api/v1/mcp/tools`, `POST /api/v1/mcp/tools/{tool}`; investigation tools read-only by default, write tools require `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, `certs:issue`, `Idempotency-Key`, and take the identity lifecycle gate (policy, dual control) |
 
 The graph and query layer build per request, so very large tenants pay a bounded build
 cost. AI features are grounded and read-only by design: no actions, no answers beyond the

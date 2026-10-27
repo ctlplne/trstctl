@@ -2300,7 +2300,7 @@ egress class, and redaction/refusal posture without echoing the full endpoint UR
 | --- | --- | --- |
 | `TRSTCTL_AI_ENABLE_API` | `false` | Serve `/api/v1/ai/status`, `/api/v1/ai/query`, `/api/v1/ai/rca`, and `/api/v1/mcp/tools*` behind auth/RBAC. |
 | `TRSTCTL_AI_MCP_IDENTITY` | — | Workload identity label the MCP server presents. |
-| `TRSTCTL_AI_MCP_WRITE_TOOLS` | `false` | Expose guarded MCP write tools (`issue_certificate`, `rotate_certificate`). Calls still require `certs:issue`, an `Idempotency-Key`, and are audited as `mcp.tool.write`. |
+| `TRSTCTL_AI_MCP_WRITE_TOOLS` | `false` | Expose guarded MCP write tools (`issue_certificate`, `rotate_certificate`). They act on a lifecycle identity through its transition route, so the policy gate and dual control apply; calls still require `certs:issue` and an `Idempotency-Key`, and are audited as `mcp.tool.write` (proposals awaiting approval as `mcp.tool.proposed`). |
 | `TRSTCTL_AI_RATE_MAX` | `60` | Per-caller MCP tool-call budget per window. |
 | `TRSTCTL_AI_RATE_WINDOW_SECONDS` | `60` | MCP tool-call rate window in seconds. |
 | `TRSTCTL_AI_MODEL_MODE` | `off` | `off`, `local`, or `cloud`. `off` means no model adapter and no prompt egress. |

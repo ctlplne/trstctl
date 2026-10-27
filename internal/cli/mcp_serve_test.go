@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -97,6 +98,72 @@ func TestMCPServeSpeaksTheStdioTransportOverTheServedToolRoutes(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "trst_test_token") {
 		t.Fatal("the token leaked into the transport")
+	}
+}
+
+// A write proposed for dual control runs only when the same call is repeated with
+// the same Idempotency-Key after approval. The bridge mints a key per call, so it
+// names the key in the proposed result and sends a caller-chosen idempotency_key
+// as the header (never in the body).
+func TestMCPServeLetsAProposedWriteBeRepeatedWithItsKey(t *testing.T) {
+	var seenIdem []string
+	var seenBodies []string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/mcp/tools/issue_certificate" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		seenIdem = append(seenIdem, r.Header.Get("Idempotency-Key"))
+		body, _ := io.ReadAll(r.Body)
+		seenBodies = append(seenBodies, string(body))
+		if len(seenIdem) == 1 {
+			w.WriteHeader(http.StatusAccepted)
+			_, _ = io.WriteString(w, `{"tool":"issue_certificate","outcome":"proposed","identity_id":"id-1","approval_request_id":"ar-1","text":"nothing was executed"}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"tool":"issue_certificate","outcome":"queued","identity_id":"id-1","text":"queued"}`)
+	}))
+	defer ts.Close()
+	call := func(arguments string) map[string]any {
+		t.Helper()
+		in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"issue_certificate","arguments":` + arguments + `}}` + "\n"
+		var out, errOut bytes.Buffer
+		if code := Run(context.Background(), []string{"--server", ts.URL, "--token", "trst_test_token", "mcp", "serve"}, Env{}, strings.NewReader(in), &out, &errOut); code != 0 {
+			t.Fatalf("mcp serve exit %d, stderr %s", code, errOut.String())
+		}
+		var resp struct {
+			Result struct {
+				IsError bool `json:"isError"`
+				Content []struct {
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &resp); err != nil || resp.Result.IsError || len(resp.Result.Content) != 1 {
+			t.Fatalf("tools/call answer %s: %v", out.String(), err)
+		}
+		var result map[string]any
+		if err := json.Unmarshal([]byte(resp.Result.Content[0].Text), &result); err != nil {
+			t.Fatalf("tool result is not the control plane's JSON: %q", resp.Result.Content[0].Text)
+		}
+		return result
+	}
+	proposed := call(`{"identity_id":"id-1","csr_pem":"PEM","reason":"rollout"}`)
+	key, _ := proposed["idempotency_key"].(string)
+	if proposed["outcome"] != "proposed" || key == "" || key != seenIdem[0] {
+		t.Fatalf("the proposed result must name the key the call was bound to: %v (sent %q)", proposed, seenIdem[0])
+	}
+	queued := call(`{"identity_id":"id-1","csr_pem":"PEM","reason":"rollout","idempotency_key":"` + key + `"}`)
+	if queued["outcome"] != "queued" || seenIdem[1] != key {
+		t.Fatalf("the repeated call must carry the proposal's key: %v (sent %q, want %q)", queued, seenIdem[1], key)
+	}
+	var first, repeated map[string]any
+	if json.Unmarshal([]byte(seenBodies[0]), &first) != nil || json.Unmarshal([]byte(seenBodies[1]), &repeated) != nil ||
+		strings.Contains(seenBodies[1], "idempotency_key") || !reflect.DeepEqual(first, repeated) {
+		t.Fatalf("the repeated call must send the same arguments without the key: %q vs %q", seenBodies[0], seenBodies[1])
+	}
+	if _, ok := queued["idempotency_key"]; ok {
+		t.Fatalf("only a proposed result names its key: %v", queued)
 	}
 }
 

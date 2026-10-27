@@ -382,8 +382,15 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"caller":"","tool":""}`), true
 	case "mcp.tool.rest":
 		return shape(`{"caller":"","tool":"","method":"","path":"","status":1}`), true
+	case "mcp.tool.proposed":
+		return shape(`{"caller":"","tool":"","identity_id":"","approval_request_id":""}`), true
 	case "mcp.tool.write":
-		return shape(`{"caller":"","tool":"","authority_id":"","serial":"","reason":""}`), true
+		// Earlier MCP writes issued from a named CA authority and recorded the
+		// serial; MCP writes now request a lifecycle identity's transition.
+		return PrivacyPayloadShapeOneOf(
+			shape(`{"caller":"","tool":"","authority_id":"","serial":"","reason":""}`),
+			shape(`{"caller":"","tool":"","identity_id":"","transition":"","reason":""}`),
+		), true
 	case "mdm.intune_scep_challenge", "mdm.intune_scep_challenge.replay_rejected":
 		return shape(`{"decision":"","reason":"","transaction_id":"","nonce":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/reason", "/transaction_id", "/nonce"}}), true

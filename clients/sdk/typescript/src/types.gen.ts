@@ -13976,11 +13976,17 @@ export interface components {
             renewal_failed: number;
         };
         MCPToolCall: {
+            /** @description No longer accepted: the write tools never issue directly from a CA authority; a call that sends it is refused. */
             authority_id?: string;
+            /** @description issue_certificate: the subject's PKCS#10 request, so the subject key never reaches trstctl. */
             csr_pem?: string;
+            /** @description The lifecycle identity issue_certificate and rotate_certificate act on, through the lifecycle gate (policy and dual control). */
+            identity_id?: string;
+            /** @description Unused since the write tools act on lifecycle identities. */
             previous_serial?: string;
             reason?: string;
             subject?: string;
+            /** @description Unused since the write tools act on lifecycle identities. */
             ttl_seconds?: number;
         };
         MCPToolList: {
@@ -13989,10 +13995,19 @@ export interface components {
             tools: string[];
         };
         MCPToolResult: {
+            approval_request_id?: string;
+            /** @description Never set since the write tools act on lifecycle identities. */
             certificate_pem?: string;
             citations?: string[];
+            identity_id?: string;
             /** Format: date-time */
             not_after?: string;
+            /**
+             * @description A certificate write's result: queued (the lifecycle transition is recorded and its CA call is in the outbox) or proposed (dual control applies; nothing was executed, and approval_request_id waits for a distinct approver).
+             * @enum {string}
+             */
+            outcome?: "queued" | "proposed";
+            /** @description Never set since the write tools act on lifecycle identities. */
             serial?: string;
             text: string;
             tool: string;

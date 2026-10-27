@@ -104,12 +104,13 @@ type Server struct {
 type Option func(*Server)
 
 // WithWriteTools exposes the guarded write-tool names. It only changes the MCP
-// metadata; the served API owns authorization, idempotency, and the actual mutation.
+// metadata; the served API owns authorization, the lifecycle gate (policy and dual
+// control), idempotency, and the actual mutation.
 func WithWriteTools() Option {
 	return func(s *Server) {
 		s.writes = map[string]string{
-			"issue_certificate":  "issue a short-lived X.509 certificate from a CSR",
-			"rotate_certificate": "issue a replacement X.509 certificate from a CSR",
+			"issue_certificate":  "issue a lifecycle identity's certificate through the lifecycle gate; under dual control it is proposed for approval",
+			"rotate_certificate": "renew a deployed lifecycle identity's certificate through the lifecycle gate",
 		}
 	}
 }

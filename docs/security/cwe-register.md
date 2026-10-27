@@ -311,7 +311,7 @@ not this file.
 | `internal/server/adcs_inventory_served_test.go:42` | this is a logical fixture name, not secret material (CWE-798). |
 | `internal/server/adcs_inventory_served_test.go:43` | this is a non-secret reference, not secret material (CWE-798). |
 | `internal/server/agent_jobs_served_test.go:23` | secret-store reference/pointer, never credential material (CWE-798) |
-| `internal/server/aisurface_served_test.go:112` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/aisurface_served_test.go:111` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:142` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |
 | `internal/server/audit_feed_served_test.go:160` | token_ref is a non-secret environment locator (CWE-798). |
@@ -1460,7 +1460,7 @@ not this file.
 | `internal/featureparity/feature_facet_coverage_test.go:110` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/featureparity/feature_facet_coverage_test.go:114` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/featureparity/feature_facet_coverage_test.go:140` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/featureparity/mcp_rest_coverage.go:53` | fixed repo-relative catalog path read by tools and tests (CWE-22) |
+| `internal/featureparity/mcp_rest_coverage.go:57` | fixed repo-relative catalog path read by tools and tests (CWE-22) |
 | `internal/fsatomic/fsatomic.go:19` | the caller's own state directory (CWE-22) |
 | `internal/keyposture/keyposture_test.go:14` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/license/license.go:352` | operator-supplied license file path (CWE-22) |

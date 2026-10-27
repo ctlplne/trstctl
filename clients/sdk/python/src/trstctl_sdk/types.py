@@ -7218,6 +7218,7 @@ MCPToolCall = TypedDict(
     {
         'authority_id': str,
         'csr_pem': str,
+        'identity_id': str,
         'previous_serial': str,
         'reason': str,
         'subject': str,
@@ -7239,9 +7240,12 @@ MCPToolList = TypedDict(
 MCPToolResult = TypedDict(
     'MCPToolResult',
     {
+        'approval_request_id': str,
         'certificate_pem': str,
         'citations': list[str],
+        'identity_id': str,
         'not_after': str,
+        'outcome': str,
         'serial': str,
         'text': str,
         'tool': str,

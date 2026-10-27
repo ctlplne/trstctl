@@ -829,6 +829,7 @@ type Route struct {
 	UnavailableReason string
 	Mutation          bool
 	SensitiveResponse bool
+	MCPExclusion      string // why the route is never an MCP tool, or ""
 }
 
 // Routes returns the served routes. Paths are reported in their OpenAPI-template
@@ -849,6 +850,7 @@ func (a *API) Routes() []Route {
 			UnavailableReason: r.unavailableReason,
 			Mutation:          r.mutation,
 			SensitiveResponse: r.sensitiveResponse,
+			MCPExclusion:      mcpExclusion(r),
 		})
 	}
 	return out

@@ -7271,19 +7271,23 @@ func componentSchemas() map[string]*Schema {
 	}, "read_only", "tools")
 	mcpToolCall := object(map[string]*Schema{
 		"subject":         str(),
-		"authority_id":    str(),
-		"csr_pem":         str(),
-		"ttl_seconds":     {Type: "integer"},
+		"identity_id":     {Type: "string", Description: "The lifecycle identity issue_certificate and rotate_certificate act on, through the lifecycle gate (policy and dual control)."},
+		"csr_pem":         {Type: "string", Description: "issue_certificate: the subject's PKCS#10 request, so the subject key never reaches trstctl."},
 		"reason":          str(),
-		"previous_serial": str(),
+		"authority_id":    {Type: "string", Description: "No longer accepted: the write tools never issue directly from a CA authority; a call that sends it is refused."},
+		"ttl_seconds":     {Type: "integer", Description: "Unused since the write tools act on lifecycle identities."},
+		"previous_serial": {Type: "string", Description: "Unused since the write tools act on lifecycle identities."},
 	})
 	mcpToolResult := object(map[string]*Schema{
-		"tool":            str(),
-		"citations":       {Type: "array", Items: str()},
-		"text":            str(),
-		"certificate_pem": str(),
-		"serial":          str(),
-		"not_after":       timestamp(),
+		"tool":                str(),
+		"citations":           {Type: "array", Items: str()},
+		"text":                str(),
+		"outcome":             {Type: "string", Enum: []string{"queued", "proposed"}, Description: "A certificate write's result: queued (the lifecycle transition is recorded and its CA call is in the outbox) or proposed (dual control applies; nothing was executed, and approval_request_id waits for a distinct approver)."},
+		"identity_id":         str(),
+		"approval_request_id": str(),
+		"certificate_pem":     {Type: "string", Description: "Never set since the write tools act on lifecycle identities."},
+		"serial":              {Type: "string", Description: "Never set since the write tools act on lifecycle identities."},
+		"not_after":           timestamp(),
 	}, "tool", "text")
 
 	return map[string]*Schema{

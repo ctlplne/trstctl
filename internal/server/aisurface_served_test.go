@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"encoding/pem"
 	"io"
 	"net/http"
 	"strings"
@@ -15,8 +14,8 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -504,8 +503,10 @@ func TestServedMCPListsAndInvokesReadOnlyTool(t *testing.T) {
 
 // TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled is the DIST-09 proof:
 // the served MCP surface stays fail-closed/read-only by default, but when an operator
-// explicitly enables guarded write tools an MCP client can issue a certificate through
-// the same served CA hierarchy. The write path is idempotent, RBAC-gated, and audited.
+// explicitly enables guarded write tools an MCP client can have a certificate issued
+// for a lifecycle identity from the agent's own CSR. The write takes the identity
+// transition route (RBAC, the lifecycle gate, idempotency), queues the CA call, and
+// is audited; the issued certificate is read back independently once the call ran.
 func TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled(t *testing.T) {
 	disabled := newOperatingServedHarness(t, config.Protocols{}, withAIEnabled())
 	readToken := seedScopedToken(t, disabled.store, disabled.tenant, "graph:read", "certs:issue")
@@ -524,33 +525,16 @@ func TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled(t *testing.T) 
 		t.Fatalf("MCP write tools must fail closed by default: %+v", disabledTools)
 	}
 	status, _ = doBearer(t, disabled.ts, http.MethodPost, "/api/v1/mcp/tools/issue_certificate", readToken, "mcp-disabled-write", map[string]string{
-		"authority_id": "ca-disabled",
-		"csr_pem":      "-----BEGIN CERTIFICATE REQUEST-----\n-----END CERTIFICATE REQUEST-----\n",
+		"identity_id": "identity-disabled",
+		"csr_pem":     "-----BEGIN CERTIFICATE REQUEST-----\n-----END CERTIFICATE REQUEST-----\n",
 	})
 	if status != http.StatusNotFound {
 		t.Fatalf("disabled write tool call = %d, want 404 fail-closed", status)
 	}
 
 	h := newOperatingServedHarness(t, config.Protocols{}, withMCPWriteToolsEnabled())
-	operatorToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "mcp-ca-operator", []string{
-		"graph:read", "issuers:write", "issuers:read", "certs:issue",
-	})
-	approverToken := seedServedAPIToken(t, context.Background(), h.store, h.tenant, "mcp-ca-approver", []string{
-		"issuers:write", "issuers:read", "certs:issue",
-	})
+	operatorToken := seedScopedToken(t, h.store, h.tenant, "graph:read", "identities:read", "identities:write", "certs:read", "certs:issue")
 	noIssueToken := seedScopedToken(t, h.store, h.tenant, "graph:read", "certs:read")
-
-	rootSpec := map[string]any{
-		"common_name":           "trstctl mcp write root",
-		"max_path_len":          0,
-		"ttl_seconds":           int64((30 * 24 * time.Hour).Seconds()),
-		"permitted_dns_domains": []string{"mcp-write.example.test"},
-		"extended_key_usages":   []string{"serverAuth"},
-		"signature_algorithm":   "ecdsa-p256",
-	}
-	ceremony := createCACeremony(t, h, operatorToken, "create_root", "", rootSpec, 1, "mcp-write-root-ceremony")
-	approveCACeremony(t, h, approverToken, ceremony.ID, 1, "mcp-write-root-approval")
-	root := createRootCA(t, h, operatorToken, ceremony.ID, rootSpec, "mcp-write-root-create")
 
 	status, body = aiReq(t, h, http.MethodGet, "/api/v1/mcp/tools", operatorToken, nil)
 	if status != http.StatusOK {
@@ -572,64 +556,55 @@ func TestServedMCPWriteToolsIssueCertificateWhenExplicitlyEnabled(t *testing.T) 
 		t.Fatalf("enabled MCP tools should report read_only=false when write tools are present: %+v", enabledTools)
 	}
 
-	leafSigner, err := h.signer.Client().GenerateKey(context.Background(), crypto.ECDSAP256)
-	if err != nil {
-		t.Fatalf("generate MCP leaf key: %v", err)
-	}
-	csrDER, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
-		CommonName: "agent.mcp-write.example.test",
-		DNSNames:   []string{"agent.mcp-write.example.test"},
-	}, leafSigner)
-	if err != nil {
-		t.Fatalf("create MCP write CSR: %v", err)
-	}
-	csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
+	identity := mcpGateIdentity(t, h, "agent", orchestrator.StateRequested)
 	req := map[string]any{
-		"authority_id": root.ID,
-		"csr_pem":      csrPEM,
-		"ttl_seconds":  int64((2 * time.Hour).Seconds()),
-		"reason":       "agent requested a short-lived replacement",
+		"identity_id": identity.ID,
+		"csr_pem":     mcpGateCSR(t, identity.Name),
+		"reason":      "agent requested a short-lived replacement",
 	}
-
 	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/mcp/tools/issue_certificate", noIssueToken, "mcp-no-certs-issue", req)
 	if status != http.StatusForbidden {
 		t.Fatalf("MCP write without certs:issue = %d body=%s; want 403", status, body)
 	}
-	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/mcp/tools/issue_certificate", operatorToken, "mcp-issue-leaf", req)
-	if status != http.StatusCreated {
-		t.Fatalf("MCP issue_certificate = %d body=%s; want 201", status, body)
+	var queued struct {
+		Tool       string `json:"tool"`
+		Outcome    string `json:"outcome"`
+		IdentityID string `json:"identity_id"`
 	}
-	var issued struct {
-		Tool           string `json:"tool"`
-		CertificatePEM string `json:"certificate_pem"`
-		Serial         string `json:"serial"`
+	for _, attempt := range []string{"first call", "idempotent replay"} {
+		status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/mcp/tools/issue_certificate", operatorToken, "mcp-issue-leaf", req)
+		if status != http.StatusOK || json.Unmarshal(body, &queued) != nil || queued.Tool != "issue_certificate" ||
+			queued.Outcome != "queued" || queued.IdentityID != identity.ID || bytes.Contains(body, []byte("certificate_pem")) {
+			t.Fatalf("MCP issue_certificate %s = %d body=%s; want 200 queued", attempt, status, body)
+		}
 	}
-	if err := json.Unmarshal(body, &issued); err != nil || issued.Tool != "issue_certificate" || issued.CertificatePEM == "" || issued.Serial == "" {
-		t.Fatalf("decode MCP issued certificate: err=%v got=%+v body=%s", err, issued, body)
+	if err := h.srv.Drain(t.Context()); err != nil {
+		t.Fatalf("drain the queued issuance: %v", err)
 	}
-	leafDER := caCertDER(t, []byte(issued.CertificatePEM))
-	if err := crypto.VerifyLeafSignedByCA(leafDER, caCertDER(t, []byte(root.CertificatePEM))); err != nil {
-		t.Fatalf("MCP-issued leaf was not signed by served CA hierarchy: %v", err)
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/certificates", operatorToken, nil)
+	var listed struct {
+		Items []struct {
+			Subject     string   `json:"subject"`
+			IdentityIDs []string `json:"identity_ids"`
+		} `json:"items"`
 	}
-	info, err := certinfo.Inspect(leafDER)
-	if err != nil {
-		t.Fatalf("inspect MCP-issued leaf: %v", err)
+	if status != http.StatusOK || json.Unmarshal(body, &listed) != nil {
+		t.Fatalf("list certificates = %d body=%s", status, body)
 	}
-	if info.Subject != "CN=agent.mcp-write.example.test" {
-		t.Fatalf("MCP-issued subject = %q", info.Subject)
+	issued := 0
+	for _, c := range listed.Items {
+		if containsString(c.IdentityIDs, identity.ID) {
+			issued++
+			if c.Subject != "CN="+identity.Name {
+				t.Fatalf("MCP-issued subject = %q, want CN=%s", c.Subject, identity.Name)
+			}
+		}
 	}
-	status, body = doBearer(t, h.ts, http.MethodPost, "/api/v1/mcp/tools/issue_certificate", operatorToken, "mcp-issue-leaf", req)
-	if status != http.StatusCreated {
-		t.Fatalf("MCP issue_certificate replay = %d body=%s; want 201 idempotent replay", status, body)
+	if issued != 1 {
+		t.Fatalf("MCP issuance (with a replay) produced %d certificates for the identity, want 1: %s", issued, body)
 	}
-	var replay struct {
-		Serial string `json:"serial"`
-	}
-	if err := json.Unmarshal(body, &replay); err != nil || replay.Serial != issued.Serial {
-		t.Fatalf("MCP idempotency replay serial = %+v err=%v; want %s body=%s", replay, err, issued.Serial, body)
-	}
-	if !h.hasEvent(t, "mcp.tool.write") || !h.hasEvent(t, "ca.endentity.issued") {
-		t.Fatal("MCP write tool did not audit the write and emit the underlying CA issue event")
+	if !h.hasEvent(t, "mcp.tool.write") {
+		t.Fatal("MCP write tool did not audit the write")
 	}
 }
 

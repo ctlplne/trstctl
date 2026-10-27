@@ -5230,6 +5230,7 @@ export interface LifecycleAutomationSummary {
 export interface MCPToolCall {
   authority_id?: string;
   csr_pem?: string;
+  identity_id?: string;
   previous_serial?: string;
   reason?: string;
   subject?: string;
@@ -5243,9 +5244,12 @@ export interface MCPToolList {
 }
 
 export interface MCPToolResult {
+  approval_request_id?: string;
   certificate_pem?: string;
   citations?: string[];
+  identity_id?: string;
   not_after?: string;
+  outcome?: "queued" | "proposed";
   serial?: string;
   text: string;
   tool: string;

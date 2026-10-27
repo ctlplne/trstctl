@@ -267,6 +267,17 @@
 
 ### Security
 
+- MCP certificate writes take the identity lifecycle gate. `issue_certificate` and
+  `rotate_certificate` used to issue straight from a named CA authority, outside the
+  policy gate and dual control. They now act on a lifecycle identity (`identity_id`,
+  with the agent's own CSR for issuance) through its transition route with the agent's
+  credentials: a deny-all policy refuses them, and under dual control an issuance is
+  proposed (`outcome: proposed`, an approval request, `mcp.tool.proposed`) and runs
+  only when the same call is repeated after a distinct approver approved it, while a
+  rotation is refused. A call naming `authority_id` is refused. Approval decisions and
+  certificate mutations outside the lifecycle gate are never MCP tools. `trstctl-cli
+  mcp serve` accepts an `idempotency_key` argument and names the key a proposed write
+  is bound to.
 - The signer's attestation verifier checks the key ID inside attestation
   evidence as a single path segment and reads the key through a directory
   handle. Before, the key ID was joined into a file path unchecked, so evidence

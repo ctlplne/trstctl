@@ -17,6 +17,10 @@ type MCPRESTRoute struct {
 	Method            string
 	Path              string
 	SensitiveResponse bool
+	// MCPExclusion is the served API's own reason the route is never an MCP tool
+	// (an approval decision, or a privileged certificate mutation outside the
+	// lifecycle gate); such a route needs no tool and no allowlist entry.
+	MCPExclusion string
 }
 
 // MCPRESTTool records that one MCP tool covers one served REST operation.
@@ -76,7 +80,7 @@ func CheckMCPRESTCoverage(routes []MCPRESTRoute, tools []MCPRESTTool, allowlist 
 	var gaps []MCPRESTCoverageGap
 	for _, route := range routes {
 		route = normalizeMCPRESTRoute(route)
-		if route.SensitiveResponse {
+		if route.SensitiveResponse || strings.TrimSpace(route.MCPExclusion) != "" {
 			continue
 		}
 		if route.OperationID == "" || route.Method == "" || route.Path == "" {

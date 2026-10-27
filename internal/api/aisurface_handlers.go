@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/authz"
 	"trstctl.com/trstctl/internal/mcpserver"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/query"
 	"trstctl.com/trstctl/internal/rca"
 )
@@ -109,16 +110,21 @@ type mcpToolsResponse struct {
 	Tools    []string `json:"tools"`
 }
 
-// mcpCallRequest invokes one MCP tool (F78). Read tools use Subject. Guarded write
-// certificate convenience tools use the certificate fields and are accepted only when
-// explicitly enabled. REST-backed tools use path_params/query/body and are replayed
-// through the served HTTP router so normal route guards remain authoritative.
+// mcpCallRequest invokes one MCP tool (F78). Read tools use Subject. The guarded
+// certificate write tools act on a lifecycle identity (IdentityID, with an optional
+// subject CSR and a reason) and are accepted only when explicitly enabled.
+// REST-backed tools use path_params/query/body and are replayed through the served
+// HTTP router so normal route guards remain authoritative.
 type mcpCallRequest struct {
-	Subject        string            `json:"subject"`
+	Subject    string `json:"subject"`
+	IdentityID string `json:"identity_id,omitempty"`
+	CSRPem     string `json:"csr_pem,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	// AuthorityID, TTLSeconds and PreviousSerial named a direct CA issuance the
+	// write tools no longer make; a call that still sends authority_id is refused
+	// with the replacement, so it cannot be mistaken for a gated issuance.
 	AuthorityID    string            `json:"authority_id,omitempty"`
-	CSRPem         string            `json:"csr_pem,omitempty"`
 	TTLSeconds     int64             `json:"ttl_seconds,omitempty"`
-	Reason         string            `json:"reason,omitempty"`
 	PreviousSerial string            `json:"previous_serial,omitempty"`
 	PathParams     map[string]string `json:"path_params,omitempty"`
 	Query          map[string]string `json:"query,omitempty"`
@@ -127,13 +133,28 @@ type mcpCallRequest struct {
 
 // mcpCallResponse is the grounded, cited tool result (F78).
 type mcpCallResponse struct {
-	Tool           string    `json:"tool"`
-	Citations      []string  `json:"citations,omitempty"`
-	Text           string    `json:"text"`
+	Tool      string   `json:"tool"`
+	Citations []string `json:"citations,omitempty"`
+	Text      string   `json:"text"`
+	// Outcome, IdentityID and ApprovalRequestID report a certificate write: queued
+	// (the lifecycle transition is recorded and its CA call is in the outbox) or
+	// proposed (dual control applies, and the write waits for a distinct approver
+	// on the named approval request; nothing was executed).
+	Outcome           string `json:"outcome,omitempty"`
+	IdentityID        string `json:"identity_id,omitempty"`
+	ApprovalRequestID string `json:"approval_request_id,omitempty"`
+	// CertificatePEM, Serial and NotAfter carried the direct CA issuance result the
+	// write tools no longer make; they are never set.
 	CertificatePEM string    `json:"certificate_pem,omitempty"`
 	Serial         string    `json:"serial,omitempty"`
-	NotAfter       time.Time `json:"not_after,omitempty"`
+	NotAfter       time.Time `json:"not_after,omitzero"`
 }
+
+// MCP certificate write outcomes.
+const (
+	mcpWriteQueued   = "queued"
+	mcpWriteProposed = "proposed"
+)
 
 // --- surface name validation ---
 
@@ -552,35 +573,11 @@ func (a *API) mcpCallREST(w http.ResponseWriter, r *http.Request, principal auth
 		_, _ = w.Write(rec.body.Bytes())
 		return
 	}
-	if legacyMCPCertificateTool(tool) {
-		var issued CAIssuedLeaf
-		if err := json.Unmarshal(rec.body.Bytes(), &issued); err == nil {
-			text := "issued certificate serial " + issued.Serial
-			if tool == "rotate_certificate" {
-				text = "rotated certificate " + strings.TrimSpace(req.PreviousSerial) + " to serial " + issued.Serial
-			}
-			_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.write", principal.TenantID,
-				[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"authority_id":%q,"serial":%q,"reason":%q}`, principal.Subject, tool, strings.TrimSpace(req.AuthorityID), issued.Serial, req.Reason)))
-			a.writeJSON(w, status, mcpCallResponse{
-				Tool:           tool,
-				Text:           text,
-				Citations:      []string{rt.Method + " " + rt.Path, "ca_issued_cert:" + issued.Serial},
-				CertificatePEM: issued.CertificatePEM,
-				Serial:         issued.Serial,
-				NotAfter:       issued.NotAfter,
-			})
-			return
-		}
-	}
 	a.writeJSON(w, status, mcpCallResponse{
 		Tool:      tool,
 		Text:      mcpRESTResponseSummary(rt, status),
 		Citations: []string{rt.Method + " " + rt.Path},
 	})
-}
-
-func legacyMCPCertificateTool(tool string) bool {
-	return tool == "issue_certificate" || tool == "rotate_certificate"
 }
 
 func mcpRESTResponseSummary(rt mcpserver.RESTTool, status int) string {
@@ -594,34 +591,118 @@ func mcpRESTResponseSummary(rt mcpserver.RESTTool, status int) string {
 	return fmt.Sprintf("%s returned %d; full response body is omitted from MCP output", summary, status)
 }
 
-// mcpCallWrite keeps the historical certificate convenience tool names working by
-// translating them to the served CA issuance route. The actual permission check,
-// issuer scoping, idempotency, request validation, and mutation all happen inside the
-// normal REST handler reached through mcpCallREST.
+// mcpCallWrite runs the certificate write tools through the lifecycle gate (RA
+// separation, the ABAC deny overlay, the default-deny policy and dual control):
+// issue_certificate is the identity's transition to issued, and rotate_certificate
+// takes the same issue decision, as the rotate playbook does, before the identity's
+// renewal. The transition route records the approval request a dual-control
+// tenant requires, so an issuance waiting for a distinct approver comes back as a
+// proposal and executes only when the same call is made after the approval.
 func (a *API) mcpCallWrite(w http.ResponseWriter, r *http.Request, principal authz.Principal, tool string, req mcpCallRequest) {
-	if tool == "rotate_certificate" && strings.TrimSpace(req.PreviousSerial) == "" {
-		a.writeError(w, errStatus(http.StatusBadRequest, "previous_serial is required for rotate_certificate"))
+	if !a.ai.rate.Allow(principal.Subject + "|" + tool) {
+		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.ratelimited", principal.TenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q}`, principal.Subject, tool)))
+		a.writeError(w, errStatus(http.StatusTooManyRequests, "rate limit exceeded"))
 		return
 	}
-	req.PathParams = copyStringMap(req.PathParams)
-	if req.PathParams == nil {
-		req.PathParams = map[string]string{}
+	identityID := strings.TrimSpace(req.IdentityID)
+	if strings.TrimSpace(req.AuthorityID) != "" {
+		a.writeError(w, errStatus(http.StatusBadRequest,
+			tool+" acts on a lifecycle identity (identity_id) through the lifecycle gate; direct CA issuance is not available to MCP"))
+		return
 	}
-	req.PathParams["id"] = strings.TrimSpace(req.AuthorityID)
-	body, err := json.Marshal(caIssueLeafJSON{CSRPem: req.CSRPem, TTLSeconds: req.TTLSeconds})
+	if identityID == "" {
+		a.writeError(w, errStatus(http.StatusBadRequest, "identity_id is required for "+tool))
+		return
+	}
+	transition := map[string]any{"to": string(orchestrator.StateIssued), "reason": req.Reason}
+	if tool == "rotate_certificate" {
+		// The renewal transition is outside the gate's issue/revoke/deploy set, but it
+		// issues a certificate, so the issue decision is taken first.
+		if err := a.gateOperatorTransition(r.Context(), principal, principal.TenantID, identityID, orchestrator.StateIssued); err != nil {
+			a.writeError(w, err)
+			return
+		}
+		transition["to"] = string(orchestrator.StateRenewing)
+	} else if strings.TrimSpace(req.CSRPem) != "" {
+		transition["subject_csr_pem"] = req.CSRPem
+	}
+	body, err := json.Marshal(transition)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
-	req.Body = body
-	a.mcpCallREST(w, r, principal, tool, mcpserver.RESTTool{
-		Method:      http.MethodPost,
-		Path:        "/api/v1/ca/authorities/{id}/issue",
-		OperationID: "issueHierarchyLeaf",
-		Summary:     "Issue a leaf certificate from a served CA authority",
-		Permission:  string(authz.CertsIssue),
-		Mutation:    true,
-	}, req)
+	path, err := mcpRESTPath("/api/v1/identities/{id}/transitions", map[string]string{"id": identityID}, "")
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	inner, err := http.NewRequestWithContext(r.Context(), http.MethodPost, path, bytes.NewReader(body))
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	copyMCPRESTHeaders(inner.Header, r.Header)
+	inner.Header.Set("Content-Type", "application/json")
+	rec := newMCPRESTRecorder()
+	a.ServeHTTP(rec, inner)
+	status := rec.status()
+	citations := []string{"POST /api/v1/identities/{id}/transitions", "identity:" + identityID}
+	if approvalID, ok := mcpApprovalProposal(status, rec.body.Bytes()); ok {
+		_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.proposed", principal.TenantID,
+			[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"identity_id":%q,"approval_request_id":%q}`, principal.Subject, tool, identityID, approvalID)))
+		a.writeJSON(w, http.StatusAccepted, mcpCallResponse{
+			Tool: tool, Outcome: mcpWriteProposed, IdentityID: identityID, ApprovalRequestID: approvalID,
+			Citations: append(citations, "approval_request:"+approvalID),
+			Text: "dual control applies: the write waits for a distinct approver on approval request " + approvalID +
+				"; nothing was executed. After it is approved, make the same call again with the same arguments and Idempotency-Key.",
+		})
+		return
+	}
+	if status < 200 || status >= 300 {
+		copyMCPRESTResponseHeaders(w.Header(), rec.Header())
+		w.WriteHeader(status)
+		_, _ = w.Write(rec.body.Bytes())
+		return
+	}
+	_ = auditsink.Emit(r.Context(), a.ai.be.Audit, nil, "mcp.tool.write", principal.TenantID,
+		[]byte(fmt.Sprintf(`{"caller":%q,"tool":%q,"identity_id":%q,"transition":%q,"reason":%q}`, principal.Subject, tool, identityID, transition["to"], req.Reason)))
+	text := "issuance of identity " + identityID + " is recorded and its CA call queued; the certificate is recorded when the call completes"
+	if tool == "rotate_certificate" {
+		text = "renewal of identity " + identityID + " is recorded and its CA call queued; the new certificate is deployed when the call completes"
+	}
+	a.writeJSON(w, http.StatusOK, mcpCallResponse{Tool: tool, Outcome: mcpWriteQueued, IdentityID: identityID, Citations: citations, Text: text})
+}
+
+// mcpApprovalProposal reports the approval request a dual-control refusal of the
+// transition route names; that refusal is where the request was recorded.
+func mcpApprovalProposal(status int, body []byte) (string, bool) {
+	if status != http.StatusForbidden {
+		return "", false
+	}
+	var p struct {
+		Code              string `json:"code"`
+		ApprovalRequestID string `json:"approval_request_id"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil || p.Code != "identity_approval_required" || p.ApprovalRequestID == "" {
+		return "", false
+	}
+	return p.ApprovalRequestID, true
+}
+
+// mcpExclusion names why a served route is never an MCP tool, or "". An agent never
+// records an approval decision, and privileged certificate mutations reach MCP only
+// through the lifecycle gate (issue_certificate and rotate_certificate), never
+// through a route that mints, configures attestation trust or completes an issuance
+// outside it.
+func mcpExclusion(rt route) string {
+	switch {
+	case rt.approval:
+		return "approval decision: an agent never approves or denies a dual-control request"
+	case rt.mutation && rt.perm == authz.CertsIssue:
+		return "privileged certificate mutation outside the lifecycle gate: MCP certificate writes use issue_certificate and rotate_certificate"
+	}
+	return ""
 }
 
 // mcpServerFor builds an MCP server bound to the caller's principal, over the
@@ -664,7 +745,7 @@ func (a *API) mcpRESTTools() []mcpserver.RESTTool {
 }
 
 func mcpRESTToolCandidate(rt route) bool {
-	if rt.opID == "" || rt.perm == "" {
+	if rt.opID == "" || rt.perm == "" || mcpExclusion(rt) != "" {
 		return false
 	}
 	if rt.sensitiveResponse {

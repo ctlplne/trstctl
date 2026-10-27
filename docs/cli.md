@@ -1413,4 +1413,8 @@ the environment, never on the command line. Every `tools/call` becomes
 server's tenant scope, RBAC, rate limit and audit apply exactly as for REST; a
 refused call comes back as a readable tool error (`isError: true`), not as a
 transport failure. Write tools appear only when the control plane exposes them
-(`TRSTCTL_AI_MCP_WRITE_TOOLS=true`) and still require `certs:issue`.
+(`TRSTCTL_AI_MCP_WRITE_TOOLS=true`) and still require `certs:issue`. A write that
+dual control holds comes back with `"outcome":"proposed"`, its approval request and the
+`idempotency_key` it is bound to; once a distinct approver approved it, repeat the same
+call with that `idempotency_key` argument, which the bridge sends as the
+`Idempotency-Key` header, and the approved write runs.

@@ -45,6 +45,28 @@ func TestMCPRESTCoverageGuardAllowsDocumentedSyntheticException(t *testing.T) {
 	}
 }
 
+// A route the served API itself excludes from MCP (an approval decision, or a
+// privileged certificate mutation outside the lifecycle gate) needs neither a
+// tool nor an allowlist entry, and an allowlist entry for it goes stale.
+func TestMCPRESTCoverageGuardSkipsAnExcludedRoute(t *testing.T) {
+	routes := []featureparity.MCPRESTRoute{{
+		OperationID:  "approveSyntheticRequest",
+		Method:       http.MethodPost,
+		Path:         "/api/v1/synthetic/{id}/approvals",
+		MCPExclusion: "approval decision: an agent never approves or denies a dual-control request",
+	}}
+	if gaps, stale := featureparity.CheckMCPRESTCoverage(routes, nil, nil); len(gaps) != 0 || len(stale) != 0 {
+		t.Fatalf("excluded route gaps=%+v stale=%+v, want clean", gaps, stale)
+	}
+	allowlist := []featureparity.MCPRESTAllowlistEntry{{
+		OperationID: "approveSyntheticRequest", Method: http.MethodPost, Path: "/api/v1/synthetic/{id}/approvals",
+		Justification: "approval decision",
+	}}
+	if _, stale := featureparity.CheckMCPRESTCoverage(routes, nil, allowlist); len(stale) != 1 {
+		t.Fatalf("an allowlist entry for an excluded route should be stale, got %+v", stale)
+	}
+}
+
 func TestMCPRESTCoverageGuardCoversServedRoutes(t *testing.T) {
 	h := api.New(nil, nil, nil,
 		api.WithInsecureHeaderResolver(),
@@ -74,6 +96,7 @@ func TestMCPRESTCoverageGuardCoversServedRoutes(t *testing.T) {
 			Method:            rt.Method,
 			Path:              rt.Path,
 			SensitiveResponse: rt.SensitiveResponse,
+			MCPExclusion:      rt.MCPExclusion,
 		})
 		if containsString(listed.Tools, mcpserver.RESTToolName(rt.OperationID)) {
 			tools = append(tools, featureparity.MCPRESTTool{OperationID: rt.OperationID})

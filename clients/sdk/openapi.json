@@ -21712,12 +21712,19 @@
       "MCPToolCall": {
         "properties": {
           "authority_id": {
+            "description": "No longer accepted: the write tools never issue directly from a CA authority; a call that sends it is refused.",
             "type": "string"
           },
           "csr_pem": {
+            "description": "issue_certificate: the subject's PKCS#10 request, so the subject key never reaches trstctl.",
+            "type": "string"
+          },
+          "identity_id": {
+            "description": "The lifecycle identity issue_certificate and rotate_certificate act on, through the lifecycle gate (policy and dual control).",
             "type": "string"
           },
           "previous_serial": {
+            "description": "Unused since the write tools act on lifecycle identities.",
             "type": "string"
           },
           "reason": {
@@ -21727,6 +21734,7 @@
             "type": "string"
           },
           "ttl_seconds": {
+            "description": "Unused since the write tools act on lifecycle identities.",
             "type": "integer"
           }
         },
@@ -21755,7 +21763,11 @@
       },
       "MCPToolResult": {
         "properties": {
+          "approval_request_id": {
+            "type": "string"
+          },
           "certificate_pem": {
+            "description": "Never set since the write tools act on lifecycle identities.",
             "type": "string"
           },
           "citations": {
@@ -21764,11 +21776,23 @@
             },
             "type": "array"
           },
+          "identity_id": {
+            "type": "string"
+          },
           "not_after": {
             "format": "date-time",
             "type": "string"
           },
+          "outcome": {
+            "description": "A certificate write's result: queued (the lifecycle transition is recorded and its CA call is in the outbox) or proposed (dual control applies; nothing was executed, and approval_request_id waits for a distinct approver).",
+            "enum": [
+              "queued",
+              "proposed"
+            ],
+            "type": "string"
+          },
           "serial": {
+            "description": "Never set since the write tools act on lifecycle identities.",
             "type": "string"
           },
           "text": {

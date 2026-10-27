@@ -4219,7 +4219,11 @@ off, so an upgrade does not silently expose it):
   Investigation tools are read-only by default; guarded write tools
   (`issue_certificate`, `rotate_certificate`) appear only when
   `TRSTCTL_AI_MCP_WRITE_TOOLS=true`, each still requiring `certs:issue`, an
-  `Idempotency-Key`, and emitting `mcp.tool.write`.
+  `Idempotency-Key`, and emitting `mcp.tool.write`. They act on a lifecycle
+  identity through the identity transition route, so the policy gate and dual
+  control apply: under dual control an issuance is proposed (`mcp.tool.proposed`)
+  and runs only when repeated after approval, and a rotation is refused. MCP has
+  no route to direct CA issuance or to an approval decision.
 
 Every route is auth-gated (API token or session, `graph:read`), tenant-scoped
 (the tenant is the authenticated principal's, never a request field), rate

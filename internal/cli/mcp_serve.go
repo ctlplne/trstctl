@@ -201,6 +201,10 @@ var mcpToolInputSchema = map[string]any{
 		"query":       map[string]any{"type": "object", "description": "query parameters for REST-backed tools", "additionalProperties": map[string]any{"type": "string"}},
 		"body":        map[string]any{"type": "object", "description": "request body for REST-backed tools"},
 		"reason":      map[string]any{"type": "string", "description": "operator reason recorded with guarded write tools"},
+		"identity_id": map[string]any{"type": "string", "description": "lifecycle identity a certificate write tool acts on"},
+		"csr_pem":     map[string]any{"type": "string", "description": "PEM certificate request for issue_certificate; the key stays with the caller"},
+		"idempotency_key": map[string]any{"type": "string", "description": "sent as the Idempotency-Key header instead of a fresh one; " +
+			"a write proposed for approval runs when the same call is repeated with the key its result names"},
 	},
 	"additionalProperties": true,
 }
@@ -243,9 +247,16 @@ func (s *mcpStdioServer) callTool(params json.RawMessage) (any, *jsonRPCError) {
 	if len(call.Arguments) > 0 && string(call.Arguments) != "null" {
 		body = call.Arguments
 	}
-	status, resp, err := do(s.ctx, s.client, s.server, http.MethodPost, "/api/v1/mcp/tools/"+url.PathEscape(call.Name), nil, body, s.token, s.tenant, generateIdempotencyKey(), "")
+	body, idem, keyErr := mcpCallIdempotencyKey(body)
+	if keyErr != nil {
+		return nil, &jsonRPCError{Code: -32602, Message: keyErr.Error()}
+	}
+	status, resp, err := do(s.ctx, s.client, s.server, http.MethodPost, "/api/v1/mcp/tools/"+url.PathEscape(call.Name), nil, body, s.token, s.tenant, idem, "")
 	if err != nil {
 		return nil, &jsonRPCError{Code: -32603, Message: "control plane unreachable: " + err.Error()}
+	}
+	if status == http.StatusAccepted {
+		resp = mcpProposalWithKey(resp, idem)
 	}
 	text := strings.TrimSpace(string(resp))
 	if status < 200 || status >= 300 {
@@ -257,6 +268,46 @@ func (s *mcpStdioServer) callTool(params json.RawMessage) (any, *jsonRPCError) {
 		text = fmt.Sprintf("HTTP %d with an empty body", status)
 	}
 	return map[string]any{"content": []map[string]any{{"type": "text", "text": text}}, "isError": false}, nil
+}
+
+// mcpCallIdempotencyKey takes a caller-chosen idempotency_key out of the tool
+// arguments, or mints a fresh key. A write proposed for dual control runs only
+// when the same call is repeated with the same key once it is approved, so the
+// model must be able to send a key again.
+func mcpCallIdempotencyKey(arguments []byte) ([]byte, string, error) {
+	var args map[string]json.RawMessage
+	if json.Unmarshal(arguments, &args) != nil {
+		return arguments, generateIdempotencyKey(), nil
+	}
+	raw, ok := args["idempotency_key"]
+	if !ok {
+		return arguments, generateIdempotencyKey(), nil
+	}
+	var key string
+	if err := json.Unmarshal(raw, &key); err != nil || strings.TrimSpace(key) == "" {
+		return nil, "", errors.New("idempotency_key must be a non-empty string")
+	}
+	delete(args, "idempotency_key")
+	body, err := json.Marshal(args)
+	if err != nil {
+		return nil, "", err
+	}
+	return body, strings.TrimSpace(key), nil
+}
+
+// mcpProposalWithKey names the Idempotency-Key a proposed write is bound to, so
+// the model can repeat the call once a distinct approver approved it.
+func mcpProposalWithKey(resp []byte, idem string) []byte {
+	var result map[string]any
+	if json.Unmarshal(resp, &result) != nil || result["outcome"] != "proposed" {
+		return resp
+	}
+	result["idempotency_key"] = idem
+	out, err := json.Marshal(result)
+	if err != nil {
+		return resp
+	}
+	return out
 }
 
 // problemSummary keeps a refusal readable without echoing arbitrary bodies.
