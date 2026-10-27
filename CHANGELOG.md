@@ -486,6 +486,11 @@
 
 ### Fixed
 
+- A staged agent upgrade's soak window now ends when its reason says. Recording
+  the soak cleared the ring's dispatch, so the next sweep sent the ring's agents
+  a second round of upgrade jobs and the window started over; a campaign that
+  dispatches nothing could move its window forward on a later sweep. Either way
+  the soak might never end.
 - The Kubernetes agent no longer stops its controller pass on a cluster without
   cert-manager (native CSRs and TrustBundles were never reconciled there), no
   longer rewrites every TrustBundle ConfigMap and status on every pass, keeps a

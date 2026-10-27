@@ -172,13 +172,23 @@ func (s *Store) ApplyAgentUpgradeCampaignOpenedTx(ctx context.Context, tx pgx.Tx
 // same ring after a resume, which is required: the agent whose failure halted
 // the round needs a fresh job after the fix, and the old round's receipts must
 // stop counting.
+//
+// A decision that stays in the same ring entry changes only the reason: the
+// same ring (an empty current_ring is the first ring, where a campaign opens)
+// and the same status, or a pending campaign starting to run. The soak (A70)
+// records its reason this way, and must neither clear the stamp, which would
+// re-dispatch the ring it is soaking, nor move updated_at, which is when an
+// observe-only campaign entered the ring and so where its soak starts.
 func (s *Store) ApplyAgentUpgradeCampaignAdvancedTx(ctx context.Context, tx pgx.Tx, tenantID, id, status, currentRing, haltedAtRing, reason string) error {
 	_, err := tx.Exec(ctx,
 		`UPDATE agent_upgrade_campaigns
 		    SET status = $3, current_ring = $4,
 		        halted_at_ring = CASE WHEN $5 <> '' THEN $5 ELSE halted_at_ring END,
-		        dispatched_ring = CASE WHEN $3 = 'running' THEN NULL ELSE dispatched_ring END,
-		        reason = $6, updated_at = now()
+		        dispatched_ring = CASE WHEN $3 = 'running' AND NOT (current_ring IN ('', $4) AND status IN ($3, 'pending'))
+		                               THEN NULL ELSE dispatched_ring END,
+		        reason = $6,
+		        updated_at = CASE WHEN current_ring IN ('', $4) AND (status = $3 OR (status = 'pending' AND $3 = 'running'))
+		                          THEN updated_at ELSE now() END
 		  WHERE tenant_id = $1 AND id = $2`,
 		tenantID, id, status, currentRing, haltedAtRing, reason)
 	return err

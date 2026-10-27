@@ -302,6 +302,10 @@ func (s *Server) RunAgentUpgradeCampaigns(ctx context.Context) {
 // recordSoak serves the soak as the campaign's reason exactly once per ring:
 // the operator reads when the ring may advance instead of a running campaign
 // that appears stuck. Later sweeps inside the window change nothing.
+//
+// The decision keeps the ring, so the projection records it as the same ring
+// entry (ApplyAgentUpgradeCampaignAdvancedTx): the window keeps its start, and
+// a dispatched ring keeps its round instead of being dispatched again.
 func (s *Server) recordSoak(ctx context.Context, tenantID string, c store.AgentUpgradeCampaign, ring fleet.Ring, until time.Time) error {
 	reason := fleet.SoakReason(ring, until)
 	if c.Reason == reason {

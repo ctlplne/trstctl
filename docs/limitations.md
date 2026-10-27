@@ -3543,12 +3543,14 @@ than sending an operator looking for a credential that was never there.
   placement is never moved, and a fleet with fewer than three unassigned agents
   is refused rather than planned into an empty ring that would halt the
   campaign. The rule is served with the result so it can be disagreed with
-  before the campaign starts. A campaign opened with `soak_seconds` keeps a
-  verified ring under observation for that long before the next ring is
-  dispatched (the reason says until when; an agent that stops heartbeating
-  during the soak is silence and halts); zero, the default, advances a verified
-  ring at once, so the 10-minute grace is the only wait unless an operator asks
-  for a soak. Verification is more than a health signal: the first sweep that
+  before the campaign starts. A campaign opened with `soak_seconds` holds the
+  next ring until that long after the current ring was dispatched (for a
+  campaign that dispatches nothing, after it entered the ring), and only while
+  the verified ring stays healthy (the reason says until when; an agent that
+  stops heartbeating during the soak is silence and halts). Recording the soak
+  neither restarts the window nor dispatches the ring again. Zero, the default,
+  advances a verified ring at once, so the 10-minute grace is the only wait
+  unless an operator asks for a soak. Verification is more than a health signal: the first sweep that
   sees an agent on the target build queues it an `agent.self_check` job pinned
   to that agent (enabled together with `agent.upgrade`), and the new binary
   claims it, exercises what an upgrade can break without stopping the process
