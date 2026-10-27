@@ -1650,6 +1650,24 @@ AssuranceDiscovery = TypedDict(
     total=False,
 )
 
+AssuranceExternalObservation = TypedDict(
+    'AssuranceExternalObservation',
+    {
+        'at': str,
+        'basis': str,
+        'endpoint': str,
+        'evidence_id': str,
+        'expected_fingerprint': str,
+        'health': str,
+        'observer': str,
+        'reachable': bool,
+        'served_fingerprint': str,
+        'vantage': str,
+        'verdict': str,
+    },
+    total=False,
+)
+
 AssuranceIssuance = TypedDict(
     'AssuranceIssuance',
     {
@@ -1709,6 +1727,7 @@ AssuranceRecord = TypedDict(
         'credential': dict[str, Any],
         'deployments': list[dict[str, Any]],
         'discovery': list[dict[str, Any]],
+        'external_observations': list[dict[str, Any]],
         'format': str,
         'generated_at': str,
         'independently_observed': list[str],
@@ -9126,6 +9145,84 @@ OIDCTenantMapping = TypedDict(
         'roles': list[str],
         'subject': str,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+Observation = TypedDict(
+    'Observation',
+    {
+        'chain_fingerprints': list[str],
+        'detail': str,
+        'endpoint': str,
+        'expected_fingerprint': str,
+        'health': str,
+        'id': str,
+        'observed_at': str,
+        'observer_id': str,
+        'observer_name': str,
+        'reachable': bool,
+        'recorded_at': str,
+        'served_fingerprint': str,
+        'vantage': str,
+        'verdict': str,
+    },
+    total=False,
+)
+
+ObservationList = TypedDict(
+    'ObservationList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ObservationRequest = TypedDict(
+    'ObservationRequest',
+    {
+        'chain_fingerprints': list[str],
+        'detail': str,
+        'endpoint': str,
+        'health': str,
+        'observed_at': str,
+        'observer_id': str,
+        'reachable': bool,
+        'served_fingerprint': str,
+        'vantage': str,
+    },
+    total=False,
+)
+
+Observer = TypedDict(
+    'Observer',
+    {
+        'created_at': str,
+        'credential_ref': str,
+        'enabled': bool,
+        'events_url': str,
+        'id': str,
+        'name': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+ObserverList = TypedDict(
+    'ObserverList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+ObserverRequest = TypedDict(
+    'ObserverRequest',
+    {
+        'credential_ref': str,
+        'enabled': bool,
+        'events_url': str,
+        'name': str,
     },
     total=False,
 )

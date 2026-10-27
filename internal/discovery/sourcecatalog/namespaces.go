@@ -17,6 +17,7 @@ const (
 	ExposureProbeSourcePrefix       = "exposure-probe:"
 	RemediationRotationSourcePrefix = "remediation-rotation:"
 	ProfilePostureSourcePrefix      = "profile-posture:"
+	ExternalObserverSourcePrefix    = "external-observer:"
 )
 
 type ReservedNamespace struct {
@@ -34,6 +35,7 @@ var reservedNamespaces = [...]ReservedNamespace{
 	{ExposureProbeSourcePrefix, "NHI exposure reachability probe"},
 	{RemediationRotationSourcePrefix, "credential-rotate replacement verification"},
 	{ProfilePostureSourcePrefix, "certificate profile posture"},
+	{ExternalObserverSourcePrefix, "external observation intake"},
 }
 
 // ReservedNamespaces returns a copy for the registration guard and docs.

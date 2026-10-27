@@ -50,18 +50,21 @@ var Stages = []string{StageDiscovery, StageOwner, StageIssuance, StageDeployment
 
 // Record is one credential's assurance record.
 type Record struct {
-	Format        string           `json:"format"`
-	TenantID      string           `json:"tenant_id"`
-	GeneratedAt   time.Time        `json:"generated_at"`
-	Credential    Credential       `json:"credential"`
-	Discovery     []Discovery      `json:"discovery"`
-	Owner         *Owner           `json:"owner"`
-	Issuance      Issuance         `json:"issuance"`
-	Deployments   []Deployment     `json:"deployments"`
-	Verifications []Verification   `json:"verifications"`
-	Renewals      Renewals         `json:"renewals"`
-	Revocation    *Revocation      `json:"revocation"`
-	Audit         []AuditReference `json:"audit"`
+	Format        string         `json:"format"`
+	TenantID      string         `json:"tenant_id"`
+	GeneratedAt   time.Time      `json:"generated_at"`
+	Credential    Credential     `json:"credential"`
+	Discovery     []Discovery    `json:"discovery"`
+	Owner         *Owner         `json:"owner"`
+	Issuance      Issuance       `json:"issuance"`
+	Deployments   []Deployment   `json:"deployments"`
+	Verifications []Verification `json:"verifications"`
+	// ExternalObservations are what monitors outside trstctl reported seeing
+	// at the endpoints, kept apart from trstctl's own verification (A180).
+	ExternalObservations []ExternalObservation `json:"external_observations"`
+	Renewals             Renewals              `json:"renewals"`
+	Revocation           *Revocation           `json:"revocation"`
+	Audit                []AuditReference      `json:"audit"`
 	// IndependentlyObserved names the stages with evidence from outside
 	// trstctl's own record; RecordedOnly the stages known only from it;
 	// Absent the stages with no evidence at all.
@@ -179,6 +182,23 @@ type Verification struct {
 	At                  time.Time `json:"at"`
 }
 
+// ExternalObservation is one report from an external observer: what it saw
+// at an endpoint and how that compared with the certificate trstctl deployed
+// there.
+type ExternalObservation struct {
+	EvidenceID          string    `json:"evidence_id"`
+	Basis               Basis     `json:"basis"`
+	Observer            string    `json:"observer"`
+	Vantage             string    `json:"vantage,omitempty"`
+	Endpoint            string    `json:"endpoint"`
+	Reachable           bool      `json:"reachable"`
+	Health              string    `json:"health"`
+	ServedFingerprint   string    `json:"served_fingerprint,omitempty"`
+	ExpectedFingerprint string    `json:"expected_fingerprint,omitempty"`
+	Verdict             string    `json:"verdict"`
+	At                  time.Time `json:"at"`
+}
+
 // Renewals links the certificate to what it replaced and what replaced it.
 type Renewals struct {
 	Predecessor *Link        `json:"predecessor,omitempty"`
@@ -256,7 +276,8 @@ func Build(in Inputs) Record {
 			Status: cert.Status, IdentityIDs: sortedUnique(in.IdentityIDs),
 		},
 		Discovery: []Discovery{}, Deployments: []Deployment{}, Verifications: []Verification{},
-		Renewals: Renewals{Successors: []Link{}, Runs: []RenewalRun{}}, Audit: nonNilAudit(in.Audit),
+		ExternalObservations: []ExternalObservation{},
+		Renewals:             Renewals{Successors: []Link{}, Runs: []RenewalRun{}}, Audit: nonNilAudit(in.Audit),
 		IndependentlyObserved: []string{}, RecordedOnly: []string{}, Absent: []string{},
 		Truncated: append([]string{}, in.Evidence.Truncated...),
 	}
@@ -333,6 +354,14 @@ func Build(in Inputs) Record {
 			v.Basis = BasisSignedObservation
 		}
 		r.Verifications = append(r.Verifications, v)
+	}
+	for _, o := range in.Evidence.ExternalObservations {
+		r.ExternalObservations = append(r.ExternalObservations, ExternalObservation{
+			EvidenceID: "external-observation:" + o.ID, Basis: BasisObserved, Observer: o.ObserverName,
+			Vantage: o.Vantage, Endpoint: o.Endpoint, Reachable: o.Reachable, Health: o.Health,
+			ServedFingerprint: o.ServedFingerprint, ExpectedFingerprint: o.ExpectedFingerprint,
+			Verdict: o.Verdict, At: o.ObservedAt.UTC(),
+		})
 	}
 	if p := in.Evidence.Predecessor; p != nil {
 		r.Renewals.Predecessor = &Link{CertificateID: p.ID, Fingerprint: p.Fingerprint, Status: p.Status, NotAfter: p.NotAfter}
@@ -419,9 +448,14 @@ func (r *Record) classifyStages() {
 			served = true
 		}
 	}
+	for _, o := range r.ExternalObservations {
+		if o.Verdict == "match" && o.ServedFingerprint == r.Credential.Fingerprint {
+			served = true
+		}
+	}
 	present := map[string]bool{
 		StageDiscovery: len(r.Discovery) > 0, StageOwner: r.Owner != nil, StageIssuance: true,
-		StageDeployment: len(r.Deployments) > 0, StageVerification: len(r.Verifications) > 0,
+		StageDeployment: len(r.Deployments) > 0, StageVerification: len(r.Verifications) > 0 || len(r.ExternalObservations) > 0,
 		StageRenewal:    r.Renewals.Predecessor != nil || len(r.Renewals.Successors) > 0 || len(r.Renewals.Runs) > 0,
 		StageRevocation: r.Revocation != nil,
 	}

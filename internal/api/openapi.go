@@ -3982,6 +3982,14 @@ func componentSchemas() map[string]*Schema {
 		"checked_sans": {Type: "boolean"}, "checked_chain": {Type: "boolean"},
 		"transcript_digest": str(), "signer_fingerprint": str(), "at": timestamp(),
 	}, "evidence_id", "basis", "vantage", "outcome", "expected_fingerprint", "checked_sans", "checked_chain", "at")
+	assuranceExternalObservation := object(map[string]*Schema{
+		"evidence_id": str(), "basis": basis(), "observer": str(), "vantage": str(), "endpoint": str(),
+		"reachable":          {Type: "boolean"},
+		"health":             {Type: "string", Enum: []string{"healthy", "degraded", "unhealthy", "unknown"}},
+		"served_fingerprint": str(), "expected_fingerprint": str(),
+		"verdict": {Type: "string", Enum: []string{"match", "mismatch", "unreachable", "unexpected"}},
+		"at":      timestamp(),
+	}, "evidence_id", "basis", "observer", "endpoint", "reachable", "health", "verdict", "at")
 	assuranceLink := object(map[string]*Schema{
 		"certificate_id": uuid(), "fingerprint": str(), "status": str(), "not_after": timestamp(),
 	}, "certificate_id", "fingerprint", "status")
@@ -4010,12 +4018,13 @@ func componentSchemas() map[string]*Schema {
 		"issuance":               ref("AssuranceIssuance"),
 		"deployments":            {Type: "array", Items: ref("AssuranceDeployment")},
 		"verifications":          {Type: "array", Items: ref("AssuranceVerification")},
+		"external_observations":  {Type: "array", Items: ref("AssuranceExternalObservation")},
 		"renewals":               ref("AssuranceRenewals"),
 		"revocation":             ref("AssuranceRevocation"),
 		"audit":                  {Type: "array", Items: ref("AssuranceAuditReference")},
 		"independently_observed": stageList(), "recorded_only": stageList(), "absent": stageList(),
 		"truncated": {Type: "array", Items: str()},
-	}, "format", "tenant_id", "generated_at", "credential", "discovery", "issuance", "deployments", "verifications", "renewals", "audit", "independently_observed", "recorded_only", "absent", "truncated")
+	}, "format", "tenant_id", "generated_at", "credential", "discovery", "issuance", "deployments", "verifications", "external_observations", "renewals", "audit", "independently_observed", "recorded_only", "absent", "truncated")
 	certificateAssuranceRecord := object(map[string]*Schema{
 		"record":        ref("AssuranceRecord"),
 		"signed_record": {Type: "string", Description: "Compact JWS over the record's exact bytes under the trstctl.audit-evidence/credential-assurance-record/v1 artifact domain; verify it with the audit JWK set you pinned"},
@@ -4023,6 +4032,36 @@ func componentSchemas() map[string]*Schema {
 		"public_jwks":   {Type: "object", Description: "The signer's public JWK set, for convenience; an offline verifier pins its own copy"},
 		"rendering":     {Type: "string", Description: "Markdown rendering of the signed record"},
 	}, "record", "signed_record", "record_sha256", "public_jwks", "rendering")
+	observerRequest := object(map[string]*Schema{
+		"name":           {Type: "string", Description: "letters, digits, spaces, dots, dashes or underscores; unique in the tenant"},
+		"events_url":     {Type: "string", Description: "https URL without credentials that receives rotation and rollback events; omit to receive none"},
+		"credential_ref": {Type: "string", Description: "secret:// reference to the tenant secret whose value signs each event (HMAC-SHA256, X-Trstctl-Signature); omit to send unsigned"},
+		"enabled":        {Type: "boolean", Description: "default true"},
+	}, "name")
+	observer := object(map[string]*Schema{
+		"id": uuid(), "name": str(), "events_url": str(), "credential_ref": str(), "enabled": {Type: "boolean"},
+		"created_at": timestamp(), "updated_at": timestamp(),
+	}, "id", "name", "events_url", "credential_ref", "enabled", "created_at", "updated_at")
+	observationRequest := object(map[string]*Schema{
+		"observer_id":        uuid(),
+		"endpoint":           {Type: "string", Description: "host:port as the observer dialed it"},
+		"vantage":            {Type: "string", Description: "where the observer stood, for example a region or site"},
+		"observed_at":        timestamp(),
+		"reachable":          {Type: "boolean"},
+		"health":             {Type: "string", Enum: []string{"healthy", "degraded", "unhealthy", "unknown"}},
+		"served_fingerprint": {Type: "string", Description: "lowercase hex SHA-256 of the served leaf's DER; empty when unreachable"},
+		"chain_fingerprints": {Type: "array", Items: str()},
+		"detail":             str(),
+	}, "observer_id", "endpoint", "observed_at", "reachable")
+	observation := object(map[string]*Schema{
+		"id": uuid(), "observer_id": uuid(), "observer_name": str(), "endpoint": str(), "vantage": str(),
+		"observed_at": timestamp(), "reachable": {Type: "boolean"},
+		"health":             {Type: "string", Enum: []string{"healthy", "degraded", "unhealthy", "unknown"}},
+		"served_fingerprint": str(), "chain_fingerprints": {Type: "array", Items: str()}, "detail": str(),
+		"expected_fingerprint": {Type: "string", Description: "what trstctl expected the endpoint to serve when the observation arrived; empty when nothing it verifies names the endpoint"},
+		"verdict":              {Type: "string", Enum: []string{"match", "mismatch", "unreachable", "unexpected"}},
+		"recorded_at":          timestamp(),
+	}, "id", "observer_id", "observer_name", "endpoint", "vantage", "observed_at", "reachable", "health", "served_fingerprint", "chain_fingerprints", "detail", "expected_fingerprint", "verdict", "recorded_at")
 	incidentExecutionReq := object(map[string]*Schema{
 		"identity_id": uuid(), "reason": str(), "replacement_name": str(),
 		"connector": str(), "target": str(), "delivery_rollback_ref": str(),
@@ -7605,6 +7644,7 @@ func componentSchemas() map[string]*Schema {
 		"AssuranceIssuance":                        assuranceIssuance,
 		"AssuranceDeployment":                      assuranceDeployment,
 		"AssuranceVerification":                    assuranceVerification,
+		"AssuranceExternalObservation":             assuranceExternalObservation,
 		"AssuranceLink":                            assuranceLink,
 		"AssuranceRenewalRun":                      assuranceRenewalRun,
 		"AssuranceRenewals":                        assuranceRenewals,
@@ -7612,6 +7652,12 @@ func componentSchemas() map[string]*Schema {
 		"AssuranceAuditReference":                  assuranceAuditReference,
 		"AssuranceRecord":                          assuranceRecord,
 		"CertificateAssuranceRecord":               certificateAssuranceRecord,
+		"ObserverRequest":                          observerRequest,
+		"Observer":                                 observer,
+		"ObserverList":                             object(map[string]*Schema{"items": {Type: "array", Items: ref("Observer")}}, "items"),
+		"ObservationRequest":                       observationRequest,
+		"Observation":                              observation,
+		"ObservationList":                          object(map[string]*Schema{"items": {Type: "array", Items: ref("Observation")}}, "items"),
 		"IncidentExecutionRequest":                 incidentExecutionReq,
 		"IncidentExecution":                        incidentExecution,
 		"IncidentExecutionList":                    list("IncidentExecution"),

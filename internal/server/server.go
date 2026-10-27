@@ -853,7 +853,10 @@ type Server struct {
 	// notificationTenantChannels resolves tenant-authored channels at delivery
 	// time into their family's notifier with the tenant's own credential (A98).
 	notificationTenantChannels *notify.StoreChannelResolver
-	licensedBackgroundWorkers  []BackgroundWorker
+	// observerEvents posts rotation and rollback events to external observers
+	// (A180); tests point its client at a stand-in observer.
+	observerEvents            *observerEventDelivery
+	licensedBackgroundWorkers []BackgroundWorker
 	// serviceNowBindings is the operator's approved ITSM egress allow-list. The
 	// CMDB scheduler resolves the private-egress grant from it at RUN time
 	// rather than from a copy taken when the schedule was configured, so
@@ -2187,12 +2190,16 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	if s.caHierarchy != nil {
 		authorityIssue = s.caHierarchy.issueLeafForExactAuthorityWithValidity
 	}
+	if d.Store != nil {
+		credentials := integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}
+		s.observerEvents = newObserverEventDelivery(d.Store, credentials.resolve)
+	}
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	default:
-		s.obHandler = &issuanceDispatcher{parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	}
 	return nil
 }

@@ -1231,6 +1231,35 @@ no executable rollback because their APIs cannot address an installed object
 separately from uploading one; their support rows say so, the refusal names the
 reason, and no rollback-shaped success is recorded.
 
+### Confirm deployments from an external observer (A180)
+
+trstctl's own agents and relays verify what a listener serves. An external
+observer — probectl, a synthetic monitor, a load balancer's probe — can confirm it
+independently from where clients stand. An operator registers it with
+`POST /api/v1/observers` (`notifications:write`): a name, an optional https
+`events_url`, and an optional `secret://` reference whose value signs each event.
+The observer reports with a `discovery:write` token to `POST /api/v1/observations`:
+the endpoint (`host:port`), its vantage, the time, reachability, health, and the
+served leaf and chain fingerprints.
+
+trstctl compares each report with what its newest endpoint verification expects
+at that address and records a verdict — `match`, `mismatch`, `unreachable`, or
+`unexpected` when nothing it verifies names the address. A mismatch raises an
+`external-observation-mismatch` finding; an unhealthy or unreachable endpoint
+within seven days after the renewal that produced the certificate it should
+serve raises `endpoint-unhealthy-after-rotation`. A match is independent
+evidence on the certificate's assurance record, listed apart from trstctl's own
+verification.
+
+When a renewal completes or a connector rollback restores a certificate, the same
+transaction queues a `rotation.completed` or `rollback.completed` event for every
+enabled observer with an events URL: the certificate the endpoints should now
+serve, the one before it, the endpoints and the connector targets. The outbox
+posts it with `X-Trstctl-Signature: sha256=<HMAC>`; delivery is at least once.
+The full contract for an observer's side is in
+[External observers](../guides/external-observers.md). CLI: `trstctl observers
+register|list|update`, `trstctl observations record|list`.
+
 ## Pitfalls & limits
 
 - **Serving status:** the SDK and all 24 shipped connectors (initial + appliance) are

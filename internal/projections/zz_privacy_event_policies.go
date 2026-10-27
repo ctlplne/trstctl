@@ -1625,6 +1625,12 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		// The TSA's own certificate and its revocation: public PKI material.
 		{EventTSACertificateRegistered, 1}: privacyPayloadShape[TSACertificateRegistered](),
 		{EventTSACertificateRevoked, 1}:    privacyPayloadShape[TSACertificateRevoked](),
+		// A180: an observer's configuration (a name, an https URL, a secret://
+		// reference) and what it saw at an endpoint: certificate fingerprints
+		// and endpoint names, no personal data.
+		{EventObserverRegistered, 1}:  privacyPayloadShape[ObserverRegistered](),
+		{EventObserverUpdated, 1}:     privacyPayloadShape[ObserverRegistered](),
+		{EventObservationRecorded, 1}: privacyPayloadShape[ObservationRecorded](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
 		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(

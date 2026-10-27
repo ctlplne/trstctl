@@ -1678,6 +1678,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.acmeDNS01Routes(dns01ProviderConfigPath)...)
 	routes = append(routes, a.acmeRoutes(acmeEABKeyPath, acmeAccountPath, page)...)
 	routes = append(routes, a.notificationRoutes(notificationChannelPath, notificationIDPath, notificationQuery, notificationRoutingPolicyPath)...)
+	routes = append(routes, a.observerRoutes(idPath)...)
 	routes = append(routes, a.profileEditApprovalRoutes()...)
 	// Extracted so this file stays inside the served-surface size budget: the
 	// route table is the bulk of api.go, and moving a coherent workflow out is

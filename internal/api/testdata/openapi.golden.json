@@ -4835,6 +4835,73 @@
         ],
         "type": "object"
       },
+      "AssuranceExternalObservation": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "basis": {
+            "description": "recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified",
+            "enum": [
+              "recorded",
+              "observed",
+              "signed_observation"
+            ],
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "evidence_id": {
+            "type": "string"
+          },
+          "expected_fingerprint": {
+            "type": "string"
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "unhealthy",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "observer": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "served_fingerprint": {
+            "type": "string"
+          },
+          "vantage": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "match",
+              "mismatch",
+              "unreachable",
+              "unexpected"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "evidence_id",
+          "basis",
+          "observer",
+          "endpoint",
+          "reachable",
+          "health",
+          "verdict",
+          "at"
+        ],
+        "type": "object"
+      },
       "AssuranceIssuance": {
         "properties": {
           "approval": {
@@ -5003,6 +5070,12 @@
             },
             "type": "array"
           },
+          "external_observations": {
+            "items": {
+              "$ref": "#/components/schemas/AssuranceExternalObservation"
+            },
+            "type": "array"
+          },
           "format": {
             "enum": [
               "trstctl.credential-assurance-record/v1"
@@ -5081,6 +5154,7 @@
           "issuance",
           "deployments",
           "verifications",
+          "external_observations",
           "renewals",
           "audit",
           "independently_observed",
@@ -27457,6 +27531,231 @@
         },
         "required": [
           "tenant_id"
+        ],
+        "type": "object"
+      },
+      "Observation": {
+        "properties": {
+          "chain_fingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "expected_fingerprint": {
+            "description": "what trstctl expected the endpoint to serve when the observation arrived; empty when nothing it verifies names the endpoint",
+            "type": "string"
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "unhealthy",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observer_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "observer_name": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "served_fingerprint": {
+            "type": "string"
+          },
+          "vantage": {
+            "type": "string"
+          },
+          "verdict": {
+            "enum": [
+              "match",
+              "mismatch",
+              "unreachable",
+              "unexpected"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "observer_id",
+          "observer_name",
+          "endpoint",
+          "vantage",
+          "observed_at",
+          "reachable",
+          "health",
+          "served_fingerprint",
+          "chain_fingerprints",
+          "detail",
+          "expected_fingerprint",
+          "verdict",
+          "recorded_at"
+        ],
+        "type": "object"
+      },
+      "ObservationList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Observation"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ObservationRequest": {
+        "properties": {
+          "chain_fingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "host:port as the observer dialed it",
+            "type": "string"
+          },
+          "health": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "unhealthy",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observer_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "served_fingerprint": {
+            "description": "lowercase hex SHA-256 of the served leaf's DER; empty when unreachable",
+            "type": "string"
+          },
+          "vantage": {
+            "description": "where the observer stood, for example a region or site",
+            "type": "string"
+          }
+        },
+        "required": [
+          "observer_id",
+          "endpoint",
+          "observed_at",
+          "reachable"
+        ],
+        "type": "object"
+      },
+      "Observer": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_ref": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "events_url": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "events_url",
+          "credential_ref",
+          "enabled",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ObserverList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Observer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ObserverRequest": {
+        "properties": {
+          "credential_ref": {
+            "description": "secret:// reference to the tenant secret whose value signs each event (HMAC-SHA256, X-Trstctl-Signature); omit to send unsigned",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "default true",
+            "type": "boolean"
+          },
+          "events_url": {
+            "description": "https URL without credentials that receives rotation and rollback events; omit to receive none",
+            "type": "string"
+          },
+          "name": {
+            "description": "letters, digits, spaces, dots, dashes or underscores; unique in the tenant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
         ],
         "type": "object"
       },
@@ -62632,6 +62931,344 @@
           }
         ],
         "summary": "Requeue a dead-lettered notification dispatch",
+        "x-trstctl-permission": "notifications:write"
+      }
+    },
+    "/api/v1/observations": {
+      "get": {
+        "operationId": "listObservations",
+        "parameters": [
+          {
+            "description": "return only this observer's observations",
+            "in": "query",
+            "name": "observer_id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only observations of this host:port",
+            "in": "query",
+            "name": "endpoint",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "return only observations that served or expected this certificate SHA-256 fingerprint",
+            "in": "query",
+            "name": "fingerprint",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "maximum items (1-500, default 500), newest first",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List external observations and their verdicts",
+        "x-trstctl-permission": "discovery:read"
+      },
+      "post": {
+        "operationId": "recordObservation",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report what an observer saw at an endpoint; trstctl compares it with the certificate deployed there",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/observers": {
+      "get": {
+        "operationId": "listObservers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObserverList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the tenant's external observers",
+        "x-trstctl-permission": "notifications:read"
+      },
+      "post": {
+        "operationId": "registerObserver",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObserverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observer"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Register an external observer that reports what endpoints serve and receives rotation and rollback events",
+        "x-trstctl-permission": "notifications:write"
+      }
+    },
+    "/api/v1/observers/{id}": {
+      "put": {
+        "operationId": "updateObserver",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObserverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Observer"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Replace an external observer's configuration",
         "x-trstctl-permission": "notifications:write"
       }
     },

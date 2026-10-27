@@ -1188,6 +1188,20 @@ export interface AssuranceDiscovery {
   source_kind: string;
 }
 
+export interface AssuranceExternalObservation {
+  at: string;
+  basis: "recorded" | "observed" | "signed_observation";
+  endpoint: string;
+  evidence_id: string;
+  expected_fingerprint?: string;
+  health: "healthy" | "degraded" | "unhealthy" | "unknown";
+  observer: string;
+  reachable: boolean;
+  served_fingerprint?: string;
+  vantage?: string;
+  verdict: "match" | "mismatch" | "unreachable" | "unexpected";
+}
+
 export interface AssuranceIssuance {
   approval?: AssuranceApproval;
   basis: "recorded" | "observed" | "signed_observation";
@@ -1229,6 +1243,7 @@ export interface AssuranceRecord {
   credential: AssuranceCredential;
   deployments: AssuranceDeployment[];
   discovery: AssuranceDiscovery[];
+  external_observations: AssuranceExternalObservation[];
   format: "trstctl.credential-assurance-record/v1";
   generated_at: string;
   independently_observed: ("discovery" | "owner" | "issuance" | "deployment" | "verification" | "renewal" | "revocation")[];
@@ -6630,6 +6645,60 @@ export interface OIDCTenantMapping {
   roles?: string[];
   subject?: string;
   tenant_id: string;
+}
+
+export interface Observation {
+  chain_fingerprints: string[];
+  detail: string;
+  endpoint: string;
+  expected_fingerprint: string;
+  health: "healthy" | "degraded" | "unhealthy" | "unknown";
+  id: string;
+  observed_at: string;
+  observer_id: string;
+  observer_name: string;
+  reachable: boolean;
+  recorded_at: string;
+  served_fingerprint: string;
+  vantage: string;
+  verdict: "match" | "mismatch" | "unreachable" | "unexpected";
+}
+
+export interface ObservationList {
+  items: Observation[];
+}
+
+export interface ObservationRequest {
+  chain_fingerprints?: string[];
+  detail?: string;
+  endpoint: string;
+  health?: "healthy" | "degraded" | "unhealthy" | "unknown";
+  observed_at: string;
+  observer_id: string;
+  reachable: boolean;
+  served_fingerprint?: string;
+  vantage?: string;
+}
+
+export interface Observer {
+  created_at: string;
+  credential_ref: string;
+  enabled: boolean;
+  events_url: string;
+  id: string;
+  name: string;
+  updated_at: string;
+}
+
+export interface ObserverList {
+  items: Observer[];
+}
+
+export interface ObserverRequest {
+  credential_ref?: string;
+  enabled?: boolean;
+  events_url?: string;
+  name: string;
 }
 
 export interface OffboardMemberRequest {

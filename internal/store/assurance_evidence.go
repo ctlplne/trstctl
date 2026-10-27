@@ -29,6 +29,9 @@ type CredentialEvidence struct {
 	// Endpoints are the latest observations, per listener and vantage, that
 	// expected or saw this certificate: what was actually being served.
 	Endpoints []EndpointVerification
+	// ExternalObservations are what external observers saw at endpoints that
+	// served or were expected to serve this certificate (A180).
+	ExternalObservations []ExternalObservation
 	// Rotations are the renewal runs this certificate entered or left.
 	Rotations []RotationRun
 	// Predecessor is the certificate this one replaced; Successors replaced it.
@@ -102,6 +105,9 @@ func (s *Store) CredentialEvidence(ctx context.Context, tenantID, certificateID 
 			return err
 		}
 		if err := out.readEndpoints(ctx, tx, tenantID, cert.Fingerprint); err != nil {
+			return err
+		}
+		if err := out.readExternalObservations(ctx, tx, tenantID, cert.Fingerprint); err != nil {
 			return err
 		}
 		if err := out.readRotations(ctx, tx, tenantID, cert.Fingerprint); err != nil {
@@ -248,6 +254,35 @@ func (e *CredentialEvidence) readEndpoints(ctx context.Context, tx pgx.Tx, tenan
 	if len(e.Endpoints) > assuranceEvidenceLimit {
 		e.Endpoints = e.Endpoints[:assuranceEvidenceLimit]
 		e.Truncated = append(e.Truncated, "endpoints")
+	}
+	return nil
+}
+
+func (e *CredentialEvidence) readExternalObservations(ctx context.Context, tx pgx.Tx, tenantID, fingerprint string) error {
+	rows, err := tx.Query(ctx,
+		`SELECT `+externalObservationColumns+`
+		   FROM external_observations o
+		   LEFT JOIN external_observers obs ON obs.tenant_id = o.tenant_id AND obs.id = o.observer_id
+		  WHERE o.tenant_id = $1 AND $2 <> '' AND (o.served_fingerprint = $2 OR o.expected_fingerprint = $2)
+		  ORDER BY o.observed_at DESC, o.id
+		  LIMIT $3`, tenantID, fingerprint, assuranceEvidenceLimit+1)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var o ExternalObservation
+		if err := scanExternalObservation(rows, &o); err != nil {
+			return err
+		}
+		e.ExternalObservations = append(e.ExternalObservations, o)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(e.ExternalObservations) > assuranceEvidenceLimit {
+		e.ExternalObservations = e.ExternalObservations[:assuranceEvidenceLimit]
+		e.Truncated = append(e.Truncated, "external_observations")
 	}
 	return nil
 }

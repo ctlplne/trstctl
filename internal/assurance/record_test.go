@@ -219,3 +219,33 @@ func TestSignedRecordVerifiesOfflineAndTamperingFails(t *testing.T) {
 		t.Fatal("a record signed under another artifact domain verified")
 	}
 }
+
+// A180: an external observer that saw the endpoint serve this certificate is
+// independent verification on its own; one that saw something else is not.
+func TestExternalObservationsAreIndependentVerification(t *testing.T) {
+	in := renewedVerified()
+	in.Evidence.Deliveries = in.Evidence.Deliveries[:1]
+	in.Evidence.Endpoints = nil
+	in.Evidence.ExternalObservations = []store.ExternalObservation{{
+		ID: "obs-1", ObserverName: "probectl-eu", Vantage: "eu-west-1", Endpoint: "checkout.example.test:443",
+		ObservedAt: t0.Add(5 * time.Hour), Reachable: true, Health: "healthy",
+		ServedFingerprint: "fp-new", ExpectedFingerprint: "fp-new", Verdict: "match",
+	}}
+	r := assurance.Build(in)
+	if len(r.ExternalObservations) != 1 || r.ExternalObservations[0].EvidenceID != "external-observation:obs-1" ||
+		r.ExternalObservations[0].Basis != assurance.BasisObserved || r.ExternalObservations[0].Observer != "probectl-eu" {
+		t.Fatalf("external observations = %+v", r.ExternalObservations)
+	}
+	if !slices.Contains(r.IndependentlyObserved, "verification") || !slices.Contains(r.IndependentlyObserved, "deployment") {
+		t.Fatalf("an observer's match is not independent verification: %v", r.IndependentlyObserved)
+	}
+	if !strings.Contains(assurance.Render(r), "external-observation:obs-1") {
+		t.Fatal("rendering omits the external observation")
+	}
+	in.Evidence.ExternalObservations[0].Verdict = "mismatch"
+	in.Evidence.ExternalObservations[0].ServedFingerprint = "fp-other"
+	r = assurance.Build(in)
+	if slices.Contains(r.IndependentlyObserved, "verification") {
+		t.Fatalf("a mismatching observation verified the certificate: %v", r.IndependentlyObserved)
+	}
+}

@@ -109,6 +109,9 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // profile enforcement. Key custody does not change authority or name admission;
 // legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
+	// observerEvents posts rotation and rollback events to external observers
+	// (A180).
+	observerEvents          *observerEventDelivery
 	parseSubjectCSR         LicensedCSRParser
 	inspectHybridSubjectCSR LicensedCSRInspector
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
@@ -346,6 +349,11 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleJiraResponseIntegration(ctx, m)
 	case orchestrator.DestinationAuditFeedSplunk, orchestrator.DestinationAuditFeedSentinel:
 		return d.handleAuditFeedBatch(ctx, m)
+	case store.ObserverEventDestination:
+		if d.observerEvents == nil {
+			return orchestrator.DefiniteNoEffect(errors.New("server: observer event delivery is not configured"))
+		}
+		return d.observerEvents.Deliver(ctx, m)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:

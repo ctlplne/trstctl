@@ -5282,6 +5282,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List external observations and their verdicts */
+        get: operations["listObservations"];
+        put?: never;
+        /** Report what an observer saw at an endpoint; trstctl compares it with the certificate deployed there */
+        post: operations["recordObservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the tenant's external observers */
+        get: operations["listObservers"];
+        put?: never;
+        /** Register an external observer that reports what endpoints serve and receives rotation and rollback events */
+        post: operations["registerObserver"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/observers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace an external observer's configuration */
+        put: operations["updateObserver"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/operations/bulkheads": {
         parameters: {
             query?: never;
@@ -9443,6 +9496,26 @@ export interface components {
             source: string;
             source_kind: string;
         };
+        AssuranceExternalObservation: {
+            /** Format: date-time */
+            at: string;
+            /**
+             * @description recorded: trstctl's record of its own action; observed: read from outside that record; signed_observation: observed by an agent or relay whose signed receipt the server verified
+             * @enum {string}
+             */
+            basis: "recorded" | "observed" | "signed_observation";
+            endpoint: string;
+            evidence_id: string;
+            expected_fingerprint?: string;
+            /** @enum {string} */
+            health: "healthy" | "degraded" | "unhealthy" | "unknown";
+            observer: string;
+            reachable: boolean;
+            served_fingerprint?: string;
+            vantage?: string;
+            /** @enum {string} */
+            verdict: "match" | "mismatch" | "unreachable" | "unexpected";
+        };
         AssuranceIssuance: {
             approval?: components["schemas"]["AssuranceApproval"];
             /**
@@ -9492,6 +9565,7 @@ export interface components {
             credential: components["schemas"]["AssuranceCredential"];
             deployments: components["schemas"]["AssuranceDeployment"][];
             discovery: components["schemas"]["AssuranceDiscovery"][];
+            external_observations: components["schemas"]["AssuranceExternalObservation"][];
             /** @enum {string} */
             format: "trstctl.credential-assurance-record/v1";
             /** Format: date-time */
@@ -15436,6 +15510,74 @@ export interface components {
             subject?: string;
             /** Format: uuid */
             tenant_id: string;
+        };
+        Observation: {
+            chain_fingerprints: string[];
+            detail: string;
+            endpoint: string;
+            /** @description what trstctl expected the endpoint to serve when the observation arrived; empty when nothing it verifies names the endpoint */
+            expected_fingerprint: string;
+            /** @enum {string} */
+            health: "healthy" | "degraded" | "unhealthy" | "unknown";
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: uuid */
+            observer_id: string;
+            observer_name: string;
+            reachable: boolean;
+            /** Format: date-time */
+            recorded_at: string;
+            served_fingerprint: string;
+            vantage: string;
+            /** @enum {string} */
+            verdict: "match" | "mismatch" | "unreachable" | "unexpected";
+        };
+        ObservationList: {
+            items: components["schemas"]["Observation"][];
+        };
+        ObservationRequest: {
+            chain_fingerprints?: string[];
+            detail?: string;
+            /** @description host:port as the observer dialed it */
+            endpoint: string;
+            /** @enum {string} */
+            health?: "healthy" | "degraded" | "unhealthy" | "unknown";
+            /** Format: date-time */
+            observed_at: string;
+            /** Format: uuid */
+            observer_id: string;
+            reachable: boolean;
+            /** @description lowercase hex SHA-256 of the served leaf's DER; empty when unreachable */
+            served_fingerprint?: string;
+            /** @description where the observer stood, for example a region or site */
+            vantage?: string;
+        };
+        Observer: {
+            /** Format: date-time */
+            created_at: string;
+            credential_ref: string;
+            enabled: boolean;
+            events_url: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ObserverList: {
+            items: components["schemas"]["Observer"][];
+        };
+        ObserverRequest: {
+            /** @description secret:// reference to the tenant secret whose value signs each event (HMAC-SHA256, X-Trstctl-Signature); omit to send unsigned */
+            credential_ref?: string;
+            /** @description default true */
+            enabled?: boolean;
+            /** @description https URL without credentials that receives rotation and rollback events; omit to receive none */
+            events_url?: string;
+            /** @description letters, digits, spaces, dots, dashes or underscores; unique in the tenant */
+            name: string;
         };
         OffboardMemberRequest: {
             reason?: string;
@@ -33948,6 +34090,228 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Notification"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listObservations: {
+        parameters: {
+            query?: {
+                /** @description return only this observer's observations */
+                observer_id?: string;
+                /** @description return only observations of this host:port */
+                endpoint?: string;
+                /** @description return only observations that served or expected this certificate SHA-256 fingerprint */
+                fingerprint?: string;
+                /** @description maximum items (1-500, default 500), newest first */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    recordObservation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObservationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observation"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listObservers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObserverList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    registerObserver: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObserverRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observer"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateObserver: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ObserverRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Observer"];
                 };
             };
             /** @description client error */

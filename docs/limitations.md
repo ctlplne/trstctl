@@ -6119,8 +6119,9 @@ one certificate; it collects nothing new. Read it with these limits:
 - **Independent observation is what scans and endpoint checks saw.** Discovery
   findings and endpoint observations (local or relay) are independent of trstctl's
   record of its own actions; a connector's delivery receipt is not, so a delivery
-  counts as observed only when an endpoint was then seen serving the certificate. An
-  external observer reporting what it saw at an endpoint is what comes next (A180).
+  counts as observed only when an endpoint was then seen serving the certificate.
+  External observers' reports (see [External observers](#external-observers)) are
+  listed apart and count the same way when they match.
 - **Endpoint observations are the latest per listener and vantage.** Earlier
   observations of the same listener are not retained, so the record cites the
   newest one; the verification receipts carry the history of each delivery's check.
@@ -6249,7 +6250,22 @@ a listener address for; there is no discovery of listeners from deployment
 targets, because a guessed address produces confident, wrong records. An endpoint
 with no address is never verified and never claims to be.
 
-## Per-issuer capabilities
+## External observers
+
+`POST /api/v1/observations` takes what an external observer saw at an endpoint and
+compares it with what trstctl expects there; `POST /api/v1/observers` registers
+observers, which also receive rotation and rollback events. What it relies on:
+
+- **The expectation is trstctl's own endpoint verification.** An observation of an
+  address no trstctl verification checks is recorded as `unexpected`, with nothing
+  to compare. Report endpoints by the `host:port` trstctl verifies.
+- **The observer's report is taken as reported.** trstctl does not probe the endpoint
+  to confirm it; the observer's token (scoped to `discovery:write`) is what
+  authenticates the report, and the record names the observer.
+- **Events are at least once.** An observer drops a redelivered event by its `id`. A
+  projection rebuild does not resend events older than a day.
+- **What comes next.** Observer management is served through the API and CLI;
+  console pages for it, and probectl's own client for this contract, come next.
 
 `GET /api/v1/issuers/capabilities` and `trstctl issuers capabilities` serve one
 row per authority kind: discover, issue, renew, revoke, whether trstctl can

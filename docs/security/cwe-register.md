@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1776 annotated sites across 27 rules. Each row is
+1781 annotated sites across 27 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (380 sites)
+### G101 — CWE-798 Use of hardcoded credentials (381 sites)
 
 | Location | Reason |
 |---|---|
@@ -356,6 +356,7 @@ not this file.
 | `internal/server/discovery_served_test.go:2751` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:2762` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/endpoint_replacement_served_test.go:29` | fabricated test-only credential (CWE-798) |
+| `internal/server/external_observer_served_test.go:62` | fabricated fixture credential (CWE-798) |
 | `internal/server/gcp_workload_identity_served_test.go:27` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:25` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/itsm_served_test.go:34` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -474,7 +475,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (272 sites)
+### G115 — CWE-190 Integer overflow or wraparound (276 sites)
 
 | Location | Reason |
 |---|---|
@@ -574,10 +575,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6226` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6243` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6256` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6284` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6232` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6249` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6262` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6290` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -625,7 +626,7 @@ not this file.
 | `internal/store/acme_upstream_ari.go:361` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
 | `internal/store/acme_upstream_ari.go:388` | DB CHECK keeps event_sequence positive (CWE-190) |
 | `internal/store/application_secret_approval_test.go:49` | the binding validator proved this fixture version is positive (CWE-190). |
-| `internal/store/assurance_evidence.go:242` | non-negative by construction (CWE-190) |
+| `internal/store/assurance_evidence.go:248` | non-negative by construction (CWE-190) |
 | `internal/store/audit_anchor.go:47` | tenant-local audit ordinal fits a Postgres bigint (CWE-190) |
 | `internal/store/audit_anchor.go:49` | event-log sequence fits a Postgres bigint (CWE-190) |
 | `internal/store/audit_anchor.go:96` | the table CHECKs keep both positive (CWE-190) |
@@ -670,6 +671,10 @@ not this file.
 | `internal/store/enrollment_diagnostics.go:234` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:275` | JetStream/PostgreSQL sequences share the signed-bigint storage bound (CWE-190) |
 | `internal/store/enrollment_diagnostics.go:372` | constrained positive bigint written from a JetStream sequence (CWE-190) |
+| `internal/store/external_observation.go:83` | event sequences fit int64 (CWE-190) |
+| `internal/store/external_observation.go:101` | event sequences fit int64 (CWE-190) |
+| `internal/store/external_observation.go:112` | non-negative by constraint (CWE-190) |
+| `internal/store/external_observation.go:159` | non-negative by constraint (CWE-190) |
 | `internal/store/federation.go:58` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/key_compromise_retry.go:25` | bounded above by the MaxInt64 check; the column is a Postgres bigint (CWE-190) |
 | `internal/store/migration_run.go:52` | JetStream/PostgreSQL event sequence is bounded by bigint (CWE-190) |
@@ -705,8 +710,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:555` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:570` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:557` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:572` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:63` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant.go:81` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/tenant_key_domain.go:168` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -1102,7 +1107,7 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_rotation_served_test.go:2561` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2774` | served CA certificate directory; the PEM is public material (CWE-276) |
+| `internal/server/server.go:2781` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |
 | `internal/tsa/http_test.go:103` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -1559,9 +1564,9 @@ not this file.
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:125` | test-owned path under t.TempDir (CWE-22) |
-| `internal/server/server.go:1476` | operator-configured key file path (CWE-22) |
-| `internal/server/server.go:2701` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/server.go:2778` | same operator-configured directory as the target certificate (CWE-22) |
+| `internal/server/server.go:1479` | operator-configured key file path (CWE-22) |
+| `internal/server/server.go:2708` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/server.go:2785` | same operator-configured directory as the target certificate (CWE-22) |
 | `internal/server/ssh_krl_adoption_served_test.go:36` | test-owned KRL path under t.TempDir |
 | `internal/server/tsa_certificates_served_test.go:87` | the test's own temp file (CWE-22) |
 | `internal/signing/ceremony_test.go:129` | the test's own temporary journal directory (CWE-22) |
@@ -1761,7 +1766,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:574` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/secrets_scan_served_test.go:27` | isolated executable test fixture |
 | `internal/server/secrets_scan_served_test.go:157` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/server.go:2784` | served CA certificate PEM is public material (CWE-276) |
+| `internal/server/server.go:2791` | served CA certificate PEM is public material (CWE-276) |
 | `internal/server/signer_authorization_test.go:132` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/signer_authorization_test.go:192` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/ssh_journey_served_test.go:277` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

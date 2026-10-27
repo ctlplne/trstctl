@@ -141,6 +141,9 @@ var TenantScopedTables = []string{
 	"audit_anchors",
 	// A145: the TSA's certificates.
 	"tsa_certificates",
+	// A180: external observations, then the observers they reference.
+	"external_observations",
+	"external_observers",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

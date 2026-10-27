@@ -574,6 +574,10 @@ stage with its evidence ID:
   the latest endpoint observation per listener and vantage (local or relay): the
   served fingerprint, which comparisons ran, any mismatch, and the signed
   transcript digest;
+- **external observations**: what external observers reported seeing at its
+  endpoints, and the verdict against what trstctl deployed there, listed apart from
+  trstctl's own verification (see
+  [External observers](../guides/external-observers.md));
 - **renewals**: the run that produced it or replaced it, and the certificates on
   either side; **revocation**; and the tenant **audit** entries that name it, with
   their chain hashes.
@@ -582,7 +586,8 @@ Each stage is classified: `independently_observed` when evidence came from outsi
 trstctl's own record (a discovery scan, an endpoint seen serving this certificate),
 `recorded_only` when only trstctl's record of its own action stands behind it, and
 `absent` when there is none. A delivery counts as observed only when an endpoint was
-then seen serving the certificate.
+then seen serving the certificate, by trstctl's own verification or an external
+observer's matching report.
 
 The response carries the record, a compact JWS over its exact bytes (artifact domain
 `trstctl.audit-evidence/credential-assurance-record/v1`, signed by the isolated

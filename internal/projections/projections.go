@@ -4444,6 +4444,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
 	auditanchor.EventTypeAnchored:                 {auditanchor.AnchoredEventSchemaVersion: true},
 	EventTSACertificateRegistered:                 {1: true},
+	EventObserverRegistered:                       {1: true},
+	EventObserverUpdated:                          {1: true},
+	EventObservationRecorded:                      {1: true},
 	EventTSACertificateRevoked:                    {1: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
@@ -4820,6 +4823,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyTSACertificateTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyExternalObservationTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {
@@ -7163,6 +7169,19 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := p.store.ApplyConnectorReceiverCompletedTx(ctx, tx, receipt, pl.ReceiverAttemptID); err != nil {
 			return err
 		}
+		if pl.Destination == "connector.rollback" && pl.Status == "rolled_back" && pl.Fingerprint != "" {
+			// A180: and about a rollback, which changes what the endpoint serves.
+			identityID := ""
+			if pl.IdentityID != nil {
+				identityID = *pl.IdentityID
+			}
+			if err := p.store.QueueObserverEventTx(ctx, tx, store.ObserverEvent{
+				ID: "rollback:" + pl.ID, Type: store.ObserverEventRollbackCompleted, TenantID: e.TenantID,
+				OccurredAt: e.Time, IdentityID: identityID, CurrentFingerprint: pl.Fingerprint, RollbackReceiptID: pl.ID,
+			}, time.Now().UTC()); err != nil {
+				return err
+			}
+		}
 		if pl.RemediationRunID == "" {
 			return nil
 		}
@@ -7233,14 +7252,26 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.ID == "" || pl.IdentityID == "" || pl.Status == "" {
 			return fmt.Errorf("projections: %s requires id, identity_id, and status", e.Type)
 		}
-		return p.store.ApplyRotationRunRecordedTx(ctx, tx, store.RotationRun{
+		if err := p.store.ApplyRotationRunRecordedTx(ctx, tx, store.RotationRun{
 			ID: pl.ID, TenantID: e.TenantID, IdentityID: pl.IdentityID, OutboxID: pl.OutboxID,
 			Status: pl.Status, Trigger: pl.Trigger, Reason: pl.Reason,
 			PredecessorFingerprint: pl.PredecessorFingerprint, SuccessorFingerprint: pl.SuccessorFingerprint,
 			RollbackRef: pl.RollbackRef, Error: pl.Error, IdempotencyKey: pl.IdempotencyKey,
 			CreatedAt: e.Time, UpdatedAt: e.Time, CompletedAt: pl.CompletedAt,
 			FirstEventSequence: e.Sequence, LatestEventSequence: e.Sequence,
-		})
+		}); err != nil {
+			return err
+		}
+		if pl.Status != "succeeded" || pl.SuccessorFingerprint == "" {
+			return nil
+		}
+		// A180: external observers hear about the rotation from the
+		// transaction that records it.
+		return p.store.QueueObserverEventTx(ctx, tx, store.ObserverEvent{
+			ID: "rotation:" + pl.ID, Type: store.ObserverEventRotationCompleted, TenantID: e.TenantID,
+			OccurredAt: e.Time, IdentityID: pl.IdentityID, PreviousFingerprint: pl.PredecessorFingerprint,
+			CurrentFingerprint: pl.SuccessorFingerprint, RotationRunID: pl.ID,
+		}, time.Now().UTC())
 	case EventOutboxReconciliationConflictRecorded:
 		var pl OutboxReconciliationConflictRecorded
 		if err := decode(e, &pl); err != nil {

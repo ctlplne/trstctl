@@ -105,6 +105,22 @@ func Render(r Record) string {
 		fmt.Fprintf(&b, ".\n")
 	}
 
+	fmt.Fprintf(&b, "\n## External observations\n\n")
+	if len(r.ExternalObservations) == 0 {
+		fmt.Fprintf(&b, "No external observer has reported this certificate.\n")
+	}
+	for _, o := range r.ExternalObservations {
+		fmt.Fprintf(&b, "- %s: %s at %s from %s", stamp(o.At), o.Verdict, o.Endpoint, orNone(o.Observer))
+		if o.Vantage != "" {
+			fmt.Fprintf(&b, " (%s)", o.Vantage)
+		}
+		fmt.Fprintf(&b, ", health %s", o.Health)
+		if o.ServedFingerprint != "" {
+			fmt.Fprintf(&b, ", serving `%s`", o.ServedFingerprint)
+		}
+		fmt.Fprintf(&b, ", %s. Evidence `%s`.\n", o.Basis, o.EvidenceID)
+	}
+
 	fmt.Fprintf(&b, "\n## Renewals\n\n")
 	if r.Renewals.Predecessor == nil && len(r.Renewals.Successors) == 0 && len(r.Renewals.Runs) == 0 {
 		fmt.Fprintf(&b, "No renewal is recorded.\n")

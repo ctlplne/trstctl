@@ -2,6 +2,18 @@
 
 ### Added
 
+- External observers: `POST /api/v1/observers` registers a monitor outside trstctl
+  (probectl or any other), and `POST /api/v1/observations` takes what it saw at an
+  endpoint — vantage, time, reachability, health, served leaf and chain
+  fingerprints. Each report is compared with what trstctl's newest endpoint
+  verification expects at that address (`match`, `mismatch`, `unreachable`,
+  `unexpected`); a mismatch raises a finding, as does an unhealthy endpoint within
+  seven days after the renewal that produced its certificate; a match is
+  independent evidence on the certificate's assurance record. Completed renewals
+  and connector rollbacks queue signed `rotation.completed` / `rollback.completed`
+  events to every enabled observer from the transaction that records them. CLI:
+  `observers register|list|update`, `observations record|list`; the observer
+  contract is documented in `docs/guides/external-observers.md`.
 - Credential assurance records: `GET /api/v1/certificates/{id}/assurance-record`
   (`trstctl certificates assurance-record`) joins one certificate's discovery,
   owner, issuance (CA, the deciding event, profile revision and approval),

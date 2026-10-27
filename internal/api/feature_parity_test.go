@@ -311,8 +311,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// mapped onto the F6 lifecycle automation row.
 	// A179's certificate assurance record raised it to 547, mapped onto the
 	// certificate inventory row.
-	if len(out) != 547 {
-		t.Fatalf("OpenAPI operationIds = %d, want 547", len(out))
+	// A180's external observers (register, list, update) and observations
+	// (record, list) raised it to 552, mapped onto the endpoint verification row.
+	if len(out) != 552 {
+		t.Fatalf("OpenAPI operationIds = %d, want 552", len(out))
 	}
 	return out
 }
