@@ -319,8 +319,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// 556, mapped onto the compliance reporting row.
 	// A191's agent role grant raised it to 557, mapped onto the agent row.
 	// A195's leaf evaluation raised it to 558, mapped onto the CA hierarchy row.
-	if len(out) != 558 {
-		t.Fatalf("OpenAPI operationIds = %d, want 558", len(out))
+	// A197's KMIP client registrations raised it to 562, mapped onto the
+	// Transit/KMIP row.
+	if len(out) != 562 {
+		t.Fatalf("OpenAPI operationIds = %d, want 562", len(out))
 	}
 	return out
 }

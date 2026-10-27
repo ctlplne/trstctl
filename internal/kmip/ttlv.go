@@ -145,6 +145,11 @@ type RequestMessage struct {
 	BatchCount    int32
 	Operations    []Operation
 	BatchItems    []RequestBatchItem
+	// Username and Password are the request header's Username and Password
+	// credential, when it carries one (A197: a registered client's
+	// enrollment). The caller wipes Password.
+	Username string
+	Password []byte
 }
 
 // RequestBatchItem is the parsed operation and payload for one KMIP batch item.
@@ -211,6 +216,7 @@ func DecodeRequestMessage(frame []byte) (RequestMessage, error) {
 	if err != nil {
 		return RequestMessage{}, err
 	}
+	username, password := headerCredential(header)
 
 	var ops []Operation
 	var batchItems []RequestBatchItem
@@ -237,7 +243,50 @@ func DecodeRequestMessage(frame []byte) (RequestMessage, error) {
 		BatchCount:    batchCount,
 		Operations:    ops,
 		BatchItems:    batchItems,
+		Username:      username,
+		Password:      password,
 	}, nil
+}
+
+// Request-header authentication (KMIP 1.4, 2.1.2 and 9.1.3).
+const (
+	TagAuthentication                 uint32 = 0x42000c
+	TagCredential                     uint32 = 0x420023
+	TagCredentialType                 uint32 = 0x420024
+	TagCredentialValue                uint32 = 0x420025
+	TagUsername                       uint32 = 0x420099
+	TagPassword                       uint32 = 0x4200a1
+	credentialTypeUsernameAndPassword int32  = 0x00000001
+)
+
+// headerCredential reads a Username and Password credential from a request
+// header's Authentication (KMIP 1.4, 2.1.2); other credential types are
+// ignored.
+func headerCredential(header TTLV) (string, []byte) {
+	auth, ok := header.FirstChild(TagAuthentication)
+	if !ok {
+		return "", nil
+	}
+	credential, ok := auth.FirstChild(TagCredential)
+	if !ok {
+		return "", nil
+	}
+	if kind, err := enumChild(credential, TagCredentialType); err != nil || kind != credentialTypeUsernameAndPassword {
+		return "", nil
+	}
+	value, ok := credential.FirstChild(TagCredentialValue)
+	if !ok {
+		return "", nil
+	}
+	username, ok := value.FirstChild(TagUsername)
+	if !ok || username.Type != TTLVTextString {
+		return "", nil
+	}
+	password, ok := value.FirstChild(TagPassword)
+	if !ok || password.Type != TTLVTextString {
+		return string(username.Value), nil
+	}
+	return string(username.Value), append([]byte(nil), password.Value...)
 }
 
 // FirstChild returns the first direct child matching tag.

@@ -21343,10 +21343,128 @@
         ],
         "type": "object"
       },
+      "KMIPClient": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "enrollment_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "SHA-256 of the bound certificate's DER.",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "description": "enrolled once a client's first KMIP request bound its certificate with the enrollment; enrolled_reenrolling while a new enrollment waits for the client's next certificate.",
+            "enum": [
+              "awaiting_enrollment",
+              "enrollment_expired",
+              "enrolled",
+              "enrolled_reenrolling"
+            ],
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state",
+          "created_at",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "KMIPClientEnrollment": {
+        "properties": {
+          "client": {
+            "$ref": "#/components/schemas/KMIPClient"
+          },
+          "enrollment": {
+            "properties": {
+              "expires_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "password": {
+                "description": "The KMIP password, shown once; the server keeps only its SHA-256.",
+                "type": "string"
+              },
+              "username": {
+                "description": "The KMIP username: the registration's ID.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "username",
+              "password",
+              "expires_at"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "client",
+          "enrollment"
+        ],
+        "type": "object"
+      },
+      "KMIPClientList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KMIPClient"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "KMIPClientRegisterRequest": {
+        "properties": {
+          "name": {
+            "description": "1 to 128 printable characters naming the client, such as the appliance.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "KMIPPosture": {
         "properties": {
           "address": {
             "type": "string"
+          },
+          "client_registrations": {
+            "description": "The listener serves every tenant's registered clients (/api/v1/kmip/clients).",
+            "type": "boolean"
           },
           "configured": {
             "type": "boolean"
@@ -21398,7 +21516,8 @@
           "profile",
           "objects",
           "operations",
-          "detail"
+          "detail",
+          "client_registrations"
         ],
         "type": "object"
       },
@@ -59538,6 +59657,246 @@
         ],
         "summary": "Queue a ServiceNow ITSM ticket through the outbox",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/kmip/clients": {
+      "get": {
+        "operationId": "listKMIPClients",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KMIPClientList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List this tenant's registered KMIP clients",
+        "x-trstctl-permission": "keys:read"
+      },
+      "post": {
+        "operationId": "registerKMIPClient",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KMIPClientRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KMIPClientEnrollment"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Register a KMIP client and issue its one-time enrollment",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/kmip/clients/{id}": {
+      "delete": {
+        "operationId": "removeKMIPClient",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Remove a KMIP client; its certificate is refused from its next request",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/kmip/clients/{id}/enrollment": {
+      "post": {
+        "operationId": "issueKMIPClientEnrollment",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KMIPClientEnrollment"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Issue a KMIP client a new one-time enrollment, for a move to a new certificate",
+        "x-trstctl-permission": "keys:write"
       }
     },
     "/api/v1/kubernetes/cert-manager-certificate-requests": {

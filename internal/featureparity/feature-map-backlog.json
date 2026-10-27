@@ -16825,6 +16825,10 @@
             "notes": "The earlier disclosure label was stale and its evidence overclaimed UI support for verify, versions, audit, and KMIP posture. g10 removed the unrelated native-secret-store dependency, then live proof exposed the missing compatible-key prerequisite. F66 convergence at 2cfd187a777d9249c58998b9a87691630abf98ad adds metadata-only complete history, effect-free automatic sealed-restore and tenant-confined KMIP posture, real signature verification, Transit-filtered immutable audit receipts, explicit no-auto-retry recovery, API/CLI/SDK parity, and focused source proof. TRACE-011 continues to prove KMIP Create, Locate, Revoke, and Destroy over the served mTLS TTLV handler; final wire and browser qualification remain evidence gates, not product-contract gaps.",
             "api_surface": [
                 "listTransitKeys",
+                "listKMIPClients",
+                "registerKMIPClient",
+                "issueKMIPClientEnrollment",
+                "removeKMIPClient",
                 "listTransitKeyVersions",
                 "getTransitPosture",
                 "createTransitKey",
@@ -16839,6 +16843,10 @@
             "api_na": "",
             "cli_surface": [
                 "transit keys list",
+                "kmip clients list",
+                "kmip clients register",
+                "kmip clients enroll",
+                "kmip clients remove",
                 "transit keys versions",
                 "transit status",
                 "transit keys create",

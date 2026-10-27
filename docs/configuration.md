@@ -2322,7 +2322,8 @@ ACME, EST, SCEP, CMP, SPIFFE, SSH, and KMIP protocol surfaces are opt-in until t
 explicitly bound to a tenant. That startup check is intentional: a public protocol
 endpoint must know the tenant it acts for before it is exposed. KMIP is a raw mTLS TCP
 listener, not an HTTP route, so it additionally requires server certificate/key files
-and a client CA trust anchor.
+and a client CA trust anchor, unless client registrations serve each tenant's own
+clients.
 
 For the blank evaluation stack, `TRSTCTL_PROTOCOLS_PROFILE=eval` is a bounded shortcut:
 it assembles ACME, EST, SCEP, CMP, SSH, TSA, and SPIFFE for exactly
@@ -2387,7 +2388,8 @@ an account without EAB, even if the account predates the configuration change.
 | `TRSTCTL_PROTOCOLS_KMIP_ADDR` | `:5696` | TCP listen address for KMIP. |
 | `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE` | — | PEM server certificate chain for the KMIP listener. Required when KMIP is enabled. |
 | `TRSTCTL_PROTOCOLS_KMIP_KEY_FILE` | — | PEM private key for the KMIP listener certificate. Required when KMIP is enabled. |
-| `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE` | — | PEM CA bundle used to verify KMIP client certificates. Required when KMIP is enabled. |
+| `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE` | — | PEM CA bundle used to verify KMIP client certificates. Required when KMIP is enabled, unless client registrations are on; then it serves the CA-issued clients of `…_TENANT_ID`. |
+| `TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS` | `false` | Serve every tenant's registered KMIP clients on this listener: a client's first request binds its own certificate with its tenant's one-time enrollment (`/api/v1/kmip/clients`). The tenant ID and client CA become optional. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_ENABLED` / `…_TENANT_ID` | `false` / — | Serve the SPIFFE Workload API UDS for the named tenant. Requires `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN`. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_SOCKET_PATH` | `/tmp/trstctl-spiffe-workload.sock` | UDS path for the SPIFFE Workload API when enabled. |
 | `TRSTCTL_PROTOCOLS_SPIFFE_TRUST_DOMAIN` | — | SPIFFE trust domain, for example `example.org`. Required when SPIFFE is enabled. |

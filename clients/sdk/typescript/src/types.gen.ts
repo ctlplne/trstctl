@@ -4232,6 +4232,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/kmip/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List this tenant's registered KMIP clients */
+        get: operations["listKMIPClients"];
+        put?: never;
+        /** Register a KMIP client and issue its one-time enrollment */
+        post: operations["registerKMIPClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kmip/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a KMIP client; its certificate is refused from its next request */
+        delete: operations["removeKMIPClient"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/kmip/clients/{id}/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a KMIP client a new one-time enrollment, for a move to a new certificate */
+        post: operations["issueKMIPClientEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/kubernetes/cert-manager-certificate-requests": {
         parameters: {
             query?: never;
@@ -14017,8 +14069,49 @@ export interface components {
             name: string;
             public_key?: string;
         };
+        KMIPClient: {
+            /** Format: date-time */
+            created_at: string;
+            detail: string;
+            /** Format: date-time */
+            enrolled_at?: string;
+            /** Format: date-time */
+            enrollment_expires_at?: string;
+            /** @description SHA-256 of the bound certificate's DER. */
+            fingerprint?: string;
+            id: string;
+            name: string;
+            /** Format: date-time */
+            not_after?: string;
+            /**
+             * @description enrolled once a client's first KMIP request bound its certificate with the enrollment; enrolled_reenrolling while a new enrollment waits for the client's next certificate.
+             * @enum {string}
+             */
+            state: "awaiting_enrollment" | "enrollment_expired" | "enrolled" | "enrolled_reenrolling";
+            subject?: string;
+        };
+        KMIPClientEnrollment: {
+            client: components["schemas"]["KMIPClient"];
+            enrollment: {
+                /** Format: date-time */
+                expires_at: string;
+                /** @description The KMIP password, shown once; the server keeps only its SHA-256. */
+                password: string;
+                /** @description The KMIP username: the registration's ID. */
+                username: string;
+            };
+        };
+        KMIPClientList: {
+            items: components["schemas"]["KMIPClient"][];
+        };
+        KMIPClientRegisterRequest: {
+            /** @description 1 to 128 printable characters naming the client, such as the appliance. */
+            name: string;
+        };
         KMIPPosture: {
             address?: string;
+            /** @description The listener serves every tenant's registered clients (/api/v1/kmip/clients). */
+            client_registrations: boolean;
             configured: boolean;
             detail: string;
             listening: boolean;
@@ -31360,6 +31453,173 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ITSMTicket"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listKMIPClients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KMIPClientList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    registerKMIPClient: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KMIPClientRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KMIPClientEnrollment"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeKMIPClient: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueKMIPClientEnrollment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KMIPClientEnrollment"];
                 };
             };
             /** @description client error */

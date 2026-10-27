@@ -136,6 +136,7 @@ type API struct {
 	managedKeyCustody          ManagedKeyCustodyConfiguration
 	transit                    TransitService // served transit/EaaS key operations (KMS-01); nil = not enabled
 	transitPosture             TransitPostureProvider
+	kmipClientRegistrations    func() bool // A197: the KMIP listener serves tenants' registered clients
 	vaultCompat                *vaultCompatState
 	protocolProfile            ProtocolProfileControl
 	cmpQualificationPosture    CMPQualificationPosture
@@ -287,6 +288,7 @@ type config struct {
 	managedKeyCustody           ManagedKeyCustodyConfiguration
 	transit                     TransitService
 	transitPosture              TransitPostureProvider
+	kmipClientRegistrations     func() bool
 	protocolProfile             ProtocolProfileControl
 	cmpQualificationPosture     CMPQualificationPosture
 	tsaQualificationPosture     TSAQualificationPosture
@@ -618,6 +620,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		managedKeyCustody:           cfg.managedKeyCustody,
 		transit:                     cfg.transit,
 		transitPosture:              cfg.transitPosture,
+		kmipClientRegistrations:     cfg.kmipClientRegistrations,
 		vaultCompat:                 newVaultCompatState(cfg.eventLog),
 		protocolProfile:             cfg.protocolProfile,
 		cmpQualificationPosture:     cfg.cmpQualificationPosture,
@@ -1674,6 +1677,7 @@ func (a *API) routes() []route {
 	// the split the budget asks for rather than a waiver.
 	routes = append(routes, a.extractedRouteGroups()...)    // see routes_ownership.go
 	routes = append(routes, a.caHierarchyRoutes(idPath)...) // see routes_ca_hierarchy.go
+	routes = append(routes, a.kmipClientRoutes(idPath)...)  // see kmip_clients.go
 	routes = append(routes, a.codeSigningRoutes()...)
 	routes = append(routes, a.platformRoutes()...)
 	routes = append(routes, a.extensionRouteRegistry(a.coreRoutes, false)...)

@@ -6955,10 +6955,53 @@ IssuerRequest = TypedDict(
     total=False,
 )
 
+KMIPClient = TypedDict(
+    'KMIPClient',
+    {
+        'created_at': str,
+        'detail': str,
+        'enrolled_at': str,
+        'enrollment_expires_at': str,
+        'fingerprint': str,
+        'id': str,
+        'name': str,
+        'not_after': str,
+        'state': str,
+        'subject': str,
+    },
+    total=False,
+)
+
+KMIPClientEnrollment = TypedDict(
+    'KMIPClientEnrollment',
+    {
+        'client': dict[str, Any],
+        'enrollment': dict[str, Any],
+    },
+    total=False,
+)
+
+KMIPClientList = TypedDict(
+    'KMIPClientList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+KMIPClientRegisterRequest = TypedDict(
+    'KMIPClientRegisterRequest',
+    {
+        'name': str,
+    },
+    total=False,
+)
+
 KMIPPosture = TypedDict(
     'KMIPPosture',
     {
         'address': str,
+        'client_registrations': bool,
         'configured': bool,
         'detail': str,
         'listening': bool,

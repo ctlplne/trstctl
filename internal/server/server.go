@@ -1149,7 +1149,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 	if err := reconcileCrashFences(ctx, d, a, orch); err != nil {
 		return nil, err
 	}
-	if err := s.configureKMIPSurface(ctx, d); err != nil {
+	if err := s.configureKMIPSurface(ctx, d, kmipClientDirectory(orch)); err != nil {
 		return nil, err
 	}
 	if err := s.configureIssuanceSurfaces(ctx, d, orch, idem); err != nil {
@@ -1661,8 +1661,12 @@ func (s *Server) appendTransitAPIOptions(d Deps, options *[]api.Option) error {
 	}
 	kmipEnabled := d.Protocols.KMIP.Enabled
 	kmipTenantID := d.Protocols.KMIP.TenantID
+	// A197: with client registrations on, the listener serves every tenant
+	// that enrolls a client.
+	kmipRegistrations := d.Protocols.KMIP.Enabled && d.Protocols.KMIP.ClientRegistrations
+	*options = append(*options, api.WithKMIPClientRegistrations(func() bool { return kmipRegistrations && s.kmip != nil }))
 	*options = append(*options, api.WithTransitPosture(func(_ context.Context, tenantID string) api.TransitRuntimePosture {
-		return s.transitRuntimePosture(kmipEnabled, kmipTenantID, tenantID)
+		return s.transitRuntimePosture(kmipEnabled, kmipRegistrations, kmipTenantID, tenantID)
 	}))
 	return nil
 }
@@ -1965,14 +1969,14 @@ func (s *Server) buildTransitService(d Deps) (*transitpkg.Service, error) {
 	return s.transit, nil
 }
 
-func (s *Server) transitRuntimePosture(kmipEnabled bool, kmipTenantID, tenantID string) api.TransitRuntimePosture {
+func (s *Server) transitRuntimePosture(kmipEnabled, kmipRegistrations bool, kmipTenantID, tenantID string) api.TransitRuntimePosture {
 	s.transitStateMu.RLock()
 	stateFound, shared := s.transitStateFound, s.transitShared
 	s.transitStateMu.RUnlock()
 	s.kmipStateMu.RLock()
 	listening := s.kmipListening
 	s.kmipStateMu.RUnlock()
-	tenantBound := kmipEnabled && strings.TrimSpace(kmipTenantID) != "" && kmipTenantID == tenantID
+	tenantBound := kmipEnabled && (kmipRegistrations || (strings.TrimSpace(kmipTenantID) != "" && kmipTenantID == tenantID))
 	address := ""
 	if tenantBound && s.kmip != nil {
 		address = s.kmip.Addr()
@@ -1981,7 +1985,7 @@ func (s *Server) transitRuntimePosture(kmipEnabled bool, kmipTenantID, tenantID 
 		Served: s.transit != nil, PersistenceConfigured: s.transitStore != nil || shared,
 		SealedStateFound: stateFound, Shared: shared, KMIPConfigured: tenantBound,
 		KMIPServed: tenantBound && s.kmip != nil, KMIPListening: tenantBound && listening,
-		KMIPTenantBound: tenantBound, KMIPAddress: address,
+		KMIPTenantBound: tenantBound, KMIPAddress: address, KMIPClientRegistrations: kmipRegistrations,
 	}
 }
 

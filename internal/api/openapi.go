@@ -7064,6 +7064,33 @@ func componentSchemas() map[string]*Schema {
 	transitKeyList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("TransitKey")},
 	}, "items")
+	kmipClient := object(map[string]*Schema{
+		"id":   str(),
+		"name": str(),
+		"state": {Type: "string", Enum: []string{"awaiting_enrollment", "enrollment_expired", "enrolled", "enrolled_reenrolling"},
+			Description: "enrolled once a client's first KMIP request bound its certificate with the enrollment; enrolled_reenrolling while a new enrollment waits for the client's next certificate."},
+		"fingerprint":           {Type: "string", Description: "SHA-256 of the bound certificate's DER."},
+		"subject":               str(),
+		"not_after":             timestamp(),
+		"enrolled_at":           timestamp(),
+		"enrollment_expires_at": timestamp(),
+		"created_at":            timestamp(),
+		"detail":                str(),
+	}, "id", "name", "state", "created_at", "detail")
+	kmipClientList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("KMIPClient")},
+	}, "items")
+	kmipClientRegisterRequest := object(map[string]*Schema{
+		"name": {Type: "string", Description: "1 to 128 printable characters naming the client, such as the appliance."},
+	}, "name")
+	kmipClientEnrollment := object(map[string]*Schema{
+		"client": ref("KMIPClient"),
+		"enrollment": object(map[string]*Schema{
+			"username":   {Type: "string", Description: "The KMIP username: the registration's ID."},
+			"password":   {Type: "string", Description: "The KMIP password, shown once; the server keeps only its SHA-256."},
+			"expires_at": timestamp(),
+		}, "username", "password", "expires_at"),
+	}, "client", "enrollment")
 	transitKeyVersion := object(map[string]*Schema{
 		"version": {Type: "integer"}, "current": {Type: "boolean"},
 		"fact_id":     {Type: "string", Description: "ID of the event that records this version's create or rotate fact (A126). Absent for a version saved before facts existed and not yet reconciled."},
@@ -7082,7 +7109,8 @@ func componentSchemas() map[string]*Schema {
 		"listening": {Type: "boolean"}, "tenant_bound": {Type: "boolean"}, "address": str(),
 		"transport": str(), "profile": str(), "objects": {Type: "array", Items: str()},
 		"operations": {Type: "array", Items: str()}, "detail": str(), "recovery": str(),
-	}, "state", "configured", "served", "listening", "tenant_bound", "transport", "profile", "objects", "operations", "detail")
+		"client_registrations": {Type: "boolean", Description: "The listener serves every tenant's registered clients (/api/v1/kmip/clients)."},
+	}, "state", "configured", "served", "listening", "tenant_bound", "transport", "profile", "objects", "operations", "detail", "client_registrations")
 	transitPosture := object(map[string]*Schema{
 		"checked_at": timestamp(), "effect_free": {Type: "boolean"},
 		"transit": ref("TransitServicePosture"), "kmip": ref("KMIPPosture"),
@@ -8335,6 +8363,10 @@ func componentSchemas() map[string]*Schema {
 		"TransitRotateRequest":               transitRotateReq,
 		"TransitKey":                         transitKey,
 		"TransitKeyList":                     transitKeyList,
+		"KMIPClient":                         kmipClient,
+		"KMIPClientList":                     kmipClientList,
+		"KMIPClientRegisterRequest":          kmipClientRegisterRequest,
+		"KMIPClientEnrollment":               kmipClientEnrollment,
 		"TransitKeyVersion":                  transitKeyVersion,
 		"TransitKeyVersionList":              transitKeyVersionList,
 		"TransitServicePosture":              transitServicePosture,

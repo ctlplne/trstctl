@@ -238,6 +238,8 @@ var TenantScopedTables = []string{
 	"agent_cert_revocations",
 	// A191: the roles operators granted its agents.
 	"agent_role_grants",
+	// A197: its self-service KMIP client registrations.
+	"kmip_clients",
 	// A91: the event-derived first-seen / offboarded record behind the agents gauge.
 	"agent_lifecycle_receipts",
 	// A95: the customer's Provider-access policy, the requests it saw and its decisions.

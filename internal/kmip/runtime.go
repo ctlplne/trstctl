@@ -72,28 +72,48 @@ func NewFactory() server.KMIPFactory {
 		if d.StartupContext == nil {
 			return nil, errors.New("KMIP requires a startup context for durable recovery")
 		}
-		service, err := NewDurable(
-			d.StartupContext,
-			firstNonEmpty(cfg.TenantID, d.ProtocolTenant),
-			VerifiedClientCertAuthenticator{},
-			audit.NewAuditor(d.EventLog),
-			d.EventLog,
-			d.KeyWrapper,
-			d.TenantCrypto,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("restore KMIP managed-object state: %w", err)
+		open := func(tenantID string) (*Server, error) {
+			service, err := NewDurable(d.StartupContext, tenantID, VerifiedClientCertAuthenticator{},
+				audit.NewAuditor(d.EventLog), d.EventLog, d.KeyWrapper, d.TenantCrypto)
+			if err != nil {
+				return nil, fmt.Errorf("restore KMIP managed-object state: %w", err)
+			}
+			service.tenantServiceCheck = d.TenantServiceCheck
+			return service, nil
 		}
-		service.tenantServiceCheck = d.TenantServiceCheck
-		return &Runtime{
+		r := &Runtime{
 			addr:         addr,
 			certFile:     cfg.CertFile,
 			keyFile:      cfg.KeyFile,
 			clientCAFile: cfg.ClientCAFile,
-			service:      service,
 			pool:         pool,
 			log:          logger,
-		}, nil
+		}
+		// A197: with client registrations on, every tenant's enrolled clients
+		// share the listener; the configured tenant, when there is one, keeps
+		// the clients the deployment's client CA issued.
+		if cfg.ClientRegistrations {
+			if d.Clients == nil {
+				return nil, errors.New("KMIP client registrations need the core client directory")
+			}
+			r.clients = d.Clients
+			r.tenants = &tenantServers{servers: map[string]*Server{}, open: open}
+			if strings.TrimSpace(cfg.ClientCAFile) != "" {
+				verifier, err := mtls.NewClientChainVerifier(cfg.ClientCAFile)
+				if err != nil {
+					return nil, fmt.Errorf("KMIP client CA: %w", err)
+				}
+				r.clientCAs = verifier
+			}
+		}
+		if tenantID := firstNonEmpty(cfg.TenantID, d.ProtocolTenant); tenantID != "" || r.clients == nil {
+			service, err := open(tenantID)
+			if err != nil {
+				return nil, err
+			}
+			r.service = service
+		}
+		return r, nil
 	}
 }
 
@@ -103,15 +123,31 @@ type Runtime struct {
 	certFile     string
 	keyFile      string
 	clientCAFile string
-	service      *Server
-	pool         *bulkhead.Pool
-	log          *slog.Logger
+	// service is the configured tenant's server: every client without client
+	// registrations, the CA-issued clients with them. Nil when registrations
+	// serve every client.
+	service *Server
+	// clients, tenants and clientCAs serve tenants' registered clients (A197).
+	clients   server.KMIPClientDirectory
+	tenants   *tenantServers
+	clientCAs *mtls.ClientChainVerifier
+	pool      *bulkhead.Pool
+	log       *slog.Logger
 }
 
 func (r *Runtime) Addr() string { return r.addr }
 
 func (r *Runtime) Serve(ctx context.Context, ln net.Listener) error {
-	tlsLn, err := mtls.MutualTLSServerListenerFromFiles(ln, r.certFile, r.keyFile, r.clientCAFile)
+	var tlsLn net.Listener
+	var err error
+	if r.clients != nil {
+		// Registered clients bring their own certificates: the handshake
+		// proves the client holds its certificate's key, and each request is
+		// then served for the tenant the certificate belongs to, or refused.
+		tlsLn, err = mtls.SelfAuthorizingClientTLSServerListenerFromFiles(ln, r.certFile, r.keyFile)
+	} else {
+		tlsLn, err = mtls.MutualTLSServerListenerFromFiles(ln, r.certFile, r.keyFile, r.clientCAFile)
+	}
 	if err != nil {
 		_ = ln.Close()
 		return fmt.Errorf("configure KMIP mTLS: %w", err)
@@ -142,7 +178,7 @@ func (r *Runtime) serve(ctx context.Context, ln net.Listener) error {
 func (r *Runtime) handleConn(ctx context.Context, conn net.Conn) {
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
-	clientCertDER, err := mtls.PeerCertificateDER(conn)
+	chain, err := mtls.PeerCertificateChainDER(conn)
 	if err != nil {
 		r.log.Warn("KMIP mTLS peer rejected", slog.String("error", err.Error()))
 		return
@@ -164,10 +200,20 @@ func (r *Runtime) handleConn(ctx context.Context, conn net.Conn) {
 			r.log.Warn("KMIP frame read failed", slog.String("error", err.Error()))
 			return
 		}
-		resp, err := r.service.HandleFrame(ctx, clientCertDER, frame)
-		if err != nil {
-			r.log.Warn("KMIP frame handling failed", slog.String("error", err.Error()))
+		var resp []byte
+		service, err := r.serverFor(ctx, chain, frame)
+		switch {
+		case errors.Is(err, errClientNotRecognized):
+			resp = refusedResponse(frame, err.Error())
+		case err != nil:
+			r.log.Warn("KMIP tenant resolution failed", slog.String("error", err.Error()))
 			return
+		default:
+			resp, err = service.HandleFrame(ctx, chain[0], frame)
+			if err != nil {
+				r.log.Warn("KMIP frame handling failed", slog.String("error", err.Error()))
+				return
+			}
 		}
 		_ = conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
 		if _, err := conn.Write(resp); err != nil {
@@ -180,6 +226,9 @@ func (r *Runtime) handleConn(ctx context.Context, conn net.Conn) {
 func (r *Runtime) Close() {
 	if r.service != nil {
 		r.service.Close()
+	}
+	if r.tenants != nil {
+		r.tenants.close()
 	}
 }
 

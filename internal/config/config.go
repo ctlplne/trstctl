@@ -1155,6 +1155,12 @@ type KMIPProtocol struct {
 	CertFile     string `json:"cert_file,omitempty"`
 	KeyFile      string `json:"key_file,omitempty"`
 	ClientCAFile string `json:"client_ca_file,omitempty"`
+	// ClientRegistrations (A197) serves every tenant's self-service KMIP
+	// clients on this listener: a client enrolls its own certificate with the
+	// one-time enrollment its tenant registered. tenant_id and client_ca_file
+	// then become optional; together they keep serving the clients the
+	// deployment's CA issued for that tenant.
+	ClientRegistrations bool `json:"client_registrations,omitempty"`
 }
 
 // ACMEQuota bounds the public ACME protocol surface. Durability is handled by the
@@ -1268,7 +1274,7 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 	requireTenant("scep", p.SCEP.Enabled, p.SCEP.TenantID)
 	requireTenant("cmp", p.CMP.Enabled, p.CMP.TenantID)
 	requireTenant("tsa", p.TSA.Enabled, p.TSA.TenantID)
-	requireTenant("kmip", p.KMIP.Enabled, p.KMIP.TenantID)
+	requireTenant("kmip", p.KMIP.Enabled && !p.KMIP.ClientRegistrations, p.KMIP.TenantID)
 	requireTenant("ssh", p.SSH.Enabled, p.SSH.TenantID)
 	if (p.SCEP.Enabled || p.CMP.Enabled) && strings.TrimSpace(p.RAKeyFile) == "" {
 		errs = append(errs, errors.New("protocols.ra_key_file is required when SCEP or CMP is enabled so the RA transport identity survives restart/replicas"))
@@ -1283,8 +1289,11 @@ func (p Protocols) ValidateTenantBindings(defaultTenant string) []error {
 		if strings.TrimSpace(p.KMIP.KeyFile) == "" {
 			errs = append(errs, errors.New("protocols.kmip.key_file is required when protocols.kmip.enabled is true"))
 		}
-		if strings.TrimSpace(p.KMIP.ClientCAFile) == "" {
+		switch {
+		case !p.KMIP.ClientRegistrations && strings.TrimSpace(p.KMIP.ClientCAFile) == "":
 			errs = append(errs, errors.New("protocols.kmip.client_ca_file is required when protocols.kmip.enabled is true"))
+		case p.KMIP.ClientRegistrations && strings.TrimSpace(p.KMIP.ClientCAFile) != "" && !hasTenant(p.KMIP.TenantID):
+			errs = append(errs, errors.New("protocols.kmip.client_ca_file serves CA-issued clients for protocols.kmip.tenant_id; set the tenant or drop the CA when protocols.kmip.client_registrations serves every client"))
 		}
 	}
 	if p.SPIFFE.Enabled {
@@ -3461,6 +3470,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_CERT_FILE", &p.KMIP.CertFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_KEY_FILE", &p.KMIP.KeyFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE", &p.KMIP.ClientCAFile)
+	setBool(getenv, "TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS", &p.KMIP.ClientRegistrations)
 	setString(getenv, "TRSTCTL_PROTOCOLS_RA_KEY_FILE", &p.RAKeyFile)
 	setString(getenv, "TRSTCTL_PROTOCOLS_CMP_CLIENT_TRUST_ANCHOR_FILE", &p.CMPClientTrustAnchorFile)
 	setBool(getenv, "TRSTCTL_PROTOCOLS_CMP_ALLOW_RA_ENROLLMENT", &p.CMPAllowRAEnrollment)

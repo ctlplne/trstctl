@@ -15,6 +15,8 @@ def connect(args):
         cert=args.cert,
         key=args.key,
         ca=args.ca,
+        username=args.username,
+        password=args.password,
         config=None,
     )
 
@@ -109,6 +111,29 @@ def keypair(args):
     print(f"PYKMIP_KEYPAIR_OK private={private_uid} public={public_uid} ecdsa={ec_private}")
 
 
+def isolation(args):
+    # One tenant's client on a listener shared with other tenants: it creates
+    # a named key pair, then reads back only its own objects. With --foreign it
+    # first checks that another tenant's object is invisible to it.
+    with connect(args) as client:
+        if args.foreign:
+            reason = refused(lambda: client.get_attributes(args.foreign, ["Name"]))
+            if reason != enums.ResultReason.ITEM_NOT_FOUND:
+                raise SystemExit(f"another tenant's object answered {reason}")
+        public_uid, private_uid = client.create_key_pair(
+            enums.CryptographicAlgorithm.ECDSA, 256, private_name=args.name, public_name=args.name
+        )
+        located = sorted(client.locate())
+        if sorted([public_uid, private_uid]) != [uid for uid in located if uid in (public_uid, private_uid)]:
+            raise SystemExit(f"located {located}")
+        for uid in located:
+            _, attributes = client.get_attributes(uid, ["Name"])
+            names = [a.attribute_value.name_value.value for a in attributes]
+            if names and names != [args.name]:
+                raise SystemExit(f"{uid} carries another tenant's name {names}")
+    print(f"PYKMIP_TENANT_OK private={private_uid} located={','.join(located)}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", required=True)
@@ -116,9 +141,13 @@ def main():
     parser.add_argument("--ca", required=True)
     parser.add_argument("--cert", required=True)
     parser.add_argument("--key", required=True)
-    parser.add_argument("flow", choices=["aes", "keypair"])
+    parser.add_argument("--username")
+    parser.add_argument("--password")
+    parser.add_argument("--name", default="pykmip")
+    parser.add_argument("--foreign")
+    parser.add_argument("flow", choices=["aes", "keypair", "isolation"])
     args = parser.parse_args()
-    {"aes": aes, "keypair": keypair}[args.flow](args)
+    {"aes": aes, "keypair": keypair, "isolation": isolation}[args.flow](args)
 
 
 if __name__ == "__main__":

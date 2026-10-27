@@ -5033,8 +5033,35 @@ export interface IssuerRequest {
   public_key?: string;
 }
 
+export interface KMIPClient {
+  created_at: string;
+  detail: string;
+  enrolled_at?: string;
+  enrollment_expires_at?: string;
+  fingerprint?: string;
+  id: string;
+  name: string;
+  not_after?: string;
+  state: "awaiting_enrollment" | "enrollment_expired" | "enrolled" | "enrolled_reenrolling";
+  subject?: string;
+}
+
+export interface KMIPClientEnrollment {
+  client: KMIPClient;
+  enrollment: { expires_at: string; password: string; username: string };
+}
+
+export interface KMIPClientList {
+  items: KMIPClient[];
+}
+
+export interface KMIPClientRegisterRequest {
+  name: string;
+}
+
 export interface KMIPPosture {
   address?: string;
+  client_registrations: boolean;
   configured: boolean;
   detail: string;
   listening: boolean;

@@ -687,6 +687,7 @@ For legacy gear, the binary can also mount an opt-in KMIP listener:
 - `TRSTCTL_PROTOCOLS_KMIP_CERT_FILE=/path/server.crt`
 - `TRSTCTL_PROTOCOLS_KMIP_KEY_FILE=/path/server.key`
 - `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE=/path/client-ca.crt`
+- `TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS=true` (optional: every tenant's own clients)
 
 The listener is raw KMIP over mutual TLS 1.3; the TLS layer verifies the client cert
 chain before the KMIP handler sees a frame. The service stores objects under the
@@ -712,6 +713,25 @@ read-only. A revocation for key or CA compromise leaves the object Compromised, 
 it signs and verifies nothing after that. Locate narrows by object type, algorithm and
 name. A stock client drives all of this in an opt-in proof that builds PyKMIP 0.10:
 `TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`.
+
+With `TRSTCTL_PROTOCOLS_KMIP_CLIENT_REGISTRATIONS=true` one listener serves every
+tenant's own clients. A tenant registers a client on the Transit page, with
+`trstctl-cli kmip clients register`, or at `POST /api/v1/kmip/clients` (`keys:write`),
+and gets a one-time enrollment: a username (the registration's ID) and a password
+shown once, valid for 24 hours, of which the server keeps only the SHA-256. Configure
+the client with the listener's server CA, its own TLS certificate and that username
+and password; its first KMIP request binds the certificate it presents to the tenant,
+and from then on the certificate alone selects the tenant. The handshake proves the
+client holds the certificate's key and the secret proves the tenant issued the
+enrollment, so a tenant cannot claim another tenant's client by registering a
+certificate it has only seen, and a certificate binds to one registration at a time.
+Each tenant sees only its own objects. When the client moves to a new certificate,
+issue a new enrollment (`trstctl-cli kmip clients enroll <id>`); the old certificate
+keeps working until the new one enrolls. Removing a registration
+(`trstctl-cli kmip clients remove <id>`) refuses its certificate from its next request.
+`TRSTCTL_PROTOCOLS_KMIP_TENANT_ID` and `TRSTCTL_PROTOCOLS_KMIP_CLIENT_CA_FILE` become
+optional; set together, they keep serving the clients the deployment's CA issued for
+that tenant.
 The Transit status endpoint and console report `not_configured`, `starting`, or
 `listening` from the assembled tenant binding and live listener state. That status is
 not a conformance claim: use a stock KMIP client to prove the complete mTLS wire path.
@@ -1342,8 +1362,8 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   in production back it with an [HSM/KMS](issuance-and-cas.md).
 - **Dynamic beats static.** Prefer dynamic/ephemeral secrets over long-lived ones; if
   you must store one, put it on a rotation schedule.
-- **Transit/KMIP boundaries:** appliance-specific templates and tenant self-service
-  KMIP listener management remain deliberate boundaries — see
+- **Transit/KMIP boundaries:** appliance-specific templates are not shipped; tenants
+  manage their own KMIP clients with client registrations — see
   [Current limitations](../limitations.md).
 - **Sync is push + drift-detect**, not a two-way merge — trstctl is the source of truth.
 

@@ -3094,6 +3094,34 @@ export const messages = {
   "secrets.transit.restoreBlocked": { defaultMessage: "Restart recovery is not protected", description: "Transit persistence-disabled warning." },
   "secrets.transit.kmipListening": { defaultMessage: "KMIP listening", description: "KMIP listener-ready state." },
   "secrets.transit.kmipNotConfigured": { defaultMessage: "KMIP not configured", description: "KMIP disabled or unavailable state." },
+  "secrets.kmipClients.heading": { defaultMessage: "KMIP clients", description: "Heading of the tenant's registered KMIP clients." },
+  "secrets.kmipClients.description": {
+    defaultMessage:
+      "Register each KMIP client this tenant trusts. Its first KMIP request presents its own certificate with the enrollment's username and password, which binds the certificate to this tenant.",
+    description: "What registering a KMIP client does.",
+  },
+  "secrets.kmipClients.name": { defaultMessage: "Client name", description: "KMIP client name field label." },
+  "secrets.kmipClients.nameDescription": { defaultMessage: "Names the client, such as the appliance.", description: "KMIP client name field help." },
+  "secrets.kmipClients.register": { defaultMessage: "Register client", description: "Registers a KMIP client." },
+  "secrets.kmipClients.enrollmentTitle": { defaultMessage: "Enrollment for {name}", description: "Title of the one-time KMIP enrollment credential." },
+  "secrets.kmipClients.enrollmentDescription": {
+    defaultMessage:
+      "Shown once. Configure the client with this username and password before {expires}; its first KMIP request binds the certificate it presents.",
+    description: "How to use the one-time KMIP enrollment credential.",
+  },
+  "secrets.kmipClients.failed": { defaultMessage: "The KMIP client change failed", description: "KMIP client action error title." },
+  "secrets.kmipClients.unavailable": { defaultMessage: "KMIP clients are unavailable", description: "KMIP client list error title." },
+  "secrets.kmipClients.empty": { defaultMessage: "No KMIP clients are registered for this tenant.", description: "Empty KMIP client list." },
+  "secrets.kmipClients.newEnrollment": { defaultMessage: "New enrollment", description: "Issues a KMIP client a new enrollment for a new certificate." },
+  "secrets.kmipClients.remove": { defaultMessage: "Remove", description: "Removes a KMIP client registration." },
+  "secrets.kmipClients.removeConfirm": {
+    defaultMessage: "Remove {name}? Its certificate is refused from its next KMIP request.",
+    description: "Confirmation before removing a KMIP client.",
+  },
+  "secrets.kmipClients.state.awaiting_enrollment": { defaultMessage: "Awaiting enrollment", description: "KMIP client state." },
+  "secrets.kmipClients.state.enrollment_expired": { defaultMessage: "Enrollment expired", description: "KMIP client state." },
+  "secrets.kmipClients.state.enrolled": { defaultMessage: "Enrolled", description: "KMIP client state." },
+  "secrets.kmipClients.state.enrolled_reenrolling": { defaultMessage: "Enrolled, new enrollment pending", description: "KMIP client state." },
   "secrets.transit.failedRecovery": {
     defaultMessage: "If an operation fails or its response is uncertain",
     description: "Transit failed-operation recovery disclosure.",

@@ -212,7 +212,11 @@ const (
 	EventAgentCertRenewed                    = "agent.cert.renewed"
 	EventAgentCertRevoked                    = "agent.cert.revoked"
 	EventAgentOffboarded                     = "agent.offboarded"
-	EventAgentRolesGranted                   = "agent.roles.granted" // A191; signed by agent.cert.renewed schema 2
+	EventAgentRolesGranted                   = "agent.roles.granted"           // A191; signed by agent.cert.renewed schema 2
+	EventKMIPClientRegistered                = "kmip.client.registered"        // A197
+	EventKMIPClientEnrollmentIssued          = "kmip.client.enrollment_issued" // A197
+	EventKMIPClientEnrolled                  = "kmip.client.enrolled"          // A197
+	EventKMIPClientRemoved                   = "kmip.client.removed"           // A197
 	EventProfileCreated                      = "profile.created"
 	EventProfileUpdated                      = "profile.updated"
 	EventDiscoverySegmentUpserted            = "discovery.segment.upserted"
@@ -2530,6 +2534,40 @@ type AgentRolesGranted struct {
 	GrantedBy string   `json:"granted_by,omitempty"`
 }
 
+// KMIPClientRegistered is the payload of kmip.client.registered (A197): a
+// tenant's KMIP client with the SHA-256 of its one-time enrollment secret.
+type KMIPClientRegistered struct {
+	ID                  string    `json:"id"`
+	Name                string    `json:"name"`
+	EnrollmentHash      string    `json:"enrollment_hash"`
+	EnrollmentExpiresAt time.Time `json:"enrollment_expires_at"`
+	RegisteredBy        string    `json:"registered_by,omitempty"`
+}
+
+// KMIPClientEnrollmentIssued is the payload of kmip.client.enrollment_issued:
+// a new enrollment secret for a client moving to a new certificate.
+type KMIPClientEnrollmentIssued struct {
+	ID                  string    `json:"id"`
+	EnrollmentHash      string    `json:"enrollment_hash"`
+	EnrollmentExpiresAt time.Time `json:"enrollment_expires_at"`
+	IssuedBy            string    `json:"issued_by,omitempty"`
+}
+
+// KMIPClientEnrolled is the payload of kmip.client.enrolled: the certificate
+// that presented the enrollment secret, now bound to the client.
+type KMIPClientEnrolled struct {
+	ID          string    `json:"id"`
+	Fingerprint string    `json:"fingerprint"`
+	Subject     string    `json:"subject"`
+	NotAfter    time.Time `json:"not_after"`
+}
+
+// KMIPClientRemoved is the payload of kmip.client.removed.
+type KMIPClientRemoved struct {
+	ID        string `json:"id"`
+	RemovedBy string `json:"removed_by,omitempty"`
+}
+
 // AgentCertRevoked is the payload of an agent.cert.revoked event. It projects a
 // tenant-scoped deny-list selector for an agent mTLS certificate; either Serial or
 // Fingerprint (or both) must be present. The agent channel derives both values
@@ -4599,6 +4637,10 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true},
 	EventAgentRolesGranted:                        {1: true},
+	EventKMIPClientRegistered:                     {1: true},
+	EventKMIPClientEnrollmentIssued:               {1: true},
+	EventKMIPClientEnrolled:                       {1: true},
+	EventKMIPClientRemoved:                        {1: true},
 	EventAgentCertRevoked:                         {1: true},
 	EventAgentOffboarded:                          {1: true},
 	EventKubernetesControllerPostureReported:      {1: true},
@@ -6159,6 +6201,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return nil
 		}
 		return p.store.ApplyAgentRoleGrantAppliedTx(ctx, tx, e.TenantID, pl.ID, pl.RoleGrantEventID, pl.NewSerial, e.Time)
+	case EventKMIPClientRegistered, EventKMIPClientEnrollmentIssued, EventKMIPClientEnrolled, EventKMIPClientRemoved:
+		return p.applyKMIPClientEventTx(ctx, tx, e)
 	case EventAgentRolesGranted:
 		var pl AgentRolesGranted
 		if err := decode(e, &pl); err != nil {

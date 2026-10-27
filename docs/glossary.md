@@ -401,8 +401,9 @@ trstctl serves KMIP as an opt-in TLS 1.3 mutual-TLS listener (`protocols.kmip.*`
 Today that listener supports AES-256 `SymmetricKey` Create/Get plus
 Locate/Revoke/Destroy lifecycle operations (Get and Register also AES-GCM wrapped),
 and RSA and ECDSA key pairs that sign and verify on the server once activated, with
-client attributes; appliance-specific profiles and tenant self-service clients are
-still future work.
+client attributes. With client registrations one listener serves every tenant's own
+clients, each enrolling its own certificate; appliance-specific profiles are still
+future work.
 
 ### CBOM
 

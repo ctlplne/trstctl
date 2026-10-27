@@ -222,6 +222,9 @@ import type {
   KeyCompromiseExecutionRequest,
   KeyCompromiseResult,
   KeyCompromiseRetryRequest,
+  KMIPClientEnrollment,
+  KMIPClientList,
+  KMIPClientRegisterRequest,
   RelayPluginRuntime,
   ContextualRiskPriorities as GenContextualRiskPriorities,
   UrgentRiskSummary as GenUrgentRiskSummary,
@@ -709,6 +712,7 @@ export interface DiscoveryFindingListOptions {
 export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.gen";
+export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type {
   ValidityReadinessCertificate,
   ValidityReadinessExport,
@@ -2458,6 +2462,10 @@ export interface Api {
   transitKeyVersions(name: string): Promise<TransitKeyVersionList>;
   transitPosture(): Promise<TransitPosture>;
   createTransitKey(input: TransitKeyRequest): Promise<TransitKey>;
+  kmipClients(): Promise<KMIPClientList>;
+  registerKMIPClient(input: KMIPClientRegisterRequest): Promise<KMIPClientEnrollment>;
+  issueKMIPClientEnrollment(id: string): Promise<KMIPClientEnrollment>;
+  removeKMIPClient(id: string): Promise<void>;
   rotateTransitKey(input: TransitRotateRequest): Promise<TransitKey>;
   encryptTransit(input: TransitEncryptRequest): Promise<TransitCiphertext>;
   decryptTransit(input: TransitDecryptRequest): Promise<TransitPlaintext>;
@@ -3286,6 +3294,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   transitKeyVersions: (name) => req<TransitKeyVersionList>(`/api/v1/transit/keys/${encodeURIComponent(name)}/versions`),
   transitPosture: () => req<TransitPosture>("/api/v1/transit/status"),
   createTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys", input),
+  kmipClients: () => req<KMIPClientList>("/api/v1/kmip/clients"),
+  registerKMIPClient: (input) => mutate<KMIPClientEnrollment>("POST", "/api/v1/kmip/clients", input),
+  issueKMIPClientEnrollment: (id) => mutate<KMIPClientEnrollment>("POST", `/api/v1/kmip/clients/${encodeURIComponent(id)}/enrollment`),
+  removeKMIPClient: (id) => mutate<void>("DELETE", `/api/v1/kmip/clients/${encodeURIComponent(id)}`),
   rotateTransitKey: (input) => mutate<TransitKey>("POST", "/api/v1/transit/keys/rotate", input),
   encryptTransit: (input) => mutate<TransitCiphertext>("POST", "/api/v1/transit/encrypt", input),
   decryptTransit: (input) => mutate<TransitPlaintext>("POST", "/api/v1/transit/decrypt", input),

@@ -53,6 +53,9 @@ type TransitRuntimePosture struct {
 	KMIPListening   bool
 	KMIPTenantBound bool
 	KMIPAddress     string
+	// KMIPClientRegistrations is true when the listener serves every
+	// tenant's registered clients (A197).
+	KMIPClientRegistrations bool
 }
 
 // TransitPostureProvider reads only assembled runtime state for the authenticated
@@ -107,6 +110,9 @@ type KMIPPosture struct {
 	Operations  []string `json:"operations"`
 	Detail      string   `json:"detail"`
 	Recovery    string   `json:"recovery,omitempty"`
+	// ClientRegistrations is true when the listener serves every tenant's
+	// registered clients (A197).
+	ClientRegistrations bool `json:"client_registrations"`
 }
 
 // TransitPosture is effect-free operational evidence for the console, API, and
@@ -322,6 +328,12 @@ func buildTransitPosture(runtime TransitRuntimePosture) TransitPosture {
 			kmip.State = "listening"
 			kmip.Detail = "The tenant-bound KMIP listener is accepting mutually authenticated connections. Prove interoperability with a stock KMIP client."
 			kmip.Recovery = ""
+		}
+	}
+	if runtime.KMIPClientRegistrations {
+		kmip.ClientRegistrations = true
+		if kmip.State == "listening" {
+			kmip.Detail = "The KMIP listener serves this tenant's registered clients. Register a client, then configure it with the enrollment's username and password; its first request binds the certificate it presents."
 		}
 	}
 

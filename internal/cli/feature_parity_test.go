@@ -360,8 +360,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A191's `agents roles grant` raised it to 619, mapped onto the agent row.
 	// A195's `ca authorities evaluate-leaf` raised it to 620, mapped onto the
 	// CA hierarchy row.
-	if len(out) != 620 {
-		t.Fatalf("CLI commands = %d, want 620", len(out))
+	// A197's `kmip clients list|register|enroll|remove` raised it to 624,
+	// mapped onto the Transit/KMIP row.
+	if len(out) != 624 {
+		t.Fatalf("CLI commands = %d, want 624", len(out))
 	}
 	return out
 }

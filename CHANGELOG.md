@@ -2,6 +2,13 @@
 
 ### Added
 
+- KMIP client registrations: with `protocols.kmip.client_registrations`, one KMIP
+  listener serves every tenant's own clients. A tenant registers a client (Transit
+  page, `trstctl-cli kmip clients`, `/api/v1/kmip/clients`) and gets a one-time
+  enrollment; the client's first request binds its own TLS certificate with that
+  username and password, and the certificate then selects the tenant. Each tenant
+  sees only its own objects, a new enrollment moves a client to a new certificate,
+  and a removed registration is refused at its next request.
 - KMIP key pairs: the KMIP listener creates RSA and ECDSA key pairs (Create Key
   Pair), activates them (Activate), signs and verifies with them (Sign, Signature
   Verify), and serves Get Attributes, Get Attribute List and Add, Modify and Delete

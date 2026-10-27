@@ -6,7 +6,13 @@
 // copy unless the catalog is intentionally regenerated.
 
 export const extractedMessages: Array<{ key: string; defaultMessage: string; sources: string[] }> = [
-
+  {
+    key: "source.value1.value2.4040b7c06c",
+    defaultMessage: "{value1} {value2}",
+    sources: [
+      "src/pages/secrets/KMIPClients.tsx:133",
+    ],
+  },
 ] as const;
 
 export type ExtractedMessageKey = (typeof extractedMessages)[number]["key"];

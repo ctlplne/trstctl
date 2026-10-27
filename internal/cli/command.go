@@ -698,6 +698,10 @@ var coreCommandTable = []Command{
 	// compile-time Go handlers behind internal/crypto, matching prior-art adapter
 	// shapes such as crypto.Signer / JCA / OpenSSL ENGINE without runtime provider
 	// registration or policy-fed crypto-provider behavior.
+	{Name: []string{"kmip", "clients", "list"}, Method: "GET", Path: "/api/v1/kmip/clients", Summary: "List this tenant's registered KMIP clients"},
+	{Name: []string{"kmip", "clients", "register"}, Method: "POST", Path: "/api/v1/kmip/clients", Body: bodyFile, Summary: "Register a KMIP client and print its one-time enrollment username and password"},
+	{Name: []string{"kmip", "clients", "enroll"}, Method: "POST", Path: "/api/v1/kmip/clients/{id}/enrollment", Summary: "Issue a KMIP client a new one-time enrollment, for a move to a new certificate"},
+	{Name: []string{"kmip", "clients", "remove"}, Method: "DELETE", Path: "/api/v1/kmip/clients/{id}", Summary: "Remove a KMIP client; its certificate is refused from its next request"},
 	{Name: []string{"transit", "keys", "list"}, Method: "GET", Path: "/api/v1/transit/keys", Summary: "List tenant-scoped Transit key metadata"},
 	{Name: []string{"transit", "keys", "versions"}, Method: "GET", Path: "/api/v1/transit/keys/{name}/versions", Summary: "List the complete metadata-only history for a Transit key"},
 	{Name: []string{"transit", "status"}, Method: "GET", Path: "/api/v1/transit/status", Summary: "Read effect-free Transit restore and KMIP runtime posture"},

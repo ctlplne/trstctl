@@ -107,7 +107,7 @@ func TestTransitKeyringSurvivesServerRebuild(t *testing.T) {
 		t.Cleanup(st.Close)
 		srv := buildTransitTestServer(t, ctx, cfg, st, filepath.Join(t.TempDir(), "nats-2"))
 		defer func() { _ = srv.Shutdown(context.Background()) }()
-		posture := srv.transitRuntimePosture(false, "", tenantID)
+		posture := srv.transitRuntimePosture(false, false, "", tenantID)
 		if !posture.Served || !posture.PersistenceConfigured || !posture.Shared {
 			t.Fatalf("restored Transit runtime posture = %+v, want a served shared keyring", posture)
 		}

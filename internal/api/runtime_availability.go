@@ -81,6 +81,9 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 	case "generateManagedKey", "approveManagedKeyAction", "rotateManagedKey", "revokeManagedKey", "zeroizeManagedKey":
 		return runtimeDependency(a.managedKeys != nil,
 			"Managed HSM or cloud KMS key lifecycle is not configured in this deployment.")
+	case "listKMIPClients", "registerKMIPClient", "issueKMIPClientEnrollment", "removeKMIPClient":
+		return runtimeDependency(a.kmipClientRegistrations != nil && a.kmipClientRegistrations(),
+			"KMIP client registrations are not served: the licensed KMIP listener is not running, or protocols.kmip.client_registrations is off.")
 	case "listTransitKeys", "listTransitKeyVersions", "createTransitKey", "rotateTransitKey", "encryptTransit", "decryptTransit", "rewrapTransit",
 		"hmacTransit", "signTransit", "verifyTransit":
 		return runtimeDependency(a.transit != nil,

@@ -17,6 +17,7 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { api, type TransitCiphertext, type TransitHMAC, type TransitKey, type TransitKeyList, type TransitSignature } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery, useQueryClient } from "@/lib/query";
+import { KMIPClients } from "./KMIPClients";
 import { RevealPanel, Snippet, decodeTransitBytes, encodeTransitBytes } from "./SecretsPageParts";
 
 const transitKinds = ["aead", "hmac", "sign"] as const;
@@ -349,6 +350,7 @@ export function TransitOperations({ nativeStoreUnavailable }: { nativeStoreUnava
                     ) : null}
                   </p>
                   {postureQuery.data.kmip.recovery ? <p className="text-status-warning">{postureQuery.data.kmip.recovery}</p> : null}
+                  {postureQuery.data.kmip.client_registrations ? <KMIPClients /> : null}
                 </div>
                 <details className="border-t border-border pt-3">
                   <summary className="cursor-pointer font-medium">{t("secrets.transit.failedRecovery")}</summary>

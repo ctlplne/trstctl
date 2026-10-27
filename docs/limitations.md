@@ -4661,10 +4661,20 @@ deliberately does not. Not served: Register of asymmetric keys, certificates,
 Re-key Key Pair, Encrypt/Decrypt, digested or streamed signing, Sensitive
 objects, templates, and the ID Placeholder (each request names its object).
 PyKMIP 0.10 drives the key-pair path in an opt-in proof
-(`TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`). Appliance-specific templates and tenant self-service
-listener management remain deliberate product-scope boundaries. Production
+(`TRSTCTL_PYKMIP_PROOF=1 go test ./internal/kmip -run PyKMIP -v`). With `protocols.kmip.client_registrations`, one
+listener serves every tenant's self-service clients: a tenant registers a
+client (`/api/v1/kmip/clients`, `trstctl-cli kmip clients`, the Transit page)
+and gets a one-time enrollment, and the client's first KMIP request presents
+its own TLS certificate with that username and password, which binds the
+certificate to the tenant. The handshake proves the client holds the
+certificate's key and the secret proves its tenant issued it, so no tenant
+can claim another tenant's client by registering a certificate it has only
+seen; a removed registration is refused at its next request. A two-tenant
+proof drives this with the listener's own clients. Appliance-specific
+templates (a vendor's key naming and attribute conventions) are not shipped:
+each needs the appliance itself to prove it. Production
 Transit durability remains conditional on the deployment KEK; the KMIP listener additionally remains conditional on its licensed runtime,
-one tenant binding, and configured mTLS trust.
+a tenant binding or client registrations, and configured mTLS trust.
 
 ## Authorization policy gates and ABAC overlays: served by the binary
 

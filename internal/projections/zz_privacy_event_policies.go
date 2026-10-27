@@ -627,6 +627,20 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/roles", opaque), privacyRule("/reason", clear),
 		privacyRule("/granted_by", exact),
 	)
+	kmipClientRegistered := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/name", clear),
+		privacyRule("/enrollment_hash", opaque), privacyRule("/enrollment_expires_at", opaque),
+		privacyRule("/registered_by", exact),
+	)
+	kmipClientEnrollmentIssued := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/enrollment_hash", opaque),
+		privacyRule("/enrollment_expires_at", opaque), privacyRule("/issued_by", exact),
+	)
+	kmipClientEnrolled := privacyRules(
+		privacyRule("/id", opaque), privacyRule("/fingerprint", opaque),
+		privacyRule("/subject", clear), privacyRule("/not_after", opaque),
+	)
+	kmipClientRemoved := privacyRules(privacyRule("/id", opaque), privacyRule("/removed_by", exact))
 	agentCertRevoked := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/agent", exact),
 		privacyRule("/serial", opaque), privacyRule("/fingerprint", opaque),
@@ -1020,6 +1034,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventAgentCertRenewed, 1}:                                        agentCertRenewed,
 		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:       agentCertRenewedRoles,
 		{EventAgentRolesGranted, 1}:                                       agentRolesGranted,
+		{EventKMIPClientRegistered, 1}:                                    kmipClientRegistered,
+		{EventKMIPClientEnrollmentIssued, 1}:                              kmipClientEnrollmentIssued,
+		{EventKMIPClientEnrolled, 1}:                                      kmipClientEnrolled,
+		{EventKMIPClientRemoved, 1}:                                       kmipClientRemoved,
 		{EventAgentCertRevoked, 1}:                                        agentCertRevoked,
 		{EventAgentOffboarded, 1}:                                         agentOffboarded,
 		{EventProfileCreated, 1}: privacyRules(
@@ -1560,6 +1578,10 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventAgentCertRenewed, 1}:                                                           privacyPayloadShape[privacyAgentCertRenewedV1](),
 		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:                          privacyPayloadShape[AgentCertRenewed](),
 		{EventAgentRolesGranted, 1}:                                                          privacyPayloadShape[AgentRolesGranted](),
+		{EventKMIPClientRegistered, 1}:                                                       privacyPayloadShape[KMIPClientRegistered](),
+		{EventKMIPClientEnrollmentIssued, 1}:                                                 privacyPayloadShape[KMIPClientEnrollmentIssued](),
+		{EventKMIPClientEnrolled, 1}:                                                         privacyPayloadShape[KMIPClientEnrolled](),
+		{EventKMIPClientRemoved, 1}:                                                          privacyPayloadShape[KMIPClientRemoved](),
 		{EventAgentCertRevoked, 1}:                                                           privacyPayloadShape[AgentCertRevoked](),
 		{EventAgentOffboarded, 1}:                                                            privacyPayloadShape[AgentOffboarded](),
 		{EventProfileCreated, 1}:                                                             privacyPayloadShape[privacyProfileV1](),

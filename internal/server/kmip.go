@@ -13,6 +13,7 @@ import (
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/seal"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/tenancy"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -27,6 +28,14 @@ type KMIPRuntime interface {
 // KMIPFactory is supplied by the tagged EE attach seam. Nil means the raw KMIP
 // listener is not mounted, even if config carries a protocols.kmip block.
 type KMIPFactory func(KMIPFactoryDeps) (KMIPRuntime, error)
+
+// KMIPClientDirectory is the core's registry of tenant self-service KMIP
+// clients (A197): which tenant bound a certificate, and enrollment of a
+// certificate with a registration's one-time secret.
+type KMIPClientDirectory interface {
+	KMIPClientTenant(ctx context.Context, certDER []byte) (tenantID string, found bool, err error)
+	EnrollKMIPClient(ctx context.Context, clientID string, enrollmentSecret, certDER []byte) (tenantID string, err error)
+}
 
 // KMIPFactoryDeps are the core spine dependencies the licensed KMIP runtime
 // consumes without importing server internals.
@@ -44,9 +53,21 @@ type KMIPFactoryDeps struct {
 	// TenantCrypto gates the complete protocol request and resolves migrated
 	// managed-object state through the tenant's independent custody domain.
 	TenantCrypto tenantseal.Access
+	// Clients resolves and enrolls tenants' registered KMIP clients; the
+	// runtime uses it when protocols.kmip.client_registrations is on.
+	Clients KMIPClientDirectory
 }
 
-func (s *Server) configureKMIPSurface(ctx context.Context, d Deps) error {
+// kmipClientDirectory is the orchestrator as the KMIP runtime's client
+// directory, or none.
+func kmipClientDirectory(orch *orchestrator.Orchestrator) KMIPClientDirectory {
+	if orch == nil {
+		return nil
+	}
+	return orch
+}
+
+func (s *Server) configureKMIPSurface(ctx context.Context, d Deps, clients KMIPClientDirectory) error {
 	if d.KMIPFactory == nil {
 		s.kmip = nil
 		return nil
@@ -61,6 +82,7 @@ func (s *Server) configureKMIPSurface(ctx context.Context, d Deps) error {
 		EventLog:           d.Log,
 		KeyWrapper:         d.KEK,
 		TenantCrypto:       d.TenantCrypto,
+		Clients:            clients,
 	})
 	if err != nil {
 		return fmt.Errorf("server: configure KMIP: %w", err)
