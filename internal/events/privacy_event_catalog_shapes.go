@@ -367,6 +367,10 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"bucket":"","requested_by":""}`), true
 	case "issuance.server_side_keygen":
 		return shape(`{"identity_id":"","name":"","detail":"","successor":""}`), true
+	case "cmdb.certificate_export.requested":
+		return shape(`{"id":"","certificate_id":"","fingerprint":"","binding_id":"","binding_digest":"","requested_by":""}`, catalogPrivacyShapeOptions{Optional: []string{"/requested_by"}}), true
+	case "cmdb.certificate_export.verified":
+		return shape(`{"operation_id":"","binding_id":"","binding_digest":"","certificate_id":"","fingerprint":"","certificate_status":"","sys_id":"","values_digest":"","checked_at":""}`), true
 	case "itsm.ticket.requested":
 		return shape(`{"id":"","instance_url":"","table":"","token_ref":"","short_description":"","description":"","category":"","urgency":"","impact":"","correlation_id":"","allow_private_endpoint":true,"private_egress_cidrs":[""],"requested_by":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{

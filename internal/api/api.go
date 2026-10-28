@@ -166,6 +166,7 @@ type API struct {
 	remediation                        bool
 	notificationChannels               []string
 	notificationEgress                 func(string, string) error
+	cmdbExports                        CMDBCertificateExports
 	notificationOutbox                 *orchestrator.Outbox
 	outboxCircuits                     func() []orchestrator.CircuitSnapshot
 	bulkheadStats                      func() []bulkhead.Stats
@@ -311,6 +312,7 @@ type config struct {
 	remediation                 bool
 	notificationChannels        []string
 	notificationEgress          func(string, string) error
+	cmdbExports                 CMDBCertificateExports
 	notificationOutbox          *orchestrator.Outbox
 	outboxCircuits              func() []orchestrator.CircuitSnapshot
 	bulkheadStats               func() []bulkhead.Stats
@@ -633,6 +635,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		remediation:                 cfg.remediation,
 		notificationChannels:        append([]string(nil), cfg.notificationChannels...),
 		notificationEgress:          cfg.notificationEgress,
+		cmdbExports:                 cfg.cmdbExports,
 		notificationOutbox:          cfg.notificationOutbox,
 		outboxCircuits:              cfg.outboxCircuits,
 		bulkheadStats:               cfg.bulkheadStats,
@@ -1032,37 +1035,6 @@ func mergeScopeDimension(dst *string, next, label string) error {
 	}
 	*dst = next
 	return nil
-}
-
-func jsonBodyStringField(r *http.Request, field string) (string, error) {
-	if r.Body == nil {
-		return "", nil
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, defaultRESTJSONBodyLimit+1))
-	_ = r.Body.Close()
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	if err != nil {
-		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
-	}
-	if len(body) == 0 {
-		return "", nil
-	}
-	if len(body) > defaultRESTJSONBodyLimit {
-		return "", errStatus(http.StatusRequestEntityTooLarge, "request body too large")
-	}
-	var payload map[string]json.RawMessage
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
-	}
-	raw, ok := payload[field]
-	if !ok || len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
-		return "", nil
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return "", errStatus(http.StatusBadRequest, field+" must be a string")
-	}
-	return strings.TrimSpace(value), nil
 }
 
 func (a *API) routes() []route {

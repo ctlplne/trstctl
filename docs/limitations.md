@@ -3155,6 +3155,25 @@ than sending an operator looking for a credential that was never there.
   The NHI inventory and every NHI posture route honor the assignment for every
   source, so a reassigned discovery finding, API token or agent is no longer reported
   orphaned.
+- Certificate CI export is opt-in and separate from ownership synchronization.
+  A tenant can queue a certificate at
+  `POST /api/v1/integrations/cmdb/certificate-exports` only through its own
+  enabled deployment-operator write binding. The binding pins the HTTPS
+  instance, registered discovery source and file-backed or tenant-secret
+  credential reference. The outbox worker sends public certificate metadata
+  through ServiceNow IRE with the class fixed to `cmdb_ci_certificate`, then
+  independently reads that exact CI and compares every exported field before
+  recording a verification receipt. An HTTP success alone never completes it.
+  `/api/v1/integrations/cmdb/certificate-exports/{id}` retains the verified
+  receipt after queue retention; an unverified command without a queue row
+  reports recovery required. The Connect other tools console and
+  `trstctl-cli cmdb certificate-exports create|show` expose the same result.
+  Exports are requested explicitly; later lifecycle changes need another
+  export. Rows lacking certificate bytes need verified DER recovery first.
+  The TLS stand-in proves one certificate CI, duplicate-safe retry, revoked
+  state, independent readback and tenant isolation; a live ServiceNow instance
+  with its certificate class, identification/reconciliation rules, discovery
+  source and read/write ACLs is still required for vendor qualification.
 - Ownership provenance and CMDB reconcile (I2): owners record WHERE an ownership
   claim came from — `ownership_source` (unset / `manual` / `csv-import` / `cmdb`),
   `ownership_source_ref`, `ownership_source_observed_at`. All three are nullable
@@ -3172,8 +3191,9 @@ than sending an operator looking for a credential that was never there.
   told about is how ownership data quietly stops matching reality. A blank cell
   is silence, not a deletion. Read-only is structural, not a flag: the network
   relay builds only GETs against a fixed `/api/now/table/cmdb_ci`, and
-  `orchestrator.NormalizeServiceNowTable` — the only writer — rejects `cmdb_ci`,
-  so there is no configuration that turns this into a CMDB write. A CI naming an
+  `orchestrator.NormalizeServiceNowTable` rejects `cmdb_ci` for ticket writes.
+  Neither path can acquire certificate-export write authority: that requires
+  its own operator-configured `itsm.servicenow.certificate_exports` binding. A CI naming an
   owner this estate has never heard of does NOT create one; it is reported as
   unattributed, because a CMDB assignment group is not evidence that a trstctl
   owner should exist and auto-creating would build a parallel estate out of the

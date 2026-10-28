@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen, Clipboard, Download, ShieldCheck } from "lucide-react";
+import { CMDBCertificateExportPanel } from "@/pages/integrate/CMDBCertificateExportPanel";
 import { Dialog } from "@/components/Dialog";
 import { PageHeader } from "@/components/PageHeader";
 import { SectionCard } from "@/components/dashboard";
@@ -496,6 +497,7 @@ export function Integrate() {
             </Link>
           </div>
         </SectionCard>
+        <CMDBCertificateExportPanel />
       </IntegrationDisclosurePanel>
 
       <Dialog

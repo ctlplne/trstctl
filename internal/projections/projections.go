@@ -4559,6 +4559,8 @@ func (p *Projector) rebuildEventProjectionsThrough(
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
+	"cmdb.certificate_export.requested":           {1: true},
+	"cmdb.certificate_export.verified":            {1: true},
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
 	auditanchor.EventTypeAnchored:                 {auditanchor.AnchoredEventSchemaVersion: true},
 	EventTSACertificateRegistered:                 {1: true},

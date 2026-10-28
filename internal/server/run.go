@@ -759,10 +759,11 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		RestoreDrillRPO:      drillRPO,
 		RestoreDrillRTO:      drillRTO,
 		Store:                st, Log: log, Signer: signer.signer, SignerMode: signer.topology, SignTokenProvider: signer.tokenProvider,
-		SignerKeyStoreDir:  cfg.Signer.KeyStoreDir,
-		ManagedKeyCustody:  managedKeyCustodyFromConfig(cfg.ManagedKeys),
-		EgressGuard:        egressGuard,
-		ServiceNowBindings: serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
+		SignerKeyStoreDir:      cfg.Signer.KeyStoreDir,
+		ManagedKeyCustody:      managedKeyCustodyFromConfig(cfg.ManagedKeys),
+		EgressGuard:            egressGuard,
+		ServiceNowBindings:     serviceNowBindingsFromConfig(cfg.ITSM.ServiceNow),
+		CMDBCertificateExports: cfg.ITSM.ServiceNow.CertificateExports,
 		// AUD-10/12/13: none of these three was ever assigned in production, so
 		// seven served routes were permanently unavailable with no operator
 		// switch. One line because they are one decision — the surfaces that

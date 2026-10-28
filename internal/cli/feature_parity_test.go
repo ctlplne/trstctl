@@ -381,8 +381,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// connectors row.
 	// A215's `certificates recover-der` raised it to 642, on the PKI secrets
 	// row.
-	if len(out) != 642 {
-		t.Fatalf("CLI commands = %d, want 642", len(out))
+	// A224 adds three commands for the separate CMDB certificate writer.
+	if len(out) != 645 {
+		t.Fatalf("CLI commands = %d, want 645", len(out))
 	}
 	return out
 }

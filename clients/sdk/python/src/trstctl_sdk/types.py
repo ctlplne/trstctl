@@ -3293,6 +3293,50 @@ CBOMScanRequest = TypedDict(
     total=False,
 )
 
+CMDBCertificateExport = TypedDict(
+    'CMDBCertificateExport',
+    {
+        'attempts': int,
+        'binding_id': str,
+        'certificate_id': str,
+        'fingerprint': str,
+        'id': str,
+        'last_error': str,
+        'receipt': dict[str, Any],
+        'status': str,
+        'verified_at': str,
+    },
+    total=False,
+)
+
+CMDBCertificateExportBinding = TypedDict(
+    'CMDBCertificateExportBinding',
+    {
+        'data_source': str,
+        'enabled': bool,
+        'id': str,
+    },
+    total=False,
+)
+
+CMDBCertificateExportBindingList = TypedDict(
+    'CMDBCertificateExportBindingList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+CMDBCertificateExportInput = TypedDict(
+    'CMDBCertificateExportInput',
+    {
+        'binding_id': str,
+        'certificate_id': str,
+    },
+    total=False,
+)
+
 CMDBReconcileRunNow = TypedDict(
     'CMDBReconcileRunNow',
     {

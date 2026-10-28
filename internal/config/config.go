@@ -1644,7 +1644,8 @@ type ITSM struct {
 
 // ServiceNowITSM is the ServiceNow Table API integration policy.
 type ServiceNowITSM struct {
-	Bindings []ServiceNowBinding `json:"bindings,omitempty"`
+	Bindings           []ServiceNowBinding            `json:"bindings,omitempty"`
+	CertificateExports []CMDBCertificateExportBinding `json:"certificate_exports,omitempty"`
 }
 
 // ServiceNowBinding names one approved ServiceNow destination and credential
@@ -2397,6 +2398,7 @@ type Bulkheads struct {
 	OutboxTenantSeal    *BulkheadLimit `json:"outbox_tenant_seal,omitempty"`
 	OutboxFleet         *BulkheadLimit `json:"outbox_fleet_reissuance,omitempty"`
 	OutboxAuditFeeds    *BulkheadLimit `json:"outbox_audit_feeds,omitempty"`
+	OutboxCMDBExports   *BulkheadLimit `json:"outbox_cmdb_exports,omitempty"`
 	Signing             BulkheadLimit  `json:"signing"`
 	Query               BulkheadLimit  `json:"query"`
 	Policy              BulkheadLimit  `json:"policy"`
@@ -2469,6 +2471,7 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemOutboxTenantSeal, limit: familyLimit(b.OutboxTenantSeal)},
 		{name: bulkhead.SubsystemOutboxFleet, limit: familyLimit(b.OutboxFleet)},
 		{name: bulkhead.SubsystemOutboxAuditFeeds, limit: familyLimit(b.OutboxAuditFeeds)},
+		{name: bulkhead.SubsystemOutboxCMDBExports, limit: familyLimit(b.OutboxCMDBExports)},
 		{name: bulkhead.SubsystemSigning, limit: b.Signing},
 		{name: bulkhead.SubsystemQuery, limit: b.Query},
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
@@ -4558,7 +4561,7 @@ func validateAirGap(c *Config) []error {
 }
 
 func validateITSM(c *Config) []error {
-	var errs []error
+	errs := ValidateCMDBCertificateExports(c.ITSM.ServiceNow.CertificateExports)
 	for i, b := range c.ITSM.ServiceNow.Bindings {
 		prefix := fmt.Sprintf("itsm.servicenow.bindings[%d]", i)
 		instanceURL := strings.TrimSpace(b.InstanceURL)

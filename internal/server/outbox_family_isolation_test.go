@@ -52,6 +52,7 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxTenantSeal, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxFleet, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxAuditFeeds, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxCMDBExports, Workers: 1, Queue: 4},
 	)
 
 	connectorStarted := make(chan string, 2)
@@ -323,6 +324,7 @@ func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 		"incident.fleet_reissuance.batch": bulkhead.SubsystemOutboxFleet,
 		"audit.feed.splunk":               bulkhead.SubsystemOutboxAuditFeeds,
 		"audit.feed.sentinel":             bulkhead.SubsystemOutboxAuditFeeds,
+		"cmdb.certificate_export":         bulkhead.SubsystemOutboxCMDBExports,
 		"revocation.publish":              bulkhead.SubsystemOutbox,
 		"remediation.rotate.verify":       bulkhead.SubsystemOutbox,
 		"agent.audit.retry":               bulkhead.SubsystemOutbox,

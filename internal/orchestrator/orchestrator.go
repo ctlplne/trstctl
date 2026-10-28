@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/cmdbexport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
@@ -1609,6 +1610,16 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				}); err != nil {
 					return err
 				}
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == cmdbexport.EventRequested {
+			inserted, err := o.reconcileCMDBCertificateExport(ctx, ev)
+			if err != nil {
+				return err
+			}
+			if inserted {
+				healed++
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}

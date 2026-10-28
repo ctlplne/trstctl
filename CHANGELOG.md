@@ -2,6 +2,11 @@
 
 ### Added
 
+- Opt-in certificate CI export through a separate tenant-bound ServiceNow write
+  binding. The outbox worker uses IRE and independently reads the fixed certificate
+  class before recording a durable verification receipt. API, CLI and console show
+  queue and verification status; ownership reconciliation remains read-only.
+
 - Per-tenant private HTTPS notification receivers: an operator can grant exact
   networks through `notifications.tenant_private_egress`. API endpoint validation
   and outbox delivery use the same tenant grant. Tenants cannot grant themselves

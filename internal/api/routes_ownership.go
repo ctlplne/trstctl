@@ -15,11 +15,11 @@ import (
 // rule: an external source may fill in what nobody recorded and may never
 // overwrite what a human attested.
 //
-// There is deliberately no CMDB write route here. "No CMDB write unless
-// explicitly configured" is held as the absence of such a route plus a ticket
-// writer whose table allow-list rejects cmdb_ci, not as a flag.
+// Ownership reconciliation remains structurally read-only. The separate
+// certificate CI export routes require their own operator-owned write binding;
+// neither ownership readers nor ticket writers acquire that authority.
 func (a *API) ownershipDataQualityRoutes() []route {
-	return []route{
+	return append(a.cmdbCertificateExportRoutes(), []route{
 		{method: "POST", path: "/api/v1/owners/import", opID: "importOwnership", summary: "Import ownership from CSV: fills in what is unrecorded, refuses to overwrite what a human attested", handler: a.importOwnership, reqSchema: "OwnershipCSV", reqContentType: "text/csv", resSchema: "OwnershipImportResult", successCode: "200", mutation: true, perm: authz.OwnersWrite},
 		{method: "POST", path: "/api/v1/owners/ownership-conflicts/{id}/resolve", opID: "resolveOwnershipConflict", summary: "Close an ownership disagreement with the reason it was decided", handler: a.resolveOwnershipConflict, pathParams: []param{pathUUID("id")}, reqSchema: "OwnershipResolveInput", successCode: "200", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners/ownership-conflicts", opID: "listOwnershipConflicts", summary: "List unresolved ownership disagreements between recorded owners and an external source", handler: a.listOwnershipConflicts, resSchema: "OwnershipConflictList", successCode: "200", perm: authz.OwnersRead},
@@ -27,7 +27,7 @@ func (a *API) ownershipDataQualityRoutes() []route {
 		{method: "POST", path: "/api/v1/owners/cmdb-schedule/run", opID: "runCMDBReconcileNow", summary: "Start a CMDB ownership sweep now, as the scheduler's own durable relay job, without waiting for the interval", handler: a.runCMDBScheduleNow, resSchema: "CMDBReconcileRunNow", successCode: "202", mutation: true, perm: authz.OwnersWrite},
 		{method: "GET", path: "/api/v1/owners/cmdb-schedule", opID: "getCMDBReconcileSchedule", summary: "Read the CMDB schedule, bounded-page coverage, retained cursor, terminal run, and last failure", handler: a.getCMDBSchedule, resSchema: "CMDBReconcileSchedule", successCode: "200", perm: authz.OwnersRead},
 		{method: "GET", path: "/api/v1/owners/unowned", opID: "listUnownedIdentities", summary: "List managed identities whose ownership cannot answer an incident question", handler: a.listUnownedIdentities, resSchema: "UnownedQueue", successCode: "200", perm: authz.OwnersRead},
-	}
+	}...)
 }
 
 // The I3 issuance-request lifecycle.

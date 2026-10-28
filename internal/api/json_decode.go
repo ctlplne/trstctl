@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
 )
@@ -68,4 +69,35 @@ func decodeJSONWithLimitOptionsEmpty(r *http.Request, v any, limit int64, strict
 		return errStatus(http.StatusBadRequest, fmt.Sprintf("invalid JSON body: %v", err))
 	}
 	return nil
+}
+
+func jsonBodyStringField(r *http.Request, field string) (string, error) {
+	if r.Body == nil {
+		return "", nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, defaultRESTJSONBodyLimit+1))
+	_ = r.Body.Close()
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if err != nil {
+		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+	}
+	if len(body) == 0 {
+		return "", nil
+	}
+	if len(body) > defaultRESTJSONBodyLimit {
+		return "", errStatus(http.StatusRequestEntityTooLarge, "request body too large")
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", errStatus(http.StatusBadRequest, "invalid JSON body")
+	}
+	raw, ok := payload[field]
+	if !ok || len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return "", nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", errStatus(http.StatusBadRequest, field+" must be a string")
+	}
+	return strings.TrimSpace(value), nil
 }

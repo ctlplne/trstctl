@@ -20365,7 +20365,10 @@
                 "getScaleOrchestration",
                 "listBulkheadStats",
                 "transitionIdentity",
-                "updateOwner"
+                "updateOwner",
+                "listCMDBCertificateExportBindings",
+                "createCMDBCertificateExport",
+                "getCMDBCertificateExport"
             ],
             "api_na": "",
             "cli_na": "N/A: REST API is the HTTP contract; CLI parity is tracked by F11.",
@@ -20702,7 +20705,10 @@
                 "secrets store get",
                 "secrets store list",
                 "secrets store put",
-                "secrets store update"
+                "secrets store update",
+                "cmdb certificate-export-bindings list",
+                "cmdb certificate-exports create",
+                "cmdb certificate-exports show"
             ],
             "cli_na": "",
             "facet_evidence": {

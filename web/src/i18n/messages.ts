@@ -10,6 +10,36 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "integrate.cmdb.heading": { defaultMessage: "Certificate export to the CMDB", description: "Certificate CI export workflow." },
+  "integrate.cmdb.description": {
+    defaultMessage:
+      "Write a certificate's public metadata to a separately configured ServiceNow certificate inventory. Ownership synchronization keeps its read-only binding.",
+    description: "Certificate CI export workflow.",
+  },
+  "integrate.cmdb.loading": { defaultMessage: "Loading certificate write bindings…", description: "Certificate CI export workflow." },
+  "integrate.cmdb.noBinding": {
+    defaultMessage: "No certificate write binding is enabled for this tenant. Ask your deployment operator to configure one with its own write credential.",
+    description: "Certificate CI export workflow.",
+  },
+  "integrate.cmdb.binding": { defaultMessage: "Certificate write binding", description: "Certificate CI export workflow." },
+  "integrate.cmdb.chooseBinding": { defaultMessage: "Choose a binding", description: "Certificate CI export workflow." },
+  "integrate.cmdb.certificate": { defaultMessage: "Certificate inventory ID", description: "Certificate CI export workflow." },
+  "integrate.cmdb.invalid": { defaultMessage: "Choose a write binding and enter a valid certificate UUID.", description: "Certificate CI export workflow." },
+  "integrate.cmdb.review": {
+    defaultMessage:
+      "This writes public certificate metadata and the recorded lifecycle state to the selected CMDB. Completion requires an independent read of that record.",
+    description: "Certificate CI export workflow.",
+  },
+  "integrate.cmdb.export": { defaultMessage: "Export certificate", description: "Certificate CI export workflow." },
+  "integrate.cmdb.failed": { defaultMessage: "Could not queue the certificate export", description: "Certificate CI export workflow." },
+  "integrate.cmdb.verified": { defaultMessage: "The CMDB record was independently verified.", description: "Certificate CI export workflow." },
+  "integrate.cmdb.pending": {
+    defaultMessage: "Export status: {status}. A verified CMDB record has not been established.",
+    description: "Certificate CI export workflow.",
+  },
+  "integrate.cmdb.operation": { defaultMessage: "Export operation", description: "Certificate CI export workflow." },
+  "integrate.cmdb.record": { defaultMessage: "CMDB record", description: "Certificate CI export workflow." },
+  "integrate.cmdb.refresh": { defaultMessage: "Check export status", description: "Certificate CI export workflow." },
   "discovery.schedule.name": { defaultMessage: "Name", description: "Discovery schedule name column." },
   "discovery.schedule.source": { defaultMessage: "Source", description: "Discovery schedule source column." },
   "discovery.schedule.interval": { defaultMessage: "Interval", description: "Discovery schedule interval column." },

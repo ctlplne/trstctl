@@ -2351,6 +2351,34 @@ export interface CBOMScanRequest {
   tls_endpoints?: string[];
 }
 
+export interface CMDBCertificateExport {
+  attempts: number;
+  binding_id: string;
+  certificate_id: string;
+  fingerprint: string;
+  id: string;
+  last_error?: string;
+  receipt?: { binding_digest: string; binding_id: string; certificate_id: string; certificate_status: string; checked_at: string; fingerprint: string; operation_id: string; sys_id: string; values_digest: string };
+  status: string;
+  verified_at?: string;
+}
+
+export interface CMDBCertificateExportBinding {
+  data_source: string;
+  enabled: boolean;
+  id: string;
+}
+
+export interface CMDBCertificateExportBindingList {
+  items: CMDBCertificateExportBinding[];
+  next_cursor?: string;
+}
+
+export interface CMDBCertificateExportInput {
+  binding_id: string;
+  certificate_id: string;
+}
+
 export interface CMDBReconcileRunNow {
   detail: string;
   schedule: CMDBReconcileSchedule;

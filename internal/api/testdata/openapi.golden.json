@@ -9605,6 +9605,144 @@
         },
         "type": "object"
       },
+      "CMDBCertificateExport": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "binding_id": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "receipt": {
+            "properties": {
+              "binding_digest": {
+                "type": "string"
+              },
+              "binding_id": {
+                "type": "string"
+              },
+              "certificate_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "certificate_status": {
+                "type": "string"
+              },
+              "checked_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "operation_id": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "sys_id": {
+                "type": "string"
+              },
+              "values_digest": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "operation_id",
+              "binding_id",
+              "binding_digest",
+              "certificate_id",
+              "fingerprint",
+              "certificate_status",
+              "sys_id",
+              "values_digest",
+              "checked_at"
+            ],
+            "type": "object"
+          },
+          "status": {
+            "type": "string"
+          },
+          "verified_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "binding_id",
+          "certificate_id",
+          "fingerprint",
+          "status",
+          "attempts"
+        ],
+        "type": "object"
+      },
+      "CMDBCertificateExportBinding": {
+        "properties": {
+          "data_source": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "enabled",
+          "data_source"
+        ],
+        "type": "object"
+      },
+      "CMDBCertificateExportBindingList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CMDBCertificateExportBinding"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "CMDBCertificateExportInput": {
+        "properties": {
+          "binding_id": {
+            "type": "string"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "binding_id",
+          "certificate_id"
+        ],
+        "type": "object"
+      },
       "CMDBReconcileRunNow": {
         "properties": {
           "detail": {
@@ -60618,6 +60756,179 @@
         ],
         "summary": "Dispatch an incident response packet to SIEM, SOAR, chat, and ITSM integrations",
         "x-trstctl-permission": "incidents:write"
+      }
+    },
+    "/api/v1/integrations/cmdb/certificate-export-bindings": {
+      "get": {
+        "operationId": "listCMDBCertificateExportBindings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMDBCertificateExportBindingList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List this tenant's operator-configured certificate CI write bindings",
+        "x-trstctl-permission": "connectors:read"
+      }
+    },
+    "/api/v1/integrations/cmdb/certificate-exports": {
+      "post": {
+        "operationId": "createCMDBCertificateExport",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CMDBCertificateExportInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMDBCertificateExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Queue a certificate CI export through a separate operator-owned write binding",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/integrations/cmdb/certificate-exports/{id}": {
+      "get": {
+        "operationId": "getCMDBCertificateExport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CMDBCertificateExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read a certificate export's queue state and independently verified CMDB receipt",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/issuance-requests": {

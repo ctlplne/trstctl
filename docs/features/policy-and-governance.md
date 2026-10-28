@@ -896,3 +896,27 @@ glossary: [event sourcing](../glossary.md), [bulkhead](../glossary.md),
 [idempotency](../glossary.md)
 
 **Covers:** F28, F29, F62, F79, F8, F9
+
+
+### Certificate CI export
+
+Publish a certificate's public metadata to a ServiceNow certificate CI through a
+separate write binding. Ownership reconciliation keeps its own read-only relay
+workflow and never inherits that permission.
+
+An operator configures a per-tenant `itsm.servicenow.certificate_exports` binding.
+The authenticated export route records an immutable command and an outbox intent
+in the same SQL transaction. The worker calls IRE for `cmdb_ci_certificate`, then
+reads the exact returned CI to verify all exported fields before recording a
+receipt. Retries keep the source identity, and a retained receipt settles a retry
+without another write. Credentials are leased as locked bytes only for delivery.
+
+Use the Connect other tools console or `trstctl-cli cmdb certificate-exports
+create|show`; the API paths are `/api/v1/integrations/cmdb/certificate-exports`
+and its `/{id}` read. A queue acknowledgment stays pending until readback matches.
+Later lifecycle changes require another explicit export. The served TLS stand-in
+proof is `TestServedCertificateExportWritesOnlyItsOwnCMDBBindingAndReadsBack`;
+SQL rollback recovery is `TestCMDBExportRecoversAnAppendWhoseOutboxTransactionRolledBack`.
+Live ServiceNow class/source/ACL behavior needs an instance. See
+[configuration](../configuration.md#certificate-ci-export-to-servicenow) for
+prerequisites, field semantics and failure recovery.

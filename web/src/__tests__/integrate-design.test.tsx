@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { AppQueryProvider } from "@/lib/query";
 import { Integrate } from "@/pages/Integrate";
+
+vi.mock("@/lib/cmdbExportApi", () => ({ cmdbExportApi: { bindings: () => Promise.resolve({ items: [] }) } }));
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
@@ -22,7 +25,9 @@ function renderIntegrate() {
   return render(
     <MemoryRouter initialEntries={["/integrate"]}>
       <main>
-        <Integrate />
+        <AppQueryProvider>
+          <Integrate />
+        </AppQueryProvider>
       </main>
     </MemoryRouter>,
   );

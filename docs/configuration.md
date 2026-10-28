@@ -3121,3 +3121,74 @@ Scan preview reports at most two connections per normalized endpoint when this
 option is enabled; neither client sends application data. Native fallback does
 not bypass a database STARTTLS negotiation. A failed handshake or unreadable leaf
 remains a partial-scan failure, while successful observations remain available.
+
+
+## Certificate CI export to ServiceNow
+
+Export a certificate's public metadata to ServiceNow without giving the ownership
+reader write access. This is an explicit export, with its own operator-owned
+binding and credential reference; it does not turn on continuous synchronization.
+
+The instance must provide the Unique Certificate class (`cmdb_ci_certificate`),
+a configured Discovery source choice and identification/reconciliation rules for
+certificate fingerprints. Use a credential authorized for the IRE write and the
+exact certificate-class readback. The product uses the
+[ServiceNow IRE API](https://www.servicenow.com/docs/r/api-reference/rest-apis/c_IdentifyReconcileAPI.html),
+which applies the instance's reconciliation rules. HTTP 200 can still contain
+item errors, so each accepted item is followed by an independent Table API read.
+
+```json
+{
+  "itsm": {
+    "servicenow": {
+      "certificate_exports": [
+        {
+          "id": "certificate-writer",
+          "tenant_id": "11111111-1111-1111-1111-111111111111",
+          "enabled": true,
+          "instance_url": "https://example.service-now.com",
+          "token_ref": "secret://cmdb/export-writer",
+          "data_source": "trstctl"
+        }
+      ]
+    }
+  }
+}
+```
+
+No bindings are configured by default, and `enabled` defaults to false. An ID is
+unique within its tenant. `instance_url` is an HTTPS origin without credentials,
+path, query or fragment. `token_ref` uses `secret://` for the tenant's own secret
+store or `file:` for an operator-owned credential file; values are opened into
+locked bytes for one worker attempt. A binding never inherits an ownership
+reader's or ticket writer's credential. Private instances additionally require
+`allow_private_endpoint: true` and exact `private_egress_cidrs`; DNS-at-dial, TLS,
+redirect and air-gap rules remain enforced. Changes take effect after restart;
+a disabled, removed or changed binding blocks retained work until a new export
+is requested under the current authority.
+
+List bindings with `trstctl-cli cmdb certificate-export-bindings list`. Write an
+export request file with only `binding_id` and the inventory `certificate_id`,
+then run `trstctl-cli cmdb certificate-exports create -f export.json`. The returned
+operation ID is read with `trstctl-cli cmdb certificate-exports show <operation-id>`.
+The console offers the same form under **Connect other tools** → Permissions and
+reliable delivery. A queued result is not proof of a CMDB write; wait for
+`verified` and inspect the bound CI ID, fingerprint and verification time.
+
+The worker fixes the class to `cmdb_ci_certificate` and names source objects by
+tenant UUID plus certificate fingerprint. It sends UTC certificate validity,
+subject/issuer distinguished names, key size, signature algorithm and the current
+recorded lifecycle state. It never sends a private key or invents issuer/root CI
+references from a distinguished name. A certificate with no retained DER/PEM
+must first use the verified DER-recovery path. An active certificate maps to
+`issued`, a revoked one to `revoked`, and a superseded one to `retired`; none of
+these labels claims independent deployment or relying-party revocation enforcement.
+If lifecycle state changes during the call, the worker retries under that state.
+
+The export has its own bounded `outbox.cmdb_exports` pool. The optional
+`bulkheads.outbox_cmdb_exports` override has `workers` and `queue` limits and
+otherwise inherits the ordinary outbox limits. Verified receipts are immutable
+`cmdb.certificate_export.verified` audit events; queue retention cannot erase
+that evidence. Ownership sync remains a separate relay-only GET workflow.
+A real ServiceNow instance is required to qualify its class dictionary, ACLs,
+source choice and reconciliation behavior beyond the local TLS stand-in.

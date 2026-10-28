@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/ca"
+	"trstctl.com/trstctl/internal/cmdbexport"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
@@ -109,6 +110,7 @@ func connectorPluginDeployerFromManager(pm *PluginManager) connectorPluginDeploy
 // profile enforcement. Key custody does not change authority or name admission;
 // legacy control-plane generation remains the existing classical path.
 type issuanceDispatcher struct {
+	cmdbExports *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180).
 	observerEvents          *observerEventDelivery
@@ -347,6 +349,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.externalCAs.DeliverExternalCAIssue(ctx, m)
 	case store.ACMEUpstreamARIFetchDestination:
 		return d.deliverExternalCAARI(ctx, m)
+	case cmdbexport.Destination:
+		return d.handleCMDBCertificateExport(ctx, m)
 	case orchestrator.DestinationITSMServiceNow:
 		return d.handleServiceNowTicket(ctx, m)
 	case orchestrator.DestinationResponseSplunk:

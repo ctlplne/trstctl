@@ -4165,6 +4165,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integrations/cmdb/certificate-export-bindings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List this tenant's operator-configured certificate CI write bindings */
+        get: operations["listCMDBCertificateExportBindings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/cmdb/certificate-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a certificate CI export through a separate operator-owned write binding */
+        post: operations["createCMDBCertificateExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/cmdb/certificate-exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a certificate export's queue state and independently verified CMDB receipt */
+        get: operations["getCMDBCertificateExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/issuance-requests": {
         parameters: {
             query?: never;
@@ -11216,6 +11267,47 @@ export interface components {
         CBOMScanRequest: {
             host_configs?: string[];
             tls_endpoints?: string[];
+        };
+        CMDBCertificateExport: {
+            attempts: number;
+            binding_id: string;
+            /** Format: uuid */
+            certificate_id: string;
+            fingerprint: string;
+            /** Format: uuid */
+            id: string;
+            last_error?: string;
+            receipt?: {
+                binding_digest: string;
+                binding_id: string;
+                /** Format: uuid */
+                certificate_id: string;
+                certificate_status: string;
+                /** Format: date-time */
+                checked_at: string;
+                fingerprint: string;
+                /** Format: uuid */
+                operation_id: string;
+                sys_id: string;
+                values_digest: string;
+            };
+            status: string;
+            /** Format: date-time */
+            verified_at?: string;
+        };
+        CMDBCertificateExportBinding: {
+            data_source: string;
+            enabled: boolean;
+            id: string;
+        };
+        CMDBCertificateExportBindingList: {
+            items: components["schemas"]["CMDBCertificateExportBinding"][];
+            next_cursor?: string;
+        };
+        CMDBCertificateExportInput: {
+            binding_id: string;
+            /** Format: uuid */
+            certificate_id: string;
         };
         CMDBReconcileRunNow: {
             detail: string;
@@ -31966,6 +32058,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseIntegrationDispatch"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCMDBCertificateExportBindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMDBCertificateExportBindingList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createCMDBCertificateExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CMDBCertificateExportInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMDBCertificateExport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCMDBCertificateExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CMDBCertificateExport"];
                 };
             };
             /** @description client error */

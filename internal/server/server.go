@@ -187,7 +187,8 @@ type Deps struct {
 	EgressGuard *egress.Guard
 	// ServiceNowBindings are operator-approved ITSM egress bindings. The served API
 	// fails closed for ServiceNow ticket requests that do not match one of them.
-	ServiceNowBindings []api.ServiceNowBinding
+	ServiceNowBindings     []api.ServiceNowBinding
+	CMDBCertificateExports []config.CMDBCertificateExportBinding
 	// OutboundEnvCredentialRefs are operator-approved env-backed credential refs
 	// that API-authored discovery/response integrations may place into outbox work.
 	OutboundEnvCredentialRefs []string
@@ -891,6 +892,7 @@ type Server struct {
 	// time into their family's notifier with the tenant's own credential (A98).
 	notificationTenantChannels *notify.StoreChannelResolver
 	tenantNotificationEgress   tenantNotificationEgress
+	cmdbExports                *certificateCIExporter
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180); tests point its client at a stand-in observer.
 	observerEvents            *observerEventDelivery
@@ -1487,6 +1489,9 @@ func (s *Server) configureMutationSpine(
 		orchOptions...,
 	)
 	s.orch, s.idem, s.defaultProfile = orch, idem, d.DefaultProfile
+	if err := s.configureCMDBCertificateExports(d); err != nil {
+		return nil, nil, err
+	}
 	// Issuance refuses a key the tenant recorded as compromised with one
 	// indexed lookup; revocations an older build projected record theirs here.
 	if recorded, unreadable, err := d.Store.BackfillCompromisedSubjectKeys(ctx); err != nil {
@@ -1772,6 +1777,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithAttestedIssuer(s),
 		api.WithAttestationPrincipalResolver(s),
 		api.WithCMDBRunNow(s),
+		api.WithCMDBCertificateExports(s.cmdbExports),
 		api.WithSSHWorkflow(s),
 		api.WithPKISecretLeafRecovery(s),
 		api.WithBroker(s),
@@ -2250,9 +2256,9 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	default:
-		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{cmdbExports: s.cmdbExports, observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, archiveHolds: s.archiveHolds, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	}
 	return nil
 }
@@ -3131,6 +3137,7 @@ var outboxDispatchFamilies = func() []outboxDispatchFamily {
 		{pool: bulkhead.SubsystemOutboxNotifications, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"notification."}}},
 		{pool: bulkhead.SubsystemOutboxTenantSeal, scope: orchestrator.DestinationScope{IncludePrefixes: []string{store.TenantKeyDomainSealDestination}}},
 		{pool: bulkhead.SubsystemOutboxFleet, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"incident.fleet_reissuance."}}},
+		{pool: bulkhead.SubsystemOutboxCMDBExports, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"cmdb.certificate_export"}}},
 		{pool: bulkhead.SubsystemOutboxAuditFeeds, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"audit.feed."}}},
 	}
 	excluded := make([]string, 0, 8)
