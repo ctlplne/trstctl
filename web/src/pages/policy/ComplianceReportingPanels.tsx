@@ -159,11 +159,13 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
   const [cursors, setCursors] = useState<string[]>([""]);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [holdFor, setHoldFor] = useState<string | null>(null);
+  const [holdReason, setHoldReason] = useState("");
   const cursor = cursors[cursors.length - 1];
   const key = ["compliance-report-runs", schedule.id, cursor];
   const runs = useApiQuery(key, () => api.complianceReportRuns(schedule.id, { limit: 10, cursor: cursor || undefined }), { live: { intervalMs: 60_000 } });
 
-  async function act(id: string, action: "requeue" | "download") {
+  async function act(id: string, action: "requeue" | "download" | "hold" | "release") {
     setBusy(id);
     setNotice(null);
     try {
@@ -171,6 +173,16 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
         await api.requeueComplianceReportRun(id);
         await queryClient.invalidateQueries({ queryKey: ["compliance-report-runs", schedule.id] });
         setNotice(t("policy.reporting.requeued"));
+      } else if (action === "hold") {
+        await api.placeComplianceReportLegalHold(id, { reason: holdReason.trim() });
+        setHoldFor(null);
+        setHoldReason("");
+        await queryClient.invalidateQueries({ queryKey: ["compliance-report-runs", schedule.id] });
+        setNotice(t("policy.reporting.held"));
+      } else if (action === "release") {
+        await api.releaseComplianceReportLegalHold(id);
+        await queryClient.invalidateQueries({ queryKey: ["compliance-report-runs", schedule.id] });
+        setNotice(t("policy.reporting.released"));
       } else {
         setNotice(t("policy.reporting.downloaded", { filename: await api.downloadScheduledReport(id) }));
       }
@@ -224,11 +236,64 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
             {run.dispatch?.ticket_skipped && (
               <p className="text-sm text-destructive">{t("policy.reporting.ticketSkipped", { reason: run.dispatch.ticket_skipped })}</p>
             )}
+            {run.legal_hold && (
+              <p className="text-sm">
+                {t("policy.reporting.legalHold", { by: run.legal_hold.by, date: formatDateTime(run.legal_hold.at), reason: run.legal_hold.reason })}
+              </p>
+            )}
+            {run.artifact_expired_at && (
+              <p className="text-sm text-muted-foreground">{t("policy.reporting.reportRemoved", { date: formatDateTime(run.artifact_expired_at) })}</p>
+            )}
+            {holdFor === run.id && (
+              <form
+                className="mt-2 grid gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void act(run.id, "hold");
+                }}
+              >
+                <label className="grid gap-1 text-sm">
+                  {t("policy.reporting.holdReason")}
+                  <input
+                    className="rounded-md border border-border bg-background px-2 py-1"
+                    value={holdReason}
+                    maxLength={512}
+                    onChange={(event) => setHoldReason(event.target.value)}
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={busy !== null || holdReason.trim() === ""}>
+                    {t("policy.reporting.confirmHold")}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setHoldFor(null)}>
+                    {t("policy.reporting.cancelHold")}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
           <div className="flex gap-2">
-            {run.status === "completed" && (
+            {run.status === "completed" && !run.artifact_expired_at && (
               <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void act(run.id, "download")}>
                 {t("policy.reporting.downloadRun")}
+              </Button>
+            )}
+            {run.status === "completed" && !run.artifact_expired_at && !run.legal_hold && holdFor !== run.id && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => {
+                  setHoldFor(run.id);
+                  setHoldReason("");
+                }}
+              >
+                {t("policy.reporting.placeHold")}
+              </Button>
+            )}
+            {run.legal_hold && (
+              <Button type="button" variant="outline" disabled={busy !== null} onClick={() => void act(run.id, "release")}>
+                {t("policy.reporting.releaseHold")}
               </Button>
             )}
             {run.status === "failed" && (

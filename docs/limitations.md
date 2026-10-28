@@ -1452,7 +1452,15 @@ never live in the API process. What you can do end to end against the running bi
   can contain tenant metadata. The full backup (`--full-backup-dir`) carries
   every completed run's report, encrypted, a full restore puts them back where
   their runs say and checks each digest, and the restore drill attests how many
-  it restored; a log-only restore still cannot recover them.
+  it restored; a log-only restore still cannot recover them. Reports are kept
+  until removed: the opt-in `audit.report_retention` removes each completed
+  run's report once it is older than the window, unless a person placed a legal
+  hold on the run, and records the run expired only after reading the archive
+  and finding the report gone. A removal the object store refuses, or
+  acknowledges without applying, retries in the outbox and the run stays
+  unexpired. The run receipt and its SHA-256 remain after removal; a backup
+  taken before it still holds the report. Object Lock retention and legal holds
+  set on the bucket itself are what comes next.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
   streams. The JWS response and browser download are one versioned JSON envelope

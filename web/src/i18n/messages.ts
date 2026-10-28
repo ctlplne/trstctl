@@ -14521,6 +14521,33 @@ export const messages = {
   "policy.reporting.requeueRun": { defaultMessage: "Requeue failed run", description: "Retry the same failed report due edge." },
   "policy.reporting.requeued": { defaultMessage: "Run requeued.", description: "Successful manual recovery of a failed report run." },
   "policy.reporting.downloaded": { defaultMessage: "Saved {filename}.", description: "Signed report download confirmation." },
+  "policy.reporting.placeHold": {
+    defaultMessage: "Place legal hold",
+    description: "A206: open the form that keeps this signed report past the report retention.",
+  },
+  "policy.reporting.holdReason": { defaultMessage: "Hold reason", description: "A206: why the signed report is held, 1 to 512 characters." },
+  "policy.reporting.confirmHold": { defaultMessage: "Hold report", description: "A206: place the legal hold on this signed report." },
+  "policy.reporting.cancelHold": { defaultMessage: "Cancel", description: "A206: close the legal hold form without holding the report." },
+  "policy.reporting.releaseHold": {
+    defaultMessage: "Release legal hold",
+    description: "A206: return a held signed report to the report retention.",
+  },
+  "policy.reporting.held": {
+    defaultMessage: "Report held. The report retention leaves it until the hold is released.",
+    description: "A206: legal hold placed.",
+  },
+  "policy.reporting.released": {
+    defaultMessage: "Hold released. The report retention applies to this report again.",
+    description: "A206: legal hold released.",
+  },
+  "policy.reporting.legalHold": {
+    defaultMessage: "Legal hold by {by} since {date}: {reason}",
+    description: "A206: who held this signed report, when, and why.",
+  },
+  "policy.reporting.reportRemoved": {
+    defaultMessage: "The report retention removed this report on {date}. The run receipt and its digest remain.",
+    description: "A206: the signed report is gone; its receipt stays.",
+  },
   "policy.reporting.previousRuns": { defaultMessage: "Previous runs", description: "Go to the previous report receipt page." },
   "policy.reporting.nextRuns": { defaultMessage: "Next runs", description: "Go to the next report receipt page." },
   "policy.accessChange.heading": {

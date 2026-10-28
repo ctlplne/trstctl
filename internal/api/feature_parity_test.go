@@ -324,8 +324,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// the platform custody row.
 	// A205's SPIRE JWT key publication and listing raised it to 566, mapped
 	// onto the SPIFFE Workload API row.
-	if len(out) != 566 {
-		t.Fatalf("OpenAPI operationIds = %d, want 566", len(out))
+	// A206's report legal hold and release raised it to 568, mapped onto the
+	// compliance reporting row.
+	if len(out) != 568 {
+		t.Fatalf("OpenAPI operationIds = %d, want 568", len(out))
 	}
 	return out
 }

@@ -17,6 +17,8 @@ const { apiMock, authSubject, authPermissions } = vi.hoisted(() => ({
     complianceReportSchedules: vi.fn(),
     complianceReportRuns: vi.fn(),
     requeueComplianceReportRun: vi.fn(),
+    placeComplianceReportLegalHold: vi.fn(),
+    releaseComplianceReportLegalHold: vi.fn(),
     downloadScheduledReport: vi.fn(),
     createComplianceReportSchedule: vi.fn(),
     previewComplianceReportSchedule: vi.fn(),
@@ -432,6 +434,8 @@ describe("policy governance surface", () => {
     apiMock.complianceReportSchedules.mockReset().mockResolvedValue({ items: [complianceSchedule()] });
     apiMock.complianceReportRuns.mockReset().mockResolvedValue({ items: [] });
     apiMock.requeueComplianceReportRun.mockReset();
+    apiMock.placeComplianceReportLegalHold.mockReset();
+    apiMock.releaseComplianceReportLegalHold.mockReset();
     apiMock.downloadScheduledReport.mockReset().mockResolvedValue("trstctl-report-run.json");
     apiMock.createComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedule("Quarterly SOC 2 inventory"));
     apiMock.previewComplianceReportSchedule.mockReset().mockResolvedValue(complianceSchedulePreview());
@@ -1145,6 +1149,55 @@ describe("policy governance surface", () => {
     await waitFor(() => expect(apiMock.requeueComplianceReportRun).toHaveBeenCalledWith(failed.id));
     await user.click(await screen.findByRole("button", { name: "Download signed report" }));
     expect(apiMock.downloadScheduledReport).toHaveBeenCalledWith(failed.id);
+  });
+
+  // A206: a person holds a completed signed report past the report retention
+  // and releases it; a report the retention removed keeps its receipt and
+  // offers no download.
+  it("holds and releases a signed report and shows one the retention removed", async () => {
+    const user = userEvent.setup();
+    const completed = {
+      id: "55555555-5555-4555-8555-555555555555",
+      tenant_id: "tenant-1",
+      schedule_id: complianceSchedule().id,
+      due_at: "2026-06-27T12:00:00Z",
+      framework: "soc2",
+      report_type: "inventory_snapshot",
+      status: "completed",
+      retry_generation: 0,
+      attempt: 1,
+      artifact_digest: "b".repeat(64),
+      event_sequence: 80,
+      created_at: "2026-06-27T12:00:00Z",
+      updated_at: "2026-06-27T12:05:00Z",
+    };
+    const removed = { ...completed, id: "66666666-6666-4666-8666-666666666666", due_at: "2026-03-27T12:00:00Z", artifact_expired_at: "2026-06-25T00:00:00Z" };
+    const held = { ...completed, legal_hold: { reason: "litigation hold 2026-117", by: "auditor@example.test", at: "2026-06-28T09:00:00Z" } };
+    apiMock.complianceReportRuns
+      .mockResolvedValueOnce({ items: [completed, removed] })
+      .mockResolvedValueOnce({ items: [held, removed] })
+      .mockResolvedValue({ items: [completed, removed] });
+    apiMock.placeComplianceReportLegalHold.mockResolvedValue(held);
+    apiMock.releaseComplianceReportLegalHold.mockResolvedValue(completed);
+    renderPolicy();
+    await user.click(await screen.findByText("Framework evidence and reports", { exact: true }));
+    await screen.findByRole("heading", { name: "Compliance inventory report" });
+    await user.click(screen.getByRole("button", { name: "Signed runs" }));
+    expect(await screen.findByText(/The report retention removed this report on/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Download signed report" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Place legal hold" })).toHaveLength(1);
+
+    await user.click(screen.getByRole("button", { name: "Place legal hold" }));
+    expect(screen.getByRole("button", { name: "Hold report" })).toBeDisabled();
+    await user.type(screen.getByLabelText("Hold reason"), "  litigation hold 2026-117 ");
+    await user.click(screen.getByRole("button", { name: "Hold report" }));
+    await waitFor(() => expect(apiMock.placeComplianceReportLegalHold).toHaveBeenCalledWith(completed.id, { reason: "litigation hold 2026-117" }));
+    expect(await screen.findByText(/Legal hold by auditor@example.test since/)).toBeInTheDocument();
+    expect(screen.getByText(/Report held\./)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Release legal hold" }));
+    await waitFor(() => expect(apiMock.releaseComplianceReportLegalHold).toHaveBeenCalledWith(completed.id));
+    expect(await screen.findByText(/Hold released\./)).toBeInTheDocument();
   });
 
   // A103: a schedule can announce each completed run on named channels and in

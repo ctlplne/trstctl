@@ -291,6 +291,39 @@ advances so an operator can distinguish recovery from the original attempts.
 trstctl-cli --idempotency-key retry-soc2-run-1 compliance report-runs requeue RUN_ID
 ```
 
+### Report retention and legal holds
+
+Signed reports are kept until removed. Setting `audit.report_retention` (or
+`TRSTCTL_AUDIT_REPORT_RETENTION`, a Go duration of at least `1h`, such as
+`2160h`) turns on the report retention: on each scheduler sweep, every completed
+run older than the window that no person holds has its removal queued, at most
+100 per sweep. The outbox removes the report where the run's reference says, the
+archive directory or the object store, then reads the archive; only when the
+report is gone does the run record `artifact_expired_at`. From then on the run
+receipt and its SHA-256 remain and the download answers `410 Gone`. A removal the
+object store refuses, or acknowledges without applying, retries with backoff and
+the run stays unexpired.
+
+A legal hold keeps one completed report past the window. Placing it needs
+`audit:write` and a reason (1 to 512 characters); the run shows who placed it,
+when and why. A hold also cancels a removal that was already queued. Releasing
+it returns the run to the retention, which removes the report on its next sweep
+if the run is past the window:
+
+```sh
+cat > hold.json <<'JSON'
+{"reason":"litigation hold 2026-117"}
+JSON
+trstctl-cli --idempotency-key hold-soc2-run-1 compliance report-runs legal-hold RUN_ID -f hold.json
+trstctl-cli --idempotency-key release-soc2-run-1 compliance report-runs release-hold RUN_ID
+```
+
+A hold placed while that run's removal is in progress is refused with a retry,
+never recorded after the report is gone. Holds, removal requests and removals are
+events, so a projection rebuild reaches the same state. The full backup skips
+reports the retention already removed. Object Lock retention and legal holds set
+on the bucket itself are what comes next.
+
 Recovery preserves evidence instead of erasing history:
 
 ```sh
@@ -409,7 +442,9 @@ trstctl enables the controls below; you operate them:
   logical query floor while preserving the AN-2 source envelopes: see
   [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle)
   below. WORM retention on the archive (a WORM-backed directory, or object lock
-  on the bucket) is still your call.
+  on the bucket) is still your call. Scheduled reports follow
+  `audit.report_retention` and legal holds instead: see
+  [Report retention and legal holds](#report-retention-and-legal-holds).
 - Schedule periodic signed exports to anchor the log over time (above).
 - Handle privacy-erasure residue in old evidence. A served subject erasure
   activates a signed, sequence-preserving replacement history generation with

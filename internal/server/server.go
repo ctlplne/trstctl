@@ -327,6 +327,9 @@ type Deps struct {
 	// (audit.anchor_interval); zero, or no served TSA, leaves it off.
 	AuditAnchorInterval time.Duration
 	AuditArchiveDir     string // cold-storage directory for signed audit archive bundles (R4.4)
+	// ComplianceReportRetention is the opt-in report retention (A206); zero
+	// keeps reports.
+	ComplianceReportRetention time.Duration
 	// ArchiveObjectStore, when set (audit.archive_object_store), receives signed
 	// audit archive segments and new scheduled report artifacts under each
 	// tenant's object prefix instead of AuditArchiveDir.
@@ -707,6 +710,8 @@ type Server struct {
 	reportArchive      reportarchive.Archive
 	reportSweepMu      sync.Mutex
 	reportTenantOffset int
+	reportRetention    time.Duration           // the opt-in report retention (A206); zero keeps reports
+	reportExpiry       *complianceReportExpiry // removes reports under the report retention (A206)
 	outbox             *orchestrator.Outbox
 	outboxWake         chan struct{}
 	idemGC             *idemgc.Sweeper   // bounds idempotency_keys via the background retention sweep (SPINE-002)
@@ -1091,6 +1096,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		store:                     d.Store,
 		log:                       d.Log,
 		reportArchive:             reportarchive.Archive{Dir: reportarchive.Dir{Root: d.AuditArchiveDir}, Objects: d.ArchiveObjectStore},
+		reportRetention:           d.ComplianceReportRetention,
 		outboxWake:                make(chan struct{}, 1),
 		signer:                    d.Signer,
 		signerTopology:            d.SignerMode,
@@ -2219,13 +2225,14 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 	if d.Store != nil {
 		credentials := integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}
 		s.observerEvents = newObserverEventDelivery(d.Store, credentials.resolve)
+		s.reportExpiry = &complianceReportExpiry{store: d.Store, orch: orch, archive: s.reportArchive}
 	}
 	switch {
 	case s.obHandler != nil:
 	case s.caSigner != nil:
-		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, issue: s.issueLeafWithValidity, authorityIssue: authorityIssue, chainPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: s.caCertDER}), orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile, ensureCRL: ensureCRL, publishCRL: publishCRL, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	default:
-		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
+		s.obHandler = &issuanceDispatcher{observerEvents: s.observerEvents, reportExpiry: s.reportExpiry, parseSubjectCSR: s.licensedCSRParser, inspectHybridSubjectCSR: s.licensedCSRInspector, authorityIssue: authorityIssue, orch: orch, idem: idem, outbox: s.outbox, store: d.Store, caKeyRetirementState: d.CAKeyRetirementState, revocationProbeNow: s.queueRevocationProbeNow, audit: s.audit, admission: d.IssuanceAdmission, log: d.Log, publishAuthorityCRL: s.publishManagedAuthorityCRL, plugins: connectorPlugins, connectorRegistry: s.connectorRegistry, connectorRightSize: d.ConnectorRightSize, rightSizeBindings: rightSizeBindingMap(d.ConnectorRightSizeBindings), connectorPayloadKey: d.KEK, tenantCrypto: d.TenantCrypto, externalCAs: s.externalCAs, notifications: s.notifications, transparency: d.CodeSigning.TransparencyHandler, codeSign: s.codeSign, secretRepoScanner: secretScannerFromDeps(d), dns01: s.acmeDNS01, licensed: licensed, secretIntegrations: secretIntegrations, tenantKeyDomains: tenantKeyDomains, scimWriteback: s.scimWriteback, ldapWriteback: s.ldapWriteback}
 	}
 	return nil
 }

@@ -293,6 +293,7 @@ public final class OpenApiSchemas {
       "ComplianceInventoryReport",
       "ComplianceInventorySummary",
       "ComplianceReportDispatch",
+      "ComplianceReportLegalHoldRequest",
       "ComplianceReportRun",
       "ComplianceReportRunDispatch",
       "ComplianceReportRunList",

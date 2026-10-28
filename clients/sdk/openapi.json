@@ -11808,9 +11808,26 @@
         },
         "type": "object"
       },
+      "ComplianceReportLegalHoldRequest": {
+        "properties": {
+          "reason": {
+            "description": "why the report is held, 1 to 512 characters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "ComplianceReportRun": {
         "properties": {
           "artifact_digest": {
+            "type": "string"
+          },
+          "artifact_expired_at": {
+            "description": "when the report retention removed the report; the download then answers 410",
+            "format": "date-time",
             "type": "string"
           },
           "artifact_ref": {
@@ -11846,6 +11863,26 @@
           "id": {
             "format": "uuid",
             "type": "string"
+          },
+          "legal_hold": {
+            "properties": {
+              "at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "by": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason",
+              "by",
+              "at"
+            ],
+            "type": "object"
           },
           "next_attempt_at": {
             "format": "date-time",
@@ -51519,6 +51556,148 @@
         ],
         "summary": "Download exact signed scheduled-report bytes after archive and signer verification",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/compliance/report-runs/{id}/legal-hold": {
+      "delete": {
+        "operationId": "releaseComplianceReportLegalHold",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Release a report run's legal hold back to the report retention",
+        "x-trstctl-permission": "audit:write"
+      },
+      "post": {
+        "operationId": "placeComplianceReportLegalHold",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComplianceReportLegalHoldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComplianceReportRun"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Hold a completed report run's signed report so the report retention leaves it",
+        "x-trstctl-permission": "audit:write"
       }
     },
     "/api/v1/compliance/report-runs/{id}/requeue": {

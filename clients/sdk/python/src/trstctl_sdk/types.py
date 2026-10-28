@@ -3993,10 +3993,19 @@ ComplianceReportDispatch = TypedDict(
     total=False,
 )
 
+ComplianceReportLegalHoldRequest = TypedDict(
+    'ComplianceReportLegalHoldRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
 ComplianceReportRun = TypedDict(
     'ComplianceReportRun',
     {
         'artifact_digest': str,
+        'artifact_expired_at': str,
         'artifact_ref': str,
         'attempt': int,
         'completed_at': str,
@@ -4007,6 +4016,7 @@ ComplianceReportRun = TypedDict(
         'event_sequence': int,
         'framework': str,
         'id': str,
+        'legal_hold': dict[str, Any],
         'next_attempt_at': str,
         'report_type': str,
         'retry_generation': int,

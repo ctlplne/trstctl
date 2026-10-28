@@ -2020,6 +2020,11 @@ type Audit struct {
 	// ArchiveDir. An ArchiveDir set alongside it stays readable for report
 	// artifacts written there before the move.
 	ArchiveObjectStore bool `json:"archive_object_store,omitempty"`
+	// ReportRetention is the opt-in report retention (A206): a completed
+	// scheduled report older than this Go duration is removed from the archive
+	// unless a person holds it. Empty keeps reports until an operator removes
+	// them.
+	ReportRetention string `json:"report_retention,omitempty"`
 	// AnchorInterval is the cadence at which each tenant's full audit chain is
 	// timestamped and the anchor appended to its audit log (Enterprise audit
 	// compliance with the TSA served). Go duration; empty means hourly, "0s"
@@ -2049,6 +2054,18 @@ func (a Audit) AnchorIntervalDuration() (time.Duration, error) {
 
 // RetentionDuration parses the retention window. An empty value means indefinite
 // retention and returns a zero duration with no error.
+// MinimumReportRetention bounds audit.report_retention below, so a typo
+// cannot remove reports minutes after they are written.
+const MinimumReportRetention = time.Hour
+
+// ReportRetentionDuration parses audit.report_retention; zero keeps reports.
+func (a Audit) ReportRetentionDuration() (time.Duration, error) {
+	if strings.TrimSpace(a.ReportRetention) == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(strings.TrimSpace(a.ReportRetention))
+}
+
 func (a Audit) RetentionDuration() (time.Duration, error) {
 	if a.Retention == "" {
 		return 0, nil
@@ -3051,6 +3068,7 @@ func (c *Config) applyEnv(getenv func(string) string) {
 	setString(getenv, "TRSTCTL_AUDIT_SIGNING_KEY_FILE", &c.Audit.SigningKeyFile)
 	setString(getenv, "TRSTCTL_AUDIT_RETENTION", &c.Audit.Retention)
 	setString(getenv, "TRSTCTL_AUDIT_ARCHIVE_DIR", &c.Audit.ArchiveDir)
+	setString(getenv, "TRSTCTL_AUDIT_REPORT_RETENTION", &c.Audit.ReportRetention)
 	setBool(getenv, "TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE", &c.Audit.ArchiveObjectStore)
 	setString(getenv, "TRSTCTL_AUDIT_ANCHOR_INTERVAL", &c.Audit.AnchorInterval)
 	setBool(getenv, "TRSTCTL_BREAKGLASS_ENABLED", &c.Breakglass.Enabled)
@@ -4210,6 +4228,13 @@ func validateOptionalServices(c *Config) []error {
 	}
 	if _, err := c.Audit.AnchorIntervalDuration(); err != nil {
 		errs = append(errs, fmt.Errorf("audit.anchor_interval %q is invalid: %w", c.Audit.AnchorInterval, err))
+	}
+	if d, err := c.Audit.ReportRetentionDuration(); err != nil {
+		errs = append(errs, fmt.Errorf("audit.report_retention %q is invalid: %w", c.Audit.ReportRetention, err))
+	} else if d != 0 && d < MinimumReportRetention {
+		errs = append(errs, fmt.Errorf("audit.report_retention must be at least %s", MinimumReportRetention))
+	} else if d != 0 && strings.TrimSpace(c.Audit.ArchiveDir) == "" && !c.Audit.ArchiveObjectStore {
+		errs = append(errs, errors.New("audit.report_retention needs a report archive (audit.archive_dir or audit.archive_object_store)"))
 	}
 	if _, _, err := c.Backup.DrillObjectiveDurations(); err != nil {
 		errs = append(errs, fmt.Errorf("backup recovery objectives are invalid: %w", err))

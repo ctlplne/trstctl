@@ -2,6 +2,18 @@
 
 ### Added
 
+- Report retention and legal holds: with `audit.report_retention` (or
+  `TRSTCTL_AUDIT_REPORT_RETENTION`, at least an hour; off by default), the
+  report scheduler queues the removal of every completed run's signed report
+  older than the window that no person holds; the outbox removes it from the
+  archive directory or the object store and records the run expired only after
+  reading the archive back and finding it gone, after which the download
+  answers 410 and the run receipt and its SHA-256 remain.
+  `POST /api/v1/compliance/report-runs/{id}/legal-hold` (with a reason) and
+  `DELETE` on the same path (`trstctl-cli compliance report-runs legal-hold` and
+  `release-hold`, `audit:write`) hold a completed report past the window and
+  release it; a hold also cancels a removal already queued. The console's
+  signed-runs list places and releases holds and shows removed reports.
 - Compliance reports in full backups: `--full-backup-dir` captures every
   completed report run's signed report (from `audit.archive_dir` or the archive
   object store) as an encrypted `report-archive` artifact with an index, a full

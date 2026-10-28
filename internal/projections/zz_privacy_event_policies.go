@@ -1682,6 +1682,13 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		// A205: a SPIRE server's JWT signing key: a key ID, a public key and
 		// an expiry, no personal data.
 		{EventSPIFFEUpstreamJWTKeyPublished, 1}: privacyPayloadShape[SPIFFEUpstreamJWTKeyPublished](),
+		// A206: a report run's legal hold (a free-text reason the person wrote,
+		// the person being the event's actor) and its retention expiry (a run,
+		// a digest, a window and a time).
+		{EventComplianceReportLegalHoldPlaced, 1}:         privacyPayloadShape[ComplianceReportLegalHold](),
+		{EventComplianceReportLegalHoldReleased, 1}:       privacyPayloadShape[ComplianceReportLegalHold](),
+		{EventComplianceReportArtifactExpiryRequested, 1}: privacyPayloadShape[ComplianceReportArtifactExpiry](),
+		{EventComplianceReportArtifactExpired, 1}:         privacyPayloadShape[ComplianceReportArtifactExpiry](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
 		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(

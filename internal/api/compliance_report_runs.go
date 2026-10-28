@@ -33,10 +33,14 @@ type complianceReportRunResponse struct {
 	ArtifactDigest  string     `json:"artifact_digest,omitempty"`
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	// Dispatch is what a completed run announced beyond the archive (A103).
-	Dispatch      *store.ComplianceReportRunDispatch `json:"dispatch,omitempty"`
-	EventSequence uint64                             `json:"event_sequence"`
-	CreatedAt     time.Time                          `json:"created_at"`
-	UpdatedAt     time.Time                          `json:"updated_at"`
+	Dispatch *store.ComplianceReportRunDispatch `json:"dispatch,omitempty"`
+	// LegalHold is a person's hold on the report (A206); ArtifactExpiredAt is
+	// when the report retention removed it.
+	LegalHold         *complianceReportLegalHoldResponse `json:"legal_hold,omitempty"`
+	ArtifactExpiredAt *time.Time                         `json:"artifact_expired_at,omitempty"`
+	EventSequence     uint64                             `json:"event_sequence"`
+	CreatedAt         time.Time                          `json:"created_at"`
+	UpdatedAt         time.Time                          `json:"updated_at"`
 }
 
 func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceReportRunResponse {
@@ -55,7 +59,19 @@ func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceRepo
 		completed := run.CompletedAt
 		out.CompletedAt = &completed
 	}
+	if run.Retention.LegalHoldAt != nil {
+		out.LegalHold = &complianceReportLegalHoldResponse{
+			Reason: run.Retention.LegalHoldReason, By: run.Retention.LegalHoldBy, At: *run.Retention.LegalHoldAt,
+		}
+	}
+	out.ArtifactExpiredAt = run.Retention.ArtifactExpiredAt
 	return out
+}
+
+type complianceReportLegalHoldResponse struct {
+	Reason string    `json:"reason"`
+	By     string    `json:"by"`
+	At     time.Time `json:"at"`
 }
 
 func reportPathUUID(r *http.Request) (string, error) {
@@ -135,6 +151,11 @@ func (a *API) downloadComplianceReportArtifact(w http.ResponseWriter, r *http.Re
 	}
 	if run.Status != "completed" {
 		a.writeError(w, errStatus(http.StatusConflict, "report run has no completed signed artifact"))
+		return
+	}
+	if run.Retention.ArtifactExpiredAt != nil {
+		a.writeError(w, errStatus(http.StatusGone, "the report retention removed this report on "+
+			run.Retention.ArtifactExpiredAt.UTC().Format(time.RFC3339)))
 		return
 	}
 	artifact, err := a.complianceReportArchive.Read(r.Context(), run.ArtifactRef, run.TenantID, run.ID, run.ArtifactDigest)

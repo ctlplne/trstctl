@@ -666,6 +666,7 @@ func buildRunSecurityGuardDeps(ctx context.Context, cfg *config.Config, st *stor
 // constructor runs.
 type runLifecycleWindows struct {
 	auditRetention              time.Duration
+	reportRetention             time.Duration
 	privacyRetentionEnabled     bool
 	privacyRetentionInterval    time.Duration
 	privacyRetentionPolicy      privacy.RetentionPolicy
@@ -686,6 +687,9 @@ func buildRunLifecycleWindows(cfg *config.Config) (runLifecycleWindows, error) {
 		return runLifecycleWindows{}, err
 	}
 	w.maintenanceWindows = maintenanceWindows
+	if w.reportRetention, err = cfg.Audit.ReportRetentionDuration(); err != nil {
+		return runLifecycleWindows{}, fmt.Errorf("audit report retention: %w", err)
+	}
 	if w.ownershipAttestationCadence, err = ownershipAttestationCadenceFromConfig(cfg.Lifecycle); err != nil {
 		return runLifecycleWindows{}, err
 	}
@@ -778,7 +782,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		BreakglassRotation: breakglassRotation, BreakglassReconciler: breakglassReconciler,
 		RequireApproval: cfg.CA.Policy.RequireApproval, RequiredApprovals: cfg.CA.Policy.RequiredApprovals,
 		AuditSigningKey: securityGuards.auditKey, AuditRetention: windows.auditRetention, AuditArchiveDir: cfg.Audit.ArchiveDir,
-		AuditAnchorInterval:     auditAnchorIntervalFromConfig(cfg),
+		ComplianceReportRetention: windows.reportRetention, AuditAnchorInterval: auditAnchorIntervalFromConfig(cfg),
 		PrivacyRetentionEnabled: windows.privacyRetentionEnabled, PrivacyRetentionInterval: windows.privacyRetentionInterval,
 		PrivacyRetentionPolicy:       windows.privacyRetentionPolicy,
 		LifecycleRenewBefore:         windows.renewBefore,

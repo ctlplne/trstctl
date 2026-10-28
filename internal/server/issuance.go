@@ -112,6 +112,7 @@ type issuanceDispatcher struct {
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180).
 	observerEvents          *observerEventDelivery
+	reportExpiry            *complianceReportExpiry // removes reports under the report retention (A206)
 	parseSubjectCSR         LicensedCSRParser
 	inspectHybridSubjectCSR LicensedCSRInspector
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
@@ -355,6 +356,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleAuditFeedBatch(ctx, m)
 	case store.ObserverEventDestination:
 		return d.deliverObserverEvent(ctx, m)
+	case store.ComplianceReportArtifactExpiryDestination:
+		return d.reportExpiry.Deliver(ctx, m)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:

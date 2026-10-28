@@ -534,7 +534,11 @@ each completed run: a `compliance.report_ready` notice on each named notificatio
 channel (up to 8, each configured for the tenant) and one ServiceNow ticket on an
 operator-approved public binding, queued with the completion and named on the run
 receipt. A notice carries the run, its SHA-256 and its download route, never the report
-body. `POST /api/v1/compliance/report-schedules/preview` validates and
+body. A person can hold a completed run's report (`POST|DELETE
+/api/v1/compliance/report-runs/{id}/legal-hold`, with a reason), and the opt-in
+`audit.report_retention` removes unheld reports older than its window, recording a run
+expired only once a read of the archive finds the report gone.
+`POST /api/v1/compliance/report-schedules/preview` validates and
 fingerprints the exact unsaved definition without appending an event, projecting a row,
 generating a report, or calling a destination. The console invalidates that review after
 any edit and keeps **Create schedule** disabled until the exact draft is ready. Saved
@@ -733,6 +737,8 @@ trstctl-cli compliance report-schedules runs SCHEDULE_ID
 trstctl-cli compliance report-runs get RUN_ID
 trstctl-cli compliance report-runs download RUN_ID > signed-report.json
 trstctl-cli --idempotency-key retry-run-1 compliance report-runs requeue FAILED_RUN_ID
+trstctl-cli --idempotency-key hold-run-1 compliance report-runs legal-hold RUN_ID -f hold.json
+trstctl-cli --idempotency-key release-run-1 compliance report-runs release-hold RUN_ID
 
 # start and decide an NHI access certification campaign
 # The start request assigns a reviewer distinct from this authenticated creator.
@@ -820,7 +826,8 @@ auth:
   `POST|GET /api/v1/compliance/report-schedules`, schedule run receipts and exact
   signed artifacts under `/api/v1/compliance/report-runs`; the local `audit_export`
   archive is the record, and a schedule's `dispatch` announces each completed run on
-  named notification channels and in one ServiceNow ticket.
+  named notification channels and in one ServiceNow ticket. Legal holds and the opt-in
+  `audit.report_retention` decide how long each report stays.
 - **Access-change approvals (served):** `POST|GET /api/v1/access/requests[/{id}]`, and
   `POST /api/v1/access/requests/{id}/decisions`; CLI: `access requests create|list|get|decide`.
 - **Notifications:** email, Slack, Teams, SMS, SIEM, PagerDuty, OpsGenie, webhook

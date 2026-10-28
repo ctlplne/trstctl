@@ -365,8 +365,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// status|rotate` to 626, on the platform custody row.
 	// A205's `spiffe upstream-jwt-keys publish|list` raised it to 628, on the
 	// SPIFFE Workload API row.
-	if len(out) != 628 {
-		t.Fatalf("CLI commands = %d, want 628", len(out))
+	// A206's `compliance report-runs legal-hold|release-hold` raised it to
+	// 630, on the compliance reporting row.
+	if len(out) != 630 {
+		t.Fatalf("CLI commands = %d, want 630", len(out))
 	}
 	return out
 }

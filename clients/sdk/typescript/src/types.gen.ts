@@ -2294,6 +2294,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/report-runs/{id}/legal-hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Hold a completed report run's signed report so the report retention leaves it */
+        post: operations["placeComplianceReportLegalHold"];
+        /** Release a report run's legal hold back to the report retention */
+        delete: operations["releaseComplianceReportLegalHold"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/compliance/report-runs/{id}/requeue": {
         parameters: {
             query?: never;
@@ -11599,8 +11617,17 @@ export interface components {
             channels?: string[];
             ticket?: components["schemas"]["ComplianceReportTicket"];
         };
+        ComplianceReportLegalHoldRequest: {
+            /** @description why the report is held, 1 to 512 characters */
+            reason: string;
+        };
         ComplianceReportRun: {
             artifact_digest?: string;
+            /**
+             * Format: date-time
+             * @description when the report retention removed the report; the download then answers 410
+             */
+            artifact_expired_at?: string;
             artifact_ref?: string;
             attempt: number;
             /** Format: date-time */
@@ -11615,6 +11642,12 @@ export interface components {
             framework: string;
             /** Format: uuid */
             id: string;
+            legal_hold?: {
+                /** Format: date-time */
+                at: string;
+                by: string;
+                reason: string;
+            };
             /** Format: date-time */
             next_attempt_at?: string;
             report_type: string;
@@ -25989,6 +26022,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScheduledComplianceArtifact"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    placeComplianceReportLegalHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComplianceReportLegalHoldRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportRun"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    releaseComplianceReportLegalHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComplianceReportRun"];
                 };
             };
             /** @description client error */

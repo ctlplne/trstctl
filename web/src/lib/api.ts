@@ -2225,6 +2225,8 @@ export interface Api {
   complianceReportRuns(id: string, options?: { limit?: number; cursor?: string }): Promise<ComplianceReportRunList>;
   complianceReportRun(id: string): Promise<ComplianceReportRun>;
   requeueComplianceReportRun(id: string): Promise<ComplianceReportRun>;
+  placeComplianceReportLegalHold(id: string, body: { reason: string }): Promise<ComplianceReportRun>;
+  releaseComplianceReportLegalHold(id: string): Promise<ComplianceReportRun>;
   downloadScheduledReport(id: string): Promise<string>;
   policyVersions(): Promise<PolicyVersionList>;
   createPolicyVersion(input: PolicyVersionRequest): Promise<PolicyVersion>;
@@ -3026,6 +3028,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     req<ComplianceReportRunList>(`/api/v1/compliance/report-schedules/${encodeURIComponent(id)}/runs${pageQueryString(options)}`),
   complianceReportRun: (id) => req<ComplianceReportRun>(`/api/v1/compliance/report-runs/${encodeURIComponent(id)}`),
   requeueComplianceReportRun: (id) => mutate<ComplianceReportRun>("POST", `/api/v1/compliance/report-runs/${encodeURIComponent(id)}/requeue`),
+  placeComplianceReportLegalHold: (id, body) =>
+    mutate<ComplianceReportRun>("POST", `/api/v1/compliance/report-runs/${encodeURIComponent(id)}/legal-hold`, body),
+  releaseComplianceReportLegalHold: (id) => mutate<ComplianceReportRun>("DELETE", `/api/v1/compliance/report-runs/${encodeURIComponent(id)}/legal-hold`),
   downloadScheduledReport: (id) => downloadSameOriginFile(`/api/v1/compliance/report-runs/${encodeURIComponent(id)}/artifact`, `trstctl-report-${id}.json`),
   policyVersions: () => req<PolicyVersionList>("/api/v1/policy/versions"),
   createPolicyVersion: (input) => mutate<PolicyVersion>("POST", "/api/v1/policy/versions", input),

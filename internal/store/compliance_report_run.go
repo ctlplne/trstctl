@@ -37,7 +37,10 @@ type ComplianceReportRun struct {
 	CompletedAt     time.Time
 	// Dispatch is the announcement a completed run made beyond the archive
 	// (A103); nil for archive-only runs and every unfinished transition.
-	Dispatch      *ComplianceReportRunDispatch
+	Dispatch *ComplianceReportRunDispatch
+	// Retention is the run's legal hold and expiry (A206), projected from
+	// their own events.
+	Retention     ComplianceReportRetention
 	EventSequence uint64
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -109,7 +112,9 @@ func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run C
 	err := scanComplianceReportRun(tx.QueryRow(ctx,
 		`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 		        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-		        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
+		        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
+		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
+		        artifact_expired_at, retention_event_sequence
 		   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
 		run.TenantID, run.ID), &old)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -206,7 +211,9 @@ func (s *Store) GetComplianceReportRun(ctx context.Context, tenantID, id string)
 		return scanComplianceReportRun(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
+		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
+		        artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
 	return out, err
@@ -221,7 +228,9 @@ func (s *Store) GetComplianceReportRunByDue(ctx context.Context, tenantID, sched
 		return scanComplianceReportRun(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
+		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
+		        artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND schedule_id = $2 AND due_at = $3`,
 			tenantID, scheduleID, dueAt), &out)
@@ -245,7 +254,9 @@ func (s *Store) ListComplianceReportRunsPage(ctx context.Context, tenantID, sche
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, schedule_id::text, due_at, framework,
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
-			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch
+			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
+		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
+		        artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND schedule_id = $2
 			    AND ($3::timestamptz IS NULL OR due_at < $3)
@@ -270,12 +281,16 @@ func scanComplianceReportRun(row rowScanner, run *ComplianceReportRun) error {
 	var nextAttempt, completed *time.Time
 	var sequence int64
 	var dispatch []byte
+	var retentionSequence int64
 	if err := row.Scan(&run.ID, &run.TenantID, &run.ScheduleID, &run.DueAt,
 		&run.Framework, &run.ReportType, &run.Status, &run.RetryGeneration, &run.Attempt, &nextAttempt,
 		&run.ErrorCode, &run.ArtifactRef, &run.ArtifactDigest, &completed, &sequence,
-		&run.CreatedAt, &run.UpdatedAt, &dispatch); err != nil {
+		&run.CreatedAt, &run.UpdatedAt, &dispatch,
+		&run.Retention.LegalHoldReason, &run.Retention.LegalHoldBy, &run.Retention.LegalHoldAt,
+		&run.Retention.ExpiryRequestedAt, &run.Retention.ArtifactExpiredAt, &retentionSequence); err != nil {
 		return err
 	}
+	run.Retention.EventSequence = uint64(retentionSequence) // #nosec G115 -- non-negative by constraint (CWE-190)
 	run.Dispatch = nil
 	if len(dispatch) > 0 {
 		var d ComplianceReportRunDispatch
@@ -309,8 +324,9 @@ type ComplianceReportArtifact struct {
 // one completed report run.
 func (s *Store) TenantsWithCompletedComplianceReports(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx,
-		//trstctl:system-query — the full backup's cross-tenant enumeration returns tenant UUIDs only; each tenant's report references are read under its forced RLS policy.
-		`SELECT DISTINCT tenant_id::text FROM compliance_report_runs WHERE status = 'completed' ORDER BY tenant_id`)
+		//trstctl:system-query — the full backup's and report retention's cross-tenant enumeration returns tenant UUIDs only; each tenant's report references are read under its forced RLS policy.
+		`SELECT DISTINCT tenant_id::text FROM compliance_report_runs
+		  WHERE status = 'completed' AND artifact_expired_at IS NULL ORDER BY tenant_id`)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +349,8 @@ func (s *Store) ListCompletedComplianceReportArtifacts(ctx context.Context, tena
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, artifact_ref, artifact_digest FROM compliance_report_runs
-			  WHERE tenant_id = $1 AND status = 'completed' ORDER BY completed_at, id`, tenantID)
+			  WHERE tenant_id = $1 AND status = 'completed' AND artifact_expired_at IS NULL
+			  ORDER BY completed_at, id`, tenantID)
 		if err != nil {
 			return err
 		}

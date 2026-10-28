@@ -2871,8 +2871,13 @@ export interface ComplianceReportDispatch {
   ticket?: ComplianceReportTicket;
 }
 
+export interface ComplianceReportLegalHoldRequest {
+  reason: string;
+}
+
 export interface ComplianceReportRun {
   artifact_digest?: string;
+  artifact_expired_at?: string;
   artifact_ref?: string;
   attempt: number;
   completed_at?: string;
@@ -2883,6 +2888,7 @@ export interface ComplianceReportRun {
   event_sequence: number;
   framework: string;
   id: string;
+  legal_hold?: { at: string; by: string; reason: string };
   next_attempt_at?: string;
   report_type: string;
   retry_generation: number;

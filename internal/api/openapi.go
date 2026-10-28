@@ -4650,6 +4650,15 @@ func componentSchemas() map[string]*Schema {
 		"created_at":       timestamp(),
 		"updated_at":       timestamp(),
 	}, "id", "tenant_id", "framework", "name", "report_type", "interval_seconds", "enabled", "delivery", "next_run_at", "created_at", "updated_at")
+	// A206: a person's legal hold on a run's report, and the hold request.
+	complianceReportLegalHold := object(map[string]*Schema{
+		"reason": str(), "by": str(), "at": timestamp(),
+	}, "reason", "by", "at")
+	complianceReportLegalHoldRequest := object(map[string]*Schema{
+		"reason": {Type: "string", Description: "why the report is held, 1 to 512 characters"},
+	}, "reason")
+	complianceReportArtifactExpiredAt := &Schema{Type: "string", Format: "date-time",
+		Description: "when the report retention removed the report; the download then answers 410"}
 	complianceReportRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "schedule_id": uuid(),
 		"due_at": timestamp(), "framework": str(), "report_type": str(),
@@ -4657,6 +4666,7 @@ func componentSchemas() map[string]*Schema {
 		"retry_generation": {Type: "integer"}, "attempt": {Type: "integer"},
 		"next_attempt_at": timestamp(), "error_code": str(),
 		"artifact_ref": str(), "artifact_digest": str(), "completed_at": timestamp(),
+		"legal_hold": complianceReportLegalHold, "artifact_expired_at": complianceReportArtifactExpiredAt,
 		"dispatch":       ref("ComplianceReportRunDispatch"),
 		"event_sequence": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "schedule_id", "due_at", "framework", "report_type", "status", "retry_generation", "attempt", "event_sequence", "created_at", "updated_at")
@@ -7938,6 +7948,7 @@ func componentSchemas() map[string]*Schema {
 		"ComplianceReportSchedule":                 complianceReportSchedule,
 		"ComplianceReportScheduleList":             list("ComplianceReportSchedule"),
 		"ComplianceReportRun":                      complianceReportRun,
+		"ComplianceReportLegalHoldRequest":         complianceReportLegalHoldRequest,
 		"ComplianceReportDispatch":                 complianceReportDispatch,
 		"ComplianceReportTicket":                   complianceReportTicket,
 		"ComplianceReportRunDispatch":              complianceReportRunDispatch,

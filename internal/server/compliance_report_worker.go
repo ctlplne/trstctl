@@ -57,13 +57,26 @@ func (s *Server) RunComplianceReportsOnce(ctx context.Context) (int, error) {
 	}
 	s.reportSweepMu.Lock()
 	defer s.reportSweepMu.Unlock()
+	now := time.Now().UTC()
+	attempted, err := s.runDueComplianceReports(ctx, now)
+	if err != nil {
+		return attempted, err
+	}
+	// A206: the opt-in report retention rides the same sweep, whether or not
+	// any schedule is still enabled.
+	_, err = s.expireComplianceReportsOnce(ctx, now)
+	return attempted, err
+}
+
+// runDueComplianceReports performs the sweep's due-edge attempts; the caller
+// holds reportSweepMu.
+func (s *Server) runDueComplianceReports(ctx context.Context, now time.Time) (int, error) {
 	tenants, err := s.store.TenantsWithEnabledComplianceReportSchedules(ctx)
 	if err != nil || len(tenants) == 0 {
 		return 0, err
 	}
 	start := s.reportTenantOffset % len(tenants)
 	attempted := 0
-	now := time.Now().UTC()
 	for visited := 0; visited < len(tenants) && attempted < complianceReportSweepLimit; visited++ {
 		index := (start + visited) % len(tenants)
 		tenantID := tenants[index]
