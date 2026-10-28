@@ -383,8 +383,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// row.
 	// A224 adds three commands for the separate CMDB certificate writer.
 	// A225 adds list and removal for named ticket-intake schedules.
-	if len(out) != 647 {
-		t.Fatalf("CLI commands = %d, want 647", len(out))
+	// A226 adds five SSH trust-fleet commands.
+	if len(out) != 652 {
+		t.Fatalf("CLI commands = %d, want 652", len(out))
 	}
 	return out
 }

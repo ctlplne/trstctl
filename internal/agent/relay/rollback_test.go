@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/agent/sshtrustfleet"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
@@ -336,6 +337,15 @@ func TestEveryShippedKindIsActuallyClaimed(t *testing.T) {
 	for _, kind := range relay.ClaimableKinds() {
 		claimed[kind] = true
 	}
+	// A226's host-authorized SSH changes have a separate one-worker claim
+	// loop. Both lists here are called by production; the cmd-agent regression
+	// proves its exact kind/limit/lease and no claim while locally disabled.
+	for _, kind := range sshtrustfleet.ClaimableKinds() {
+		if claimed[kind] {
+			t.Fatalf("dedicated SSH work also enters the shared relay pool: %s", kind)
+		}
+		claimed[kind] = true
+	}
 	// agent.upgrade is asked for CONDITIONALLY — RunOnceWithSelfUpgrade appends
 	// it only when the machine operator passed -self-upgrade, because the ask
 	// itself is the consent to binary replacement (A5). The kind is still
@@ -356,7 +366,7 @@ func TestEveryShippedKindIsActuallyClaimed(t *testing.T) {
 	for _, s := range relay.ShippedJobKinds() {
 		shipped[s.Kind] = true
 	}
-	for _, kind := range relay.ClaimableKinds() {
+	for _, kind := range append(relay.ClaimableKinds(), sshtrustfleet.ClaimableKinds()...) {
 		if !shipped[kind] {
 			t.Errorf("relay claims %q but does not declare it shipped; it will take work it "+
 				"cannot perform", kind)

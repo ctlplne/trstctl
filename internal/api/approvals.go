@@ -408,6 +408,8 @@ func approvalRecordPermission(resourceKind, action string) (authz.Permission, bo
 		return authz.CertsIssue, action == "issue"
 	case "code_signing":
 		return authz.CertsIssue, action == "sign"
+	case "ssh_trust_rollout":
+		return authz.CertsIssue, action == "apply"
 	case "migration_run", "pqc_migration_run":
 		return authz.CertsIssue, action == "start"
 	case "secret":

@@ -3768,6 +3768,9 @@
             ],
             "type": "object"
           },
+          "reported_ssh_trust_readiness": {
+            "$ref": "#/components/schemas/SSHTrustReadiness"
+          },
           "role_grant": {
             "$ref": "#/components/schemas/AgentRoleGrant"
           },
@@ -37397,6 +37400,483 @@
           "tenant_id",
           "krl_version",
           "revoked_count"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetApproval": {
+        "properties": {
+          "approval_count": {
+            "type": "integer"
+          },
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SSHTrustFleetPlan"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "required_approvals": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "plan_digest",
+          "approval_request_id",
+          "approval_intent_digest",
+          "status",
+          "required_approvals",
+          "approval_count",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetHost": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/SSHTrustFleetReport"
+          },
+          "receipt_event_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "skip_reason": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "skipped",
+              "verified",
+              "failed",
+              "refused"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id",
+          "state"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SSHTrustFleetRollout"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetPlan": {
+        "properties": {
+          "ca_fingerprint": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hosts": {
+            "items": {
+              "properties": {
+                "agent_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "readiness_digest": {
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": [
+                    "disabled",
+                    "unconfirmed",
+                    "misconfigured",
+                    "not_reported",
+                    "stale",
+                    "not_host_role",
+                    "ca_not_staged",
+                    "claims_paused"
+                  ],
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "ready",
+                    "skipped"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "agent_id",
+                "state"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public_ca_key": {
+            "description": "Canonical public OpenSSH CA line, encoded as base64 in the reviewed plan.",
+            "format": "byte",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "reason",
+          "public_ca_key",
+          "ca_fingerprint",
+          "expires_at",
+          "hosts"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetPlanInput": {
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/SSHTrustFleetPlan"
+          },
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "plan_digest"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetPreview": {
+        "properties": {
+          "effect_free": {
+            "type": "boolean"
+          },
+          "job_kind_enabled": {
+            "type": "boolean"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SSHTrustFleetPlan"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "ready_hosts": {
+            "type": "integer"
+          },
+          "skipped_hosts": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan",
+          "plan_digest",
+          "ready_hosts",
+          "skipped_hosts",
+          "effect_free",
+          "job_kind_enabled"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetPreviewInput": {
+        "properties": {
+          "agent_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "public_ca_key": {
+            "description": "One plain OpenSSH CA public key, never a private key.",
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "reason",
+          "public_ca_key",
+          "agent_ids"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetReport": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ca_fingerprint": {
+            "type": "string"
+          },
+          "ca_read_back": {
+            "type": "boolean"
+          },
+          "changed": {
+            "type": "boolean"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "config_file_sha256": {
+            "type": "string"
+          },
+          "effective_config_read_back": {
+            "type": "boolean"
+          },
+          "healthy": {
+            "type": "boolean"
+          },
+          "phase": {
+            "enum": [
+              "preflight",
+              "backup",
+              "write_trust",
+              "write_config",
+              "validate",
+              "reload",
+              "health",
+              "readback",
+              "complete"
+            ],
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "readiness_digest": {
+            "type": "string"
+          },
+          "reason_code": {
+            "enum": [
+              "local_not_enabled",
+              "local_unconfirmed",
+              "other_agent",
+              "policy_changed",
+              "ca_pin_changed",
+              "execution_window_ended",
+              "canceled",
+              "local_configuration_invalid",
+              "host_busy",
+              "apply_failed",
+              "readback_failed"
+            ],
+            "type": "string"
+          },
+          "reloaded": {
+            "type": "boolean"
+          },
+          "rollback": {
+            "enum": [
+              "not_needed",
+              "not_available",
+              "verified",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "rollout_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "verified",
+              "failed",
+              "refused"
+            ],
+            "type": "string"
+          },
+          "trust_file_sha256": {
+            "type": "string"
+          },
+          "validated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "rollout_id",
+          "agent_id",
+          "plan_digest",
+          "readiness_digest",
+          "ca_fingerprint",
+          "state",
+          "phase",
+          "rollback",
+          "changed",
+          "ca_read_back",
+          "effective_config_read_back",
+          "validated",
+          "reloaded",
+          "healthy",
+          "checked_at"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetRollout": {
+        "properties": {
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/SSHTrustFleetHost"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SSHTrustFleetPlan"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "requester": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "verified",
+              "attention_required",
+              "execution_window_expired"
+            ],
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "window_expired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "id",
+          "plan",
+          "plan_digest",
+          "approval_request_id",
+          "requester",
+          "state",
+          "window_expired",
+          "created_at",
+          "updated_at",
+          "hosts"
+        ],
+        "type": "object"
+      },
+      "SSHTrustFleetStartInput": {
+        "properties": {
+          "approval_intent_digest": {
+            "type": "string"
+          },
+          "approval_request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/SSHTrustFleetPlan"
+          },
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan",
+          "plan_digest",
+          "approval_request_id",
+          "approval_intent_digest"
+        ],
+        "type": "object"
+      },
+      "SSHTrustReadiness": {
+        "properties": {
+          "ca_fingerprint": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "issue_code": {
+            "enum": [
+              "local_configuration_invalid",
+              "report_state_paused"
+            ],
+            "type": "string"
+          },
+          "policy_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "confirmed"
         ],
         "type": "object"
       },
@@ -78353,6 +78833,321 @@
         ],
         "summary": "Get SSH CA, KRL, and attestation workflow status",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/ssh/trust-fleet/approvals": {
+      "post": {
+        "operationId": "requestSSHTrustFleetApproval",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHTrustFleetPlanInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHTrustFleetApproval"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Request exact approval for a reviewed SSH trust fleet change",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/ssh/trust-fleet/preview": {
+      "post": {
+        "operationId": "previewSSHTrustFleet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHTrustFleetPreviewInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHTrustFleetPreview"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review an additive SSH CA change and each host's local opt-in",
+        "x-trstctl-permission": "agents:write",
+        "x-trstctl-read-only": true
+      }
+    },
+    "/api/v1/ssh/trust-fleet/rollouts": {
+      "get": {
+        "operationId": "listSSHTrustFleetRollouts",
+        "parameters": [
+          {
+            "description": "maximum items per page (1-100, default 20)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor from a prior page",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHTrustFleetList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List SSH fleet rollouts with signed host results",
+        "x-trstctl-permission": "agents:read"
+      },
+      "post": {
+        "operationId": "startSSHTrustFleet",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SSHTrustFleetStartInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHTrustFleetRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Dispatch an approved SSH trust addition to opted-in hosts",
+        "x-trstctl-permission": "agents:write"
+      }
+    },
+    "/api/v1/ssh/trust-fleet/rollouts/{id}": {
+      "get": {
+        "operationId": "getSSHTrustFleetRollout",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSHTrustFleetRollout"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read one SSH fleet rollout and its verified or failed host effects",
+        "x-trstctl-permission": "agents:read"
       }
     },
     "/api/v1/ssh/trust-rollouts": {

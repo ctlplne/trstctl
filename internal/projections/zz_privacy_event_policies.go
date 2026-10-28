@@ -1129,6 +1129,10 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	policies[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = identityTransitionV5
 	policies[privacyEventPolicyKey{EventType: EventIdentityRevoked, Version: LifecycleKeyCompromiseEventSchemaVersion}] = identityTransitionV8
 	addCACeremonyPrivacyPolicies(policies)
+	addSSHTrustFleetPrivacyPolicies(policies)
+	current := agentHeartbeat
+	current.Rules = append(append([]events.PrivacyFieldRule{}, agentHeartbeat.Rules...), privacyRule("/executors/ssh_trust/enabled", opaque), privacyRule("/executors/ssh_trust/confirmed", opaque), privacyRule("/executors/ssh_trust/ca_fingerprint", opaque), privacyRule("/executors/ssh_trust/policy_digest", opaque), privacyRule("/executors/ssh_trust/issue_code", opaque))
+	policies[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = current
 	return policies
 }
 
@@ -1569,12 +1573,12 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventPAMSessionRevocationRequested, 1}:                                              privacyPayloadShape[PAMSessionRevocationRequested](),
 		{EventPAMSessionRevocationFailed, 1}:                                                 privacyPayloadShape[PAMSessionRevocationFailed](),
 		{EventPAMSessionRevoked, 1}:                                                          privacyPayloadShape[PAMSessionRevoked](),
-		{EventAgentHeartbeat, 1}:                                                             privacyPayloadShape[AgentHeartbeat](),
-		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:                       privacyPayloadShape[AgentHeartbeat](),
-		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}:                    privacyPayloadShape[AgentHeartbeat](),
-		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:                     privacyPayloadShape[AgentHeartbeat](),
-		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:                             privacyPayloadShape[AgentHeartbeat](),
-		{EventAgentHeartbeat, AgentHeartbeatClockSchemaVersion}:                              privacyPayloadShape[AgentHeartbeat](),
+		{EventAgentHeartbeat, 1}:                                                             privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
+		{EventAgentHeartbeat, AgentHeartbeatPluginCensusSchemaVersion}:                       privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
+		{EventAgentHeartbeat, AgentHeartbeatRevocationCacheSchemaVersion}:                    privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
+		{EventAgentHeartbeat, AgentHeartbeatExecutorCensusSchemaVersion}:                     privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
+		{EventAgentHeartbeat, AgentHeartbeatSSHKRLSchemaVersion}:                             privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
+		{EventAgentHeartbeat, AgentHeartbeatClockSchemaVersion}:                              privacyPayloadShape[agentHeartbeatBeforeSSHTrust](),
 		{EventAgentCertRenewed, 1}:                                                           privacyPayloadShape[privacyAgentCertRenewedV1](),
 		{EventAgentCertRenewed, AgentCertRenewedRolesSchemaVersion}:                          privacyPayloadShape[AgentCertRenewed](),
 		{EventAgentRolesGranted, 1}:                                                          privacyPayloadShape[AgentRolesGranted](),
@@ -1648,6 +1652,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV7]()
 	}
 	addCACeremonyPrivacyShapes(shapes)
+	addSSHTrustFleetPrivacyShapes(shapes)
+	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = privacyPayloadShape[AgentHeartbeat]()
 	return shapes
 }
 

@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -2230,6 +2231,12 @@ const AgentHeartbeatClockSchemaVersion = 6
 // validateAgentHeartbeatClock binds the clock reading to the schema version
 // that introduced it.
 func validateAgentHeartbeatClock(schemaVersion int, heartbeat AgentHeartbeat) error {
+	if schemaVersion == AgentHeartbeatSSHTrustSchemaVersion {
+		if heartbeat.AgentTimeUnixMilli < 0 {
+			return errors.New("agent clock reading cannot be negative")
+		}
+		return nil
+	}
 	switch schemaVersion {
 	case events.DefaultSchemaVersion, AgentHeartbeatPluginCensusSchemaVersion, AgentHeartbeatRevocationCacheSchemaVersion,
 		AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion:
@@ -2273,7 +2280,7 @@ func validateAgentHeartbeatSSHKRL(schemaVersion int, tenantID string, heartbeat 
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v5 requires an SSH KRL receipt")
 		}
-	case AgentHeartbeatClockSchemaVersion:
+	case AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
 		// A v6 heartbeat is introduced by the agent's clock reading; the KRL
 		// receipt stays independently optional.
 		if report == nil {
@@ -2304,8 +2311,9 @@ func validateAgentHeartbeatSSHKRL(schemaVersion int, tenantID string, heartbeat 
 // authorizing nothing; the certificate role and the server census still gate
 // every claim.
 type AgentExecutorCensus struct {
-	Version string              `json:"version"`
-	Kinds   []AgentExecutorKind `json:"kinds"`
+	SSHTrust *sshtrustrollout.Readiness `json:"ssh_trust,omitempty"`
+	Version  string                     `json:"version"`
+	Kinds    []AgentExecutorKind        `json:"kinds"`
 	// HostTLSProbe: the host exec profile pins tls_probe_openssl (B6-1).
 	HostTLSProbe bool `json:"host_tls_probe,omitempty"`
 	// HostProfileError: why the host exec profile could not be loaded (B7);
@@ -2362,7 +2370,7 @@ func validateAgentHeartbeatExecutors(schemaVersion int, heartbeat AgentHeartbeat
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v4 requires an executor census")
 		}
-	case AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion:
+	case AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
 		// A v5 heartbeat is introduced by an SSH KRL receipt and a v6 by the
 		// agent's clock reading; the executor census stays independently
 		// optional.
@@ -2433,7 +2441,7 @@ func validateAgentHeartbeatPluginCensus(schemaVersion int, tenantID string, hear
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v2 requires relay plugin census")
 		}
-	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion:
+	case AgentHeartbeatRevocationCacheSchemaVersion, AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
 		// A v3 heartbeat is introduced by revocation-cache posture, a v4 by
 		// the executor census, a v5 by an SSH KRL receipt and a v6 by the
 		// agent's clock reading. Plugin census
@@ -2474,7 +2482,7 @@ func validateAgentHeartbeatRevocationCaches(schemaVersion int, tenantID string, 
 		if report == nil {
 			return errors.New("projections: agent.heartbeat v3 requires revocation cache posture")
 		}
-	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion:
+	case AgentHeartbeatExecutorCensusSchemaVersion, AgentHeartbeatSSHKRLSchemaVersion, AgentHeartbeatClockSchemaVersion, AgentHeartbeatSSHTrustSchemaVersion:
 		// A v4 heartbeat is introduced by the executor census, a v5 by an SSH
 		// KRL receipt and a v6 by the agent's clock reading; cache posture stays
 		// independently optional.
@@ -4563,6 +4571,8 @@ func (p *Projector) rebuildEventProjectionsThrough(
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
+	EventSSHTrustFleetStarted:                     {1: true},
+	EventSSHTrustFleetObserved:                    {1: true},
 	"cmdb.certificate_export.requested":           {1: true},
 	"cmdb.certificate_export.verified":            {1: true},
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
@@ -4680,7 +4690,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventBreakglassCACrossSigned:                  {1: true},
 	EventCRLPublished:                             {1: true, 2: true, 3: true},
 	EventOCSPResponderRotated:                     {1: true},
-	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true},
+	EventAgentHeartbeat:                           {1: true, AgentHeartbeatPluginCensusSchemaVersion: true, AgentHeartbeatRevocationCacheSchemaVersion: true, AgentHeartbeatExecutorCensusSchemaVersion: true, AgentHeartbeatSSHKRLSchemaVersion: true, AgentHeartbeatClockSchemaVersion: true, AgentHeartbeatSSHTrustSchemaVersion: true},
 	EventAgentCertRenewed:                         {1: true, AgentCertRenewedRolesSchemaVersion: true},
 	EventAgentRolesGranted:                        {1: true},
 	EventKMIPClientRegistered:                     {1: true},
@@ -4988,6 +4998,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyArchiveLegalHoldTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applySSHTrustFleetTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyEndpointRecoveryCheckTx(ctx, tx, e); handled {
@@ -6194,6 +6207,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		if err := validateAgentHeartbeatRevocationCaches(schemaVersionOf(e), e.TenantID, pl); err != nil {
+			return err
+		}
+		if err := validateAgentHeartbeatSSHTrust(schemaVersionOf(e), pl); err != nil {
 			return err
 		}
 		if err := validateAgentHeartbeatExecutors(schemaVersionOf(e), pl); err != nil {

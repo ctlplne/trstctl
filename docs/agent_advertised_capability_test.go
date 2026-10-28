@@ -11,6 +11,7 @@ import (
 
 	"trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/relay"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 )
 
 // Advertised agent capability must equal shipped agent capability
@@ -189,6 +190,16 @@ func TestShippedRelayJobKindsAreExecutableByTheBinary(t *testing.T) {
 			!strings.Contains(sources, "relay.RunOnceWithHost(") &&
 			!strings.Contains(sources, "relay.RunOnce(") {
 			t.Errorf("relay job kind %q is declared but the agent binary never runs the job loop", kind.Kind)
+		}
+		// A226 has its own host-authorized worker. A shared relay call cannot
+		// prove this executor reachable, so require its constructor, real claim
+		// list and effect path in the shipped binary too.
+		if kind.Kind == sshtrustrollout.Destination {
+			for _, call := range []string{"startSSHTrustFleetLoop(", "sshtrustfleet.ClaimableKinds(", "sshtrustfleet.ExecuteAt("} {
+				if !strings.Contains(sources, call) {
+					t.Errorf("SSH fleet census has no production call to %s", call)
+				}
+			}
 		}
 		// Every declared connector must be executable by ONE of the two
 		// executors — the relay for appliances, the host runner for file/exec

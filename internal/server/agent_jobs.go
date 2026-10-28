@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -64,6 +65,7 @@ import (
 // ship. Handing out work nothing can perform is how a queue silently fills while
 // the control plane's own worker stops doing it.
 var agentJobKindAllowlist = map[string]bool{
+	sshtrustrollout.Destination: true,
 	"connector.deploy":          true,
 	"connector.rollback":        true,
 	relay.KindEndpointContain:   true,
@@ -865,6 +867,8 @@ func (a *agentService) ingestExecutedReport(
 		return ingestErr
 	}
 	switch claim.Destination {
+	case sshtrustrollout.Destination:
+		return a.recordSSHTrustFleetResult(ctx, info, claim, req)
 	case relay.KindPQCPosture, relay.KindPQCPostureRollback:
 		if a.recordPQCPostureResult == nil {
 			return errors.New("PQC host posture result receiver is not configured")
@@ -1126,6 +1130,11 @@ func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.Pee
 		}
 	}
 
+	if claim.Destination == sshtrustrollout.Destination {
+		if err := a.recordSSHTrustFleetResult(ctx, info, claim, req); err != nil {
+			return false, "", status.Error(codes.Internal, "record SSH trust failure")
+		}
+	}
 	detail := strings.TrimSpace(req.Detail)
 	if claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback {
 		if a.recordPQCPostureResult == nil {
@@ -1767,6 +1776,10 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 }
 
 func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job store.AgentJob) ([]byte, error) {
+	if job.Destination == sshtrustrollout.Destination {
+		return a.projectSSHTrustFleetClaim(ctx, job)
+	}
+
 	if job.Destination == relay.KindPQCPosture || job.Destination == relay.KindPQCPostureRollback {
 		if a.openPQCPostureJob == nil {
 			return nil, errors.New("PQC host posture job opener is not configured")

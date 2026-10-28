@@ -911,6 +911,7 @@ export interface Agent {
   reported_host_tls_probe?: boolean;
   reported_pending_report_error?: string;
   reported_relay_ca_bundle?: { error?: string; loaded_at: string; sha256: string };
+  reported_ssh_trust_readiness?: SSHTrustReadiness;
   role_grant?: AgentRoleGrant;
   role_source: "certificate" | "unreported";
   roles: ("host" | "network")[];
@@ -8876,6 +8877,113 @@ export interface SSHStatus {
   revoked_count: number;
   served: boolean;
   tenant_id: string;
+}
+
+export interface SSHTrustFleetApproval {
+  approval_count: number;
+  approval_intent_digest: string;
+  approval_request_id: string;
+  expires_at: string;
+  plan: SSHTrustFleetPlan;
+  plan_digest: string;
+  required_approvals: number;
+  status: string;
+}
+
+export interface SSHTrustFleetHost {
+  agent_id: string;
+  attempt?: number;
+  checked_at?: string;
+  job_id?: number;
+  receipt?: SSHTrustFleetReport;
+  receipt_event_id?: string;
+  skip_reason?: string;
+  state: "queued" | "skipped" | "verified" | "failed" | "refused";
+}
+
+export interface SSHTrustFleetList {
+  items: SSHTrustFleetRollout[];
+  next_cursor?: string;
+}
+
+export interface SSHTrustFleetPlan {
+  ca_fingerprint: string;
+  expires_at: string;
+  hosts: ({ agent_id: string; readiness_digest?: string; reason?: "disabled" | "unconfirmed" | "misconfigured" | "not_reported" | "stale" | "not_host_role" | "ca_not_staged" | "claims_paused"; state: "ready" | "skipped" })[];
+  name: string;
+  public_ca_key: string;
+  reason: string;
+}
+
+export interface SSHTrustFleetPlanInput {
+  plan: SSHTrustFleetPlan;
+  plan_digest: string;
+}
+
+export interface SSHTrustFleetPreview {
+  effect_free: boolean;
+  job_kind_enabled: boolean;
+  plan: SSHTrustFleetPlan;
+  plan_digest: string;
+  ready_hosts: number;
+  skipped_hosts: number;
+}
+
+export interface SSHTrustFleetPreviewInput {
+  agent_ids: string[];
+  name: string;
+  public_ca_key: string;
+  reason: string;
+}
+
+export interface SSHTrustFleetReport {
+  agent_id: string;
+  ca_fingerprint: string;
+  ca_read_back: boolean;
+  changed: boolean;
+  checked_at: string;
+  config_file_sha256?: string;
+  effective_config_read_back: boolean;
+  healthy: boolean;
+  phase: "preflight" | "backup" | "write_trust" | "write_config" | "validate" | "reload" | "health" | "readback" | "complete";
+  plan_digest: string;
+  readiness_digest: string;
+  reason_code?: "local_not_enabled" | "local_unconfirmed" | "other_agent" | "policy_changed" | "ca_pin_changed" | "execution_window_ended" | "canceled" | "local_configuration_invalid" | "host_busy" | "apply_failed" | "readback_failed";
+  reloaded: boolean;
+  rollback: "not_needed" | "not_available" | "verified" | "failed";
+  rollout_id: string;
+  state: "verified" | "failed" | "refused";
+  trust_file_sha256?: string;
+  validated: boolean;
+}
+
+export interface SSHTrustFleetRollout {
+  approval_request_id: string;
+  created_at: string;
+  hosts: SSHTrustFleetHost[];
+  id: string;
+  plan: SSHTrustFleetPlan;
+  plan_digest: string;
+  requester: string;
+  state: "pending" | "verified" | "attention_required" | "execution_window_expired";
+  tenant_id: string;
+  updated_at: string;
+  window_expired: boolean;
+}
+
+export interface SSHTrustFleetStartInput {
+  approval_intent_digest: string;
+  approval_request_id: string;
+  plan: SSHTrustFleetPlan;
+  plan_digest: string;
+}
+
+export interface SSHTrustReadiness {
+  ca_fingerprint?: string;
+  confirmed: boolean;
+  enabled: boolean;
+  issue_code?: "local_configuration_invalid" | "report_state_paused";
+  policy_digest?: string;
 }
 
 export interface SSHTrustRollout {

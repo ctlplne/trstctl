@@ -642,3 +642,14 @@ operators bring signed emergency bundles back to the control plane.
 See [Configuration → Datastores](configuration.md#datastores) and
 [Configuration → Signer](configuration.md#signer-topology-and-ca-custody) for the
 settings these procedures use.
+
+### Approved SSH fleet state (A226)
+
+Snapshot format 66 includes `ssh_trust_fleet_rollouts` and
+`ssh_trust_fleet_hosts`, restoring the parent before its host receipts. Older
+snapshots are invalidated so their covered offsets cannot skip new SSH events.
+Full log restore rebuilds approvals, the exact skipped roster and observations;
+outbox reconciliation recreates each approved host intent once. This restores
+control-plane evidence, not host file bytes. Expired work refuses before a new
+mutation. Pending encrypted host reports remain on the agent's retained volume;
+keep that volume during upgrade and use the fleet runbook for local recovery.

@@ -118,8 +118,44 @@ The control plane also has a served handoff for this high-blast-radius path:
 `POST /api/v1/ssh/trust-rollouts` records the source, target hosts, CA fingerprint,
 reload/health commands, rollback plan, status, and an explicit `confirmed=true`
 acknowledgment; `POST /api/v1/ssh/hosts/retire` records retirement evidence once
-migration completes. The browser and CLI record/request the workflow, but host file
-edits happen only inside the operator-confirmed agent path.
+migration completes. This endpoint remains a manual evidence record; it cannot dispatch jobs or create
+verified fleet receipts.
+
+### Approved fleet trust changes (A226)
+
+The **Fleet SSH trust changes** panel in **SSH access → Trust rollout** previews
+an exact roster, requests independent approval, starts the approved change, and
+shows each signed host receipt. The matching API is
+`/api/v1/ssh/trust-fleet/{preview,approvals,rollouts}`; the CLI is
+`trstctl-cli ssh trust-fleet {preview,request-approval,start,list,show}`.
+
+Each enrolled host must separately enable `--ssh-trust-fleet` and
+`--ssh-trust-confirm`, stage the selected public CA, and choose its local file
+paths and validation, reload, and health commands. The remote job carries none
+of those commands or paths and cannot turn local confirmation on. Preview keeps
+opted-out, stale, missing, or misconfigured hosts visible as skipped. Approval
+binds the exact public key, host policies, roster, and deadline; a changed ready
+host requires another preview and approval. The default quorum is two distinct
+reviewers, with no self-approval.
+
+A dedicated one-worker host loop executes `ssh.trust.apply`. It serializes local
+SSH changes with KRL installation, adds trust, validates, reloads, and checks
+health, then independently reads the CA and effective global trust path back.
+The signed receipt binds the enrolled host, job attempt, plan, policy, hashes,
+and observation time. A queued job is pending. A checked restoration after a
+failure is **attention_required**, never successful rollout. Served completion
+also requires the matching immutable source event; changing a database row
+cannot manufacture a verified effect.
+
+Local backups are memory-only. Process or machine loss can interrupt recovery;
+keep an independent access path and backup. External administrators must not
+edit these files concurrently. The health command defines the runtime proof:
+configure a pinned, real login check for the access you need. Receipts describe
+the observation time, not perpetual host health. The fleet path adds user-CA
+trust only; host-certificate installation, trust removal, and authorized_keys
+pruning need their own explicit workflow. See the
+[fleet trust runbook](../runbooks/ssh-trust-fleet.md) for setup, approvals,
+receipt recovery, and the exact proof limits.
 
 ### Hosts under this SSH CA (A115)
 

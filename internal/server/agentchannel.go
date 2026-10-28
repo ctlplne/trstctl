@@ -43,8 +43,8 @@ import (
 	"os"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -724,6 +724,13 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 			// B13-R1: bounded like the relay CA bundle's reload error below.
 			census.PendingReportError = census.PendingReportError[:512]
 		}
+		if req.Executors.SSHTrust != nil {
+			readiness := *req.Executors.SSHTrust
+			if err := readiness.Validate(); err != nil {
+				return nil, status.Error(codes.InvalidArgument, "invalid SSH trust readiness")
+			}
+			census.SSHTrust = &readiness
+		}
 		if census.Version == "" {
 			census.Version = strings.TrimSpace(req.Version)
 		}
@@ -766,6 +773,9 @@ func (a *agentService) recordHeartbeat(ctx context.Context, req *transport.Heart
 		// the event's time; nothing here trusts it for anything else.
 		beatPayload.AgentTimeUnixMilli = req.AgentTimeUnixMilli
 		eventSchemaVersion = projections.AgentHeartbeatClockSchemaVersion
+	}
+	if beatPayload.Executors != nil && beatPayload.Executors.SSHTrust != nil {
+		eventSchemaVersion = projections.AgentHeartbeatSSHTrustSchemaVersion
 	}
 	payload, err := json.Marshal(beatPayload)
 	if err != nil {
@@ -1349,12 +1359,11 @@ func (s *Server) AgentChannelAddr() string {
 // agentNamespace is the fixed UUIDv5 namespace under which an agent's stable
 // (tenant,name) identity is turned into its agents.id, so repeated heartbeats from the
 // same agent upsert the same row (mirroring caNamespace for the CA id).
-var agentNamespace = uuid.MustParse("b3d4e5f6-0a1b-5c2d-8e3f-4a5b6c7d8e9f")
 
 // agentRowID derives a STABLE agents.id for an agent identified by (tenant, name), so
 // repeated heartbeats from the same agent upsert the same row rather than inserting
 // duplicates. It is a deterministic UUIDv5 over the tenant + name under the agent
 // namespace (the same approach IssuingCAID uses for the CA id).
 func agentRowID(tenantID, name string) string {
-	return uuid.NewSHA1(agentNamespace, []byte(tenantID+"\x00"+name)).String()
+	return sshtrustrollout.EnrolledAgentID(tenantID, name)
 }

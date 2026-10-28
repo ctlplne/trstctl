@@ -31,6 +31,7 @@ type highRiskVerdictProof struct {
 // negative proof and an operator-visible console rendering. References are
 // declaration-checked below, so renaming or deleting a proof fails CI.
 var highRiskVerdictProofs = []highRiskVerdictProof{
+	{Verdict: "SSHTrustFleetRollout.state", NegativeTests: []negativeProofReference{{Test: "internal/server/ssh_trust_fleet_served_test.go:TestServedSSHTrustFleetRequiresExactApprovalAndSkipsOptOut", RequiredTokens: []string{"http.StatusServiceUnavailable", "projected state invented completion without signed source", "opt-out host got work"}}}, Console: "web/src/pages/ssh/SSHTrustFleetPanel.tsx:SSHTrustFleetPanel", ConsoleTokens: []string{"rollout.state", "host.receipt.rollback", "detail.error ? null : detail.data"}},
 	{
 		Verdict: "ComplianceReportRun.status",
 		NegativeTests: []negativeProofReference{

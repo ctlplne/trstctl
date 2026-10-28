@@ -579,6 +579,13 @@ import type {
   SSHKRLHost,
   SSHRevokeCertificateRequest,
   SSHStatus,
+  SSHTrustFleetPreview,
+  SSHTrustFleetPreviewInput,
+  SSHTrustFleetPlanInput,
+  SSHTrustFleetApproval,
+  SSHTrustFleetRollout,
+  SSHTrustFleetList,
+  SSHTrustFleetStartInput,
   SSHTrustRollout,
   SSHTrustRolloutRequest,
   ThirdPartySecretScanIngestRequest,
@@ -1439,6 +1446,13 @@ export type {
   SSHKRLHost,
   SSHRevokeCertificateRequest,
   SSHStatus,
+  SSHTrustFleetPreview,
+  SSHTrustFleetPreviewInput,
+  SSHTrustFleetPlanInput,
+  SSHTrustFleetApproval,
+  SSHTrustFleetRollout,
+  SSHTrustFleetList,
+  SSHTrustFleetStartInput,
   SSHTrustRollout,
   SSHTrustRolloutRequest,
   ThirdPartySecretScanIngestRequest,
@@ -2408,6 +2422,11 @@ export interface Api {
   sshStatus(): Promise<SSHStatus>;
   sshFleet(): Promise<SSHFleetInventory>;
   sshKRLFleet(): Promise<SSHKRLFleet>;
+  previewSSHTrustFleet(input: SSHTrustFleetPreviewInput): Promise<SSHTrustFleetPreview>;
+  requestSSHTrustFleetApproval(input: SSHTrustFleetPlanInput, key?: string): Promise<SSHTrustFleetApproval>;
+  startSSHTrustFleet(input: SSHTrustFleetStartInput, key?: string): Promise<SSHTrustFleetRollout>;
+  sshTrustFleetRollouts(options?: { limit?: number; cursor?: string }): Promise<SSHTrustFleetList>;
+  sshTrustFleetRollout(id: string): Promise<SSHTrustFleetRollout>;
   recordSSHTrustRollout(input: SSHTrustRolloutRequest): Promise<SSHTrustRollout>;
   previewSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificatePreview>;
   issueSSHCertificate(input: SSHCertificateRequest): Promise<SSHCertificate>;
@@ -3240,6 +3259,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   sshStatus: () => req<SSHStatus>("/api/v1/ssh/status"),
   sshFleet: () => req<SSHFleetInventory>("/api/v1/ssh/fleet"),
   sshKRLFleet: () => req<SSHKRLFleet>("/api/v1/ssh/krl/receipts"),
+  previewSSHTrustFleet: (input) => postRead<SSHTrustFleetPreview>("/api/v1/ssh/trust-fleet/preview", input),
+  requestSSHTrustFleetApproval: (input, key) => mutate<SSHTrustFleetApproval>("POST", "/api/v1/ssh/trust-fleet/approvals", input, key),
+  startSSHTrustFleet: (input, key) => mutate<SSHTrustFleetRollout>("POST", "/api/v1/ssh/trust-fleet/rollouts", input, key),
+  sshTrustFleetRollouts: (options) => req<SSHTrustFleetList>(`/api/v1/ssh/trust-fleet/rollouts${pageQueryString(options)}`),
+  sshTrustFleetRollout: (id) => req<SSHTrustFleetRollout>(`/api/v1/ssh/trust-fleet/rollouts/${encodeURIComponent(id)}`),
   recordSSHTrustRollout: (input) => mutate<SSHTrustRollout>("POST", "/api/v1/ssh/trust-rollouts", input),
   previewSSHCertificate: (input) => postRead<SSHCertificatePreview>("/api/v1/ssh/certificates/preview", input),
   issueSSHCertificate: (input) => mutate<SSHCertificate>("POST", "/api/v1/ssh/certificates", input),

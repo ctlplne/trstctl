@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { AppQueryProvider } from "@/lib/query";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { SSHTrust } from "@/pages/SSHTrust";
@@ -7,6 +8,7 @@ import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    sshTrustFleetRollouts: vi.fn(),
     sshStatus: vi.fn(),
     sshFleet: vi.fn(),
     sshKRLFleet: vi.fn(),
@@ -28,7 +30,9 @@ vi.mock("@/lib/api", async () => {
 function renderSSHTrust() {
   return render(
     <MemoryRouter>
-      <SSHTrust />
+      <AppQueryProvider>
+        <SSHTrust />
+      </AppQueryProvider>
     </MemoryRouter>,
   );
 }
@@ -36,6 +40,7 @@ function renderSSHTrust() {
 describe("SSH trust served workflow surface", () => {
   beforeEach(() => {
     for (const mock of Object.values(apiMock)) mock.mockReset();
+    apiMock.sshTrustFleetRollouts.mockResolvedValue({ items: [] });
     apiMock.sshStatus.mockResolvedValue({
       served: true,
       tenant_id: "tenant-1",
@@ -356,6 +361,7 @@ describe("SSH trust served workflow surface", () => {
   });
 
   it("labels readiness counts without broken singular grammar", async () => {
+    apiMock.sshTrustFleetRollouts.mockResolvedValue({ items: [] });
     apiMock.sshStatus.mockResolvedValue({
       served: true,
       tenant_id: "tenant-1",

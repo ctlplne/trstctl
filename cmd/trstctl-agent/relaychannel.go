@@ -88,7 +88,7 @@ func (r relayChannel) ClaimJobs(ctx context.Context, kinds []string, limit, leas
 	for _, job := range resp.Jobs {
 		out = append(out, relay.Job{
 			JobID: job.JobID, Kind: job.Kind, Attempt: job.Attempt, Payload: job.Payload,
-			ApplianceReference: job.ApplianceReference,
+			ApplianceReference: job.ApplianceReference, LeaseExpiresUnix: job.LeaseExpiresUnix,
 		})
 	}
 	return out, nil

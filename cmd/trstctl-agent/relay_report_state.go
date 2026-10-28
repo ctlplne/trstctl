@@ -206,3 +206,50 @@ func setAsidePendingReportFor(o agentOptions) (string, error) {
 	}
 	return reportstate.SetAsideUnopenable(path, binding)
 }
+
+func setAsideAllPendingReportsFor(o agentOptions) (string, error) {
+	normal, err := setAsidePendingReportFor(o)
+	if err != nil {
+		return normal, err
+	}
+	ssh, err := setAsideSSHTrustPendingReportFor(o)
+	if err != nil {
+		return normal, err
+	}
+	if normal == "" {
+		return ssh, nil
+	}
+	if ssh == "" {
+		return normal, nil
+	}
+	return normal + ", " + ssh, nil
+}
+func setAsideSSHTrustPendingReportFor(o agentOptions) (string, error) {
+	path, err := sshTrustPendingReportsDir(o)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	caPEM, err := os.ReadFile(o.caBundle)
+	if err != nil {
+		return "", fmt.Errorf("read CA bundle: %w", err)
+	}
+	id, err := mtls.LoadAgentIdentity(o.commonName, o.keyPath, o.certPath)
+	if err != nil {
+		return "", fmt.Errorf("load this agent's enrolled identity: %w", err)
+	}
+	defer id.Destroy()
+	serverName := o.serverName
+	if serverName == "" {
+		serverName = o.commonName
+	}
+	binding, err := reportIdentityBinding(id, caPEM, serverName)
+	if err != nil {
+		return "", err
+	}
+	return reportstate.SetAsideUnopenable(path, binding)
+}

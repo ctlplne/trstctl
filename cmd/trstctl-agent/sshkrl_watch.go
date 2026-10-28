@@ -303,6 +303,12 @@ func fetchSSHKRL(ctx context.Context, client *http.Client, o sshKRLWatchOptions)
 }
 
 func applySSHKRL(ctx context.Context, o sshKRLWatchOptions, checks sshkrl.Checks, data []byte) (sshkrl.Result, error) {
+	release, lockErr := acquireSSHHostMutation(ctx)
+	if lockErr != nil {
+		return sshkrl.Result{}, lockErr
+	}
+	defer release()
+
 	if checks == nil {
 		return sshkrl.Result{}, errors.New("SSH KRL sync requires local OpenSSH checks")
 	}

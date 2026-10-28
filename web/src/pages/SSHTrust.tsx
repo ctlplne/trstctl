@@ -22,6 +22,9 @@ import {
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { SSHCertificateWorkflow } from "@/pages/ssh/SSHCertificateWorkflow";
 import { SSHHostTrustPanel } from "@/pages/ssh/SSHHostTrustPanel";
+import { SSHTrustFleetPanel } from "@/pages/ssh/SSHTrustFleetPanel";
+import { useAuth } from "@/auth/AuthProvider";
+import { hasPermission } from "@/lib/access";
 import { SSHKRLFleetPanel } from "@/pages/ssh/SSHKRLFleetPanel";
 import { SSHRevocationWorkflow, type SSHRevocationSeed } from "@/pages/ssh/SSHRevocationWorkflow";
 
@@ -88,6 +91,7 @@ function numericOrUndefined(input: string): number | undefined {
 }
 
 export function SSHTrust() {
+  const { user } = useAuth();
   const { t } = useTranslation();
   const [activeTask, setActiveTask] = useState<"certificate" | "rollout" | "access" | "remove" | null>(null);
   const [status, setStatus] = useState<SSHStatus | null>(null);
@@ -453,6 +457,7 @@ export function SSHTrust() {
 
           {activeTask === "rollout" && (
             <section id="task-panel-rollout" aria-labelledby="rollout-heading" className="grid gap-3 border-y border-border py-4">
+              <SSHTrustFleetPanel publicKey={status.authority_key ?? ""} canConfigure={hasPermission(user, "agents:write")} />
               <div>
                 <h2 id="rollout-heading" className="text-title font-semibold">
                   {translateNow("source.ssh.deployment.and.trust.rollout.098d316f31")}

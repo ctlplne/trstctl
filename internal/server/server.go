@@ -1779,6 +1779,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithCMDBRunNow(s),
 		api.WithCMDBCertificateExports(s.cmdbExports),
 		api.WithSSHWorkflow(s),
+		api.WithSSHTrustFleet(sshTrustFleetSurface(d, s.orch)),
 		api.WithPKISecretLeafRecovery(s),
 		api.WithBroker(s),
 		api.WithCertificateRevocationAuthority(s.certificateRevocationAuthority),

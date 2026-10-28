@@ -116,6 +116,7 @@ nav:
           - Auth0: operator/oidc-runbooks/auth0.md
           - Microsoft Entra ID: operator/oidc-runbooks/entra-id.md
           - Google Workspace: operator/oidc-runbooks/google-workspace.md
+      - Approved SSH fleet trust: runbooks/ssh-trust-fleet.md
       - CA key ceremony: runbooks/key-ceremony.md
       - cert-manager approval and renewal: runbooks/kubernetes-cert-manager-approval.md
   - Build and automate:

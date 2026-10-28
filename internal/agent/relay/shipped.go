@@ -5,6 +5,7 @@ package relay
 import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 )
 
 // What this build can actually execute (epic A3, the C1a discipline).
@@ -46,6 +47,7 @@ type ShippedJobKind struct {
 // ShippedJobKinds is what this build performs.
 func ShippedJobKinds() []ShippedJobKind {
 	return []ShippedJobKind{
+		{Kind: sshtrustrollout.Destination, Flags: []string{"--ssh-trust-fleet", "--ssh-trust-confirm", "--ssh-trust-ca-key", "--ssh-trust-reload-cmd", "--ssh-trust-health-cmd"}, Roles: []string{mtls.AgentRoleHost}},
 		{
 			// H2: host-local CA-anchor install/remove plus exact readback. Public
 			// anchor bytes travel in the job; no credential is redeemed.

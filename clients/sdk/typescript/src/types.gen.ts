@@ -8341,6 +8341,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ssh/trust-fleet/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request exact approval for a reviewed SSH trust fleet change */
+        post: operations["requestSSHTrustFleetApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/trust-fleet/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review an additive SSH CA change and each host's local opt-in */
+        post: operations["previewSSHTrustFleet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/trust-fleet/rollouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List SSH fleet rollouts with signed host results */
+        get: operations["listSSHTrustFleetRollouts"];
+        put?: never;
+        /** Dispatch an approved SSH trust addition to opted-in hosts */
+        post: operations["startSSHTrustFleet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ssh/trust-fleet/rollouts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one SSH fleet rollout and its verified or failed host effects */
+        get: operations["getSSHTrustFleetRollout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/trust-rollouts": {
         parameters: {
             query?: never;
@@ -9656,6 +9725,7 @@ export interface components {
                 loaded_at: string;
                 sha256: string;
             };
+            reported_ssh_trust_readiness?: components["schemas"]["SSHTrustReadiness"];
             role_grant?: components["schemas"]["AgentRoleGrant"];
             /** @enum {string} */
             role_source: "certificate" | "unreported";
@@ -18763,6 +18833,138 @@ export interface components {
             served: boolean;
             /** Format: uuid */
             tenant_id: string;
+        };
+        SSHTrustFleetApproval: {
+            approval_count: number;
+            approval_intent_digest: string;
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            plan: components["schemas"]["SSHTrustFleetPlan"];
+            plan_digest: string;
+            required_approvals: number;
+            status: string;
+        };
+        SSHTrustFleetHost: {
+            /** Format: uuid */
+            agent_id: string;
+            attempt?: number;
+            /** Format: date-time */
+            checked_at?: string;
+            /** Format: int64 */
+            job_id?: number;
+            receipt?: components["schemas"]["SSHTrustFleetReport"];
+            /** Format: uuid */
+            receipt_event_id?: string;
+            skip_reason?: string;
+            /** @enum {string} */
+            state: "queued" | "skipped" | "verified" | "failed" | "refused";
+        };
+        SSHTrustFleetList: {
+            items: components["schemas"]["SSHTrustFleetRollout"][];
+            next_cursor?: string;
+        };
+        SSHTrustFleetPlan: {
+            ca_fingerprint: string;
+            /** Format: date-time */
+            expires_at: string;
+            hosts: {
+                /** Format: uuid */
+                agent_id: string;
+                readiness_digest?: string;
+                /** @enum {string} */
+                reason?: "disabled" | "unconfirmed" | "misconfigured" | "not_reported" | "stale" | "not_host_role" | "ca_not_staged" | "claims_paused";
+                /** @enum {string} */
+                state: "ready" | "skipped";
+            }[];
+            name: string;
+            /**
+             * Format: byte
+             * @description Canonical public OpenSSH CA line, encoded as base64 in the reviewed plan.
+             */
+            public_ca_key: string;
+            reason: string;
+        };
+        SSHTrustFleetPlanInput: {
+            plan: components["schemas"]["SSHTrustFleetPlan"];
+            plan_digest: string;
+        };
+        SSHTrustFleetPreview: {
+            effect_free: boolean;
+            job_kind_enabled: boolean;
+            plan: components["schemas"]["SSHTrustFleetPlan"];
+            plan_digest: string;
+            ready_hosts: number;
+            skipped_hosts: number;
+        };
+        SSHTrustFleetPreviewInput: {
+            agent_ids: string[];
+            name: string;
+            /** @description One plain OpenSSH CA public key, never a private key. */
+            public_ca_key: string;
+            reason: string;
+        };
+        SSHTrustFleetReport: {
+            /** Format: uuid */
+            agent_id: string;
+            ca_fingerprint: string;
+            ca_read_back: boolean;
+            changed: boolean;
+            /** Format: date-time */
+            checked_at: string;
+            config_file_sha256?: string;
+            effective_config_read_back: boolean;
+            healthy: boolean;
+            /** @enum {string} */
+            phase: "preflight" | "backup" | "write_trust" | "write_config" | "validate" | "reload" | "health" | "readback" | "complete";
+            plan_digest: string;
+            readiness_digest: string;
+            /** @enum {string} */
+            reason_code?: "local_not_enabled" | "local_unconfirmed" | "other_agent" | "policy_changed" | "ca_pin_changed" | "execution_window_ended" | "canceled" | "local_configuration_invalid" | "host_busy" | "apply_failed" | "readback_failed";
+            reloaded: boolean;
+            /** @enum {string} */
+            rollback: "not_needed" | "not_available" | "verified" | "failed";
+            /** Format: uuid */
+            rollout_id: string;
+            /** @enum {string} */
+            state: "verified" | "failed" | "refused";
+            trust_file_sha256?: string;
+            validated: boolean;
+        };
+        SSHTrustFleetRollout: {
+            /** Format: uuid */
+            approval_request_id: string;
+            /** Format: date-time */
+            created_at: string;
+            hosts: components["schemas"]["SSHTrustFleetHost"][];
+            /** Format: uuid */
+            id: string;
+            plan: components["schemas"]["SSHTrustFleetPlan"];
+            plan_digest: string;
+            requester: string;
+            /** @enum {string} */
+            state: "pending" | "verified" | "attention_required" | "execution_window_expired";
+            /** Format: uuid */
+            tenant_id: string;
+            /** Format: date-time */
+            updated_at: string;
+            window_expired: boolean;
+        };
+        SSHTrustFleetStartInput: {
+            approval_intent_digest: string;
+            /** Format: uuid */
+            approval_request_id: string;
+            plan: components["schemas"]["SSHTrustFleetPlan"];
+            plan_digest: string;
+        };
+        SSHTrustReadiness: {
+            ca_fingerprint?: string;
+            confirmed: boolean;
+            enabled: boolean;
+            /** @enum {string} */
+            issue_code?: "local_configuration_invalid" | "report_state_paused";
+            policy_digest?: string;
         };
         SSHTrustRollout: {
             candidate_ca_fingerprint?: string;
@@ -44350,6 +44552,221 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SSHStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestSSHTrustFleetApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHTrustFleetPlanInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHTrustFleetApproval"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSSHTrustFleet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHTrustFleetPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHTrustFleetPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSSHTrustFleetRollouts: {
+        parameters: {
+            query?: {
+                /** @description maximum items per page (1-100, default 20) */
+                limit?: number;
+                /** @description opaque pagination cursor from a prior page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHTrustFleetList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startSSHTrustFleet: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SSHTrustFleetStartInput"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHTrustFleetRollout"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSSHTrustFleetRollout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSHTrustFleetRollout"];
                 };
             };
             /** @description client error */

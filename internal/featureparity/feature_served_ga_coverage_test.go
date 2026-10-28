@@ -675,9 +675,8 @@ func TestTRACE027SSHCertificateAuthorityIncludesTheDirectConsole(t *testing.T) {
 
 // TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual locks the
 // remediation for TRACE-028. The explicit-confirmation SSH trust rollout API,
-// CLI, and console workflow belongs in the GA denominator; closed-loop host
-// rewrite automation remains visible as a roadmap residual and must not be
-// hidden inside a conditional F44 row.
+// CLI, and console workflow belongs in the GA denominator. A226 now also
+// requires approved fleet execution and signed, independently checked effects.
 func TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual(t *testing.T) {
 	catalog, err := Load()
 	if err != nil {
@@ -719,6 +718,10 @@ func TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual(t *testi
 		"internal/cli/cli_test.go",
 		"cmd/trstctl/main_test.go",
 		"web/src/__tests__/ssh_trust.test.tsx",
+		"internal/server/ssh_trust_fleet_openssh_test.go",
+		"internal/server/ssh_trust_fleet_served_test.go",
+		"internal/orchestrator/ssh_trust_fleet_recovery_test.go",
+		"web/src/__tests__/ssh_trust_fleet.test.tsx",
 		"internal/featureparity/feature_served_ga_coverage_test.go",
 	} {
 		if !testRefs[wantRef] {
@@ -734,9 +737,9 @@ func TestTRACE028SSHTrustDeploymentRowSplitsServedGAFromRoadmapResidual(t *testi
 	}
 
 	residual := strings.ToLower(strings.Join([]string{f44.TargetMapping, f44.AcceptanceTest}, "\n"))
-	for _, want := range []string{"roadmap residual", "closed-loop host rewrite"} {
+	for _, want := range []string{"closed-loop host rewrite", "testservedsshtrustfleetchangesopensshthroughsignedjobs", "opt-out unchanged", "memory-only rollback"} {
 		if !strings.Contains(residual, want) {
-			t.Errorf("TRACE-028: F44 must explicitly park closed-loop host rewrite automation as a roadmap residual; missing %q in %q", want, residual)
+			t.Errorf("TRACE-028: F44 must retain approved fleet proof and recovery limits; missing %q in %q", want, residual)
 		}
 	}
 }

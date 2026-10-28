@@ -8,13 +8,15 @@
 **Catastrophic-risk area.** A mistake in how the agent rewrites `sshd` / host
 trust can lock operators out of production.
 This document is the contract the implementation must satisfy.
-The implementation follows this design; it adds no behavior not specified here.
+The additive applier follows this design. The approved fleet transport and its
+receipt/recovery limits are described in the [fleet trust runbook](../runbooks/ssh-trust-fleet.md).
 
 ## 1. Goal and non-goals
 
 Configure a host to trust the trstctl SSH CA — install a host certificate and
-point `sshd` at the CA via `TrustedUserCAKeys` — **without any path that can lock
-an operator out of their own machine.** The agent performs the change through the
+point `sshd` at the CA via `TrustedUserCAKeys` — with validation and recovery checks that reduce lockout risk. Process or power
+loss can interrupt memory-backed rollback; independent access and backups remain
+required. The agent performs the change through the
 supervised agent path; it never edits trust out of band.
 
 Non-goals: session brokering (trstctl manages SSH *credentials*, it is not a
@@ -38,15 +40,16 @@ bastion), and non-SSH trust.
   reloaded again — automatically, without operator action.
 - **Atomic writes.** Config and trust files are written write-temp-then-`rename`
   so a crash mid-write can never leave a truncated `sshd_config`.
-- **Fail-safe, not fail-open and not fail-closed-to-lockout.** On any uncertainty
-  the agent restores the last-known-good state rather than leaving a half-applied
-  config.
+- **Checked recovery.** On an observed apply failure the live process attempts
+  to restore its captured prior files. Fleet receipts call recovery verified
+  only after exact byte readback, validation, reload and health all pass.
 
 ## 3. Change procedure
 
 1. **Snapshot / backup** the current `sshd_config` and `TrustedUserCAKeys` file
    (and record their absence if they do not exist).
-2. **Install the host certificate** (additive — does not touch existing host keys).
+2. **Keep host keys and certificates unchanged.** This user-CA trust operation
+   does not install a host certificate.
 3. **Add the CA trust line** to `TrustedUserCAKeys` *if not already present*
    (additive, idempotent). Ensure `sshd_config` references the file (additive
    directive; existing directives preserved).
@@ -66,7 +69,7 @@ bastion), and non-SSH trust.
 | L3 | Agent crashes mid-write, truncating `sshd_config` | Atomic write-temp-then-`rename`; the live file is replaced only when fully written |
 | L4 | Change removes the operator's existing access | Additive-first: existing `authorized_keys` and trust are preserved; removal requires explicit confirmation (§2) |
 | L5 | CA key compromise forces emergency host access | Break-glass recovery (§5) issues an emergency host credential out-of-band |
-| L6 | Backup itself is lost before rollback | Backups are written atomically and verified to exist before any mutation proceeds |
+| L6 | Backup itself is lost before rollback | Prior file bytes are captured in memory before mutation; process loss needs independent recovery |
 | L7 | Repeated apply double-adds trust / drifts config | Additive step is idempotent (CA line added only if absent) |
 | L8 | Health check passes locally but control-plane connectivity is gone | Health check is local (does `sshd` accept a connection), independent of the control plane, so a control-plane outage cannot block rollback |
 

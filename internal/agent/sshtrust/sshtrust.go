@@ -15,6 +15,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 
 	"trstctl.com/trstctl/internal/auditsink"
@@ -184,6 +185,11 @@ type fileBackup struct {
 }
 
 func (a *Applier) rollbackFiles(ctx context.Context, stage string, cause error, reload bool, backups ...fileBackup) error {
+	// An expired lease must not prevent restoration. This detached cleanup is
+	// bounded and preserves context values for audit, without accepting new work.
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	ctx = cleanupCtx
 	var rollbackErrs []error
 	for _, backup := range backups {
 		if err := a.restore(backup.path, backup.data, backup.existed); err != nil {
@@ -200,10 +206,10 @@ func (a *Applier) rollbackFiles(ctx context.Context, stage string, cause error, 
 	}
 	if rollbackErr := errors.Join(rollbackErrs...); rollbackErr != nil {
 		a.auditEv(ctx, "ssh.trust.rollback_failed", stage)
-		return fmt.Errorf("sshtrust: %s failed and rollback failed: %w", stage, errors.Join(cause, rollbackErr))
+		return &ApplyFailure{Phase: closedApplyPhase(stage), Restored: false, Cause: fmt.Errorf("sshtrust: %s failed and rollback failed: %w", stage, errors.Join(cause, rollbackErr))}
 	}
 	a.auditEv(ctx, "ssh.trust.rolled_back", stage)
-	return fmt.Errorf("sshtrust: %s failed, rolled back to last-known-good: %w", stage, cause)
+	return &ApplyFailure{Phase: closedApplyPhase(stage), Restored: true, Cause: fmt.Errorf("sshtrust: %s failed, rolled back to last-known-good: %w", stage, cause)}
 }
 
 // read loads a file's current contents so it can be restored on rollback.

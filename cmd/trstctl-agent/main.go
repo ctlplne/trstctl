@@ -146,6 +146,7 @@ func main() {
 	// existing trust), validated with `sshd -t`, reloaded, and auto-rolled-back on
 	// failure. Gated behind --ssh-trust-confirm because weakening sshd trust is a
 	// lockout-class mutation (SIGNER-004).
+	sshTrustFleet := flag.Bool("ssh-trust-fleet", false, "claim approved additive SSH CA jobs for this host; requires --ssh-trust-confirm, a staged --ssh-trust-ca-key, and local validate/reload/health commands")
 	sshTrustAddCA := flag.Bool("ssh-trust-add-ca", false, "ADD the SSH CA to this host's trust (default off; additive, with rollback). Requires --ssh-trust-confirm")
 	sshTrustConfirm := flag.Bool("ssh-trust-confirm", false, "explicit confirmation required to rewrite SSH CA trust")
 	sshTrustCAKey := flag.String("ssh-trust-ca-key", "", "path to the SSH CA public key (OpenSSH authorized-key line) to trust")
@@ -306,16 +307,13 @@ func main() {
 	// explicitly-confirmed one-shot op that does NOT need the enroll/connection
 	// settings, so it runs (and exits) before the steady-state agent loop. With the
 	// flag off this is a no-op and the agent proceeds normally.
-	if (*sshTrustAddCA && (*sshKRLApply || *sshKRLWatch)) || (*sshKRLApply && *sshKRLWatch) {
+	if (*sshTrustFleet && (*sshTrustAddCA || *sshKRLApply)) || (*sshTrustAddCA && (*sshKRLApply || *sshKRLWatch)) || (*sshKRLApply && *sshKRLWatch) {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: choose one SSH operation mode at a time")
 		os.Exit(2)
 	}
 	sshCtx, sshStop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	if handled, err := runSSHTrustAddCA(sshCtx, sshTrustOptions{
-		addCA: *sshTrustAddCA, confirm: *sshTrustConfirm, caKeyPath: *sshTrustCAKey,
-		tenantID: *sshTrustTenant, sshdConfig: *sshTrustConfig, trustedKeys: *sshTrustKeysFile,
-		reloadCmd: *sshTrustReloadCmd, validateCmd: *sshTrustValidateCmd, healthCmd: *sshTrustHealthCmd,
-	}); handled {
+	sshTrustConfigOptions := sshTrustOptions{fleet: *sshTrustFleet, addCA: *sshTrustAddCA, confirm: *sshTrustConfirm, caKeyPath: *sshTrustCAKey, tenantID: *sshTrustTenant, sshdConfig: *sshTrustConfig, trustedKeys: *sshTrustKeysFile, reloadCmd: *sshTrustReloadCmd, validateCmd: *sshTrustValidateCmd, healthCmd: *sshTrustHealthCmd}
+	if handled, err := runSSHTrustAddCA(sshCtx, sshTrustConfigOptions); handled {
 		sshStop()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
@@ -433,6 +431,7 @@ func main() {
 	}
 
 	o := agentOptions{
+		sshTrust:  sshTrustConfigOptions,
 		enrollURL: *enrollURL, inlineToken: *token, caBundle: *caBundle, relayCABundle: *relayCABundle, relayEgressAllow: *relayEgressAllow,
 		deployFailureLog:   strings.TrimSpace(*deployFailureLog),
 		connectorIsolation: *connectorIsolation,
@@ -504,7 +503,7 @@ func main() {
 	// registration cannot open. It needs no connection, and the report store's
 	// process lock refuses it while the agent runs.
 	if *setAsidePendingReport {
-		moved, err := setAsidePendingReportFor(o)
+		moved, err := setAsideAllPendingReportsFor(o)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)
@@ -552,6 +551,7 @@ func checkedTPMPersistentHandleBase(value uint) (uint32, error) {
 }
 
 type agentOptions struct {
+	sshTrust                                                                                                          sshTrustOptions
 	enrollURL, inlineToken, tokenFile, caBundle, relayCABundle, serverAddr, serverName, commonName, keyPath, certPath string
 	// relayEgressAllow is the operator's egress allowlist for job connections (A190).
 	relayEgressAllow string
@@ -812,6 +812,11 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	// B13-R1: set when a pending job report pauses claims; every later census
 	// carries it so work bound to this agent is refused by name.
 	var pendingReportError atomic.Pointer[string]
+	sshFleet, err := startSSHTrustFleetLoop(ctx, o, a, conn, caPEM, serverName)
+	if err != nil {
+		return fmt.Errorf("initialize SSH trust receipt state: %w", err)
+	}
+	defer sshFleet.Stop()
 	ch := channelAdapter{
 		c:                  transport.NewAgentClient(conn, transport.WithAgentVersion(buildinfo.Version())),
 		enrollmentProxy:    reportEnrollmentProxy,
@@ -819,6 +824,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		revocationIssuedAt: &atomic.Int64{},
 		executors: func() *transport.ExecutorReport {
 			report := executorCensus(o, relayCAStatus)
+			report.SSHTrust = sshFleet.Readiness()
 			if reason := pendingReportError.Load(); reason != nil {
 				report.PendingReportError = *reason
 			}
@@ -1116,10 +1122,12 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			if renewRequested {
 				budget, renewRequested = 0, false
 			}
+			sshFleet.Pause()
 			if renewWithBackoff(ctx, a, ch, budget, rng) {
 				fmt.Println("trstctl-agent: renewed identity adopted; reconnecting the agent channel with the new certificate")
 				return errAgentIdentityRotated
 			}
+			sshFleet.Resume()
 			// A5: re-armed from the credential's remaining life, not from the
 			// configured cadence alone, so a renewal that failed through an
 			// outage comes back before expiry rather than one interval later.
@@ -1643,7 +1651,8 @@ const hostProfileErrorLimit = 512
 // (A86); nil means no relay bundle is configured.
 func executorCensus(o agentOptions, relayCAStatus func() *transport.RelayCABundleReport) *transport.ExecutorReport {
 	set := map[string]bool{
-		"--relay-claim":       o.relayClaim,
+		"--relay-claim":     o.relayClaim,
+		"--ssh-trust-fleet": o.sshTrust.fleet, "--ssh-trust-confirm": o.sshTrust.confirm, "--ssh-trust-ca-key": o.sshTrust.caKeyPath != "", "--ssh-trust-reload-cmd": o.sshTrust.reloadCmd != "", "--ssh-trust-health-cmd": o.sshTrust.healthCmd != "",
 		"--host-exec-profile": o.hostExecProfile != "",
 		"--host-rollback-dir": o.hostRollbackDir != "",
 	}

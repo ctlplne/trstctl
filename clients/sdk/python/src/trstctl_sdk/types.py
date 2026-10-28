@@ -1235,6 +1235,7 @@ Agent = TypedDict(
         'reported_host_tls_probe': bool,
         'reported_pending_report_error': str,
         'reported_relay_ca_bundle': dict[str, Any],
+        'reported_ssh_trust_readiness': dict[str, Any],
         'role_grant': dict[str, Any],
         'role_source': str,
         'roles': list[str],
@@ -12232,6 +12233,157 @@ SSHStatus = TypedDict(
         'revoked_count': int,
         'served': bool,
         'tenant_id': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetApproval = TypedDict(
+    'SSHTrustFleetApproval',
+    {
+        'approval_count': int,
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'expires_at': str,
+        'plan': dict[str, Any],
+        'plan_digest': str,
+        'required_approvals': int,
+        'status': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetHost = TypedDict(
+    'SSHTrustFleetHost',
+    {
+        'agent_id': str,
+        'attempt': int,
+        'checked_at': str,
+        'job_id': int,
+        'receipt': dict[str, Any],
+        'receipt_event_id': str,
+        'skip_reason': str,
+        'state': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetList = TypedDict(
+    'SSHTrustFleetList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetPlan = TypedDict(
+    'SSHTrustFleetPlan',
+    {
+        'ca_fingerprint': str,
+        'expires_at': str,
+        'hosts': list[dict[str, Any]],
+        'name': str,
+        'public_ca_key': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetPlanInput = TypedDict(
+    'SSHTrustFleetPlanInput',
+    {
+        'plan': dict[str, Any],
+        'plan_digest': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetPreview = TypedDict(
+    'SSHTrustFleetPreview',
+    {
+        'effect_free': bool,
+        'job_kind_enabled': bool,
+        'plan': dict[str, Any],
+        'plan_digest': str,
+        'ready_hosts': int,
+        'skipped_hosts': int,
+    },
+    total=False,
+)
+
+SSHTrustFleetPreviewInput = TypedDict(
+    'SSHTrustFleetPreviewInput',
+    {
+        'agent_ids': list[str],
+        'name': str,
+        'public_ca_key': str,
+        'reason': str,
+    },
+    total=False,
+)
+
+SSHTrustFleetReport = TypedDict(
+    'SSHTrustFleetReport',
+    {
+        'agent_id': str,
+        'ca_fingerprint': str,
+        'ca_read_back': bool,
+        'changed': bool,
+        'checked_at': str,
+        'config_file_sha256': str,
+        'effective_config_read_back': bool,
+        'healthy': bool,
+        'phase': str,
+        'plan_digest': str,
+        'readiness_digest': str,
+        'reason_code': str,
+        'reloaded': bool,
+        'rollback': str,
+        'rollout_id': str,
+        'state': str,
+        'trust_file_sha256': str,
+        'validated': bool,
+    },
+    total=False,
+)
+
+SSHTrustFleetRollout = TypedDict(
+    'SSHTrustFleetRollout',
+    {
+        'approval_request_id': str,
+        'created_at': str,
+        'hosts': list[dict[str, Any]],
+        'id': str,
+        'plan': dict[str, Any],
+        'plan_digest': str,
+        'requester': str,
+        'state': str,
+        'tenant_id': str,
+        'updated_at': str,
+        'window_expired': bool,
+    },
+    total=False,
+)
+
+SSHTrustFleetStartInput = TypedDict(
+    'SSHTrustFleetStartInput',
+    {
+        'approval_intent_digest': str,
+        'approval_request_id': str,
+        'plan': dict[str, Any],
+        'plan_digest': str,
+    },
+    total=False,
+)
+
+SSHTrustReadiness = TypedDict(
+    'SSHTrustReadiness',
+    {
+        'ca_fingerprint': str,
+        'confirmed': bool,
+        'enabled': bool,
+        'issue_code': str,
+        'policy_digest': str,
     },
     total=False,
 )

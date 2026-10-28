@@ -604,6 +604,7 @@ func (s *Store) ListOperationApprovalsPage(ctx context.Context, tenantID string,
 			          OR (r.resource_kind = 'ephemeral' AND r.action = 'issue')
 			          OR (r.resource_kind = 'code_signing' AND r.action = 'sign')
 			          OR (r.resource_kind IN ('migration_run', 'pqc_migration_run') AND r.action = 'start')
+ OR (r.resource_kind = 'ssh_trust_rollout' AND r.action = 'apply')
 			        ))
 			        OR ($7 AND r.resource_kind = 'secret' AND r.action IN ('create', 'rotate', 'recover', 'delete'))
 		        OR ($8 AND r.resource_kind = 'managed_key'

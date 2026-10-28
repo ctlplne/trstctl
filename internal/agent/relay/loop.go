@@ -73,10 +73,11 @@ type HostRenewAdoptionReceiptChannel interface {
 
 // Job is one claimed unit of work as the relay sees it.
 type Job struct {
-	JobID   int64
-	Kind    string
-	Attempt int
-	Payload []byte
+	LeaseExpiresUnix int64
+	JobID            int64
+	Kind             string
+	Attempt          int
+	Payload          []byte
 	// ApplianceReference is the appliance's own reference for this job's key
 	// request, recorded by an earlier attempt (A122); empty when none was.
 	ApplianceReference string

@@ -124,6 +124,7 @@ type API struct {
 	attestationPrincipals    AttestationPrincipalResolver
 	cmdbRunNow               CMDBRunNow
 	sshWorkflow              SSHWorkflowService
+	sshTrustFleet            SSHTrustFleetService
 	pkiSecretLeafRecovery    PKISecretLeafRecoveryService
 	broker                   BrokerService
 	ephemeral                EphemeralIssuerService
@@ -282,6 +283,7 @@ type config struct {
 	attestationPrincipals       AttestationPrincipalResolver
 	cmdbRunNow                  CMDBRunNow
 	sshWorkflow                 SSHWorkflowService
+	sshTrustFleet               SSHTrustFleetService
 	pkiSecretLeafRecovery       PKISecretLeafRecoveryService
 	broker                      BrokerService
 	ephemeral                   EphemeralIssuerService
@@ -604,6 +606,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		attestationPrincipals:       cfg.attestationPrincipals,
 		cmdbRunNow:                  cfg.cmdbRunNow,
 		sshWorkflow:                 cfg.sshWorkflow,
+		sshTrustFleet:               cfg.sshTrustFleet,
 		pkiSecretLeafRecovery:       cfg.pkiSecretLeafRecovery,
 		broker:                      cfg.broker,
 		ephemeral:                   cfg.ephemeral,
@@ -1226,6 +1229,11 @@ func (a *API) routes() []route {
 		// certificate rotation alone cannot remove.
 		{method: "GET", path: "/api/v1/ssh/fleet", opID: "getSSHFleet", summary: "List discovered SSH key locations and standing access grants", handler: a.getSSHFleet, resSchema: "SSHFleetInventory", successCode: "200", perm: authz.CertsRead},
 		{method: "GET", path: "/api/v1/ssh/status", opID: "getSSHStatus", summary: "Get SSH CA, KRL, and attestation workflow status", handler: a.getSSHStatus, resSchema: "SSHStatus", successCode: "200", perm: authz.CertsRead},
+		{method: "POST", path: "/api/v1/ssh/trust-fleet/preview", opID: "previewSSHTrustFleet", summary: "Review an additive SSH CA change and each host's local opt-in", handler: a.previewSSHTrustFleet, readOnly: true, reqSchema: "SSHTrustFleetPreviewInput", resSchema: "SSHTrustFleetPreview", successCode: "200", perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/ssh/trust-fleet/approvals", opID: "requestSSHTrustFleetApproval", summary: "Request exact approval for a reviewed SSH trust fleet change", handler: a.requestSSHTrustFleetApproval, reqSchema: "SSHTrustFleetPlanInput", resSchema: "SSHTrustFleetApproval", successCode: "201", mutation: true, perm: authz.AgentsWrite},
+		{method: "POST", path: "/api/v1/ssh/trust-fleet/rollouts", opID: "startSSHTrustFleet", summary: "Dispatch an approved SSH trust addition to opted-in hosts", handler: a.startSSHTrustFleet, reqSchema: "SSHTrustFleetStartInput", resSchema: "SSHTrustFleetRollout", successCode: "202", mutation: true, perm: authz.AgentsWrite},
+		{method: "GET", path: "/api/v1/ssh/trust-fleet/rollouts", opID: "listSSHTrustFleetRollouts", summary: "List SSH fleet rollouts with signed host results", handler: a.listSSHTrustFleetRollouts, query: page, resSchema: "SSHTrustFleetList", successCode: "200", perm: authz.AgentsRead},
+		{method: "GET", path: "/api/v1/ssh/trust-fleet/rollouts/{id}", opID: "getSSHTrustFleetRollout", summary: "Read one SSH fleet rollout and its verified or failed host effects", handler: a.getSSHTrustFleetRollout, pathParams: idPath, resSchema: "SSHTrustFleetRollout", successCode: "200", perm: authz.AgentsRead},
 		{method: "POST", path: "/api/v1/ssh/trust-rollouts", opID: "recordSSHTrustRollout", summary: "Record SSH trust rollout status from the agent-safe workflow", handler: a.recordSSHTrustRollout, reqSchema: "SSHTrustRolloutRequest", resSchema: "SSHTrustRollout", successCode: "201", mutation: true, perm: authz.AgentsWrite},
 		{method: "POST", path: "/api/v1/ssh/certificates/preview", opID: "previewSSHCertificate", summary: "Review an exact SSH host or user certificate request without writes, network calls, or signer calls", handler: a.previewSSHCertificate, reqSchema: "SSHCertificateRequest", resSchema: "SSHCertificatePreview", successCode: "200", perm: authz.CertsIssue},
 		{method: "POST", path: "/api/v1/ssh/certificates", opID: "issueSSHCertificate", summary: "Issue a reviewed SSH host or user certificate through the isolated signer", handler: a.issueSSHCertificate, reqSchema: "SSHCertificateRequest", resSchema: "SSHCertificate", successCode: "201", mutation: true, perm: authz.CertsIssue},

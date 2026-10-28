@@ -2628,6 +2628,12 @@ plane has no route into a host and never gets one, so the agent comes and takes
 the work over the connection it opened — the same mTLS channel it heartbeats on,
 the same certificate-derived tenant, no inbound port anywhere.
 
+Approved additive SSH trust uses `ssh.trust.apply` in its own one-worker loop,
+with local `--ssh-trust-fleet --ssh-trust-confirm` plus the staged CA and local
+command policy. It is not claimed by the shared relay pool. The exact skipped
+roster, approval and signed readback/health/rollback facts are served under
+`/api/v1/ssh/trust-fleet/rollouts`; queued jobs remain pending.
+
 The ledger is the outbox, unchanged. An entry is still committed in the same
 transaction as the state change that caused it, still carries an idempotency key,
 still at-least-once. What changed is the consumer: `ClaimJobs` and
@@ -3080,6 +3086,27 @@ than sending an operator looking for a credential that was never there.
   it on and confirms; with the flag off the agent only *discovers* SSH trust,
   it does not *mutate* it. Trust *removal* still requires its own explicit
   confirmation.
+- Approved SSH fleet trust changes (A226) are served through
+  `/api/v1/ssh/trust-fleet/{preview,approvals,rollouts}`, the matching
+  `ssh trust-fleet` CLI, and **SSH access → Trust rollout**. Each enrolled
+  host still needs local `--ssh-trust-fleet --ssh-trust-confirm`, a staged
+  public CA and its own file/command policy. Skipped hosts stay in the exact
+  reviewed roster and receive no job. Default two-person approval binds the
+  CA, deadline, ready policies and skipped hosts; the requester cannot approve.
+  `ssh.trust.apply` jobs have their own one-worker loop, and signed receipts
+  prove file readback, effective global trust selection, validation, reload
+  and the configured health command. Pending work never implies success;
+  verified rollback stays attention_required. Completion must match retained
+  source evidence. New work expires after its reviewed window; delayed jobs
+  refuse before writing. This is additive user-CA trust: no remote command
+  selection, trust removal, authorized_keys pruning, or host-certificate install.
+  Backups are memory-only, so process/power loss can interrupt rollback. Do not
+  edit host files concurrently; keep independent recovery access and backups.
+  A receipt proves the configured checks at checked_at, not future host state.
+  Real stock-OpenSSH served tests cover two applied hosts, an unchanged opt-out,
+  strict host-key pins, retry and a checked failed-change restoration. Final
+  image/console/restart replay and covering release gates remain qualification
+  work; see the [runbook](runbooks/ssh-trust-fleet.md).
 - Posture collectors and agents: CT-log monitoring and path-based credential
   drift detection now run through the served discovery worker when operators
   create `ct_log` or `drift` sources; findings are tenant-scoped and alert

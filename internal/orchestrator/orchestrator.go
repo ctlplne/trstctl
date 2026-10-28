@@ -1613,6 +1613,14 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}
+		if ev.Type == projections.EventSSHTrustFleetStarted {
+			count, err := o.reconcileSSHTrustFleet(ctx, ev)
+			if err != nil {
+				return err
+			}
+			healed += count
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
 		if ev.Type == cmdbexport.EventRequested {
 			inserted, err := o.reconcileCMDBCertificateExport(ctx, ev)
 			if err != nil {

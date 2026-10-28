@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -124,6 +125,7 @@ type HeartbeatRequest struct {
 
 // ExecutorReport is one agent process's executor census.
 type ExecutorReport struct {
+	SSHTrust *sshtrustrollout.Readiness `json:"ssh_trust,omitempty"`
 	// Version is the agent build version the census belongs to.
 	Version string `json:"version"`
 	// Kinds are the job kinds this binary ships, with the connectors it

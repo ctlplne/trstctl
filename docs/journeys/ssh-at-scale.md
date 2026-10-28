@@ -99,6 +99,12 @@ mutation stays in the operator-confirmed agent path.
    ssh-keygen -lf trstctl-ssh-ca.pub
    ```
 
+   For an enrolled fleet, use the [approved fleet trust
+   runbook](../runbooks/ssh-trust-fleet.md): stage this same public key and
+   explicitly opt in on each host, then preview, approve and dispatch from
+   **SSH access → Trust rollout** or `ssh trust-fleet`. Hosts without local
+   opt-in remain skipped. The one-shot alternative below stays available.
+
    Run the next command on the target with permission to update its SSH files
    and reload its daemon. First inspect `sshd -T -f /etc/ssh/sshd_config` and
    use its active `trustedusercakeys` path for `--ssh-trust-keys-file`. The

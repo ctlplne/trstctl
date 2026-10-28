@@ -135,6 +135,8 @@ var TenantScopedTables = []string{
 	"kubernetes_controller_posture",
 	"kubernetes_certificate_provenance",
 	// A138: rollout clusters reference their rollout.
+	"ssh_trust_fleet_hosts",
+	"ssh_trust_fleet_rollouts",
 	"kubernetes_trust_rollout_clusters",
 	"kubernetes_trust_rollouts",
 	// A147: the audit anchor series projection.

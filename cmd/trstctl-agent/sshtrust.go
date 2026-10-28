@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"trstctl.com/trstctl/internal/agent/sshtrust"
@@ -25,6 +26,7 @@ import (
 // and the underlying Applier is additive (it never removes existing trust) with
 // an automatic validate→reload→health-check→rollback (see internal/agent/sshtrust).
 type sshTrustOptions struct {
+	fleet       bool   // --ssh-trust-fleet: default-off long-running host job execution
 	addCA       bool   // --ssh-trust-add-ca: opt in to the trust rewrite
 	confirm     bool   // --ssh-trust-confirm: explicit operator confirmation (required)
 	caKeyPath   string // path to the SSH CA public key to trust (OpenSSH authorized-key line)
@@ -43,6 +45,9 @@ type sshTrustOptions struct {
 // rewrite trust (SIGNER-004: never weaken sshd/authorized_keys trust without
 // explicit confirmation and rollback). On success the agent prints what changed.
 func runSSHTrustAddCA(ctx context.Context, o sshTrustOptions) (handled bool, err error) {
+	if o.addCA && o.fleet {
+		return true, fmt.Errorf("choose the one-shot SSH addition or fleet mode")
+	}
 	if !o.addCA {
 		return false, nil
 	}
@@ -160,7 +165,9 @@ func (r *sshdReloader) HealthCheck(ctx context.Context) error {
 // runCommandLine runs a whitespace-delimited argv directly, without a shell.
 // Operator-provided reload/health commands are intentionally simple command
 // lines; shell pipelines and expansions are rejected so trust rewrites cannot
-// become a command-injection surface.
+// become a command-injection surface. An explicit io.Discard output also
+// suppresses stderr/error detail for signed fleet work; one-shot callers retain
+// their local diagnostics.
 func runCommandLine(ctx context.Context, line string, stdout ...io.Writer) error {
 	argv, err := parseCommandLine(line)
 	if err != nil {
@@ -170,14 +177,23 @@ func runCommandLine(ctx context.Context, line string, stdout ...io.Writer) error
 		return fmt.Errorf("only one stdout destination is allowed")
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- operator-configured sshd reload command; running it is the feature (CWE-78)
+	cmd.WaitDelay = 2 * time.Second
+	quiet := len(stdout) == 1 && stdout[0] == io.Discard
 	cmd.Stdout = io.Discard
 	if len(stdout) == 1 && stdout[0] != nil {
 		cmd.Stdout = stdout[0]
 	}
 	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	if quiet {
+		cmd.Stderr = io.Discard
+	} else {
+		cmd.Stderr = &stderr
+	}
 	err = cmd.Run()
 	if err != nil {
+		if quiet {
+			return fmt.Errorf("SSH action failed: %w", err)
+		}
 		return fmt.Errorf("%q failed: %v: %s", line, err, stderr.String())
 	}
 	return nil

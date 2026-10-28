@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"trstctl.com/trstctl/internal/agent/discovery"
 	"trstctl.com/trstctl/internal/agent/relay"
@@ -134,7 +135,8 @@ type agentResponse struct {
 	ReportedExecutorVersion string  `json:"reported_executor_version,omitempty"`
 	// ReportedHostTLSProbe says whether the binary's host exec profile pins
 	// tls_probe_openssl (B6-1); absent until the binary has reported a census.
-	ReportedHostTLSProbe *bool `json:"reported_host_tls_probe,omitempty"`
+	ReportedHostTLSProbe      *bool                      `json:"reported_host_tls_probe,omitempty"`
+	ReportedSSHTrustReadiness *sshtrustrollout.Readiness `json:"reported_ssh_trust_readiness,omitempty"`
 	// ReportedHostProfileError is the binary's own reason its host exec
 	// profile could not be loaded (B7); absent when it loaded.
 	ReportedHostProfileError string `json:"reported_host_profile_error,omitempty"`
@@ -560,6 +562,7 @@ func toAgentResponseAt(a store.Agent, now time.Time, heartbeatInterval time.Dura
 		_ = json.Unmarshal(a.Executors, &census)
 		out.ReportedExecutorVersion = census.Version
 		out.ReportedHostTLSProbe = agentReportedHostTLSProbe(a)
+		out.ReportedSSHTrustReadiness = agentReportedSSHTrustReadiness(a)
 		out.ReportedHostProfileError = AgentReportedHostProfileError(a)
 		out.ReportedPendingReportError = AgentReportedPendingReportError(a)
 		out.ReportedRelayCABundle = agentReportedRelayCABundle(a)

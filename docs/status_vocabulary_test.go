@@ -139,7 +139,10 @@ func validateServedEvidenceBindings(doc openAPIVerdictDocument, bindings []Evide
 	want := map[string]bool{}
 	for schema, shape := range doc.Components.Schemas {
 		for field := range shape.Properties {
-			if servedVerdictFields[field] {
+			// Fleet execution deliberately uses state/rollback rather than status.
+			// Keep these exact verdicts in the same fail-closed contract census.
+			fleetVerdict := (schema == "SSHTrustFleetRollout" || schema == "SSHTrustFleetHost" || schema == "SSHTrustFleetReport") && field == "state" || schema == "SSHTrustFleetReport" && field == "rollback"
+			if servedVerdictFields[field] || fleetVerdict {
 				want[schema+"."+field] = true
 			}
 		}
