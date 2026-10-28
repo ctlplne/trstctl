@@ -11,7 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ApiError, api } from "@/lib/api";
 import { useApiQuery } from "@/lib/query";
-import type { CAAuthority, DeploymentTarget, EndpointBinding, EndpointBindingPreview, EndpointIssuer, ExternalCA, Identity, Owner } from "@/lib/api-types.gen";
+import type {
+  CAAuthority,
+  DeploymentTarget,
+  EndpointBinding,
+  EndpointBindingPreview,
+  EndpointIssuer,
+  EndpointRecoveryReadiness,
+  ExternalCA,
+  Identity,
+  Owner,
+} from "@/lib/api-types.gen";
+import { EndpointRecoveryReadinessPanel } from "./EndpointRecoveryReadinessPanel";
 import { useTranslation } from "@/i18n/I18nProvider";
 
 import { newIdempotencyKey } from "@/lib/apiTransport";
@@ -57,6 +68,7 @@ export function EndpointBindingWorkflow({
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [issuerWarning, setIssuerWarning] = useState<string | null>(null);
   const [preview, setPreview] = useState<EndpointBindingPreview | null>(null);
+  const [recovery, setRecovery] = useState<EndpointRecoveryReadiness | null>(null);
   const [busy, setBusy] = useState<"preview" | "execute" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [requestKey, setRequestKey] = useState<string | null>(null);
@@ -226,7 +238,14 @@ export function EndpointBindingWorkflow({
         ...(values.profile_name ? { profile_name: values.profile_name.trim() } : {}),
         ...(values.subject_key_algorithm ? { subject_key_algorithm: values.subject_key_algorithm } : {}),
       });
-      if (!reviewed.ready || !reviewed.effect_free || reviewed.preview_writes.length > 0 || reviewed.preview_external_effects.length > 0) {
+      const effectFree = reviewed.effect_free && reviewed.preview_writes.length === 0 && reviewed.preview_external_effects.length === 0;
+      // A210: a contained listener's replacement waits for the host's recovery check.
+      if (effectFree && reviewed.recovery_readiness && reviewed.recovery_readiness.state !== "ready") {
+        setRecovery(reviewed.recovery_readiness);
+        return;
+      }
+      setRecovery(null);
+      if (!reviewed.ready || !effectFree) {
         throw new Error(t("connectors.binding.previewUnsafe"));
       }
       if (values.subject_key_algorithm && reviewed.subject_key_algorithm !== values.subject_key_algorithm) {
@@ -300,6 +319,7 @@ export function EndpointBindingWorkflow({
 
   function previous() {
     if (step === 2) setPreview(null);
+    setRecovery(null);
     setActionError(null);
     setStep((current) => Math.max(0, current - 1));
   }
@@ -482,6 +502,7 @@ export function EndpointBindingWorkflow({
             ) : (
               <p className="rounded-control border border-border p-3 text-sm text-muted-foreground">{t("connectors.binding.noIssuerDefault")}</p>
             )}
+            {recovery ? <EndpointRecoveryReadinessPanel readiness={recovery} targetId={targetID} identityId={originalID} /> : null}
           </div>
         ) : null}
 
@@ -549,6 +570,9 @@ export function EndpointBindingWorkflow({
               </div>
             ) : null}
             <p className="text-sm text-muted-foreground">{preview.custody.detail}</p>
+            {preview.recovery_readiness ? (
+              <EndpointRecoveryReadinessPanel readiness={preview.recovery_readiness} targetId={targetID} identityId={originalID} />
+            ) : null}
             {preview.replaced_identity ? (
               <Fact label={t("connectors.binding.original")} value={`${preview.replaced_identity.name} — ${preview.replaced_identity.id}`} />
             ) : null}

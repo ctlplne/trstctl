@@ -2709,6 +2709,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connectors/targets/{id}/recovery-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the latest recovery check of a contained target and the host's signed answer */
+        get: operations["getEndpointRecoveryCheck"];
+        put?: never;
+        /** Ask a contained target's enrolled host whether its profile pins an action that brings the listener back and what the listener serves now */
+        post: operations["requestEndpointRecoveryCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/connectors/targets/{id}/rollback": {
         parameters: {
             query?: never;
@@ -13267,6 +13285,7 @@ export interface components {
             preview_writes: string[];
             queued_lifecycle_intents: string[];
             ready: boolean;
+            recovery_readiness?: components["schemas"]["EndpointRecoveryReadiness"];
             recovery_steps: string[];
             replaced_identity?: components["schemas"]["Identity"];
             replaced_identity_version?: number;
@@ -13377,6 +13396,64 @@ export interface components {
             guidance: string;
             items: components["schemas"]["EndpointKeyCustody"][];
             summary: components["schemas"]["EndpointCustodySummary"];
+        };
+        EndpointRecoveryCheck: {
+            /** Format: uuid */
+            agent_id: string;
+            /** @description SHA-256 over the recovery action's pinned command line: executable path, fixed arguments, accepted connector arguments and whether it passes them on. */
+            argv_sha256?: string;
+            /** Format: uuid */
+            check_id: string;
+            /** Format: date-time */
+            checked_at?: string;
+            evidence_digest?: string;
+            /** @description SHA-256 of the recovery action's executable as the host read it. The host never reports the path. */
+            executable_sha256?: string;
+            failure?: string;
+            job_id?: number;
+            /**
+             * @description What one local TLS probe of the contained listener saw.
+             * @enum {string}
+             */
+            listener?: "none" | "stopped" | "serving" | "serving_revoked" | "unverified";
+            /**
+             * @description What the host profile says about this listener: a pinned recovery action, none, or no containment binding for this target.
+             * @enum {string}
+             */
+            recovery?: "pinned" | "no_recovery_action" | "no_binding";
+            recovery_action?: string;
+            /** Format: date-time */
+            requested_at: string;
+            requested_by?: string;
+            serving_fingerprint?: string;
+            /**
+             * @description queued until the target's enrolled host answers; checked once its signed job receipt is accepted; failed when the host could not complete the check.
+             * @enum {string}
+             */
+            status: "queued" | "checked" | "failed";
+            /** Format: uuid */
+            target_id: string;
+            target_revision: string;
+        };
+        EndpointRecoveryCheckRequest: {
+            /**
+             * Format: uuid
+             * @description The contained identity. Its contained leaves are the ones the listener must not serve again.
+             */
+            identity_id: string;
+        };
+        EndpointRecoveryReadiness: {
+            check?: components["schemas"]["EndpointRecoveryCheck"];
+            /** Format: date-time */
+            contained_at: string;
+            contained_fingerprint: string;
+            deploy_actions?: string[];
+            reasons: string[];
+            /**
+             * @description ready only when a recovery check requested after the containment shows a pinned recovery action the connector runs while deploying and a listener that is not serving the contained leaf.
+             * @enum {string}
+             */
+            state: "ready" | "not_ready" | "unchecked" | "queued" | "stale" | "failed";
         };
         EndpointVerification: {
             address: string;
@@ -27481,6 +27558,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EndpointContainmentPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEndpointRecoveryCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointRecoveryCheck"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestEndpointRecoveryCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndpointRecoveryCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndpointRecoveryCheck"];
                 };
             };
             /** @description client error */

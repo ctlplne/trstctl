@@ -267,7 +267,9 @@ renewals. `connector.deploy` handles delivery of centrally prepared material and
 does not replace `endpoint.renew`. Enable `connector.test` for target tests and
 `connector.rollback` for supported restores, `endpoint.contain` for emergency
 stop of a compromised leaf on a host listener, and `endpoint.purge` to remove
-that leaf's certificate and key files and ledger snapshots from the host. Start the agent with `--relay-claim`, and place
+that leaf's certificate and key files and ledger snapshots from the host.
+Enabling `endpoint.contain` also enables `endpoint.recovery_check`, the
+read-only check a replacement reads after a containment. Start the agent with `--relay-claim`, and place
 the exact roots and executables in the file named by `--host-exec-profile`. The profile
 lives on the target host because an allowlist for `/usr/sbin/nginx` on the control
 plane says nothing about the binary the target host will actually run. Tenant target
@@ -465,12 +467,12 @@ Keep the stopped listener closed while creating a **replacement** identity in
 same destination, an explicit issuing CA and a profile that permits the name.
 Do not use connector rollback: that would restore a revoked predecessor.
 The replacement preview is effect-free and binds the original identity,
-destination revision, issuer, profile and request fingerprint. Its `ready`
-result does not inspect the host's private stop/recovery script.
+destination revision, issuer, profile and request fingerprint.
 
 For a service whose containment action removed one listener from its local
-configuration, the host operator must prepare a separate, pinned recovery
-action in `--host-exec-profile` before authorizing the replacement. For NGINX,
+configuration, the host operator prepares a separate, pinned recovery action
+in `--host-exec-profile` and names it in the containment binding's
+`recovery_action`. For NGINX,
 the connector calls the logical `nginx` action with only `-t` and `-s reload`.
 An operator-owned executable can whitelist exactly those arguments and, during
 `-t`, re-enable only the contained server block **after** the connector writes
@@ -481,17 +483,54 @@ fails, put the include back into its disabled state. The subsequent reload
 must refuse an invalid or revoked leaf. Keep the executable as a regular,
 non-symlink file under host ownership; the tenant request cannot replace it.
 Other listeners should continue to use their normal NGINX test and reload
-path while this one is contained.
+path while this one is contained. The recovery action must be one of the
+profile's actions and must not be the stop action:
+
+```json
+{
+  "actions": [
+    {"logical_name": "stop-incident-nginx", "logical_args": [], "command": "/usr/local/sbin/nginx-contain",
+     "args": ["disable", "payments"], "pass_args": false},
+    {"logical_name": "nginx", "command": "/usr/local/sbin/nginx-recover", "args": ["payments"], "pass_args": true}
+  ],
+  "containments": [{
+    "target_id": "22222222-2222-4222-8222-222222222222",
+    "address": "127.0.0.1:8443",
+    "server_name": "payments.example.test",
+    "action": "stop-incident-nginx",
+    "recovery_action": "nginx"
+  }]
+}
+```
+
+After the stop, the replacement preview reads the listener's host recovery.
+Until a recovery check has run since the stop it reads `ready: false` with
+`recovery_readiness.state` `unchecked`, and the console shows **Check host
+recovery readiness** (API `POST /api/v1/connectors/targets/{id}/recovery-check`
+with the contained `identity_id`; CLI `trstctl connector target recovery-check
+<target-id> -f body.json`). The target's enrolled host answers that read-only
+`endpoint.recovery_check` job in a signed receipt: whether its profile pins a
+recovery action for this listener, the SHA-256 of that action's executable and
+of its pinned command line (never the path), and what one local TLS probe of
+the listener saw (`stopped`, `serving`, `serving_revoked` or `unverified`).
+Build the preview again once it answers. It reads `ready` only when a check
+requested after the stop shows a recovery action the target's connector runs
+while deploying (for NGINX, `nginx`) and a listener that is not serving the
+contained leaf; otherwise it names what is missing, and creating the
+replacement answers 409 with the same reasons and queues nothing. A check that
+ran before the stop, or before the target or its enrolled host changed, reads
+`stale`. `GET /api/v1/connectors/targets/{id}/recovery-check` (CLI
+`recovery-status`) reads the latest check and its job ID.
 
 The host agent's deployment receipt must then say `verified` for the new
 fingerprint, and a fresh stock TLS client must see that same leaf and validate
 its hostname and chain. Read the revoked original and replacement by their
 distinct identity IDs, then retire the original only after checking its CA
-revocation result. A failed deploy or missing host recovery action leaves the
-listener stopped; an HTTP 201 binding response alone is not recovery proof.
-The control plane does not currently attest this private recovery action in
-the binding preview, so the operator must test and record its exact host
-profile before submitting a stopped-listener replacement.
+revocation result. A failed deploy leaves the listener stopped; an HTTP 201
+binding response alone is not recovery proof. The recovery check reports what
+the host profile pins and what the listener answered, not what the action will
+do: test that the action re-enables only this listener and refuses every
+revoked predecessor before relying on it.
 
 ### One reviewed key-compromise response
 

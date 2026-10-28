@@ -115,6 +115,7 @@ func ClaimableKinds() []string {
 		KindEndpointRenew,
 		KindEndpointContain,
 		KindEndpointPurge,
+		KindEndpointRecoveryCheck,
 		KindConnectorTakedown,
 		KindPQCPosture, KindPQCPostureRollback,
 		// A64: an entitlement right-size whose binding names a network relay.
@@ -359,6 +360,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	}
 	if job.Kind == KindEndpointPurge {
 		return runPurge(ctx, ch, hostProfile, hostRollback, job)
+	}
+	if job.Kind == KindEndpointRecoveryCheck {
+		return runRecoveryCheck(ctx, ch, hostProfile, job)
 	}
 	if job.Kind == KindConnectorTakedown {
 		return runTakedown(ctx, ch, client, job)

@@ -372,8 +372,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// the compliance reporting row.
 	// A209's `certificates inventory-managed-ca` raised it to 636, on the PKI
 	// secrets row.
-	if len(out) != 636 {
-		t.Fatalf("CLI commands = %d, want 636", len(out))
+	// A210's `connector target recovery-check|recovery-status` raised it to
+	// 638, on the deployment connectors row.
+	if len(out) != 638 {
+		t.Fatalf("CLI commands = %d, want 638", len(out))
 	}
 	return out
 }

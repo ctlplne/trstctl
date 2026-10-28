@@ -2645,6 +2645,9 @@ lists the estate-touching job kinds enrolled agents may lease and execute:
 `endpoint.contain`, `endpoint.purge`, `connector.takedown`,
 `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, and `agent.upgrade`.
+Enabling `endpoint.contain` also enables `endpoint.recovery_check`, the
+read-only check of whether a stopped listener can come back that a replacement
+reads after a containment.
 
 Empty is the default and means the job ledger is served but hands nothing out.
 Enable a kind when its agent-side executor ships; enabling one earlier fills the

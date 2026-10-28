@@ -179,6 +179,9 @@ func (a *API) endpointEnrollmentSnapshot(ctx context.Context, tenantID, keyDiges
 		if req.PreviewFingerprint != preview.RequestFingerprint {
 			return nil, errStatus(http.StatusConflict, "endpoint binding changed after preview or preview_fingerprint is missing; preview the exact owner, issuer, destination, DNS name and profile again; nothing was queued or changed")
 		}
+		if err := recoveryNotReadyError(preview.RecoveryReadiness); err != nil {
+			return nil, err
+		}
 		snapshot := endpointEnrollmentSnapshot{Preview: preview, IdentityID: googleuuid.NewString(), TargetID: req.TargetID, Replaced: preview.replacementSource}
 		if preview.ExistingIdentity != nil {
 			snapshot.IdentityID = preview.ExistingIdentity.ID

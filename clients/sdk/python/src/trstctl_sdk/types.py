@@ -5707,6 +5707,7 @@ EndpointBindingPreview = TypedDict(
         'preview_writes': list[str],
         'queued_lifecycle_intents': list[str],
         'ready': bool,
+        'recovery_readiness': dict[str, Any],
         'recovery_steps': list[str],
         'replaced_identity': dict[str, Any],
         'replaced_identity_version': int,
@@ -5835,6 +5836,51 @@ EndpointKeyCustodyList = TypedDict(
         'guidance': str,
         'items': list[dict[str, Any]],
         'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+EndpointRecoveryCheck = TypedDict(
+    'EndpointRecoveryCheck',
+    {
+        'agent_id': str,
+        'argv_sha256': str,
+        'check_id': str,
+        'checked_at': str,
+        'evidence_digest': str,
+        'executable_sha256': str,
+        'failure': str,
+        'job_id': int,
+        'listener': str,
+        'recovery': str,
+        'recovery_action': str,
+        'requested_at': str,
+        'requested_by': str,
+        'serving_fingerprint': str,
+        'status': str,
+        'target_id': str,
+        'target_revision': str,
+    },
+    total=False,
+)
+
+EndpointRecoveryCheckRequest = TypedDict(
+    'EndpointRecoveryCheckRequest',
+    {
+        'identity_id': str,
+    },
+    total=False,
+)
+
+EndpointRecoveryReadiness = TypedDict(
+    'EndpointRecoveryReadiness',
+    {
+        'check': dict[str, Any],
+        'contained_at': str,
+        'contained_fingerprint': str,
+        'deploy_actions': list[str],
+        'reasons': list[str],
+        'state': str,
     },
     total=False,
 )

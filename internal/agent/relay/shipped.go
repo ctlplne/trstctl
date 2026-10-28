@@ -103,6 +103,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleHost},
 		},
 		{
+			// A210: after containment, the same enrolled host reports whether
+			// its profile pins an action that restores the listener (digests
+			// only) and what the listener serves now. Read-only.
+			Kind:  KindEndpointRecoveryCheck,
+			Flags: []string{"--relay-claim", "--host-exec-profile"},
+			Roles: []string{mtls.AgentRoleHost},
+		},
+		{
 			// A49: after containment, the same enrolled host removes the
 			// compromised certificate and key files its target names, wipes
 			// every ledger snapshot with that fingerprint, and runs the pinned

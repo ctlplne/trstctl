@@ -17658,6 +17658,9 @@
           "ready": {
             "type": "boolean"
           },
+          "recovery_readiness": {
+            "$ref": "#/components/schemas/EndpointRecoveryReadiness"
+          },
           "recovery_steps": {
             "items": {
               "type": "string"
@@ -18056,6 +18059,155 @@
           "items",
           "summary",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "EndpointRecoveryCheck": {
+        "properties": {
+          "agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "argv_sha256": {
+            "description": "SHA-256 over the recovery action's pinned command line: executable path, fixed arguments, accepted connector arguments and whether it passes them on.",
+            "type": "string"
+          },
+          "check_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "evidence_digest": {
+            "type": "string"
+          },
+          "executable_sha256": {
+            "description": "SHA-256 of the recovery action's executable as the host read it. The host never reports the path.",
+            "type": "string"
+          },
+          "failure": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "integer"
+          },
+          "listener": {
+            "description": "What one local TLS probe of the contained listener saw.",
+            "enum": [
+              "none",
+              "stopped",
+              "serving",
+              "serving_revoked",
+              "unverified"
+            ],
+            "type": "string"
+          },
+          "recovery": {
+            "description": "What the host profile says about this listener: a pinned recovery action, none, or no containment binding for this target.",
+            "enum": [
+              "pinned",
+              "no_recovery_action",
+              "no_binding"
+            ],
+            "type": "string"
+          },
+          "recovery_action": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "serving_fingerprint": {
+            "type": "string"
+          },
+          "status": {
+            "description": "queued until the target's enrolled host answers; checked once its signed job receipt is accepted; failed when the host could not complete the check.",
+            "enum": [
+              "queued",
+              "checked",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "check_id",
+          "target_id",
+          "target_revision",
+          "agent_id",
+          "requested_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "EndpointRecoveryCheckRequest": {
+        "properties": {
+          "identity_id": {
+            "description": "The contained identity. Its contained leaves are the ones the listener must not serve again.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "identity_id"
+        ],
+        "type": "object"
+      },
+      "EndpointRecoveryReadiness": {
+        "properties": {
+          "check": {
+            "$ref": "#/components/schemas/EndpointRecoveryCheck"
+          },
+          "contained_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "contained_fingerprint": {
+            "type": "string"
+          },
+          "deploy_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "description": "ready only when a recovery check requested after the containment shows a pinned recovery action the connector runs while deploying and a listener that is not serving the contained leaf.",
+            "enum": [
+              "ready",
+              "not_ready",
+              "unchecked",
+              "queued",
+              "stale",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "reasons",
+          "contained_at",
+          "contained_fingerprint"
         ],
         "type": "object"
       },
@@ -53716,6 +53868,139 @@
           }
         ],
         "summary": "Review an exact host target and compromised leaf before removing its installed material",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/connectors/targets/{id}/recovery-check": {
+      "get": {
+        "operationId": "getEndpointRecoveryCheck",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointRecoveryCheck"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the latest recovery check of a contained target and the host's signed answer",
+        "x-trstctl-permission": "connectors:read"
+      },
+      "post": {
+        "operationId": "requestEndpointRecoveryCheck",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointRecoveryCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointRecoveryCheck"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Ask a contained target's enrolled host whether its profile pins an action that brings the listener back and what the listener serves now",
         "x-trstctl-permission": "connectors:write"
       }
     },

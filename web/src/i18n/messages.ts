@@ -17803,6 +17803,42 @@ export const messages = {
     defaultMessage: "The server did not prove a zero-write preview. Nothing was authorized.",
     description: "Endpoint preview invariant refusal.",
   },
+  "connectors.hostRecovery.heading": {
+    defaultMessage: "Host recovery after containment",
+    description: "A210: replacement section for a listener containment stopped.",
+  },
+  "connectors.hostRecovery.ready": {
+    defaultMessage: "Ready: the enrolled host pins a recovery action this deploy runs, and the listener is not using the contained certificate.",
+    description: "A210: recovery readiness confirmed by the host's signed check.",
+  },
+  "connectors.hostRecovery.notReady": {
+    defaultMessage: "Not ready: the host's last answer leaves this listener without a way back.",
+    description: "A210: recovery check answered, not ready.",
+  },
+  "connectors.hostRecovery.unchecked": {
+    defaultMessage: "Not checked: containment stopped this listener and no host recovery check has run since.",
+    description: "A210: no recovery check after the containment.",
+  },
+  "connectors.hostRecovery.queued": {
+    defaultMessage: "Waiting for the enrolled host to answer the recovery check. Build the preview again once it answers.",
+    description: "A210: recovery check queued.",
+  },
+  "connectors.hostRecovery.stale": {
+    defaultMessage: "Out of date: the last check ran before the stop, or the target or its host changed since.",
+    description: "A210: recovery check older than the containment or target.",
+  },
+  "connectors.hostRecovery.failed": { defaultMessage: "The last recovery check failed on the host.", description: "A210: recovery check failed." },
+  "connectors.hostRecovery.action": { defaultMessage: "Recovery action", description: "A210: pinned recovery action name." },
+  "connectors.hostRecovery.listener": { defaultMessage: "Listener", description: "A210: listener state the host probed." },
+  "connectors.hostRecovery.executableDigest": { defaultMessage: "Executable SHA-256", description: "A210: digest of the recovery executable." },
+  "connectors.hostRecovery.commandDigest": { defaultMessage: "Command line SHA-256", description: "A210: digest of the pinned command line." },
+  "connectors.hostRecovery.check": { defaultMessage: "Check host recovery readiness", description: "A210: queues a recovery check on the host." },
+  "connectors.hostRecovery.checking": { defaultMessage: "Asking the host…", description: "A210: recovery check request in flight." },
+  "connectors.hostRecovery.requested": {
+    defaultMessage: "Recovery check queued for the enrolled host. Build the preview again once it answers.",
+    description: "A210: recovery check queued confirmation.",
+  },
+  "connectors.hostRecovery.checkFailed": { defaultMessage: "The recovery check could not be queued", description: "A210: recovery check request error." },
   // Machine-authored Spanish/German wording requires human review before release.
   "connectors.binding.subjectAlgorithm": { defaultMessage: "Certificate key algorithm", description: "Endpoint enrollment subject-key selection." },
   "connectors.binding.subjectAlgorithmHelp": {

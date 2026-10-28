@@ -300,6 +300,7 @@ type endpointBindingPreviewResponse struct {
 	Changes                 []string                     `json:"changes"`
 	QueuedLifecycleIntents  []string                     `json:"queued_lifecycle_intents"`
 	RecoverySteps           []string                     `json:"recovery_steps"`
+	RecoveryReadiness       *endpointRecoveryReadiness   `json:"recovery_readiness,omitempty"`
 	VerificationSteps       []string                     `json:"verification_steps"`
 	PreviewWrites           []string                     `json:"preview_writes"`
 	PreviewExternalEffects  []string                     `json:"preview_external_effects"`
@@ -1203,6 +1204,12 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 				"original already has active replacement "+active+"; complete or revoke it before starting another; nothing was queued or changed")
 		}
 	}
+	var recovery *endpointRecoveryReadiness
+	if replacedResp != nil {
+		if recovery, err = a.endpointRecoveryReadiness(ctx, tenantID, replaced.ID, target); err != nil {
+			return endpointBindingPreviewResponse{}, err
+		}
+	}
 	agentKeygen := custody.TargetGeneratesKeyOnHost(target.Connector, target.Config)
 	custodySummary := endpointBindingCustody{
 		KeyOrigin:              "control_plane",
@@ -1216,7 +1223,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 			Detail:                 "the host agent generates the subject key, sends only a CSR, installs the returned certificate, and verifies the listener",
 		}
 	}
-	return endpointBindingPreviewResponse{
+	return withRecoveryReadiness(endpointBindingPreviewResponse{
 		SubjectKeyAlgorithm:     subjectAlgorithm,
 		ExistingIdentityVersion: existingVersion,
 		Issuance:                profileRequirement.IssuanceBinding(),
@@ -1250,7 +1257,7 @@ func (a *API) endpointBindingPreview(ctx context.Context, tenantID string, req e
 		},
 		PreviewWrites:          []string{},
 		PreviewExternalEffects: []string{},
-	}, nil
+	}, recovery, replaced.ID), nil
 }
 
 // validateEndpointBindingVerificationName stops a deploy that is guaranteed to

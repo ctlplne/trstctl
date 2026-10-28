@@ -4127,6 +4127,7 @@ export interface EndpointBindingPreview {
   preview_writes: string[];
   queued_lifecycle_intents: string[];
   ready: boolean;
+  recovery_readiness?: EndpointRecoveryReadiness;
   recovery_steps: string[];
   replaced_identity?: Identity;
   replaced_identity_version?: number;
@@ -4223,6 +4224,39 @@ export interface EndpointKeyCustodyList {
   guidance: string;
   items: EndpointKeyCustody[];
   summary: EndpointCustodySummary;
+}
+
+export interface EndpointRecoveryCheck {
+  agent_id: string;
+  argv_sha256?: string;
+  check_id: string;
+  checked_at?: string;
+  evidence_digest?: string;
+  executable_sha256?: string;
+  failure?: string;
+  job_id?: number;
+  listener?: "none" | "stopped" | "serving" | "serving_revoked" | "unverified";
+  recovery?: "pinned" | "no_recovery_action" | "no_binding";
+  recovery_action?: string;
+  requested_at: string;
+  requested_by?: string;
+  serving_fingerprint?: string;
+  status: "queued" | "checked" | "failed";
+  target_id: string;
+  target_revision: string;
+}
+
+export interface EndpointRecoveryCheckRequest {
+  identity_id: string;
+}
+
+export interface EndpointRecoveryReadiness {
+  check?: EndpointRecoveryCheck;
+  contained_at: string;
+  contained_fingerprint: string;
+  deploy_actions?: string[];
+  reasons: string[];
+  state: "ready" | "not_ready" | "unchecked" | "queued" | "stale" | "failed";
 }
 
 export interface EndpointVerification {

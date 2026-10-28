@@ -2,6 +2,15 @@
 
 ### Added
 
+- Host recovery after containment: a host profile's containment binding can name a
+  `recovery_action`, and `POST /api/v1/connectors/targets/{id}/recovery-check` (CLI
+  `connector target recovery-check`, console **Check host recovery readiness**) asks
+  the target's enrolled host, in a read-only `endpoint.recovery_check` job enabled with
+  `endpoint.contain`, whether its profile pins one and what the listener answers now;
+  the signed answer carries SHA-256 digests, never the action's path. A replacement
+  preview for a listener containment stopped reads `ready` only after such a check
+  shows a recovery action the connector runs while deploying and a listener not
+  serving the contained leaf, and creating the replacement otherwise answers 409.
 - Managed CA leaf recovery: `POST /api/v1/certificates/managed-ca-recoveries`
   (`trstctl certificates inventory-managed-ca -f leaf.pem`) gives a managed CA leaf a
   version-1 `ca.endentity.issued` mint recorded by serial only its inventory row from

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1912 annotated sites across 29 rules. Each row is
+1919 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -504,7 +504,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (302 sites)
+### G115 — CWE-190 Integer overflow or wraparound (307 sites)
 
 | Location | Reason |
 |---|---|
@@ -607,10 +607,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6415` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6432` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6445` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6473` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6421` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6438` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6451` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6479` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -712,6 +712,11 @@ not this file.
 | `internal/store/discovery_segments.go:107` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:138` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
 | `internal/store/discovery_segments.go:199` | the migration constrains this PostgreSQL bigint to non-negative values (CWE-190) |
+| `internal/store/endpoint_recovery_check.go:53` | event sequences fit int64 (CWE-190) |
+| `internal/store/endpoint_recovery_check.go:85` | event sequences fit int64 (CWE-190) |
+| `internal/store/endpoint_recovery_check.go:102` | positive by constraint (CWE-190) |
+| `internal/store/endpoint_recovery_check.go:103` | positive by constraint (CWE-190) |
+| `internal/store/endpoint_recovery_check.go:146` | a projected event sequence (CWE-190) |
 | `internal/store/endpoint_verification.go:145` | event sequence fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/endpoint_verification.go:189` | non-negative by construction (CWE-190) |
 | `internal/store/endpoint_verification.go:230` | constrained positive database sequence (CWE-190) |
@@ -758,8 +763,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:569` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:584` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:570` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:585` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -997,7 +1002,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
 | `internal/cli/cli_test.go:2616` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/connector/localops.go:404` | operator-configured local-ops action command; running it is the feature (CWE-78) |
+| `internal/connector/localops.go:417` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/connector/wasm/host/host_test.go:44` | fixed toolchain and package; output confined to the temp dir (CWE-78). |
 | `internal/crypto/kmswrap/external_kms.go:122` | operator-configured external KMS helper command (CWE-78) |
 | `internal/crypto/pfx/alias_test.go:88` | runs the locally installed JDK tool with fixed arguments (CWE-78). |
@@ -1273,7 +1278,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (537 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (538 sites)
 
 | Location | Reason |
 |---|---|
@@ -1419,7 +1424,7 @@ not this file.
 | `internal/agent/relay/host_renew_pending.go:143` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending.go:261` | validated agent-local state directory |
 | `internal/agent/relay/host_renew_pending_replay_test.go:52` | test-owned directory |
-| `internal/agent/relay/hostexec.go:138` | operator-supplied profile path, read at their instruction (CWE-22) |
+| `internal/agent/relay/hostexec.go:141` | operator-supplied profile path, read at their instruction (CWE-22) |
 | `internal/agent/relay/hostposture_store_test.go:34` | test-owned directory |
 | `internal/agent/relay/hostrollback.go:915` | validated agent-local state directory (CWE-22) |
 | `internal/agent/relay/hostrollback_test.go:46` | test-owned temporary directory (CWE-22) |
@@ -1429,6 +1434,7 @@ not this file.
 | `internal/agent/relay/plugins.go:142` | operator-configured plugin directory (CWE-22) |
 | `internal/agent/relay/plugins.go:146` | sibling of an operator-configured module (CWE-22) |
 | `internal/agent/relay/postgresql_verification_test.go:154` | p is one of two fixed filenames under t.TempDir, with no external input (CWE-22). |
+| `internal/agent/relay/recovery_check.go:273` | the host operator's own pinned executable from the host profile (CWE-22) |
 | `internal/agent/relay/relay_test.go:681` | certPath is created beneath this test's private t.TempDir, |
 | `internal/agent/relay/relay_test.go:1112` | callers pass paths created inside this test package's t.TempDir fixtures (CWE-22). |
 | `internal/agent/relay/rollback_test.go:206` | test-owned temporary path (CWE-22) |
@@ -1522,8 +1528,8 @@ not this file.
 | `internal/config/config.go:4342` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
-| `internal/connector/localops.go:280` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
-| `internal/connector/localops.go:372` | clean is confined to operator-approved local roots above (CWE-22) |
+| `internal/connector/localops.go:293` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
+| `internal/connector/localops.go:385` | clean is confined to operator-approved local roots above (CWE-22) |
 | `internal/connector/localops_sync_other.go:10` | path is the parent of an operator-approved local connector target (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
@@ -1815,7 +1821,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (106 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (107 sites)
 
 | Location | Reason |
 |---|---|
@@ -1847,6 +1853,7 @@ not this file.
 | `internal/agent/drift/drift_test.go:169` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_test.go:226` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:81` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) (world-readable) |
+| `internal/agent/relay/recovery_check_test.go:25` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:29` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshkrl/install_test.go:62` | public KRL fixture checks that mode is preserved |

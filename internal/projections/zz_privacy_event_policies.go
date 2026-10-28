@@ -1656,7 +1656,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 // matters: required append/import mode must reject a new field under the same
 // version even when the existing schema was designed to carry no personal data.
 func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPayloadShape {
-	return map[privacyEventPolicyKey]events.PrivacyPayloadShape{
+	shapes := map[privacyEventPolicyKey]events.PrivacyPayloadShape{
 		{EventSecretStaticRotationQueued, 1}:                                 privacyPayloadShape[SecretStaticRotationQueued](),
 		{EventSecretStaticRotationAdvanced, 1}:                               privacyPayloadShape[SecretStaticRotationAdvanced](),
 		{EventCAIssuedCertificate, CAIssuedCertificateEvidenceSchemaVersion}: privacyPayloadShape[privacyCAIssuedEvidenceV2](),
@@ -1682,22 +1682,6 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		// A205: a SPIRE server's JWT signing key: a key ID, a public key and
 		// an expiry, no personal data.
 		{EventSPIFFEUpstreamJWTKeyPublished, 1}: privacyPayloadShape[SPIFFEUpstreamJWTKeyPublished](),
-		// A206: a report run's legal hold (a free-text reason the person wrote,
-		// the person being the event's actor) and its retention expiry (a run,
-		// a digest, a window and a time).
-		{EventComplianceReportLegalHoldPlaced, 1}:         privacyPayloadShape[ComplianceReportLegalHold](),
-		{EventComplianceReportLegalHoldReleased, 1}:       privacyPayloadShape[ComplianceReportLegalHold](),
-		{EventComplianceReportArtifactExpiryRequested, 1}: privacyPayloadShape[ComplianceReportArtifactExpiry](),
-		{EventComplianceReportArtifactExpired, 1}:         privacyPayloadShape[ComplianceReportArtifactExpiry](),
-		{EventComplianceReportArtifactExpiryDeferred, 1}:  privacyPayloadShape[ComplianceReportArtifactExpiryDeferred](),
-		// A208: an archive object's legal hold (a free-text reason the person
-		// wrote, the person being the event's actor) and its read-back.
-		{EventArchiveLegalHoldPlaced, 1}:           privacyPayloadShape[ArchiveLegalHoldPlaced](),
-		{EventArchiveLegalHoldReleaseRequested, 1}: privacyPayloadShape[ArchiveLegalHoldRelease](),
-		{EventArchiveLegalHoldRecorded, 1}:         privacyPayloadShape[ArchiveLegalHoldRecorded](),
-		// A207: a tenant custom role's name, description and permissions.
-		{EventTenantCustomRoleUpserted, 1}: privacyPayloadShape[TenantCustomRoleUpserted](),
-		{EventTenantCustomRoleDeleted, 1}:  privacyPayloadShape[TenantCustomRoleDeleted](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
 		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(
@@ -1926,6 +1910,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventSecretSyncWorkloadIdentityStatus, 1}:                                         privacyPayloadShape[SecretSyncWorkloadIdentitySourceStatus](),
 		{EventSecretSyncWorkloadIdentityDeleted, 1}:                                        privacyPayloadShape[SecretSyncWorkloadIdentitySourceDeleted](),
 	}
+	addOperatorRecordPrivacyShapes(shapes)
+	return shapes
 }
 
 // privacyDiscoveryRunCompletedV1 freezes the aggregate-only historical shape.

@@ -69,6 +69,9 @@ var agentJobKindAllowlist = map[string]bool{
 	relay.KindEndpointContain:   true,
 	relay.KindEndpointPurge:     true,
 	relay.KindConnectorTakedown: true,
+	// A210: the read-only recovery check that follows a containment. It is
+	// enabled with endpoint.contain (see AgentClaimableJobKinds).
+	relay.KindEndpointRecoveryCheck: true,
 	// A64: the entitlement right-size for bindings that name a relay.
 	relay.KindConnectorRightSize: true,
 	// D5: the dry-run. It is a first-class job kind rather than a flag on
@@ -479,6 +482,13 @@ func AgentClaimableJobKinds(configured []string) map[string]bool {
 	// the upgrade would only make "verified" quietly mean less.
 	if out[agentJobKindUpgrade] {
 		out[relay.KindAgentSelfCheck] = true
+	}
+	// A210: enabling containment enables the recovery check that tells a
+	// replacement preview whether the stopped listener can come back. It
+	// changes nothing on the host, is pinned to one agent per row and reports
+	// digests only; a stop without its check would leave the preview guessing.
+	if out[relay.KindEndpointContain] {
+		out[relay.KindEndpointRecoveryCheck] = true
 	}
 	return out
 }
@@ -893,6 +903,8 @@ func (a *agentService) ingestExecutedReport(
 			return err
 		}
 		return a.recordEndpointPurgeResult(ctx, info, claim, req, result)
+	case relay.KindEndpointRecoveryCheck:
+		return a.recordEndpointRecoveryCheckResult(ctx, info, claim, req)
 	case relay.KindConnectorRightSize:
 		return a.ingestRightSizeReport(ctx, info.TenantID, claim, req)
 	case relay.KindTrustDistribute:
@@ -1142,6 +1154,11 @@ func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.Pee
 			return false, "", status.Errorf(codes.Internal, "record failed connector takedown: %v", err)
 		}
 	}
+	if claim.Destination == relay.KindEndpointRecoveryCheck {
+		if err := a.recordEndpointRecoveryCheckFailure(ctx, info, claim, req); err != nil {
+			return false, "", status.Errorf(codes.Internal, "record failed recovery check: %v", err)
+		}
+	}
 	if err := a.recordDistrustRemovalFailure(ctx, info, claim, req); err != nil {
 		return false, "", status.Errorf(codes.Internal, "record failed distrusted root removal: %v", err)
 	}
@@ -1220,6 +1237,11 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	}
 	if claim.Destination == relay.KindConnectorTakedown {
 		terminalReason = "takedown_failed"
+	}
+	// A210: a failed recovery check is answered, not retried; the person
+	// fixes the host profile and asks again.
+	if claim.Destination == relay.KindEndpointRecoveryCheck {
+		permanent, terminalReason = true, "recovery_check_failed"
 	}
 	if _, removal := distrustRemovalJob(claim); removal {
 		// A refused or failed removal is reviewed by an operator, never

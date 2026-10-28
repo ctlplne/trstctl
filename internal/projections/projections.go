@@ -4563,6 +4563,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventArchiveLegalHoldPlaced:                   {1: true},
 	EventArchiveLegalHoldReleaseRequested:         {1: true},
 	EventArchiveLegalHoldRecorded:                 {1: true},
+	EventEndpointRecoveryCheckRequested:           {1: true},
+	EventEndpointRecoveryChecked:                  {1: true},
+	EventEndpointRecoveryCheckFailed:              {1: true},
 	EventTenantCustomRoleUpserted:                 {1: true},
 	EventTenantCustomRoleDeleted:                  {1: true},
 	EventTSACertificateRevoked:                    {1: true},
@@ -4962,6 +4965,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyArchiveLegalHoldTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyEndpointRecoveryCheckTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyTenantCustomRoleTx(ctx, tx, e); handled {

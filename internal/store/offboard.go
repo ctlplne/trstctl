@@ -150,6 +150,8 @@ var TenantScopedTables = []string{
 	"tenant_custom_roles",
 	// A208: archive objects' legal holds.
 	"archive_legal_holds",
+	// A210: contained targets' recovery checks.
+	"endpoint_recovery_checks",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

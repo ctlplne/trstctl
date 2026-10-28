@@ -3389,6 +3389,7 @@ func componentSchemas() map[string]*Schema {
 		"existing_identity":         ref("Identity"),
 		"replaced_identity":         ref("Identity"),
 		"replaced_identity_version": {Type: "integer"},
+		"recovery_readiness":        ref("EndpointRecoveryReadiness"),
 		"issuer":                    ref("EndpointIssuer"), "target": ref("EndpointBindingTarget"), "custody": ref("EndpointBindingCustody"),
 		"changes": {Type: "array", Items: str()}, "queued_lifecycle_intents": {Type: "array", Items: str()},
 		"recovery_steps": {Type: "array", Items: str()}, "verification_steps": {Type: "array", Items: str()},
@@ -3426,6 +3427,35 @@ func componentSchemas() map[string]*Schema {
 		"target_enabled", "identity_id", "identity_name", "identity_status", "certificate_status",
 		"expected_fingerprint", "required_agent_id", "preview_fingerprint", "required_permission",
 		"execution_effects", "verification_steps", "warnings")
+	endpointRecoveryCheckReq := object(map[string]*Schema{
+		"identity_id": {Type: "string", Format: "uuid", Description: "The contained identity. Its contained leaves are the ones the listener must not serve again."},
+	}, "identity_id")
+	endpointRecoveryCheck := object(map[string]*Schema{
+		"check_id": uuid(), "target_id": uuid(), "target_revision": str(), "agent_id": uuid(),
+		"requested_by": str(), "requested_at": timestamp(),
+		"status": {Type: "string", Enum: []string{"queued", "checked", "failed"},
+			Description: "queued until the target's enrolled host answers; checked once its signed job receipt is accepted; failed when the host could not complete the check."},
+		"recovery": {Type: "string", Enum: []string{"pinned", "no_recovery_action", "no_binding"},
+			Description: "What the host profile says about this listener: a pinned recovery action, none, or no containment binding for this target."},
+		"recovery_action": str(),
+		"executable_sha256": {Type: "string",
+			Description: "SHA-256 of the recovery action's executable as the host read it. The host never reports the path."},
+		"argv_sha256": {Type: "string",
+			Description: "SHA-256 over the recovery action's pinned command line: executable path, fixed arguments, accepted connector arguments and whether it passes them on."},
+		"listener": {Type: "string", Enum: []string{"none", "stopped", "serving", "serving_revoked", "unverified"},
+			Description: "What one local TLS probe of the contained listener saw."},
+		"serving_fingerprint": str(), "failure": str(), "job_id": {Type: "integer"}, "evidence_digest": str(),
+		"checked_at": timestamp(),
+	}, "check_id", "target_id", "target_revision", "agent_id", "requested_at", "status")
+	endpointRecoveryReadiness := object(map[string]*Schema{
+		"state": {Type: "string", Enum: []string{"ready", "not_ready", "unchecked", "queued", "stale", "failed"},
+			Description: "ready only when a recovery check requested after the containment shows a pinned recovery action the connector runs while deploying and a listener that is not serving the contained leaf."},
+		"reasons":               {Type: "array", Items: str()},
+		"contained_at":          timestamp(),
+		"contained_fingerprint": str(),
+		"deploy_actions":        {Type: "array", Items: str()},
+		"check":                 ref("EndpointRecoveryCheck"),
+	}, "state", "reasons", "contained_at", "contained_fingerprint")
 	rogueInstalledTarget := object(map[string]*Schema{
 		"target_id": uuid(), "target_name": str(), "connector": str(),
 		"model": {Type: "string", Enum: []string{"host_purge", "appliance_takedown", "none"}},
@@ -7785,6 +7815,9 @@ func componentSchemas() map[string]*Schema {
 		"ConnectorTargetActionRequest":             connectorTargetActionReq,
 		"EndpointContainmentRequest":               endpointContainmentReq,
 		"EndpointContainmentPreview":               endpointContainmentPreview,
+		"EndpointRecoveryCheckRequest":             endpointRecoveryCheckReq,
+		"EndpointRecoveryCheck":                    endpointRecoveryCheck,
+		"EndpointRecoveryReadiness":                endpointRecoveryReadiness,
 		"ConnectorDelivery":                        connectorDelivery,
 		"ConnectorDeliveryList":                    list("ConnectorDelivery"),
 		"ConnectorWorkCancellation":                connectorWorkCancellation,

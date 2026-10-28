@@ -25,6 +25,7 @@ export {
 } from "./apiTransport";
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
+import * as endpointRecovery from "./endpointRecoveryApi";
 import { downloadAuditExport as downloadAuditExportImpl, downloadSameOriginFile } from "./auditExport";
 import { auditQueryParams, auditReadSignal } from "./auditQuery";
 import type {
@@ -218,6 +219,9 @@ import type {
   ConnectorTargetActionRequest,
   EndpointContainmentPreview,
   EndpointContainmentRequest,
+  EndpointRecoveryCheck,
+  EndpointRecoveryCheckRequest,
+  EndpointRecoveryReadiness,
   KeyCompromisePlan,
   KeyCompromiseExecutionRequest,
   KeyCompromiseResult,
@@ -1130,6 +1134,9 @@ export type {
   ConnectorTargetActionRequest,
   EndpointContainmentPreview,
   EndpointContainmentRequest,
+  EndpointRecoveryCheck,
+  EndpointRecoveryCheckRequest,
+  EndpointRecoveryReadiness,
   KeyCompromisePlan,
   KeyCompromiseExecutionRequest,
   KeyCompromiseResult,
@@ -2103,6 +2110,8 @@ export interface Api {
   previewEndpointPurge(id: string): Promise<EndpointContainmentPreview>;
   purgeEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   containEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
+  requestEndpointRecoveryCheck(targetId: string, input: EndpointRecoveryCheckRequest, idempotencyKey?: string): Promise<EndpointRecoveryCheck>;
+  getEndpointRecoveryCheck(targetId: string): Promise<EndpointRecoveryCheck>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
   validityReadiness(): Promise<ValidityReadinessReport>;
@@ -2886,6 +2895,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<ConnectorWorkCancellation>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/cancel`, input, key),
   previewEndpointContainment: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/contain/preview`),
   containEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/contain`, input, key),
+  requestEndpointRecoveryCheck: endpointRecovery.requestEndpointRecoveryCheck,
+  getEndpointRecoveryCheck: endpointRecovery.getEndpointRecoveryCheck,
   previewEndpointPurge: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/purge/preview`),
   purgeEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/purge`, input, key),
   connectorDeliveries: (options) => {

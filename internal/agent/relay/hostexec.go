@@ -116,6 +116,9 @@ type HostContainment struct {
 	Address    string `json:"address"`
 	ServerName string `json:"server_name,omitempty"`
 	Action     string `json:"action"`
+	// RecoveryAction names the pinned action that brings the listener back
+	// after containment (A210).
+	RecoveryAction string `json:"recovery_action,omitempty"`
 }
 
 // HostAction is one permitted command.
@@ -190,7 +193,7 @@ func LoadHostProfile(path string) (connector.LocalOpsConfig, error) {
 	for _, binding := range profile.Containments {
 		containments = append(containments, connector.LocalContainment{
 			TargetID: binding.TargetID, Address: binding.Address,
-			ServerName: binding.ServerName, Action: binding.Action,
+			ServerName: binding.ServerName, Action: binding.Action, RecoveryAction: binding.RecoveryAction,
 		})
 	}
 	configured := connector.LocalOpsConfig{AllowedRoots: profile.AllowedRoots, Actions: actions,

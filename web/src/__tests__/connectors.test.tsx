@@ -23,6 +23,7 @@ const { apiMock } = vi.hoisted(() => ({
     createConnectorTarget: vi.fn(),
     previewEndpointBinding: vi.fn(),
     createEndpointBinding: vi.fn(),
+    requestEndpointRecoveryCheck: vi.fn(),
     bindIdentityConnectorTarget: vi.fn(),
     testConnectorTarget: vi.fn(),
     deployConnectorTarget: vi.fn(),
@@ -731,6 +732,83 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByRole("link", { name: "Review new identity" })).toHaveAttribute("href", "/identities?identity=identity-bound");
     expect(screen.getByRole("link", { name: "Review original identity" })).toHaveAttribute("href", "/identities?identity=identity-original");
     expect(screen.queryByText(/endpoint-binding:/)).not.toBeInTheDocument();
+  });
+
+  it("A210 waits for the host's recovery check before a contained listener's replacement reads ready", async () => {
+    const user = userEvent.setup();
+    const original = {
+      id: "identity-original",
+      tenant_id: "tenant-1",
+      name: "payments.example.test",
+      kind: "x509_certificate",
+      owner_id: "owner-1",
+      status: "revoked",
+      attributes: { deployment_target_id: "target-1" },
+      created_at: "2026-06-20T00:00:00Z",
+    };
+    apiMock.identities.mockResolvedValue([original]);
+    const defaultPreview = await apiMock.previewEndpointBinding.getMockImplementation()?.();
+    const answered = {
+      check_id: "check-1",
+      target_id: "target-1",
+      target_revision: "sha256:target-revision",
+      agent_id: "agent-1",
+      requested_at: "2026-10-28T03:00:00Z",
+      status: "checked",
+      recovery: "no_recovery_action",
+      listener: "stopped",
+    };
+    const notReady = {
+      ...defaultPreview,
+      ready: false,
+      replaced_identity: original,
+      replaced_identity_version: 10,
+      recovery_readiness: {
+        state: "not_ready",
+        reasons: ["the host profile pins no recovery action for this listener; set containments[].recovery_action in the host profile"],
+        contained_at: "2026-10-28T02:00:00Z",
+        contained_fingerprint: "a".repeat(64),
+        deploy_actions: ["nginx"],
+        check: answered,
+      },
+    };
+    const ready = {
+      ...notReady,
+      ready: true,
+      recovery_readiness: {
+        ...notReady.recovery_readiness,
+        state: "ready",
+        reasons: [],
+        check: { ...answered, recovery: "pinned", recovery_action: "nginx", executable_sha256: "b".repeat(64), argv_sha256: "c".repeat(64) },
+      },
+    };
+    apiMock.previewEndpointBinding.mockResolvedValueOnce(notReady).mockResolvedValueOnce(ready);
+    apiMock.requestEndpointRecoveryCheck.mockResolvedValue({ ...answered, status: "queued", recovery: undefined, listener: undefined });
+    renderConnectors();
+    await screen.findByRole("heading", { name: "Where credentials are installed" });
+    await user.click(screen.getByText("Destinations and safe actions", { exact: true }));
+    await screen.findByRole("heading", { name: "Name the endpoint" });
+    await user.selectOptions(screen.getByLabelText("Certificate action"), "replace");
+    await user.selectOptions(screen.getByLabelText("Destination"), "target-1");
+    await user.selectOptions(screen.getByLabelText("Original identity"), original.id);
+    await user.type(screen.getByLabelText("Enrollment reason"), "replace the contained certificate");
+    await user.click(screen.getByRole("button", { name: "Choose CA" }));
+    await user.selectOptions(await screen.findByLabelText("Issuing CA"), "external:corporate-digicert");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    const panel = within(await screen.findByRole("region", { name: "Host recovery after containment" }));
+    expect(panel.getByText(/Not ready/)).toBeInTheDocument();
+    expect(panel.getByText(/pins no recovery action/)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ready to authorize — nothing changed" })).not.toBeInTheDocument();
+    expect(screen.queryByText("The server did not prove a zero-write preview. Nothing was authorized.")).not.toBeInTheDocument();
+    await user.click(panel.getByRole("button", { name: "Check host recovery readiness" }));
+    await waitFor(() => expect(apiMock.requestEndpointRecoveryCheck).toHaveBeenCalledWith("target-1", { identity_id: original.id }, expect.any(String)));
+    expect(await panel.findByRole("status")).toHaveTextContent("Recovery check queued for the enrolled host.");
+    await user.click(screen.getByRole("button", { name: "Build safe preview" }));
+    await screen.findByRole("heading", { name: "Ready to authorize — nothing changed" });
+    const confirmed = within(screen.getByRole("region", { name: "Host recovery after containment" }));
+    expect(confirmed.getByText(/^Ready:/)).toBeInTheDocument();
+    expect(confirmed.getByText("nginx")).toBeInTheDocument();
+    expect(confirmed.queryByRole("button", { name: "Check host recovery readiness" })).not.toBeInTheDocument();
   });
 
   it("recovers unavailable profile choices without discarding the endpoint or CA", async () => {

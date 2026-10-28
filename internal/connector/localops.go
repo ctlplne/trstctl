@@ -75,6 +75,10 @@ type LocalContainment struct {
 	Address    string
 	ServerName string
 	Action     string
+	// RecoveryAction, when set, names the pinned action that brings the
+	// listener back after containment (A210); a recovery check reports its
+	// digests, never its path.
+	RecoveryAction string
 }
 
 // LocalActionInvocation is one command a host connector would ask its sandbox
@@ -249,6 +253,15 @@ func NewLocalOps(cfg LocalOpsConfig) (Ops, error) {
 		action, ok := actions[actionName]
 		if !ok || action.PassArgs || action.LogicalArgs == nil || len(action.LogicalArgs) != 0 {
 			return nil, fmt.Errorf("connector: containment action %q must be a pinned, argument-free operator action", actionName)
+		}
+		// A210: the recovery action is the operator's own pinned action that
+		// brings this listener back, usually the wrapper the connector calls
+		// while deploying; it may take the connector's arguments, but it must
+		// exist and must not be the stop action.
+		if recovery := strings.TrimSpace(binding.RecoveryAction); recovery != "" {
+			if _, ok := actions[recovery]; !ok || recovery == actionName || strings.ContainsAny(recovery, "\r\n") {
+				return nil, fmt.Errorf("connector: containment recovery action %q must be one of the profile's actions other than the stop action", recovery)
+			}
 		}
 		seenContainments[parsedID.String()] = true
 		seenListeners[listener] = true
