@@ -1742,8 +1742,8 @@ not this file.
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |
 | `internal/signing/revocation.go:105` | path passed the explicit signer-keystore confinement check above (CWE-22) |
-| `internal/spireupstream/plugin.go:370` | operator-configured public CA bundle path (CWE-22) |
-| `internal/spireupstream/plugin.go:455` | operator-configured upstream-authority plugin config path (CWE-22) |
+| `internal/spireupstream/plugin.go:381` | operator-configured public CA bundle path (CWE-22) |
+| `internal/spireupstream/plugin.go:466` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
 | `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/store/store_isolation_test.go:392` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |

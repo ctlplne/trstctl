@@ -428,7 +428,14 @@ servers that share a trust domain through trstctl verify each other's JWT-SVIDs:
 in containers, two SPIRE servers mint JWT-SVIDs that verify with the other
 server's bundle. trstctl keeps public keys only (`GET /api/v1/spiffe/upstream-jwt-keys`,
 `trstctl-cli spiffe upstream-jwt-keys list`); a key ID published again with a
-different key is refused.
+different key is refused. A SPIRE server pointed at a trstctl that does not serve
+JWT key publication (an older trstctl answers the route with 404) still starts:
+the plugin tells SPIRE it does not publish JWT keys, SPIRE logs
+`UpstreamAuthority plugin does not support JWT-SVIDs` once and keeps its JWT key
+in its own bundle, and the plugin tries again at the next JWT key rotation. CI's
+SPIRE container test runs both: against a stand-in that serves publication, a
+JWT-SVID signed with another server's published key verifies with the SPIRE
+bundle; against one that does not, SPIRE starts and mints X.509 and JWT-SVIDs.
 
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 

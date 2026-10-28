@@ -666,6 +666,11 @@
 
 ### Fixed
 
+- A SPIRE server whose upstream authority is the trstctl plugin no longer stops
+  at startup when trstctl does not serve JWT key publication (an older trstctl
+  answers 404): the plugin reports publication as unsupported, so SPIRE logs a
+  warning, keeps its JWT keys in its own bundle and starts; the next JWT key
+  rotation publishes again.
 - The SPIRE upstream authority docs said the plugin's token needs `certs:issue`;
   the intermediate CSR route needs `issuers:write`, and it signs only under an
   approved ceremony for each CSR, which the docs now say.

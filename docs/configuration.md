@@ -2868,7 +2868,7 @@ environment variables.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `endpoint` | yes | Base URL of the trstctl control plane, for example `https://trstctl.example.com:8443`. The plugin calls `/api/v1/ca/authorities/{id}/intermediates/csr` for SPIRE's X.509 CA and `/api/v1/spiffe/upstream-jwt-keys` for its JWT signing keys. |
+| `endpoint` | yes | Base URL of the trstctl control plane, for example `https://trstctl.example.com:8443`. The plugin calls `/api/v1/ca/authorities/{id}/intermediates/csr` for SPIRE's X.509 CA and `/api/v1/spiffe/upstream-jwt-keys` for its JWT signing keys; a trstctl without the JWT key route leaves those keys in SPIRE's own bundle. |
 | `ca_bundle_file` | no | PEM CA bundle used only to verify the HTTPS trstctl endpoint. Set this to trstctl's published internal trust file for a self-signed/private deployment; omit it to use the host's normal trust store. Plain HTTP cannot use this field. |
 | `allow_private_cidrs` | no | Exact private network ranges the endpoint is allowed to resolve into, for example `["10.96.42.15/32"]`. Private addresses are blocked by default; link-local, metadata, multicast, unspecified, CGNAT, and IPv6 unique-local addresses remain blocked even if listed. Prefer a host-sized `/32` or `/128` over a whole network. |
 | `ca_authority_id` | yes | The trstctl CA authority that signs SPIRE's intermediate CA CSR. |

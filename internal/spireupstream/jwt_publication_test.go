@@ -10,12 +10,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	upstreamauthorityv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/server/upstreamauthority/v1"
 	typesv1 "github.com/spiffe/spire-plugin-sdk/proto/spire/plugin/types"
@@ -183,5 +186,51 @@ token_file = "` + writeTempToken(t, []byte("wrong-token\n")) + `"
 	err := p.PublishJWTKeyAndSubscribe(&upstreamauthorityv1.PublishJWTKeyRequest{JwtKey: &typesv1.JWTKey{KeyId: "k", PublicKey: []byte{1}}}, stream)
 	if err == nil || !strings.Contains(err.Error(), "401") {
 		t.Fatalf("a rejected token = %v, want trstctl's 401", err)
+	}
+}
+
+// A SPIRE server pointed at a trstctl that does not serve JWT key publication
+// still starts: an older trstctl's 404 (or a 405 or 501) reaches SPIRE as
+// Unimplemented, which SPIRE takes as an upstream authority that does not
+// publish JWT keys, so it keeps the key in its own bundle. Any other failure
+// stays an error.
+func TestPluginJWTPublicationIsUnimplementedWhenTrstctlDoesNotServeIt(t *testing.T) {
+	for _, tc := range []struct {
+		httpStatus int
+		want       codes.Code
+	}{
+		{http.StatusNotFound, codes.Unimplemented},
+		{http.StatusMethodNotAllowed, codes.Unimplemented},
+		{http.StatusNotImplemented, codes.Unimplemented},
+		{http.StatusServiceUnavailable, codes.Unavailable},
+		{http.StatusInternalServerError, codes.Unavailable},
+	} {
+		t.Run(strconv.Itoa(tc.httpStatus), func(t *testing.T) {
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, http.StatusText(tc.httpStatus), tc.httpStatus)
+			}))
+			t.Cleanup(srv.Close)
+			caBundleFile := t.TempDir() + "/trstctl-ca.pem"
+			if err := os.WriteFile(caBundleFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			p := New()
+			if _, err := p.Configure(context.Background(), &configv1.ConfigureRequest{HclConfiguration: `
+endpoint = "` + srv.URL + `"
+ca_bundle_file = "` + caBundleFile + `"
+ca_authority_id = "root-1"
+token_file = "` + writeTempToken(t, []byte("plugin-token\n")) + `"
+`}); err != nil {
+				t.Fatalf("configure plugin: %v", err)
+			}
+			stream := &jwtStream{ctx: context.Background(), sent: make(chan struct{}, 1)}
+			err := p.PublishJWTKeyAndSubscribe(&upstreamauthorityv1.PublishJWTKeyRequest{JwtKey: &typesv1.JWTKey{KeyId: "k", PublicKey: []byte{1}}}, stream)
+			if status.Code(err) != tc.want {
+				t.Fatalf("HTTP %d reached SPIRE as %v, want code %v", tc.httpStatus, err, tc.want)
+			}
+			if len(stream.responses) != 0 {
+				t.Fatalf("the plugin answered SPIRE with %v", stream.responses)
+			}
+		})
 	}
 }

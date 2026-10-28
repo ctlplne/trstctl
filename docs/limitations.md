@@ -5259,7 +5259,11 @@ This is a deliberate, documented trust boundary, not an accident.
   through trstctl verify each other's JWT-SVIDs (two SPIRE server containers,
   each verifying the other's JWT-SVID with its own bundle). trstctl keeps the
   public keys only; its own SPIFFE JWT authority is not added to that set, and
-  SPIRE's optional `SubscribeToLocalBundle` is not implemented.
+  SPIRE's optional `SubscribeToLocalBundle` is not implemented. Against a
+  trstctl that does not serve that route (an older trstctl's 404, or a 405 or
+  501), the plugin reports JWT key publication as unsupported, so SPIRE keeps
+  its JWT keys in its own bundle and still starts; the next JWT key rotation
+  publishes again.
 - Attested issuance transport (REST): `POST /api/v1/workloads/attested-issuance`
   is the served proof-before-trust mint for workloads that already have
   their own key pair. The request carries the attestation method, base64

@@ -132,7 +132,9 @@ func (p *Plugin) MintX509CAAndSubscribe(req *upstreamauthorityv1.MintX509CAReque
 // through trstctl then verify each other's JWT-SVIDs. The subscription stays
 // open and sends the set again whenever another server's publication changes
 // it. A failed refresh keeps the stream open, as SPIRE reopens it only at its
-// next JWT key rotation.
+// next JWT key rotation. A trstctl that does not serve JWT key publication
+// gets SPIRE Unimplemented, so SPIRE warns once and keeps the key in its own
+// bundle instead of failing the rotation; the next rotation publishes again.
 func (p *Plugin) PublishJWTKeyAndSubscribe(req *upstreamauthorityv1.PublishJWTKeyRequest, stream upstreamauthorityv1.UpstreamAuthority_PublishJWTKeyAndSubscribeServer) error {
 	key := req.GetJwtKey()
 	if key == nil || len(key.GetPublicKey()) == 0 || strings.TrimSpace(key.GetKeyId()) == "" {
@@ -227,7 +229,16 @@ func jwtKeysCall(ctx context.Context, cfg *Config, client *http.Client, method s
 		return nil, status.Errorf(codes.Unavailable, "read trstctl response: %v", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, status.Errorf(codes.Unavailable, "trstctl returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		detail := strings.TrimSpace(string(respBody))
+		switch resp.StatusCode {
+		case http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusNotImplemented:
+			// trstctl does not serve the route: an older trstctl answers 404, a
+			// router without this method 405, a deployment without the service
+			// 501. SPIRE takes Unimplemented as an upstream authority that does
+			// not publish JWT keys and keeps the key in its own bundle.
+			return nil, status.Errorf(codes.Unimplemented, "trstctl does not serve JWT key publication (HTTP %d: %s)", resp.StatusCode, detail)
+		}
+		return nil, status.Errorf(codes.Unavailable, "trstctl returned HTTP %d: %s", resp.StatusCode, detail)
 	}
 	var listed struct {
 		Items []trstctlJWTKey `json:"items"`

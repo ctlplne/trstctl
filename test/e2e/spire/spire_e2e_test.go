@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,19 +25,126 @@ import (
 	"trstctl.com/trstctl/internal/crypto/mtls"
 )
 
-const spireServerSocket = "/tmp/spire-server/private/api.sock"
+const (
+	spireServerSocket = "/tmp/spire-server/private/api.sock"
+	jwtKeysPath       = "/api/v1/spiffe/upstream-jwt-keys"
+	// jwtUnsupportedWarning is what SPIRE logs once when its upstream authority
+	// answers JWT key publication with Unimplemented.
+	jwtUnsupportedWarning = "UpstreamAuthority plugin does not support JWT-SVIDs"
+)
 
 func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
+	requireSPIREE2E(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	// Another SPIRE server of the tenant has already published its JWT key.
+	peerKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(peerKey.Destroy)
+	peerExpires := time.Now().Add(time.Hour).UTC()
+	jwtKeys := &fakeJWTKeys{keys: []fakeJWTKey{{
+		KeyID: "peer-spire-server", PublicKey: peerKey.Public().DER, ExpiresAt: &peerExpires,
+		PublishedBy: "peer", PublishedAt: time.Now().UTC(),
+	}}}
+
+	spire := startSPIREServer(t, ctx, jwtKeys)
+	spire.requireX509SVIDChainedToTrstctl(t, ctx)
+
+	// The SPIRE server published its JWT key to trstctl and signs JWT-SVIDs
+	// with it.
+	published := jwtKeys.publishedKeys()
+	if len(published) == 0 {
+		t.Fatal("the SPIRE server published no JWT key to trstctl")
+	}
+	var publishedJWKS crypto.JWKS
+	for _, key := range published {
+		jwk, err := crypto.PublicJWK(crypto.PublicKey{DER: key.PublicKey}, key.KeyID)
+		if err != nil {
+			t.Fatalf("published JWT key %q: %v", key.KeyID, err)
+		}
+		publishedJWKS.Keys = append(publishedJWKS.Keys, jwk)
+	}
+	svid := spire.mintJWTSVID(t, ctx)
+	claims, err := crypto.VerifyJWT(svid, publishedJWKS)
+	if err != nil {
+		t.Fatalf("the JWT-SVID does not verify with the key published to trstctl: %v", err)
+	}
+	var sub struct {
+		Subject string `json:"sub"`
+	}
+	if err := json.Unmarshal(claims, &sub); err != nil || sub.Subject != "spiffe://example.org/workload" {
+		t.Fatalf("JWT-SVID subject = %q (%v), want spiffe://example.org/workload", sub.Subject, err)
+	}
+
+	// trstctl's answer reached the SPIRE bundle: a JWT-SVID signed by the
+	// peer server verifies with this server's bundle.
+	bundle := spire.bundleJWKS(t, ctx)
+	peerSVID, err := crypto.SignJWT(peerKey, "peer-spire-server", map[string]any{
+		"sub": "spiffe://example.org/peer-workload", "aud": []string{"trstctl-e2e"},
+		"exp": time.Now().Add(time.Minute).Unix(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := crypto.VerifyJWT(peerSVID, bundle); err != nil {
+		t.Fatalf("the peer server's JWT-SVID does not verify with the SPIRE bundle: %v", err)
+	}
+	if _, err := crypto.VerifyJWT(svid, bundle); err != nil {
+		t.Fatalf("the JWT-SVID does not verify with its own SPIRE bundle: %v", err)
+	}
+	if logs := spire.logs(t, ctx); strings.Contains(logs, jwtUnsupportedWarning) {
+		t.Fatalf("SPIRE treated JWT key publication as unsupported:\n%s", logs)
+	}
+}
+
+// An older trstctl does not serve JWT key publication. The SPIRE server still
+// starts and mints SVIDs, and keeps its JWT key in its own bundle.
+func TestSPIREServerStartsWhenTrstctlDoesNotServeJWTKeyPublication(t *testing.T) {
+	requireSPIREE2E(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	spire := startSPIREServer(t, ctx, nil)
+	spire.requireX509SVIDChainedToTrstctl(t, ctx)
+	if spire.trstctl.jwtRouteMisses.Load() == 0 {
+		t.Fatal("the plugin never asked trstctl to publish the SPIRE server's JWT key")
+	}
+	if logs := spire.logs(t, ctx); !strings.Contains(logs, jwtUnsupportedWarning) {
+		t.Fatalf("SPIRE did not log that JWT key publication is unsupported:\n%s", logs)
+	}
+	svid := spire.mintJWTSVID(t, ctx)
+	if _, err := crypto.VerifyJWT(svid, spire.bundleJWKS(t, ctx)); err != nil {
+		t.Fatalf("the JWT-SVID does not verify with the SPIRE server's own bundle: %v", err)
+	}
+}
+
+func requireSPIREE2E(t *testing.T) {
+	t.Helper()
 	if os.Getenv("TRSTCTL_RUN_SPIRE_E2E") != "1" {
 		t.Skip("set TRSTCTL_RUN_SPIRE_E2E=1 to run the SPIRE server container acceptance test")
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker not available: %v", err)
 	}
+}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
+// spireServer is a SPIRE server container whose upstream authority is the
+// trstctl plugin, pointed at a stand-in for trstctl.
+type spireServer struct {
+	name    string
+	outDir  string
+	root    crypto.IssuedHierarchyCA
+	trstctl *fakeTrstctl
+}
 
+// startSPIREServer starts a SPIRE server against a stand-in for trstctl that
+// serves JWT key publication from jwtKeys, or answers it with 404, as an older
+// trstctl does, when jwtKeys is nil. It returns once the server is ready.
+func startSPIREServer(t *testing.T, ctx context.Context, jwtKeys *fakeJWTKeys) *spireServer {
+	t.Helper()
 	rootKey, err := crypto.GenerateLockedKey(crypto.ECDSAP256)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +160,8 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	trstctlHTTP, trstctlTrustPEM, closeHTTP := serveFakeTrstctlIntermediateCSR(t, rootKey, root)
+	trstctl := &fakeTrstctl{jwtKeys: jwtKeys}
+	trstctlHTTP, trstctlTrustPEM, closeHTTP := serveFakeTrstctl(t, rootKey, root, trstctl)
 	t.Cleanup(closeHTTP)
 
 	dir := t.TempDir()
@@ -92,15 +202,22 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 	})
 
 	waitForSPIREServer(t, ctx, name)
-	run(t, ctx, "docker", "exec", name,
+	return &spireServer{name: name, outDir: outDir, root: root, trstctl: trstctl}
+}
+
+// requireX509SVIDChainedToTrstctl mints an X.509-SVID and checks it chains
+// through SPIRE's intermediate to the trstctl root.
+func (s *spireServer) requireX509SVIDChainedToTrstctl(t *testing.T, ctx context.Context) {
+	t.Helper()
+	run(t, ctx, "docker", "exec", s.name,
 		"/opt/spire/bin/spire-server", "x509", "mint",
 		"-socketPath", spireServerSocket,
 		"-spiffeID", "spiffe://example.org/workload",
 		"-ttl", "60s",
 		"-write", "/tmp/out")
 
-	svidPEM := readFile(t, filepath.Join(outDir, "svid.pem"))
-	bundlePEM := readFile(t, filepath.Join(outDir, "bundle.pem"))
+	svidPEM := readFile(t, filepath.Join(s.outDir, "svid.pem"))
+	bundlePEM := readFile(t, filepath.Join(s.outDir, "bundle.pem"))
 	svidChain := pemCerts(t, svidPEM)
 	bundle := pemCerts(t, bundlePEM)
 	if len(svidChain) < 2 {
@@ -119,15 +236,121 @@ func TestSPIREServerMintsSVIDChainedToTrstctlUpstreamAuthority(t *testing.T) {
 	if err := crypto.VerifyLeafSignedByCA(svidChain[0], svidChain[1]); err != nil {
 		t.Fatalf("SPIRE SVID does not chain to SPIRE intermediate: %v", err)
 	}
-	if err := crypto.VerifyLeafSignedByCA(svidChain[1], root.CertificateDER); err != nil {
+	if err := crypto.VerifyLeafSignedByCA(svidChain[1], s.root.CertificateDER); err != nil {
 		t.Fatalf("SPIRE intermediate does not chain to trstctl root: %v", err)
 	}
-	if string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: bundle[0]})) != string(root.CertificatePEM) {
+	if string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: bundle[0]})) != string(s.root.CertificatePEM) {
 		t.Fatal("SPIRE upstream bundle is not the trstctl root returned by the upstream-authority plugin")
 	}
 }
 
-func serveFakeTrstctlIntermediateCSR(t *testing.T, rootKey crypto.DigestSigner, root crypto.IssuedHierarchyCA) (string, []byte, func()) {
+// mintJWTSVID returns a JWT-SVID for spiffe://example.org/workload.
+func (s *spireServer) mintJWTSVID(t *testing.T, ctx context.Context) string {
+	t.Helper()
+	run(t, ctx, "docker", "exec", s.name,
+		"/opt/spire/bin/spire-server", "jwt", "mint",
+		"-socketPath", spireServerSocket,
+		"-spiffeID", "spiffe://example.org/workload",
+		"-audience", "trstctl-e2e",
+		"-ttl", "60s",
+		"-write", "/tmp/out/jwt-svid.token")
+	return strings.TrimSpace(string(readFile(t, filepath.Join(s.outDir, "jwt-svid.token"))))
+}
+
+// bundleJWKS returns the SPIRE server's trust bundle in SPIFFE (JWKS) form.
+func (s *spireServer) bundleJWKS(t *testing.T, ctx context.Context) crypto.JWKS {
+	t.Helper()
+	out := run(t, ctx, "docker", "exec", s.name,
+		"/opt/spire/bin/spire-server", "bundle", "show",
+		"-socketPath", spireServerSocket,
+		"-format", "spiffe")
+	jwks, err := crypto.ParseJWKS(out)
+	if err != nil {
+		t.Fatalf("parse SPIRE bundle: %v\n%s", err, out)
+	}
+	return jwks
+}
+
+func (s *spireServer) logs(t *testing.T, ctx context.Context) string {
+	t.Helper()
+	return string(run(t, ctx, "docker", "logs", s.name))
+}
+
+// fakeTrstctl records what the stand-in for trstctl saw.
+type fakeTrstctl struct {
+	// jwtKeys serves JWT key publication; nil answers it with 404.
+	jwtKeys *fakeJWTKeys
+	// jwtRouteMisses counts JWT key requests answered with 404.
+	jwtRouteMisses atomic.Int64
+}
+
+// fakeJWTKeys is trstctl's JWT key publication: POST publishes a key and
+// answers with every key published, GET lists them.
+type fakeJWTKeys struct {
+	mu        sync.Mutex
+	keys      []fakeJWTKey
+	published []fakeJWTKey
+}
+
+type fakeJWTKey struct {
+	KeyID       string     `json:"key_id"`
+	PublicKey   []byte     `json:"public_key"`
+	ExpiresAt   *time.Time `json:"expires_at"`
+	Tainted     bool       `json:"tainted"`
+	PublishedBy string     `json:"published_by"`
+	PublishedAt time.Time  `json:"published_at"`
+}
+
+func (k *fakeJWTKeys) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if got := r.Header.Get("Authorization"); got != "Bearer e2e-token" {
+		http.Error(w, "missing bearer token", http.StatusUnauthorized)
+		return
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if r.Method == http.MethodPost {
+		if got := r.Header.Get("Idempotency-Key"); !strings.HasPrefix(got, "spire-upstream-jwt-") {
+			http.Error(w, "missing idempotency key", http.StatusBadRequest)
+			return
+		}
+		var key fakeJWTKey
+		if err := json.NewDecoder(r.Body).Decode(&key); err != nil || key.KeyID == "" || len(key.PublicKey) == 0 {
+			http.Error(w, "a key ID and a public key are required", http.StatusBadRequest)
+			return
+		}
+		key.PublishedBy, key.PublishedAt = "spire-e2e", time.Now().UTC()
+		known := false
+		for _, existing := range k.keys {
+			if existing.KeyID != key.KeyID {
+				continue
+			}
+			if string(existing.PublicKey) != string(key.PublicKey) {
+				http.Error(w, "that key ID is already published with a different key", http.StatusConflict)
+				return
+			}
+			known = true
+		}
+		k.published = append(k.published, key)
+		if !known {
+			k.keys = append(k.keys, key)
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"items": k.keys})
+}
+
+// publishedKeys returns the keys the SPIRE server published.
+func (k *fakeJWTKeys) publishedKeys() []fakeJWTKey {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return append([]fakeJWTKey(nil), k.published...)
+}
+
+func serveFakeTrstctl(t *testing.T, rootKey crypto.DigestSigner, root crypto.IssuedHierarchyCA, fake *fakeTrstctl) (string, []byte, func()) {
 	t.Helper()
 	ln, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
@@ -182,6 +405,14 @@ func serveFakeTrstctlIntermediateCSR(t *testing.T, rootKey crypto.DigestSigner, 
 			"not_after":       issued.NotAfter.UTC().Format(time.RFC3339),
 		})
 	})
+	if fake.jwtKeys != nil {
+		mux.Handle(jwtKeysPath, fake.jwtKeys)
+	} else {
+		mux.HandleFunc(jwtKeysPath, func(w http.ResponseWriter, r *http.Request) {
+			fake.jwtRouteMisses.Add(1)
+			http.NotFound(w, r)
+		})
+	}
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	serverCert, err := mtls.SelfSignedServerCert([]string{"host.docker.internal"}, 24*time.Hour)
 	if err != nil {
