@@ -26,6 +26,7 @@ export {
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
+import * as verificationAddress from "./verificationSuggestionsApi";
 import { downloadAuditExport as downloadAuditExportImpl, downloadSameOriginFile } from "./auditExport";
 import { auditQueryParams, auditReadSignal } from "./auditQuery";
 import type {
@@ -223,6 +224,8 @@ import type {
   EndpointContainmentRequest,
   EndpointRecoveryCheck,
   EndpointRecoveryCheckRequest,
+  VerificationAddressConfirmation,
+  VerificationSuggestions,
   EndpointRecoveryReadiness,
   KeyCompromisePlan,
   KeyCompromiseExecutionRequest,
@@ -1140,6 +1143,8 @@ export type {
   EndpointContainmentRequest,
   EndpointRecoveryCheck,
   EndpointRecoveryCheckRequest,
+  VerificationAddressConfirmation,
+  VerificationSuggestions,
   EndpointRecoveryReadiness,
   KeyCompromisePlan,
   KeyCompromiseExecutionRequest,
@@ -2116,6 +2121,8 @@ export interface Api {
   containEndpoint(id: string, input: EndpointContainmentRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
   requestEndpointRecoveryCheck(targetId: string, input: EndpointRecoveryCheckRequest, idempotencyKey?: string): Promise<EndpointRecoveryCheck>;
   getEndpointRecoveryCheck(targetId: string): Promise<EndpointRecoveryCheck>;
+  verificationSuggestions(targetId: string): Promise<VerificationSuggestions>;
+  confirmVerificationAddress(targetId: string, input: VerificationAddressConfirmation, idempotencyKey?: string): Promise<DeploymentTarget>;
   connectorDeliveries(options?: { limit?: number; cursor?: string; identityId?: string; idempotencyKey?: string }): Promise<ConnectorDeliveryList>;
   lifecycleAutomationPlan(): Promise<LifecycleAutomationPlan>;
   validityReadiness(): Promise<ValidityReadinessReport>;
@@ -2902,6 +2909,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   containEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/contain`, input, key),
   requestEndpointRecoveryCheck: endpointRecovery.requestEndpointRecoveryCheck,
   getEndpointRecoveryCheck: endpointRecovery.getEndpointRecoveryCheck,
+  verificationSuggestions: verificationAddress.verificationSuggestions,
+  confirmVerificationAddress: verificationAddress.confirmVerificationAddress,
   previewEndpointPurge: (id) => req<EndpointContainmentPreview>(`/api/v1/connectors/targets/${encodeURIComponent(id)}/purge/preview`),
   purgeEndpoint: (id, input, key) => mutate<ConnectorDelivery>("POST", `/api/v1/connectors/targets/${encodeURIComponent(id)}/purge`, input, key),
   connectorDeliveries: (options) => {

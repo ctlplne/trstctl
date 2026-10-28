@@ -376,8 +376,11 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// 638, on the deployment connectors row.
 	// A212's `discovery coverage candidates` raised it to 639, on the discovery
 	// row.
-	if len(out) != 639 {
-		t.Fatalf("CLI commands = %d, want 639", len(out))
+	// A214's `connector target verification-suggestions|
+	// confirm-verification-address` raised it to 641, on the deployment
+	// connectors row.
+	if len(out) != 641 {
+		t.Fatalf("CLI commands = %d, want 641", len(out))
 	}
 	return out
 }

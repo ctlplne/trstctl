@@ -357,6 +357,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"connector", "target", "purge"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/purge", Body: bodyFile, Summary: "Queue the reviewed exact-fingerprint removal of installed certificate and key material"},
 	{Name: []string{"connector", "target", "recovery-check"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/recovery-check", Body: bodyFile, Summary: "Ask a contained target's enrolled host whether it can bring the listener back"},
 	{Name: []string{"connector", "target", "recovery-status"}, Method: "GET", Path: "/api/v1/connectors/targets/{id}/recovery-check", Summary: "Read the latest recovery check of a contained target"},
+	{Name: []string{"connector", "target", "verification-suggestions"}, Method: "GET", Path: "/api/v1/connectors/targets/{id}/verification-suggestions", Summary: "List addresses where discovery saw a certificate delivered to a target, with the findings"},
+	{Name: []string{"connector", "target", "confirm-verification-address"}, Method: "POST", Path: "/api/v1/connectors/targets/{id}/verification-address", Body: bodyFile, Summary: "Confirm a suggested address as a target's verification address"},
 	{Name: []string{"notifications", "channels"}, Method: "GET", Path: "/api/v1/notification-channels", Summary: "List supported and configured notification channel families"},
 	{Name: []string{"notifications", "channels", "create"}, Method: "POST", Path: "/api/v1/notification-channels", Body: bodyFile, Summary: "Create a tenant-authored notification channel using secret references"},
 	{Name: []string{"notifications", "channels", "get"}, Method: "GET", Path: "/api/v1/notification-channels/{id}", Summary: "Get a tenant-authored notification channel"},

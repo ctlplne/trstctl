@@ -42314,6 +42314,117 @@
         ],
         "type": "object"
       },
+      "VerificationAddressConfirmation": {
+        "properties": {
+          "address": {
+            "description": "A suggested host:port; an address no finding suggests answers 409 (set any other address by updating the target).",
+            "type": "string"
+          },
+          "server_name": {
+            "description": "The TLS server name verification sends; optional.",
+            "type": "string"
+          },
+          "target_revision": {
+            "description": "The target revision the suggestions were read at; a changed target answers 409.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "target_revision"
+        ],
+        "type": "object"
+      },
+      "VerificationSuggestion": {
+        "properties": {
+          "address": {
+            "description": "host:port where a discovery scan saw a certificate delivered to this target.",
+            "type": "string"
+          },
+          "evidence": {
+            "description": "The newest findings that saw it, at most five.",
+            "items": {
+              "$ref": "#/components/schemas/VerificationSuggestionEvidence"
+            },
+            "type": "array"
+          },
+          "last_seen": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "last_seen",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "VerificationSuggestionEvidence": {
+        "properties": {
+          "discovered_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_id",
+          "run_id",
+          "source_id",
+          "fingerprint",
+          "discovered_at"
+        ],
+        "type": "object"
+      },
+      "VerificationSuggestions": {
+        "properties": {
+          "note": {
+            "type": "string"
+          },
+          "suggestions": {
+            "description": "Newest first, at most 20. Empty when no scan saw a certificate delivered to this target.",
+            "items": {
+              "$ref": "#/components/schemas/VerificationSuggestion"
+            },
+            "type": "array"
+          },
+          "target_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_revision": {
+            "type": "string"
+          },
+          "verify_address": {
+            "type": "string"
+          },
+          "verify_server_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "target_revision",
+          "suggestions",
+          "note"
+        ],
+        "type": "object"
+      },
       "WorkloadAttesterTrustSource": {
         "properties": {
           "allowed_owners": {
@@ -54316,6 +54427,141 @@
         ],
         "summary": "Preview deployment changes from the target vantage without writing",
         "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/connectors/targets/{id}/verification-address": {
+      "post": {
+        "operationId": "confirmVerificationAddress",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationAddressConfirmation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentTarget"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Confirm a suggested address as the target's verification address; later deployments verify the listener there",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/connectors/targets/{id}/verification-suggestions": {
+      "get": {
+        "operationId": "listVerificationAddressSuggestions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationSuggestions"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List addresses where discovery saw a certificate delivered to this target, with the findings, for an operator to confirm as its verification address",
+        "x-trstctl-permission": "connectors:read"
       }
     },
     "/api/v1/discovery/capabilities": {

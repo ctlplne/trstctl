@@ -9483,6 +9483,49 @@ export const messages = {
       "Signed relay probes of this certificate's CRL and OCSP endpoints. A certificate known only from a network scan is checked for its own serial when the deployment keeps scanned certificates for revocation checks.",
     description: "A211: explains the revocation answers and when scanned certificates are checked.",
   },
+  "connectors.verificationSuggestions.heading": {
+    defaultMessage: "Verification address",
+    description: "Heading for a target's verification address and the addresses scans suggest.",
+  },
+  "connectors.verificationSuggestions.current": {
+    defaultMessage: "Deployments verify the listener at {address}.",
+    description: "The target's configured verification address.",
+  },
+  "connectors.verificationSuggestions.none": {
+    defaultMessage: "No verification address is set, so deployments to this target are not verified.",
+    description: "The target has no verification address.",
+  },
+  "connectors.verificationSuggestions.empty": {
+    defaultMessage: "No discovery scan has seen a certificate delivered to this target.",
+    description: "No suggestions.",
+  },
+  "connectors.verificationSuggestions.evidence": {
+    defaultMessage: "Scan run {run} saw leaf {fingerprint}… on {seen}",
+    description: "One finding behind a suggested address.",
+  },
+  "connectors.verificationSuggestions.use": { defaultMessage: "Use this address", description: "Choose a suggested verification address." },
+  "connectors.verificationSuggestions.confirmTitle": {
+    defaultMessage: "Verify deployments at {address}?",
+    description: "Confirmation title for a suggested verification address.",
+  },
+  "connectors.verificationSuggestions.confirmEffect": {
+    defaultMessage: "The target gets a new revision with this address; the next deployment verifies the certificate the listener there presents.",
+    description: "What confirming a verification address does.",
+  },
+  "connectors.verificationSuggestions.serverName": {
+    defaultMessage: "TLS server name (optional)",
+    description: "Label for the server name verification sends.",
+  },
+  "connectors.verificationSuggestions.confirm": { defaultMessage: "Confirm address", description: "Confirm the chosen verification address." },
+  "connectors.verificationSuggestions.cancel": { defaultMessage: "Cancel", description: "Close the confirmation without changing the target." },
+  "connectors.verificationSuggestions.confirmed": {
+    defaultMessage: "{address} is now this target's verification address.",
+    description: "The address was confirmed.",
+  },
+  "connectors.verificationSuggestions.note": {
+    defaultMessage: "Suggestions come only from discovery scans that saw a certificate trstctl delivered here. Set any other address by editing the target.",
+    description: "Where suggestions come from.",
+  },
   "certificateCockpit.detail.transparency": {
     defaultMessage: "Certificate Transparency",
     description: "Certificate detail label for what each CT log answered for the certificate.",

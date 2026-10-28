@@ -745,7 +745,12 @@ the host agent validates the exact target fields, confirms every path and logica
 command fits its operator-owned `--host-exec-profile`, and, when configured,
 handshakes `verify_address` using `verify_server_name`. With no `verify_address`,
 the plan says the deploy can run but live-state verification is not configured; it
-never upgrades that omission into a claim that the certificate is serving. It does
+never upgrades that omission into a claim that the certificate is serving. When a
+discovery scan has seen a certificate delivered to the target, the destination's
+**Verification address** panel (`connector target verification-suggestions`)
+suggests that `host:port` with the findings as evidence, and confirming it
+(`connector target confirm-verification-address`) sets `verify_address` as a new
+target revision; nothing is set without that confirmation. It does
 not write a file, run a command, call `Deploy`, or redeem certificate/private-key
 material. A host secret needed to open the target, such as a Java keystore password
 reference, is redeemed only for that one attempt. Network-relay appliance tests

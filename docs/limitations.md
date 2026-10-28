@@ -6572,15 +6572,27 @@ their material is not an addressable file on an enrolled host.
 **Configuring it.** Local post-deploy verification runs when a deployment target
 carries `verify_address` (and optionally `verify_server_name`) in its config —
 for example `{"cert_path": "/etc/nginx/server.crt", "verify_address": "api.example.test:443"}`.
-The address cannot be derived and is not guessed: on an appliance target
+The address is never derived or guessed: on an appliance target
 `endpoint` is the MANAGEMENT API, and the connector's target string is a routing
 label, so an F5's management plane and the virtual server it fronts are
-different sockets.
+different sockets. trstctl suggests one from evidence instead:
+`GET /api/v1/connectors/targets/{id}/verification-suggestions` (CLI `connector
+target verification-suggestions`, the destination's **Verification address**
+panel in the console) lists the `host:port` addresses where a discovery scan saw
+a certificate trstctl delivered to that target (a delivered or verified deploy,
+not purged since), each with the findings that saw it. Nothing changes until an
+operator confirms one with `POST .../verification-address` (CLI `connector target
+confirm-verification-address`), which refuses an address no finding suggests and
+a target that changed since the suggestions were read; the confirmed address is
+written to the target as a new revision and later deployments verify the listener
+there. Any other address is set by updating the target.
 
-**What is not served.** Verification only covers endpoints an operator has given
-a listener address for; there is no discovery of listeners from deployment
-targets, because a guessed address produces confident, wrong records. An endpoint
-with no address is never verified and never claims to be.
+**What is not served.** Verification only covers endpoints with a listener address
+an operator gave or confirmed; an endpoint with no address is never verified and
+never claims to be. Suggestions come only from TLS discovery findings, so a
+listener no scan has seen is not suggested; addresses read from connector
+bindings (a load balancer's virtual server, a cloud listener) are what comes
+next.
 
 ## External observers
 

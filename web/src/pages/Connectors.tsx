@@ -29,6 +29,7 @@ import { EndpointBindingWorkflow } from "@/pages/connectors/EndpointBindingWorkf
 import { RecoveryResult } from "@/pages/connectors/RecoveryResult";
 import { EndpointContainment } from "@/pages/connectors/EndpointContainment";
 import { EndpointPurge } from "@/pages/connectors/EndpointPurge";
+import { VerificationAddressSuggestions } from "@/pages/connectors/VerificationAddressSuggestions";
 import { DestinationHostField } from "@/pages/connectors/DestinationHostField";
 import { ApplianceKeyGenerationField } from "@/pages/connectors/ApplianceKeyGenerationField";
 import { defaultTargetConfig } from "@/lib/connectorTargetTemplates";
@@ -790,6 +791,7 @@ export function Connectors() {
                 {selectedTargetRecord && selectedConnectorRecord?.target_vantage === "host_agent" && (
                   <EndpointPurge key={`purge-${selectedTargetRecord.id}`} target={selectedTargetRecord} reason={reason} />
                 )}
+                {selectedTargetRecord && <VerificationAddressSuggestions key={`verify-${selectedTargetRecord.id}`} target={selectedTargetRecord} />}
                 {targetRenewalPaused.length > 0 ? (
                   <p role="status" className="text-sm text-status-warning md:col-span-3">
                     {t("connectors.renewal.pausedOnTarget", { count: String(targetRenewalPaused.length) })}{" "}

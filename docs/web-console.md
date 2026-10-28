@@ -962,7 +962,11 @@ offers requeue only for failed delivery. Toasts report real success and failure.
   closed evidence sections for safe target actions, health/retries/rollback, and the
   full connector/plugin capability registry. Expert APIs load only when their section
   opens; identity binding, test, deploy, rollback, delivery receipts, listener proof,
-  key custody, circuits, grants, and provenance remain available.
+  key custody, circuits, grants, and provenance remain available. A selected
+  destination's **Verification address** panel shows the address its deployments
+  verify, or suggests the `host:port` where a discovery scan saw a certificate
+  delivered there, with the findings; **Use this address** sets it only after the
+  operator confirms.
 - **Wizard** (`/wizard`) is the onboarding carousel: connect an issuer, enable the
   evaluation enrollment profile, issue a first certificate, optionally prove a
   configured connector/upstream-CA/dynamic-secret backend, enroll an agent, then

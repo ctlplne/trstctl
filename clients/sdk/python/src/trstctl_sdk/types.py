@@ -13966,6 +13966,51 @@ ValidityReadinessStep = TypedDict(
     total=False,
 )
 
+VerificationAddressConfirmation = TypedDict(
+    'VerificationAddressConfirmation',
+    {
+        'address': str,
+        'server_name': str,
+        'target_revision': str,
+    },
+    total=False,
+)
+
+VerificationSuggestion = TypedDict(
+    'VerificationSuggestion',
+    {
+        'address': str,
+        'evidence': list[dict[str, Any]],
+        'last_seen': str,
+    },
+    total=False,
+)
+
+VerificationSuggestionEvidence = TypedDict(
+    'VerificationSuggestionEvidence',
+    {
+        'discovered_at': str,
+        'finding_id': str,
+        'fingerprint': str,
+        'run_id': str,
+        'source_id': str,
+    },
+    total=False,
+)
+
+VerificationSuggestions = TypedDict(
+    'VerificationSuggestions',
+    {
+        'note': str,
+        'suggestions': list[dict[str, Any]],
+        'target_id': str,
+        'target_revision': str,
+        'verify_address': str,
+        'verify_server_name': str,
+    },
+    total=False,
+)
+
 WorkloadAttesterTrustSource = TypedDict(
     'WorkloadAttesterTrustSource',
     {

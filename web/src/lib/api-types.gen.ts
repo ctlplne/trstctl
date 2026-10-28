@@ -10116,6 +10116,35 @@ export interface ValidityReadinessStep {
   should_days: number;
 }
 
+export interface VerificationAddressConfirmation {
+  address: string;
+  server_name?: string;
+  target_revision: string;
+}
+
+export interface VerificationSuggestion {
+  address: string;
+  evidence: VerificationSuggestionEvidence[];
+  last_seen: string;
+}
+
+export interface VerificationSuggestionEvidence {
+  discovered_at: string;
+  finding_id: string;
+  fingerprint: string;
+  run_id: string;
+  source_id: string;
+}
+
+export interface VerificationSuggestions {
+  note: string;
+  suggestions: VerificationSuggestion[];
+  target_id: string;
+  target_revision: string;
+  verify_address?: string;
+  verify_server_name?: string;
+}
+
 export interface WorkloadAttesterTrustSource {
   allowed_owners: string[];
   audience?: string;

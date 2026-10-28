@@ -1876,6 +1876,24 @@ func componentSchemas() map[string]*Schema {
 		"root_hash":            str(),
 		"inclusion_checked_at": {Type: "string", Format: "date-time"},
 	}, "submission_id", "log_url", "entry_type", "sct_timestamp", "sct_status", "inclusion_status")
+	verificationSuggestionEvidence := object(map[string]*Schema{
+		"finding_id": uuid(), "run_id": uuid(), "source_id": uuid(), "fingerprint": str(), "discovered_at": timestamp(),
+	}, "finding_id", "run_id", "source_id", "fingerprint", "discovered_at")
+	verificationSuggestion := object(map[string]*Schema{
+		"address":   {Type: "string", Description: "host:port where a discovery scan saw a certificate delivered to this target."},
+		"last_seen": timestamp(),
+		"evidence":  {Type: "array", Items: ref("VerificationSuggestionEvidence"), Description: "The newest findings that saw it, at most five."},
+	}, "address", "last_seen", "evidence")
+	verificationSuggestions := object(map[string]*Schema{
+		"target_id": uuid(), "target_revision": str(), "verify_address": str(), "verify_server_name": str(),
+		"suggestions": {Type: "array", Items: ref("VerificationSuggestion"), Description: "Newest first, at most 20. Empty when no scan saw a certificate delivered to this target."},
+		"note":        str(),
+	}, "target_id", "target_revision", "suggestions", "note")
+	verificationAddressConfirmation := object(map[string]*Schema{
+		"address":         {Type: "string", Description: "A suggested host:port; an address no finding suggests answers 409 (set any other address by updating the target)."},
+		"server_name":     {Type: "string", Description: "The TLS server name verification sends; optional."},
+		"target_revision": {Type: "string", Description: "The target revision the suggestions were read at; a changed target answers 409."},
+	}, "address", "target_revision")
 	certificateKeyObservation := object(map[string]*Schema{
 		"agent": str(), "path": str(), "file_mode": str(), "encrypted": {Type: "boolean"}, "key_format": str(),
 		"first_observed": timestamp(), "last_observed": timestamp(),
@@ -7678,6 +7696,10 @@ func componentSchemas() map[string]*Schema {
 		"IdentityDeploymentEvidence":               identityDeploymentEvidence,
 		"Certificate":                              certificate,
 		"CertificateKeyObservation":                certificateKeyObservation,
+		"VerificationSuggestions":                  verificationSuggestions,
+		"VerificationSuggestion":                   verificationSuggestion,
+		"VerificationSuggestionEvidence":           verificationSuggestionEvidence,
+		"VerificationAddressConfirmation":          verificationAddressConfirmation,
 		"CertificateTransparencyEntry":             certificateTransparencyEntry,
 		"KubernetesCertificateProvenance":          kubernetesCertificateProvenance,
 		"CertificateIngest":                        certificateIngest,

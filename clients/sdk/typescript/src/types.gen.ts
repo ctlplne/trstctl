@@ -2761,6 +2761,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/connectors/targets/{id}/verification-address": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a suggested address as the target's verification address; later deployments verify the listener there */
+        post: operations["confirmVerificationAddress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/connectors/targets/{id}/verification-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List addresses where discovery saw a certificate delivered to this target, with the findings, for an operator to confirm as its verification address */
+        get: operations["listVerificationAddressSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/capabilities": {
         parameters: {
             query?: never;
@@ -19917,6 +19951,43 @@ export interface components {
             renews: number;
             should_days: number;
         };
+        VerificationAddressConfirmation: {
+            /** @description A suggested host:port; an address no finding suggests answers 409 (set any other address by updating the target). */
+            address: string;
+            /** @description The TLS server name verification sends; optional. */
+            server_name?: string;
+            /** @description The target revision the suggestions were read at; a changed target answers 409. */
+            target_revision: string;
+        };
+        VerificationSuggestion: {
+            /** @description host:port where a discovery scan saw a certificate delivered to this target. */
+            address: string;
+            /** @description The newest findings that saw it, at most five. */
+            evidence: components["schemas"]["VerificationSuggestionEvidence"][];
+            /** Format: date-time */
+            last_seen: string;
+        };
+        VerificationSuggestionEvidence: {
+            /** Format: date-time */
+            discovered_at: string;
+            /** Format: uuid */
+            finding_id: string;
+            fingerprint: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            source_id: string;
+        };
+        VerificationSuggestions: {
+            note: string;
+            /** @description Newest first, at most 20. Empty when no scan saw a certificate delivered to this target. */
+            suggestions: components["schemas"]["VerificationSuggestion"][];
+            /** Format: uuid */
+            target_id: string;
+            target_revision: string;
+            verify_address?: string;
+            verify_server_name?: string;
+        };
         WorkloadAttesterTrustSource: {
             /** @description Lower-cased GitHub repository owners this source admits. */
             allowed_owners: string[];
@@ -27811,6 +27882,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConnectorDelivery"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirmVerificationAddress: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationAddressConfirmation"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeploymentTarget"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listVerificationAddressSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificationSuggestions"];
                 };
             };
             /** @description client error */

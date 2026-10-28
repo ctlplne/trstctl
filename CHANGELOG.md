@@ -2,6 +2,13 @@
 
 ### Added
 
+- Verification address suggestions: `GET /api/v1/connectors/targets/{id}/verification-suggestions`
+  (`trstctl-cli connector target verification-suggestions`) lists the `host:port` addresses where a
+  discovery scan saw a certificate trstctl delivered to the target, with those findings as
+  evidence, and `POST /api/v1/connectors/targets/{id}/verification-address`
+  (`connector target confirm-verification-address`, the console's **Verification address** panel)
+  sets one as the target's `verify_address` only when an operator confirms it — never an address
+  no finding suggests, and never on a target that changed since the suggestions were read.
 - Certificate Transparency SCT verification and inclusion proofs: a CT submission can name
   each log's public key in `log_public_keys` (the console takes it after the log's URL).
   Every SCT a log returns is kept: verified against that key over the exact RFC 6962

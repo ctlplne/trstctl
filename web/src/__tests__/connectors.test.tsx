@@ -24,6 +24,8 @@ const { apiMock } = vi.hoisted(() => ({
     previewEndpointBinding: vi.fn(),
     createEndpointBinding: vi.fn(),
     requestEndpointRecoveryCheck: vi.fn(),
+    verificationSuggestions: vi.fn(),
+    confirmVerificationAddress: vi.fn(),
     bindIdentityConnectorTarget: vi.fn(),
     testConnectorTarget: vi.fn(),
     deployConnectorTarget: vi.fn(),
@@ -56,6 +58,7 @@ function renderConnectors() {
 describe("connector deployment disclosure surface", () => {
   beforeEach(() => {
     apiMock.agentPage.mockReset().mockResolvedValue({ agents: [] });
+    apiMock.verificationSuggestions.mockReset().mockResolvedValue({ target_id: "target-1", target_revision: "rev-1", suggestions: [], note: "" });
     apiMock.identityPage.mockReset().mockImplementation(async () => ({ items: await apiMock.identities() }));
     apiMock.getIdentity.mockReset().mockImplementation(async (id: string) => (await apiMock.identities()).find((item: { id: string }) => item.id === id));
     apiMock.connectorCatalog.mockReset().mockResolvedValue({
@@ -420,6 +423,51 @@ describe("connector deployment disclosure surface", () => {
     expect(screen.getByTestId("selected-target-timeline")).toHaveTextContent("host-agent-edge-1");
     expect(document.body.textContent).not.toMatch(/BEGIN .* PRIVATE KEY|raw token hidden/i);
     expect(screen.queryByText(/BEGIN .* PRIVATE KEY/)).not.toBeInTheDocument();
+  });
+
+  it("suggests a verification address from a scan's evidence and sets it only after confirmation", async () => {
+    apiMock.verificationSuggestions.mockReset().mockResolvedValue({
+      target_id: "target-1",
+      target_revision: "rev-7",
+      suggestions: [
+        {
+          address: "192.0.2.14:8443",
+          last_seen: "2026-10-28T07:00:00Z",
+          evidence: [
+            {
+              finding_id: "finding-1",
+              run_id: "run-42",
+              source_id: "source-1",
+              fingerprint: "e4".repeat(32),
+              discovered_at: "2026-10-28T07:00:00Z",
+            },
+          ],
+        },
+      ],
+      note: "Addresses where a discovery scan saw a certificate trstctl delivered to this target.",
+    });
+    apiMock.confirmVerificationAddress.mockReset().mockResolvedValue({ id: "target-1" });
+    const user = userEvent.setup();
+    renderConnectors();
+    await user.click(await screen.findByText("Destinations and safe actions", { exact: true }));
+    await user.selectOptions(screen.getByLabelText("Target"), "target-1");
+    const panel = await screen.findByRole("region", { name: "Verification address" });
+    expect(within(panel).getByText(/No verification address is set/)).toBeInTheDocument();
+    expect(within(panel).getByText("192.0.2.14:8443")).toBeInTheDocument();
+    expect(within(panel).getByText(/Scan run run-42 saw leaf e4e4e4e4e4e4e4e4…/)).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "Use this address" }));
+    expect(apiMock.confirmVerificationAddress).not.toHaveBeenCalled();
+    expect(within(panel).getByText("Verify deployments at 192.0.2.14:8443?")).toBeInTheDocument();
+    await user.type(within(panel).getByLabelText("TLS server name (optional)"), "payments.example.test");
+    await user.click(within(panel).getByRole("button", { name: "Confirm address" }));
+    await waitFor(() =>
+      expect(apiMock.confirmVerificationAddress).toHaveBeenCalledWith(
+        "target-1",
+        { address: "192.0.2.14:8443", server_name: "payments.example.test", target_revision: "rev-7" },
+        expect.any(String),
+      ),
+    );
+    expect(await within(panel).findByText("192.0.2.14:8443 is now this target's verification address.")).toBeInTheDocument();
   });
 
   it("keeps destination identifiers readable inside the mobile scroll region", async () => {
