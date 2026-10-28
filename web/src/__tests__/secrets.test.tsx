@@ -287,27 +287,35 @@ function primeSecretsMocks() {
   apiMock.getSecret.mockResolvedValue({ name: "app/db/password", value: "SUPER-SECRET", version: 3 });
   apiMock.getSecretWithToken.mockResolvedValue({ name: "app/db/password", value: "WORKLOAD-SECRET", version: 3 });
   apiMock.rotateSecret.mockResolvedValue({ name: "app/db/password", version: 4, updated_at: "2026-06-19T11:00:00Z" });
-  apiMock.previewSecretRotation.mockImplementation(async (input: { provider: string; key: string; old_ref: string; target?: string; remote_key?: string }) => ({
-    capability: "F37",
-    ready: input.provider.startsWith("connector:"),
-    effect_free: true,
-    provider: input.provider,
-    key: input.key,
-    old_ref: input.old_ref,
-    target: input.target || input.provider.replace(/^connector:/, ""),
-    remote_key: input.remote_key || input.key,
-    current_version: 3,
-    next_version: 4,
-    required_permission: "secrets:write",
-    request_fingerprint: "sha256:f37-preview-fixture",
-    blockers: input.provider.startsWith("connector:") ? [] : ["This provider does not yet have a durable worker-owned rotation path."],
-    preview_writes: [],
-    preview_external_effects: [],
-    execute_writes: ["append one immutable event", "project one sealed successor", "commit one connector outbox intent"],
-    execute_external_effects: ["deliver the successor to the connector target"],
-    recovery_steps: ["retry the same command", "inspect delivery evidence", "recover the predecessor version"],
-    secret_data_handling: "Preview reads metadata only and never decrypts or sends secret material.",
-  }));
+  apiMock.previewSecretRotation.mockImplementation(
+    async (input: { provider: string; key: string; old_ref: string; target?: string; remote_key?: string; ttl_seconds?: number }) => ({
+      capability: "F37",
+      ready: input.provider.startsWith("connector:") || (input.provider.startsWith("dynamic-lease:") && (input.ttl_seconds ?? 0) > 0),
+      effect_free: true,
+      provider: input.provider,
+      key: input.key,
+      old_ref: input.old_ref,
+      target: input.target || input.provider.replace(/^connector:/, ""),
+      remote_key: input.remote_key || input.key,
+      current_version: 3,
+      next_version: 4,
+      required_permission: "secrets:write",
+      request_fingerprint: "sha256:f37-preview-fixture",
+      blockers: input.provider.startsWith("connector:")
+        ? []
+        : input.provider.startsWith("dynamic-lease:")
+          ? (input.ttl_seconds ?? 0) > 0
+            ? []
+            : ["ttl_seconds is required for dynamic-lease rotation and must be positive"]
+          : ["This provider does not yet have a durable worker-owned rotation path."],
+      preview_writes: [],
+      preview_external_effects: [],
+      execute_writes: ["append one immutable event", "project one sealed successor", "commit one connector outbox intent"],
+      execute_external_effects: ["deliver the successor to the connector target"],
+      recovery_steps: ["retry the same command", "inspect delivery evidence", "recover the predecessor version"],
+      secret_data_handling: "Preview reads metadata only and never decrypts or sends secret material.",
+    }),
+  );
   apiMock.runSecretRotation.mockResolvedValue({
     key: "app/db/password",
     old_ref: "version:3",
@@ -1602,18 +1610,48 @@ describe("secrets surface", () => {
     expect(within(drawer).getByText("v4")).toBeInTheDocument();
   });
 
+  it("runs a reviewed dynamic-lease rotation with the lease TTL and names its command", async () => {
+    const user = userEvent.setup();
+    apiMock.runSecretRotation.mockResolvedValueOnce({
+      key: "reporting",
+      old_ref: "lease-1",
+      new_ref: "",
+      completed: false,
+      queued: true,
+      rolled_back: false,
+      rollback_attempted: false,
+      rollback_failed: false,
+      command_id: "4f0c6a3e-8d2b-4c71-9a51-2b7d0e6f1c90",
+      phase: "queued",
+    });
+    renderSecrets();
+    await screen.findByText("app/db/password");
+    const rotationForm = within(screen.getByRole("form", { name: "Run connector rotation" }));
+    await user.type(rotationForm.getByLabelText("Key"), "reporting");
+    await user.type(rotationForm.getByLabelText("Old reference"), "lease-1");
+    await user.type(rotationForm.getByLabelText("Provider"), "dynamic-lease:pg-leases");
+    await user.type(rotationForm.getByLabelText("Lease TTL seconds (dynamic-lease only)"), "1800");
+    await user.click(rotationForm.getByRole("button", { name: /review rotation plan/i }));
+    const request = { key: "reporting", old_ref: "lease-1", provider: "dynamic-lease:pg-leases", ttl_seconds: 1800 };
+    await waitFor(() => expect(apiMock.previewSecretRotation).toHaveBeenLastCalledWith(request));
+    expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
+    await user.click(await screen.findByRole("button", { name: /run reviewed rotation/i }));
+    await waitFor(() => expect(apiMock.runSecretRotation).toHaveBeenCalledWith(request));
+    expect(await screen.findByText(/command 4f0c6a3e-8d2b-4c71-9a51-2b7d0e6f1c90 runs in the background/i)).toBeInTheDocument();
+  });
+
   it("keeps manual and scheduled rotation scope truthful and clears stale deferred evidence", async () => {
     const user = userEvent.setup();
     renderSecrets();
     await screen.findByText("app/db/password");
 
     const rotationForm = within(screen.getByRole("form", { name: "Run connector rotation" }));
-    expect(rotationForm.queryByLabelText("TTL seconds")).not.toBeInTheDocument();
+    expect(rotationForm.getByLabelText("Lease TTL seconds (dynamic-lease only)")).toBeInTheDocument();
     await user.type(rotationForm.getByLabelText("Key"), "app/db/password");
     await user.type(rotationForm.getByLabelText("Old reference"), "version:3");
     await user.type(rotationForm.getByLabelText("Provider"), "dynamic-lease:postgresql");
     await user.click(rotationForm.getByRole("button", { name: /review rotation plan/i }));
-    expect(await screen.findByText(/this provider does not yet have a durable worker-owned rotation path/i)).toBeInTheDocument();
+    expect(await screen.findByText(/ttl_seconds is required for dynamic-lease rotation/i)).toBeInTheDocument();
     expect(apiMock.runSecretRotation).not.toHaveBeenCalled();
 
     await user.clear(rotationForm.getByLabelText("Provider"));

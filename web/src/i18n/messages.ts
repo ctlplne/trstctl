@@ -3406,7 +3406,7 @@ export const messages = {
   "secrets.sessions.failedTitle": { defaultMessage: "Session revoke failed", description: "Session ledger action error title." },
   "secrets.rotation.scopeDescription": {
     defaultMessage:
-      "Manual native-store rotation replaces one stored value at a time. Provider rotation accepts connector:<target> (worker-queued delivery) and a configured static provider id with allow_static_rotation: the worker mints, publishes, verifies and retires the credential as a durable command you can follow by command id. Dynamic-lease providers and rotation TTL input remain unavailable.",
+      "Manual native-store rotation replaces one stored value at a time. Provider rotation accepts connector:<target> (worker-queued delivery), a configured static provider id with allow_static_rotation, and dynamic-lease:<provider> with a lease TTL for a PostgreSQL, MySQL or Redis provider: the worker issues the replacement, publishes it, verifies it and retires the predecessor as a durable command you can follow by command id.",
     description: "Secret rotation panel: truthful served backend scope.",
   },
   "secrets.rotation.scheduleDescription": {
@@ -3492,6 +3492,14 @@ export const messages = {
   "secrets.rotation.scheduleProviderPlaceholder": {
     defaultMessage: "connector:ci",
     description: "Secret rotation schedule form: connector provider example.",
+  },
+  "secrets.rotation.leaseTTLLabel": {
+    defaultMessage: "Lease TTL seconds (dynamic-lease only)",
+    description: "Secret rotation form: the new lease's lifetime for a dynamic-lease:<provider> rotation.",
+  },
+  "secrets.rotation.commandFollow": {
+    defaultMessage: "Command {id} runs in the background; follow it to its terminal phase with secrets rotations get.",
+    description: "Secret rotation result: the durable command id a static-provider or dynamic-lease rotation queued.",
   },
   "secrets.rotation.queued": {
     defaultMessage: "Rotation queued for delivery",
@@ -24245,7 +24253,7 @@ export const messages = {
   },
   "parity.rotateAProviderBackedCredentialBy_ec7a8f": {
     defaultMessage:
-      "Queue connector delivery for a credential reference. Static and dynamic-lease providers are refused before effects until their complete phase chains are durable. No secret values pass through this form.",
+      "Queue connector delivery for a credential reference, or a durable static-provider or dynamic-lease rotation command. Review the plan first; no secret values pass through this form.",
     description: "CLI-parity console flow copy.",
   },
   "protocols.mdm.rotation.recordAction": {

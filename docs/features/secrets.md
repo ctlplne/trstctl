@@ -422,7 +422,7 @@ execution effects, recovery steps, and explicit blockers. The console and
 changing console inputs invalidates the review. Only a ready, still-current review
 reveals the separate execution action.
 
-`POST /api/v1/secrets/rotations` accepts two provider modes. `connector:<target>`
+`POST /api/v1/secrets/rotations` accepts three provider modes. `connector:<target>`
 commits one application-secret event plus its sealed outbox intent before returning
 queued, non-secret evidence. Any other `provider` names a configured dynamic-secret
 provider (`secret_integrations.dynamic_providers`, type `postgresql`, `mysql` or
@@ -445,9 +445,25 @@ revoked (`rolled_back`); a restore that fails ends in `rollback_failed`; a retir
 that exhausts the outbox budget leaves the successor live as `retire_pending`.
 `GET /api/v1/secrets/rotations/{id}` and `GET /api/v1/secrets/rotations?key=<name>`
 (CLI `secrets rotations get` / `list`) follow a command to its terminal phase; no
-response carries the credential. `dynamic-lease:<provider>` requests still return
-`503` before any effect. Native-store value rotation remains a separate
-event-sourced operation.
+response carries the credential.
+
+`dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
+configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
+provider role, `old_ref` is the lease id the secret publishes now (or `none`), and
+`ttl_seconds` (required, at most the provider's `max_ttl`) is the new lease's
+lifetime. It runs as the same durable command: **stage** issues the new lease
+through the durable lease lifecycle under an idempotency key derived from the
+command, so a crash resumes the same lease; **cutover** publishes its credential as
+the next secret version; **verify** opens a database session, or authenticates to
+Redis as the lease user and runs `PING`; **retire** revokes the `old_ref` lease and
+completes only once the provider confirms the removal (until then the outbox
+retries, and a removal that never completes ends as `retire_pending`). A failed
+verification restores the predecessor and revokes the new lease. The command view
+reports `ttl_seconds` and the new lease's `new_expires_at`, and the console's
+rotation form takes the lease TTL. Rotating a MongoDB, cloud IAM or Kubernetes
+lease is what comes next (`503` today); issue, renew and revoke those leases through
+the lease endpoints. Native-store value rotation remains a separate event-sourced
+operation.
 
 The scheduled path records connector cadences at
 `POST /api/v1/secrets/rotation-schedules`, lists them with
@@ -565,23 +581,23 @@ terminal event is still retained, the schedule has advanced past that due edge,
 and a newer command exists. The newest command remains as a finite
 one-row-per-schedule lineage fence; claimed or ambiguous commands are never purged.
 
-The endpoint currently accepts one provider class:
+Scheduled runs execute two provider classes:
 
 - `connector:<target>` atomically commits a native-store version and one sealed
   secret-sync outbox command. The response sets `queued:true` and `completed:false`;
   only the bounded outbox worker calls the connector. Delivery failure stays on the
   durable job for retry and does not perform a compensating direct write.
+- A static provider queues one durable static-rotation command per due edge, as
+  described above.
 
-Static providers such as `postgresql`, `mysql`, and `aws-iam`, plus
-`dynamic-lease:<provider>`, fail closed with a stable `503` before any provider,
-connector, event, or outbox effect. Issuing, renewing, and revoking dynamic leases
-remain supported through the lease endpoints. Provider rotation stays unavailable
-until one durable worker command can autonomously own every effect and compensation
-across every crash boundary.
+Scheduled `dynamic-lease:<provider>` rotation is what comes next: creating such a
+schedule returns `503`, and a historical one is terminalized as `unsupported`. Run
+a dynamic-lease rotation on request through `POST /api/v1/secrets/rotations`.
 
-PostgreSQL, MySQL, and AWS IAM rotators ship as concrete, infrastructure-verified
-library backends covering stage/cutover/verify/retire-and-rollback; the served
-request path deliberately does not invoke them yet.
+The rotation package's library rotators (stage/cutover/verify/retire-and-rollback
+for PostgreSQL, MySQL and AWS IAM) are not what the served commands run: those run
+the durable phases above and use the package's PostgreSQL and MySQL credential
+checks.
 
 ### Ephemeral API keys (F38)
 

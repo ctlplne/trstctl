@@ -38005,7 +38005,7 @@
             "type": "string"
           },
           "provider": {
-            "description": "connector:\u003ctarget\u003e queues a connector rotation; any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. dynamic-lease:\u003cprovider\u003e remains unavailable and fails closed with 503 before effects.",
+            "description": "connector:\u003ctarget\u003e queues a connector rotation; dynamic-lease:\u003cprovider\u003e queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command.",
             "type": "string"
           },
           "remote_key": {
@@ -38015,7 +38015,7 @@
             "type": "string"
           },
           "ttl_seconds": {
-            "description": "Compatibility input only. Connector and static requests reject any supplied ttl_seconds with 400. dynamic-lease providers remain unavailable with 503 regardless of this field.",
+            "description": "The new lease's lifetime in seconds: required and positive for dynamic-lease:\u003cprovider\u003e, bounded by the provider's maximum. Connector and static requests reject any supplied ttl_seconds with 400.",
             "type": "integer"
           }
         },
@@ -38498,6 +38498,10 @@
           "key": {
             "type": "string"
           },
+          "new_expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "new_ref": {
             "type": "string"
           },
@@ -38540,6 +38544,9 @@
           "terminal_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "ttl_seconds": {
+            "type": "integer"
           },
           "updated_at": {
             "format": "date-time",
@@ -73008,7 +73015,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "List durable static-provider rotation commands",
+        "summary": "List durable static-provider and dynamic-lease rotation commands",
         "x-trstctl-permission": "secrets:read"
       },
       "post": {
@@ -73084,7 +73091,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Queue connector or static-provider secret rotation; refuse dynamic-lease requests",
+        "summary": "Queue a connector, static-provider or dynamic-lease secret rotation",
         "x-trstctl-permission": "secrets:write"
       }
     },
@@ -73199,7 +73206,7 @@
             "SessionCookie": []
           }
         ],
-        "summary": "Read one durable static-provider rotation command",
+        "summary": "Read one durable static-provider or dynamic-lease rotation command",
         "x-trstctl-permission": "secrets:read"
       }
     },

@@ -985,9 +985,9 @@ func (a *API) recoverSecretAt(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// rotateStaticSecret queues connector rotation through one metadata-only route.
-// Static and dynamic-lease providers fail closed before any provider call until
-// one durable worker command owns every phase and its compensating actions.
+// rotateStaticSecret queues a rotation through one metadata-only route: a
+// connector delivery, or a durable static-provider (A14) or dynamic-lease
+// (A201) command whose worker owns every phase and its compensating actions.
 //
 //trstctl:mutation
 func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
@@ -1048,6 +1048,11 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if isDynamicLeaseRotation(req.Provider) {
+		// A201: a dynamic-lease rotation is a durable command too.
+		a.rotateDynamicLeaseSecret(w, r, idempotencyKey, req)
+		return
+	}
 	if isStaticSecretRotation(req.Provider) {
 		// A14: static providers run through the durable command worker. The
 		// request commits the command and returns queued evidence.
@@ -1097,23 +1102,7 @@ func (a *API) rotateStaticSecret(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	principal, err := requestPrincipalSubject(r.Context())
-	if err != nil {
-		a.writeError(w, err)
-		return
-	}
-	binding, err := unavailableDirectSecretRotationRequestBinding(principal, req)
-	if err != nil {
-		a.writeError(w, err)
-		return
-	}
-	detail := dynamicLeaseRotationUnavailableDetail
-	// This branch deliberately owns no independently durable receiver. Cache its
-	// exact RFC 7807 refusal in the transactional recorder: retries cannot change
-	// the command binding, but no durable "bound" recovery row can be stranded.
-	a.mutateWithRecorder(w, r, idempotencyKey, binding, func(context.Context, string) (int, any, error) {
-		return http.StatusServiceUnavailable, problem.New(http.StatusServiceUnavailable, detail), nil
-	}, false)
+	a.writeError(w, errStatus(http.StatusBadRequest, "provider must be connector:<target>, dynamic-lease:<provider>, or a configured static provider"))
 }
 
 // createSecretRotationSchedule records a tenant cadence for connector-backed

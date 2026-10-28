@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1848 annotated sites across 28 rules. Each row is
+1853 annotated sites across 28 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -439,7 +439,7 @@ not this file.
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
 | `internal/store/privacy_erasure_preparation.go:177` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
-| `internal/store/secret_static_rotation.go:210` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
+| `internal/store/secret_static_rotation.go:226` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
 | `internal/store/upsert_arbiter_race_test.go:239` | an env reference name in a fixture, not a credential (CWE-798) |
@@ -594,10 +594,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6371` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6388` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6401` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6429` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6376` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6393` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6406` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6434` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -634,7 +634,7 @@ not this file.
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
-| `internal/server/secrets_rotation_served_test.go:2568` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/server/secrets_rotation_served_test.go:2571` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/signing/keystore.go:117` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:119` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
 | `internal/signing/keystore.go:121` | enum values and set sizes documented bounded <256 in the framing header (CWE-190) |
@@ -876,7 +876,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4174` | closed test table list above |
+| `internal/store/migration_content_test.go:4175` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 
@@ -886,7 +886,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (215 sites)
+### G204 — CWE-78 OS command injection (220 sites)
 
 | Location | Reason |
 |---|---|
@@ -1067,6 +1067,11 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:73` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:30` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:36` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:45` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_dynamic_lease_rotation_container_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/ssh_krl_adoption_served_test.go:31` | fixed ssh-keygen argv over a test-owned temp path |
 | `internal/server/vault_compat_served_test.go:178` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1148,7 +1153,7 @@ not this file.
 | `internal/server/protocols_served_stock_clients_test.go:747` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/protocols_served_tsa_test.go:189` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/server/secret_third_party_scan_served_test.go:154` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/secrets_rotation_served_test.go:2561` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/secrets_rotation_served_test.go:2564` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/server.go:2820` | served CA certificate directory; the PEM is public material (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:24` | the loose mode IS the attack fixture this test defends against (CWE-276) |
 | `internal/signing/socket_dir_symlink_test.go:56` | the wide mode IS the precondition this test proves gets narrowed (CWE-276) |

@@ -9172,6 +9172,7 @@ export interface SecretStaticRotation {
   expected_version: number;
   id: string;
   key: string;
+  new_expires_at?: string;
   new_ref: string;
   old_ref: string;
   phase: "queued" | "staged" | "cutover" | "verified" | "completed" | "rolled_back" | "rollback_failed" | "failed" | "retire_pending";
@@ -9182,6 +9183,7 @@ export interface SecretStaticRotation {
   schedule_id?: string;
   terminal: boolean;
   terminal_at?: string;
+  ttl_seconds?: number;
   updated_at: string;
   verify_mode?: string;
 }

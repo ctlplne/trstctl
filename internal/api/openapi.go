@@ -6557,9 +6557,9 @@ func componentSchemas() map[string]*Schema {
 		"verification_steps": {Type: "array", Items: str()}, "cli_argv": {Type: "array", Items: str()}, "secret_data_handling": str(),
 	}, "capability", "operation", "ready", "effect_free", "provider_id", "provider_type", "provider_label", "role", "requested_ttl_seconds", "effective_ttl_seconds", "maximum_ttl_seconds", "configuration_revision", "required_permission", "request_fingerprint", "blockers", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects", "recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
 	rotationProvider := str()
-	rotationProvider.Description = "connector:<target> queues a connector rotation; any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. dynamic-lease:<provider> remains unavailable and fails closed with 503 before effects."
+	rotationProvider.Description = "connector:<target> queues a connector rotation; dynamic-lease:<provider> queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command."
 	rotationTTL := &Schema{Type: "integer"}
-	rotationTTL.Description = "Compatibility input only. Connector and static requests reject any supplied ttl_seconds with 400. dynamic-lease providers remain unavailable with 503 regardless of this field."
+	rotationTTL.Description = "The new lease's lifetime in seconds: required and positive for dynamic-lease:<provider>, bounded by the provider's maximum. Connector and static requests reject any supplied ttl_seconds with 400."
 	secretRotationReq := object(map[string]*Schema{
 		"provider": rotationProvider, "key": str(), "old_ref": str(),
 		"target": str(), "remote_key": str(), "ttl_seconds": rotationTTL,
@@ -6577,6 +6577,7 @@ func componentSchemas() map[string]*Schema {
 		"terminal":         {Type: "boolean"},
 		"expected_version": {Type: "integer"}, "result_version": {Type: "integer"}, "restored_version": {Type: "integer"},
 		"verify_mode": str(), "error": str(), "schedule_id": uuid(),
+		"ttl_seconds": {Type: "integer"}, "new_expires_at": timestamp(),
 		"created_at": timestamp(), "updated_at": timestamp(), "terminal_at": timestamp(),
 	}, "id", "provider", "key", "old_ref", "new_ref", "phase", "terminal", "expected_version", "result_version", "restored_version", "created_at", "updated_at")
 	secretRotationPreview := object(map[string]*Schema{

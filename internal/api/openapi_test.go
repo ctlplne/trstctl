@@ -219,15 +219,18 @@ func TestOpenAPISecretRotationReportsQueuedDeferredAndUnavailableModesTruthfully
 	requestProps := request["properties"].(map[string]any)
 	providerDescription, _ := requestProps["provider"].(map[string]any)["description"].(string)
 	ttlDescription, _ := requestProps["ttl_seconds"].(map[string]any)["description"].(string)
-	if !strings.Contains(providerDescription, "unavailable") || !strings.Contains(providerDescription, "503") {
-		t.Fatalf("rotation provider description=%q, want dynamic unavailable 503", providerDescription)
+	// A201: dynamic-lease rotation is a durable command on the three provider
+	// types with a credential check, and ttl_seconds is its lease lifetime.
+	if !strings.Contains(providerDescription, "dynamic-lease:<provider> queues a durable dynamic-lease rotation command") ||
+		!strings.Contains(providerDescription, "postgresql, mysql or redis") {
+		t.Fatalf("rotation provider description=%q, want the dynamic-lease command and its provider types", providerDescription)
 	}
 	if !strings.Contains(ttlDescription, "reject any supplied ttl_seconds with 400") ||
-		!strings.Contains(ttlDescription, "unavailable with 503") {
-		t.Fatalf("rotation ttl description=%q, want connector/static rejection plus dynamic-lease refusal", ttlDescription)
+		!strings.Contains(ttlDescription, "required and positive for dynamic-lease:<provider>") {
+		t.Fatalf("rotation ttl description=%q, want connector/static rejection plus the required dynamic-lease TTL", ttlDescription)
 	}
 	if !strings.Contains(providerDescription, "allow_static_rotation") || !strings.Contains(providerDescription, "dynamic-lease:<provider>") {
-		t.Fatalf("rotation provider description=%q, want the static-provider mode and the dynamic-lease refusal named", providerDescription)
+		t.Fatalf("rotation provider description=%q, want the static-provider and dynamic-lease modes named", providerDescription)
 	}
 	scheduleRequest := schemas["SecretRotationScheduleRequest"].(map[string]any)
 	scheduleProviderDescription, _ := scheduleRequest["properties"].(map[string]any)["provider"].(map[string]any)["description"].(string)

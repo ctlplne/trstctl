@@ -1218,8 +1218,14 @@ printf '{"provider":"connector:ci","key":"db/password","old_ref":"version:2","re
 printf '{"provider":"connector:ci","key":"db/password","old_ref":"version:2","remote_key":"DB_PASSWORD"}' \
   | trstctl-cli --idempotency-key connector-rotation-1 secrets rotations run -f -
 
-# Static-provider and dynamic-lease rotation both fail closed before effects until
-# their complete phase chains have one crash-recoverable worker receiver.
+# Rotate the lease an application secret publishes: a new lease of ttl_seconds is
+# issued, published as the next version, verified, and the old lease revoked. The
+# secret's name is the provider role; old_ref is the lease id it publishes now.
+printf '{"provider":"dynamic-lease:pg-leases","key":"reporting","old_ref":"<lease-id>","ttl_seconds":1800}' \
+  | trstctl-cli secrets rotations preview -f -
+printf '{"provider":"dynamic-lease:pg-leases","key":"reporting","old_ref":"<lease-id>","ttl_seconds":1800}' \
+  | trstctl-cli --idempotency-key lease-rotation-1 secrets rotations run -f -
+trstctl-cli secrets rotations get <command-id>
 
 # Schedule connector rotation and run due schedules from the served path.
 cat > connector-rotation-schedule.json <<'JSON'

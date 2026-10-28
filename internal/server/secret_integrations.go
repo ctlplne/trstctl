@@ -1371,6 +1371,34 @@ func (p *configuredDynamicProvider) AllowsStaticRotation(role string) bool {
 	return p != nil && p.cfg.AllowStaticRotation && config.StaticRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] && p.allowedRoles[role]
 }
 
+// VerifyLeaseCredential implements dynsecret.LeaseCredentialVerifier for
+// dynamic-lease rotation: database providers open a session with the lease's
+// credential, and Redis authenticates as the lease's user against the
+// configured server and runs PING. Other types have no proof here.
+func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, credential []byte) (string, error) {
+	switch strings.TrimSpace(p.cfg.Type) {
+	case "postgresql":
+		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
+	case "mysql":
+		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
+	case "redis":
+		backend, closeBackend, err := p.open(ctx)
+		if err != nil {
+			return "", err
+		}
+		defer closeBackend()
+		verifier, ok := backend.(interface {
+			VerifyCredential(context.Context, []byte) error
+		})
+		if !ok {
+			return "", errors.New("server: the redis backend cannot verify a lease credential")
+		}
+		return "authenticated", verifier.VerifyCredential(ctx, credential)
+	default:
+		return "not_available", nil
+	}
+}
+
 // VerifyStaticCredential implements dynsecret.StaticRotationProvider. Database
 // providers prove the staged credential by opening a session with it; AWS IAM
 // access keys have no side-effect-free proof the control plane can sign with the

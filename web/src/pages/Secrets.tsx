@@ -284,6 +284,7 @@ export function Secrets() {
   const [rotationRunProvider, setRotationRunProvider] = useState("");
   const [rotationRunTarget, setRotationRunTarget] = useState("");
   const [rotationRunRemoteKey, setRotationRunRemoteKey] = useState("");
+  const [rotationRunTTL, setRotationRunTTL] = useState("");
   const [rotationRunBusy, setRotationRunBusy] = useState(false);
   const [rotationRunError, setRotationRunError] = useState<string | null>(null);
   const [rotationRun, setRotationRun] = useState<SecretRotation | null>(null);
@@ -292,16 +293,17 @@ export function Secrets() {
     request: SecretRotationRequest;
     plan: SecretRotationPreview;
   } | null>(null);
-  const rotationRequest = useMemo<SecretRotationRequest>(
-    () => ({
+  const rotationRequest = useMemo<SecretRotationRequest>(() => {
+    const ttlSeconds = Number(rotationRunTTL.trim());
+    return {
       key: rotationRunKey.trim(),
       old_ref: rotationRunOldRef.trim(),
       provider: rotationRunProvider.trim(),
       ...(rotationRunTarget.trim() ? { target: rotationRunTarget.trim() } : {}),
       ...(rotationRunRemoteKey.trim() ? { remote_key: rotationRunRemoteKey.trim() } : {}),
-    }),
-    [rotationRunKey, rotationRunOldRef, rotationRunProvider, rotationRunRemoteKey, rotationRunTarget],
-  );
+      ...(rotationRunTTL.trim() && Number.isInteger(ttlSeconds) && ttlSeconds > 0 ? { ttl_seconds: ttlSeconds } : {}),
+    };
+  }, [rotationRunKey, rotationRunOldRef, rotationRunProvider, rotationRunRemoteKey, rotationRunTarget, rotationRunTTL]);
   const rotationRequestKey = JSON.stringify(rotationRequest);
   const reviewedRotation = rotationPreview?.requestKey === rotationRequestKey ? rotationPreview : null;
 
@@ -1632,6 +1634,18 @@ export function Secrets() {
                       placeholder={translateNow("source.secret.payments.db.password.cf46ca15a9")}
                     />
                   </label>
+                  <label className="grid gap-1 text-body font-medium">
+                    {t("secrets.rotation.leaseTTLLabel")}
+                    <input
+                      className="min-h-9 rounded-control border border-border bg-background px-3 py-2 text-body"
+                      type="number"
+                      min={1}
+                      step={1}
+                      inputMode="numeric"
+                      value={rotationRunTTL}
+                      onChange={(event) => setRotationRunTTL(event.target.value)}
+                    />
+                  </label>
                   <div className="md:col-span-2 xl:col-span-3">
                     <Button type="submit" disabled={rotationRunBusy || Boolean(loadError)}>
                       {rotationRunBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
@@ -1756,9 +1770,14 @@ export function Secrets() {
                       <span className="break-all font-mono text-xs">{rotationRun.key}</span>
                     </div>
                     {rotationRun.completed || secretRotationQueued(rotationRun) ? (
-                      <p className="break-all font-mono text-xs">
-                        {rotationRun.old_ref} → {rotationRun.new_ref}
-                      </p>
+                      <>
+                        <p className="break-all font-mono text-xs">
+                          {rotationRun.old_ref} → {rotationRun.new_ref}
+                        </p>
+                        {rotationRun.command_id ? (
+                          <p className="break-all text-xs text-muted-foreground">{t("secrets.rotation.commandFollow", { id: rotationRun.command_id })}</p>
+                        ) : null}
+                      </>
                     ) : (
                       <div className="grid gap-2">
                         <p>

@@ -4487,15 +4487,18 @@ when off, requiring a KEK when on):
   connection test for databases and `not_available` for AWS IAM access keys; a
   `rollback_failed` or `retire_pending` command needs an operator to retire the
   leftover credential at the provider (no retry route yet); approval-gated
-  tenants must approve the worker's cutover write. `dynamic-lease:<provider>`
-  requests still return `503` before any issue, delivery, revoke, event or outbox
-  effect because lease rotation has no durable command yet. Dynamic lease
-  issue/renew/revoke remain separate served operations. Rotation `ttl_seconds` is
-  a compatibility field only: a connector request, or a static request against a
-  configured provider, that supplies it returns `400`, while dynamic-lease
-  requests and unconfigured static providers still return their cached
-  request-bound `503` regardless of that field. New schedules accept `connector:<target>` and
-  static providers; dynamic-lease schedule creation returns `503`. Historical
+  tenants must approve the worker's cutover write. `dynamic-lease:<provider>` runs
+  the same durable command on a configured PostgreSQL, MySQL or Redis provider:
+  stage issues a new lease of `ttl_seconds` (required, at most the provider's
+  `max_ttl`) through the durable lease lifecycle, cutover publishes its
+  credential, verify opens a database session or authenticates to Redis and runs
+  PING, and retire revokes the `old_ref` lease, completing only once the provider
+  confirms the removal; `old_ref` is `none` or an active lease of that provider
+  for the role the secret names. Rotating a MongoDB, cloud IAM or Kubernetes lease
+  is what comes next (`503` today); those leases issue, renew and revoke through
+  the lease endpoints. A connector or static request that supplies `ttl_seconds`
+  returns `400`. New schedules accept `connector:<target>` and static providers;
+  scheduled dynamic-lease rotation is what comes next (creation returns `503`). Historical
   dynamic-lease schedules, and static schedules whose provider no longer allows
   static rotation, are marked `unsupported`, disabled, and make zero provider
   calls. Scheduled ticks bind each exact due edge to one durable,

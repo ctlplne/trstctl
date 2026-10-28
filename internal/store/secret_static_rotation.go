@@ -60,9 +60,14 @@ type SecretStaticRotationCommand struct {
 	RequestBinding       string
 	ScheduleID           string
 	OutboxID             int64
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	TerminalAt           *time.Time
+	// TTLSeconds is the requested lifetime of a dynamic-lease rotation's new
+	// lease (A201); zero for a static rotation.
+	TTLSeconds int
+	// NewExpiresAt is when a dynamic-lease rotation's new lease expires.
+	NewExpiresAt *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	TerminalAt   *time.Time
 }
 
 // Terminal reports whether the worker has nothing left to do for the command.
@@ -96,6 +101,7 @@ type SecretStaticRotationAdvance struct {
 	RestoredVersion int
 	VerifyMode      string
 	Error           string
+	NewExpiresAt    *time.Time
 	At              time.Time
 }
 
@@ -110,7 +116,8 @@ func SecretStaticRotationOutboxIdempotencyKey(tenantEpoch, id string) string {
 // same row and the same outbox identity and changes nothing.
 func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx, cmd SecretStaticRotationCommand, outboxPayload []byte) error {
 	if cmd.TenantID == "" || cmd.ID == "" || cmd.TenantEpoch == "" || cmd.Provider == "" || cmd.Key == "" ||
-		cmd.OldRef == "" || len(cmd.IdempotencyKeyDigest) != 64 || len(cmd.RequestBinding) != 64 || cmd.CreatedAt.IsZero() {
+		cmd.OldRef == "" || len(cmd.IdempotencyKeyDigest) != 64 || len(cmd.RequestBinding) != 64 || cmd.CreatedAt.IsZero() ||
+		cmd.TTLSeconds < 0 {
 		return errors.New("store: static rotation command is incomplete")
 	}
 	if err := s.ValidateApplicationSecretTenantEpochTx(ctx, tx, cmd.TenantID, cmd.TenantEpoch); err != nil {
@@ -123,11 +130,11 @@ func (s *Store) ApplySecretStaticRotationQueuedTx(ctx context.Context, tx pgx.Tx
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO secret_static_rotation_commands
 		        (tenant_id, id, tenant_epoch, provider, secret_key, old_ref, phase, expected_version,
-		         idempotency_key_digest, request_binding, schedule_id, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)
+		         idempotency_key_digest, request_binding, schedule_id, ttl_seconds, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		cmd.TenantID, cmd.ID, cmd.TenantEpoch, cmd.Provider, cmd.Key, cmd.OldRef, SecretStaticRotationQueued,
-		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.CreatedAt.UTC()); err != nil {
+		cmd.ExpectedVersion, cmd.IdempotencyKeyDigest, cmd.RequestBinding, scheduleID, cmd.TTLSeconds, cmd.CreatedAt.UTC()); err != nil {
 		return err
 	}
 	outboxID, err := ensureSecretIntegrationOutboxTx(ctx, tx, cmd.TenantID, SecretStaticRotationDestination,
@@ -165,11 +172,12 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 		        verify_mode = CASE WHEN $11 <> '' THEN $11 ELSE verify_mode END,
 		        error = $12,
 		        updated_at = $13,
-		        terminal_at = $14
+		        terminal_at = $14,
+		        new_expires_at = COALESCE($15, new_expires_at)
 		  WHERE tenant_id = $1 AND id = $2 AND phase = $3`,
 		adv.TenantID, adv.ID, adv.FromPhase, adv.Phase, adv.ProviderType, adv.NewRef,
 		adv.SealedNew, adv.SealedOld, adv.ResultVersion, adv.RestoredVersion, adv.VerifyMode,
-		adv.Error, adv.At.UTC(), terminalAt)
+		adv.Error, adv.At.UTC(), terminalAt, utcTimePtr(adv.NewExpiresAt))
 	if err != nil {
 		return err
 	}
@@ -192,6 +200,14 @@ func (s *Store) ApplySecretStaticRotationAdvancedTx(ctx context.Context, tx pgx.
 		ErrIdempotencyConflict, adv.ID, current, adv.FromPhase)
 }
 
+// utcTimePtr is a nullable timestamp parameter in UTC; nil stays SQL NULL.
+func utcTimePtr(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.UTC()
+}
+
 func secretStaticRotationPhaseRank(phase string) int {
 	switch phase {
 	case SecretStaticRotationQueued:
@@ -210,14 +226,14 @@ func secretStaticRotationPhaseRank(phase string) int {
 const secretStaticRotationColumns = /* #nosec G101 -- SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref,
        phase, expected_version, result_version, restored_version, sealed_new, sealed_old, verify_mode, error,
        idempotency_key_digest, request_binding, coalesce(schedule_id::text, ''), coalesce(outbox_id, 0),
-       created_at, updated_at, terminal_at`
+       ttl_seconds, new_expires_at, created_at, updated_at, terminal_at`
 
 func scanSecretStaticRotationCommand(row pgx.Row) (SecretStaticRotationCommand, error) {
 	var c SecretStaticRotationCommand
 	err := row.Scan(&c.TenantID, &c.ID, &c.TenantEpoch, &c.Provider, &c.ProviderType, &c.Key, &c.OldRef, &c.NewRef,
 		&c.Phase, &c.ExpectedVersion, &c.ResultVersion, &c.RestoredVersion, &c.SealedNew, &c.SealedOld, &c.VerifyMode, &c.Error,
 		&c.IdempotencyKeyDigest, &c.RequestBinding, &c.ScheduleID, &c.OutboxID,
-		&c.CreatedAt, &c.UpdatedAt, &c.TerminalAt)
+		&c.TTLSeconds, &c.NewExpiresAt, &c.CreatedAt, &c.UpdatedAt, &c.TerminalAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SecretStaticRotationCommand{}, ErrSecretStaticRotationCommandNotFound
 	}

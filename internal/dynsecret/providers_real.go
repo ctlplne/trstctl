@@ -2013,7 +2013,9 @@ func redisCredential(addr string, db int, user string, password []byte, verified
 	return strconv.AppendInt(out, int64(db), 10)
 }
 
-func (b *RedisBackend) redisCommands(ctx context.Context, command [][]byte) error {
+// connect opens one connection to the configured server under the backend's
+// TLS rules, bounded by 15 seconds or the context's deadline.
+func (b *RedisBackend) connect(ctx context.Context) (net.Conn, error) {
 	var conn net.Conn
 	var err error
 	if b.allowPlaintext {
@@ -2022,16 +2024,81 @@ func (b *RedisBackend) redisCommands(ctx context.Context, command [][]byte) erro
 		conn, err = mtls.DialVerifiedTCP(ctx, b.addr, b.tlsServerName, b.tlsCA)
 	}
 	if err != nil {
-		return fmt.Errorf("dynsecret redis: dial: %w", err)
+		return nil, fmt.Errorf("dynsecret redis: dial: %w", err)
 	}
-	defer func() { _ = conn.Close() }()
 	deadline := time.Now().Add(15 * time.Second)
 	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
 		deadline = contextDeadline
 	}
 	if err := conn.SetDeadline(deadline); err != nil {
-		return fmt.Errorf("dynsecret redis: deadline: %w", err)
+		_ = conn.Close()
+		return nil, fmt.Errorf("dynsecret redis: deadline: %w", err)
 	}
+	return conn, nil
+}
+
+// VerifyCredential proves a lease credential this backend issued works: it
+// connects to the configured server (never the address the credential names)
+// under the same TLS rules, authenticates as the lease's user and runs PING,
+// which every lease role is granted. A deleted user, or a password that is not
+// the user's, fails.
+func (b *RedisBackend) VerifyCredential(ctx context.Context, credential []byte) error {
+	user, password, err := redisCredentialUserinfo(credential)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(password)
+	conn, err := b.connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	reader := bufio.NewReader(conn)
+	if err := redisWriteArray(conn, [][]byte{[]byte("AUTH"), []byte(user), password}); err != nil {
+		return fmt.Errorf("dynsecret redis: auth write: %w", err)
+	}
+	if err := redisReadOK(reader); err != nil {
+		return fmt.Errorf("dynsecret redis: lease credential auth: %w", err)
+	}
+	if err := redisWriteArray(conn, [][]byte{[]byte("PING")}); err != nil {
+		return fmt.Errorf("dynsecret redis: ping write: %w", err)
+	}
+	if err := redisReadOK(reader); err != nil {
+		return fmt.Errorf("dynsecret redis: lease credential ping: %w", err)
+	}
+	return nil
+}
+
+// redisCredentialUserinfo reads the user and password out of a credential
+// redisCredential built, redis[s]://user:password@addr/db, both percent-encoded.
+func redisCredentialUserinfo(credential []byte) (string, []byte, error) {
+	rest, ok := bytes.CutPrefix(credential, []byte("rediss://"))
+	if !ok {
+		rest, ok = bytes.CutPrefix(credential, []byte("redis://"))
+	}
+	at := bytes.LastIndexByte(rest, '@')
+	if !ok || at <= 0 {
+		return "", nil, errors.New("dynsecret redis: credential is not a redis URL with user information")
+	}
+	colon := bytes.IndexByte(rest[:at], ':')
+	if colon <= 0 {
+		return "", nil, errors.New("dynsecret redis: credential has no user and password")
+	}
+	user, okUser := percentDecode(rest[:colon])
+	password, okPassword := percentDecode(rest[colon+1 : at])
+	if !okUser || !okPassword || len(password) == 0 {
+		secret.Wipe(password)
+		return "", nil, errors.New("dynsecret redis: credential user information is malformed")
+	}
+	return string(user), password, nil
+}
+
+func (b *RedisBackend) redisCommands(ctx context.Context, command [][]byte) error {
+	conn, err := b.connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
 	reader := bufio.NewReader(conn)
 	if b.password != nil && b.password.Len() > 0 {
 		if err := redisWriteArray(conn, [][]byte{[]byte("AUTH"), b.password.Bytes()}); err != nil {

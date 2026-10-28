@@ -2,6 +2,13 @@
 
 ### Added
 
+- Dynamic-lease rotation: `POST /api/v1/secrets/rotations` with
+  `dynamic-lease:<provider>` and `ttl_seconds` replaces the lease an application
+  secret publishes with a new lease of that lifetime on a PostgreSQL, MySQL or
+  Redis provider, as a durable command: the new lease's credential becomes the
+  next secret version once a database session (or Redis AUTH and PING) proves it,
+  and the old lease is revoked at the provider. The console's rotation form takes
+  the lease TTL.
 - `trstctl-kms-wrap`, the signer key store's KMS/HSM wrap adapter, ships in the
   images. With `--kms-provider`/`--kms-key-ref`/`--kms-wrap-command` (Helm
   `externalKMS`), the signer's data keys are wrapped under an AWS KMS key, a

@@ -182,6 +182,12 @@ func (a *API) AdvanceStaticSecretRotation(ctx context.Context, tenantID, command
 		if cmd.Terminal() {
 			return nil
 		}
+		if isDynamicLeaseRotation(cmd.Provider) {
+			if err := a.stepDynamicLeaseRotation(ctx, cmd, attempt); err != nil {
+				return err
+			}
+			continue
+		}
 		provider, verifier, err := a.staticRotationProvider(tenantID, cmd.Provider, cmd.Key)
 		if err != nil {
 			return err
@@ -220,6 +226,9 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 	}
 	if cmd.Terminal() {
 		return nil
+	}
+	if isDynamicLeaseRotation(cmd.Provider) {
+		return a.failDynamicLeaseRotation(ctx, cmd)
 	}
 	provider, _, providerErr := a.staticRotationProvider(tenantID, cmd.Provider, cmd.Key)
 	switch cmd.Phase {
@@ -443,6 +452,8 @@ type secretStaticRotationView struct {
 	VerifyMode      string     `json:"verify_mode,omitempty"`
 	Error           string     `json:"error,omitempty"`
 	ScheduleID      string     `json:"schedule_id,omitempty"`
+	TTLSeconds      int        `json:"ttl_seconds,omitempty"`
+	NewExpiresAt    *time.Time `json:"new_expires_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 	TerminalAt      *time.Time `json:"terminal_at,omitempty"`
@@ -453,6 +464,7 @@ func toSecretStaticRotationView(cmd store.SecretStaticRotationCommand) secretSta
 		ID: cmd.ID, Provider: cmd.Provider, ProviderType: cmd.ProviderType, Key: cmd.Key, OldRef: cmd.OldRef, NewRef: cmd.NewRef,
 		Phase: cmd.Phase, Terminal: cmd.Terminal(), ExpectedVersion: cmd.ExpectedVersion, ResultVersion: cmd.ResultVersion,
 		RestoredVersion: cmd.RestoredVersion, VerifyMode: cmd.VerifyMode, Error: cmd.Error, ScheduleID: cmd.ScheduleID,
+		TTLSeconds: cmd.TTLSeconds, NewExpiresAt: cmd.NewExpiresAt,
 		CreatedAt: cmd.CreatedAt, UpdatedAt: cmd.UpdatedAt, TerminalAt: cmd.TerminalAt,
 	}
 }

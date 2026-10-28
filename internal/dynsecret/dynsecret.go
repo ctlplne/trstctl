@@ -45,6 +45,14 @@ type StaticRotationProvider interface {
 	VerifyStaticCredential(ctx context.Context, backendRef string, credential []byte) (string, error)
 }
 
+// LeaseCredentialVerifier proves a lease credential works at its provider:
+// dynamic-lease rotation (A201) verifies the new lease's credential before it
+// retires the predecessor. It returns the closed mode it used ("connected",
+// "authenticated", "not_available") and an error when the proof failed.
+type LeaseCredentialVerifier interface {
+	VerifyLeaseCredential(ctx context.Context, credential []byte) (string, error)
+}
+
 // Credential is a generated backend credential. BackendRef is the handle the
 // backend uses to revoke it (e.g. a username or access-key id); Secret is the
 // material handed to the caller (AN-8 []byte).

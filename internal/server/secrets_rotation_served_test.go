@@ -420,15 +420,18 @@ func TestServedSecretRotationCoversConnectorAndDynamicBackendsTRACE008(t *testin
 		"remote_key":  "dynamic/readonly",
 		"ttl_seconds": 600,
 	}
+	// A201: dynamic-lease rotation is a durable command now, but this request
+	// names an application secret that publishes nothing yet, so it is refused
+	// before any lease, event, outbox or connector effect.
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok, dynamicRotationKey,
 		dynamicCommand)
-	if status != http.StatusServiceUnavailable || !strings.Contains(string(body), "dynamic-lease rotation is unavailable") {
-		t.Fatalf("dynamic lease rotation fail-closed response: status %d body %s", status, body)
+	if status != http.StatusNotFound || !strings.Contains(string(body), "no such secret") {
+		t.Fatalf("dynamic lease rotation of an unpublished secret: status %d body %s", status, body)
 	}
 	firstFailure := append([]byte(nil), body...)
 	status, body = secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/rotations", tok, dynamicRotationKey,
 		dynamicCommand)
-	if status != http.StatusServiceUnavailable || string(body) != string(firstFailure) {
+	if status != http.StatusNotFound || string(body) != string(firstFailure) {
 		t.Fatalf("dynamic lease rotation replay: status %d body %s, want identical %s", status, body, firstFailure)
 	}
 	if dynamicBackend.issuedCount() != issuedBefore || dynamicBackend.revokedCount() != 0 {

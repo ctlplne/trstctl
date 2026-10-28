@@ -7366,10 +7366,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List durable static-provider rotation commands */
+        /** List durable static-provider and dynamic-lease rotation commands */
         get: operations["listStaticSecretRotations"];
         put?: never;
-        /** Queue connector or static-provider secret rotation; refuse dynamic-lease requests */
+        /** Queue a connector, static-provider or dynamic-lease secret rotation */
         post: operations["rotateStaticSecret"];
         delete?: never;
         options?: never;
@@ -7401,7 +7401,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read one durable static-provider rotation command */
+        /** Read one durable static-provider or dynamic-lease rotation command */
         get: operations["getStaticSecretRotation"];
         put?: never;
         post?: never;
@@ -18557,11 +18557,11 @@ export interface components {
         SecretRotationRequest: {
             key: string;
             old_ref: string;
-            /** @description connector:<target> queues a connector rotation; any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. dynamic-lease:<provider> remains unavailable and fails closed with 503 before effects. */
+            /** @description connector:<target> queues a connector rotation; dynamic-lease:<provider> queues a durable dynamic-lease rotation command on a configured postgresql, mysql or redis provider (role = key, old_ref = the published lease id or none); any other value names a configured dynamic-secret provider with allow_static_rotation and queues a durable static-provider rotation command. */
             provider: string;
             remote_key?: string;
             target?: string;
-            /** @description Compatibility input only. Connector and static requests reject any supplied ttl_seconds with 400. dynamic-lease providers remain unavailable with 503 regardless of this field. */
+            /** @description The new lease's lifetime in seconds: required and positive for dynamic-lease:<provider>, bounded by the provider's maximum. Connector and static requests reject any supplied ttl_seconds with 400. */
             ttl_seconds?: number;
         };
         SecretRotationSchedule: {
@@ -18701,6 +18701,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             key: string;
+            /** Format: date-time */
+            new_expires_at?: string;
             new_ref: string;
             old_ref: string;
             /** @enum {string} */
@@ -18714,6 +18716,7 @@ export interface components {
             terminal: boolean;
             /** Format: date-time */
             terminal_at?: string;
+            ttl_seconds?: number;
             /** Format: date-time */
             updated_at: string;
             verify_mode?: string;

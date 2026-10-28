@@ -114,6 +114,10 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		},
 		DataHandling: "Preview reads tenant-scoped secret metadata only; it never decrypts, generates, returns, logs, or sends secret material.",
 	}
+	if isDynamicLeaseRotation(req.Provider) {
+		a.previewDynamicLeaseRotation(w, r, tenantID, req, plan)
+		return
+	}
 	if isStaticSecretRotation(req.Provider) {
 		// A14: the static plan names the durable phases the worker will run.
 		plan.ExecuteWrites = []string{
@@ -158,11 +162,6 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		a.writeJSON(w, http.StatusOK, plan)
 		return
 	}
-	if !isConnectorSecretRotation(req.Provider) {
-		plan.Blockers = append(plan.Blockers, dynamicLeaseRotationUnavailableDetail)
-		a.writeJSON(w, http.StatusOK, plan)
-		return
-	}
 	if req.TTLSeconds != nil {
 		plan.Blockers = append(plan.Blockers, "ttl_seconds is unsupported for connector rotation")
 	}
@@ -198,35 +197,6 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 	}
 	plan.Ready = len(plan.Blockers) == 0
 	a.writeJSON(w, http.StatusOK, plan)
-}
-
-func unavailableDirectSecretRotationRequestBinding(principal string, req secretRotationRequest) (string, error) {
-	operation := "static-secret.rotation.unavailable"
-	if strings.HasPrefix(req.Provider, secretDynamicLeaseRotationPrefix) {
-		// Preserve the existing binding domain for already-attempted dynamic-lease
-		// commands; the static refusal joins the same shape under a disjoint domain.
-		operation = "dynamic-secret.rotation"
-	}
-	canonical := struct {
-		Operation  string `json:"operation"`
-		Principal  string `json:"principal"`
-		Provider   string `json:"provider"`
-		Role       string `json:"role"`
-		OldRef     string `json:"old_ref"`
-		Target     string `json:"target"`
-		RemoteKey  string `json:"remote_key"`
-		TTLSeconds *int   `json:"ttl_seconds,omitempty"`
-	}{
-		Operation: operation, Principal: principal,
-		Provider: req.Provider, Role: req.Key, OldRef: req.OldRef,
-		Target: req.Target, RemoteKey: req.RemoteKey, TTLSeconds: req.TTLSeconds,
-	}
-	encoded, err := json.Marshal(canonical)
-	if err != nil {
-		return "", err
-	}
-	defer secret.Wipe(encoded)
-	return crypto.SHA256Hex(encoded), nil
 }
 
 func isTerminalConnectorRotationScheduleError(err error) bool {
