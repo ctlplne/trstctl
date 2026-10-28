@@ -404,6 +404,7 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 		entry(provider.EventDelegationRevoked, 1, delegationPolicy),
 		entry(provider.EventOperatorUpserted, 1, operatorPolicy),
 		entry(provider.EventOperatorOffboarded, 1, operatorPolicy),
+		entry(provider.EventOperatorRoleRevoked, 1, operatorPolicy),
 		entry(provider.EventRoleUpserted, 1, rolePolicy),
 		entry(provider.EventRoleDeleted, 1, rolePolicy),
 		entry(provider.EventTenantQuotaSet, 1, providerPolicy[providerQuotaAuthorityPayload](

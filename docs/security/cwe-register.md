@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1958 annotated sites across 29 rules. Each row is
+1959 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (390 sites)
+### G101 — CWE-798 Use of hardcoded credentials (391 sites)
 
 | Location | Reason |
 |---|---|
@@ -98,6 +98,7 @@ not this file.
 | `ee/provider/custom_roles_test.go:91` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `ee/provider/scim_bulk_test.go:27` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
+| `ee/provider/scim_groups_test.go:36` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:34` | a canary the log must not keep, not a credential (CWE-798) |

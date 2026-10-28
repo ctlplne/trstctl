@@ -175,6 +175,11 @@ export const messages = {
     defaultMessage: "Grant source",
     description: "Delegation entry point, separate from the operator's SCIM or IdP identity source.",
   },
+  "provider.access.role.unassigned": {
+    defaultMessage: "No role",
+    description:
+      "A221: an operator holding no Provider role (created without one, or removed from its IdP group by a SCIM push), who cannot sign in until one is assigned.",
+  },
   "provider.access.roles.heading": {
     defaultMessage: "Custom Provider roles",
     description: "A90: heading of the custom role editor in the Provider access console.",

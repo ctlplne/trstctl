@@ -24,19 +24,24 @@ func TestProviderWorkforceEventsPassRequiredPrivacyBoundary(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	const subject = "workforce@example.test"
-	for _, typ := range []string{provider.EventOperatorUpserted, provider.EventOperatorOffboarded} {
+	for _, typ := range []string{provider.EventOperatorUpserted, provider.EventOperatorOffboarded, provider.EventOperatorRoleRevoked} {
 		t.Run(typ, func(t *testing.T) {
 			now := time.Now().UTC()
+			role, reason := provider.OperatorAdmin, ""
+			if typ == provider.EventOperatorRoleRevoked {
+				// A221: a SCIM group push took the role; the operator stays active.
+				role, reason = "", "removed from SCIM group provider-admin; the admin role is revoked"
+			}
 			payload := provider.AuthorityEvent{
 				Operator: &provider.OperatorIdentity{
 					ID: subject, ExternalID: subject, UserName: subject, Email: subject,
-					DisplayName: "Operator " + subject, Role: provider.OperatorAdmin,
-					Active: typ == provider.EventOperatorUpserted, Source: "scim:workforce",
+					DisplayName: "Operator " + subject, Role: role,
+					Active: typ != provider.EventOperatorOffboarded, Source: "scim:workforce",
 					CreatedAt: now, UpdatedAt: now,
 				},
 				EffectiveAt: now,
 				Audit: provider.AuditEvent{Type: typ, TenantID: store.ZeroUUID,
-					OperatorID: "scim:workforce", Subject: subject, At: now},
+					OperatorID: "scim:workforce", Subject: subject, Reason: reason, At: now},
 			}
 			if !payload.Operator.Active {
 				payload.Operator.DeprovisionedAt = now

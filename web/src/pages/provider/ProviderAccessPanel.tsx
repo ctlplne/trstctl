@@ -278,6 +278,11 @@ export function ProviderAccessPanel({ onAuthError, canWrite, rolesWrite = false 
                   disabled={!row.identity.active}
                   onChange={(event) => void setRole(row, event.target.value as ProviderOperatorRole)}
                 >
+                  {row.identity.role === "" && (
+                    <option value="" disabled>
+                      {translateNow("provider.access.role.unassigned")}
+                    </option>
+                  )}
                   <option value="admin">{translateNow("source.provider.access.role.admin.aud580021")}</option>
                   <option value="operator">{translateNow("source.provider.access.role.operator.aud580022")}</option>
                   {customRoles.map((role) => (
@@ -287,7 +292,7 @@ export function ProviderAccessPanel({ onAuthError, canWrite, rolesWrite = false 
                   ))}
                 </Select>
               ) : (
-                <span>{row.identity.role}</span>
+                <span>{row.identity.role || translateNow("provider.access.role.unassigned")}</span>
               ),
           },
           {

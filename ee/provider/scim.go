@@ -290,10 +290,16 @@ func (h *providerSCIMHandler) upsertUser(ctx context.Context, token SCIMToken, p
 	if role == "" && currentErr == nil {
 		role = current.Role
 	}
-	if known, knownErr := h.roleKnown(ctx, role); knownErr != nil {
-		return OperatorIdentity{}, knownErr
-	} else if !known {
-		return OperatorIdentity{}, errors.New("roles must contain provider admin, operator, or a defined custom role")
+	// A221: an operator may hold no Provider role — created by an IdP that
+	// pushes group membership separately, or removed from its group. No role
+	// authorizes nothing (OIDC and SAML refuse it) until a group push or a
+	// roles value assigns one.
+	if role != "" {
+		if known, knownErr := h.roleKnown(ctx, role); knownErr != nil {
+			return OperatorIdentity{}, knownErr
+		} else if !known {
+			return OperatorIdentity{}, errors.New("roles must contain provider admin, operator, or a defined custom role")
+		}
 	}
 	now := h.clock().UTC()
 	identity := current
@@ -336,6 +342,12 @@ func (h *providerSCIMHandler) upsertUser(ctx context.Context, token SCIMToken, p
 }
 
 func (h *providerSCIMHandler) emitIdentity(ctx context.Context, token SCIMToken, typ string, identity OperatorIdentity, key, binding string) (OperatorIdentity, error) {
+	return h.emitIdentityReason(ctx, token, typ, identity, key, binding, "")
+}
+
+// emitIdentityReason records the operator's new state with the reason the
+// audit event shows.
+func (h *providerSCIMHandler) emitIdentityReason(ctx context.Context, token SCIMToken, typ string, identity OperatorIdentity, key, binding, reason string) (OperatorIdentity, error) {
 	if h.mutations == nil {
 		return OperatorIdentity{}, errors.New("provider SCIM event sink is not configured")
 	}
@@ -343,7 +355,7 @@ func (h *providerSCIMHandler) emitIdentity(ctx context.Context, token SCIMToken,
 	payload := AuthorityEvent{
 		Operator: &identity, EffectiveAt: now, RequestBinding: binding,
 		Audit: AuditEvent{Type: typ, TenantID: providerAuthorityTenant, OperatorID: "scim:" + token.Name,
-			Subject: identity.ID, At: now},
+			Subject: identity.ID, Reason: reason, At: now},
 	}
 	event, err := h.mutations.Append(ContextWithMutationKey(ctx, key), key, typ, providerAuthorityTenant, payload)
 	if err != nil {
@@ -404,6 +416,10 @@ func operatorIdentityToSCIM(identity OperatorIdentity, base string) providerSCIM
 		location = base + "/Users/" + url.PathEscape(identity.ID)
 	}
 	created, updated := identity.CreatedAt, identity.UpdatedAt
+	var roles []providerSCIMRole
+	if identity.Role != "" {
+		roles = []providerSCIMRole{{Value: string(identity.Role), Primary: true}}
+	}
 	return providerSCIMUser{
 		User: scim.User{
 			Schemas: []string{scim.SchemaUser}, ID: identity.ID, ExternalID: identity.ExternalID,
@@ -411,13 +427,18 @@ func operatorIdentityToSCIM(identity OperatorIdentity, base string) providerSCIM
 			Emails: []scim.Email{{Value: identity.Email, Primary: true}},
 			Meta:   &scim.Meta{ResourceType: "User", Created: &created, LastModified: &updated, Location: location},
 		},
-		Roles: []providerSCIMRole{{Value: string(identity.Role), Primary: true}},
+		Roles: roles,
 	}
 }
 
 func (h *providerSCIMHandler) listGroups(w http.ResponseWriter, r *http.Request) {
+	filter := r.URL.Query().Get("filter")
+	name, id := providerSCIMEqFilter(filter, "displayName"), providerSCIMEqFilter(filter, "id")
 	resources := []any{}
 	for _, role := range []OperatorRole{OperatorAdmin, OperatorOperator} {
+		if (name != "" && !strings.EqualFold(name, "provider-"+string(role))) || (id != "" && id != string(role)) {
+			continue
+		}
 		group, err := h.scimGroup(r.Context(), role, providerSCIMBase(r))
 		if err != nil {
 			writeProviderSCIMError(w, http.StatusInternalServerError, "", "list groups failed")
@@ -444,45 +465,11 @@ func (h *providerSCIMHandler) groupByRole(w http.ResponseWriter, r *http.Request
 		writeProviderSCIM(w, http.StatusOK, group)
 		return
 	}
-	if r.Method != http.MethodPatch {
+	if r.Method != http.MethodPatch && r.Method != http.MethodPut {
 		http.NotFound(w, r)
 		return
 	}
-	raw, ok := readProviderSCIMBody(w, r)
-	if !ok {
-		return
-	}
-	defer secret.Wipe(raw)
-	var patch scim.PatchOp
-	if json.Unmarshal(raw, &patch) != nil {
-		writeProviderSCIMError(w, http.StatusBadRequest, "invalidSyntax", "malformed SCIM group patch")
-		return
-	}
-	parsed := scim.ParseGroupPatch(patch.Operations)
-	if len(parsed.Remove) > 0 || parsed.ReplaceAll != nil {
-		writeProviderSCIMError(w, http.StatusBadRequest, "mutability", "remove/replace group membership is refused; send Users active=false so leaver revocation is explicit")
-		return
-	}
-	baseKey, binding := providerSCIMMutationKey(r, token, raw), providerSCIMBinding(r, token, raw)
-	for _, member := range parsed.Add {
-		identity, resolveErr := h.access.ResolveOperator(r.Context(), member)
-		if resolveErr != nil {
-			writeProviderSCIMError(w, http.StatusNotFound, "", "group member not found")
-			return
-		}
-		identity.Role, identity.Active, identity.UpdatedAt = role, true, h.clock().UTC()
-		identity.DeprovisionedAt = time.Time{}
-		if _, emitErr := h.emitIdentity(r.Context(), token, EventOperatorUpserted, identity, baseKey+":"+identity.ID, binding); emitErr != nil {
-			h.writeMutationError(w, emitErr)
-			return
-		}
-	}
-	group, err := h.scimGroup(r.Context(), role, providerSCIMBase(r))
-	if err != nil {
-		writeProviderSCIMError(w, http.StatusInternalServerError, "", "get group failed")
-		return
-	}
-	writeProviderSCIM(w, http.StatusOK, group)
+	h.patchOrPutGroup(w, r, token, role)
 }
 
 func (h *providerSCIMHandler) scimGroup(ctx context.Context, role OperatorRole, base string) (scim.Group, error) {

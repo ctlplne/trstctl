@@ -563,6 +563,32 @@ describe("provider console (L3)", () => {
     expect(screen.getByText("#42")).toBeInTheDocument();
   });
 
+  it("shows an operator whose IdP group push removed its role as holding no role", async () => {
+    providerMock.listTenants.mockResolvedValue([]);
+    providerMock.listOperatorAccess.mockResolvedValue([
+      {
+        identity: {
+          id: "op-9",
+          external_id: "okta-9",
+          user_name: "riley@example.test",
+          email: "riley@example.test",
+          display_name: "Riley",
+          role: "",
+          active: true,
+          source: "scim:okta",
+          created_at: "2026-10-28T12:00:00Z",
+          updated_at: "2026-10-28T12:05:00Z",
+        },
+        delegations: [],
+      },
+    ]);
+    setProviderToken("operator-bearer");
+    renderProvider();
+
+    const row = (await screen.findByText("Riley")).closest("tr")!;
+    expect(within(row).getByText("No role")).toBeInTheDocument();
+  });
+
   it("manages SCIM operators, exact customer grants, and revocation evidence", async () => {
     providerMock.listTenants.mockResolvedValue([
       { id: "tenant-acme", slug: "acme", name: "Acme Corp", status: "active", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" },

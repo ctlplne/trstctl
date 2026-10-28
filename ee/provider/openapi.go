@@ -68,7 +68,8 @@ var providerOperations = []providerOperation{
 	{"DELETE", "/provider/scim/v2/Users/{id}", "deactivateProviderSCIMUser", "Deactivate a Provider operator and revoke its authority", "204", "", "", false, false, true},
 	{"GET", "/provider/scim/v2/Groups", "listProviderSCIMGroups", "List Provider role groups", "200", "", "ProviderSCIMList", false, false, true},
 	{"GET", "/provider/scim/v2/Groups/{id}", "getProviderSCIMGroup", "Read a Provider role group", "200", "", "ProviderSCIMGroup", false, false, true},
-	{"PATCH", "/provider/scim/v2/Groups/{id}", "patchProviderSCIMGroup", "Add Provider operator role membership", "200", "ProviderSCIMPatch", "ProviderSCIMGroup", false, false, true},
+	{"PUT", "/provider/scim/v2/Groups/{id}", "replaceProviderSCIMGroup", "Replace a Provider role group's members; a member left out loses the role", "200", "ProviderSCIMGroup", "ProviderSCIMGroup", false, false, true},
+	{"PATCH", "/provider/scim/v2/Groups/{id}", "patchProviderSCIMGroup", "Add, remove or replace Provider role group members; a removed member loses the role", "200", "ProviderSCIMPatch", "ProviderSCIMGroup", false, false, true},
 }
 
 // providerOpenAPIDocument is built from the attached Provider capabilities.

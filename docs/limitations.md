@@ -475,8 +475,18 @@ never live in the API process. What you can do end to end against the running bi
   the access console, or a SCIM `roles` value, and its effective permissions
   are intersected with the ceiling the signed IdP role allows (`admin` or
   `operator`), so a custom role never grants what the IdP would not. SCIM
-  Groups still expose only the two built-in roles; group remove/replace is
-  refused in favor of an explicit User `active:false`/DELETE leaver event.
+  Groups expose the two built-in roles as `provider-admin` and
+  `provider-operator` (A221): an IdP group push adds, removes and replaces
+  members (PATCH in operation order, in the Okta and Entra shapes, and PUT),
+  and a member it removes or leaves out loses the role as a
+  `provider.operator.role_revoked` authority event naming the group and the
+  SCIM token. The operator stays active with no role, which OIDC and SAML
+  refuse on the next request; a user created without roles holds none until a
+  group push assigns one. Standing customer delegations stay until a leaver
+  event (`active:false` or DELETE) revokes them, and SCIM Bulk still refuses
+  group operations per operation. What comes next: a live Okta and Entra push
+  (today's proof is handler and PostgreSQL tests built on the request shapes
+  their documentation shows).
   Crypto migration sequencing (M2): `GET /api/v1/graph/crypto-readiness` and a Risk
   console panel order every observed crypto asset by WHO DEPENDS ON IT, not by
   severity alone. The CBOM already said which algorithms are weak; it could not say

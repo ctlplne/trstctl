@@ -616,7 +616,9 @@ A licensed provider deployment with identity-provider-backed operators, customer
 that only delegated operators can touch, one proven customer lifecycle with
 metering evidence, and audited refusals at every boundary. Suspending, resuming,
 and offboarding follow the same delegation rules; SCIM provisioning of your
-workforce is available at `/provider/scim/v2` when enabled.
+workforce is available at `/provider/scim/v2` when enabled. Pushing an operator
+into the `provider-admin` or `provider-operator` group grants that role, and
+removing them from the group revokes it with an audit event.
 
 ## See also
 

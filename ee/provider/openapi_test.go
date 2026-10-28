@@ -154,9 +154,9 @@ func TestProviderOpenAPIIncludesConfiguredIdentityRoutes(t *testing.T) {
 	// Tenant templates added /templates (record, list), /templates/{id},
 	// its rollout and rollout preview, and a customer's /template and
 	// /template-drift: 41 / 51. A187 added a customer's /assurance-reports and
-	// /assurance-reports/{run_id}: 43 / 53.
-	if len(paths) != 43 || operationCount != 53 {
-		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 43 / 53", len(paths), operationCount)
+	// /assurance-reports/{run_id}: 43 / 53. A221 added PUT /scim/v2/Groups/{id}: 43 / 54.
+	if len(paths) != 43 || operationCount != 54 {
+		t.Fatalf("configured Provider/SCIM contract = %d paths / %d operations, want 43 / 54", len(paths), operationCount)
 	}
 	components := doc["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)

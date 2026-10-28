@@ -28,8 +28,11 @@ const (
 	EventDelegationRevoked  = "provider.delegation.revoked"
 	EventOperatorUpserted   = "provider.operator.upserted"
 	EventOperatorOffboarded = "provider.operator.offboarded"
-	EventTenantQuotaSet     = "provider.tenant.quota.set"
-	EventTenantBrandSet     = "provider.tenant.brand.set"
+	// EventOperatorRoleRevoked records an operator losing its Provider role
+	// to a SCIM group push (A221); identity and active state stay.
+	EventOperatorRoleRevoked = "provider.operator.role_revoked"
+	EventTenantQuotaSet      = "provider.tenant.quota.set"
+	EventTenantBrandSet      = "provider.tenant.brand.set"
 )
 
 var (
@@ -659,7 +662,7 @@ var providerAuthorityEventTypes = []string{
 	AuditTenantProvisioned, AuditTenantSuspended, AuditTenantResumed, AuditTenantOffboarded,
 	AuditTenantErasureRequested, AuditUnregisteredTenantOffboarded,
 	AuditTenantErasureFailed, AuditTenantErasureCompleted,
-	EventOperatorUpserted, EventOperatorOffboarded, EventRoleUpserted, EventRoleDeleted,
+	EventOperatorUpserted, EventOperatorOffboarded, EventOperatorRoleRevoked, EventRoleUpserted, EventRoleDeleted,
 	EventDelegationGranted, EventDelegationRevoked, EventTenantQuotaSet, EventTenantBrandSet,
 	AuditBreakGlassRequested, AuditBreakGlassConsented, AuditBreakGlassDenied,
 	AuditBreakGlassWithdrawn, AuditBreakGlassAccessed,
@@ -807,7 +810,7 @@ func applyAuthorityEventTx(ctx context.Context, tx pgx.Tx, event eventspec.Event
 			WHERE tenant_id = $1 AND customer_tenant_id = $2 AND revoked_at IS NULL`,
 			providerAuthorityTenant, event.TenantID, event.Time.UTC())
 		return err
-	case EventOperatorUpserted, EventOperatorOffboarded:
+	case EventOperatorUpserted, EventOperatorOffboarded, EventOperatorRoleRevoked:
 		if payload.Operator == nil {
 			return fmt.Errorf("provider: %s needs operator state", event.Type)
 		}

@@ -58,7 +58,7 @@ func TestAUD58DocumentsServedProviderWorkforceAuthorityAndExactLimits(t *testing
 			t.Errorf("limitations.md retains stale AUD-58 claim %q", stale)
 		}
 	}
-	for _, exactLimit := range []string{"SCIM Bulk", "group remove/replace", "active:false"} {
+	for _, exactLimit := range []string{"SCIM Bulk", "provider.operator.role_revoked", "active:false"} {
 		if !strings.Contains(limitations, exactLimit) {
 			t.Errorf("limitations.md does not state exact Provider limit %q", exactLimit)
 		}

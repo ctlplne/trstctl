@@ -2,6 +2,14 @@
 
 ### Added
 
+- Provider SCIM group removal: removing an operator from the `provider-admin` or
+  `provider-operator` group through SCIM now revokes that role, recorded as a
+  `provider.operator.role_revoked` authority event naming the group and the SCIM token, instead
+  of being refused. Group PATCH applies its operations in order (the Okta and Entra request
+  shapes), replace and PUT revoke whoever they leave out, and the operator stays active with no
+  role, which OIDC and SAML refuse on the next request. A user created without roles holds none
+  until a group push assigns one, and `GET /Groups` answers a `displayName` or `id` filter. The
+  access console shows such an operator as holding no role.
 - Attested edge delegation renewal: a segment policy can set `renewal_enabled` (with
   `renewal_window_days`, default 7), and a host agent run with `--edge-renew` renews its delegated
   edge CA over the agent channel inside that window. The TPM key signs a fresh CSR and TPM2_Certify
