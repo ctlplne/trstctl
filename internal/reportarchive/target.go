@@ -77,7 +77,7 @@ func (a Archive) Read(ctx context.Context, ref, tenantID, runID, digest string) 
 	if !ValidReference(ref, tenantID, runID, digest) {
 		return nil, errors.New("reportarchive: reference does not match the run")
 	}
-	if strings.HasPrefix(ref, "reports/") {
+	if IsDirectoryReference(ref) {
 		return a.Dir.Read(tenantID, runID, digest)
 	}
 	if a.Objects == nil {
@@ -138,6 +138,10 @@ func (a Archive) readObject(ctx context.Context, name, digest string) ([]byte, e
 	}
 	return data, nil
 }
+
+// IsDirectoryReference reports whether a run's reference names the archive
+// directory rather than the object store.
+func IsDirectoryReference(ref string) bool { return strings.HasPrefix(ref, "reports/") }
 
 func objectRelative(runID, digest string) string {
 	return "reports/" + runID + "/" + digest + ".json"

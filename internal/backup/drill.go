@@ -99,6 +99,11 @@ type DrillAttestation struct {
 	// only after every required artifact and both datastore artifacts complete.
 	ArtifactsRestored []string `json:"artifacts_restored"`
 	FullSetRestored   bool     `json:"full_set_restored"`
+	// ReportsRestored counts the compliance reports restored into the target
+	// and read back against their digests; ReportsMissingAtBackup the completed
+	// runs whose report was already missing when the backup ran (A206).
+	ReportsRestored        int `json:"reports_restored,omitempty"`
+	ReportsMissingAtBackup int `json:"reports_missing_at_backup,omitempty"`
 	// Health is evidence collected from the recovered target, not the source
 	// deployment. A restored verdict requires every check to be true.
 	StoreHealthy    bool `json:"store_healthy"`
@@ -127,6 +132,8 @@ type RestoreResult struct {
 	PostgresRecordsRestored int
 	PostgresTablesRestored  map[string]int
 	ArtifactsRestored       []string
+	ReportsRestored         int
+	ReportsMissingAtBackup  int
 	FullSetRestored         bool
 	StoreHealthy            bool
 	EventLogHealthy         bool
@@ -195,6 +202,8 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 	att.PostgresRecordsRestored = result.PostgresRecordsRestored
 	att.PostgresTablesRestored = result.PostgresTablesRestored
 	att.ArtifactsRestored = append([]string(nil), result.ArtifactsRestored...)
+	att.ReportsRestored = result.ReportsRestored
+	att.ReportsMissingAtBackup = result.ReportsMissingAtBackup
 	att.FullSetRestored = result.FullSetRestored
 	att.StoreHealthy = result.StoreHealthy
 	att.EventLogHealthy = result.EventLogHealthy
@@ -234,6 +243,13 @@ func RunDrill(ctx context.Context, backupDir string, restore RestoreFunc, now fu
 			"events and importing %d independent PostgreSQL records. PostgreSQL, the event log, "+
 			"the signer, and the recovered server all passed health checks. The state it holds is %s old.",
 			result.EventsRestored, result.PostgresRecordsRestored, humaniseAge(att.RPOSeconds))
+		if result.ReportsRestored > 0 || result.ReportsMissingAtBackup > 0 {
+			att.Detail += fmt.Sprintf(" %d compliance reports restored and matched their digests", result.ReportsRestored)
+			if result.ReportsMissingAtBackup > 0 {
+				att.Detail += fmt.Sprintf("; %d completed runs had no report in the archive when the backup ran", result.ReportsMissingAtBackup)
+			}
+			att.Detail += "."
+		}
 	}
 	return att, err
 }

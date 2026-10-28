@@ -2,6 +2,12 @@
 
 ### Added
 
+- Compliance reports in full backups: `--full-backup-dir` captures every
+  completed report run's signed report (from `audit.archive_dir` or the archive
+  object store) as an encrypted `report-archive` artifact with an index, a full
+  restore puts each back where its run's reference says and reads it back
+  against its digest, and the restore drill restores them into its isolated
+  target and attests the count.
 - SPIRE JWT authorities through trstctl: the SPIRE upstream authority plugin
   publishes each SPIRE server's JWT signing key to
   `POST /api/v1/spiffe/upstream-jwt-keys` and returns every unexpired key the

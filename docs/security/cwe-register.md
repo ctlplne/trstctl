@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1881 annotated sites across 29 rules. Each row is
+1884 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -829,7 +829,7 @@ not this file.
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/notify/response_buffer_guard_test.go:37` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/server/backup_test.go:959` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1040,7 +1040,7 @@ not this file.
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:267` | fixed binary built by this test; arguments are fixed/test-owned paths and enum values (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:292` | fixed repository binary and test-owned destination (CWE-78) |
-| `internal/server/backup_test.go:900` | fixed repository binary and test-owned destination (CWE-78) |
+| `internal/server/backup_test.go:918` | fixed repository binary and test-owned destination (CWE-78) |
 | `internal/server/bundled_pg_dependency_test.go:19` | fixed local Go tool and package pattern (CWE-78) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:32` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/server/ca_hierarchy_pqc_served_test.go:41` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
@@ -1245,7 +1245,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (535 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (537 sites)
 
 | Location | Reason |
 |---|---|
@@ -1594,15 +1594,17 @@ not this file.
 | `internal/server/backup.go:143` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:207` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:379` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:440` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:532` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:775` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:877` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:881` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup_test.go:387` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/backup_test.go:435` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/backup_test.go:574` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/server/backup_test.go:941` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/server/backup.go:450` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:542` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:794` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:896` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:900` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup_reports.go:165` | the restore's own staging tree (CWE-22) |
+| `internal/server/backup_reports.go:181` | the restore's own staging tree; names validated above (CWE-22) |
+| `internal/server/backup_test.go:388` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/backup_test.go:436` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/backup_test.go:575` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/server/backup_test.go:959` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/server/breakglass.go:173` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/breakglass_material_test.go:67` | test-owned public kit under t.TempDir (CWE-22) |
 | `internal/server/bundled_pg_dependency_test.go:32` | fixed repository source path (CWE-22) |
@@ -2009,7 +2011,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (105 sites)
+### G703 — CWE-22 Path traversal (taint) (106 sites)
 
 | Location | Reason |
 |---|---|
@@ -2064,6 +2066,7 @@ not this file.
 | `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
+| `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
 | `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:229` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:357` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |

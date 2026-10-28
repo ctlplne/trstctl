@@ -26,6 +26,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/reportarchive"
 	"trstctl.com/trstctl/internal/secrets"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -693,7 +694,11 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 	cfg.Audit.SigningKeyFile = filepath.Join(dir, "source", "legacy-audit.pem")
 	cfg.CA.CertFile = filepath.Join(dir, "source", "issuing-ca.crt")
 	cfg.Backup.EncryptionKeyFile = filepath.Join(dir, "backup-encryption-key.bin")
+	cfg.Audit.ArchiveDir = filepath.Join(dir, "source", "audit-archive")
 	if err := os.MkdirAll(filepath.Dir(cfg.Secrets.KEKFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cfg.Audit.ArchiveDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)
@@ -805,6 +810,16 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 		t.Fatalf("close source event log with drill history: %v", err)
 	}
 
+	// A206: a completed compliance report run whose signed report lives in the
+	// archive outside the replay log; the drill must restore and check it.
+	report := []byte(`{"signed_export":{"report":"drill","signature":"AQ=="}}`)
+	reportRef, reportDigest, err := reportarchive.Dir{Root: cfg.Audit.ArchiveDir}.Put(tenantID, "11111111-1111-4111-8111-0000000000a6", report)
+	if err != nil {
+		t.Fatalf("archive a source report: %v", err)
+	}
+	seedCompletedReportRun(t, st, tenantID, "11111111-1111-4111-8111-0000000000b6", "11111111-1111-4111-8111-0000000000a6",
+		now.Add(-2*time.Hour).Truncate(time.Hour), reportRef, reportDigest)
+
 	backupDir := filepath.Join(dir, "delivered-backup")
 	if _, err := RunFullBackup(ctx, cfg, backupDir); err != nil {
 		t.Fatalf("RunFullBackup: %v", err)
@@ -842,7 +857,10 @@ func TestScheduledRestoreDrillRestoresFullDeliveredSetAndRecoveredRuntime(t *tes
 		t.Errorf("recovered health = postgres:%v event-log:%v signer:%v server:%v, want all true",
 			att.StoreHealthy, att.EventLogHealthy, att.SignerHealthy, att.ServerHealthy)
 	}
-	for _, name := range []string{"event-log", "postgres-state", "signer-auth-secret", "signer-keystore", "ca-certificate"} {
+	if att.ReportsRestored != 1 || !strings.Contains(att.Detail, "1 compliance reports restored") {
+		t.Errorf("drill reports restored = %d (%s), want the source report", att.ReportsRestored, att.Detail)
+	}
+	for _, name := range []string{"event-log", "postgres-state", "signer-auth-secret", "signer-keystore", "ca-certificate", "report-archive"} {
 		if !backupContainsString(att.ArtifactsRestored, name) {
 			t.Errorf("restored artifacts %v do not include %s", att.ArtifactsRestored, name)
 		}

@@ -282,6 +282,8 @@ func RunRestoreDrill(
 			PostgresRecordsRestored: restored.Postgres.Records,
 			PostgresTablesRestored:  restored.Postgres.Tables,
 			ArtifactsRestored:       restored.ArtifactsRestored,
+			ReportsRestored:         restored.ReportsRestored,
+			ReportsMissingAtBackup:  restored.ReportsMissingAtBackup,
 			FullSetRestored:         true,
 			StoreHealthy:            restored.StoreHealthy,
 			EventLogHealthy:         restored.EventLogHealthy,

@@ -132,6 +132,7 @@ unclassified — so a store cannot silently fall out of the recovery plan.
 | **Signer authorization secret** | The signer-side content-authorization root for dual-control CA handles. Without it, restored privileged handles fail closed because the signer cannot verify approval tokens. | The full backup captures `TRSTCTL_SIGNER_AUTH_SECRET_FILE` as an encrypted artifact; keep the backup encryption key outside the backup directory. |
 | **Signer key store** | The issuing CA and audit-evidence private keys, **sealed at rest** (R3.2/AUD-63), plus the atomic PCAS spent-token claim directories. Restoring the whole tree preserves both key identities and single-use refusals. | The full backup encrypts the signer's key-store directory (`--keystore`) file-by-file and hashes the encrypted tree in `manifest.json`; the KEK is still restored separately. Do not restore only the `.key` files. |
 | **Issuing CA certificate** | So the control plane reuses the same CA cert across a restore (stable identity). | The full backup captures `TRSTCTL_CA_CERT_FILE`. |
+| **Compliance reports** | The signed report each completed scheduled-report run recorded lives outside the event log, under `audit.archive_dir` or in the archive object store, so neither the log nor the database can bring it back. | The full backup reads every completed run's report through the archive, checks it against the run's SHA-256, and writes them with an index as one encrypted `report-archive` tree. A run whose report was already gone is listed in the index, not fatal. |
 
 The signer's CA key is now **persisted, sealed at rest** (R3.2) — it survives a
 restart and is part of the backup set above. Restore it (the sealed key store) and
@@ -161,7 +162,12 @@ The artifact directory contains:
   `RecoveredFromPostgresBackup`, written as JSONL with its own SHA-256 trailer.
 - `files/`: the CA certificate in plaintext, plus `.enc` AES-256-GCM envelopes
   for the signer authorization secret and sealed signer key-store files. The
-  audit-evidence key is one sealed handle inside that store.
+  audit-evidence key is one sealed handle inside that store. When any report run
+  has completed, `files/report-archive.enc/` holds the encrypted compliance
+  reports and their index; a full restore puts each report back where its run's
+  reference says (`audit.archive_dir` or the object store, which must be
+  configured on the target) and reads it back against its digest, and the restore
+  drill restores them into its isolated target and attests how many matched.
 - `manifest.json`: artifact hashes, byte counts, sensitivity flags, source paths,
   encryption metadata, plaintext hashes for encrypted artifacts, and recovery
   classes for every persistent table.

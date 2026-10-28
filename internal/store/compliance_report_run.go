@@ -296,3 +296,56 @@ func scanComplianceReportRun(row rowScanner, run *ComplianceReportRun) error {
 	run.EventSequence = uint64(sequence) // #nosec G115 -- event sequence is a positive PostgreSQL bigint.
 	return nil
 }
+
+// ComplianceReportArtifact is where a completed report run's signed report
+// lives (A206: the full backup copies every one).
+type ComplianceReportArtifact struct {
+	RunID          string
+	ArtifactRef    string
+	ArtifactDigest string
+}
+
+// TenantsWithCompletedComplianceReports lists the tenants that have at least
+// one completed report run.
+func (s *Store) TenantsWithCompletedComplianceReports(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — the full backup's cross-tenant enumeration returns tenant UUIDs only; each tenant's report references are read under its forced RLS policy.
+		`SELECT DISTINCT tenant_id::text FROM compliance_report_runs WHERE status = 'completed' ORDER BY tenant_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		out = append(out, tenantID)
+	}
+	return out, rows.Err()
+}
+
+// ListCompletedComplianceReportArtifacts returns where each of the tenant's
+// completed report runs keeps its signed report.
+func (s *Store) ListCompletedComplianceReportArtifacts(ctx context.Context, tenantID string) ([]ComplianceReportArtifact, error) {
+	var out []ComplianceReportArtifact
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT id::text, artifact_ref, artifact_digest FROM compliance_report_runs
+			  WHERE tenant_id = $1 AND status = 'completed' ORDER BY completed_at, id`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var a ComplianceReportArtifact
+			if err := rows.Scan(&a.RunID, &a.ArtifactRef, &a.ArtifactDigest); err != nil {
+				return err
+			}
+			out = append(out, a)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

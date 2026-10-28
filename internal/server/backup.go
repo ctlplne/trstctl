@@ -420,6 +420,16 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 		return backup.FullManifest{}, err
 	}
 	artifacts = append(artifacts, staticArtifacts...)
+	archive, closeArchive, err := reportArchiveFromConfig(cfg)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	defer closeArchive()
+	reports, err := captureFullBackupReports(ctx, st, archive, dir, enc)
+	if err != nil {
+		return backup.FullManifest{}, err
+	}
+	artifacts = append(artifacts, reports)
 
 	manifest := backup.NewFullManifest(artifacts)
 	manifest.Encryption = enc.manifestEncryption()
@@ -703,10 +713,14 @@ type fullRestoreResult struct {
 	Postgres          backup.PostgresStateSummary
 	EventsRestored    int
 	ArtifactsRestored []string
-	StoreHealthy      bool
-	EventLogHealthy   bool
-	SignerHealthy     bool
-	ServerHealthy     bool
+	// ReportsRestored and ReportsMissingAtBackup count the compliance reports
+	// the backup carried (A206).
+	ReportsRestored        int
+	ReportsMissingAtBackup int
+	StoreHealthy           bool
+	EventLogHealthy        bool
+	SignerHealthy          bool
+	ServerHealthy          bool
 }
 
 func runFullRestore(
@@ -761,6 +775,11 @@ func runFullRestore(
 	if err := restoreFullBackupFileArtifacts(manifest, dir, cfg, enc.key); err != nil {
 		return result, err
 	}
+	reports, err := restoreFullBackupReportsFor(ctx, cfg, manifest, dir, enc.key, isolatedEventTarget)
+	if err != nil {
+		return result, err
+	}
+	result.ReportsRestored, result.ReportsMissingAtBackup = reports.Restored, reports.MissingAtBackup
 
 	eventsRestored, err := restoreEventLog(ctx, cfg, filepath.Join(dir, "events.jsonl"), true, isolatedEventTarget, factories...)
 	if err != nil {

@@ -1449,8 +1449,10 @@ never live in the API process. What you can do end to end against the running bi
   bytes with its own `audit:read` credential. A binding the operator withdraws
   later skips the ticket on later runs and the receipt says why. A Jira ticket
   and attaching the report itself to a notice are what comes next. Report files
-  can contain tenant metadata and remain under the operator's backup, retention,
-  access-control, and erasure policy; a log-only restore cannot recover them.
+  can contain tenant metadata. The full backup (`--full-backup-dir`) carries
+  every completed run's report, encrypted, a full restore puts them back where
+  their runs say and checks each digest, and the restore drill attests how many
+  it restored; a log-only restore still cannot recover them.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
   streams. The JWS response and browser download are one versioned JSON envelope
