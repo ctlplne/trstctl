@@ -5,6 +5,7 @@ package enterpriseauth
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"trstctl.com/trstctl/internal/api"
@@ -40,7 +41,7 @@ func buildSCIMConfig(cfg config.SCIM) (*api.SCIMConfig, error) {
 			return nil, fmt.Errorf("auth.scim.tokens[%d] duplicates another SCIM token", i)
 		}
 		seen[hash] = true
-		token := api.SCIMToken{Name: tok.Name, TenantID: tok.TenantID, TokenHash: hash, SubjectAttribute: tok.SubjectAttribute}
+		token := api.SCIMToken{Name: tok.Name, TenantID: tok.TenantID, TokenHash: hash, SubjectAttribute: tok.SubjectAttribute, GroupRoles: tok.GroupRoles}
 		if tok.WritebackConfigured() {
 			// A73: the outbound bearer stays in locked memory for the life of
 			// the process; the core seam sees only the endpoint.
@@ -67,6 +68,18 @@ func buildSCIMConfig(cfg config.SCIM) (*api.SCIMConfig, error) {
 		out.NewWriteback = func(deps api.SCIMWritebackDeps) api.SCIMWritebackHandler {
 			return newSCIMWriteback(deps, writebacks)
 		}
+	}
+	// A207: the handler reads its tokens from a set that reloads the token
+	// files when they change, so a rotated token works without a restart.
+	set, err := newSCIMTokenSet(cfg.Tokens)
+	if err != nil {
+		return nil, err
+	}
+	out.NewHandler = func(_ api.SCIMConfig, d api.SCIMHandlerDeps) http.Handler {
+		if set.empty() {
+			return nil
+		}
+		return newSCIMHandler(set, d)
 	}
 	return &out, nil
 }

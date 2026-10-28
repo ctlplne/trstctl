@@ -32,6 +32,8 @@ type SCIMToken struct {
 	// WritebackEndpoint is the directory's SCIM endpoint this token writes
 	// back to; empty means no writeback for its tenant.
 	WritebackEndpoint string
+	// GroupRoles maps a directory group to the role its members hold (A207).
+	GroupRoles map[string]string
 }
 
 // SCIMWritebackDeps is what the writeback worker reads and records with.

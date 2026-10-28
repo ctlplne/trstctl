@@ -127,8 +127,10 @@ tenant-scoped credential-store reference for confidential-client secrets.
 Directory provisioning requires Enterprise SSO and is served under `/scim/v2` when `auth.scim.enabled` is on.
 An IdP such as Okta or Microsoft Entra sends a tenant-bound bearer token to
 `/scim/v2/Users` and `/scim/v2/Groups`; trstctl hashes the configured token file at
-startup and keeps only the hash in memory. The token chooses the tenant before any
-payload is read, so a SCIM request cannot smuggle a tenant id in its JSON body.
+startup and keeps only the hash in memory, reading the file again within two seconds
+of a change, so rotating a token is rewriting its file. The token chooses the tenant
+before any payload is read, so a SCIM request cannot smuggle a tenant id in its JSON
+body.
 
 Each token also selects the login-subject attribute: `userName` by default, or
 explicit `externalId` when the trusted IdP mapping supplies the exact login
@@ -140,6 +142,10 @@ SCIM users project into the same tenant-member read model used by RBAC. Creating
 updating a user appends a tenant-member upsert event; `active:false` or DELETE appends
 an offboarding event. SCIM groups map to existing RBAC role names: a group named
 `viewer` gives its members the `viewer` role, and removing a member removes that role.
+Any other group needs the token's `group_roles` entry naming the built-in or tenant
+custom role it grants ([custom roles](../configuration.md#custom-roles)); an unmapped
+group, or one mapped to a custom role the tenant has not defined, is refused and grants
+nothing.
 Group cleanup preserves offboarding; a group addition cannot reactivate an inactive user.
 Browser sessions consult the current tenant-member roles on each API request, so
 SCIM provisioning and deprovisioning change real authorization, beyond an admin list.

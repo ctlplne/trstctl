@@ -4555,6 +4555,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventComplianceReportLegalHoldReleased:        {1: true},
 	EventComplianceReportArtifactExpiryRequested:  {1: true},
 	EventComplianceReportArtifactExpired:          {1: true},
+	EventTenantCustomRoleUpserted:                 {1: true},
+	EventTenantCustomRoleDeleted:                  {1: true},
 	EventTSACertificateRevoked:                    {1: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
@@ -4949,6 +4951,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyComplianceReportRetentionTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyTenantCustomRoleTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {

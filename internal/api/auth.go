@@ -820,10 +820,14 @@ func (a *API) sessionRoleSummary(ctx context.Context, sess auth.Session) ([]stri
 	if err != nil {
 		return nil, nil, err
 	}
+	resolved, err := a.resolveRoles(ctx, sess.TenantID, roleNames)
+	if err != nil {
+		return nil, nil, err
+	}
 	seen := map[string]bool{}
 	permissions := make([]string, 0, len(roleNames))
 	for _, name := range roleNames {
-		role, ok := a.roles.Role(name)
+		role, ok := resolved[name]
 		if !ok {
 			continue
 		}

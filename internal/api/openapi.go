@@ -4323,7 +4323,12 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "tenant_id", "status", "idempotency_key", "created_at", "destinations")
 	role := object(map[string]*Schema{
 		"name": str(), "permissions": {Type: "array", Items: str()},
+		"description": str(), "custom": {Type: "boolean", Description: "true for a role the tenant defined"},
 	}, "name", "permissions")
+	tenantCustomRoleRequest := object(map[string]*Schema{
+		"description": {Type: "string", Description: "at most 512 characters"},
+		"permissions": {Type: "array", Items: str(), Description: "one or more permissions you hold, from the custom role vocabulary"},
+	}, "permissions")
 	oidcTenantMapping := object(map[string]*Schema{
 		"subject": str(), "claim": str(), "group": str(), "tenant_id": uuid(),
 		"roles": {Type: "array", Items: str()},
@@ -7899,6 +7904,7 @@ func componentSchemas() map[string]*Schema {
 		"ResponseIntegrationDispatch":              responseIntegrationDispatch,
 		"Role":                                     role,
 		"RoleList":                                 list("Role"),
+		"TenantCustomRoleRequest":                  tenantCustomRoleRequest,
 		"OIDCTenantMapping":                        oidcTenantMapping,
 		"OIDCMappingStatus":                        oidcMappingStatus,
 		"Member":                                   member,

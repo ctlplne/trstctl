@@ -273,7 +273,7 @@ func (a *API) ValidateTenantBaseline(b TenantBaseline) error {
 		if len(x.Roles) == 0 {
 			return fmt.Errorf("baseline member %s: roles are required", x.Subject)
 		}
-		if err := a.validateRoleNames(x.Roles); err != nil {
+		if err := a.validateRoleNameShapes(x.Roles); err != nil {
 			return fmt.Errorf("baseline member %s: %w", x.Subject, err)
 		}
 	}
@@ -716,7 +716,7 @@ func (a *API) baselineMemberStep(tenantID string, x BaselineMember) baselineStep
 			return s, &got, nil
 		},
 		apply: func(ctx context.Context, current any) (string, string, error) {
-			if err := a.validateRoleNames(x.Roles); err != nil {
+			if err := a.validateRoleNames(ctx, tenantID, x.Roles); err != nil {
 				return "", "", err
 			}
 			if _, err := a.orch.UpsertTenantMember(ctx, tenantID, store.TenantMember{

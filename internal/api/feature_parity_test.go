@@ -326,8 +326,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// onto the SPIFFE Workload API row.
 	// A206's report legal hold and release raised it to 568, mapped onto the
 	// compliance reporting row.
-	if len(out) != 568 {
-		t.Fatalf("OpenAPI operationIds = %d, want 568", len(out))
+	// A207's tenant custom role define and delete raised it to 570, mapped onto
+	// the access row.
+	if len(out) != 570 {
+		t.Fatalf("OpenAPI operationIds = %d, want 570", len(out))
 	}
 	return out
 }

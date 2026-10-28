@@ -17,7 +17,10 @@ import (
 
 type roleResponse struct {
 	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
 	Permissions []string `json:"permissions"`
+	// Custom marks a tenant custom role (A207).
+	Custom bool `json:"custom,omitempty"`
 }
 
 type roleListResponse struct {
@@ -106,7 +109,7 @@ type apiTokenRevokeRequest struct {
 	Reason string `json:"reason"`
 }
 
-func (a *API) listAccessRoles(w http.ResponseWriter, _ *http.Request) {
+func (a *API) listAccessRoles(w http.ResponseWriter, r *http.Request) {
 	roles := a.roles.Roles()
 	items := make([]roleResponse, 0, len(roles))
 	for _, role := range roles {
@@ -115,6 +118,16 @@ func (a *API) listAccessRoles(w http.ResponseWriter, _ *http.Request) {
 			perms = append(perms, string(p))
 		}
 		items = append(items, roleResponse{Name: role.Name, Permissions: perms})
+	}
+	if tenantID, ok := a.tenant(r); ok && a.store != nil {
+		custom, err := a.store.ListTenantCustomRoles(r.Context(), tenantID)
+		if err != nil {
+			a.writeError(w, err)
+			return
+		}
+		for _, role := range custom {
+			items = append(items, roleResponse{Name: role.Name, Description: role.Description, Permissions: role.Permissions, Custom: true})
+		}
 	}
 	a.writeJSON(w, http.StatusOK, roleListResponse{Items: items})
 }
@@ -197,7 +210,7 @@ func (a *API) upsertMember(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		if err := a.validateRoleNames(req.Roles); err != nil {
+		if err := a.validateRoleNames(ctx, tenantID, req.Roles); err != nil {
 			return 0, nil, err
 		}
 		if err := a.authorizeRoleAssignment(ctx, tenantID, subject, req.Roles, req.Roles != nil); err != nil {
@@ -244,9 +257,29 @@ func (a *API) authorizeRoleAssignment(ctx context.Context, tenantID, subject str
 	// permission, so an operator or a role-provisioning token cannot create an
 	// administrator (F266). Other roles stay assignable with access:role.assign.
 	if !principal.Can(authz.Wildcard, target) {
+		resolved, err := a.resolveRoles(ctx, tenantID, roles)
+		if err != nil {
+			return err
+		}
 		for _, name := range roles {
-			if role, ok := a.roles.Role(strings.TrimSpace(name)); ok && role.Allows(authz.Wildcard) {
-				reason := "only an administrator can grant the " + role.Name + " role, which holds every permission"
+			role, ok := resolved[strings.TrimSpace(name)]
+			if !ok {
+				continue
+			}
+			reason := ""
+			if role.Allows(authz.Wildcard) {
+				reason = "only an administrator can grant the " + role.Name + " role, which holds every permission"
+			} else if _, builtin := authz.BuiltinRoles()[role.Name]; !builtin {
+				// A207: a custom role is assignable only by a caller holding
+				// every permission it grants.
+				for _, p := range role.Permissions {
+					if !principal.Can(p, target) {
+						reason = "granting the " + role.Name + " role needs " + string(p) + ", which you do not hold"
+						break
+					}
+				}
+			}
+			if reason != "" {
 				if err := a.recordRoleAssignDecision(ctx, tenantID, principal, subject, roles, "deny", reason); err != nil {
 					return err
 				}
@@ -384,12 +417,18 @@ func (a *API) revokeAPIToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (a *API) validateRoleNames(roles []string) error {
+func (a *API) validateRoleNames(ctx context.Context, tenantID string, roles []string) error {
 	for _, name := range roles {
 		if name == "" {
 			return errStatus(http.StatusBadRequest, "role names must be non-empty")
 		}
-		if _, ok := a.roles.Role(name); !ok {
+	}
+	resolved, err := a.resolveRoles(ctx, tenantID, roles)
+	if err != nil {
+		return err
+	}
+	for _, name := range roles {
+		if _, ok := resolved[name]; !ok {
 			return errStatus(http.StatusUnprocessableEntity, "unknown role "+name)
 		}
 	}

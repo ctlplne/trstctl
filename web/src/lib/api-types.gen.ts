@@ -8380,6 +8380,8 @@ export interface RogueInstalledTarget {
 }
 
 export interface Role {
+  custom?: boolean;
+  description?: string;
   name: string;
   permissions: string[];
 }
@@ -9546,6 +9548,11 @@ export interface TSARotateRequest {
 export interface TSARotation {
   current: TSACertificate;
   previous: TSACertificate;
+}
+
+export interface TenantCustomRoleRequest {
+  description?: string;
+  permissions: string[];
 }
 
 export interface TenantKeyDomainMigrateRequest {

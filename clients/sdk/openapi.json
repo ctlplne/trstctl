@@ -35059,6 +35059,13 @@
       },
       "Role": {
         "properties": {
+          "custom": {
+            "description": "true for a role the tenant defined",
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -40060,6 +40067,25 @@
         ],
         "type": "object"
       },
+      "TenantCustomRoleRequest": {
+        "properties": {
+          "description": {
+            "description": "at most 512 characters",
+            "type": "string"
+          },
+          "permissions": {
+            "description": "one or more permissions you hold, from the custom role vocabulary",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "type": "object"
+      },
       "TenantKeyDomainMigrateRequest": {
         "properties": {
           "wrapper_id": {
@@ -43162,8 +43188,143 @@
             "SessionCookie": []
           }
         ],
-        "summary": "List built-in and configured access roles",
+        "summary": "List built-in, configured and tenant custom access roles",
         "x-trstctl-permission": "access:read"
+      }
+    },
+    "/api/v1/access/roles/{name}": {
+      "delete": {
+        "operationId": "deleteTenantCustomRole",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "tenant custom role name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Delete a tenant custom role no member holds",
+        "x-trstctl-permission": "access:write"
+      },
+      "put": {
+        "operationId": "defineTenantCustomRole",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "tenant custom role name",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenantCustomRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Role"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Define or redefine a tenant custom role from permissions you hold",
+        "x-trstctl-permission": "access:write"
       }
     },
     "/api/v1/access/session-requests": {

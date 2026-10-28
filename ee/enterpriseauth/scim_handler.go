@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +35,8 @@ type scimToken struct {
 	Name             string
 	TenantID         string
 	TokenHash        string
+	// GroupRoles maps a directory group to the role its members hold (A207).
+	GroupRoles map[string]string
 }
 
 type scimHTTPError struct {
@@ -50,27 +53,46 @@ func normalizeSCIM(cfg *api.SCIMConfig) map[string]scimToken {
 	}
 	out := map[string]scimToken{}
 	for _, tok := range cfg.Tokens {
-		if tok.TenantID == "" || tok.TokenHash == "" {
-			continue
+		if normalized, ok := normalizeSCIMToken(tok.Name, tok.TenantID, tok.TokenHash, tok.SubjectAttribute, tok.GroupRoles); ok {
+			out[tok.TokenHash] = normalized
 		}
-		name := tok.Name
-		if name == "" {
-			name = "scim"
-		}
-		attribute := strings.TrimSpace(tok.SubjectAttribute)
-		if attribute == "" {
-			attribute = "userName"
-		}
-		if attribute != "userName" && attribute != "externalId" {
-			continue
-		}
-		out[tok.TokenHash] = scimToken{Name: name, TenantID: tok.TenantID, TokenHash: tok.TokenHash, SubjectAttribute: attribute}
 	}
 	return out
 }
 
+func normalizeSCIMToken(name, tenantID, hash, subjectAttribute string, groupRoles map[string]string) (scimToken, bool) {
+	if tenantID == "" || hash == "" {
+		return scimToken{}, false
+	}
+	if name == "" {
+		name = "scim"
+	}
+	attribute := strings.TrimSpace(subjectAttribute)
+	if attribute == "" {
+		attribute = "userName"
+	}
+	if attribute != "userName" && attribute != "externalId" {
+		return scimToken{}, false
+	}
+	roles := make(map[string]string, len(groupRoles))
+	for group, role := range groupRoles {
+		roles[strings.TrimSpace(group)] = strings.TrimSpace(role)
+	}
+	return scimToken{Name: name, TenantID: tenantID, TokenHash: hash, SubjectAttribute: attribute, GroupRoles: roles}, true
+}
+
+// mapsTo reports whether a group_roles entry targets the role.
+func (t scimToken) mapsTo(role string) bool {
+	for _, target := range t.GroupRoles {
+		if target == role {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *scimHandler) scimTenant(r *http.Request) (scimToken, string, bool) {
-	if len(a.scimTokens) == 0 {
+	if a.scimTokens.empty() {
 		return scimToken{}, "", false
 	}
 	raw := bearerTokenBytes(r)
@@ -79,7 +101,7 @@ func (a *scimHandler) scimTenant(r *http.Request) (scimToken, string, bool) {
 	}
 	defer secret.Wipe(raw)
 	hash := crypto.SHA256Hex(raw)
-	got, ok := a.scimTokens[hash]
+	got, ok := a.scimTokens.lookup(hash)
 	return got, hash, ok
 }
 
@@ -307,7 +329,7 @@ func (a *scimHandler) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
 	if !decodeSCIMRaw(w, raw, &in) {
 		return
 	}
-	if _, err := scimGroupRole(a.roles, in); err != nil {
+	if _, err := a.scimGroupTarget(tok, in.DisplayName); err != nil {
 		writeSCIMMappedError(w, err)
 		return
 	}
@@ -325,9 +347,10 @@ func (a *scimHandler) scimListGroups(w http.ResponseWriter, r *http.Request) {
 	}
 	base := scimBase(r)
 	roles := a.roles.Roles()
-	resources := make([]any, 0, len(roles))
-	for _, role := range roles {
-		g, err := a.groupToSCIM(r.Context(), tok, role.Name, base)
+	resources := make([]any, 0, len(roles)+len(tok.GroupRoles))
+	for _, group := range a.scimGroupNames(tok) {
+		role, _ := a.scimGroupTarget(tok, group)
+		g, err := a.groupToSCIM(r.Context(), tok, group, role, base)
 		if err != nil {
 			writeSCIMError(w, http.StatusInternalServerError, "", "list groups failed")
 			return
@@ -342,12 +365,13 @@ func (a *scimHandler) scimGetGroup(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	roleName := strings.TrimSpace(r.PathValue("id"))
-	if _, ok := a.roles.Role(roleName); !ok {
+	group := strings.TrimSpace(r.PathValue("id"))
+	roleName, err := a.scimGroupTarget(tok, group)
+	if err != nil {
 		writeSCIMError(w, http.StatusNotFound, "", "group not found")
 		return
 	}
-	g, err := a.groupToSCIM(r.Context(), tok, roleName, scimBase(r))
+	g, err := a.groupToSCIM(r.Context(), tok, group, roleName, scimBase(r))
 	if err != nil {
 		writeSCIMError(w, http.StatusInternalServerError, "", "get group failed")
 		return
@@ -361,8 +385,8 @@ func (a *scimHandler) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer secret.Wipe(raw)
-	roleName := strings.TrimSpace(r.PathValue("id"))
-	if _, ok := a.roles.Role(roleName); !ok {
+	group := strings.TrimSpace(r.PathValue("id"))
+	if _, err := a.scimGroupTarget(tok, group); err != nil {
 		writeSCIMError(w, http.StatusNotFound, "", "group not found")
 		return
 	}
@@ -370,13 +394,13 @@ func (a *scimHandler) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 	if !decodeSCIMRaw(w, raw, &patch) {
 		return
 	}
-	if err := scimGroupPatchRename(roleName, patch); err != nil {
+	if err := scimGroupPatchRename(group, patch); err != nil {
 		writeSCIMMappedError(w, err)
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
 	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
-		return a.opPatchGroup(ctx, tok, scimBase(r), roleName, patch)
+		return a.opPatchGroup(ctx, tok, scimBase(r), group, patch)
 	})
 }
 
@@ -386,14 +410,14 @@ func (a *scimHandler) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer secret.Wipe(raw)
-	roleName := strings.TrimSpace(r.PathValue("id"))
-	if _, ok := a.roles.Role(roleName); !ok {
+	group := strings.TrimSpace(r.PathValue("id"))
+	if _, err := a.scimGroupTarget(tok, group); err != nil {
 		writeSCIMError(w, http.StatusNotFound, "", "group not found")
 		return
 	}
 	key, prevKey := scimIdempotencyKey(r, raw)
 	a.scimMutate(w, r, tok, key, prevKey, raw, func(ctx context.Context, _ string) (int, any, error) {
-		return a.opDeleteGroup(ctx, tok, roleName)
+		return a.opDeleteGroup(ctx, tok, group)
 	})
 }
 
@@ -455,7 +479,7 @@ func (a *scimHandler) removeRoleFromMember(ctx context.Context, tok scimToken, s
 	return err
 }
 
-func (a *scimHandler) groupToSCIM(ctx context.Context, tok scimToken, roleName, base string) (scim.Group, error) {
+func (a *scimHandler) groupToSCIM(ctx context.Context, tok scimToken, group, roleName, base string) (scim.Group, error) {
 	tenantID := tok.TenantID
 	members, err := a.store.ListTenantMembersByRole(ctx, tenantID, roleName)
 	if err != nil {
@@ -463,9 +487,9 @@ func (a *scimHandler) groupToSCIM(ctx context.Context, tok scimToken, roleName, 
 	}
 	g := scim.Group{
 		Schemas:     []string{scim.SchemaGroup},
-		ID:          roleName,
-		DisplayName: roleName,
-		Meta:        &scim.Meta{ResourceType: "Group", Location: base + "/Groups/" + roleName},
+		ID:          group,
+		DisplayName: group,
+		Meta:        &scim.Meta{ResourceType: "Group", Location: base + "/Groups/" + url.PathEscape(group)},
 	}
 	for _, m := range members {
 		if scimMemberVisible(tok, m) {
@@ -875,6 +899,10 @@ func NewSCIMHandler(cfg api.SCIMConfig, d api.SCIMHandlerDeps) http.Handler {
 	if len(tokens) == 0 {
 		return nil
 	}
+	return newSCIMHandler(staticSCIMTokens(tokens), d)
+}
+
+func newSCIMHandler(tokens *scimTokenSet, d api.SCIMHandlerDeps) http.Handler {
 	h := &scimHandler{store: d.Store, orch: d.Orchestrator, idem: d.Idempotency, roles: d.Roles, scimTokens: tokens, allowRequest: d.AllowRequest}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /scim/v2/ServiceProviderConfig", h.scimServiceProviderConfig)
@@ -898,7 +926,7 @@ type scimHandler struct {
 	orch         *orchestrator.Orchestrator
 	idem         *orchestrator.Idempotency
 	roles        *authz.Registry
-	scimTokens   map[string]scimToken
+	scimTokens   *scimTokenSet
 	allowRequest func(http.ResponseWriter, *http.Request, string, string) bool
 }
 
@@ -968,30 +996,72 @@ func (a *scimHandler) opDeleteUser(ctx context.Context, tok scimToken, subject s
 	return http.StatusNoContent, nil, nil
 }
 
-// scimGroupRole resolves a SCIM group to the configured RBAC role it must
-// name; groups never create roles.
-func scimGroupRole(roles *authz.Registry, in scim.Group) (string, error) {
-	roleName := strings.TrimSpace(in.DisplayName)
-	if roleName == "" {
+// scimGroupTarget resolves a SCIM group to the role its members hold (A207):
+// the token's group_roles entry first, then a built-in or configured role of
+// the same name that no entry targets. Any other group is refused, so a group
+// grants nothing unless it is mapped or named for a role; groups never create
+// roles.
+func (a *scimHandler) scimGroupTarget(tok scimToken, group string) (string, error) {
+	group = strings.TrimSpace(group)
+	if group == "" {
 		return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "displayName is required"}
 	}
-	if _, ok := roles.Role(roleName); !ok {
-		return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "SCIM group must match a configured RBAC role"}
+	if role, ok := tok.GroupRoles[group]; ok {
+		return role, nil
 	}
-	return roleName, nil
+	if _, ok := a.roles.Role(group); ok && !tok.mapsTo(group) {
+		return group, nil
+	}
+	return "", scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "SCIM group must match a configured RBAC role or a group_roles mapping"}
 }
 
-func scimGroupPatchRename(roleName string, patch scim.PatchOp) error {
+// scimGroupNames lists a token's groups: its mapped groups, then each built-in
+// or configured role no mapping targets.
+func (a *scimHandler) scimGroupNames(tok scimToken) []string {
+	names := make([]string, 0, len(tok.GroupRoles))
+	for group := range tok.GroupRoles {
+		names = append(names, group)
+	}
+	sort.Strings(names)
+	for _, role := range a.roles.Roles() {
+		if _, mapped := tok.GroupRoles[role.Name]; !mapped && !tok.mapsTo(role.Name) {
+			names = append(names, role.Name)
+		}
+	}
+	return names
+}
+
+// requireTenantRole refuses a group whose mapped custom role the tenant has
+// not defined, so the push grants nothing rather than a dangling name.
+func (a *scimHandler) requireTenantRole(ctx context.Context, tok scimToken, group, role string) error {
+	if _, ok := a.roles.Role(role); ok {
+		return nil
+	}
+	if _, err := a.store.GetTenantCustomRole(ctx, tok.TenantID, role); err != nil {
+		if store.IsNotFound(err) {
+			return scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue",
+				detail: "group " + group + " maps to role " + role + ", which this tenant has not defined"}
+		}
+		return err
+	}
+	return nil
+}
+
+func scimGroupPatchRename(group string, patch scim.PatchOp) error {
 	gp := scim.ParseGroupPatch(patch.Operations)
-	if gp.DisplayName != nil && strings.TrimSpace(*gp.DisplayName) != roleName {
-		return scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "renaming SCIM groups is not supported; group id is the RBAC role name"}
+	if gp.DisplayName != nil && strings.TrimSpace(*gp.DisplayName) != group {
+		return scimHTTPError{status: http.StatusBadRequest, scimType: "invalidValue", detail: "renaming SCIM groups is not supported; group id is its name"}
 	}
 	return nil
 }
 
 func (a *scimHandler) opCreateGroup(ctx context.Context, tok scimToken, base string, in scim.Group) (int, any, string, error) {
-	roleName, err := scimGroupRole(a.roles, in)
+	group := strings.TrimSpace(in.DisplayName)
+	roleName, err := a.scimGroupTarget(tok, group)
 	if err != nil {
+		return 0, nil, "", err
+	}
+	if err := a.requireTenantRole(ctx, tok, group, roleName); err != nil {
 		return 0, nil, "", err
 	}
 	for _, m := range in.Members {
@@ -1002,16 +1072,20 @@ func (a *scimHandler) opCreateGroup(ctx context.Context, tok scimToken, base str
 			return 0, nil, "", err
 		}
 	}
-	g, err := a.groupToSCIM(ctx, tok, roleName, base)
+	g, err := a.groupToSCIM(ctx, tok, group, roleName, base)
 	if err != nil {
 		return 0, nil, "", err
 	}
-	return http.StatusCreated, g, roleName, nil
+	return http.StatusCreated, g, group, nil
 }
 
-func (a *scimHandler) opPatchGroup(ctx context.Context, tok scimToken, base, roleName string, patch scim.PatchOp) (int, any, error) {
-	if _, ok := a.roles.Role(roleName); !ok {
+func (a *scimHandler) opPatchGroup(ctx context.Context, tok scimToken, base, group string, patch scim.PatchOp) (int, any, error) {
+	roleName, err := a.scimGroupTarget(tok, group)
+	if err != nil {
 		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "group not found"}
+	}
+	if err := a.requireTenantRole(ctx, tok, group, roleName); err != nil {
+		return 0, nil, err
 	}
 	gp := scim.ParseGroupPatch(patch.Operations)
 	if gp.ReplaceAll != nil {
@@ -1048,15 +1122,16 @@ func (a *scimHandler) opPatchGroup(ctx context.Context, tok scimToken, base, rol
 			return 0, nil, err
 		}
 	}
-	g, err := a.groupToSCIM(ctx, tok, roleName, base)
+	g, err := a.groupToSCIM(ctx, tok, group, roleName, base)
 	if err != nil {
 		return 0, nil, err
 	}
 	return http.StatusOK, g, nil
 }
 
-func (a *scimHandler) opDeleteGroup(ctx context.Context, tok scimToken, roleName string) (int, any, error) {
-	if _, ok := a.roles.Role(roleName); !ok {
+func (a *scimHandler) opDeleteGroup(ctx context.Context, tok scimToken, group string) (int, any, error) {
+	roleName, err := a.scimGroupTarget(tok, group)
+	if err != nil {
 		return 0, nil, scimHTTPError{status: http.StatusNotFound, detail: "group not found"}
 	}
 	members, err := a.store.ListTenantMembersByRole(ctx, tok.TenantID, roleName)

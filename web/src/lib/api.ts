@@ -491,7 +491,9 @@ import type {
   ResponseIntegrationDispatchRequest,
   RogueCertificatePosture,
   RogueCertificateTakedownRequest,
+  Role,
   RoleList,
+  TenantCustomRoleRequest,
   LifecycleAutomationPlan,
   CertificateAssuranceRecord,
   ValidityReadinessExport,
@@ -1342,7 +1344,9 @@ export type {
   ResponseIntegrationDispatch,
   ResponseIntegrationDispatchRequest,
   RogueCertificatePosture,
+  Role,
   RoleList,
+  TenantCustomRoleRequest,
   LifecycleAutomationPlan,
   RotationRun,
   RotationRunList,
@@ -2179,6 +2183,8 @@ export interface Api {
   revokeManagedKey(keyId: string, idempotencyKey?: string, provider?: string): Promise<ManagedKey | ManagedKeyOperation>;
   zeroizeManagedKey(keyId: string, idempotencyKey?: string, provider?: string): Promise<ManagedKey | ManagedKeyOperation>;
   accessRoles(): Promise<RoleList>;
+  defineTenantCustomRole(name: string, body: TenantCustomRoleRequest): Promise<Role>;
+  deleteTenantCustomRole(name: string): Promise<void>;
   oidcMappingStatus(): Promise<OIDCMappingStatus>;
   members(options?: { limit?: number; cursor?: string; includeOffboarded?: boolean }): Promise<MemberList>;
   upsertMember(subject: string, input: MemberRequest): Promise<Member>;
@@ -2978,6 +2984,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   revokeManagedKey: (keyId, idempotencyKey, provider) => managedKeyAction("revoke", keyId, idempotencyKey, provider),
   zeroizeManagedKey: (keyId, idempotencyKey, provider) => managedKeyAction("zeroize", keyId, idempotencyKey, provider),
   accessRoles: () => req<RoleList>("/api/v1/access/roles"),
+  defineTenantCustomRole: (name, body) => mutate<Role>("PUT", `/api/v1/access/roles/${encodeURIComponent(name)}`, body),
+  deleteTenantCustomRole: (name) => mutate<void>("DELETE", `/api/v1/access/roles/${encodeURIComponent(name)}`),
   oidcMappingStatus: () => req<OIDCMappingStatus>("/api/v1/access/oidc-mapping"),
   members: (options) => req<MemberList>(`/api/v1/access/members${accessMembersQueryString(options)}`),
   upsertMember: (subject, input) => mutate<Member>("PUT", `/api/v1/access/members/${encodeURIComponent(subject)}`, input),

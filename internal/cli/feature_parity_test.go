@@ -367,8 +367,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// SPIFFE Workload API row.
 	// A206's `compliance report-runs legal-hold|release-hold` raised it to
 	// 630, on the compliance reporting row.
-	if len(out) != 630 {
-		t.Fatalf("CLI commands = %d, want 630", len(out))
+	// A207's `access roles define|delete` raised it to 632, on the access row.
+	if len(out) != 632 {
+		t.Fatalf("CLI commands = %d, want 632", len(out))
 	}
 	return out
 }

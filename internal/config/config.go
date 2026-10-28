@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -842,6 +844,11 @@ type SCIMToken struct {
 	// neither; the endpoint must be https, or http to a loopback host.
 	WritebackEndpoint  string `json:"writeback_endpoint,omitempty"`
 	WritebackTokenFile string `json:"writeback_token_file,omitempty"`
+	// GroupRoles maps a directory group's displayName to the role its members
+	// hold in the tenant (A207): a built-in role or a tenant custom role. A
+	// group named for a built-in role needs no entry; any other group is
+	// refused unless mapped here.
+	GroupRoles map[string]string `json:"group_roles,omitempty"`
 }
 
 // WritebackConfigured reports whether this token writes member changes back
@@ -5459,6 +5466,36 @@ func (s SCIM) validate() []error {
 		}
 		if tok.WritebackConfigured() {
 			errs = append(errs, validateSCIMWriteback(i, tok)...)
+		}
+		errs = append(errs, validateSCIMGroupRoles(i, tok.GroupRoles)...)
+	}
+	return errs
+}
+
+var scimGroupRoleName = regexp.MustCompile(`^[a-z][a-z0-9-]{1,62}$`)
+
+// validateSCIMGroupRoles checks a token's group map: named groups, well-formed
+// role names (a tenant custom role must still be defined when a group is
+// pushed), and one group per role so a role's members are one group's members.
+func validateSCIMGroupRoles(i int, groupRoles map[string]string) []error {
+	var errs []error
+	byRole := map[string]string{}
+	groups := make([]string, 0, len(groupRoles))
+	for group := range groupRoles {
+		groups = append(groups, group)
+	}
+	sort.Strings(groups)
+	for _, group := range groups {
+		role := strings.TrimSpace(groupRoles[group])
+		switch {
+		case strings.TrimSpace(group) == "" || len(group) > 256:
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].group_roles: a group name is 1 to 256 characters", i))
+		case !scimGroupRoleName.MatchString(role):
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].group_roles[%q]: %q is not a role name", i, group, role))
+		case byRole[role] != "":
+			errs = append(errs, fmt.Errorf("auth.scim.tokens[%d].group_roles: groups %q and %q both map to %s; map one group per role", i, byRole[role], group, role))
+		default:
+			byRole[role] = group
 		}
 	}
 	return errs

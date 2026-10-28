@@ -3578,14 +3578,14 @@ than sending an operator looking for a credential that was never there.
   from one (registering its core tenant when needed), `.../template-drift` reads
   its drift, and a rollout applies a new version across customers after a
   preview whose fingerprint it must match. What a template can say is what core
-  holds: "roles" are built-in role grants to named members, because tenants have
-  no custom role definitions of their own yet; a CA binding is an issuer record
+  holds: "roles" are role grants to named members, built-in or a custom role the
+  tenant has already defined (a template does not define custom roles); a CA
+  binding is an issuer record
   (a changed chain binds a new issuer and the old one stays for what it issued);
   connector defaults are deployment targets. A template's report schedule can
   carry `dispatch`, announcing each run on the customer's channel of that type.
   The Provider console does not show templates yet; they are served on the
-  Provider API. Tenant-defined custom roles and a console view are what comes
-  next.
+  Provider API. A console view is what comes next.
 - Provider console (L3 + AUD-58): the web app has a `/provider` route — a
   console for the provider's own staff, separate from the tenant plane. It lists
   customer tenants with their lifecycle state and drives the `/provider/v1` API
@@ -4213,11 +4213,14 @@ operation reports its own status and body, `failOnErrors` stops the request
 after that many failures, and the whole request is one idempotent mutation —
 a replay under the same `Idempotency-Key` returns the recorded response.
 Current SCIM limits are deliberate and fail closed: password management and
-password-change flows are not implemented; SCIM groups do not create new
-custom roles (a group's `displayName` or id must match a configured RBAC role
-such as `admin`, `operator`, `viewer`, `auditor`, or `ra-officer`). Token
-rotation is operator-managed: write a new token file and restart the control
-plane so the new hash loads.
+password-change flows are not implemented; SCIM groups never create roles. A
+group grants a role only when its name is a configured RBAC role (such as
+`admin`, `operator`, `viewer`, `auditor`, or `ra-officer`) or the token's
+`group_roles` maps it to a configured RBAC role or a custom role the tenant
+defined; any other group is refused and grants nothing. Inbound token rotation is rewriting the token file: the new
+hash loads within two seconds without a restart, and a rewrite that cannot be
+used keeps the last good token. The writeback bearer is still read only at
+startup.
 
 Directory writeback (A73) is served when a token also names the directory's
 own SCIM 2.0 endpoint (`auth.scim.tokens[].writeback_endpoint` and

@@ -11560,6 +11560,8 @@ RogueInstalledTarget = TypedDict(
 Role = TypedDict(
     'Role',
     {
+        'custom': bool,
+        'description': str,
         'name': str,
         'permissions': list[str],
     },
@@ -13150,6 +13152,15 @@ TSARotation = TypedDict(
     {
         'current': dict[str, Any],
         'previous': dict[str, Any],
+    },
+    total=False,
+)
+
+TenantCustomRoleRequest = TypedDict(
+    'TenantCustomRoleRequest',
+    {
+        'description': str,
+        'permissions': list[str],
     },
     total=False,
 )

@@ -917,6 +917,7 @@ public final class OpenApiSchemas {
       "TSARevokeRequest",
       "TSARotateRequest",
       "TSARotation",
+      "TenantCustomRoleRequest",
       "TenantKeyDomainMigrateRequest",
       "TenantKeyDomainRotateRequest",
       "TenantKeyDomainSealReceipt",

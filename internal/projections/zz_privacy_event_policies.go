@@ -1689,6 +1689,9 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventComplianceReportLegalHoldReleased, 1}:       privacyPayloadShape[ComplianceReportLegalHold](),
 		{EventComplianceReportArtifactExpiryRequested, 1}: privacyPayloadShape[ComplianceReportArtifactExpiry](),
 		{EventComplianceReportArtifactExpired, 1}:         privacyPayloadShape[ComplianceReportArtifactExpiry](),
+		// A207: a tenant custom role's name, description and permissions.
+		{EventTenantCustomRoleUpserted, 1}: privacyPayloadShape[TenantCustomRoleUpserted](),
+		{EventTenantCustomRoleDeleted, 1}:  privacyPayloadShape[TenantCustomRoleDeleted](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
 		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(

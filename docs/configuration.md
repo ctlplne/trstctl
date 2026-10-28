@@ -1114,6 +1114,23 @@ a new member event and new browser login; the old session remains revoked.
 `default_roles` to `admin` so the first operator can sign in; in production, leave it
 unset or use a read-only role and grant more through member records or mappings.
 
+### Custom roles
+
+A tenant can define its own roles as named subsets of the permissions the
+built-in roles grant: `PUT /api/v1/access/roles/{name}` with `permissions` and an
+optional `description` (`trstctl-cli access roles define NAME -f role.json`, or
+**People and roles → Define custom role**). Defining needs `access:write` and every
+permission the role grants, so nobody can define a role broader than themselves;
+assigning one to a member also needs `access:role.assign` and every permission it
+grants. Names are 2 to 63 lowercase letters, digits or hyphens; built-in names are
+taken, and the wildcard and the agent channel's machine permissions are never
+grantable. A role resolves on every request, so redefining it changes what its
+holders can do at once on every replica. `DELETE /api/v1/access/roles/{name}`
+(`access roles delete`) deletes a role no member holds; a held role is refused with
+409. `GET /api/v1/access/roles` lists the built-in roles and the tenant's custom
+roles (`custom: true`). A directory group grants a custom role through the SCIM
+token's `group_roles`, below.
+
 ## SCIM provisioning
 
 SCIM 2.0 provisioning requires Enterprise SSO and is optional and separate from browser sign-on. Enable it when
@@ -1124,9 +1141,20 @@ IdPs use `POST /scim/v2/Users`, `PATCH /scim/v2/Users/{id}`,
 
 Each SCIM bearer token is bound to exactly one tenant in config. trstctl reads the raw
 token from `auth.scim.tokens[].token_file`, hashes it at startup, wipes the raw bytes,
-and keeps only the hash. The token selects the tenant for every SCIM request; tenant
-ids in SCIM payloads are ignored. Groups map to configured RBAC role names, so an IdP
-group with display name `viewer` grants the built-in `viewer` role to its members.
+and keeps only the hash. When the file changes (its size, modification time, or the
+file itself), trstctl reads it again within two seconds, so rotating a token is
+rewriting its file, and the old token stops working then; no restart is needed. A
+rewrite it cannot use (an empty or unreadable file, or a token another entry already
+uses) is logged and the last good token stays in effect. Adding a token entry is a
+configuration change and needs a restart. The token selects the tenant for every
+SCIM request; tenant ids in SCIM payloads are ignored. A group named for a built-in
+role grants that role, so an IdP group with display name `viewer` grants the built-in
+`viewer` role to its members. Any other group needs an entry in
+`auth.scim.tokens[].group_roles`, mapping the group's display name to a built-in role
+or a [custom role](#custom-roles); a group with no entry is refused and grants
+nothing, and a group mapped to a custom role the tenant has not defined is refused
+with that role's name. Each role takes at most one group, and a mapped role is listed
+under its group's name.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -1177,7 +1205,7 @@ https, or http only to a loopback host). A role change or offboard an operator
 makes in trstctl to a member that token provisioned is then written to the
 directory's User (`active` and `roles`), read back, and recorded as
 `scim.writeback.recorded`. The outbound bearer is loaded at startup into locked
-memory; rotate it like the inbound token, by writing the file and restarting.
+memory and read only at startup: rotate it by writing the file and restarting.
 
 The environment variables replace the token list as one complete single-token
 configuration. A mapping-only environment override fails validation when enabled;
@@ -1194,6 +1222,9 @@ auth:
         tenant_id: 22222222-2222-2222-2222-222222222222
         token_file: /etc/trstctl/scim/okta-payments.token
         subject_attribute: externalId # IdP mapping must supply the exact login subject
+        group_roles: # directory group display name -> built-in or tenant custom role
+          payments-ops: payments-operator
+          Platform Admins: admin
       - name: entra-platform
         tenant_id: 33333333-3333-3333-3333-333333333333
         token_file: /etc/trstctl/scim/entra-platform.token

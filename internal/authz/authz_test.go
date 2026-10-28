@@ -378,3 +378,27 @@ func TestReadOnlyAndAutomationRolesCannotRevealSecrets(t *testing.T) {
 		}
 	}
 }
+
+// A207: a tenant custom role draws only on concrete permissions a person can
+// hold: never the wildcard, the computed approvals:review predicate or the
+// agent channel's machine permissions; audit:read is grantable.
+func TestCustomRoleVocabularyLeavesOutWildcardAndMachinePermissions(t *testing.T) {
+	vocabulary := map[authz.Permission]bool{}
+	for _, p := range authz.CustomRoleVocabulary() {
+		if vocabulary[p] {
+			t.Fatalf("%s is listed twice", p)
+		}
+		vocabulary[p] = true
+	}
+	for _, refused := range []authz.Permission{authz.Wildcard, authz.ApprovalsReview, authz.AgentsHeartbeat,
+		authz.AgentsJobPoll, authz.AgentsJobComplete, authz.AgentsJobReport} {
+		if vocabulary[refused] {
+			t.Fatalf("the custom role vocabulary grants %s", refused)
+		}
+	}
+	for _, granted := range []authz.Permission{authz.AuditRead, authz.CertsRead, authz.CertsRequest, authz.AccessRoleAssign} {
+		if !vocabulary[granted] {
+			t.Fatalf("the custom role vocabulary leaves out %s", granted)
+		}
+	}
+}

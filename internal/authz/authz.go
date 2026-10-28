@@ -141,6 +141,15 @@ func allResourcePermissions() []Permission {
 	}
 }
 
+// CustomRoleVocabulary is what a tenant custom role may grant (A207): every
+// concrete permission a person's role can hold. It leaves out the wildcard,
+// the computed approvals:review predicate, and the agent channel's machine
+// permissions.
+func CustomRoleVocabulary() []Permission {
+	return withPermissions(withoutPermissions(allResourcePermissions(),
+		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport), AuditRead)
+}
+
 // Role is a named set of permissions.
 type Role struct {
 	Name        string

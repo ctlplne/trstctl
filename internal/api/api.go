@@ -1072,6 +1072,7 @@ func (a *API) routes() []route {
 		pathInteger("version", "positive certificate profile version"),
 	}
 	memberSubjectPath := []param{pathString("subject", "tenant member subject")}
+	roleNamePath := []param{pathString("name", "tenant custom role name")}
 	tsaSerialPath := []param{pathString("serial", "TSA certificate serial, lowercase hex")}
 	nhiReviewItemPath := []param{pathUUID("id"), pathUUID("item_id")}
 	pqcCampaignFindingPath := []param{pathUUID("id"), pathUUID("finding_id")}
@@ -1413,7 +1414,9 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/remediation/owner-actions", opID: "listOwnerRemediationActions", summary: "List owner-driven self-remediation actions", handler: a.listOwnerRemediationActions, query: []param{{name: "owner_id", typ: "string", desc: "return only actions for one owner id"}}, resSchema: "OwnerRemediationQueue", successCode: "200", perm: authz.OwnersRead},
 		{method: "POST", path: "/api/v1/remediation/owner-actions/{id}/accept", opID: "acceptOwnerRemediationAction", summary: "Accept an owner-driven self-remediation action", handler: a.acceptOwnerRemediationAction, pathParams: ownerActionPath, reqSchema: "OwnerRemediationAcceptRequest", resSchema: "OwnerRemediationRun", successCode: "201", mutation: true, perm: authz.OwnersWrite},
 
-		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in and configured access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
+		{method: "GET", path: "/api/v1/access/roles", opID: "listAccessRoles", summary: "List built-in, configured and tenant custom access roles", handler: a.listAccessRoles, resSchema: "RoleList", successCode: "200", perm: authz.AccessRead},
+		{method: "PUT", path: "/api/v1/access/roles/{name}", opID: "defineTenantCustomRole", summary: "Define or redefine a tenant custom role from permissions you hold", handler: a.defineTenantCustomRole, pathParams: roleNamePath, reqSchema: "TenantCustomRoleRequest", resSchema: "Role", successCode: "200", mutation: true, perm: authz.AccessWrite},
+		{method: "DELETE", path: "/api/v1/access/roles/{name}", opID: "deleteTenantCustomRole", summary: "Delete a tenant custom role no member holds", handler: a.deleteTenantCustomRole, pathParams: roleNamePath, successCode: "204", mutation: true, perm: authz.AccessWrite},
 		{method: "GET", path: "/api/v1/access/oidc-mapping", opID: "getOIDCMappingStatus", summary: "Show served OIDC tenant and group mapping status", handler: a.getOIDCMappingStatus, resSchema: "OIDCMappingStatus", successCode: "200", perm: authz.AccessRead},
 		{method: "GET", path: "/api/v1/access/members", opID: "listMembers", summary: "List tenant members and offboarding state", handler: a.listMembers, query: memberQuery, resSchema: "MemberList", successCode: "200", perm: authz.AccessRead},
 		// A95: the customer's side of Provider emergency access.
@@ -1841,9 +1844,13 @@ func (a *API) sessionPrincipal(ctx context.Context, sess auth.Session) (authz.Pr
 	if err != nil {
 		return authz.Principal{}, err
 	}
+	resolved, err := a.resolveRoles(ctx, sess.TenantID, roleNames)
+	if err != nil {
+		return authz.Principal{}, err
+	}
 	grants := make([]authz.Grant, 0, len(roleNames))
 	for _, name := range roleNames {
-		if role, ok := a.roles.Role(name); ok {
+		if role, ok := resolved[name]; ok {
 			grants = append(grants, authz.Grant{Role: role, Scope: authz.Scope{TenantID: sess.TenantID}})
 		}
 	}

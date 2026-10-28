@@ -218,11 +218,29 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List built-in and configured access roles */
+        /** List built-in, configured and tenant custom access roles */
         get: operations["listAccessRoles"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/access/roles/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Define or redefine a tenant custom role from permissions you hold */
+        put: operations["defineTenantCustomRole"];
+        post?: never;
+        /** Delete a tenant custom role no member holds */
+        delete: operations["deleteTenantCustomRole"];
         options?: never;
         head?: never;
         patch?: never;
@@ -17837,6 +17855,9 @@ export interface components {
             target_name: string;
         };
         Role: {
+            /** @description true for a role the tenant defined */
+            custom?: boolean;
+            description?: string;
             name: string;
             permissions: string[];
         };
@@ -19169,6 +19190,12 @@ export interface components {
             current: components["schemas"]["TSACertificate"];
             previous: components["schemas"]["TSACertificate"];
         };
+        TenantCustomRoleRequest: {
+            /** @description at most 512 characters */
+            description?: string;
+            /** @description one or more permissions you hold, from the custom role vocabulary */
+            permissions: string[];
+        };
         TenantKeyDomainMigrateRequest: {
             wrapper_id: string;
             /** @enum {string} */
@@ -20401,6 +20428,96 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RoleList"];
                 };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    defineTenantCustomRole: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description tenant custom role name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenantCustomRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteTenantCustomRole: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description tenant custom role name */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description client error */
             "4XX": {

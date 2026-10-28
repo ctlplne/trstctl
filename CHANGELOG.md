@@ -2,6 +2,17 @@
 
 ### Added
 
+- Tenant custom roles: `PUT /api/v1/access/roles/{name}` defines a role as a named
+  subset of the permissions built-in roles grant (only from permissions the caller
+  holds), `DELETE` removes one no member holds, and `GET /api/v1/access/roles` lists
+  them with `custom: true`; CLI `access roles define|delete` and the People and roles
+  console. Assigning a custom role needs every permission it grants. A role resolves
+  on every request, so a change applies at once.
+- SCIM group-to-role map: `auth.scim.tokens[].group_roles` maps a directory group to a
+  built-in or custom role; an unmapped group that is not named for a built-in role is
+  still refused, and a group mapped to an undefined custom role is refused by name.
+- SCIM token rotation without a restart: a rewritten token file is read again within
+  two seconds; a rewrite that cannot be used keeps the last good token.
 - Report retention and legal holds: with `audit.report_retention` (or
   `TRSTCTL_AUDIT_REPORT_RETENTION`, at least an hour; off by default), the
   report scheduler queues the removal of every completed run's signed report

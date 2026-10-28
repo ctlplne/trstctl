@@ -34,6 +34,7 @@ import {
 import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { PAMTargetsPanel } from "@/pages/PAMTargetsPanel";
+import { CustomRoleDialog } from "@/pages/access/CustomRoleDialog";
 import type { StatusTone } from "@/lib/statusVocab";
 
 const pamFormSchema = z
@@ -106,6 +107,10 @@ export function AdminAccess() {
   const [addPersonOpen, setAddPersonOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const editMemberTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const customRoleTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [customRoleOpen, setCustomRoleOpen] = useState(false);
+  const [roleNotice, setRoleNotice] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const [accessKeyOpen, setAccessKeyOpen] = useState(false);
   const [offboardOpen, setOffboardOpen] = useState(false);
   const [offboardConfirmed, setOffboardConfirmed] = useState(false);
@@ -145,6 +150,7 @@ export function AdminAccess() {
   const offboardTriggerRef = useRef<HTMLButtonElement>(null);
   const pamTriggerRef = useRef<HTMLButtonElement>(null);
   const roleRows = useMemo(() => roles?.items ?? [], [roles]);
+  const canWriteAccess = !!user?.permissions?.some((permission) => permission === "*" || permission === "access:write");
   const activeMembers = useMemo(() => members.filter((member) => member.status !== "offboarded"), [members]);
   const pamColumns = useMemo<DataGridColumn<PAMSession>[]>(
     () => [
@@ -192,6 +198,18 @@ export function AdminAccess() {
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
+
+  async function deleteCustomRole(name: string) {
+    setRoleNotice(null);
+    setRoleError(null);
+    try {
+      await api.deleteTenantCustomRole(name);
+      setRoleNotice(t("admin.access.customRoleDeleted", { name }));
+      await loadOverview();
+    } catch (err) {
+      setRoleError(accessProblemMessage(err, t("admin.access.customRoleFailed")));
+    }
+  }
 
   async function loadSSODetails(force = false) {
     if (ssoLoading || (ssoLoaded && !force)) return;
@@ -558,9 +576,37 @@ export function AdminAccess() {
           ) : null}
 
           <section aria-labelledby="role-catalog-heading" className="grid gap-2">
-            <h3 id="role-catalog-heading" className="text-body font-semibold">
-              {t("admin.access.roleCatalog")}
-            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 id="role-catalog-heading" className="text-body font-semibold">
+                {t("admin.access.roleCatalog")}
+              </h3>
+              {canWriteAccess ? (
+                <Button
+                  ref={customRoleTriggerRef}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRoleNotice(null);
+                    setRoleError(null);
+                    setCustomRoleOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  {t("admin.access.defineCustomRole")}
+                </Button>
+              ) : null}
+            </div>
+            {roleNotice ? (
+              <p role="status" className="text-sm">
+                {roleNotice}
+              </p>
+            ) : null}
+            {roleError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {roleError}
+              </p>
+            ) : null}
             {/* A named horizontal overflow region needs a keyboard entry point; axe enforces this behavior. */}
             <div
               role="region"
@@ -573,12 +619,24 @@ export function AdminAccess() {
                   <tr>
                     <th scope="col">{translateNow("source.role.14736a2eb9")}</th>
                     <th scope="col">{t("admin.access.exactPermissions")}</th>
+                    <th scope="col">
+                      <span className="sr-only">{t("admin.access.roleActions")}</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {roleRows.map((role) => (
                     <tr key={role.name} className="align-top">
-                      <td className="font-medium">{role.name}</td>
+                      <td className="font-medium">
+                        {role.name}
+                        {role.custom ? (
+                          <>
+                            {" "}
+                            <StatusBadge value="custom" label={t("admin.access.customRole")} tone="neutral" />
+                            {role.description ? <p className="mt-1 text-xs font-normal text-muted-foreground">{role.description}</p> : null}
+                          </>
+                        ) : null}
+                      </td>
                       <td>
                         <ul className="flex max-w-4xl flex-wrap gap-1.5">
                           {role.permissions.map((permission) => (
@@ -587,6 +645,13 @@ export function AdminAccess() {
                             </li>
                           ))}
                         </ul>
+                      </td>
+                      <td>
+                        {role.custom && canWriteAccess ? (
+                          <Button type="button" size="sm" variant="ghost" onClick={() => void deleteCustomRole(role.name)}>
+                            {t("admin.access.deleteCustomRole", { name: role.name })}
+                          </Button>
+                        ) : null}
                       </td>
                     </tr>
                   ))}
@@ -787,6 +852,18 @@ export function AdminAccess() {
         </AccessDisclosure>
       </div>
 
+      {customRoleOpen ? (
+        <CustomRoleDialog
+          roles={roleRows}
+          returnFocusRef={customRoleTriggerRef}
+          onClose={() => setCustomRoleOpen(false)}
+          onDefined={(role) => {
+            setCustomRoleOpen(false);
+            setRoleNotice(t("admin.access.customRoleDefined", { name: role.name }));
+            void loadOverview();
+          }}
+        />
+      ) : null}
       {addPersonOpen ? (
         <Dialog
           open

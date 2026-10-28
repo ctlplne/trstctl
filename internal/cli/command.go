@@ -424,6 +424,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"scale", "ha-issuance"}, Method: "GET", Path: "/api/v1/scale/ha-issuance", Summary: "Show multi-region HA issuance posture"},
 
 	{Name: []string{"access", "roles"}, Method: "GET", Path: "/api/v1/access/roles", Summary: "List access roles and scopes"},
+	{Name: []string{"access", "roles", "define"}, Method: "PUT", Path: "/api/v1/access/roles/{name}", Body: bodyFile, Summary: "Define or redefine a tenant custom role from permissions you hold"},
+	{Name: []string{"access", "roles", "delete"}, Method: "DELETE", Path: "/api/v1/access/roles/{name}", Summary: "Delete a tenant custom role no member holds"},
 	{Name: []string{"access", "oidc-mapping"}, Method: "GET", Path: "/api/v1/access/oidc-mapping", Summary: "Show OIDC tenant and group mapping status"},
 	{Name: []string{"access", "members", "list"}, Method: "GET", Path: "/api/v1/access/members", Query: []string{"limit", "cursor", "include_offboarded"}, Summary: "List tenant members"},
 	{Name: []string{"access", "members", "upsert"}, Method: "PUT", Path: "/api/v1/access/members/{subject}", Body: bodyFile, Summary: "Onboard or update a tenant member"},
