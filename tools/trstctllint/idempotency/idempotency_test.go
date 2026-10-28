@@ -78,6 +78,7 @@ func (a *API) routes() []route {
 		{handler: a.goodVaultMutationHelper, mutation: true},
 		{handler: a.goodVaultStockCLIHelper, mutation: true},
 		{handler: a.goodVaultLifecycleHelper, mutation: true},
+		{handler: a.goodVaultLeaseHelper, mutation: true},
 		{handler: a.goodSCIMCompat, mutation: true},
 		{handler: a.goodScheduleAuthority, mutation: true},
 		{handler: a.badScheduleFixedInput, mutation: true},
@@ -115,6 +116,12 @@ func (a *API) goodVaultStockCLIHelper(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) goodVaultLifecycleHelper(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey, ok := a.vaultLifecycleKey(w, r, []byte("fixture"), "mount", false)
+	if !ok { return }
+	a.mutate(w, r, idempotencyKey, nil)
+}
+
+func (a *API) goodVaultLeaseHelper(w http.ResponseWriter, r *http.Request) {
+	idempotencyKey, ok := vaultLeaseCommandKey(w, r)
 	if !ok { return }
 	a.mutate(w, r, idempotencyKey, nil)
 }
@@ -203,6 +210,12 @@ func (a *API) vaultLifecycleKey(w http.ResponseWriter, r *http.Request, body []b
 	_ = name
 	_ = policy
 	return vaultStockCLIKey(w, r, body)
+}
+
+func vaultLeaseCommandKey(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if key := r.Header.Get("Idempotency-Key"); key != "" { return key, true }
+	_ = w
+	return "vault-lease-v1-per-request", true
 }
 
 func scimIdempotencyKey(r *http.Request, body []byte) string {

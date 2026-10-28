@@ -2,6 +2,13 @@
 
 ### Added
 
+- Vault-path dynamic credentials: a stock Vault or OpenBao client reads native
+  leases at `database/creds/<role>` (username and password), `aws/creds/<role>`
+  and `aws/sts/<role>` (an STS session with its assumed-role ARN) and
+  `kubernetes/creds/<role>` (a ServiceAccount token), or at
+  `<provider>/creds/<role>` when several providers offer the role, and looks
+  up, renews (database leases) and revokes them through `sys/leases`; a
+  synchronous revoke returns once the provider confirms removal.
 - Three secret-sync targets: `webhook` POSTs templated JSON signed with HMAC-SHA256
   over a timestamp and the body (`X-Trstctl-Signature`, `X-Trstctl-Timestamp`), so
   a receiver can refuse a changed or replayed delivery; `aws-parameter-store`

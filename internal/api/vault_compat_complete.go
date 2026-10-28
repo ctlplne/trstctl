@@ -52,11 +52,12 @@ var vaultCompatCompleteRoutes = []vaultCompatRoute{
 }
 
 func allVaultCompatRoutes() []vaultCompatRoute {
-	out := make([]vaultCompatRoute, 0, len(vaultCompatRoutes)+len(vaultCompatCompleteRoutes)+len(vaultCompatKVExtraRoutes))
+	out := make([]vaultCompatRoute, 0, len(vaultCompatRoutes)+len(vaultCompatCompleteRoutes)+len(vaultCompatKVExtraRoutes)+len(vaultCompatWrappingRoutes)+len(vaultCompatDynamicRoutes))
 	out = append(out, vaultCompatRoutes...)
 	out = append(out, vaultCompatCompleteRoutes...)
 	out = append(out, vaultCompatKVExtraRoutes...)
 	out = append(out, vaultCompatWrappingRoutes...)
+	out = append(out, vaultCompatDynamicRoutes...)
 	return out
 }
 

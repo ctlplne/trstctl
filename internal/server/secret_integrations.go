@@ -256,6 +256,25 @@ func (p *configuredDynamicProvider) DynamicSecretConfigurationRevision() string 
 	return p.configurationRevision
 }
 
+// DynamicSecretKubernetesScope is the namespace a kubernetes provider creates
+// its ServiceAccounts in and the audience of their tokens, which the
+// Vault-compatible API reports and checks.
+func (p *configuredDynamicProvider) DynamicSecretKubernetesScope() (namespace, audience string) {
+	namespace = p.cfg.Namespace
+	if namespace == "" {
+		namespace = "default"
+	}
+	return namespace, p.cfg.KubernetesAudience
+}
+
+// DynamicSecretBindsRole reports whether role binds exactly this
+// provider-native authority (the IAM role ARN an AWS role assumes), without
+// handing the binding across the API seam.
+func (p *configuredDynamicProvider) DynamicSecretBindsRole(role, binding string) bool {
+	configured, ok := p.cfg.RoleBindings[role]
+	return ok && configured != "" && configured == binding
+}
+
 // MaximumTTL is the provider credential's hard native-validity bound. The
 // durable lifecycle creates native credentials for this duration, then manages a
 // shorter renewable control-plane lease within it.

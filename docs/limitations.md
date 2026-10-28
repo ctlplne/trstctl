@@ -4414,8 +4414,24 @@ when off, requiring a KEK when on):
   (`/v1/sys/wrapping/wrap|unwrap|lookup` over the native one-time share rows,
   single-use `trstw_` tokens with a bounded TTL) and the per-token cubbyhole
   (`/v1/cubbyhole/{path}`, sealed in the tenant key domain, keyed by the
-  presented token, expiring with it). The native dynamic secret engines remain
-  outside this shim. The stock Vault CLI's KV put and
+  presented token, expiring with it). The native dynamic leases are served at
+  Vault's engine paths: `database/creds/<role>` (username and password from a
+  PostgreSQL, MySQL, MongoDB or Redis provider), `aws/creds/<role>` and
+  `aws/sts/<role>` (an STS session), `kubernetes/creds/<role>` (a ServiceAccount
+  token), or `<provider>/creds/<role>` when several providers offer the role,
+  with `sys/leases/lookup`, `renew` and `revoke`. Each read opens a native lease
+  (an explicit `Idempotency-Key` replays it). Database leases renew up to the
+  provider's maximum TTL; AWS STS and Kubernetes leases are not renewable on
+  these paths because their native renewal mints a replacement credential. A
+  synchronous revoke returns once the provider confirms removal; a Kubernetes
+  API server can still accept a token it authenticated recently for its
+  authentication cache TTL (10 seconds by default) after its ServiceAccount is
+  gone. AWS cannot end one STS session early, so revoking an STS lease closes
+  the lease and reports the session valid until its native expiry. Vault's
+  engine configuration paths
+  (`database/config`, `database/roles`, `aws/roles`, `kubernetes/roles`), static
+  database credentials, `revoke-prefix` and lease listing are not served:
+  providers stay operator-configured. The stock Vault CLI's KV put and
   PKI issue/sign commands derive a token-keyed idempotency key when no header is
   sent. Mount and ACL mutations also derive a token-keyed key with the exact
   mount or policy event generation, allowing stock CLI retries and later

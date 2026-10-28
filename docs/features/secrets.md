@@ -141,6 +141,8 @@ vault login -no-store "$VAULT_TOKEN"
 vault kv put secret/payments/db username=payments password='correct horse battery staple'
 vault kv get -format=json secret/payments/db
 vault write -format=json pki/sign/default csr=@payments.csr ttl=1h
+vault read -format=json database/creds/readonly
+vault lease revoke -sync database/creds/readonly/lease-...
 ```
 
 Supported paths are intentionally small:
@@ -160,17 +162,27 @@ Supported paths are intentionally small:
 | `POST /v1/auth/token/renew-self`           | `400`: trstctl API tokens are not renewable leases; mint a new token instead.           |
 | `POST /v1/sys/wrapping/wrap`, `unwrap`, `lookup` | Response wrapping over the native one-time share rows: a single-use `trstw_` wrapping token (`X-Vault-Wrap-TTL`, default 5m, max 24h), lookup without consuming, unwrap exactly once. |
 | `GET`/`POST`/`PUT`/`DELETE`/`LIST /v1/cubbyhole/{path}` | A per-token scratch space keyed by the presented token; another token sees nothing; entries expire with the token when it has an expiry. |
+| `GET /v1/database/creds/{role}`            | Opens a native lease on the tenant's PostgreSQL, MySQL, MongoDB or Redis provider offering the role; returns `username` and `password`. |
+| `GET`/`POST /v1/aws/creds/{role}`, `/v1/aws/sts/{role}` | Opens an AWS STS lease: `access_key`, `secret_key`, `session_token` and the assumed-role `arn`; accepts `ttl` and the role's own `role_arn`. |
+| `POST`/`PUT /v1/kubernetes/creds/{role}`   | Opens a Kubernetes lease: a ServiceAccount token for the role's binding, with `service_account_name` and `service_account_namespace`; `kubernetes_namespace` and `audiences` must be the provider's. |
+| `/v1/{provider}/creds/{role}`              | The same lease, naming the provider when several offer the role. |
+| `PUT /v1/sys/leases/lookup`, `renew`, `revoke` | Lookup reports a lease's issue and expiry; renew extends a database lease, never past the provider's maximum TTL; revoke with `-sync` returns once the provider confirms removal. An STS session stays valid until its native expiry; a Kubernetes API server may accept a recently used token for its 10-second authentication cache. |
 
 The served compatibility contract also includes tenant-authored KV v2, PKI, and
 transit mounts, Vault ACL policy management, common transit operations, the
-cubbyhole and response wrapping. It still omits the native dynamic secret
-engines; the native trstctl API remains the full surface. The machine-readable contract is
+cubbyhole, response wrapping, and the native dynamic leases at the Vault
+database, AWS and Kubernetes engine paths. The engines' configuration paths are
+not served (providers are operator-configured); the native trstctl API remains
+the full surface. The machine-readable contract is
 pinned separately as
 [`docs/contracts/vault-openbao-compat.openapi.json`](../contracts/vault-openbao-compat.openapi.json),
 since `/v1` paths preserve Vault/OpenBao wire shapes. Mutating calls accept
 `Idempotency-Key`. For the stock CLI's KV put and PKI issue/sign commands,
 trstctl derives a token-keyed digest of method, path, and body when the header is
 absent, so an exact retry cannot mint a duplicate certificate or secret version.
+A dynamic-credential read without the header opens a new lease each time, as
+Vault does; `sys/leases` renew targets an absolute expiry and revoke is a state
+transition, so a retry cannot extend or revoke twice.
 For transit writes, pass the CLI's `-header` option explicitly. Use a fresh key
 for each distinct mutation and reuse that key when retrying the same request:
 

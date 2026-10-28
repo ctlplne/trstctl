@@ -282,11 +282,14 @@ func approvedIdempotencyHelperProvenance(pass *analysis.Pass, call *ast.CallExpr
 		return false
 	}
 	switch fn.Name() {
-	case "vaultIdempotencyKey", "vaultMutationKey", "vaultStockCLIKey", "vaultLifecycleKey", "scimIdempotencyKey":
+	case "vaultIdempotencyKey", "vaultMutationKey", "vaultStockCLIKey", "vaultLifecycleKey", "vaultLeaseCommandKey", "scimIdempotencyKey":
 		// These exact API-package helpers preserve explicit keys. The stock
 		// Vault CLI helpers derive a token-keyed request digest for reviewed
 		// KV/PKI and event-generation-bound mount/ACL commands; other Vault
-		// mutations fail closed without a header. SCIM retains its derivation.
+		// mutations fail closed without a header. The dynamic-credential and
+		// sys/leases helper keys each unkeyed stock request on its own: Vault
+		// opens a new lease per creds read, renew sets an absolute expiry and
+		// revoke is a state transition. SCIM retains its derivation.
 		return true
 	case "secretRotationScheduleTickAuthority":
 		// This helper derives a lifecycle-bound receiver key from the raw header.

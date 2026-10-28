@@ -91,7 +91,7 @@ func vaultCompatParameters(rt vaultCompatRoute) []Parameter {
 			Schema:      str(),
 		})
 	default:
-		for _, name := range []string{"mount", "path", "name", "role"} {
+		for _, name := range []string{"mount", "path", "name", "role", "lease_id"} {
 			if strings.Contains(rt.contractPath, "{"+name+"}") {
 				out = append(out, Parameter{Name: name, In: "path", Required: true, Schema: str()})
 			}
@@ -109,6 +109,10 @@ func vaultCompatParameters(rt vaultCompatRoute) []Parameter {
 		description := "Required for transit mutations so a repeat rotation or cryptographic call is a distinct command."
 		if fallback {
 			description = "Optional for stock Vault/OpenBao KV, PKI, mount, and ACL clients. The token-keyed fallback binds the request; mount and ACL keys also bind the exact path's latest lifecycle event. Transit signing still requires an explicit key."
+		}
+		if vaultLeaseCommandPath(rt.contractPath) {
+			fallback = true
+			description = "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition."
 		}
 		out = append(out, Parameter{
 			Name:        "Idempotency-Key",
@@ -129,6 +133,14 @@ func vaultCompatResponses(rt vaultCompatRoute) map[string]Response {
 				"application/json": {Schema: ref(rt.responseSchema)},
 			},
 		},
+	}
+	if strings.HasPrefix(rt.contractPath, "/v1/sys/leases/revoke") {
+		responses["202"] = Response{
+			Description: "Revocation queued (sync false); the provider has not confirmed removal yet.",
+			Content: map[string]MediaType{
+				"application/json": {Schema: ref("VaultGenericResponse")},
+			},
+		}
 	}
 	for _, code := range vaultCompatErrorCodes(rt) {
 		responses[code] = Response{
@@ -153,6 +165,10 @@ func vaultCompatErrorCodes(rt vaultCompatRoute) []string {
 		return []string{"400", "403", "404", "429", "500"}
 	case rt.contractPath == "/v1/pki/issue/{role}" || rt.contractPath == "/v1/pki/sign/{role}":
 		return []string{"400", "403", "413", "422", "429", "503"}
+	case strings.HasSuffix(rt.contractPath, "/creds/{role}") || strings.HasSuffix(rt.contractPath, "/sts/{role}"):
+		return []string{"400", "403", "405", "409", "422", "423", "429", "503", "504"}
+	case strings.HasPrefix(rt.contractPath, "/v1/sys/leases/"):
+		return []string{"400", "403", "409", "429", "500"}
 	default:
 		return []string{"403", "429", "500"}
 	}
@@ -238,7 +254,54 @@ func vaultCompatSchemas() map[string]*Schema {
 	}
 	vaultCompatKVExtraSchemas(schemas)
 	vaultCompatWrappingSchemas(schemas)
+	vaultCompatDynamicSchemas(schemas)
 	return schemas
+}
+
+// vaultLeaseCommandPath reports the dynamic-credential and sys/leases paths,
+// whose stock-client key is per request (vaultLeaseCommandKey).
+func vaultLeaseCommandPath(contractPath string) bool {
+	return strings.HasPrefix(contractPath, "/v1/sys/leases/") ||
+		strings.HasSuffix(contractPath, "/creds/{role}") ||
+		strings.HasSuffix(contractPath, "/sts/{role}")
+}
+
+func vaultCompatDynamicSchemas(schemas map[string]*Schema) {
+	anySchema := &Schema{}
+	schemas["VaultDynamicCredentialRequest"] = object(map[string]*Schema{
+		"ttl":                  str(),
+		"kubernetes_namespace": str(),
+		"cluster_role_binding": {Type: "boolean"},
+		"audiences":            str(),
+		"role_arn":             str(),
+	})
+	schemas["VaultDynamicCredentialData"] = object(map[string]*Schema{
+		"username":                  str(),
+		"password":                  str(),
+		"access_key":                str(),
+		"secret_key":                str(),
+		"session_token":             str(),
+		"arn":                       str(),
+		"service_account_name":      str(),
+		"service_account_namespace": str(),
+		"service_account_token":     str(),
+	})
+	schemas["VaultDynamicCredentialResponse"] = vaultCompatEnvelope("VaultDynamicCredentialData", anySchema)
+	schemas["VaultLeaseRequest"] = object(map[string]*Schema{
+		"lease_id":  str(),
+		"increment": {Type: "integer"},
+		"sync":      {Type: "boolean"},
+	})
+	schemas["VaultLeaseLookupData"] = object(map[string]*Schema{
+		"id":           str(),
+		"issue_time":   timestamp(),
+		"expire_time":  timestamp(),
+		"last_renewal": anySchema,
+		"renewable":    {Type: "boolean"},
+		"ttl":          {Type: "integer"},
+	}, "id", "issue_time", "expire_time", "renewable", "ttl")
+	schemas["VaultLeaseLookupResponse"] = vaultCompatEnvelope("VaultLeaseLookupData", anySchema)
+	schemas["VaultLeaseRenewResponse"] = vaultCompatEnvelope("VaultGenericData", anySchema)
 }
 
 func vaultCompatEnvelope(dataSchema string, warnings *Schema) *Schema {

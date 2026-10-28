@@ -55,6 +55,87 @@
         ],
         "type": "object"
       },
+      "VaultDynamicCredentialData": {
+        "properties": {
+          "access_key": {
+            "type": "string"
+          },
+          "arn": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "secret_key": {
+            "type": "string"
+          },
+          "service_account_name": {
+            "type": "string"
+          },
+          "service_account_namespace": {
+            "type": "string"
+          },
+          "service_account_token": {
+            "type": "string"
+          },
+          "session_token": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VaultDynamicCredentialRequest": {
+        "properties": {
+          "audiences": {
+            "type": "string"
+          },
+          "cluster_role_binding": {
+            "type": "boolean"
+          },
+          "kubernetes_namespace": {
+            "type": "string"
+          },
+          "role_arn": {
+            "type": "string"
+          },
+          "ttl": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "VaultDynamicCredentialResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultDynamicCredentialData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
       "VaultErrorResponse": {
         "properties": {
           "errors": {
@@ -366,6 +447,108 @@
           "data",
           "warnings"
         ],
+        "type": "object"
+      },
+      "VaultLeaseLookupData": {
+        "properties": {
+          "expire_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "issue_time": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_renewal": {},
+          "renewable": {
+            "type": "boolean"
+          },
+          "ttl": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "issue_time",
+          "expire_time",
+          "renewable",
+          "ttl"
+        ],
+        "type": "object"
+      },
+      "VaultLeaseLookupResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultLeaseLookupData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "VaultLeaseRenewResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VaultGenericData"
+          },
+          "lease_duration": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "renewable": {
+            "type": "boolean"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "warnings": {}
+        },
+        "required": [
+          "request_id",
+          "lease_id",
+          "renewable",
+          "lease_duration",
+          "data",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "VaultLeaseRequest": {
+        "properties": {
+          "increment": {
+            "type": "integer"
+          },
+          "lease_id": {
+            "type": "string"
+          },
+          "sync": {
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "VaultMountInfo": {
@@ -2533,6 +2716,988 @@
         "summary": "Discover the supported Vault/OpenBao-compatible mount type"
       }
     },
+    "/v1/sys/leases/lookup": {
+      "post": {
+        "operationId": "vaultCompatLeaseLookupPost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLeaseLookupResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Look up a dynamic-credential lease's issue and expiry times",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "put": {
+        "operationId": "vaultCompatLeaseLookup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLeaseLookupResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Look up a dynamic-credential lease's issue and expiry times",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/v1/sys/leases/renew": {
+      "post": {
+        "operationId": "vaultCompatLeaseRenewPost",
+        "parameters": [
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLeaseRenewResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Renew a database dynamic-credential lease",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "put": {
+        "operationId": "vaultCompatLeaseRenew",
+        "parameters": [
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLeaseRenewResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Renew a database dynamic-credential lease",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/v1/sys/leases/renew/{lease_id}": {
+      "post": {
+        "operationId": "vaultCompatLeaseRenewByPathPost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLeaseRenewResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Renew a database dynamic-credential lease named in the path",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "put": {
+        "operationId": "vaultCompatLeaseRenewByPath",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultLeaseRenewResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Renew a database dynamic-credential lease named in the path",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/v1/sys/leases/revoke": {
+      "post": {
+        "operationId": "vaultCompatLeaseRevokePost",
+        "parameters": [
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Revocation queued (sync false); the provider has not confirmed removal yet."
+          },
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Revoke a dynamic-credential lease and remove its credential at the provider",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "put": {
+        "operationId": "vaultCompatLeaseRevoke",
+        "parameters": [
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Revocation queued (sync false); the provider has not confirmed removal yet."
+          },
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Revoke a dynamic-credential lease and remove its credential at the provider",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/v1/sys/leases/revoke/{lease_id}": {
+      "post": {
+        "operationId": "vaultCompatLeaseRevokeByPathPost",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Revocation queued (sync false); the provider has not confirmed removal yet."
+          },
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Revoke a dynamic-credential lease named in the path",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "put": {
+        "operationId": "vaultCompatLeaseRevokeByPath",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lease_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultLeaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Revocation queued (sync false); the provider has not confirmed removal yet."
+          },
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultGenericResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Revoke a dynamic-credential lease named in the path",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
     "/v1/sys/mounts": {
       "get": {
         "operationId": "vaultCompatListMounts",
@@ -3377,6 +4542,445 @@
           }
         ],
         "summary": "Wrap a JSON payload under a single-use wrapping token (X-Vault-Wrap-TTL, default 5m) sealed in the tenant key domain"
+      }
+    },
+    "/v1/{mount}/creds/{role}": {
+      "get": {
+        "operationId": "vaultCompatDynamicCredsRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultDynamicCredentialResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Open a dynamic-credential lease through a Vault database, AWS or Kubernetes engine path",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "post": {
+        "operationId": "vaultCompatDynamicCredsWrite",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultDynamicCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultDynamicCredentialResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Open a dynamic-credential lease through a Vault database, AWS or Kubernetes engine path",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "put": {
+        "operationId": "vaultCompatDynamicCredsWritePut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultDynamicCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultDynamicCredentialResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Open a dynamic-credential lease through a Vault database, AWS or Kubernetes engine path",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/v1/{mount}/data/{name}": {
@@ -4977,6 +6581,445 @@
         ],
         "summary": "Sign through a Vault-compatible transit key or PKI CSR mount",
         "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/v1/{mount}/sts/{role}": {
+      "get": {
+        "operationId": "vaultCompatDynamicSTSRead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultDynamicCredentialResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Open an AWS STS lease through a Vault aws/sts path",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "post": {
+        "operationId": "vaultCompatDynamicSTSWrite",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultDynamicCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultDynamicCredentialResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Open an AWS STS lease through a Vault aws/sts path",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      },
+      "put": {
+        "operationId": "vaultCompatDynamicSTSWritePut",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Optional. A key replays the same lease command. Without one each stock-client request is its own command: a creds read opens a new lease, as Vault does; renew moves the expiry to an absolute target and revoke is a state transition.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VaultDynamicCredentialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultDynamicCredentialResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible success response."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultErrorResponse"
+                }
+              }
+            },
+            "description": "Vault/OpenBao-compatible error envelope."
+          }
+        },
+        "security": [
+          {
+            "VaultToken": []
+          }
+        ],
+        "summary": "Open an AWS STS lease through a Vault aws/sts path",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
       }
     },
     "/v1/{mount}/verify/{name}": {

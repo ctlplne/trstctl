@@ -55,7 +55,7 @@ type dynamicLeaseRotationOutcome struct {
 func writeServedCredentialFile(t *testing.T, name, value string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
-	if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(value), 0o600); err != nil { // #nosec G703 -- test path inside its own tempdir/checkout (CWE-22)
 		t.Fatal(err)
 	}
 	return "file:" + path
