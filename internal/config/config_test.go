@@ -1019,6 +1019,58 @@ func TestFullBackupEncryptionConfigurable(t *testing.T) {
 	}
 }
 
+// A218: an ejbca source names its https base URL, trust anchor, client
+// certificate and issuer certificates; a stepca source its DSN file and issuer
+// certificates; an inventory source only its issuer certificates. Fields of
+// another kind, a page size past EJBCA's limit and a source on a store-backed
+// id are refused.
+func TestReconcileCALedgerSourcesValidate(t *testing.T) {
+	ejbca := func() *ReconcileAuthoritySource {
+		return &ReconcileAuthoritySource{Kind: "ejbca", Address: "https://ejbca.internal:8443", CAFile: "/run/ejbca/ca.pem",
+			ClientCertFile: "/run/ejbca/client.pem", ClientKeyFile: "/run/ejbca/client-key.pem",
+			IssuerCertificatesFile: "/etc/trstctl/ejbca-ca.pem", CANames: []string{"IssuingCA"}, PageSize: 500}
+	}
+	stepca := func() *ReconcileAuthoritySource {
+		return &ReconcileAuthoritySource{Kind: "stepca", DSNFile: "/run/stepca/dsn", IssuerCertificatesFile: "/etc/trstctl/stepca.pem"}
+	}
+	inventory := func() *ReconcileAuthoritySource {
+		return &ReconcileAuthoritySource{Kind: "inventory", IssuerCertificatesFile: "/etc/trstctl/ejbca-ca.pem"}
+	}
+	validate := func(id string, src *ReconcileAuthoritySource) error {
+		c := Default()
+		c.Reconcile.Schedules = []ReconcileSchedule{{TenantID: "t", Authorities: []ReconcileAuthority{
+			{AuthorityID: "inventory-lab", Source: inventory()}, {AuthorityID: id, Source: src}}}}
+		return c.Validate()
+	}
+	for _, src := range []*ReconcileAuthoritySource{ejbca(), stepca()} {
+		if err := validate("ca-lab", src); err != nil {
+			t.Fatalf("a valid %s source was refused: %v", src.Kind, err)
+		}
+	}
+	for name, tc := range map[string]struct {
+		id   string
+		src  func() *ReconcileAuthoritySource
+		want string
+	}{
+		"ejbca over http":        {"ca-lab", func() *ReconcileAuthoritySource { s := ejbca(); s.Address = "http://ejbca.internal"; return s }, "https URL"},
+		"ejbca without issuers":  {"ca-lab", func() *ReconcileAuthoritySource { s := ejbca(); s.IssuerCertificatesFile = ""; return s }, "issuer_certificates_file is required"},
+		"ejbca page size":        {"ca-lab", func() *ReconcileAuthoritySource { s := ejbca(); s.PageSize = 5000; return s }, "page_size"},
+		"ejbca with a dsn":       {"ca-lab", func() *ReconcileAuthoritySource { s := ejbca(); s.DSNFile = "/run/dsn"; return s }, "do not belong to an ejbca source"},
+		"stepca without dsn":     {"ca-lab", func() *ReconcileAuthoritySource { s := stepca(); s.DSNFile = ""; return s }, "dsn_file is required"},
+		"stepca with an address": {"ca-lab", func() *ReconcileAuthoritySource { s := stepca(); s.Address = "https://stepca"; return s }, "do not belong to it"},
+		"inventory with a cap":   {"ca-lab", func() *ReconcileAuthoritySource { s := inventory(); s.MaxObjects = 5; return s }, "only issuer_certificates_file"},
+		"vault with issuers": {"ca-lab", func() *ReconcileAuthoritySource {
+			return &ReconcileAuthoritySource{Kind: "vault", Address: "https://vault.internal", TokenFile: "/run/token", PKIMounts: []string{"pki"},
+				IssuerCertificatesFile: "/etc/ca.pem"}
+		}, "belong to ejbca, stepca and inventory sources"},
+		"store-backed id": {"trstctl-self", stepca, "takes no source"},
+	} {
+		if err := validate(tc.id, tc.src()); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Fatalf("%s: %v; want an error naming %q", name, err, tc.want)
+		}
+	}
+}
+
 // A124: a kmip source names a host:port, its trust anchor and its client
 // certificate, and validates without any vault field.
 func TestReconcileKMIPSourceValidates(t *testing.T) {

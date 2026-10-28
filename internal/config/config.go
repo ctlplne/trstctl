@@ -1877,6 +1877,13 @@ type ReconcileAuthority struct {
 // only CAFile: object metadata with Locate and Get Attributes and certificate
 // values with Get, never key values. The TLS floor is 1.3 unless AllowTLS12;
 // AllowInsecureLoopback permits a loopback address (TLS is still required).
+//
+// Kinds "ejbca" and "stepca" (A218) read an external CA's issuance ledger for
+// the CAs in IssuerCertificatesFile: EJBCA's REST v2 certificate search at
+// Address with that client certificate, or step-ca's PostgreSQL database
+// through the connection string in DSNFile. Kind "inventory" is the
+// certificate inventory scoped to the CAs in IssuerCertificatesFile, the
+// authority such a ledger is compared with.
 type ReconcileAuthoritySource struct {
 	Kind      string `json:"kind"`
 	Address   string `json:"address"`
@@ -1897,6 +1904,14 @@ type ReconcileAuthoritySource struct {
 	KVMounts      []string `json:"kv_mounts,omitempty"`
 	PKIMounts     []string `json:"pki_mounts,omitempty"`
 	TransitMounts []string `json:"transit_mounts,omitempty"`
+	// IssuerCertificatesFile is the PEM bundle of the CA certificates an
+	// ejbca, stepca or inventory authority speaks for; CANames narrows an
+	// EJBCA search to those CA names and PageSize sets its page (default 500).
+	// DSNFile holds step-ca's PostgreSQL connection string.
+	IssuerCertificatesFile string   `json:"issuer_certificates_file,omitempty"`
+	CANames                []string `json:"ca_names,omitempty"`
+	PageSize               int      `json:"page_size,omitempty"`
+	DSNFile                string   `json:"dsn_file,omitempty"`
 	// AllowInsecureLoopback permits http:// and loopback addresses for a lab or
 	// sidecar Vault; PrivateEndpointCIDRs lets the SSRF-safe client dial a
 	// Vault on an operator-owned private range.
@@ -1907,8 +1922,11 @@ type ReconcileAuthoritySource struct {
 // The external authority source kinds served today; a cloud-kms authority still
 // fails observation closed.
 const (
-	ReconcileSourceKindVault = "vault"
-	ReconcileSourceKindKMIP  = "kmip"
+	ReconcileSourceKindVault     = "vault"
+	ReconcileSourceKindKMIP      = "kmip"
+	ReconcileSourceKindEJBCA     = "ejbca"
+	ReconcileSourceKindStepCA    = "stepca"
+	ReconcileSourceKindInventory = "inventory"
 )
 
 func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySource) []error {
@@ -1917,12 +1935,86 @@ func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySourc
 	}
 	switch strings.TrimSpace(src.Kind) {
 	case ReconcileSourceKindVault:
-		return validateReconcileVaultSource(label, src)
+		return append(validateReconcileVaultSource(label, src), refuseCALedgerFields(label, "vault", src)...)
 	case ReconcileSourceKindKMIP:
-		return validateReconcileKMIPSource(label, src)
+		return append(validateReconcileKMIPSource(label, src), refuseCALedgerFields(label, "kmip", src)...)
+	case ReconcileSourceKindEJBCA:
+		return validateReconcileEJBCASource(label, src)
+	case ReconcileSourceKindStepCA:
+		return validateReconcileStepCASource(label, src)
+	case ReconcileSourceKindInventory:
+		return validateReconcileInventorySource(label, src)
 	default:
-		return []error{fmt.Errorf("%s.kind %q is not served; use %q or %q", label, src.Kind, ReconcileSourceKindVault, ReconcileSourceKindKMIP)}
+		return []error{fmt.Errorf("%s.kind %q is not served; use %q, %q, %q, %q or %q", label, src.Kind,
+			ReconcileSourceKindVault, ReconcileSourceKindKMIP, ReconcileSourceKindEJBCA, ReconcileSourceKindStepCA, ReconcileSourceKindInventory)}
 	}
+}
+
+// refuseCALedgerFields rejects the external-CA ledger fields on a vault or
+// kmip source, where nothing would read them.
+func refuseCALedgerFields(label, kind string, src *ReconcileAuthoritySource) []error {
+	if strings.TrimSpace(src.IssuerCertificatesFile+src.DSNFile) != "" || len(src.CANames) > 0 || src.PageSize != 0 {
+		return []error{fmt.Errorf("%s: issuer_certificates_file, ca_names, page_size and dsn_file belong to ejbca, stepca and inventory sources, not a %s one", label, kind)}
+	}
+	return nil
+}
+
+// validateReconcileEJBCASource checks a kind "ejbca" source (A218).
+func validateReconcileEJBCASource(label string, src *ReconcileAuthoritySource) []error {
+	var errs []error
+	u, err := url.Parse(strings.TrimSpace(src.Address))
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		errs = append(errs, fmt.Errorf("%s.address must be the https URL of EJBCA", label))
+	}
+	for field, value := range map[string]string{"ca_file": src.CAFile, "client_cert_file": src.ClientCertFile,
+		"client_key_file": src.ClientKeyFile, "issuer_certificates_file": src.IssuerCertificatesFile} {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s.%s is required for an ejbca source", label, field))
+		}
+	}
+	if src.MaxObjects < 0 {
+		errs = append(errs, fmt.Errorf("%s.max_objects cannot be negative", label))
+	}
+	if src.PageSize < 0 || src.PageSize > 1000 {
+		errs = append(errs, fmt.Errorf("%s.page_size must be between 1 and 1000 (EJBCA's maximum; above 500 needs EJBCA's Maximum Query Count raised)", label))
+	}
+	if strings.TrimSpace(src.TokenFile+src.Namespace+src.DSNFile) != "" || len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts) > 0 {
+		errs = append(errs, fmt.Errorf("%s: token_file, namespace, mounts and dsn_file do not belong to an ejbca source", label))
+	}
+	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
+	return errs
+}
+
+// validateReconcileStepCASource checks a kind "stepca" source (A218).
+func validateReconcileStepCASource(label string, src *ReconcileAuthoritySource) []error {
+	var errs []error
+	for field, value := range map[string]string{"dsn_file": src.DSNFile, "issuer_certificates_file": src.IssuerCertificatesFile} {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s.%s is required for a stepca source", label, field))
+		}
+	}
+	if src.MaxObjects < 0 {
+		errs = append(errs, fmt.Errorf("%s.max_objects cannot be negative", label))
+	}
+	if strings.TrimSpace(src.Address+src.TokenFile+src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile) != "" ||
+		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames) > 0 || src.PageSize != 0 || src.AllowTLS12 {
+		errs = append(errs, fmt.Errorf("%s: a stepca source reads its database through dsn_file; address, TLS files, token, mounts, ca_names and page_size do not belong to it", label))
+	}
+	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
+	return errs
+}
+
+// validateReconcileInventorySource checks a kind "inventory" source (A218).
+func validateReconcileInventorySource(label string, src *ReconcileAuthoritySource) []error {
+	if strings.TrimSpace(src.IssuerCertificatesFile) == "" {
+		return []error{fmt.Errorf("%s.issuer_certificates_file is required for an inventory source", label)}
+	}
+	if strings.TrimSpace(src.Address+src.TokenFile+src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile+src.DSNFile) != "" ||
+		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames)+len(src.PrivateEndpointCIDRs) > 0 ||
+		src.PageSize != 0 || src.MaxObjects != 0 || src.AllowTLS12 || src.AllowInsecureLoopback {
+		return []error{fmt.Errorf("%s: an inventory source reads the certificate inventory; only issuer_certificates_file belongs to it", label)}
+	}
+	return nil
 }
 
 // validateReconcileKMIPSource checks a kind "kmip" source (A124).
@@ -4278,6 +4370,9 @@ func validateOptionalServices(c *Config) []error {
 			label := fmt.Sprintf("reconcile.schedules[%d].authorities[%d].source", i, j)
 			errs = append(errs, validateReconcileAuthoritySource(label, a.Source)...)
 			id := strings.TrimSpace(a.AuthorityID)
+			if id == "trstctl-self" || id == "trstctl-ca" {
+				errs = append(errs, fmt.Errorf("%s: authority %q is store-backed and takes no source; name the external authority differently", label, id))
+			}
 			fingerprint, _ := json.Marshal(a.Source)
 			if prev, ok := reconcileSources[id]; ok && prev != string(fingerprint) {
 				errs = append(errs, fmt.Errorf("%s differs from an earlier source for authority %q", label, id))

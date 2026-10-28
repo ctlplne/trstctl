@@ -2,6 +2,16 @@
 
 ### Added
 
+- External CA ledgers in reconciliation: a reconcile authority can read an EJBCA CA's issuance
+  ledger (`ejbca` source: REST v2 certificate search over mutual TLS) or a step-ca CA's (`stepca`
+  source: its PostgreSQL `x509_certs` and `revoked_x509_certs` tables, read-only), and an
+  `inventory` source scopes the certificate inventory to the same CAs. A round between the two
+  witnesses drift both ways: certificates the CA issued that the inventory lacks, certificates the
+  inventory holds that the CA never recorded, and revocations only one side knows. Both sides read
+  the CAs in `issuer_certificates_file` and certificates unexpired at the observation, identity
+  from each certificate's DER. A ledger that moves during the read, or is larger than
+  `max_objects`, fails the observation instead of reporting part of it. The ids `trstctl-self` and
+  `trstctl-ca` now refuse a source block.
 - Hybrid-to-pure ML-DSA certificate cutover: a PQC migration run can target pure ML-DSA for a
   certificate whose current leaf is the hybrid composite (the console offers such certificates).
   The plan marks that reissue `cutover`; starting the run holds its host job, the finding reads

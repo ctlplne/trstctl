@@ -512,6 +512,66 @@ accepts a server whose TLS stops at 1.2, with AEAD suites only.
 `private_endpoint_cidrs` widens the SSRF-safe dialer as it does for Vault. An
 authority id with no source block, such as `cloud-kms`, fails observation closed.
 
+An external CA's issuance ledger joins a round as its own authority. Pair it with
+an `inventory` authority: the certificate inventory scoped to the same CAs. Both
+read only the CAs whose certificates are in `issuer_certificates_file` (a PEM
+bundle) and only certificates unexpired at the observation, and both assert each
+certificate's issuer and serial, read from its DER, and whether it is revoked:
+
+```json
+{"tenant_id": "YOUR_TENANT_ID", "cadence": "1h", "authorities": [
+  {"authority_id": "inventory-ejbca", "source": {
+    "kind": "inventory",
+    "issuer_certificates_file": "/etc/trstctl/ejbca-issuing-ca.pem"
+  }},
+  {"authority_id": "ejbca-prod", "source": {
+    "kind": "ejbca",
+    "address": "https://ejbca.internal:8443",
+    "server_name": "ejbca.internal",
+    "ca_file": "/run/secrets/ejbca/server-ca.pem",
+    "client_cert_file": "/run/secrets/ejbca/observer.pem",
+    "client_key_file": "/run/secrets/ejbca/observer-key.pem",
+    "issuer_certificates_file": "/etc/trstctl/ejbca-issuing-ca.pem",
+    "ca_names": ["IssuingCA"],
+    "private_endpoint_cidrs": ["10.40.0.0/16"]
+  }}
+]}
+```
+
+An `ejbca` source uses EJBCA's REST v2 certificate search: enable the **REST
+Certificate Management V2** protocol and put the client certificate in an EJBCA
+role that may view certificates. `address` is EJBCA's base URL; the source adds
+`/ejbca/ejbca-rest-api` unless the URL already has a path. `ca_names` narrows the
+search to those EJBCA CA names. The search covers active and revoked certificates
+issued before the observation and expiring after it; on hold counts as revoked.
+The source reads the count first, then pages in expiry order (`page_size`,
+default 500; EJBCA allows up to 1000 once its Maximum Query Count is raised).
+If the pages do not add up to the count, or there are more than `max_objects`
+certificates (default 20000), the observation fails and the next round tries
+again; a partial ledger never reads as drift. The TLS floor is 1.3 unless
+`"allow_tls12": true`.
+
+A `stepca` source reads step-ca's PostgreSQL database, because step-ca has no API
+that lists what it issued:
+
+```json
+{"authority_id": "stepca-prod", "source": {
+  "kind": "stepca",
+  "dsn_file": "/run/secrets/stepca/observer.dsn",
+  "issuer_certificates_file": "/etc/trstctl/stepca-intermediate.pem",
+  "private_endpoint_cidrs": ["10.40.0.0/16"]
+}}
+```
+
+`dsn_file` holds a PostgreSQL connection string. It is read at each observation
+and is not kept. Use a role that has `SELECT` on step-ca's `x509_certs` and
+`revoked_x509_certs` tables only. The source reads both tables in one read-only,
+repeatable-read transaction, and fails past `max_objects` rows (default 20000).
+step-ca's file backends (Badger, BoltDB) and its MySQL backend are not read. For
+both kinds, `allow_insecure_loopback` permits a loopback address, and
+`private_endpoint_cidrs` widens the SSRF-safe dialer as it does for Vault. The
+store-backed ids `trstctl-self` and `trstctl-ca` take no source block.
+
 ## Workload-held PCAS co-signers
 
 An identity whose predecessor key lives in a workload agent (not in the isolated

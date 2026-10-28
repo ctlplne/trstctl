@@ -3854,7 +3854,25 @@ than sending an operator looking for a credential that was never there.
   `kmip` source block: KMIP 1.4 over mutual TLS, reading object metadata and
   certificate values and never key values, proven against an in-process double
   and against a PyKMIP server (run with `TRSTCTL_PYKMIP_PROOF=1`); a pre-active
-  KMIP object reduces to an unknown status. The cloud-kms reducer still has a
+  KMIP object reduces to an unknown status. An EJBCA or step-ca CA joins with an
+  `ejbca` or `stepca` source block, and an `inventory` source block makes an
+  authority of the certificate inventory scoped to the same CAs. A round then
+  compares a CA's issuance ledger with what the inventory holds. Both sides read
+  only the CAs in `issuer_certificates_file` and only certificates unexpired at
+  the observation, and assert issuer and serial (read from each certificate's
+  DER) and whether it is revoked. EJBCA is read with its REST v2 certificate
+  search. The search is frozen at the observation time, and its pages must add
+  up to the count read first; otherwise the observation fails rather than report
+  part of the ledger. step-ca's PostgreSQL tables `x509_certs` and
+  `revoked_x509_certs` are read in one read-only, repeatable-read transaction;
+  its file and MySQL backends are not read. Proven in containers against EJBCA
+  9.6.3 Community and step-ca 0.30.2 (run with `TRSTCTL_XREC_CA_PROOF=1`). A
+  round per CA witnessed each kind of drift: a revocation only the CA knew, a
+  certificate the CA issued that the inventory lacked, and one the inventory
+  held that the CA never recorded. EJBCA issued that one while its certificate
+  storage was off; for step-ca it was signed offline with the intermediate key.
+  AD CS ledgers need the Windows image and an x86 machine, and commercial CAs
+  need accounts; those come next. The cloud-kms reducer still has a
   nil source — scheduling it fails observation closed and logs, it does not
   fabricate an authority — and
   inventory rows with no captured DER cannot participate in the comparison

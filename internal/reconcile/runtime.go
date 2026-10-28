@@ -56,6 +56,13 @@ type RuntimeConfig struct {
 	// registered the same way: a kmip reducer with a real wire source under
 	// each authority id.
 	KMIPSources []KMIPSourceConfig
+	// EJBCASources and StepCASources are external CA issuance ledgers (A218),
+	// each an authority asserting what the named CAs issued and revoked;
+	// InventoryAuthorities are the certificate inventory scoped to those same
+	// CAs, the authority a ledger is compared with.
+	EJBCASources         []EJBCASourceConfig
+	StepCASources        []StepCASourceConfig
+	InventoryAuthorities []InventoryAuthorityConfig
 }
 
 // Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. The
@@ -172,6 +179,46 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 			return nil, err
 		}
 		if err := reducerRegistry.Register(src.cfg.AuthorityID, kmip.NewReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
+			return nil, err
+		}
+	}
+
+	// A218: external CA ledgers and the inventory scoped to their CAs. Their
+	// ids never replace the store-backed authorities.
+	registerSelf := func(id string, source reducers.SelfInventorySource) error {
+		if id == defaultSelfAuthority || id == defaultCAAuthority {
+			return fmt.Errorf("xrec runtime: authority id %q is reserved for the store-backed authority", id)
+		}
+		return reducerRegistry.Register(id, reducers.NewSelfReducer(id, source))
+	}
+	for _, es := range cfg.EJBCASources {
+		src, err := newEJBCASource(es)
+		if err != nil {
+			return nil, err
+		}
+		if err := registerSelf(src.cfg.AuthorityID, src); err != nil {
+			return nil, err
+		}
+	}
+	for _, ss := range cfg.StepCASources {
+		src, err := newStepCASource(ss)
+		if err != nil {
+			return nil, err
+		}
+		if err := registerSelf(src.cfg.AuthorityID, src); err != nil {
+			return nil, err
+		}
+	}
+	for _, ia := range cfg.InventoryAuthorities {
+		var src reducers.SelfInventorySource
+		if cfg.Store != nil {
+			inventory, err := newStoreInventoryJurisdictionSource(cfg.Store, ia)
+			if err != nil {
+				return nil, err
+			}
+			src = inventory
+		}
+		if err := registerSelf(strings.TrimSpace(ia.AuthorityID), src); err != nil {
 			return nil, err
 		}
 	}

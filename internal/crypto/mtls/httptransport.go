@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -34,6 +35,29 @@ func HTTPTransportForServerName(caPEM []byte, serverName string) (*http.Transpor
 			MinVersion: tls.VersionTLS12,
 		},
 	}, nil
+}
+
+// MutualTLSHTTPTransportFromFiles returns an HTTP transport that presents the
+// client certificate in certFile/keyFile and trusts only the CA certificate(s)
+// in serverCAFile, for operator-configured HTTPS APIs that authenticate their
+// caller by certificate (an EJBCA REST API, for example). TLS 1.3 is the floor
+// unless an option lowers it; serverName, when set, overrides the identity the
+// server certificate is verified against. HTTP/1.1 only: no HTTP/2 ALPN.
+func MutualTLSHTTPTransportFromFiles(certFile, keyFile, serverCAFile, serverName string, opts ...RawClientOption) (*http.Transport, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("mtls: load client certificate: %w", err)
+	}
+	serverCAs, err := loadCAPool(serverCAFile)
+	if err != nil {
+		return nil, err
+	}
+	cfg := clientTLSConfig(StaticSource(cert), serverCAs, serverName, nil)
+	cfg.NextProtos = nil
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return &http.Transport{TLSClientConfig: cfg}, nil
 }
 
 // HTTPTransportWithSystemRootsAndCA keeps the host's normal HTTPS trust and

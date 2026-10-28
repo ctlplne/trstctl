@@ -51,25 +51,38 @@ import (
 const storeSourcePageSize = 500
 
 // storeInventorySource is the "trstctl-self" authority: the certificate
-// inventory's claims, scoped to the internal-CA jurisdiction.
+// inventory's claims, scoped to the internal-CA jurisdiction. An inventory
+// authority (A218) is the same view scoped to the CAs an operator names, the
+// side an external CA's ledger is compared with.
 type storeInventorySource struct {
 	store *corestore.Store
+	// issuers is the jurisdiction: the issuer names whose certificates this
+	// view asserts.
+	issuers func(ctx context.Context, tenantID string) (map[string]struct{}, error)
+	// unexpiredOnly drops certificates expired at the observation, as the
+	// external ledgers this view is compared with do.
+	unexpiredOnly bool
+	watermark     string
 }
 
 func newStoreInventorySource(store *corestore.Store) *storeInventorySource {
-	return &storeInventorySource{store: store}
+	s := &storeInventorySource{store: store, watermark: "inventory"}
+	s.issuers = func(ctx context.Context, tenantID string) (map[string]struct{}, error) {
+		return internalCAIssuers(ctx, s.store, tenantID)
+	}
+	return s
 }
 
 func (s *storeInventorySource) SelfSnapshot(ctx context.Context, tenantID string) (reducers.SelfSnapshot, error) {
 	if s == nil || s.store == nil {
 		return reducers.SelfSnapshot{}, reducers.ErrMissingSource
 	}
-	issuers, err := internalCAIssuers(ctx, s.store, tenantID)
+	issuers, err := s.issuers(ctx, tenantID)
 	if err != nil {
 		return reducers.SelfSnapshot{}, err
 	}
 	now := time.Now().UTC()
-	snap := reducers.SelfSnapshot{Watermark: storeWatermark("inventory", now)}
+	snap := reducers.SelfSnapshot{Watermark: storeWatermark(s.watermark, now)}
 	afterID := corestore.ZeroUUID
 	for {
 		page, err := s.store.ListCertificatesPage(ctx, tenantID, afterID, nil, storeSourcePageSize, nil)
@@ -84,16 +97,20 @@ func (s *storeInventorySource) SelfSnapshot(ctx context.Context, tenantID string
 				// comparison; it still exists in the inventory read model.
 				continue
 			}
-			issuerDER, serialHex, err := crypto.CertificateIssuerAndSerial(row.CertificateDER)
+			facts, err := crypto.CertificateFactsFromDER(row.CertificateDER)
 			if err != nil {
 				// Stored bytes that no longer parse are an inventory data
 				// problem, not a reconciliation claim; refusing the whole
 				// observation for one bad row would silence the comparison.
 				continue
 			}
+			issuerDER, serialHex := facts.IssuerNameDER, facts.SerialHex
 			if _, ok := issuers[string(issuerDER)]; !ok {
 				// Outside the internal-CA jurisdiction (external CA, scan of a
 				// foreign cert). The ledger makes no claim about it.
+				continue
+			}
+			if s.unexpiredOnly && facts.NotAfter.Before(now) {
 				continue
 			}
 			status := canonStatusActive

@@ -44,6 +44,33 @@ func CertificateSubjectNameDERFromPEM(pemText []byte) ([]byte, error) {
 	return append([]byte(nil), cert.RawSubject...), nil
 }
 
+// CertificateSubjectNameDERsFromPEM returns the subject Name, exactly as
+// encoded, of every certificate in a PEM bundle: the issuer names a set of CAs
+// put on the certificates they sign. Non-certificate blocks are skipped; a
+// bundle without a certificate is an error.
+func CertificateSubjectNameDERsFromPEM(pemText []byte) ([][]byte, error) {
+	var names [][]byte
+	for rest := pemText; ; {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("crypto: parse certificate: %w", err)
+		}
+		names = append(names, append([]byte(nil), cert.RawSubject...))
+	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("crypto: PEM bundle has no certificate block")
+	}
+	return names, nil
+}
+
 // CertificateFacts is what a foreign authority's certificate asserts about
 // itself, read inside the AN-3 boundary for cross-authority observation:
 // identity (issuer Name DER + serial), key algorithm label, validity and the

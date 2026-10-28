@@ -212,6 +212,10 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 		VaultSources: reconcileVaultSourcesFromConfig(reconcileConfigOf(cfg)),
 		// A124: external KMIP servers named with a kmip source block.
 		KMIPSources: reconcileKMIPSourcesFromConfig(reconcileConfigOf(cfg)),
+		// A218: external CA ledgers and the inventory scoped to their CAs.
+		EJBCASources:         reconcileEJBCASourcesFromConfig(reconcileConfigOf(cfg)),
+		StepCASources:        reconcileStepCASourcesFromConfig(reconcileConfigOf(cfg)),
+		InventoryAuthorities: reconcileInventoryAuthoritiesFromConfig(reconcileConfigOf(cfg)),
 	})
 	if err != nil {
 		return err
@@ -307,6 +311,71 @@ func reconcileKMIPSourcesFromConfig(c config.Reconcile) []reconcile.KMIPSourceCo
 			out = append(out, ks)
 		}
 	}
+	return out
+}
+
+// reconcileSourcesOfKind visits the source blocks of one kind across all
+// schedules, once per authority id.
+func reconcileSourcesOfKind(c config.Reconcile, kind string, visit func(id string, src *config.ReconcileAuthoritySource)) {
+	seen := map[string]bool{}
+	for _, s := range c.Schedules {
+		for _, a := range s.Authorities {
+			id := strings.TrimSpace(a.AuthorityID)
+			if a.Source == nil || id == "" || seen[id] || strings.TrimSpace(a.Source.Kind) != kind {
+				continue
+			}
+			seen[id] = true
+			visit(id, a.Source)
+		}
+	}
+}
+
+func reconcilePrivateCIDRs(raw []string) []netip.Prefix {
+	var out []netip.Prefix
+	for _, cidr := range raw {
+		if p, err := netip.ParsePrefix(strings.TrimSpace(cidr)); err == nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// reconcileEJBCASourcesFromConfig collects the ejbca source blocks (A218).
+func reconcileEJBCASourcesFromConfig(c config.Reconcile) []reconcile.EJBCASourceConfig {
+	var out []reconcile.EJBCASourceConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindEJBCA, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.EJBCASourceConfig{
+			AuthorityID: id, Address: strings.TrimSpace(src.Address), ServerName: strings.TrimSpace(src.ServerName),
+			CAFile: strings.TrimSpace(src.CAFile), ClientCertFile: strings.TrimSpace(src.ClientCertFile),
+			ClientKeyFile: strings.TrimSpace(src.ClientKeyFile), IssuerCertificatesFile: strings.TrimSpace(src.IssuerCertificatesFile),
+			CANames: append([]string(nil), src.CANames...), MaxCertificates: src.MaxObjects, PageSize: src.PageSize,
+			AllowTLS12: src.AllowTLS12, AllowLoopback: src.AllowInsecureLoopback,
+			PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+		})
+	})
+	return out
+}
+
+// reconcileStepCASourcesFromConfig collects the stepca source blocks (A218).
+func reconcileStepCASourcesFromConfig(c config.Reconcile) []reconcile.StepCASourceConfig {
+	var out []reconcile.StepCASourceConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindStepCA, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.StepCASourceConfig{
+			AuthorityID: id, DSNFile: strings.TrimSpace(src.DSNFile), IssuerCertificatesFile: strings.TrimSpace(src.IssuerCertificatesFile),
+			MaxCertificates: src.MaxObjects, AllowLoopback: src.AllowInsecureLoopback,
+			PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+		})
+	})
+	return out
+}
+
+// reconcileInventoryAuthoritiesFromConfig collects the inventory source
+// blocks (A218): the inventory scoped to an external CA's certificates.
+func reconcileInventoryAuthoritiesFromConfig(c config.Reconcile) []reconcile.InventoryAuthorityConfig {
+	var out []reconcile.InventoryAuthorityConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindInventory, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.InventoryAuthorityConfig{AuthorityID: id, IssuerCertificatesFile: strings.TrimSpace(src.IssuerCertificatesFile)})
+	})
 	return out
 }
 

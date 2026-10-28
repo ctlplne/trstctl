@@ -107,3 +107,39 @@ func TestReconcileKMIPSourcesFromConfig(t *testing.T) {
 		t.Fatalf("kmip source = %+v", ks)
 	}
 }
+
+// A218: ejbca, stepca and inventory source blocks become one source each per
+// authority id, with their files, CA names, caps and egress carried over.
+func TestReconcileCALedgerSourcesFromConfig(t *testing.T) {
+	ejbca := &config.ReconcileAuthoritySource{Kind: config.ReconcileSourceKindEJBCA, Address: " https://ejbca.internal:8443 ",
+		ServerName: "ejbca.internal", CAFile: "/run/ca.pem", ClientCertFile: "/run/client.pem", ClientKeyFile: "/run/client-key.pem",
+		IssuerCertificatesFile: "/etc/ejbca-ca.pem", CANames: []string{"IssuingCA"}, PageSize: 250, MaxObjects: 900,
+		AllowTLS12: true, PrivateEndpointCIDRs: []string{"10.20.0.0/16"}}
+	stepca := &config.ReconcileAuthoritySource{Kind: config.ReconcileSourceKindStepCA, DSNFile: "/run/stepca.dsn",
+		IssuerCertificatesFile: "/etc/stepca.pem", AllowInsecureLoopback: true}
+	inventory := &config.ReconcileAuthoritySource{Kind: config.ReconcileSourceKindInventory, IssuerCertificatesFile: "/etc/ejbca-ca.pem"}
+	c := config.Reconcile{Schedules: []config.ReconcileSchedule{
+		{TenantID: "t1", Authorities: []config.ReconcileAuthority{{AuthorityID: "inventory-ejbca", Source: inventory}, {AuthorityID: "ejbca-prod", Source: ejbca}}},
+		{TenantID: "t2", Authorities: []config.ReconcileAuthority{{AuthorityID: "inventory-ejbca", Source: inventory}, {AuthorityID: "ejbca-prod", Source: ejbca},
+			{AuthorityID: "stepca-prod", Source: stepca}}},
+	}}
+	ejbcaSources := reconcileEJBCASourcesFromConfig(c)
+	if len(ejbcaSources) != 1 {
+		t.Fatalf("ejbca sources = %+v", ejbcaSources)
+	}
+	if es := ejbcaSources[0]; es.AuthorityID != "ejbca-prod" || es.Address != "https://ejbca.internal:8443" || es.ServerName != "ejbca.internal" ||
+		es.CAFile != "/run/ca.pem" || es.ClientCertFile != "/run/client.pem" || es.ClientKeyFile != "/run/client-key.pem" ||
+		es.IssuerCertificatesFile != "/etc/ejbca-ca.pem" || len(es.CANames) != 1 || es.PageSize != 250 || es.MaxCertificates != 900 ||
+		!es.AllowTLS12 || es.AllowLoopback || len(es.PrivateEndpointCIDRs) != 1 {
+		t.Fatalf("ejbca source = %+v", es)
+	}
+	stepcaSources := reconcileStepCASourcesFromConfig(c)
+	if len(stepcaSources) != 1 || stepcaSources[0].DSNFile != "/run/stepca.dsn" || stepcaSources[0].IssuerCertificatesFile != "/etc/stepca.pem" ||
+		!stepcaSources[0].AllowLoopback {
+		t.Fatalf("stepca sources = %+v", stepcaSources)
+	}
+	inventories := reconcileInventoryAuthoritiesFromConfig(c)
+	if len(inventories) != 1 || inventories[0].AuthorityID != "inventory-ejbca" || inventories[0].IssuerCertificatesFile != "/etc/ejbca-ca.pem" {
+		t.Fatalf("inventory authorities = %+v", inventories)
+	}
+}
