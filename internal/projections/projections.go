@@ -1904,12 +1904,16 @@ const (
 	// RecoveredFromRetainedResponderLeaf: a managed CA's v2 responder-form
 	// ca.endentity.issued mint retained the public leaf (A113).
 	RecoveredFromRetainedResponderLeaf = "retained_v2_responder_leaf"
+	// RecoveredFromOperatorManagedLeaf: a managed CA's v1 ca.endentity.issued
+	// mint kept only a serial, and an operator supplied the public leaf, which
+	// that CA's stored certificate and the serial ledger confirm (A209).
+	RecoveredFromOperatorManagedLeaf = "operator_public_managed_leaf"
 )
 
 // RecoveredInventoryID is the inventory ID a recovery event projects: the
 // identity bound to the original mint for that kind of leaf.
 func RecoveredInventoryID(tenantID string, recovered CACertificateInventoryRecovered) string {
-	if recovered.Evidence == RecoveredFromRetainedResponderLeaf {
+	if recovered.Evidence == RecoveredFromRetainedResponderLeaf || recovered.Evidence == RecoveredFromOperatorManagedLeaf {
 		return caevent.RecoveredManagedResponderInventoryID(tenantID, recovered.OriginalEventID)
 	}
 	return RecoveredSecretPKIInventoryID(tenantID, recovered.OriginalEventID)
@@ -5692,9 +5696,21 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if pl.OriginalEventID == "" || len(pl.OriginalEventID) > 128 || e.ID == "" || pl.CAID == "" || info.IsCA ||
 			pl.Serial != info.SerialNumber || pl.Fingerprint != info.SHA256Fingerprint ||
 			(pl.Evidence != RecoveredFromRetainedLeaf && pl.Evidence != RecoveredFromOperatorLeaf &&
-				pl.Evidence != RecoveredFromRetainedResponderLeaf) ||
+				pl.Evidence != RecoveredFromRetainedResponderLeaf && pl.Evidence != RecoveredFromOperatorManagedLeaf) ||
 			cryptoboundary.VerifyLeafSignedByCA(pl.CertificateDER, pl.IssuerCertificateDER) != nil {
 			return errors.New("projections: recovered PKI secret leaf differs from its exact issuer evidence")
+		}
+		if pl.Evidence == RecoveredFromOperatorManagedLeaf {
+			// A209: an operator-supplied managed CA leaf must be signed by that
+			// CA's stored certificate, not only by the issuer the event names.
+			caPEM, err := p.store.CAAuthorityCertificateTx(ctx, tx, e.TenantID, pl.CAID)
+			if err != nil {
+				return fmt.Errorf("projections: recovered managed CA leaf issuer: %w", err)
+			}
+			caDER, err := certinfo.LeafDER(caPEM)
+			if err != nil || !bytes.Equal(caDER, pl.IssuerCertificateDER) {
+				return errors.New("projections: recovered managed CA leaf names an issuer other than the CA's stored certificate")
+			}
 		}
 		// The original mint put this serial in the CA ledger; recovery adds
 		// no serial, and binds to that mint when the ledger recorded it.

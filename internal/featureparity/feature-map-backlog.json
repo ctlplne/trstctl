@@ -17156,13 +17156,15 @@
             "api_surface": [
                 "previewPKISecret",
                 "issuePKISecret",
-                "recoverPKISecretLeaf"
+                "recoverPKISecretLeaf",
+                "recoverManagedCALeaf"
             ],
             "api_na": "",
             "cli_surface": [
                 "secrets pki preview",
                 "secrets pki",
-                "certificates inventory-pki-secret"
+                "certificates inventory-pki-secret",
+                "certificates inventory-managed-ca"
             ],
             "cli_na": "",
             "facet_evidence": {

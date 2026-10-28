@@ -2,6 +2,12 @@
 
 ### Added
 
+- Managed CA leaf recovery: `POST /api/v1/certificates/managed-ca-recoveries`
+  (`trstctl certificates inventory-managed-ca -f leaf.pem`) gives a managed CA leaf a
+  version-1 `ca.endentity.issued` mint recorded by serial only its inventory row from
+  the public certificate an operator supplies, when the tenant's managed CA signed it
+  by its stored certificate and that CA's mint recorded the serial; the leaf is then
+  revocable through the inventory workflow.
 - Archive legal holds: `POST /api/v1/archives/legal-holds` (object and reason,
   `audit:write`), `DELETE` on `/{id}` and `GET` (CLI `archives legal-holds
   place|release|list`) place and release an S3 legal hold on one archive object under

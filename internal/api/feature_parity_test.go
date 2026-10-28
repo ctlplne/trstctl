@@ -330,8 +330,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// the access row.
 	// A208's archive legal hold place, release and list raised it to 573,
 	// mapped onto the compliance reporting row.
-	if len(out) != 573 {
-		t.Fatalf("OpenAPI operationIds = %d, want 573", len(out))
+	// A209's managed CA leaf recovery raised it to 574, mapped onto the PKI
+	// secrets row beside the PKI-secret leaf recovery.
+	if len(out) != 574 {
+		t.Fatalf("OpenAPI operationIds = %d, want 574", len(out))
 	}
 	return out
 }

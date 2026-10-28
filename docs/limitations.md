@@ -5508,8 +5508,15 @@ managed CA.
 The inventory identity stays stable across rebuilds and the original issuance
 event remains its revocation authority. Version-1 events retain only a serial;
 trstctl cannot reconstruct their missing public certificate or infer key custody
-from that serial. An operator-supplied PEM can be imported as an observation,
-but that import is not proof of issuance or revocation authority.
+from that serial. An operator who still holds such a leaf's public certificate
+submits it to `POST /api/v1/certificates/managed-ca-recoveries`
+(`trstctl certificates inventory-managed-ca -f leaf.pem`), which accepts it only
+when one of the tenant's managed CAs signed it, by that CA's stored
+certificate, and a version-1 mint of that CA recorded its serial; the leaf then
+gets its own inventory row once (custody unknown) and is revoked against that
+managed CA through the inventory workflow. A leaf another CA signed, or one no
+mint recorded, is refused and records nothing. A version-1 leaf whose
+certificate nobody kept remains serial evidence.
 
 CT log submission is served as an outbound side effect, not as an inline
 API call: the API validates public certificate PEM and CT log URLs,

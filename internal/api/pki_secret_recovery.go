@@ -20,14 +20,16 @@ var (
 	ErrPKISecretLeafInInventory = errors.New("api: the leaf is already in inventory")
 )
 
-// PKISecretLeafRecoveryService gives a historical PKI-secret leaf, minted by
-// a v1 event that kept only its serial, the inventory row a v3 mint would
-// have had, from the public certificate an operator supplies (A111).
+// PKISecretLeafRecoveryService gives a historical leaf the inventory row its
+// mint would have had, from the public certificate an operator supplies: a
+// PKI-secret leaf minted by a v1 event that kept only its serial (A111), or a
+// managed CA leaf a v1 ca.endentity.issued mint recorded by serial only (A209).
 type PKISecretLeafRecoveryService interface {
 	RecoverPKISecretLeaf(ctx context.Context, tenantID string, certificatePEM []byte) (PKISecretLeafRecovery, error)
+	RecoverManagedCALeaf(ctx context.Context, tenantID string, certificatePEM []byte) (PKISecretLeafRecovery, error)
 }
 
-// WithPKISecretLeafRecovery wires historical PKI-secret leaf recovery.
+// WithPKISecretLeafRecovery wires historical leaf recovery.
 func WithPKISecretLeafRecovery(svc PKISecretLeafRecoveryService) Option {
 	return func(c *config) { c.pkiSecretLeafRecovery = svc }
 }
@@ -46,30 +48,46 @@ type PKISecretLeafRecovery struct {
 //
 //trstctl:mutation
 func (a *API) recoverPKISecretLeaf(w http.ResponseWriter, r *http.Request) {
-	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
-		if a.pkiSecretLeafRecovery == nil {
-			return 0, nil, errStatus(http.StatusServiceUnavailable, "PKI secret leaf recovery is not available on this control plane")
-		}
-		pemBytes, err := io.ReadAll(io.LimitReader(r.Body, MaxPKISecretLeafPEMBytes+1))
-		if err != nil {
-			return 0, nil, errStatus(http.StatusBadRequest, "cannot read the certificate")
-		}
-		if len(pemBytes) == 0 {
-			return 0, nil, errStatus(http.StatusBadRequest, "send the leaf's PEM certificate as the request body")
-		}
-		if len(pemBytes) > MaxPKISecretLeafPEMBytes {
-			return 0, nil, errStatus(http.StatusRequestEntityTooLarge, "the certificate is larger than 64 KiB")
-		}
-		out, err := a.pkiSecretLeafRecovery.RecoverPKISecretLeaf(ctx, tenantID, pemBytes)
-		switch {
-		case errors.Is(err, ErrPKISecretLeafNotRecoverable):
-			return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
-		case errors.Is(err, ErrPKISecretLeafInInventory):
-			return 0, nil, errWithStatus(http.StatusConflict, err)
-		case err != nil:
-			return 0, nil, err
-		}
-		return http.StatusOK, out, nil
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.recoverHistoricalLeaf(ctx, r, tenantID, false)
 	})
+}
+
+// recoverManagedCALeaf reads one PEM certificate as the request body (A209).
+//
+//trstctl:mutation
+func (a *API) recoverManagedCALeaf(w http.ResponseWriter, r *http.Request) {
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		return a.recoverHistoricalLeaf(ctx, r, tenantID, true)
+	})
+}
+
+func (a *API) recoverHistoricalLeaf(ctx context.Context, r *http.Request, tenantID string, managed bool) (int, any, error) {
+	if a.pkiSecretLeafRecovery == nil {
+		return 0, nil, errStatus(http.StatusServiceUnavailable, "historical leaf recovery is not available on this control plane")
+	}
+	pemBytes, err := io.ReadAll(io.LimitReader(r.Body, MaxPKISecretLeafPEMBytes+1))
+	if err != nil {
+		return 0, nil, errStatus(http.StatusBadRequest, "cannot read the certificate")
+	}
+	if len(pemBytes) == 0 {
+		return 0, nil, errStatus(http.StatusBadRequest, "send the leaf's PEM certificate as the request body")
+	}
+	if len(pemBytes) > MaxPKISecretLeafPEMBytes {
+		return 0, nil, errStatus(http.StatusRequestEntityTooLarge, "the certificate is larger than 64 KiB")
+	}
+	recoverLeaf := a.pkiSecretLeafRecovery.RecoverPKISecretLeaf
+	if managed {
+		recoverLeaf = a.pkiSecretLeafRecovery.RecoverManagedCALeaf
+	}
+	out, err := recoverLeaf(ctx, tenantID, pemBytes)
+	switch {
+	case errors.Is(err, ErrPKISecretLeafNotRecoverable):
+		return 0, nil, errWithStatus(http.StatusUnprocessableEntity, err)
+	case errors.Is(err, ErrPKISecretLeafInInventory):
+		return 0, nil, errWithStatus(http.StatusConflict, err)
+	case err != nil:
+		return 0, nil, err
+	}
+	return http.StatusOK, out, nil
 }

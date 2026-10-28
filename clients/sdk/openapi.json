@@ -51118,6 +51118,74 @@
         "x-trstctl-permission": "certs:read"
       }
     },
+    "/api/v1/certificates/managed-ca-recoveries": {
+      "post": {
+        "operationId": "recoverManagedCALeaf",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/x-pem-file": {
+              "schema": {
+                "$ref": "#/components/schemas/PKISecretLeafPEM"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PKISecretLeafRecovery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Give a serial-only managed CA leaf its inventory row from its public certificate",
+        "x-trstctl-permission": "certs:write"
+      }
+    },
     "/api/v1/certificates/pki-secret-recoveries": {
       "post": {
         "operationId": "recoverPKISecretLeaf",

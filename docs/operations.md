@@ -298,4 +298,9 @@ kept only the serial; submit the leaf's public certificate with
 inventory row once the issuing CA's signature and the recorded serial match.
 The same sweep recovers a managed-CA leaf recorded only in the version-2
 responder form of `ca.endentity.issued` when no other event inventoried it,
-checking it against that managed CA's stored certificate.
+checking it against that managed CA's stored certificate. A managed-CA leaf a
+version-1 `ca.endentity.issued` mint recorded by serial only joins inventory
+the same way once its public certificate is submitted with
+`trstctl certificates inventory-managed-ca -f leaf.pem`: the managed CA's
+stored certificate must have signed it and that CA's version-1 mint must have
+recorded its serial.

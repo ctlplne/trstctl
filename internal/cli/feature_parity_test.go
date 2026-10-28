@@ -370,8 +370,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A207's `access roles define|delete` raised it to 632, on the access row.
 	// A208's `archives legal-holds place|release|list` raised it to 635, on
 	// the compliance reporting row.
-	if len(out) != 635 {
-		t.Fatalf("CLI commands = %d, want 635", len(out))
+	// A209's `certificates inventory-managed-ca` raised it to 636, on the PKI
+	// secrets row.
+	if len(out) != 636 {
+		t.Fatalf("CLI commands = %d, want 636", len(out))
 	}
 	return out
 }
