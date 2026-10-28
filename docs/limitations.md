@@ -3848,8 +3848,18 @@ than sending an operator looking for a credential that was never there.
   nil source — scheduling it fails observation closed and logs, it does not
   fabricate an authority — and
   inventory rows with no captured DER cannot participate in the comparison
-  (no issuer bytes to derive the shared identity from), so a metadata-only
-  scanner import is invisible to this pair of authorities.
+  (no issuer bytes to derive the shared identity from) until their bytes are
+  recovered. `POST /api/v1/certificates/{id}/der-recovery` (CLI `certificates
+  recover-der`, the certificate detail's **Certificate bytes** actions) looks for
+  them in a mint of the tenant's own CAs that retained the certificate, found by
+  the row's serial (`ca_ledger`), or reads the certificate the row's `host:port`
+  location serves from the control plane under the usual egress rules (`endpoint`;
+  a private address needs `egress:private` and its CIDR). Bytes are attached
+  only when they hash to the row's fingerprint, only to a row that holds none,
+  and with where they came from (`certificate.der.recovered`); the row then
+  joins the comparison. An address only a relay reaches gets its bytes from a
+  sweep with `agent_channel.probe_scanned_certificates` on, and fetching by
+  serial from external CAs is what comes next.
 - CA-key retirement (H4): `GET /api/v1/ca/keys/{id}/retirement` and
   `trstctl ca keys retirement` list the dependents standing between a CA key and
   destruction. An operator with `keys:write` can submit the exact final dependency

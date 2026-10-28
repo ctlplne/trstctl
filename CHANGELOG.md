@@ -2,6 +2,14 @@
 
 ### Added
 
+- Certificate byte recovery: `POST /api/v1/certificates/{id}/der-recovery` (`trstctl-cli
+  certificates recover-der`, the certificate detail's **Certificate bytes** actions) gives an
+  inventory row recorded without its certificate — a scan, a cloud listing, an older import — the
+  certificate itself, from a mint of the tenant's CAs that retained it (`ca_ledger`, by serial) or
+  from the `host:port` the row names (`endpoint`, dialed by the control plane under the egress
+  rules). Bytes are attached only when they hash to the row's fingerprint and the row held none,
+  with where they came from; the row then joins authority agreement checks. Certificate responses
+  carry `certificate_bytes_held`, and the detail `der_recovery`.
 - Verification address suggestions: `GET /api/v1/connectors/targets/{id}/verification-suggestions`
   (`trstctl-cli connector target verification-suggestions`) lists the `host:port` addresses where a
   discovery scan saw a certificate trstctl delivered to the target, with those findings as

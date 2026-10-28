@@ -379,8 +379,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A214's `connector target verification-suggestions|
 	// confirm-verification-address` raised it to 641, on the deployment
 	// connectors row.
-	if len(out) != 641 {
-		t.Fatalf("CLI commands = %d, want 641", len(out))
+	// A215's `certificates recover-der` raised it to 642, on the PKI secrets
+	// row.
+	if len(out) != 642 {
+		t.Fatalf("CLI commands = %d, want 642", len(out))
 	}
 	return out
 }

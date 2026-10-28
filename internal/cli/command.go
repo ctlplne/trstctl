@@ -279,6 +279,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"certificates", "verify-assurance-record"}, Summary: "Verify a saved assurance record offline against an audit JWK set you pinned"},
 	{Name: []string{"certificates", "inventory-pki-secret"}, Method: "POST", Path: "/api/v1/certificates/pki-secret-recoveries", Body: bodyFile, ContentType: "application/x-pem-file", ExampleFile: "leaf.pem", Summary: "Give a historical PKI-secret leaf its inventory row from its public certificate"},
 	{Name: []string{"certificates", "inventory-managed-ca"}, Method: "POST", Path: "/api/v1/certificates/managed-ca-recoveries", Body: bodyFile, ContentType: "application/x-pem-file", ExampleFile: "leaf.pem", Summary: "Give a serial-only managed CA leaf its inventory row from its public certificate"},
+	{Name: []string{"certificates", "recover-der"}, Method: "POST", Path: "/api/v1/certificates/{id}/der-recovery", Body: bodyFile, Summary: "Recover an inventory row's certificate bytes from the tenant's CA mint or the endpoint it records"},
 	{Name: []string{"certificates", "bulk-revoke"}, Method: "POST", Path: "/api/v1/certificates/bulk-revoke", Body: bodyFile, Summary: "Revoke exact certificates or explicitly selected lifecycle identities"},
 
 	{Name: []string{"workloads", "attester-trust-sources", "create"}, Method: "POST", Path: "/api/v1/workloads/attester-trust-sources", Body: bodyFile, Summary: "Create a tenant workload attester trust source"},

@@ -11,6 +11,7 @@ const { apiMock } = vi.hoisted(() => ({
   apiMock: {
     certificatePage: vi.fn(),
     getCertificate: vi.fn(),
+    recoverCertificateDER: vi.fn(),
     certificateKeyAttestation: vi.fn(),
     certificateHealth: vi.fn(),
     crlDistributions: vi.fn(),
@@ -913,6 +914,51 @@ describe("Certificate Lifecycle cockpit", () => {
     ).toBeInTheDocument();
     expect(within(detail).getByText(/OCSP http:\/\/ocsp\.example\/a211: OCSP answered revoked \(its own serial, signature verified\)/)).toBeInTheDocument();
     expect(within(detail).getAllByText(/by relay-edge$/)).toHaveLength(2);
+  });
+
+  it("recovers a scanned certificate's bytes from the endpoint it names and says where they came from", async () => {
+    const scanned = {
+      id: "scanned-bytes",
+      tenant_id: "tenant-1",
+      subject: "CN=bytes.example",
+      sans: ["bytes.example"],
+      issuer: "CN=Internal CA",
+      status: "active",
+      fingerprint: "fp-bytes",
+      source: "discovery:network",
+      deployment_location: "10.0.0.5:443",
+      certificate_bytes_held: false,
+      not_before: "2026-10-24T00:00:00Z",
+      not_after: "2027-10-24T00:00:00Z",
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [scanned] });
+    apiMock.getCertificate.mockResolvedValueOnce(scanned).mockResolvedValueOnce({
+      ...scanned,
+      certificate_bytes_held: true,
+      der_recovery: { method: "endpoint", evidence: "10.0.0.5:443", recovered_at: "2026-10-28T08:00:00Z" },
+    });
+    apiMock.recoverCertificateDER.mockResolvedValue({
+      certificate_id: "scanned-bytes",
+      fingerprint: "fp-bytes",
+      method: "endpoint",
+      outcome: "recovered",
+      evidence: "10.0.0.5:443",
+    });
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    fireEvent.click(within(within(inventory).getByRole("row", { name: /bytes\.example/ })).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText(/trstctl holds only what was recorded about this certificate/)).toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("button", { name: "Read from 10.0.0.5:443" }));
+    await vi.waitFor(() =>
+      expect(apiMock.recoverCertificateDER).toHaveBeenCalledWith(
+        "scanned-bytes",
+        { method: "endpoint", allow_private_endpoint: true, private_egress_cidrs: ["10.0.0.5/32"] },
+        expect.any(String),
+      ),
+    );
+    expect(await within(detail).findByText(/Read from the endpoint 10\.0\.0\.5:443 on/)).toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: "Look up in this tenant's CA records" })).not.toBeInTheDocument();
   });
 
   it("shows each CT log's SCT check and inclusion proof for an issued certificate", async () => {

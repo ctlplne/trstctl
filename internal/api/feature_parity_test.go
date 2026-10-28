@@ -337,8 +337,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A212's coverage candidates raised it to 577, on the discovery row.
 	// A214's verification address suggestions and confirmation raised it to
 	// 579, on the deployment connectors row.
-	if len(out) != 579 {
-		t.Fatalf("OpenAPI operationIds = %d, want 579", len(out))
+	// A215's certificate byte recovery raised it to 580, on the PKI secrets
+	// row beside the historical leaf recoveries.
+	if len(out) != 580 {
+		t.Fatalf("OpenAPI operationIds = %d, want 580", len(out))
 	}
 	return out
 }

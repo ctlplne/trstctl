@@ -1859,7 +1859,27 @@ func componentSchemas() map[string]*Schema {
 			Description: "Relay-verified CRL and OCSP answers that name this certificate, newest first (detail reads only): checks of its own serial when it is known only from a scan, and endpoint checks it represents."},
 		"transparency": {Type: "array", Items: ref("CertificateTransparencyEntry"),
 			Description: "What each Certificate Transparency log answered for this certificate's submissions, newest first (detail reads only)."},
+		"certificate_bytes_held": {Type: "boolean", Description: "Whether trstctl holds the certificate itself, not only what was recorded about it. A row without its bytes cannot take part in cross-authority reconciliation until they are recovered."},
+		"der_recovery":           ref("CertificateDERRecoveryRecord"),
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
+	certificateDERRecoveryRecord := object(map[string]*Schema{
+		"method":       {Type: "string", Enum: []string{"ca_ledger", "endpoint"}},
+		"evidence":     {Type: "string", Description: "The CA mint event that retained the certificate, or the endpoint address that served it."},
+		"recovered_at": timestamp(),
+	}, "method", "evidence", "recovered_at")
+	certificateDERRecoveryRequest := object(map[string]*Schema{
+		"method": {Type: "string", Enum: []string{"ca_ledger", "endpoint"},
+			Description: "ca_ledger: a mint of this tenant's CAs that retained the certificate, found by the row's serial. endpoint: the certificate the row's host:port deployment location serves, dialed by the control plane."},
+		"allow_private_endpoint": {Type: "boolean", Description: "Allow the endpoint method to dial a private address; requires egress:private and private_egress_cidrs."},
+		"private_egress_cidrs":   {Type: "array", Items: str()},
+	}, "method")
+	certificateDERRecovery := object(map[string]*Schema{
+		"certificate_id": uuid(), "fingerprint": str(),
+		"method": {Type: "string", Enum: []string{"ca_ledger", "endpoint"}},
+		"outcome": {Type: "string", Enum: []string{"recovered", "already_held", "not_found", "mismatch", "unreachable"},
+			Description: "recovered: bytes that hash to the row's fingerprint were attached; already_held: the row had them; not_found: no mint retained them or the row records no endpoint; mismatch: the endpoint serves another certificate; unreachable: the endpoint could not be read."},
+		"evidence": str(), "detail": str(),
+	}, "certificate_id", "fingerprint", "method", "outcome")
 	certificateTransparencyEntry := object(map[string]*Schema{
 		"submission_id": uuid(), "log_url": str(),
 		"log_id":        {Type: "string", Description: "The log id the SCT names: hex SHA-256 of the log's public key."},
@@ -7701,6 +7721,9 @@ func componentSchemas() map[string]*Schema {
 		"VerificationSuggestionEvidence":           verificationSuggestionEvidence,
 		"VerificationAddressConfirmation":          verificationAddressConfirmation,
 		"CertificateTransparencyEntry":             certificateTransparencyEntry,
+		"CertificateDERRecoveryRecord":             certificateDERRecoveryRecord,
+		"CertificateDERRecoveryRequest":            certificateDERRecoveryRequest,
+		"CertificateDERRecovery":                   certificateDERRecovery,
 		"KubernetesCertificateProvenance":          kubernetesCertificateProvenance,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),

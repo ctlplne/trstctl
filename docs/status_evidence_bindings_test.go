@@ -74,6 +74,7 @@ var servedEvidenceBindings = []EvidenceBinding{
 	evidence("CADiscoveryItem", "status", observationPredicate, "internal/api/ca_discovery.go:API.listCADiscoveryInventory"),
 	evidence("CAKeyCeremony", "status", eventProjectionPredicate, "internal/api/ca_hierarchy.go:API.createCACeremony"),
 	evidence("Certificate", "status", eventProjectionPredicate, "internal/projections/projections.go:Projector.Apply"),
+	evidence("CertificateDERRecovery", "outcome", predicate(evidenceObservation, "recovered requires certificate bytes read from a mint event of the tenant's own CA or from a TLS handshake with the row's recorded host:port whose SHA-256 equals the row's fingerprint, appended as an immutable certificate.der.recovered event that the projection checks again and applies only to a row holding no bytes; already_held, not_found, mismatch and unreachable attach nothing"), "internal/server/certificate_der_recovery.go:Server.RecoverCertificateDER"),
 	evidence("CertificateHealthItem", "status", observationPredicate, "internal/api/certificates.go:toCertificateHealthDashboard"),
 	evidence("CodeSigningIdentity", "status", eventProjectionPredicate, "internal/api/codesign_identities.go:API.listCodeSigningIdentities"),
 	evidence("ConnectorDelivery", "status", predicate(evidenceObservation, "the connector receipt registry binds each value to queued, contacted, mutated, or independently verified evidence"), "internal/orchestrator/commands.go:Orchestrator.RecordConnectorDelivery"),

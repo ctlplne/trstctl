@@ -136,7 +136,10 @@ count, delta base, freshness window), a Certificate Transparency queueing form (
 line may carry the log's public key after its URL), and a per-certificate renewal-history
 timeline in the detail drawer. The drawer's **Certificate Transparency** list shows each
 log's SCT (verified against the log key, invalid with the reason, or unverified) and
-whether the log proved the entry is in a tree head it signed. The drawer's
+whether the log proved the entry is in a tree head it signed. For a row recorded
+without the certificate itself, **Certificate bytes** offers to look it up in the
+tenant's CA records or read it from the `host:port` the row names, attaches it only
+when it matches the fingerprint, and then shows where it came from. The drawer's
 **Assurance record** section builds the certificate's signed lifecycle assurance
 record on request, shows which stages were independently observed, recorded only, or
 absent, and saves the signed file for offline verification. See

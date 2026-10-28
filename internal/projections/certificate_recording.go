@@ -265,6 +265,8 @@ var certificateMetadataEventTypes = [...]string{
 	EventCertificateRevocationBatchApplied, EventMigrationRunRecorded,
 	EventOwnerDeleted, EventPrivacySubjectErased, EventPrivacyRetentionEnforced,
 	EventEndpointVerified, EventOwnershipAssigned,
+	// A215: recovered certificate bytes fill a row's empty DER.
+	EventCertificateDERRecovered,
 }
 
 // CertificateMetadataEventTypes is the source subject set the command recovery

@@ -24,9 +24,12 @@ var (
 // mint would have had, from the public certificate an operator supplies: a
 // PKI-secret leaf minted by a v1 event that kept only its serial (A111), or a
 // managed CA leaf a v1 ca.endentity.issued mint recorded by serial only (A209).
+// It also gives an inventory row that holds no certificate bytes the bytes of
+// its certificate, from the tenant's CA mint or the endpoint it records (A215).
 type PKISecretLeafRecoveryService interface {
 	RecoverPKISecretLeaf(ctx context.Context, tenantID string, certificatePEM []byte) (PKISecretLeafRecovery, error)
 	RecoverManagedCALeaf(ctx context.Context, tenantID string, certificatePEM []byte) (PKISecretLeafRecovery, error)
+	RecoverCertificateDER(ctx context.Context, tenantID, certificateID string, req CertificateDERRecoveryRequest) (CertificateDERRecovery, error)
 }
 
 // WithPKISecretLeafRecovery wires historical leaf recovery.

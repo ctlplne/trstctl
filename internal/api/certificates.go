@@ -87,6 +87,12 @@ type certificateResponse struct {
 	// Transparency (A213) is what each CT log answered for this certificate
 	// (detail reads only).
 	Transparency []CertificateTransparencyEntry `json:"transparency,omitempty"`
+	// CertificateBytesHeld says whether trstctl holds the certificate itself,
+	// not only what was recorded about it (A215).
+	CertificateBytesHeld bool `json:"certificate_bytes_held"`
+	// DERRecovery is how those bytes were recovered for a row that recorded
+	// none (detail reads only).
+	DERRecovery *CertificateDERRecoveryRecord `json:"der_recovery,omitempty"`
 }
 
 // certificateKeyObservation is one agent-reported key file (metadata only).
@@ -165,7 +171,7 @@ func toCertificateResponse(c store.Certificate) certificateResponse {
 		ID: c.ID, TenantID: c.TenantID, OwnerID: c.OwnerID, Subject: c.Subject, SANs: sans,
 		Issuer: c.Issuer, Serial: c.Serial, Fingerprint: c.Fingerprint, KeyAlgorithm: c.KeyAlgorithm,
 		NotBefore: c.NotBefore, NotAfter: c.NotAfter, DeploymentLocation: c.DeploymentLocation,
-		Source: c.Source, CreatedAt: c.CreatedAt,
+		Source: c.Source, CreatedAt: c.CreatedAt, CertificateBytesHeld: len(c.CertificateDER) > 0,
 		ExpectedEphemeralExpiry: store.CertificateExpectedEphemeralExpiry(c),
 		Status:                  c.Status, RevokedAt: c.RevokedAt, RevocationReason: certificateRevocationReason(c.RevocationReason),
 		KeyOrigin: c.KeyOrigin, KeyStorage: c.KeyStorage,
@@ -370,6 +376,10 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if response.Transparency, err = a.certificateTransparency(r.Context(), tenantID, c.Fingerprint); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if response.DERRecovery, err = a.certificateDERRecovery(r.Context(), tenantID, c.Fingerprint); err != nil {
 		a.writeError(w, err)
 		return
 	}

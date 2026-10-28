@@ -52,6 +52,7 @@ import { revocationReasons } from "@/lib/revocation";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 import { CertificateRevocationObservations } from "@/pages/certificates/CertificateRevocationObservations";
 import { CertificateTransparency } from "@/pages/certificates/CertificateTransparency";
+import { CertificateBytesRecovery } from "@/pages/certificates/CertificateBytesRecovery";
 import {
   certificateEnvironment,
   certificateProfile,
@@ -1589,6 +1590,7 @@ function CertificateWorkspace() {
               ) : null}
               <CertificateRevocationObservations observations={detail.revocation_observations} />
               <CertificateTransparency entries={detail.transparency} />
+              <CertificateBytesRecovery detail={detail} onRecovered={setDetail} />
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
                 <dd>{detail.source || "-"}</dd>

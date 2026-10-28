@@ -9526,6 +9526,38 @@ export const messages = {
     defaultMessage: "Suggestions come only from discovery scans that saw a certificate trstctl delivered here. Set any other address by editing the target.",
     description: "Where suggestions come from.",
   },
+  "certificateCockpit.detail.bytes": {
+    defaultMessage: "Certificate bytes",
+    description: "Certificate detail label for whether trstctl holds the certificate itself.",
+  },
+  "certificateCockpit.detail.bytesMissing": {
+    defaultMessage:
+      "trstctl holds only what was recorded about this certificate, not the certificate itself, so authority agreement checks cannot include it. Recover the bytes; they are attached only if they match this fingerprint.",
+    description: "A row without the certificate's bytes and what recovering them does.",
+  },
+  "certificateCockpit.detail.bytesFromLedgerAction": {
+    defaultMessage: "Look up in this tenant's CA records",
+    description: "Recover the certificate from the tenant's CA mint records.",
+  },
+  "certificateCockpit.detail.bytesFromEndpointAction": {
+    defaultMessage: "Read from {address}",
+    description: "Recover the certificate from the endpoint the row names.",
+  },
+  "certificateCockpit.detail.bytesFromLedger": {
+    defaultMessage: "Recovered from the CA record {evidence} on {when}",
+    description: "The certificate bytes came from the tenant's CA mint record.",
+  },
+  "certificateCockpit.detail.bytesFromEndpoint": {
+    defaultMessage: "Read from the endpoint {evidence} on {when}",
+    description: "The certificate bytes came from the endpoint the row names.",
+  },
+  "certificateCockpit.detail.bytesAlreadyHeld": { defaultMessage: "trstctl already holds this certificate.", description: "The row already had its bytes." },
+  "certificateCockpit.detail.bytesNotFound": { defaultMessage: "Nothing found: {detail}", description: "No source held the certificate." },
+  "certificateCockpit.detail.bytesMismatch": { defaultMessage: "Not attached: {detail}", description: "The endpoint serves another certificate." },
+  "certificateCockpit.detail.bytesUnreachable": {
+    defaultMessage: "The endpoint could not be read: {detail}",
+    description: "The endpoint could not be dialed.",
+  },
   "certificateCockpit.detail.transparency": {
     defaultMessage: "Certificate Transparency",
     description: "Certificate detail label for what each CT log answered for the certificate.",

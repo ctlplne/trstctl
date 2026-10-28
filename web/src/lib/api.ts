@@ -27,6 +27,7 @@ export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
 import * as verificationAddress from "./verificationSuggestionsApi";
+import * as certificateBytes from "./certificateBytesApi";
 import { downloadAuditExport as downloadAuditExportImpl, downloadSameOriginFile } from "./auditExport";
 import { auditQueryParams, auditReadSignal } from "./auditQuery";
 import type {
@@ -2001,6 +2002,7 @@ export interface Api {
   /** I4/AUD-49: queue one network relay to re-check the exact failed target. */
   proveEnrollmentDiagnosticFixed(id: string): Promise<EnrollmentDiagnosticVerification>;
   getCertificate(id: string): Promise<Certificate>;
+  recoverCertificateDER: typeof certificateBytes.recoverCertificateDER;
   /** A131: a certificate's device-bound custody evidence, complete for offline re-verification. */
   certificateKeyAttestation(id: string): Promise<CertificateKeyAttestation>;
   certificateAssuranceRecord(id: string): Promise<CertificateAssuranceRecord>;
@@ -2724,6 +2726,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   mdmSCEPStatus: () => req<MDMSCEPStatus>("/api/v1/mdm/scep/status"),
   mdmSCEPPolicies: () => req<MDMSCEPPolicyList>("/api/v1/mdm/scep/policies"),
   getCertificate: (id) => req<Certificate>(`/api/v1/certificates/${encodeURIComponent(id)}`),
+  recoverCertificateDER: certificateBytes.recoverCertificateDER,
   certificateKeyAttestation: (id) => req<CertificateKeyAttestation>(`/api/v1/certificates/${encodeURIComponent(id)}/key-attestation`),
   certificateAssuranceRecord: (id) => req<CertificateAssuranceRecord>(`/api/v1/certificates/${encodeURIComponent(id)}/assurance-record`),
   ingestCertificate: (input) => mutate<Certificate>("POST", "/api/v1/certificates", input),

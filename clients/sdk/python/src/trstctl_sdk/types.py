@@ -3609,9 +3609,11 @@ CapabilityViewStage = TypedDict(
 Certificate = TypedDict(
     'Certificate',
     {
+        'certificate_bytes_held': bool,
         'created_at': str,
         'custody_summary': str,
         'deployment_location': str,
+        'der_recovery': dict[str, Any],
         'expected_ephemeral_expiry': bool,
         'fingerprint': str,
         'id': str,
@@ -3666,6 +3668,39 @@ CertificateCustodySummary = TypedDict(
         'total': int,
         'unrecorded': int,
         'unrecorded_certificates': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+CertificateDERRecovery = TypedDict(
+    'CertificateDERRecovery',
+    {
+        'certificate_id': str,
+        'detail': str,
+        'evidence': str,
+        'fingerprint': str,
+        'method': str,
+        'outcome': str,
+    },
+    total=False,
+)
+
+CertificateDERRecoveryRecord = TypedDict(
+    'CertificateDERRecoveryRecord',
+    {
+        'evidence': str,
+        'method': str,
+        'recovered_at': str,
+    },
+    total=False,
+)
+
+CertificateDERRecoveryRequest = TypedDict(
+    'CertificateDERRecoveryRequest',
+    {
+        'allow_private_endpoint': bool,
+        'method': str,
+        'private_egress_cidrs': list[str],
     },
     total=False,
 )

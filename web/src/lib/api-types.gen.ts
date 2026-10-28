@@ -2577,9 +2577,11 @@ export interface CapabilityViewStage {
 }
 
 export interface Certificate {
+  certificate_bytes_held?: boolean;
   created_at?: string;
   custody_summary?: string;
   deployment_location?: string;
+  der_recovery?: CertificateDERRecoveryRecord;
   expected_ephemeral_expiry?: boolean;
   fingerprint: string;
   id: string;
@@ -2626,6 +2628,27 @@ export interface CertificateCustodySummary {
   total: number;
   unrecorded: number;
   unrecorded_certificates: UnrecordedCustodyCertificate[];
+}
+
+export interface CertificateDERRecovery {
+  certificate_id: string;
+  detail?: string;
+  evidence?: string;
+  fingerprint: string;
+  method: "ca_ledger" | "endpoint";
+  outcome: "recovered" | "already_held" | "not_found" | "mismatch" | "unreachable";
+}
+
+export interface CertificateDERRecoveryRecord {
+  evidence: string;
+  method: "ca_ledger" | "endpoint";
+  recovered_at: string;
+}
+
+export interface CertificateDERRecoveryRequest {
+  allow_private_endpoint?: boolean;
+  method: "ca_ledger" | "endpoint";
+  private_egress_cidrs?: string[];
 }
 
 export interface CertificateExpiryBucket {

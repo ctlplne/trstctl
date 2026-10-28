@@ -17167,14 +17167,16 @@
                 "previewPKISecret",
                 "issuePKISecret",
                 "recoverPKISecretLeaf",
-                "recoverManagedCALeaf"
+                "recoverManagedCALeaf",
+                "recoverCertificateDER"
             ],
             "api_na": "",
             "cli_surface": [
                 "secrets pki preview",
                 "secrets pki",
                 "certificates inventory-pki-secret",
-                "certificates inventory-managed-ca"
+                "certificates inventory-managed-ca",
+                "certificates recover-der"
             ],
             "cli_na": "",
             "facet_evidence": {

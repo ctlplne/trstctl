@@ -10557,6 +10557,10 @@
       },
       "Certificate": {
         "properties": {
+          "certificate_bytes_held": {
+            "description": "Whether trstctl holds the certificate itself, not only what was recorded about it. A row without its bytes cannot take part in cross-authority reconciliation until they are recovered.",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -10566,6 +10570,9 @@
           },
           "deployment_location": {
             "type": "string"
+          },
+          "der_recovery": {
+            "$ref": "#/components/schemas/CertificateDERRecoveryRecord"
           },
           "expected_ephemeral_expiry": {
             "description": "True only for a JIT certificate whose immutable issuance command expects short expiry. Inventory and audit retain it, but it is not actionable renewal or owner-gap work.",
@@ -10802,6 +10809,99 @@
           "storage",
           "exportability",
           "unrecorded_certificates"
+        ],
+        "type": "object"
+      },
+      "CertificateDERRecovery": {
+        "properties": {
+          "certificate_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "ca_ledger",
+              "endpoint"
+            ],
+            "type": "string"
+          },
+          "outcome": {
+            "description": "recovered: bytes that hash to the row's fingerprint were attached; already_held: the row had them; not_found: no mint retained them or the row records no endpoint; mismatch: the endpoint serves another certificate; unreachable: the endpoint could not be read.",
+            "enum": [
+              "recovered",
+              "already_held",
+              "not_found",
+              "mismatch",
+              "unreachable"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "fingerprint",
+          "method",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "CertificateDERRecoveryRecord": {
+        "properties": {
+          "evidence": {
+            "description": "The CA mint event that retained the certificate, or the endpoint address that served it.",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "ca_ledger",
+              "endpoint"
+            ],
+            "type": "string"
+          },
+          "recovered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method",
+          "evidence",
+          "recovered_at"
+        ],
+        "type": "object"
+      },
+      "CertificateDERRecoveryRequest": {
+        "properties": {
+          "allow_private_endpoint": {
+            "description": "Allow the endpoint method to dial a private address; requires egress:private and private_egress_cidrs.",
+            "type": "boolean"
+          },
+          "method": {
+            "description": "ca_ledger: a mint of this tenant's CAs that retained the certificate, found by the row's serial. endpoint: the certificate the row's host:port deployment location serves, dialed by the control plane.",
+            "enum": [
+              "ca_ledger",
+              "endpoint"
+            ],
+            "type": "string"
+          },
+          "private_egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "method"
         ],
         "type": "object"
       },
@@ -51895,6 +51995,83 @@
         ],
         "summary": "Get a certificate's signed lifecycle assurance record: every stage with its evidence, and which stages were independently observed",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/certificates/{id}/der-recovery": {
+      "post": {
+        "operationId": "recoverCertificateDER",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertificateDERRecoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CertificateDERRecovery"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Recover an inventory row's certificate bytes from the tenant's CA mint or the endpoint it records, attached only when they hash to the row's fingerprint",
+        "x-trstctl-permission": "certs:write"
       }
     },
     "/api/v1/certificates/{id}/key-attestation": {

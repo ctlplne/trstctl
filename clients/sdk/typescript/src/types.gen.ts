@@ -2177,6 +2177,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/certificates/{id}/der-recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recover an inventory row's certificate bytes from the tenant's CA mint or the endpoint it records, attached only when they hash to the row's fingerprint */
+        post: operations["recoverCertificateDER"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/certificates/{id}/key-attestation": {
         parameters: {
             query?: never;
@@ -11431,10 +11448,13 @@ export interface components {
             reason?: string;
         };
         Certificate: {
+            /** @description Whether trstctl holds the certificate itself, not only what was recorded about it. A row without its bytes cannot take part in cross-authority reconciliation until they are recovered. */
+            certificate_bytes_held?: boolean;
             /** Format: date-time */
             created_at?: string;
             custody_summary?: string;
             deployment_location?: string;
+            der_recovery?: components["schemas"]["CertificateDERRecoveryRecord"];
             /** @description True only for a JIT certificate whose immutable issuance command expects short expiry. Inventory and audit retain it, but it is not actionable renewal or owner-gap work. */
             expected_ephemeral_expiry?: boolean;
             fingerprint: string;
@@ -11504,6 +11524,38 @@ export interface components {
             total: number;
             unrecorded: number;
             unrecorded_certificates: components["schemas"]["UnrecordedCustodyCertificate"][];
+        };
+        CertificateDERRecovery: {
+            /** Format: uuid */
+            certificate_id: string;
+            detail?: string;
+            evidence?: string;
+            fingerprint: string;
+            /** @enum {string} */
+            method: "ca_ledger" | "endpoint";
+            /**
+             * @description recovered: bytes that hash to the row's fingerprint were attached; already_held: the row had them; not_found: no mint retained them or the row records no endpoint; mismatch: the endpoint serves another certificate; unreachable: the endpoint could not be read.
+             * @enum {string}
+             */
+            outcome: "recovered" | "already_held" | "not_found" | "mismatch" | "unreachable";
+        };
+        CertificateDERRecoveryRecord: {
+            /** @description The CA mint event that retained the certificate, or the endpoint address that served it. */
+            evidence: string;
+            /** @enum {string} */
+            method: "ca_ledger" | "endpoint";
+            /** Format: date-time */
+            recovered_at: string;
+        };
+        CertificateDERRecoveryRequest: {
+            /** @description Allow the endpoint method to dial a private address; requires egress:private and private_egress_cidrs. */
+            allow_private_endpoint?: boolean;
+            /**
+             * @description ca_ledger: a mint of this tenant's CAs that retained the certificate, found by the row's serial. endpoint: the certificate the row's host:port deployment location serves, dialed by the control plane.
+             * @enum {string}
+             */
+            method: "ca_ledger" | "endpoint";
+            private_egress_cidrs?: string[];
         };
         CertificateExpiryBucket: {
             count: number;
@@ -26177,6 +26229,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CertificateAssuranceRecord"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    recoverCertificateDER: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificateDERRecoveryRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateDERRecovery"];
                 };
             };
             /** @description client error */

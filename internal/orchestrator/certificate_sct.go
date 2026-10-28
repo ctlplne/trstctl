@@ -57,3 +57,14 @@ func (o *Orchestrator) recordExactEvent(ctx context.Context, tenantID, eventID, 
 		return o.proj.ApplyTx(ctx, tx, event)
 	})
 }
+
+// RecordCertificateDERRecoveredWithEventID gives an inventory row without
+// certificate bytes the bytes of its certificate (A215), under an id derived
+// from where they were found.
+func (o *Orchestrator) RecordCertificateDERRecoveredWithEventID(ctx context.Context, tenantID, eventID string,
+	recovered projections.CertificateDERRecovered) error {
+	if err := projections.ValidateCertificateDERRecovered(recovered); err != nil {
+		return fmt.Errorf("orchestrator: %w", err)
+	}
+	return o.recordExactEvent(ctx, tenantID, eventID, projections.EventCertificateDERRecovered, recovered)
+}

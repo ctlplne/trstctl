@@ -96,6 +96,23 @@ tenant's metadata; this endpoint does not establish a large-estate latency guara
 When `expiring_before` is set, the result contains active certificates only. Omit it
 to search historical revoked and superseded rows as well.
 
+### Recover the certificate behind a scanned row
+
+Some paths record what a certificate says without the certificate itself: a network
+scan without `agent_channel.probe_scanned_certificates`, a cloud listing, an older
+import. The certificate detail says so (`certificate_bytes_held: false`), and such a
+row cannot take part in [authority agreement](../configuration.md#authority-agreement) checks, which
+identify a certificate by the issuer and serial inside its bytes. **Certificate
+bytes → Look up in this tenant's CA records** (`certificates recover-der <id>` with
+`{"method": "ca_ledger"}`) finds a mint of the tenant's CAs that retained the
+certificate by the row's serial; **Read from host:port** (`{"method": "endpoint"}`)
+reads the certificate that address serves from the control plane — for a private
+address the console sends that one address as the allowed CIDR, which needs
+`egress:private`. Either way the bytes are attached only when they hash to the row's
+fingerprint and the row held none; the answer says `recovered`, `already_held`,
+`not_found`, `mismatch` (the endpoint serves another certificate) or `unreachable`,
+and the detail then shows where the bytes came from.
+
 ### Network discovery (F2) — scanning from an enrolled [network relay](../glossary.md#network-relay)
 
 Network discovery connects from an explicitly enrolled agent with the `network`
