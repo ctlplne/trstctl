@@ -374,8 +374,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// secrets row.
 	// A210's `connector target recovery-check|recovery-status` raised it to
 	// 638, on the deployment connectors row.
-	if len(out) != 638 {
-		t.Fatalf("CLI commands = %d, want 638", len(out))
+	// A212's `discovery coverage candidates` raised it to 639, on the discovery
+	// row.
+	if len(out) != 639 {
+		t.Fatalf("CLI commands = %d, want 639", len(out))
 	}
 	return out
 }

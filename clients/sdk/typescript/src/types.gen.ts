@@ -2795,6 +2795,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/coverage/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List addresses trstctl's own sources saw outside every declared segment, as candidates to declare; never a complete list */
+        get: operations["listCoverageCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/ct-monitoring": {
         parameters: {
             query?: never;
@@ -12037,6 +12054,20 @@ export interface components {
             /** @description Why the tenant changes it; recorded in the event (up to 512 bytes). */
             reason: string;
         };
+        CoverageCandidate: {
+            address: string;
+            /** Format: date-time */
+            last_seen: string;
+            observations: number;
+            sources: ("certificate_location" | "endpoint_verification" | "external_observation" | "verification_target")[];
+        };
+        CoverageCandidates: {
+            /** @description Always false: an address no source has seen cannot appear. */
+            complete: boolean;
+            items: components["schemas"]["CoverageCandidate"][];
+            note: string;
+            window_days: number;
+        };
         CredentialRisk: {
             components: components["schemas"]["RiskComponents"];
             /** Format: uuid */
@@ -12876,7 +12907,7 @@ export interface components {
             action?: string;
             detail: string;
             /** @enum {string} */
-            kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved";
+            kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved" | "addresses_outside_segments";
             subject: string;
         };
         DistrustedRootRemovalRequest: {
@@ -27825,6 +27856,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryCoverage"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listCoverageCandidates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageCandidates"];
                 };
             };
             /** @description client error */

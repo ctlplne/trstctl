@@ -334,8 +334,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// secrets row beside the PKI-secret leaf recovery.
 	// A210's recovery check request and read raised it to 576, on the
 	// deployment connectors row beside containment.
-	if len(out) != 576 {
-		t.Fatalf("OpenAPI operationIds = %d, want 576", len(out))
+	// A212's coverage candidates raised it to 577, on the discovery row.
+	if len(out) != 577 {
+		t.Fatalf("OpenAPI operationIds = %d, want 577", len(out))
 	}
 	return out
 }

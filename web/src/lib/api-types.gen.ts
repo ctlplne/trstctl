@@ -3139,6 +3139,20 @@ export interface ControlPlaneKeygenInput {
   reason: string;
 }
 
+export interface CoverageCandidate {
+  address: string;
+  last_seen: string;
+  observations: number;
+  sources: ("certificate_location" | "endpoint_verification" | "external_observation" | "verification_target")[];
+}
+
+export interface CoverageCandidates {
+  complete: boolean;
+  items: CoverageCandidate[];
+  note: string;
+  window_days: number;
+}
+
 export interface CredentialRisk {
   components: RiskComponents;
   credential_id: string;
@@ -3761,7 +3775,7 @@ export interface DiscoverySourceRequest {
 export interface DiscoveryUnknown {
   action?: string;
   detail: string;
-  kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved";
+  kind: "segment_never_swept" | "segment_stale" | "segment_excluded" | "segment_read_failed" | "class_unobservable" | "inventory_unobserved" | "addresses_outside_segments";
   subject: string;
 }
 

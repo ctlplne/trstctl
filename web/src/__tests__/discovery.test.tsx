@@ -14,6 +14,8 @@ const { apiMock } = vi.hoisted(() => ({
     discoveryRuns: vi.fn(),
     discoveryMonitoring: vi.fn(),
     discoveryCoverage: vi.fn(),
+    coverageCandidates: vi.fn(),
+    createDiscoverySegment: vi.fn(),
     nhiShadowPosture: vi.fn(),
     discoveryFindings: vi.fn(),
     discoveryCapabilities: vi.fn(),
@@ -902,6 +904,41 @@ describe("discovery control-plane surface", () => {
     });
     expect(await screen.findByText("10.0.0.10:443 is draft. Type: X.509 certificate. Owner: platform.")).toBeInTheDocument();
     expect(screen.getByLabelText("Managed identity")).toHaveValue("identity-created");
+  });
+
+  it("lists addresses seen outside every declared segment and declares one (A212)", async () => {
+    const user = userEvent.setup();
+    const base = await apiMock.discoveryCoverage.getMockImplementation()?.();
+    apiMock.discoveryCoverage.mockResolvedValue({
+      ...base,
+      unknowns: [
+        {
+          kind: "addresses_outside_segments",
+          subject: "1 address",
+          detail: "trstctl's own sources saw these addresses outside every declared segment in the last 30 days",
+          action: "declare a segment that covers them, or declare them out of scope",
+        },
+      ],
+    });
+    apiMock.coverageCandidates.mockResolvedValue({
+      items: [{ address: "198.51.100.20:8443", sources: ["certificate_location"], last_seen: "2026-10-28T03:00:00Z", observations: 2 }],
+      complete: false,
+      window_days: 30,
+      note: "Addresses trstctl's own sources saw outside every declared segment, excluded segments included.",
+    });
+    apiMock.createDiscoverySegment.mockResolvedValue({ id: "segment-seen", name: "seen-198-51-100-20", ranges: ["198.51.100.20"] });
+    renderDiscovery(["/discovery?tab=sources"]);
+    const panel = within(await screen.findByRole("region", { name: "Addresses seen outside every declared segment" }));
+    expect(panel.getByText("198.51.100.20:8443")).toBeInTheDocument();
+    expect(panel.getByText("certificate_location")).toBeInTheDocument();
+    await user.click(panel.getByRole("button", { name: "Declare 198.51.100.20 as a segment" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySegment).toHaveBeenCalledWith(
+        { name: "seen-198-51-100-20", ranges: ["198.51.100.20"], staleness_hours: 168 },
+        expect.any(String),
+      ),
+    );
+    expect(await panel.findByRole("status")).toHaveTextContent("Declared a segment for 198.51.100.20:8443.");
   });
 
   it("creates a network source with host:port targets and can queue a run", async () => {

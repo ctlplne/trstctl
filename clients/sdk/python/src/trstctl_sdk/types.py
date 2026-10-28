@@ -4361,6 +4361,28 @@ ControlPlaneKeygenInput = TypedDict(
     total=False,
 )
 
+CoverageCandidate = TypedDict(
+    'CoverageCandidate',
+    {
+        'address': str,
+        'last_seen': str,
+        'observations': int,
+        'sources': list[str],
+    },
+    total=False,
+)
+
+CoverageCandidates = TypedDict(
+    'CoverageCandidates',
+    {
+        'complete': bool,
+        'items': list[dict[str, Any]],
+        'note': str,
+        'window_days': int,
+    },
+    total=False,
+)
+
 CredentialRisk = TypedDict(
     'CredentialRisk',
     {

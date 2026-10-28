@@ -10,6 +10,7 @@ import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type Source
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
+import { CoverageCandidatesPanel } from "./discovery/CoverageCandidatesPanel";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
 import { RunTable } from "./discovery/DiscoveryRunTableParts";
 import { SourceSetup } from "./discovery/SourceSetup";
@@ -1392,6 +1393,9 @@ export function Discovery() {
                   </div>
                 )}
 
+                {(coverageReport.unknowns ?? []).some((u) => u.kind === "addresses_outside_segments") ? (
+                  <CoverageCandidatesPanel onDeclared={() => void load()} />
+                ) : null}
                 {(coverageReport.unknowns ?? []).length > 0 && (
                   <div className="rounded-md border border-status-warning/40 p-3">
                     <p className="text-sm font-medium">{t("discovery.coverage.unknownsHeading")}</p>

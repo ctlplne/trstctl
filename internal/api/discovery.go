@@ -701,6 +701,7 @@ func (a *API) getDiscoveryCoverage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	a.appendSegmentCoverage(r.Context(), tenantID, &out)
+	a.appendCoverageCandidates(r.Context(), tenantID, &out)
 	a.appendProvenance(r.Context(), tenantID, &out)
 	if out.Segments == nil {
 		out.Segments = []DiscoverySegmentCoverage{}

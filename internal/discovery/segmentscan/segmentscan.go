@@ -336,6 +336,25 @@ func applyExclusions(targets, targetRules, cidrRules []string, portRules []int) 
 	return kept, len(targets) - len(kept), proof, nil
 }
 
+// Covered reports whether any declared range covers an observed address,
+// "host:port" or a bare host, by the same rule a sweep's targets are held to
+// (A212): an exact hostname or address, a CIDR, or an explicit address range.
+// DNS is not resolved, so a hostname is covered only by its own declaration.
+func Covered(declarations []string, observed string) bool {
+	host := observed
+	target := observed
+	if h, _, err := net.SplitHostPort(observed); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	for _, declaration := range declarations {
+		if ok, err := declarationCovers(strings.TrimSpace(declaration), host, target); err == nil && ok {
+			return true
+		}
+	}
+	return false
+}
+
 func declarationCovers(declaration, host, target string) (bool, error) {
 	if declaration == target || strings.EqualFold(declaration, host) {
 		return true, nil

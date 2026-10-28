@@ -2,6 +2,13 @@
 
 ### Added
 
+- Addresses outside the declared segments: `GET /api/v1/discovery/coverage/candidates`
+  (`trstctl-cli discovery coverage candidates`) lists the addresses trstctl's own sources
+  recorded in the last 30 days — certificate deployment locations, verified endpoints,
+  external observations and verification addresses — that no declared segment covers,
+  by the same rule sweeps use (excluded segments count as declared). The coverage register
+  names them and the console lists them with a one-step segment declaration. Never a
+  complete list: an address no source has recorded cannot appear.
 - Revocation checks for scanned certificates: with `agent_channel.probe_scanned_certificates`
   on (off by default), a relay's TLS discovery sweep keeps the leaf it finds and up to four
   issuers served after it, each only if it hashes to what the relay reported, and revocation

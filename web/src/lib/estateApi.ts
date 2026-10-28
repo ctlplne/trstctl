@@ -1,5 +1,6 @@
 import { mutate, req } from "./apiTransport";
 import type {
+  CoverageCandidates,
   GraphImpact,
   GraphReachable,
   GraphTrustStores,
@@ -29,6 +30,9 @@ import type {
 // what does the estate look like, and what is blocking a change to it — and
 // because the served-file budget is a real guard against one module accreting
 // every operation the product has. The split is by workflow, not by size.
+
+/** A212: addresses trstctl's own sources saw outside every declared segment. */
+export const coverageCandidates = () => req<CoverageCandidates>("/api/v1/discovery/coverage/candidates");
 
 /** Reachability from a node — what a credential can reach. */
 export const graphReachable = (id: string) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`);

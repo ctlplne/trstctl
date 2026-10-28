@@ -6708,16 +6708,27 @@ of an issuance, not of a deployment.
 
 **The blind spots are named, not implied.** The register lists segments never
 swept, segments outside their own staleness window, segments declared out of
-scope with the reason, asset classes no configured source can ever see, and the
-count of inventory rows with no observation behind them. Each carries the action
-that closes it, or says plainly that nothing does.
+scope with the reason, asset classes no configured source can ever see, the
+count of inventory rows with no observation behind them, and the addresses
+trstctl's own sources saw outside every declared segment. Each carries the
+action that closes it, or says plainly that nothing does.
+
+**Addresses outside the declared segments.** `GET
+/api/v1/discovery/coverage/candidates` (`trstctl-cli discovery coverage
+candidates`, and the coverage panel in the console) lists the network addresses
+recorded in the last 30 days — certificates' deployment locations, endpoints
+trstctl verified, endpoints external observers reported, and destinations'
+verification addresses — that no declared segment covers, by the same rule a
+sweep's targets are held to (an exact hostname or address, a CIDR, or an
+explicit range; an excluded segment counts as declared). Nothing is resolved,
+and file paths and other location labels are not addresses. Each is a candidate
+for a declaration, which the console can make in one step. The list is never
+complete: an address none of these sources has recorded cannot appear, so a
+network nobody has touched still has to be declared by the operator.
 
 What this does not do: it does not verify that a certificate found at an address
 is the certificate that address serves to a real client — that is verification,
-and it is a separate claim. It does not detect a segment an operator forgot to
-declare; nothing can, which is why the declaration is the operator's
-responsibility and why the console says how many segments exist rather than
-implying the list is complete.
+and it is a separate claim.
 
 ## Kubernetes deployment
 

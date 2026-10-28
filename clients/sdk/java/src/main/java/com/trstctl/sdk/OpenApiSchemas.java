@@ -318,6 +318,8 @@ public final class OpenApiSchemas {
       "ContextualRiskSummary",
       "ControlPlaneKeygen",
       "ControlPlaneKeygenInput",
+      "CoverageCandidate",
+      "CoverageCandidates",
       "CredentialRisk",
       "CredentialRiskList",
       "CryptoDependent",

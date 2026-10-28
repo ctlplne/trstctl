@@ -6642,6 +6642,21 @@ export const messages = {
     defaultMessage: "Known blind spots",
     description: "C3: count of named things this deployment cannot see.",
   },
+  "discovery.candidates.heading": {
+    defaultMessage: "Addresses seen outside every declared segment",
+    description: "A212: heading for addresses trstctl's sources saw outside the declared segments.",
+  },
+  "discovery.candidates.caption": { defaultMessage: "Addresses seen outside every declared segment", description: "A212: table caption." },
+  "discovery.candidates.address": { defaultMessage: "Address", description: "A212: column for the observed address." },
+  "discovery.candidates.sources": { defaultMessage: "Seen by", description: "A212: column naming the sources that recorded the address." },
+  "discovery.candidates.lastSeen": { defaultMessage: "Last seen", description: "A212: column for when a source last recorded it." },
+  "discovery.candidates.actions": { defaultMessage: "Actions", description: "A212: column for the declare action." },
+  "discovery.candidates.declare": { defaultMessage: "Declare {range} as a segment", description: "A212: declares a segment covering one address." },
+  "discovery.candidates.declared": {
+    defaultMessage: "Declared a segment for {address}. Sweep it to bring it into coverage.",
+    description: "A212: a segment was declared for a candidate address.",
+  },
+  "discovery.candidates.declareFailed": { defaultMessage: "The segment could not be declared", description: "A212: segment declaration error fallback." },
   "discovery.coverage.unknownsHeading": {
     defaultMessage: "What this deployment cannot see",
     description: "C3: heading of the register of named blind spots.",

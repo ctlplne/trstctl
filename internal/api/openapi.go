@@ -2237,6 +2237,7 @@ func componentSchemas() map[string]*Schema {
 		"kind": {Type: "string", Enum: []string{
 			"segment_never_swept", "segment_stale", "segment_excluded",
 			"segment_read_failed", "class_unobservable", "inventory_unobserved",
+			"addresses_outside_segments",
 		}},
 		"subject": str(),
 		"detail":  str(),
@@ -2387,6 +2388,16 @@ func componentSchemas() map[string]*Schema {
 		"unattended_dv_capable_count": {Type: "integer"},
 		"guidance":                    str(),
 	}, "issuers", "revoke_capable_count", "unattended_dv_capable_count", "guidance")
+	coverageCandidate := object(map[string]*Schema{
+		"address": str(), "sources": {Type: "array", Items: &Schema{Type: "string",
+			Enum: []string{"certificate_location", "endpoint_verification", "external_observation", "verification_target"}}},
+		"last_seen": timestamp(), "observations": {Type: "integer"},
+	}, "address", "sources", "last_seen", "observations")
+	coverageCandidates := object(map[string]*Schema{
+		"items":       {Type: "array", Items: ref("CoverageCandidate")},
+		"complete":    {Type: "boolean", Description: "Always false: an address no source has seen cannot appear."},
+		"window_days": {Type: "integer"}, "note": str(),
+	}, "items", "complete", "window_days", "note")
 	discoveryCoverage := object(map[string]*Schema{
 		"generated_at":              timestamp(),
 		"observed":                  {Type: "integer"},
@@ -7689,6 +7700,8 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,
 		"DiscoveryMonitoring":                      discoveryMonitoring,
 		"DiscoveryCoverage":                        discoveryCoverage,
+		"CoverageCandidate":                        coverageCandidate,
+		"CoverageCandidates":                       coverageCandidates,
 		"ACMEUpstreamAuthorization":                acmeUpstreamAuthorization,
 		"DeploymentTriState":                       deploymentTriState,
 		"RenewalSLO":                               renewalSLO,

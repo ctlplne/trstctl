@@ -13063,6 +13063,66 @@
         ],
         "type": "object"
       },
+      "CoverageCandidate": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "last_seen": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "observations": {
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "enum": [
+                "certificate_location",
+                "endpoint_verification",
+                "external_observation",
+                "verification_target"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "address",
+          "sources",
+          "last_seen",
+          "observations"
+        ],
+        "type": "object"
+      },
+      "CoverageCandidates": {
+        "properties": {
+          "complete": {
+            "description": "Always false: an address no source has seen cannot appear.",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CoverageCandidate"
+            },
+            "type": "array"
+          },
+          "note": {
+            "type": "string"
+          },
+          "window_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "complete",
+          "window_days",
+          "note"
+        ],
+        "type": "object"
+      },
       "CredentialRisk": {
         "properties": {
           "components": {
@@ -16115,7 +16175,8 @@
               "segment_excluded",
               "segment_read_failed",
               "class_unobservable",
-              "inventory_unobserved"
+              "inventory_unobserved",
+              "addresses_outside_segments"
             ],
             "type": "string"
           },
@@ -54276,6 +54337,53 @@
           }
         ],
         "summary": "Get discovery coverage: observed, observable-unobserved, and structurally unobservable asset classes",
+        "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/discovery/coverage/candidates": {
+      "get": {
+        "operationId": "listCoverageCandidates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoverageCandidates"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List addresses trstctl's own sources saw outside every declared segment, as candidates to declare; never a complete list",
         "x-trstctl-permission": "discovery:read"
       }
     },

@@ -217,6 +217,8 @@ import type {
   ConnectorWorkCancellation,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
+  CoverageCandidate,
+  CoverageCandidates,
   EndpointContainmentPreview,
   EndpointContainmentRequest,
   EndpointRecoveryCheck,
@@ -1132,6 +1134,8 @@ export type {
   ConnectorDelivery,
   ConnectorDeliveryList,
   ConnectorTargetActionRequest,
+  CoverageCandidate,
+  CoverageCandidates,
   EndpointContainmentPreview,
   EndpointContainmentRequest,
   EndpointRecoveryCheck,
@@ -2272,6 +2276,7 @@ export interface Api {
   caKeyReprotectionPlan(keyId: string, jobId: string): Promise<CAReprotectionPlan>;
   startCAKeyReprotection(keyId: string): Promise<CAReprotectionStartReceipt>;
   graphReachable(id: string): Promise<GraphReachable>;
+  coverageCandidates(): Promise<CoverageCandidates>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
   pamSessions(options?: { limit?: number; cursor?: string }): Promise<PAMSessionList>;
@@ -3058,6 +3063,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   policyDryRun: (input) => mutate<PolicyDryRun>("POST", "/api/v1/policy/dry-run", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphReachable: estate.graphReachable,
+  coverageCandidates: estate.coverageCandidates,
   graphBlastRadius: estate.graphBlastRadius,
   graphTrustStores: estate.graphTrustStores,
   unownedIdentities: estate.unownedIdentities,
