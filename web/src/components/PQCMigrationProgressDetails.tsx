@@ -11,6 +11,7 @@ const statusKeys = {
   rolled_back: "posture.pqcMigration.rolledBackStatus",
   rollback_failed: "posture.pqcMigration.rollbackFailedStatus",
   rollback_unverified: "posture.pqcMigration.rollbackUnverifiedStatus",
+  awaiting_acknowledgment: "posture.pqcMigration.awaitingAcknowledgmentStatus",
 } as const;
 
 export function PQCMigrationProgressDetails({ progress, assets, loading = false }: { progress: PQCMigrationProgress; assets: CBOMAsset[]; loading?: boolean }) {
@@ -117,6 +118,11 @@ export function PQCMigrationProgressDetails({ progress, assets, loading = false 
       {typeof progress.issued === "number" && progress.issued > 0 ? (
         <p role="status" className="text-sm">
           {t("posture.pqcMigration.issuedSummary", { count: String(progress.issued) })}
+        </p>
+      ) : null}
+      {typeof progress.awaiting_acknowledgment === "number" && progress.awaiting_acknowledgment > 0 ? (
+        <p role="status" className="text-sm">
+          {t("posture.pqcMigration.awaitingAcknowledgmentSummary", { count: String(progress.awaiting_acknowledgment) })}
         </p>
       ) : null}
       {typeof progress.rollback_unverified === "number" && progress.rollback_unverified > 0 ? (

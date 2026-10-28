@@ -73,6 +73,10 @@ type Reissue struct {
 	EffectiveAlgorithm string
 	Protocol           string
 	RollbackOnFailure  bool
+	// Cutover is a hybrid leaf's move to pure ML-DSA (A217): it waits for the
+	// identity's relying-party acknowledgment quorum before its host job is
+	// queued.
+	Cutover bool
 }
 
 type Plan struct {
@@ -113,6 +117,12 @@ func IsMLDSATarget(algorithm string) bool {
 		return true
 	}
 	return false
+}
+
+// IsHybridAlgorithm reports whether an observed key label names a hybrid
+// classical + ML-DSA composite (Hybrid-ML-DSA-44-ECDSA-P256 and its kin).
+func IsHybridAlgorithm(algorithm string) bool {
+	return strings.HasPrefix(strings.ToUpper(strings.TrimSpace(algorithm)), "HYBRID")
 }
 
 // MLDSATargets lists the accepted certificate-key targets for messages and schemas.
@@ -185,7 +195,12 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 			if _, bound := bindings[id]; bound {
 				return Plan{}, fmt.Errorf("pqcmigration: certificate-key asset %s must not have a TLS target binding", id)
 			}
-			if !asset.QuantumVulnerable {
+			// A hybrid leaf is quantum-safe through its ML-DSA component but still
+			// carries a classical one; moving it to pure ML-DSA is the cutover the
+			// relying parties must acknowledge first (A217). Anything else that is
+			// not quantum-vulnerable has nothing to migrate.
+			cutover := !asset.QuantumVulnerable && IsHybridAlgorithm(asset.Algorithm)
+			if !asset.QuantumVulnerable && !cutover {
 				return Plan{}, fmt.Errorf("pqcmigration: asset %s is already post-quantum-ready", id)
 			}
 			binding, bound := certBindings[id]
@@ -206,6 +221,7 @@ func BuildPlan(assets []Asset, req Request) (Plan, error) {
 				EffectiveAlgorithm: req.TargetAlgorithm,
 				Protocol:           protocol,
 				RollbackOnFailure:  req.RollbackOnFailure,
+				Cutover:            cutover,
 			})
 		case string(cbom.AssetTLSEndpoint), string(cbom.AssetHostConfig):
 			// TLS 1.2 may be allowed by a tenant's general TLS policy, but it
@@ -288,8 +304,8 @@ func ResidualDenominator() []Residual {
 	return []Residual{
 		{
 			ID:     "hybrid_to_pure_pqc_cutover",
-			Status: "planned_gated",
-			Reason: "succession jobs can target a pure ML-DSA-65 deployment leaf (PostureHybridToPurePQC), but the cutover from the hybrid composite leaf is gated by evidence-based retirement (PCAS-10); the served effective leaf stays hybrid until then",
+			Status: "acknowledgment_gated",
+			Reason: "a hybrid composite leaf's reissue to pure ML-DSA is held until a quorum of signed relying-party acknowledgments for the identity's active retirement policy is recorded (PCAS-10); the served leaf stays hybrid until then",
 		},
 	}
 }

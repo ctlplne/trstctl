@@ -68,7 +68,7 @@ func attachFamilies(cfg *config.Config, log *slog.Logger, deps *server.Deps) err
 	if err := attachVerifiableDecommission(log, deps); err != nil {
 		return err
 	}
-	attachPQC(log, deps)
+	attachPQC(cfg, log, deps)
 	return nil
 }
 
@@ -393,9 +393,15 @@ func attachVerifiableDecommission(log *slog.Logger, deps *server.Deps) error {
 	return nil
 }
 
-func attachPQC(log *slog.Logger, deps *server.Deps) {
+func attachPQC(cfg *config.Config, log *slog.Logger, deps *server.Deps) {
 	cryptoRuntime := pqcruntime.NewRuntime()
 	migrationRuntime := pqcmigration.NewRuntime(deps.Store)
+	// A217: a hybrid leaf's cutover to pure ML-DSA is held until its identity's
+	// relying-party acknowledgment quorum is met; this leader worker queues it
+	// then. An acknowledgment counts for PCAS retirement's own window.
+	ackWindow, _ := time.ParseDuration(attachConfig(cfg).PCAS.Retirement.ValidityWindow)
+	deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers,
+		migrationRuntime.CutoverReleaseWorker(deps.Store, deps.Log, ackWindow))
 	hostPosture := pqcmigration.HostAgentHooks{
 		Store: deps.Store, Log: deps.Log, Progress: migrationRuntime.Progress,
 		Key: deps.KEK, TenantCrypto: deps.TenantCrypto,

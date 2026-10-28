@@ -54,16 +54,20 @@ type APITLSBinding struct {
 }
 
 type Response struct {
-	RunID                     string                 `json:"run_id"`
-	Queued                    int                    `json:"queued"`
-	CertificateReissuesQueued int                    `json:"certificate_reissues_queued"`
-	TLSFindingsQueued         int                    `json:"tls_findings_queued"`
-	TargetAlgorithm           string                 `json:"target_algorithm"`
-	EffectiveAlgorithm        string                 `json:"effective_algorithm"`
-	Protocol                  string                 `json:"protocol"`
-	RollbackConfigured        bool                   `json:"rollback_configured"`
-	MigrationProgress         cbom.MigrationProgress `json:"migration_progress"`
-	QueuedAt                  time.Time              `json:"queued_at"`
+	RunID                     string `json:"run_id"`
+	Queued                    int    `json:"queued"`
+	CertificateReissuesQueued int    `json:"certificate_reissues_queued"`
+	// CertificateCutoversAwaitingAcknowledgment counts hybrid leaves whose
+	// move to pure ML-DSA waits for their identity's relying-party
+	// acknowledgment quorum (A217); their host jobs are not queued yet.
+	CertificateCutoversAwaitingAcknowledgment int                    `json:"certificate_cutovers_awaiting_acknowledgment,omitempty"`
+	TLSFindingsQueued                         int                    `json:"tls_findings_queued"`
+	TargetAlgorithm                           string                 `json:"target_algorithm"`
+	EffectiveAlgorithm                        string                 `json:"effective_algorithm"`
+	Protocol                                  string                 `json:"protocol"`
+	RollbackConfigured                        bool                   `json:"rollback_configured"`
+	MigrationProgress                         cbom.MigrationProgress `json:"migration_progress"`
+	QueuedAt                                  time.Time              `json:"queued_at"`
 	// Status is "pending_approval" when a selected reissue runs under an
 	// approval-required profile and the exact start approval is not complete;
 	// no run exists then, and the fields below name the request to review.
@@ -76,15 +80,18 @@ type Response struct {
 }
 
 type RunProgressResponse struct {
-	Issued             int               `json:"issued"`
-	RollbackUnverified int               `json:"rollback_unverified"`
-	RunID              string            `json:"run_id"`
-	Total              int               `json:"total"`
-	Queued             int               `json:"queued"`
-	Applied            int               `json:"applied"`
-	Failed             int               `json:"failed"`
-	RolledBack         int               `json:"rolled_back"`
-	Findings           []FindingProgress `json:"findings"`
+	Issued             int    `json:"issued"`
+	RollbackUnverified int    `json:"rollback_unverified"`
+	RunID              string `json:"run_id"`
+	Total              int    `json:"total"`
+	Queued             int    `json:"queued"`
+	Applied            int    `json:"applied"`
+	Failed             int    `json:"failed"`
+	RolledBack         int    `json:"rolled_back"`
+	// AwaitingAcknowledgment counts cutovers held for their identity's
+	// relying-party acknowledgment quorum (A217).
+	AwaitingAcknowledgment int               `json:"awaiting_acknowledgment"`
+	Findings               []FindingProgress `json:"findings"`
 }
 
 type RollbackRequest struct {
@@ -302,6 +309,7 @@ func schemas() map[string]*api.Schema {
 			"identity_id": api.StringSchema(), "target_id": api.StringSchema(),
 			"predecessor_fingerprint": api.StringSchema(),
 			"rollback_on_failure":     api.BooleanSchema(),
+			"cutover":                 {Type: "boolean", Description: "A hybrid leaf's move to pure ML-DSA: its host job is held until a quorum of signed relying-party acknowledgments for the identity's active retirement policy is recorded."},
 		}, "asset_id", "target_algorithm", "protocol"),
 		"PQCMigrationPlanTLSRollout": api.ObjectSchema(map[string]*api.Schema{
 			"asset_id": api.StringSchema(), "location": api.StringSchema(),
@@ -359,13 +367,14 @@ func schemas() map[string]*api.Schema {
 			"run_id":                      api.StringSchema(),
 			"queued":                      api.IntegerSchema(),
 			"certificate_reissues_queued": api.IntegerSchema(),
-			"tls_findings_queued":         api.IntegerSchema(),
-			"target_algorithm":            api.StringSchema(),
-			"effective_algorithm":         api.StringSchema(),
-			"protocol":                    api.StringSchema(),
-			"rollback_configured":         api.BooleanSchema(),
-			"migration_progress":          api.SchemaRef("CBOMMigrationProgress"),
-			"queued_at":                   api.TimestampSchema(),
+			"certificate_cutovers_awaiting_acknowledgment": {Type: "integer", Description: "Hybrid leaves whose move to pure ML-DSA waits for their identity's relying-party acknowledgment quorum; their host jobs are not queued yet."},
+			"tls_findings_queued":                          api.IntegerSchema(),
+			"target_algorithm":                             api.StringSchema(),
+			"effective_algorithm":                          api.StringSchema(),
+			"protocol":                                     api.StringSchema(),
+			"rollback_configured":                          api.BooleanSchema(),
+			"migration_progress":                           api.SchemaRef("CBOMMigrationProgress"),
+			"queued_at":                                    api.TimestampSchema(),
 			// A start under an approval-required profile answers with these
 			// instead of a run (A40): status is pending_approval and no run_id
 			// exists until the exact approval is consumed by a later start.
@@ -390,8 +399,9 @@ func schemas() map[string]*api.Schema {
 			"run_id": api.StringSchema(), "total": api.IntegerSchema(), "queued": api.IntegerSchema(),
 			"issued": api.IntegerSchema(), "rollback_unverified": api.IntegerSchema(),
 			"applied": api.IntegerSchema(), "failed": api.IntegerSchema(), "rolled_back": api.IntegerSchema(),
-			"findings": api.ArraySchema(api.SchemaRef("PQCMigrationFindingProgress")),
-		}, "run_id", "total", "queued", "issued", "applied", "failed", "rolled_back", "rollback_unverified", "findings"),
+			"awaiting_acknowledgment": api.IntegerSchema(),
+			"findings":                api.ArraySchema(api.SchemaRef("PQCMigrationFindingProgress")),
+		}, "run_id", "total", "queued", "issued", "applied", "failed", "rolled_back", "rollback_unverified", "awaiting_acknowledgment", "findings"),
 		"PQCMigrationRollbackRequest": api.ObjectSchema(map[string]*api.Schema{
 			"asset_ids": api.ArraySchema(api.StringSchema()),
 			"reason":    api.StringSchema(),
@@ -420,6 +430,9 @@ type PlanPreviewReissue struct {
 	EffectiveAlgorithm     string `json:"effective_algorithm"`
 	Protocol               string `json:"protocol"`
 	RollbackOnFailure      bool   `json:"rollback_on_failure"`
+	// Cutover marks a hybrid leaf's move to pure ML-DSA, held until the
+	// identity's relying-party acknowledgment quorum is met (A217).
+	Cutover bool `json:"cutover,omitempty"`
 }
 
 type PlanPreviewTLSRollout struct {

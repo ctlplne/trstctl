@@ -364,6 +364,19 @@ receipt. An `issued` state alone is not deployment proof. Historical
 issuance-only certificate runs keep `rollback_unverified`, counted separately
 from `rolled_back`, because they have no recoverable host predecessor. Exhausted
 issue and rollback attempts report `failed` and `rollback_failed`.
+
+A certificate whose current leaf is the hybrid composite can be selected for a
+pure ML-DSA target: the plan marks that reissue `cutover` and the console says
+it waits for acknowledgments. Starting the run queues nothing for it; the
+finding reads `awaiting_acknowledgment` and the start response counts it in
+`certificate_cutovers_awaiting_acknowledgment`. Record the identity's
+relying-party roster, threshold and window with `trstctl pcas retirement policy
+set` (see [PCAS operations](../runbooks/pcas-operations.md)); once a quorum of
+signed acknowledgments for the policy's epoch is recorded inside its window, the
+leader queues the held host job unchanged within a minute and records
+`pqc.migration.cutover_released` with the acknowledging relying parties and the
+ack-set digest. From there the cutover is an ordinary host reissue: the host
+generates the ML-DSA key, and `applied` needs its signed readback.
 Rollback accepts only findings with an applied, rollback-eligible result in that run.
 For a known run whose selected finding failed before application, the API returns
 HTTP 409 with the finding ID and queues no recovery work. A run outside the caller's
@@ -573,8 +586,9 @@ every build through `internal/pqcmigration`.
   CBOM TLS findings roll out to Envoy through an enrolled host agent or a network
   relay, with agent-owned rollback. These client proofs do not claim that every
   legacy client understands ML-DSA. Hybrid-to-pure
-  replacement of an already deployed leaf stays gated by succession and evidence-based
-  retirement; direct pure enrollment is served.
+  replacement of an already deployed hybrid leaf is a migration run's cutover: it
+  waits for a quorum of signed relying-party acknowledgments under the identity's
+  PCAS retirement policy, then queues the host reissue; direct pure enrollment is served.
 - **SLH-DSA** signatures are large — the conservative choice for long-lived roots, not
   high-volume leaf issuance; pick the algorithm per profile.
 - **Lifetime-reduction readiness** reads what trstctl can see. A client-renewed

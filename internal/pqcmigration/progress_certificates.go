@@ -10,6 +10,10 @@ import (
 const (
 	CertificateFindingIssued             = "issued"
 	CertificateFindingRollbackUnverified = "rollback_unverified"
+	// CertificateFindingAwaitingAcknowledgment is a hybrid leaf's cutover to
+	// pure ML-DSA, held until its identity's relying-party acknowledgment
+	// quorum is met (A217).
+	CertificateFindingAwaitingAcknowledgment = "awaiting_acknowledgment"
 )
 
 // applyCertificateStarted joins issuance work into the same per-run denominator
@@ -23,11 +27,20 @@ func (p *ProgressProjection) applyCertificateStarted(ev eventspec.Event, started
 		// A delayed start can fill in the operator's requested algorithm, but it
 		// cannot replace the effective algorithm proven by a later signed apply
 		// or exact rollback receipt.
-		if item.Status == "" || item.Status == TLSFindingQueued {
+		if item.Status == "" || item.Status == TLSFindingQueued || item.Status == CertificateFindingAwaitingAcknowledgment {
 			item.EffectiveAlgorithm = intent.EffectiveAlgorithm
 		}
 		if item.Status == "" {
 			item.Status, item.UpdatedAt = TLSFindingQueued, eventTime(ev)
+			// A217: a cutover waits for its identity's acknowledgment quorum;
+			// the release worker queues the held host job.
+			if intent.Cutover {
+				item.Status = CertificateFindingAwaitingAcknowledgment
+				if p.heldCutovers == nil {
+					p.heldCutovers = map[progressKey]projections.LicensedCryptoMigrationReissue{}
+				}
+				p.heldCutovers[key] = intent
+			}
 		}
 		p.items[key] = item
 	}

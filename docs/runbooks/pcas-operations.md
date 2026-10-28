@@ -161,6 +161,13 @@ this does not establish that the ciphertext inventory is empty. Do not infer
 that a relying party
 changed trust stores just because it appears in the roster.
 
+The same policy gates a PQC migration's hybrid-to-pure certificate cutover for
+that identity: a held cutover is released once its quorum is met inside the
+window, and a policy that PCAS has already retired on that quorum still counts.
+When PCAS retirement is enabled and the identity has a succession, the same
+quorum also retires the predecessor key, so set the policy for the identity
+whose relying parties actually acknowledge pure ML-DSA.
+
 On restart, the retirement worker checks previously retired policies against
 the signed retirement event and the tenant-bound signer handle. This also
 repairs older policies that were marked retired after deleting a different,

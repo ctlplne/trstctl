@@ -54,6 +54,10 @@ const splitList = (value: string): string[] =>
     .map((item) => item.trim())
     .filter(Boolean);
 const findingLabel = (asset: CBOMAsset): string => [asset.location, asset.protocol || asset.cipher].filter(Boolean).join(" · ");
+// A hybrid composite leaf is quantum-safe but still carries a classical key;
+// its move to pure ML-DSA is a cutover held for relying-party acknowledgments.
+const isHybridCertificate = (asset: CBOMAsset): boolean =>
+  asset.kind === "certificate-key" && (asset.algorithm ?? "").trim().toUpperCase().startsWith("HYBRID");
 const migrationTarget = (asset: CBOMAsset, targetAlgorithm: PQCTargetAlgorithm): string =>
   asset.kind === "host-config" || asset.kind === "tls-endpoint" ? asset.migration_target || "X25519MLKEM768" : targetAlgorithm;
 
@@ -114,7 +118,11 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
   const [error, setError] = useState<string | null>(null);
 
   const vulnerable = useMemo(
-    () => assets.filter((asset) => asset.quantum_vulnerable || asset.out_of_policy || (asset.kind === "tls-endpoint" && asset.protocol === "TLSv1.2")),
+    () =>
+      assets.filter(
+        (asset) =>
+          asset.quantum_vulnerable || asset.out_of_policy || isHybridCertificate(asset) || (asset.kind === "tls-endpoint" && asset.protocol === "TLSv1.2"),
+      ),
     [assets],
   );
   const selectedIds = vulnerable.filter((asset) => selected.has(asset.id)).map((asset) => asset.id);
@@ -447,6 +455,11 @@ export function PQCMigrationWorkflow({ assets }: { assets: CBOMAsset[] }) {
               <dd>{plan.residuals.length}</dd>
             </div>
           </dl>
+          {plan.reissues.some((reissue) => reissue.cutover) ? (
+            <p role="note" className="text-sm">
+              {t("posture.pqcMigration.cutoversHeld", { count: String(plan.reissues.filter((reissue) => reissue.cutover).length) })}
+            </p>
+          ) : null}
           {plan.residuals.length > 0 ? (
             <ul className="list-disc pl-5 text-sm">
               {plan.residuals.map((item) => (

@@ -2,6 +2,16 @@
 
 ### Added
 
+- Hybrid-to-pure ML-DSA certificate cutover: a PQC migration run can target pure ML-DSA for a
+  certificate whose current leaf is the hybrid composite (the console offers such certificates).
+  The plan marks that reissue `cutover`; starting the run holds its host job, the finding reads
+  `awaiting_acknowledgment`, and the start response counts it in
+  `certificate_cutovers_awaiting_acknowledgment`. Once a quorum of signed relying-party
+  acknowledgments for the identity's PCAS retirement policy is recorded inside its window (a policy
+  PCAS already retired on that quorum still counts), a leader worker queues the held job unchanged
+  and records `pqc.migration.cutover_released` with the relying parties and the ack-set digest; the
+  host then generates the ML-DSA key and returns only its CSR. Without the quorum the cutover waits
+  and the served leaf stays hybrid.
 - Scheduled CA rollover drafts: with `ca.rollover_draft_band_months` (`TRSTCTL_CA_ROLLOVER_DRAFT_BAND_MONTHS`,
   off by default) set to a CA calendar band, an active signer-backed authority entering it gets a
   `rekey_ca` ceremony opened for it with the reviewed plan — its profile and lifetime and a

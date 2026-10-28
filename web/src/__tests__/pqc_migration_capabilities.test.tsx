@@ -253,6 +253,34 @@ describe("Core PQC runtime authority", () => {
     expect(mocks.planPQCMigration).not.toHaveBeenCalled();
   });
 
+  it("offers a hybrid certificate for the pure ML-DSA cutover and says it waits for acknowledgments", async () => {
+    const user = userEvent.setup();
+    mocks.planPQCMigration.mockResolvedValue({
+      reissues: [
+        {
+          asset_id: "asset-1",
+          target_algorithm: "ML-DSA-65",
+          effective_algorithm: "ML-DSA-65",
+          protocol: "host-csr",
+          rollback_on_failure: false,
+          cutover: true,
+        },
+      ],
+      tls_rollouts: [],
+      residuals: [],
+      reissue_count: 1,
+      tls_rollout_count: 0,
+    });
+    render(workflow(view(), false, [{ ...asset, algorithm: "Hybrid-MLDSA44-ECDSAP256", quantum_vulnerable: false }]));
+    await bindCertificate(user);
+    await user.click(screen.getByRole("button", { name: "Preview migration plan" }));
+    expect(
+      await screen.findByText(
+        "Hybrid-to-pure cutovers: 1. Each waits for a quorum of signed relying-party acknowledgments under its identity's retirement policy before the host is asked for a new key.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("keeps missing and loading capability truth closed", () => {
     const result = render(workflow(null, true));
     expect(screen.queryByRole("button", { name: "Preview migration plan" })).not.toBeInTheDocument();

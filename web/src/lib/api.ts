@@ -869,6 +869,9 @@ export interface PQCMigrationPlanReissue {
   effective_algorithm: string;
   protocol: string;
   rollback_on_failure: boolean;
+  // A hybrid leaf's move to pure ML-DSA, held until the identity's
+  // relying-party acknowledgment quorum is met.
+  cutover?: boolean;
 }
 
 export interface PQCMigrationPlanResidual {
@@ -895,6 +898,7 @@ export interface PQCMigrationRun {
   run_id: string;
   queued: number;
   certificate_reissues_queued: number;
+  certificate_cutovers_awaiting_acknowledgment?: number;
   tls_findings_queued: number;
   target_algorithm: string;
   effective_algorithm: string;
@@ -957,6 +961,7 @@ export interface PQCMigrationFindingProgress {
 export interface PQCMigrationProgress {
   issued?: number;
   rollback_unverified?: number;
+  awaiting_acknowledgment?: number;
   run_id: string;
   total: number;
   queued: number;

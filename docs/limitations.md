@@ -6035,9 +6035,21 @@ the host-agent path existed remain historical evidence, not rollout proof.
 
 Those proofs define the compatibility boundary: they do not claim every
 legacy TLS client or every connector understands ML-DSA. A hybrid-to-pure
-cutover for an existing hybrid certificate remains evidence-gated by
-succession/retirement policy; direct pure ML-DSA enrollment is served
-through EST (and as the SPIFFE Workload API's second SVID), and
+cutover for an existing hybrid certificate is served behind the relying-party
+acknowledgment gate: a migration run that targets pure ML-DSA for a
+certificate whose current leaf is the hybrid composite plans that reissue as
+a `cutover` and holds its host job (finding status `awaiting_acknowledgment`)
+until a quorum of signed relying-party acknowledgments for the identity's PCAS
+retirement policy is recorded inside the policy's window. That is the PCAS-10
+rule that gates retiring a predecessor key, and a policy PCAS has already
+retired on that quorum still counts. A leader worker then queues the held job
+unchanged and records `pqc.migration.cutover_released` with the acknowledging
+relying parties and the ack-set digest; the host generates the ML-DSA key and
+returns only its CSR, and the finding reaches `applied` only on the host's
+signed readback. Without a policy for the identity, or without the quorum,
+the cutover waits and the served leaf stays hybrid. Direct pure ML-DSA
+enrollment is served through EST (and as the SPIFFE Workload API's second
+SVID), and
 CMP consults the same PQC parser for its carried CSR (PKIMessage
 protection stays classically verified). SCEP cannot by protocol. The direct
 identity API now accepts a caller-supplied CSR — supply `subject_csr_pem`

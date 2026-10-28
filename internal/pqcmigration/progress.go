@@ -170,6 +170,9 @@ type ProgressProjection struct {
 	// entire tenant history for each signed host report can outlast the agent's
 	// acknowledgement window on a busy control plane.
 	runStarts map[progressRunKey]runStartRef
+	// heldCutovers are hybrid-to-pure reissues waiting for their identity's
+	// relying-party acknowledgment quorum (A217), by run and asset.
+	heldCutovers map[progressKey]projections.LicensedCryptoMigrationReissue
 	// Package-private projection hooks let restart/replay tests exercise the
 	// event fold without starting PostgreSQL. Production leaves them nil and
 	// always projects CBOM rows through Store under tenant RLS.
@@ -210,7 +213,8 @@ func NewProgressProjection(st *store.Store) *ProgressProjection {
 		certificateRenewalEvents:  map[progressKey]eventspec.Event{},
 		certificateRollbackEvents: map[progressKey]eventspec.Event{},
 		certificateStateEvents:    map[progressKey]eventspec.Event{},
-		runStarts:                 map[progressRunKey]runStartRef{}}
+		runStarts:                 map[progressRunKey]runStartRef{},
+		heldCutovers:              map[progressKey]projections.LicensedCryptoMigrationReissue{}}
 }
 
 func WithProgressProjection(p *ProgressProjection) projections.Option {
@@ -236,6 +240,7 @@ func (p *ProgressProjection) Reset(context.Context) error {
 	p.certificateStateEvents = map[progressKey]eventspec.Event{}
 	p.pendingEvents = map[string]eventspec.Event{}
 	p.runStarts = map[progressRunKey]runStartRef{}
+	p.heldCutovers = map[progressKey]projections.LicensedCryptoMigrationReissue{}
 	p.mu.Unlock()
 	return nil
 }
@@ -283,6 +288,12 @@ func (p *ProgressProjection) Apply(ctx context.Context, ev eventspec.Event) erro
 			return err
 		}
 		return p.applyCertificateFailure(ev, failed)
+	case EventCertificateCutoverReleased:
+		var released CertificateCutoverReleased
+		if err := json.Unmarshal(ev.Data, &released); err != nil {
+			return err
+		}
+		p.applyCutoverReleased(ev, released)
 	case projections.EventLicensedCryptoMigrationAssetCompleted:
 		var issued projections.LicensedCryptoMigrationAssetCompleted
 		if err := json.Unmarshal(ev.Data, &issued); err != nil {

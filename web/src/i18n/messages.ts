@@ -29276,6 +29276,20 @@ export const messages = {
     defaultMessage: "{count} issued; endpoint verification pending.",
     description: "Issuance does not establish deployment.",
   },
+  "posture.pqcMigration.awaitingAcknowledgmentSummary": {
+    defaultMessage:
+      "Waiting for relying-party acknowledgments: {count}. Each hybrid certificate moves to pure ML-DSA once a quorum of signed acknowledgments for its identity is recorded.",
+    description: "Cutovers held for the relying-party acknowledgment quorum.",
+  },
+  "posture.pqcMigration.cutoversHeld": {
+    defaultMessage:
+      "Hybrid-to-pure cutovers: {count}. Each waits for a quorum of signed relying-party acknowledgments under its identity's retirement policy before the host is asked for a new key.",
+    description: "Plan note: hybrid certificates moving to pure ML-DSA wait for relying-party acknowledgments.",
+  },
+  "posture.pqcMigration.awaitingAcknowledgmentStatus": {
+    defaultMessage: "Waiting for relying-party acknowledgments",
+    description: "A hybrid-to-pure ML-DSA cutover held until the identity's acknowledgment quorum is met.",
+  },
   "posture.pqcMigration.rollbackUnverifiedSummary": {
     defaultMessage: "Inventory-only rollbacks: {count}. Endpoint recovery is unverified.",
     description: "Historical inventory rollback lacks receiver evidence.",

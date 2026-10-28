@@ -166,7 +166,7 @@ func TestCompletedCapabilitiesLeaveOnlyEvidenceGatedPureCutoverResidual(t *testi
 		case "pure_mldsa_subject_certificates", "spiffe_multi_key_workload_response", "fleetwide_tls_cipher_rollout":
 			t.Fatalf("completed capability remains falsely listed as residual: %+v", residual)
 		case "hybrid_to_pure_pqc_cutover":
-			sawCutover = residual.Status == "planned_gated"
+			sawCutover = residual.Status == "acknowledgment_gated"
 		}
 	}
 	if !sawCutover {
@@ -193,5 +193,34 @@ func TestPQCPlannerAcceptsEveryMLDSAParameterSet(t *testing.T) {
 		if _, err := BuildPlan([]Asset{asset}, request(target)); err == nil || !strings.Contains(err.Error(), "ML-DSA") {
 			t.Fatalf("%q was accepted as a certificate-key target: %v", target, err)
 		}
+	}
+}
+
+// A217: a hybrid composite leaf is not quantum-vulnerable but still carries a
+// classical component, so a pure ML-DSA target plans it as a cutover; a leaf
+// that is already pure post-quantum still has nothing to migrate.
+func TestPQCPlannerPlansAHybridLeafAsAnAcknowledgmentGatedCutover(t *testing.T) {
+	binding := func(id string) []CertificateBinding {
+		return []CertificateBinding{{AssetID: id, IdentityID: "identity-" + id, TargetID: "target-" + id}}
+	}
+	hybrid := Asset{ID: "asset-hybrid", Kind: string(cbom.AssetCertKey), Location: "payments.internal:443",
+		Algorithm: EffectiveHybridTLS, CertificateFingerprint: strings.Repeat("a", 64), Strength: "strong"}
+	plan, err := BuildPlan([]Asset{hybrid}, Request{AssetIDs: []string{hybrid.ID}, TargetAlgorithm: TargetMLDSA65,
+		Protocol: ProtocolHostCSR, CertificateBindings: binding(hybrid.ID)})
+	if err != nil || len(plan.Reissues) != 1 || !plan.Reissues[0].Cutover || plan.Reissues[0].EffectiveAlgorithm != TargetMLDSA65 {
+		t.Fatalf("hybrid leaf plan = %+v, %v; want one cutover reissue to ML-DSA-65", plan.Reissues, err)
+	}
+	pure := Asset{ID: "asset-pure", Kind: string(cbom.AssetCertKey), Location: "payments.internal:8443",
+		Algorithm: TargetMLDSA65, CertificateFingerprint: strings.Repeat("b", 64), Strength: "strong"}
+	if _, err := BuildPlan([]Asset{pure}, Request{AssetIDs: []string{pure.ID}, TargetAlgorithm: TargetMLDSA65,
+		Protocol: ProtocolHostCSR, CertificateBindings: binding(pure.ID)}); err == nil || !strings.Contains(err.Error(), "already post-quantum-ready") {
+		t.Fatalf("a pure ML-DSA leaf was planned: %v", err)
+	}
+	classical := Asset{ID: "asset-ecdsa", Kind: string(cbom.AssetCertKey), Location: "payments.internal:9443",
+		Algorithm: "ECDSA", QuantumVulnerable: true, CertificateFingerprint: strings.Repeat("c", 64), Strength: "acceptable"}
+	plan, err = BuildPlan([]Asset{classical}, Request{AssetIDs: []string{classical.ID}, TargetAlgorithm: TargetMLDSA65,
+		Protocol: ProtocolHostCSR, CertificateBindings: binding(classical.ID)})
+	if err != nil || len(plan.Reissues) != 1 || plan.Reissues[0].Cutover {
+		t.Fatalf("classical leaf plan = %+v, %v; want an ungated reissue", plan.Reissues, err)
 	}
 }

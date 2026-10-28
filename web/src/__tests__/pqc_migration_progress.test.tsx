@@ -44,6 +44,27 @@ describe("PQC certificate progress", () => {
     expect(screen.queryByText("Verified on target")).not.toBeInTheDocument();
   });
 
+  it("shows a hybrid cutover held for relying-party acknowledgments, not issued", () => {
+    render(
+      <PQCMigrationProgressDetails
+        assets={[{ ...asset, algorithm: "Hybrid-MLDSA44-ECDSAP256" }]}
+        progress={{
+          ...progress,
+          issued: 0,
+          awaiting_acknowledgment: 1,
+          findings: [{ ...finding, status: "awaiting_acknowledgment", certificate_fingerprint: "", effective_algorithm: "ML-DSA-65" }],
+        }}
+      />,
+    );
+    expect(screen.getByText("Waiting for relying-party acknowledgments")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Waiting for relying-party acknowledgments: 1. Each hybrid certificate moves to pure ML-DSA once a quorum of signed acknowledgments for its identity is recorded.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Issued; deployment not verified")).not.toBeInTheDocument();
+  });
+
   it("distinguishes inventory restoration from verified recovery", () => {
     render(
       <PQCMigrationProgressDetails

@@ -423,7 +423,7 @@ func ensureRetiredPredecessorAbsent(ctx context.Context, client *signing.Client,
 }
 
 func (w *retirementWorker) evaluatePolicy(ctx context.Context, client *signing.Client, tenantID string, policy pcasstore.RetirementPolicy, ledgerEvents []events.Event) error {
-	roster, err := decodeRPRoster(policy.RosterJSON)
+	roster, err := retirement.DecodeRoster(policy.RosterJSON)
 	if err != nil {
 		return err
 	}
@@ -515,28 +515,6 @@ func retirementPredecessorHandle(tenantID string, policy pcasstore.RetirementPol
 		return "", fmt.Errorf("pcas retirement worker: predecessor handle is not bound to tenant identity epoch")
 	}
 	return bound, nil
-}
-
-type rpRosterEntry struct {
-	RelyingParty string `json:"relying_party"`
-	PublicDER    []byte `json:"public_der"`
-}
-
-func decodeRPRoster(raw json.RawMessage) (retirement.Roster, error) {
-	var entries []rpRosterEntry
-	if len(raw) == 0 {
-		return retirement.Roster{}, nil
-	}
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		return nil, fmt.Errorf("pcas retirement worker: decode roster: %w", err)
-	}
-	roster := retirement.Roster{}
-	for _, e := range entries {
-		if e.RelyingParty != "" && len(e.PublicDER) > 0 {
-			roster[e.RelyingParty] = e.PublicDER
-		}
-	}
-	return roster, nil
 }
 
 func collectEvents(ctx context.Context, log *events.Log) ([]events.Event, error) {

@@ -3365,6 +3365,10 @@ type LicensedCryptoMigrationReissue struct {
 	EffectiveAlgorithm     string                 `json:"effective_algorithm"`
 	Protocol               string                 `json:"protocol"`
 	RollbackOnFailure      bool                   `json:"rollback_on_failure"`
+	// Cutover marks a hybrid leaf's move to pure ML-DSA (A217): its host job
+	// is held until the identity's relying-party acknowledgment quorum is
+	// met, then queued unchanged.
+	Cutover bool `json:"cutover,omitempty"`
 }
 
 // LicensedCryptoHostJob is the closed, reference-only host intent retained for

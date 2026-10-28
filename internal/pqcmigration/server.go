@@ -311,7 +311,7 @@ func (s *pqcMigrationService) PlanPreview(ctx context.Context, tenantID string, 
 			PredecessorFingerprint: reissue.Asset.CertificateFingerprint,
 			CurrentAlgorithm:       reissue.Asset.Algorithm, TargetAlgorithm: reissue.TargetAlgorithm,
 			EffectiveAlgorithm: reissue.EffectiveAlgorithm, Protocol: reissue.Protocol,
-			RollbackOnFailure: reissue.RollbackOnFailure,
+			RollbackOnFailure: reissue.RollbackOnFailure, Cutover: reissue.Cutover,
 		})
 	}
 	for _, rollout := range plan.TLSRollouts {
@@ -412,7 +412,7 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			QuantumVulnerable: asset.QuantumVulnerable, OutOfPolicy: asset.OutOfPolicy,
 			Reasons: append([]string(nil), asset.Reasons...), TargetAlgorithm: reissue.TargetAlgorithm,
 			EffectiveAlgorithm: reissue.EffectiveAlgorithm, Protocol: reissue.Protocol,
-			RollbackOnFailure: reissue.RollbackOnFailure,
+			RollbackOnFailure: reissue.RollbackOnFailure, Cutover: reissue.Cutover,
 		})
 	}
 	tlsPayloads := make([]pqcMigrationTLSPosturePayload, 0, len(plan.TLSRollouts))
@@ -496,19 +496,12 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 			return err
 		}
 		for _, payload := range reissuePayloads {
-			if payload.HostJobPayload == nil || payload.RequiredAgentID == "" || payload.IdentityID == "" || payload.TargetID == "" {
-				return errors.New("pqcmigration: host certificate intent is incomplete")
+			// A217: a cutover's host job is held in the started event until the
+			// identity's relying-party acknowledgment quorum releases it.
+			if payload.Cutover {
+				continue
 			}
-			body, err := json.Marshal(payload.HostJobPayload)
-			if err != nil {
-				return err
-			}
-			if _, err := s.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
-				TenantID: tenantID, Destination: relay.KindEndpointRenew,
-				IdempotencyKey: "licensed-crypto-migration:" + payload.RunID + ":" + payload.AssetID,
-				Payload:        body, EffectLane: store.ConnectorTargetLanePrefix + payload.TargetID,
-				RequiredAgentRole: mtls.AgentRoleHost, RequiredAgentID: payload.RequiredAgentID,
-			}); err != nil {
+			if err := enqueueHostReissue(ctx, tx, s.outbox, tenantID, payload); err != nil {
 				return err
 			}
 		}
@@ -535,14 +528,40 @@ func (s *pqcMigrationService) start(ctx context.Context, tenantID string, req AP
 	}); err != nil {
 		return Response{}, err
 	}
+	held := 0
+	for _, payload := range reissuePayloads {
+		if payload.Cutover {
+			held++
+		}
+	}
 	return Response{
-		RunID: runID, Queued: totalQueued, CertificateReissuesQueued: len(reissuePayloads),
-		TLSFindingsQueued: len(tlsPayloads), TargetAlgorithm: req.TargetAlgorithm,
+		RunID: runID, Queued: totalQueued - held, CertificateReissuesQueued: len(reissuePayloads) - held,
+		CertificateCutoversAwaitingAcknowledgment: held,
+		TLSFindingsQueued:                         len(tlsPayloads), TargetAlgorithm: req.TargetAlgorithm,
 		EffectiveAlgorithm: effectiveAlgorithm, Protocol: protocol,
 		RollbackConfigured: req.RollbackOnFailure,
 		MigrationProgress:  api.CBOMInventoryFromAssets(assets).MigrationProgress,
 		QueuedAt:           time.Now().UTC(),
 	}, nil
+}
+
+// enqueueHostReissue queues a reissue's host job on the target's enrolled
+// host agent. A cutover released later queues the same job under the same key.
+func enqueueHostReissue(ctx context.Context, tx pgx.Tx, outbox *orchestrator.Outbox, tenantID string, payload pqcMigrationReissuePayload) error {
+	if payload.HostJobPayload == nil || payload.RequiredAgentID == "" || payload.IdentityID == "" || payload.TargetID == "" {
+		return errors.New("pqcmigration: host certificate intent is incomplete")
+	}
+	body, err := json.Marshal(payload.HostJobPayload)
+	if err != nil {
+		return err
+	}
+	_, err = outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
+		TenantID: tenantID, Destination: relay.KindEndpointRenew,
+		IdempotencyKey: "licensed-crypto-migration:" + payload.RunID + ":" + payload.AssetID,
+		Payload:        body, EffectLane: store.ConnectorTargetLanePrefix + payload.TargetID,
+		RequiredAgentRole: mtls.AgentRoleHost, RequiredAgentID: payload.RequiredAgentID,
+	})
+	return err
 }
 
 // Preview and start must agree on whether the exact selected targets can be
@@ -790,6 +809,8 @@ func progressResponse(runID string, findings []FindingProgress) RunProgressRespo
 			resp.Failed++
 		case TLSFindingRolledBack:
 			resp.RolledBack++
+		case CertificateFindingAwaitingAcknowledgment:
+			resp.AwaitingAcknowledgment++
 		}
 	}
 	return resp
