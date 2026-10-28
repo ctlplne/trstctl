@@ -1031,7 +1031,15 @@ Multi-token JSON configuration and a complete SAML block:
       "jwks_file": "/etc/trstctl/provider-idp.jwks",
       "role_claim": "groups",
       "admin_values": ["provider-admin"],
-      "operator_values": ["provider-operator"]
+      "operator_values": ["provider-operator"],
+      "login": {
+        "authorization_endpoint": "https://idp.provider.example/protocol/openid-connect/auth",
+        "token_endpoint": "https://idp.provider.example/protocol/openid-connect/token",
+        "client_id": "trstctl-provider-console",
+        "client_secret_file": "/etc/trstctl/provider-console-client.secret",
+        "redirect_url": "https://trstctl.provider.example/provider/v1/auth/oidc/callback",
+        "session_secret_file": "/var/lib/trstctl/provider-oidc-session.secret"
+      }
     },
     "saml": {
       "enabled": true,
@@ -1057,6 +1065,21 @@ Multi-token JSON configuration and a complete SAML block:
   }
 }
 ```
+
+`provider.oidc.login` turns on Provider console sign-in through the IdP: the
+console's "Sign in with your identity provider" runs the authorization code
+flow with state, nonce and PKCE S256 (`GET /provider/v1/auth/oidc/login` and
+`/provider/v1/auth/oidc/callback`). The endpoints are configured, never
+discovered at request time; the code is redeemed with the client secret from
+`client_secret_file` (client_secret_basic) and the ID token is verified
+against the pinned keys above, with `client_id` as its audience, the same role
+and MFA claims, and the nonce. The browser receives an HttpOnly, host-only,
+SameSite=Strict Provider session (`session_ttl`, default 12h; the secret in
+`session_secret_file` is created on first start) plus the double-submit CSRF
+cookie; no token reaches the browser or browser storage, and when this is set
+the console no longer offers the bearer-token box. Every request re-reads the
+SCIM directory row, so a leaver or a revoked role is refused at once, and
+sign-out revokes the session.
 
 The operator console lists SCIM lifecycle and every current/historical
 delegation. Grant/revoke/role mutations require a Provider admin, current MFA,

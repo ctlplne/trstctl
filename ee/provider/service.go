@@ -90,6 +90,9 @@ type Config struct {
 	// SAML owns the Provider-plane SP endpoints and separate browser session.
 	// Nil simply means SAML is not one of the configured identity methods.
 	SAML *SAMLAuthenticator
+	// OIDCLogin serves the Provider console's OIDC code flow and its session
+	// (A222). Nil means browser sign-in through OIDC is not configured.
+	OIDCLogin *OIDCLogin
 	// SCIM owns Provider workforce joiner/leaver provisioning. The handler binds
 	// it to Access and Mutations; nil means no Provider SCIM endpoint is served.
 	SCIM *SCIMConfig

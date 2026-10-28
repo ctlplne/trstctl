@@ -445,7 +445,13 @@ never live in the API process. What you can do end to end against the running bi
   the whole workforce must not make every employee someone who can suspend
   customers. A single-factor operator authenticates and is then refused
   mutations (403 at the act, not 401 at the door — the gap is MFA and the
-  error should say so). Federation answers WHO; the per-customer delegation
+  error should say so). Console sign-in (A222): with `provider.oidc.login`
+  the console signs in through the IdP's authorization code flow (state,
+  nonce, PKCE S256) and holds an HttpOnly, SameSite=Strict Provider session
+  instead of a pasted bearer; the ID token meets the same offline checks with
+  the client id as audience, no token reaches browser storage, and the
+  directory row is re-read on every request. The session store is in memory,
+  so a restart signs operators out. Federation answers WHO; the per-customer delegation
   still answers WHICH customers, and the combined test proves a federated
   admin delegated one customer cannot suspend another.
   SAML AND SCIM ARE NOW SERVED (AUD-58): Provider SAML mounts a separate SP at

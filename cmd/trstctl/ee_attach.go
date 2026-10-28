@@ -245,6 +245,13 @@ func attachEEProviderAPI(
 		providerIdempotency = orchestrator.NewIdempotency(deps.Store,
 			orchestrator.WithResultProtector(deps.IdempotencyResultProtector))
 	}
+	oidcLogin, err := providerOIDCLogin(cfg, access)
+	if err != nil {
+		return err
+	}
+	if oidcLogin != nil {
+		operatorAuthenticators = append(operatorAuthenticators, oidcLogin)
+	}
 	samlAuth, err := providerSAMLAuthenticator(cfg, access, deps.KEK)
 	if err != nil {
 		return err
@@ -275,6 +282,7 @@ func attachEEProviderAPI(
 		Delegations:              delegations,
 		Access:                   access,
 		SAML:                     samlAuth,
+		OIDCLogin:                oidcLogin,
 		SCIM:                     providerSCIM,
 		Telemetry:                eeprovider.NewPGStore(deps.Store),
 		TenantConsent:            eeprovider.NewPGStore(deps.Store),
@@ -346,6 +354,72 @@ func providerOIDCAuthenticator(
 		MFAValues: cfg.Provider.OIDC.MFAValues, Directory: directory,
 		RequireDirectory: cfg.Provider.SCIM.Enabled,
 	}), nil
+}
+
+// providerOIDCLogin builds the Provider console's OIDC code flow (A222). The
+// client secret and the session secret are file-backed bytes owned by the
+// login for its lifetime (AN-8); the token endpoint client follows the
+// outbound SSRF policy for that endpoint.
+func providerOIDCLogin(cfg *config.Config, directory eeprovider.OperatorDirectory) (*eeprovider.OIDCLogin, error) {
+	login := cfg.Provider.OIDC.Login
+	if !login.Enabled() {
+		return nil, nil
+	}
+	jwksJSON := cfg.Provider.OIDC.JWKSJSON
+	if path := strings.TrimSpace(cfg.Provider.OIDC.JWKSFile); path != "" {
+		raw, err := os.ReadFile(path) // #nosec G304 -- operator-supplied path to their own IdP's JWKS (CWE-22)
+		if err != nil {
+			return nil, fmt.Errorf("provider.oidc.jwks_file: %w", err)
+		}
+		jwksJSON = string(raw)
+	}
+	jwks, err := crypto.ParseJWKS([]byte(jwksJSON))
+	if err != nil {
+		return nil, fmt.Errorf("provider.oidc jwks: %w", err)
+	}
+	clientSecret, err := os.ReadFile(login.ClientSecretFile) // #nosec G304 -- operator-configured client secret file (CWE-22)
+	if err != nil {
+		return nil, fmt.Errorf("provider.oidc.login.client_secret_file: %w", err)
+	}
+	clientSecret = bytes.TrimSpace(clientSecret)
+	sessionSecret, err := secretfile.LoadOrCreate(login.SessionSecretFile, func() ([]byte, error) {
+		return crypto.RandomBytes(32)
+	})
+	if err != nil {
+		secret.Wipe(clientSecret)
+		return nil, fmt.Errorf("provider.oidc.login.session_secret_file: %w", err)
+	}
+	ttl, err := login.SessionTTLDuration()
+	if err != nil {
+		secret.Wipe(clientSecret)
+		secret.Wipe(sessionSecret)
+		return nil, fmt.Errorf("provider.oidc.login.session_ttl: %w", err)
+	}
+	client, err := netsec.OutboundClientForEndpoint(login.TokenEndpoint, 10*time.Second)
+	if err != nil {
+		secret.Wipe(clientSecret)
+		secret.Wipe(sessionSecret)
+		return nil, fmt.Errorf("provider.oidc.login.token_endpoint: %w", err)
+	}
+	oidcLogin := eeprovider.NewOIDCLogin(eeprovider.OIDCLoginConfig{
+		Verifier: eeprovider.OIDCAuthenticatorConfig{
+			Issuer: cfg.Provider.OIDC.Issuer, JWKS: jwks,
+			RoleClaim: cfg.Provider.OIDC.RoleClaim, AdminValues: cfg.Provider.OIDC.AdminValues,
+			OperatorValues: cfg.Provider.OIDC.OperatorValues, MFAClaim: cfg.Provider.OIDC.MFAClaim,
+			MFAValues: cfg.Provider.OIDC.MFAValues, Directory: directory,
+			RequireDirectory: cfg.Provider.SCIM.Enabled,
+		},
+		AuthorizationEndpoint: login.AuthorizationEndpoint, TokenEndpoint: login.TokenEndpoint,
+		ClientID: login.ClientID, ClientSecret: clientSecret, RedirectURL: login.RedirectURL,
+		HTTPClient: client, SessionSecret: sessionSecret, SessionTTL: ttl, LoginRedirect: login.LoginRedirect,
+		Secure: cfg.Server.TLS.Mode != config.TLSDisabled || strings.HasPrefix(strings.ToLower(login.RedirectURL), "https://"),
+	})
+	if oidcLogin == nil {
+		secret.Wipe(clientSecret)
+		secret.Wipe(sessionSecret)
+		return nil, errors.New("provider.oidc.login configuration did not produce a sign-in")
+	}
+	return oidcLogin, nil
 }
 
 func providerSAMLAuthenticator(

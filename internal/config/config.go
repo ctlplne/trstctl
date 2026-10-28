@@ -1685,6 +1685,44 @@ type ProviderOIDC struct {
 	// it.
 	MFAClaim  string   `json:"mfa_claim,omitempty"`
 	MFAValues []string `json:"mfa_values,omitempty"`
+	// Login turns on the Provider console's OIDC authorization code flow
+	// (A222). Its endpoints are configured, never discovered at request time,
+	// and ID tokens verify against the pinned keys above with the client id
+	// as the audience.
+	Login ProviderOIDCLogin `json:"login,omitempty"`
+}
+
+// ProviderOIDCLogin configures Provider console sign-in through the IdP. The
+// client secret and the session secret are read from files.
+type ProviderOIDCLogin struct {
+	AuthorizationEndpoint string `json:"authorization_endpoint,omitempty"`
+	TokenEndpoint         string `json:"token_endpoint,omitempty"`
+	ClientID              string `json:"client_id,omitempty"`
+	ClientSecretFile      string `json:"client_secret_file,omitempty"`
+	RedirectURL           string `json:"redirect_url,omitempty"`
+	SessionSecretFile     string `json:"session_secret_file,omitempty"`
+	SessionTTL            string `json:"session_ttl,omitempty"`
+	LoginRedirect         string `json:"login_redirect,omitempty"`
+}
+
+// Enabled reports whether any login field is set; validation then requires
+// the whole flow.
+func (l ProviderOIDCLogin) Enabled() bool {
+	for _, value := range []string{l.AuthorizationEndpoint, l.TokenEndpoint, l.ClientID, l.ClientSecretFile,
+		l.RedirectURL, l.SessionSecretFile, l.SessionTTL, l.LoginRedirect} {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// SessionTTLDuration is the console session lifetime (default 12h).
+func (l ProviderOIDCLogin) SessionTTLDuration() (time.Duration, error) {
+	if strings.TrimSpace(l.SessionTTL) == "" {
+		return 12 * time.Hour, nil
+	}
+	return time.ParseDuration(l.SessionTTL)
 }
 
 // Configured reports whether the operator pinned an IdP.
@@ -3947,6 +3985,23 @@ func validateProviderConfig(c *Config) []error {
 		}
 		if len(oidc.AdminValues) == 0 && len(oidc.OperatorValues) == 0 {
 			errs = append(errs, errors.New("provider.oidc needs admin_values and/or operator_values: without a role mapping every authenticated token is refused, and the plane reads as broken rather than unmapped"))
+		}
+	}
+	if login := oidc.Login; login.Enabled() {
+		if !oidc.Configured() {
+			errs = append(errs, errors.New("provider.oidc.login needs the provider.oidc issuer and pinned keys: the console sign-in verifies ID tokens with them"))
+		}
+		for name, value := range map[string]string{
+			"authorization_endpoint": login.AuthorizationEndpoint, "token_endpoint": login.TokenEndpoint,
+			"client_id": login.ClientID, "client_secret_file": login.ClientSecretFile,
+			"redirect_url": login.RedirectURL, "session_secret_file": login.SessionSecretFile,
+		} {
+			if strings.TrimSpace(value) == "" {
+				errs = append(errs, fmt.Errorf("provider.oidc.login.%s is required when the console sign-in is configured", name))
+			}
+		}
+		if _, err := login.SessionTTLDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("provider.oidc.login.session_ttl: %w", err))
 		}
 	}
 

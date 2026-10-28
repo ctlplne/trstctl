@@ -26,7 +26,7 @@ import (
 // NewHandler returns the licensed Provider/MSP HTTP surface.
 func NewHandler(cfg Config) http.Handler {
 	return &handler{
-		svc: NewService(cfg), idem: cfg.Idempotency, saml: cfg.SAML,
+		svc: NewService(cfg), idem: cfg.Idempotency, saml: cfg.SAML, oidcLogin: cfg.OIDCLogin,
 		scim:     newSCIMHandler(cfg.SCIM, cfg.Access, cfg.Mutations, cfg.Clock),
 		evidence: cfg.Evidence, evidenceVerificationJWKS: append([]byte(nil), cfg.EvidenceVerificationJWKS...),
 	}
@@ -36,6 +36,7 @@ type handler struct {
 	svc                      *Service
 	idem                     *orchestrator.Idempotency
 	saml                     *SAMLAuthenticator
+	oidcLogin                *OIDCLogin
 	scim                     *providerSCIMHandler
 	evidence                 billing.EvidenceDeps
 	evidenceVerificationJWKS []byte
@@ -101,6 +102,16 @@ func (h *handler) serveIdentityRoute(w http.ResponseWriter, r *http.Request) boo
 			}{Operator: operator, Authority: h.svc.consoleAuthority(r.Context(), operator)})
 		}
 		return true
+	case r.Method == http.MethodGet && (r.URL.Path == "/provider/v1/auth/oidc/login" || r.URL.Path == "/provider/v1/auth/oidc/callback"):
+		switch {
+		case h.oidcLogin == nil:
+			http.NotFound(w, r)
+		case strings.HasSuffix(r.URL.Path, "/login"):
+			h.oidcLogin.ServeLogin(w, r)
+		default:
+			h.oidcLogin.ServeCallback(w, r)
+		}
+		return true
 	case r.Method == http.MethodGet && r.URL.Path == "/provider/v1/auth/saml/login":
 		if h.saml == nil {
 			http.NotFound(w, r)
@@ -149,6 +160,10 @@ func providerAuthMethods(authenticator OperatorAuthenticator) []string {
 		case *SAMLAuthenticator:
 			if !seen["saml"] {
 				seen["saml"], methods = true, append(methods, "saml")
+			}
+		case *OIDCLogin:
+			if !seen["oidc_login"] {
+				seen["oidc_login"], methods = true, append(methods, "oidc_login")
 			}
 		case AnyAuthenticator:
 			for _, child := range typed {
@@ -599,11 +614,16 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if op.Session != "" {
-		if h.saml == nil {
-			writeProviderError(w, errors.New("provider: session authenticator is not configured"))
-			return
+		var err error
+		switch {
+		case h.oidcLogin.holdsSession(r):
+			err = h.oidcLogin.RevokeSession(r.Context(), w, op.Session)
+		case h.saml != nil:
+			err = h.saml.RevokeSession(r.Context(), w, op.Session)
+		default:
+			err = errors.New("provider: session authenticator is not configured")
 		}
-		if err := h.saml.RevokeSession(r.Context(), w, op.Session); err != nil {
+		if err != nil {
 			writeProviderError(w, err)
 			return
 		}
@@ -1133,8 +1153,13 @@ func (h *handler) operatorForMutation(r *http.Request) (Operator, bool) {
 	if op, ok := h.operatorFromRequest(r); ok {
 		return op, true
 	}
-	if h != nil && h.saml != nil && r != nil && r.Method == http.MethodPost && r.URL.Path == "/provider/v1/auth/logout" {
-		return h.saml.AuthenticateLogout(r)
+	if h != nil && r != nil && r.Method == http.MethodPost && r.URL.Path == "/provider/v1/auth/logout" {
+		if h.oidcLogin.holdsSession(r) {
+			return h.oidcLogin.AuthenticateLogout(r)
+		}
+		if h.saml != nil {
+			return h.saml.AuthenticateLogout(r)
+		}
 	}
 	return Operator{}, false
 }

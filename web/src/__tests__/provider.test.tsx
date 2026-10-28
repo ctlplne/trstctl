@@ -97,6 +97,22 @@ describe("provider console (L3)", () => {
     providerMock.signOut.mockResolvedValue(undefined);
   });
 
+  it("offers OIDC sign-in instead of a token box and keeps nothing in browser storage", async () => {
+    providerMock.authMethods.mockResolvedValue(["oidc", "oidc_login"]);
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    try {
+      renderProvider();
+      fireEvent.click(await screen.findByRole("button", { name: "Sign in with your identity provider" }));
+      expect(assign).toHaveBeenCalledWith("/provider/v1/auth/oidc/login");
+      expect(screen.queryByLabelText("Operator bearer token")).toBeNull();
+      expect(window.localStorage.length).toBe(0);
+      expect(window.sessionStorage.length).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("gates on an operator token before touching customer data", async () => {
     renderProvider();
     expect(await screen.findByLabelText("Operator bearer token")).toBeInTheDocument();

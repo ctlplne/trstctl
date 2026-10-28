@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1959 annotated sites across 29 rules. Each row is
+1974 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -197,8 +197,8 @@ not this file.
 | `internal/config/audit_test.go:66` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:79` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/audit_test.go:102` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/config.go:3046` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
-| `internal/config/config.go:3813` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3084` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/config/config.go:3851` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/config/config_test.go:64` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:173` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:416` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -886,11 +886,17 @@ not this file.
 | `internal/store/store_isolation_test.go:392` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/store/store_isolation_test.go:438` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
-### G124 — CWE-1004 Sensitive cookie without protective attributes (42 sites)
+### G124 — CWE-1004 Sensitive cookie without protective attributes (48 sites)
 
 | Location | Reason |
 |---|---|
 | `ee/enterpriseauth/scim_served_test.go:224` | explicit plaintext loopback fixture; the production TLS cookie remains Secure and __Host-prefixed (CWE-1004) |
+| `ee/provider/oidc_login.go:156` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
+| `ee/provider/oidc_login.go:165` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
+| `ee/provider/oidc_login.go:331` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
+| `ee/provider/oidc_login.go:335` | this non-credential double-submit cookie must remain JavaScript-readable; strict and served-mode Secure still apply (CWE-614). |
+| `ee/provider/oidc_login.go:352` | short-lived login state, HttpOnly; Lax so the IdP's top-level GET redirect returns it (CWE-614). |
+| `ee/provider/oidc_login.go:359` | expiring login state (CWE-614). |
 | `ee/provider/saml_authenticator.go:199` | credential cookie is HttpOnly, host-only, strict, and Secure follows the served TLS mode. |
 | `ee/provider/saml_authenticator.go:208` | non-HttpOnly by design for double-submit CSRF; it is not a credential without the HttpOnly session. |
 | `ee/provider/saml_authenticator.go:230` | deletion preserves the HttpOnly, strict, host-only session policy; Secure is false only in explicit loopback development mode (CWE-614). |
@@ -947,7 +953,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (245 sites)
+### G204 — CWE-78 OS command injection (250 sites)
 
 | Location | Reason |
 |---|---|
@@ -1008,6 +1014,11 @@ not this file.
 | `ee/enterpriseauth/ldap_writeback_test.go:89` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/ntlm.go:112` | operator-pinned absolute helper path from deployment configuration, validated at startup (CWE-78) |
 | `ee/managedkeys/signerwiring/softhsm_container_test.go:83` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `ee/provider/oidc_login_keycloak_test.go:36` | pinned image, local docker client (CWE-78) |
+| `ee/provider/oidc_login_keycloak_test.go:81` | pinned image, fixed arguments (CWE-78) |
+| `ee/provider/oidc_login_keycloak_test.go:85` | removes the container this test started (CWE-78) |
+| `ee/provider/oidc_login_keycloak_test.go:86` | reads this test's container port (CWE-78) |
+| `ee/provider/oidc_login_keycloak_test.go:103` | this test's container logs (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:178` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
@@ -1197,7 +1208,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (52 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (53 sites)
 
 | Location | Reason |
 |---|---|
@@ -1207,6 +1218,7 @@ not this file.
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:111` | deliberately loose, to prove it is tightened (CWE-276) |
 | `cmd/trstctl-trustbundle/main.go:79` | build-time output path named by the image build (CWE-22) |
 | `deploy/docker/dist_test.go:1105` | npm fixture tree in t.TempDir; mirrors a real package layout, nothing secret (CWE-276) |
+| `ee/provider/oidc_login_keycloak_test.go:74` | the container's keycloak user must read the import directory (CWE-276) |
 | `internal/agent/csitrust/driver.go:147` | the volume holds public CA certificates the pod's containers read (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:79` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:270` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -1306,7 +1318,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (549 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (551 sites)
 
 | Location | Reason |
 |---|---|
@@ -1371,8 +1383,10 @@ not this file.
 | `cmd/trstctl/connector.go:155` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:250` | the operator names their reviewed public preview file (CWE-22) |
 | `cmd/trstctl/connector.go:382` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `cmd/trstctl/ee_attach.go:332` | operator-supplied path to their own IdP's JWKS (CWE-22) |
-| `cmd/trstctl/ee_attach.go:372` | operator-pinned local IdP metadata, validated as configuration. |
+| `cmd/trstctl/ee_attach.go:340` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:370` | operator-supplied path to their own IdP's JWKS (CWE-22) |
+| `cmd/trstctl/ee_attach.go:380` | operator-configured client secret file (CWE-22) |
+| `cmd/trstctl/ee_attach.go:446` | operator-pinned local IdP metadata, validated as configuration. |
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/demo/aud66_test.go:105` | fixed repository test path (CWE-22) |
 | `deploy/demo/demo_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1557,9 +1571,9 @@ not this file.
 | `internal/cli/report_verify.go:49` | operator-named local file (CWE-22) |
 | `internal/cli/report_verify_test.go:90` | the test's own temporary file (CWE-22) |
 | `internal/cloudhttp/adoption_guard_test.go:127` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/config/config.go:3140` | the config loader reading the operator's own config file (CWE-22) |
-| `internal/config/config.go:4433` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4452` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:3178` | the config loader reading the operator's own config file (CWE-22) |
+| `internal/config/config.go:4488` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4507` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:293` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
@@ -1860,7 +1874,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (108 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (109 sites)
 
 | Location | Reason |
 |---|---|
@@ -1883,6 +1897,7 @@ not this file.
 | `deploy/docker/dist_test.go:1151` | fake npm shim in a test tempdir must be executable (CWE-276) |
 | `deploy/helm/airgap_bundle_test.go:149` | the executable is a disposable fake Docker client inside this test's private temporary directory. |
 | `docs/lint_gate_test.go:91` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `ee/provider/oidc_login_keycloak_test.go:77` | lab realm with lab-only credentials, read by the container (CWE-276) |
 | `internal/agent/destination/fs_unix_test.go:57` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/discovery_test.go:273` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/discovery/privatekey_test.go:34` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2121,8 +2136,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/shellca/shellca_test.go:182` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/config/config.go:4433` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/config.go:4452` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4488` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/config/config.go:4507` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |

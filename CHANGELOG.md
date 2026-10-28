@@ -2,6 +2,12 @@
 
 ### Added
 
+- Provider console sign-in through OIDC: with `provider.oidc.login` configured, the Provider console
+  signs operators in with the IdP's authorization code flow (state, nonce and PKCE S256) and holds
+  an HttpOnly, SameSite=Strict Provider session instead of a pasted bearer token. The ID token is
+  verified offline against the pinned keys with the client id as audience and the same role and
+  MFA claims; no token reaches the browser, every request re-reads the SCIM directory row, and
+  sign-out revokes the session.
 - Provider SCIM group removal: removing an operator from the `provider-admin` or
   `provider-operator` group through SCIM now revokes that role, recorded as a
   `provider.operator.role_revoked` authority event naming the group and the SCIM token, instead

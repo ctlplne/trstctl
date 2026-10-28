@@ -120,6 +120,7 @@ function ProviderLogin({ onAuthed, authRefused }: { onAuthed: () => void; authRe
   const [token, setToken] = useState("");
   const methods = useApiQuery(["provider", "auth-methods"], providerApi.authMethods);
   const session = useApiQuery(["provider", "session"], providerApi.session);
+  const oidcLogin = (methods.data ?? []).includes("oidc_login");
   useEffect(() => {
     if (session.data) onAuthed();
   }, [session.data, onAuthed]);
@@ -132,35 +133,43 @@ function ProviderLogin({ onAuthed, authRefused }: { onAuthed: () => void; authRe
           {translateNow("source.provider.login.refused.f2280001")}
         </p>
       ) : null}
+      {/* A222: the IdP's code flow signs in with an HttpOnly session; the browser never holds a token. */}
+      {oidcLogin ? (
+        <Button type="button" className="mt-4 w-full" onClick={() => window.location.assign("/provider/v1/auth/oidc/login")}>
+          {translateNow("provider.login.oidc")}
+        </Button>
+      ) : null}
       {(methods.data ?? []).includes("saml") ? (
         <Button type="button" className="mt-4 w-full" onClick={() => window.location.assign("/provider/v1/auth/saml/login")}>
           {translateNow("source.provider.saml.signin.aud580020")}
         </Button>
       ) : null}
-      <form
-        className="mt-4 grid gap-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (token.trim()) {
-            setProviderToken(token.trim());
-            onAuthed();
-          }
-        }}
-      >
-        <label className="grid gap-1">
-          <span className="text-caption font-medium">{translateNow("source.provider.token.l3prov0003")}</span>
-          <Input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            autoComplete="off"
-            aria-label={translateNow("source.provider.token.l3prov0003")}
-          />
-        </label>
-        <Button type="submit" disabled={!token.trim()}>
-          {translateNow("source.provider.signin.l3prov0004")}
-        </Button>
-      </form>
+      {oidcLogin ? null : (
+        <form
+          className="mt-4 grid gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (token.trim()) {
+              setProviderToken(token.trim());
+              onAuthed();
+            }
+          }}
+        >
+          <label className="grid gap-1">
+            <span className="text-caption font-medium">{translateNow("source.provider.token.l3prov0003")}</span>
+            <Input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              autoComplete="off"
+              aria-label={translateNow("source.provider.token.l3prov0003")}
+            />
+          </label>
+          <Button type="submit" disabled={!token.trim()}>
+            {translateNow("source.provider.signin.l3prov0004")}
+          </Button>
+        </form>
+      )}
     </main>
   );
 }

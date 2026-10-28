@@ -175,6 +175,10 @@ export const messages = {
     defaultMessage: "Grant source",
     description: "Delegation entry point, separate from the operator's SCIM or IdP identity source.",
   },
+  "provider.login.oidc": {
+    defaultMessage: "Sign in with your identity provider",
+    description: "A222: starts the Provider console's OIDC sign-in; the session is an HttpOnly cookie.",
+  },
   "provider.access.role.unassigned": {
     defaultMessage: "No role",
     description:
