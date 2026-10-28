@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/ticketintake"
 )
@@ -1648,6 +1649,31 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 				return nil
 			}); err != nil {
 				return err
+			}
+			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
+		}
+		if ev.Type == projections.EventSSHTrustCollectionQueued {
+			if err := projections.ValidateSchemaVersion(ev); err != nil {
+				return err
+			}
+			command, err := sshcollection.DecodeCommand(ev.Data)
+			if err != nil {
+				return err
+			}
+			finished, err := o.discoveryRunFinished(ctx, ev.TenantID, command.ID)
+			if err != nil {
+				return err
+			}
+			if !finished {
+				if err := o.store.WithTenant(ctx, ev.TenantID, func(tx pgx.Tx) error {
+					inserted, err := o.outbox.EnqueueIfAbsent(ctx, tx, Entry{TenantID: ev.TenantID, Destination: sshcollection.Destination, IdempotencyKey: ev.ID, Payload: ev.Data, RequiredAgentRole: command.RequiredAgentRole, RequiredAgentID: command.RequiredAgentID})
+					if inserted {
+						healed++
+					}
+					return err
+				}); err != nil {
+					return err
+				}
 			}
 			return o.store.AdvanceOutboxReconciliationCheckpoint(ctx, ev.Sequence)
 		}

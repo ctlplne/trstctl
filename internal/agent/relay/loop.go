@@ -96,7 +96,7 @@ const (
 func ClaimableKinds() []string {
 	return []string{
 		"connector.deploy", "connector.test", KindConnectorRollback,
-		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindEndpointVerify,
+		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindSSHTrustCollect, KindEndpointVerify,
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
 		KindCMDBSync,
@@ -321,6 +321,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// A segment sweep needs no credential either — it reads what hosts serve
 	// publicly. Routing it before the deploy path keeps it from redeeming
 	// material it has no use for (C2).
+	if job.Kind == KindSSHTrustCollect {
+		return runSSHTrustCollection(ctx, ch, job)
+	}
 	if job.Kind == KindDiscoveryRun {
 		return runDiscoverySweep(ctx, ch, job)
 	}

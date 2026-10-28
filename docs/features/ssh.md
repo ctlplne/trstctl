@@ -219,6 +219,99 @@ its **Retry unchanged request** action recovers the original result instead of s
 again. For CLI recovery, set `TRSTCTL_IDEMPOTENCY_KEY` to a stable value and reuse the
 same command body. A changed request with that key is rejected with HTTP 409.
 
+## Agentless trust collection
+
+Host-agent inventory remains the default. If a machine cannot run an agent,
+create an explicitly enabled **Agentless SSH trust** source in Discover. Select
+an enrolled network relay, a declared scope, and up to 100 exact `host:port`
+bindings. Each binding needs a non-root account, a SHA256 server host-key pin
+obtained through a trusted administrative channel, and a `secret://` reference
+to a supported PKCS#8 RSA/ECDSA key. A raw host-key pin continues to bind that
+same key when the server presents it in a host certificate; this does not imply
+that the login client validated the certificate's CA or principals.
+
+Install the repository's `deploy/ssh/trstctl-ssh-collect-v1` as root at
+`/usr/local/libexec/trstctl-ssh-collect-v1` (mode 0755). It requires Python 3 and
+`/usr/sbin/sshd`. Install a root-owned, group/other-unwritable policy at
+`/etc/trstctl/ssh-collection-v1.json`:
+
+```json
+{
+  "config_path": "/etc/ssh/sshd_config",
+  "allowed_public_files": [
+    "/etc/ssh/trusted_user_ca_keys",
+    "/etc/ssh/revoked.krl",
+    "/etc/ssh/ssh_host_ed25519_key-cert.pub"
+  ]
+}
+```
+
+The policy permits only public files already named by the five allowlisted
+`sshd -T` settings. It never returns private HostKey bytes and cannot request arbitrary files or
+commands. The `sshd -T` process may internally validate the configured host keys;
+only the allowlisted public profile leaves the machine. A denied, missing, relative, oversized or invalid public file has an
+explicit coverage state. The helper bounds time, file count and bytes, suppresses
+stderr, strips public-key comments and refuses private-key material. It does
+not follow final-component symlinks. Configure the actual canonical public paths.
+
+Use a dedicated account, for example `trstctl_observe`, with no writable policy,
+helper, configuration, public trust files, authorized-key file or parent directory.
+Store its public authentication key in an administrator-owned authorized-key
+file. Restrict that account with `Match User trstctl_observe` and a forced command
+`/usr/bin/sudo -n /usr/local/libexec/trstctl-ssh-collect-v1`; disable forwarding,
+PTY, X11, tunnels, user environment changes and user rc scripts (`PermitUserRC no`). If root access is required for
+`sshd -T`, sudoers must permit only the exact no-argument helper:
+
+```sudoers
+trstctl_observe ALL=(root) NOPASSWD: /usr/local/libexec/trstctl-ssh-collect-v1 ""
+```
+
+The [OpenSSH daemon manual](https://man.openbsd.org/sshd) describes the
+`-T`/`-C` distinction and forced-command restrictions. Validate any SSH configuration change with `sshd -t`, retain an independent
+administrative session and follow the host's tested rollback procedure. Never
+replace an existing trust policy or broaden general login access for collection.
+The helper is a one-shot read, not a host agent or a remote shell. A source cannot
+choose its command or paths. Repeated requests run only this fixed profile.
+
+Enable `ssh.trust.collect` in `agent.claimable_job_kinds` and run the selected
+network relay with `--relay-claim`. Its local egress policy must name the actual
+SSH destinations. Private RFC1918 targets need explicit source permission as
+well as declared scope; loopback is a separate owned-test opt-in. Metadata,
+link-local, multicast and other reserved destinations stay blocked at dial time,
+including after DNS resolution. The relay never falls back to an unpinned host
+or a different credential.
+
+Preview/preflight only validates the plan; it makes no SSH connection and queues
+no job. Save it, then use the source's Run action, the existing
+`trstctl discovery plans preview`, `sources create`, `sources preflight`,
+`runs start` and `runs get` commands, or the discovery source/run API.
+The immutable command and same-transaction outbox bind the exact source, relay,
+targets and reference names. Redemption needs that relay's authenticated live
+lease and happens once per attempt. Keys are encrypted at rest and over mTLS,
+borrowed into locked byte buffers, and erased after the bounded attempt; they
+necessarily exist in the SSH client's memory during authentication. They never
+enter source configuration, events, job payloads, logs or public reports.
+
+The relay uses eight workers, 20 seconds per SSH attempt and a 90-second total
+read window while maintaining its lease. Every requested target gets an outcome;
+queued targets not reached before cancellation remain failed, never silently
+omitted. A signed report must match its command and include the exact public
+readback for observed targets. The 1 MiB job-report bound can make a large target
+`report_too_large`; reduce the source's host set or inspect that host locally.
+Connection/authentication, helper, permission and pin failures require correcting
+the prerequisite and explicitly rerunning; a failed setup attempt is terminal.
+
+SSH access shows the remote address and the collecting relay separately, with
+agentless provenance. It checks the retained immutable observation before serving
+those facts; a changed or missing projection proof is unavailable until source
+history is restored/replayed. Ordinary host inventory cannot declare agentless
+provenance. The observation is the on-disk configuration as `sshd -T`
+resolves it, including global defaults/Includes. It does not prove what a running
+daemon has loaded, evaluate connection-specific Match contexts, inventory
+per-user keys or modify trust/reload SSH. A failed public-file read stays unknown,
+even when the collection job successfully records that failure. Host-agent
+inventory continues through its existing signed report path.
+
 ## Use it
 
 Stand up the SSH CA, distribute its public key to hosts via the agent, then issue

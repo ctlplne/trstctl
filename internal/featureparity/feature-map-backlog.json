@@ -10817,12 +10817,18 @@
                 "internal/agent/sshtrustfleet",
                 "internal/sshtrustrollout",
                 "internal/server/ssh_trust_fleet.go",
-                "cmd/trstctl-agent/ssh_trust_fleet_loop.go"
+                "cmd/trstctl-agent/ssh_trust_fleet_loop.go",
+                "internal/sshcollection",
+                "internal/server/sshcollection.go",
+                "internal/agent/relay/sshcollection.go",
+                "deploy/ssh/trstctl-ssh-collect-v1"
             ],
             "source_frontend": [
                 "web/src/pages/SSHTrust.tsx",
                 "web/src/pages/ssh/SSHTrustFleetPanel.tsx",
-                "web/src/pages/ssh/SSHTrustFleetWizard.tsx"
+                "web/src/pages/ssh/SSHTrustFleetWizard.tsx",
+                "web/src/pages/discovery/SSHCollectionFields.tsx",
+                "web/src/pages/ssh/SSHHostTrustPanel.tsx"
             ],
             "status": "closed",
             "notes": "A226 closes additive fleet dispatch and observation; whole-image console/cold restart qualification remains in the final replay. Manual evidence cannot create a verified host effect.",
@@ -10849,14 +10855,18 @@
             "facet_evidence": {
                 "served": {
                     "evidence": [
-                        "Served approval-gated additive fleet trust: /api/v1/ssh/trust-fleet previews exact ready/skipped hosts, requests approval and dispatches ssh.trust.apply; signed host receipts bind independent readback, validation, reload, health and checked rollback. Per-host opt-in and explicit confirmation remain required. /api/v1/ssh/trust-rollouts and /api/v1/ssh/hosts/retire keep ssh.trust_rollout.recorded and ssh.host.retired manual evidence."
+                        "Served approval-gated additive fleet trust: /api/v1/ssh/trust-fleet previews exact ready/skipped hosts, requests approval and dispatches ssh.trust.apply; signed host receipts bind independent readback, validation, reload, health and checked rollback. Per-host opt-in and explicit confirmation remain required. /api/v1/ssh/trust-rollouts and /api/v1/ssh/hosts/retire keep ssh.trust_rollout.recorded and ssh.host.retired manual evidence.",
+                        "A227: opt-in ssh_trust sources dispatch exact-relay ssh.trust.collect jobs from typed immutable commands. A forced-command helper returns bounded sshd -T global settings and allowlisted public trust bytes; host-agent inventory stays default. Credentials stay encrypted in transport and locked for bounded authentication, never in the public command or report. Match contexts, per-user keys and loaded daemon state remain unassessed."
                     ],
                     "refs": [
                         "internal/server/ssh_workflow.go",
                         "internal/api/ssh_workflow.go",
                         "internal/server/ssh_journey_served_test.go",
                         "internal/server/ssh_trust_fleet.go",
-                        "internal/server/ssh_trust_fleet_evidence.go"
+                        "internal/server/ssh_trust_fleet_evidence.go",
+                        "internal/server/sshcollection.go",
+                        "internal/agent/relay/sshcollection.go",
+                        "internal/sshcollection/command.go"
                     ],
                     "commands": [
                         "make test"
@@ -10865,14 +10875,18 @@
                 "ui": {
                     "evidence": [
                         "SSHTrust at /ssh: Fleet SSH trust changes wizard, exact reviewed roster, shared approval inbox and live host receipts; manual explicit confirmation evidence and host retirement remain separately labeled.",
-                        "Served closed-loop host rewrite for additive user-CA trust through approved host jobs. Trust removal, authorized_keys pruning and host-certificate installation require separate workflows; memory-only rollback cannot promise recovery after process loss."
+                        "Served closed-loop host rewrite for additive user-CA trust through approved host jobs. Trust removal, authorized_keys pruning and host-certificate installation require separate workflows; memory-only rollback cannot promise recovery after process loss.",
+                        "Discover has a schema-backed agentless SSH source form with explicit opt-in, declared scope, relay and per-host key pins/reference fields. SSH host trust labels the remote address and collecting relay separately and states global-only coverage."
                     ],
                     "refs": [
                         "web/src/pages/SSHTrust.tsx",
                         "web/src/lib/navigation.ts",
                         "web/src/App.tsx",
                         "web/src/pages/ssh/SSHTrustFleetPanel.tsx",
-                        "web/src/pages/ssh/SSHTrustFleetWizard.tsx"
+                        "web/src/pages/ssh/SSHTrustFleetWizard.tsx",
+                        "web/src/pages/discovery/SSHCollectionFields.tsx",
+                        "web/src/pages/discovery/SourceSetup.tsx",
+                        "web/src/pages/ssh/SSHHostTrustPanel.tsx"
                     ]
                 },
                 "cli": {
@@ -10898,7 +10912,8 @@
                 "test": {
                     "evidence": [
                         "TestServedSSHTrustFleetChangesOpenSSHThroughSignedJobs proves two opted-in OpenSSH hosts accept the new CA, opt-out unchanged, and a health failure restores prior trust. TestServedSSHTrustFleetRequiresExactApprovalAndSkipsOptOut rejects self/unapproved/invented-source effects. TestSSHTrustFleetFullDRAppendGapReceiptResignAndSnapshot proves crash/re-sign/snapshot/log restore. Console ssh_trust_fleet.test.tsx covers approval, pending and checked rollback. TestServedSSHAtScaleJourneyJOURNEY002EndToEnd and OpenAPI/CLI parity retain explicit confirmation and retire evidence.",
-                        "TRACE-028 now requires approved fleet execution and exact skipped/failed receipts, while retaining explicit confirmation, retire and OpenAPI/CLI parity."
+                        "TRACE-028 now requires approved fleet execution and exact skipped/failed receipts, while retaining explicit confirmation, retire and OpenAPI/CLI parity.",
+                        "TestServedAgentlessSSHCollectsOpenSSHThroughVaultedRelayJob exercises a real stock OpenSSH target without a host agent, vaulted mTLS redemption, fixed public readback, source-bound signed receipt and projection rebuild. TestServedAgentlessSSHTrustSourceIsExplicitReferenceOnlyAndEffectFree covers effect-free planning, lost-outbox reconciliation and refusal of an altered credential reference. SourceSetup.test.tsx requires opt-in and exact pinned bindings."
                     ],
                     "refs": [
                         "internal/server/ssh_journey_served_test.go",
@@ -10913,7 +10928,11 @@
                         "internal/server/ssh_trust_fleet_openssh_test.go",
                         "internal/server/ssh_trust_fleet_served_test.go",
                         "internal/orchestrator/ssh_trust_fleet_recovery_test.go",
-                        "web/src/__tests__/ssh_trust_fleet.test.tsx"
+                        "web/src/__tests__/ssh_trust_fleet.test.tsx",
+                        "internal/server/sshcollection_openssh_test.go",
+                        "internal/server/ssh_agentless_collection_served_test.go",
+                        "internal/crypto/ssh_collection_client_test.go",
+                        "web/src/pages/discovery/SourceSetup.test.tsx"
                     ]
                 },
                 "docs": {
@@ -10943,7 +10962,8 @@
                     "evidence": [
                         "served trust rollout appends ssh.trust_rollout.recorded.",
                         "served host retirement appends ssh.host.retired.",
-                        "ssh.trust_fleet.started and ssh.trust_fleet.observed preserve exact approval/host/attempt and canonical signed receipts; reviewer text has an explicit privacy policy."
+                        "ssh.trust_fleet.started and ssh.trust_fleet.observed preserve exact approval/host/attempt and canonical signed receipts; reviewer text has an explicit privacy policy.",
+                        "ssh.trust_collection.queued has its own schema/privacy policy. Discovery finding/completion events retain public target/collector provenance; the durable job receipt binds the exact readback digest."
                     ],
                     "refs": [
                         "internal/server/ssh_workflow.go",

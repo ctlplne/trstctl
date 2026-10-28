@@ -850,7 +850,7 @@ what it is.
   when `agent_channel.enabled` is true.
 - **Config:** `TRSTCTL_LIFECYCLE_RENEW_BEFORE` (default `720h`) sets the
   expiry window the inventory and lifecycle treat as "renew soon".
-- **Served discovery source kinds:** `network`, `cloud_certificate`,
+- **Served discovery source kinds:** `network`, `ssh_trust` (explicit agentless SSH trust through a pinned network relay; [setup and limits](ssh.md#agentless-trust-collection)), `cloud_certificate`,
   `cloud_secret`, `nhi_cross_surface`, `oauth_grant`, `service_account`,
   `nhi_behavior`, `credential_compromise`, `k8s_ingress_gateway`, `ct_log`, `drift`,
   `manual`, plus metadata-only `ssh`, `secret_store`, `api_key`, and `agent`.

@@ -15,9 +15,13 @@ import (
 
 // SSHHostTrust is one host's sshd configuration as judged against the tenant.
 type SSHHostTrust struct {
-	AgentID    string `json:"agent_id"`
-	Agent      string `json:"agent"`
-	SSHDConfig string `json:"sshd_config"`
+	CollectionMode string `json:"collection_mode,omitempty"`
+	TargetAddress  string `json:"target_address,omitempty"`
+	SourceID       string `json:"source_id,omitempty"`
+	Coverage       string `json:"coverage,omitempty"`
+	AgentID        string `json:"agent_id"`
+	Agent          string `json:"agent"`
+	SSHDConfig     string `json:"sshd_config"`
 	// ConfigRead is "read", "missing", or "unreadable".
 	ConfigRead string `json:"config_read"`
 	// UserCA is "tenant_ca" (sshd accepts user certificates from this tenant's

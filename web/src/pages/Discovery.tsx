@@ -86,6 +86,7 @@ const sourceKinds: SourceKind[] = [
 const sourceKindLabels: Record<SourceKind, string> = {
   network: "Network",
   ssh: "SSH",
+  ssh_trust: translateNow("discovery.setup.sshCollection.label"),
   adcs: translateNow("source.adcs.heading.f1adcs0001"),
   cloud_certificate: "Cloud certificates",
   cloud_secret: "Cloud secrets",

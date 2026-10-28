@@ -9,6 +9,7 @@ import { ApiError, type DiscoveryCapability, type DiscoveryCapabilityCatalog, ty
 
 const { apiMock } = vi.hoisted(() => ({
   apiMock: {
+    agents: vi.fn(),
     discoveryCapabilities: vi.fn(),
     discoveryCoverage: vi.fn(),
     createDiscoverySegment: vi.fn(),
@@ -53,6 +54,7 @@ const catalog: DiscoveryCapabilityCatalog = {
   items: [
     capability("network"),
     capability("ssh"),
+    capability("ssh_trust"),
     capability("adcs"),
     capability("cloud_certificate", [
       { id: "aws-acm", label: "AWS Certificate Manager", least_privilege: "List certificates", preferred_credential: "env: references", fields: [] },
@@ -95,6 +97,7 @@ function renderSetup(onCreated = vi.fn()) {
 describe("typed discovery source setup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMock.agents.mockResolvedValue([{ id: "a2270000-0000-4000-8000-000000000001", name: "SSH relay", roles: ["network"] }]);
     apiMock.discoveryCapabilities.mockResolvedValue(catalog);
     apiMock.discoveryCoverage.mockResolvedValue(emptyCoverage);
     apiMock.createDiscoverySegment.mockResolvedValue({
@@ -135,6 +138,51 @@ describe("typed discovery source setup", () => {
       created_at: "2026-08-25T00:00:00Z",
       updated_at: "2026-08-25T00:00:00Z",
     } satisfies DiscoverySource);
+  });
+
+  it("requires explicit agentless opt-in and submits pinned hosts with references only", async () => {
+    const user = userEvent.setup();
+    apiMock.discoveryCoverage.mockResolvedValue({
+      ...emptyCoverage,
+      segments: [{ name: "ssh-owned", ranges: ["ssh.example.test"], status: "never", staleness_hours: 168 }],
+    });
+    renderSetup();
+    await screen.findByText("What this source does");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Owned SSH trust");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "ssh_trust");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Explicitly enable agentless SSH collection.")).toBeInTheDocument();
+    expect(apiMock.previewDiscoveryPlan).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", { name: "Enable read-only agentless SSH collection" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Declared SSH scope" }), "ssh-owned");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Collecting network relay" }), "a2270000-0000-4000-8000-000000000001");
+    await user.type(screen.getByRole("textbox", { name: "SSH host:port" }), "ssh.example.test:22");
+    await user.type(screen.getByRole("textbox", { name: "Trusted host-key fingerprint" }), "SHA256:" + "A".repeat(43));
+    await user.type(screen.getByRole("textbox", { name: "Vault key reference" }), "secret://ssh/reader");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await waitFor(() =>
+      expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "ssh_trust",
+          config: {
+            enabled: true,
+            segment: "ssh-owned",
+            relay_agent_id: "a2270000-0000-4000-8000-000000000001",
+            allow_rfc1918: false,
+            allow_loopback: false,
+            hosts: [
+              {
+                address: "ssh.example.test:22",
+                username: "trstctl_observe",
+                host_key_fingerprint: "SHA256:" + "A".repeat(43),
+                credential_ref: "secret://ssh/reader",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    expect(apiMock.createDiscoverySegment).not.toHaveBeenCalled();
   });
 
   it("normalizes a bounded host/CIDR/port plan and submits every configured field", async () => {

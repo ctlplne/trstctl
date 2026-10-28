@@ -44,6 +44,7 @@ var projectionEventConstants = map[string]string{
 	projections.EventDiscoverySchedulePaused:                  "EventDiscoverySchedulePaused",
 	projections.EventDiscoveryScheduleResumed:                 "EventDiscoveryScheduleResumed",
 	projections.EventDiscoveryScheduleRetired:                 "EventDiscoveryScheduleRetired",
+	projections.EventSSHTrustCollectionQueued:                 "EventSSHTrustCollectionQueued",
 	projections.EventDiscoveryRunQueued:                       "EventDiscoveryRunQueued",
 	projections.EventRevocationProbeQueued:                    "EventRevocationProbeQueued",
 	projections.EventRevocationHealthObserved:                 "EventRevocationHealthObserved",

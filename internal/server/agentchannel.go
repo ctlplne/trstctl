@@ -331,6 +331,7 @@ type agentService struct {
 	recordTicketSyncFailure func(ctx context.Context, tenantID, idempotencyKey string, payload []byte, attempt int, failedAt time.Time, detail string) error
 	// recordDiscoveryScan validates and projects a network relay's signed scan
 	// report before the exact job claim is closed (AUD-28/C2).
+	recordSSHCollection func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report, digest string) error
 	recordDiscoveryScan func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
 	// recordADCSInventory validates and projects a signed AD CS result before
 	// the exact job claim closes (AUD-35/F1).
@@ -1152,6 +1153,13 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 			}
 		} else if kind == agentTrustStoreFindingKind {
 			return nil, status.Errorf(codes.InvalidArgument, "trust-store inventory finding %q requires source kind %q", f.Ref, agentTrustStoreFindingKind)
+		}
+		if kind == store.SSHTrustFindingKind {
+			for _, reserved := range []string{"collection_mode", "target_address", "command_digest", "command_event_id"} {
+				if _, supplied := f.Metadata[reserved]; supplied {
+					return nil, status.Error(codes.InvalidArgument, "host SSH inventory cannot declare agentless collector provenance; use a bound SSH collection job")
+				}
+			}
 		}
 		if err := validateAgentServiceDependencyFinding(sourceKind, f); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "service dependency inventory finding %q: %v", f.Ref, err)

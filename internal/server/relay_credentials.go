@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/revocationhealth"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenantseal"
 )
@@ -83,6 +84,12 @@ func (r *relayCredentialResolver) resolveJobCredential(
 		// Falling through to the sealed-deploy opener below refused every
 		// relay re-bind before it could contact the target.
 		return r.resolveJobReferences(ctx, tenantID, job)
+	case sshcollection.Destination:
+		command, err := sshcollection.DecodeCommand(job.Payload)
+		if err != nil {
+			return redeemedMaterial{}, err
+		}
+		return r.resolveReferenceNames(ctx, tenantID, command.CredentialRefs())
 	case "adcs.inventory":
 		// F1: an AD CS inventory redeems a directory bind credential. Its
 		// payload is not a sealed connector deploy, so it resolves the

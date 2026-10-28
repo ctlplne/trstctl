@@ -244,7 +244,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Four paths still generate one in the control plane, each named with its successor and each governed by the tenant's control-plane key generation switch: the three deprecated paths (identity issuance without a CSR and its renewal, PKI-as-a-secret by common name and the Vault-compatible `pki/issue`, the compatibility Workload API socket) and the reissue step of a PQC migration run that predates host-csr migration. Kubernetes TLS auto-issuance never generates a key in the control plane: a `k8s_ingress_gateway` source bound to the host-role agent running in the cluster hands each TLS block to that agent, which generates the key inside the cluster, sends only a CSR and writes the TLS Secret with a signed receipt; a source without an agent records each resource and reports it not delivered, with the reason | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped get the origin their own retained issuance event proves, marked as derived and naming the rule and the event ([Key custody](custody.md) lists the rules); the rest of them, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance. A certificate ordered through an external CA records requester custody (A121), and where a host agent's key inventory found a matching key file the detail lists where it was seen, as an observation rather than a custody claim (A121) | [Key custody](custody.md) |
-| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.recovery_check` (enabled with `endpoint.contain`), `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.recovery_check` (enabled with `endpoint.contain`), `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. A successful host-generated renewal uses the v2 statement, which also binds the installed certificate fingerprint plus origin, storage, exportability, and generator; the projected custody event is replayable. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the changed listener — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
@@ -2628,6 +2628,12 @@ plane has no route into a host and never gets one, so the agent comes and takes
 the work over the connection it opened — the same mTLS channel it heartbeats on,
 the same certificate-derived tenant, no inbound port anywhere.
 
+Agentless SSH trust collection uses `ssh.trust.collect` through the selected
+network relay. It calls only a fixed root-owned read-only helper using pinned
+host identity and a vaulted PKCS#8 reference. Every target has an explicit outcome;
+missing permissions, failed authentication, denied egress and oversized readback
+cannot become an observed posture. The host-agent collector stays the default.
+
 Approved additive SSH trust uses `ssh.trust.apply` in its own one-worker loop,
 with local `--ssh-trust-fleet --ssh-trust-confirm` plus the staged CA and local
 command policy. It is not claimed by the shared relay pool. The exact skipped
@@ -2736,7 +2742,7 @@ rather than unfinished: handing out work nothing can perform fills a queue while
 control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.recovery_check` (the read-only check a replacement reads after a
-containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
+containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`,
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `connector.right_size`, `cmdb.sync`,
 `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (the
 post-upgrade functional check every polling agent answers, A71) —
@@ -3129,11 +3135,20 @@ than sending an operator looking for a credential that was never there.
   SSH-trust or drift findings. Generic
   agent/endpoint discovery is served through the mTLS `ReportInventory` channel
   and visible through `/api/v1/agents`, `/api/v1/discovery/findings`,
-  `/api/v1/graph`, and the Agents console. The SSH-specific host/trust
-  collector still runs on the agent, not a server-side discovery-worker
-  scanner, because only the endpoint can safely inspect local SSH files and
-  trust config; its metadata flows through the served agent inventory report
-  path. The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
+  `/api/v1/graph`, and the Agents console. The default SSH host/trust collector runs on the enrolled host agent.
+  An explicit `ssh_trust` source can instead use an enrolled network relay,
+  pinned host keys and vaulted PKCS#8 credential references to call the installed
+  read-only `trstctl-ssh-collect-v1` helper (A227). Its `ssh.trust.collect` job
+  reads the on-disk configuration through `sshd -T` and only root-allowlisted
+  public CA, KRL and host-certificate files. The target needs no running agent;
+  it does need Python 3, the fixed root-owned helper/policy and a restricted
+  forced-command account. Match contexts, per-user keys, other SSH files and
+  whether the running daemon loaded that disk configuration remain unassessed.
+  Read failures and denied paths stay unknown; the remote target, source and
+  collecting relay remain distinct in the fleet view. The key is encrypted at
+  rest and in transit and is borrowed into locked relay memory for the bounded
+  attempt; no credential value enters configuration, events, outbox or reports.
+  See [agentless trust collection](features/ssh.md#agentless-trust-collection). The credential graph and risk-scoring read APIs (`/api/v1/graph*`,
   `/api/v1/risk/credentials`, `/api/v1/risk/contextual-priorities`) are
   also served. The contextual-priorities response carries a canonical
   `urgent_summary`: it merges the named credential-score and contextual-priority

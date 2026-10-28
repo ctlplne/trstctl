@@ -3559,7 +3559,7 @@ export interface DiscoveryCapability {
   documentation_ref: string;
   edition: string;
   execution: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   label: string;
   lifecycle: string[];
   permission: string;
@@ -3684,7 +3684,7 @@ export interface DiscoveryMonitoringSource {
   failed_run_count: number;
   finding_count: number;
   findings_path: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   last_discovery_at?: string;
   last_run_completed_at?: string;
   last_run_error: string;
@@ -3723,7 +3723,7 @@ export interface DiscoveryPlanPreview {
   estimated_upper_seconds: number;
   excluded_target_count: number;
   execution: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   normalized_target_count: number;
   normalized_targets?: string[];
   permission: string;
@@ -3840,7 +3840,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -3853,7 +3853,7 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   name: string;
 }
 
@@ -8795,7 +8795,9 @@ export interface SSHHostTrust {
   agent: string;
   agent_id: string;
   authorized_keys_file: string[];
+  collection_mode?: "agentless";
   config_read: "read" | "missing" | "unreadable";
+  coverage?: string;
   first_observed: string;
   host_certificate: "tenant_ca" | "expiring" | "expired" | "not_yet_valid" | "other_ca" | "unverified" | "not_host" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
   host_certificates: SSHHostCertificate[];
@@ -8804,8 +8806,10 @@ export interface SSHHostTrust {
   match_blocks: number;
   revocation_list: "served" | "not_served" | "key_list" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
   revoked_keys_sha256?: string;
+  source_id?: string;
   sshd_config: string;
   standing_keys: "off" | "on" | "missing" | "unreadable" | "relative_path" | "invalid";
+  target_address?: string;
   trusted_ca_fingerprints: string[];
   user_ca: "tenant_ca" | "tenant_ca_and_other" | "other_ca" | "none" | "missing" | "unreadable" | "relative_path" | "invalid";
 }

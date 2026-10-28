@@ -8,10 +8,10 @@ import (
 	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditanchor"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
-	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/revocationhealth"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -83,24 +83,6 @@ type privacyNotificationDeliveryRecordedV1 struct {
 	OutboxID              *int64    `json:"outbox_id,omitempty"`
 	Attempts              int       `json:"attempts,omitempty"`
 	DeliveredAt           time.Time `json:"delivered_at,omitempty"`
-}
-
-// privacyDiscoveryRunQueued is the closed union carried by
-// discovery.run.queued. The projector reads the embedded common relay fields;
-// AD CS boot reconciliation additionally needs its immutable public connection
-// command. PasswordRef is a reference name, never credential material.
-type privacyDiscoveryRunQueued struct {
-	segmentscan.Intent
-	URL                string `json:"url,omitempty"`
-	ConfigurationDN    string `json:"configuration_dn,omitempty"`
-	BindDN             string `json:"bind_dn,omitempty"`
-	PasswordRef        string `json:"password_ref,omitempty"`
-	InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
-	// The AD CS command also carries its bounded enrollment-endpoint checks and
-	// private-egress policy; all three are public target descriptions.
-	EnrollmentEndpoints  []adcsdiscovery.EnrollmentEndpointTarget `json:"enrollment_endpoints,omitempty"`
-	AllowPrivateEndpoint bool                                     `json:"allow_private_endpoint,omitempty"`
-	PrivateEgressCIDRs   []string                                 `json:"private_egress_cidrs,omitempty"`
 }
 
 // privacyADCSTemplateDriftV1 is the historical append-only payload. It is
@@ -1046,10 +1028,12 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventProfileUpdated, 1}: privacyRules(
 			privacyRule("/name", opaque), privacyRule("/version", opaque),
 		),
-		{EventProfileCreated, ProfileEventSchemaVersion}:                                     profileV2,
-		{EventProfileUpdated, ProfileEventSchemaVersion}:                                     profileV2,
-		{EventDiscoverySegmentUpserted, 1}:                                                   discoverySegment,
-		{EventDiscoverySourceUpserted, 1}:                                                    discoverySource,
+		{EventProfileCreated, ProfileEventSchemaVersion}: profileV2,
+		{EventProfileUpdated, ProfileEventSchemaVersion}: profileV2,
+		{EventDiscoverySegmentUpserted, 1}:               discoverySegment,
+		{EventDiscoverySourceUpserted, 1}:                discoverySource,
+		{EventSSHTrustCollectionQueued, 1}: privacyRules(
+			privacyRule("/id", opaque), privacyRule("/source_id", opaque), privacyRule("/job_kind", opaque), privacyRule("/schedule_id", opaque), privacyRule("/retry_of_run_id", opaque), privacyRule("/requested_by", exact), privacyRule("/execution", opaque), privacyRule("/required_agent_role", opaque), privacyRule("/required_agent_id", opaque), privacyRule("/segment", opaque), privacyRule("/allow_rfc1918", opaque), privacyRule("/allow_loopback", opaque), privacyRule("/hosts", opaque)),
 		{EventDiscoveryRunQueued, 1}:                                                         discoveryRunQueued,
 		{EventRevocationProbeQueued, 1}:                                                      revocationProbe,
 		{EventRevocationHealthObserved, 1}:                                                   revocationObserved,
@@ -1594,6 +1578,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventProfileUpdated, ProfileEventSchemaVersion}:                                     privacyPayloadShape[ProfileVersioned](),
 		{EventDiscoverySegmentUpserted, 1}:                                                   privacyPayloadShape[DiscoverySegmentUpserted](),
 		{EventDiscoverySourceUpserted, 1}:                                                    privacyPayloadShape[DiscoverySourceUpserted](),
+		{EventSSHTrustCollectionQueued, 1}:                                                   privacyPayloadShape[sshcollection.Command](),
 		{EventDiscoveryRunQueued, 1}:                                                         privacyPayloadShape[privacyDiscoveryRunQueued](),
 		{EventRevocationProbeQueued, 1}:                                                      privacyPayloadShape[revocationhealth.Intent](),
 		{EventRevocationHealthObserved, 1}:                                                   privacyPayloadShape[revocationhealth.Observed](),

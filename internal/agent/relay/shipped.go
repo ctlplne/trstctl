@@ -211,6 +211,11 @@ func ShippedJobKinds() []ShippedJobKind {
 			// should not be — so an in-domain relay is the only vantage from
 			// which this inventory exists at all. It redeems a bind credential,
 			// unlike the other read-only kinds.
+			Kind:  KindSSHTrustCollect,
+			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			Kind:  KindADCSInventory,
 			Flags: []string{"--relay-claim"},
 			Roles: []string{mtls.AgentRoleNetwork},

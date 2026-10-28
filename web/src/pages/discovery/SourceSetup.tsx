@@ -16,7 +16,9 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 
-const primaryKinds = ["network", "ssh", "adcs", "cloud_certificate", "cloud_secret", "secret_store"] as const;
+import { SSHCollectionFields } from "./SSHCollectionFields";
+
+const primaryKinds = ["network", "ssh", "ssh_trust", "adcs", "cloud_certificate", "cloud_secret", "secret_store"] as const;
 export type PrimaryKind = (typeof primaryKinds)[number];
 const noProviders: NonNullable<DiscoveryCapability["providers"]> = [];
 const networkFieldPaths = [
@@ -65,6 +67,17 @@ const secretFieldPaths = [
 export const sourceWizardFieldPaths: Record<PrimaryKind, readonly string[]> = {
   network: networkFieldPaths,
   ssh: networkFieldPaths,
+  ssh_trust: [
+    "enabled",
+    "segment",
+    "relay_agent_id",
+    "hosts[].address",
+    "hosts[].username",
+    "hosts[].host_key_fingerprint",
+    "hosts[].credential_ref",
+    "allow_rfc1918",
+    "allow_loopback",
+  ],
   adcs: ["url", "configuration_dn", "bind_dn", "password_ref", "relay_agent_id", "enrollment_endpoints", "allow_private_endpoint", "private_egress_cidrs"],
   cloud_certificate: cloudFieldPaths,
   cloud_secret: secretFieldPaths,
@@ -106,6 +119,10 @@ const setupSchema = z
   .object({
     name: z.string().trim().min(2, translateNow("discovery.setup.validation.name")),
     kind: z.enum(primaryKinds),
+    sshEnabled: z.boolean(),
+    sshHosts: z.array(
+      z.object({ address: z.string().trim(), username: z.string().trim(), host_key_fingerprint: z.string().trim(), credential_ref: z.string().trim() }),
+    ),
     segment: z.string().trim(),
     relayAgentID: z.string().trim(),
     targets: z.string(),
@@ -145,6 +162,24 @@ const setupSchema = z
     labelValue: z.string().trim(),
   })
   .superRefine((value, ctx) => {
+    if (value.kind === "ssh_trust") {
+      if (!value.sshEnabled) ctx.addIssue({ code: "custom", path: ["sshEnabled"], message: translateNow("discovery.setup.sshCollection.optInRequired") });
+      requireField(ctx, value.segment, "segment", translateNow("discovery.setup.validation.scope"));
+      requireField(ctx, value.relayAgentID, "relayAgentID", translateNow("discovery.setup.sshCollection.relayRequired"));
+      if (value.sshHosts.length < 1 || value.sshHosts.length > 100)
+        ctx.addIssue({ code: "custom", path: ["sshHosts"], message: translateNow("discovery.setup.sshCollection.hostsRequired") });
+      value.sshHosts.forEach((host, index) => {
+        const checks: Array<[keyof typeof host, boolean]> = [
+          ["address", /^(?:[a-z0-9.-]+|\[[a-f0-9:]+\]):[1-9][0-9]{0,4}$/.test(host.address)],
+          ["username", /^[a-z_][a-z0-9_-]{0,31}$/.test(host.username) && host.username !== "root"],
+          ["host_key_fingerprint", /^SHA256:[A-Za-z0-9+/]{43}$/.test(host.host_key_fingerprint)],
+          ["credential_ref", /^secret:\/\/[^\s]+$/.test(host.credential_ref)],
+        ];
+        for (const [key, valid] of checks)
+          if (!valid) ctx.addIssue({ code: "custom", path: ["sshHosts", index, key], message: translateNow("discovery.setup.sshCollection.invalidBinding") });
+      });
+      return;
+    }
     if (value.kind === "network" || value.kind === "ssh") {
       requireField(ctx, value.segment, "segment", translateNow("discovery.setup.validation.scope"));
       if (!value.targets.trim() && !value.cidrs.trim() && !value.addressRanges.trim()) {
@@ -216,11 +251,13 @@ const setupSchema = z
     }
   });
 
-type SetupValues = z.infer<typeof setupSchema>;
+export type SetupValues = z.infer<typeof setupSchema>;
 
 const defaults: SetupValues = {
   name: "",
   kind: "network",
+  sshEnabled: false,
+  sshHosts: [{ address: "", username: "trstctl_observe", host_key_fingerprint: "", credential_ref: "" }],
   segment: "",
   relayAgentID: "",
   targets: "",
@@ -454,6 +491,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
                 }}
               />
             ) : null}
+            {values.kind === "ssh_trust" ? <SSHCollectionFields form={form} segments={declaredScopes} agents={relayAgents.list} /> : null}
             {values.kind === "adcs" ? <ADCSFields form={form} /> : null}
             {values.kind === "cloud_certificate" || values.kind === "cloud_secret" || values.kind === "secret_store" ? (
               <CloudFields form={form} providers={providers} />
@@ -1040,6 +1078,15 @@ export function scopeDeclarations(values: SetupValues): string[] {
 }
 
 function buildConfig(values: SetupValues): Record<string, unknown> {
+  if (values.kind === "ssh_trust")
+    return {
+      enabled: values.sshEnabled,
+      segment: values.segment,
+      relay_agent_id: values.relayAgentID,
+      hosts: values.sshHosts,
+      allow_rfc1918: values.allowRFC1918,
+      allow_loopback: values.allowLoopback,
+    };
   if (values.kind === "network" || values.kind === "ssh") {
     return compact({
       targets: normalizedTargets(values),

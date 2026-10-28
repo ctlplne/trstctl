@@ -15297,7 +15297,8 @@
               "oauth_grant",
               "secret_store",
               "service_account",
-              "ssh"
+              "ssh",
+              "ssh_trust"
             ],
             "type": "string"
           },
@@ -15800,7 +15801,8 @@
               "oauth_grant",
               "secret_store",
               "service_account",
-              "ssh"
+              "ssh",
+              "ssh_trust"
             ],
             "type": "string"
           },
@@ -15969,7 +15971,8 @@
               "oauth_grant",
               "secret_store",
               "service_account",
-              "ssh"
+              "ssh",
+              "ssh_trust"
             ],
             "type": "string"
           },
@@ -16471,7 +16474,8 @@
               "oauth_grant",
               "secret_store",
               "service_account",
-              "ssh"
+              "ssh",
+              "ssh_trust"
             ],
             "type": "string"
           },
@@ -16538,7 +16542,8 @@
               "oauth_grant",
               "secret_store",
               "service_account",
-              "ssh"
+              "ssh",
+              "ssh_trust"
             ],
             "type": "string"
           },
@@ -36942,12 +36947,21 @@
             },
             "type": "array"
           },
+          "collection_mode": {
+            "enum": [
+              "agentless"
+            ],
+            "type": "string"
+          },
           "config_read": {
             "enum": [
               "read",
               "missing",
               "unreadable"
             ],
+            "type": "string"
+          },
+          "coverage": {
             "type": "string"
           },
           "first_observed": {
@@ -37004,6 +37018,10 @@
           "revoked_keys_sha256": {
             "type": "string"
           },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          },
           "sshd_config": {
             "type": "string"
           },
@@ -37016,6 +37034,9 @@
               "relative_path",
               "invalid"
             ],
+            "type": "string"
+          },
+          "target_address": {
             "type": "string"
           },
           "trusted_ca_fingerprints": {

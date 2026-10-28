@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -529,6 +530,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		Execution: segmentscan.ExecutionControlPlane,
 	}
 	destination := discoveryRunDestination
+	eventType := projections.EventDiscoveryRunQueued
 	var command any = queued
 	switch source.Kind {
 	case "network", "ssh":
@@ -555,6 +557,37 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		resolved.KeepChain = o.keepScannedChains && resolved.Mode == segmentscan.ModeTLS && !resolved.DryRun
 		queued = resolved
 		command = resolved
+	case sshcollection.SourceKind:
+		if in.DryRun {
+			return store.DiscoveryRun{}, errors.New("SSH trust collection is read-only; use preflight for an effect-free plan")
+		}
+		cfg, err := sshcollection.DecodeConfig(source.Config)
+		if err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		resolved := cfg.Resolve()
+		segment, err := o.store.GetDiscoverySegmentByName(ctx, tenantID, resolved.Segment)
+		if err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		if segment.Excluded {
+			return store.DiscoveryRun{}, errors.New("SSH collection segment is excluded")
+		}
+		if err := segmentscan.ValidateDeclaredSegment(resolved.ScopeIntent(), segment.Ranges); err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		if err := o.requireDiscoveryNetworkRelayForJob(ctx, tenantID, resolved.RequiredAgentID, sshcollection.Destination); err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
+		resolved.RetryOfRunID, resolved.RequestedBy = in.RetryOfRunID, requestedBy
+		if err := resolved.Validate(); err != nil {
+			return store.DiscoveryRun{}, err
+		}
+		queued = projections.DiscoveryRunQueued{ID: id, SourceID: in.SourceID, ScheduleID: in.ScheduleID, RetryOfRunID: in.RetryOfRunID, RequestedBy: requestedBy, Execution: resolved.Execution, Segment: resolved.Segment, RequiredAgentRole: resolved.RequiredAgentRole, RequiredAgentID: resolved.RequiredAgentID}
+		command = resolved
+		destination = sshcollection.Destination
+		eventType = projections.EventSSHTrustCollectionQueued
 	case adcsdiscovery.SourceKind:
 		if in.DryRun {
 			return store.DiscoveryRun{}, errors.New("orchestrator: AD CS inventory is already read-only and does not support dry-run")
@@ -624,7 +657,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			}
 		}
 		var err error
-		ev, err = o.log.Append(ctx, events.Event{Type: projections.EventDiscoveryRunQueued, TenantID: tenantID, Data: commandPayload})
+		ev, err = o.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: commandPayload})
 		if err != nil {
 			return err
 		}

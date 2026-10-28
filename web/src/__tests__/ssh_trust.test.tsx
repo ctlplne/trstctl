@@ -4,6 +4,7 @@ import { AppQueryProvider } from "@/lib/query";
 import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { SSHTrust } from "@/pages/SSHTrust";
+import { SSHHostTrustPanel } from "@/pages/ssh/SSHHostTrustPanel";
 import { ApiError } from "@/lib/api";
 
 const { apiMock } = vi.hoisted(() => ({
@@ -344,6 +345,52 @@ describe("SSH trust served workflow surface", () => {
     expect(within(second).getByText("File missing: sshd refuses every key")).toBeInTheDocument();
     expect(within(second).getByText("On")).toBeInTheDocument();
     expect(within(second).getByText(/Match blocks: 1/)).toBeInTheDocument();
+  });
+
+  it("labels a remote SSH target separately from its collecting relay and states unassessed coverage", async () => {
+    render(
+      <SSHHostTrustPanel
+        view={{
+          summary: {
+            hosts: 1,
+            tenant_ca_configured: false,
+            tenant_ca_fingerprint: "",
+            served_krl_sha256: "",
+            trusts_tenant_ca: 0,
+            trusts_other_ca_only: 0,
+            no_user_ca: 0,
+            tenant_host_certificate: 0,
+            enforces_served_krl: 0,
+            standing_keys_on: 1,
+          },
+          hosts: [
+            {
+              agent_id: "relay-1",
+              agent: "Inside relay",
+              collection_mode: "agentless",
+              target_address: "remote.example:22",
+              source_id: "source-1",
+              coverage: "effective_global_settings;match_contexts_and_per_user_keys_unassessed",
+              sshd_config: "/etc/ssh/sshd_config",
+              config_read: "read",
+              user_ca: "unreadable",
+              trusted_ca_fingerprints: [],
+              host_certificate: "none",
+              host_certificates: [],
+              revocation_list: "unreadable",
+              standing_keys: "on",
+              authorized_keys_file: [".ssh/authorized_keys"],
+              match_blocks: 0,
+              first_observed: "2026-10-28T00:00:00Z",
+              last_observed: "2026-10-28T00:00:00Z",
+            },
+          ],
+        }}
+      />,
+    );
+    const row = (await screen.findByText("remote.example:22")).closest("tr") as HTMLElement;
+    expect(within(row).getByText(/Agentless via Inside relay/)).toHaveTextContent("Match contexts and per-user keys are unassessed");
+    expect(within(row).getAllByText("Could not read").length).toBeGreaterThan(0);
   });
 
   it("renders the honest empty state for a pre-inventory rolling-upgrade payload", async () => {

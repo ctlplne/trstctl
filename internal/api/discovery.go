@@ -32,6 +32,7 @@ import (
 	"trstctl.com/trstctl/internal/discovery/sourcecatalog"
 	"trstctl.com/trstctl/internal/netsec"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -298,6 +299,11 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		}
 		preview.Concurrency = 1
 		preview.QueueDepth = 256
+	}
+	if req.Kind == sshcollection.SourceKind {
+		if err := a.previewSSHCollection(ctx, tenantID, cfg, &preview); err != nil {
+			return discoveryPlanPreviewResponse{}, err
+		}
 	}
 	if req.Kind == adcsdiscovery.SourceKind {
 		intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
@@ -882,6 +888,15 @@ func (a *API) createDiscoverySource(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		if kind == sshcollection.SourceKind {
+			var preview discoveryPlanPreviewResponse
+			if err := a.previewSSHCollection(ctx, tenantID, cfg, &preview); err != nil {
+				return 0, nil, err
+			}
+			if !preview.Ready {
+				return 0, nil, errStatus(http.StatusBadRequest, strings.Join(preview.BlockedReasons, "; "))
+			}
+		}
 		if kind == adcsdiscovery.SourceKind {
 			intent, resolveErr := adcsdiscovery.ResolveInventoryIntent(cfg)
 			if resolveErr != nil {
@@ -1396,6 +1411,11 @@ func validateDiscoverySourceRequest(req discoverySourceRequest) (json.RawMessage
 	}
 	if req.Kind == "network" || req.Kind == "ssh" {
 		if _, err := segmentscan.Resolve(req.Kind, cfg); err != nil {
+			return nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+	}
+	if req.Kind == sshcollection.SourceKind {
+		if _, err := sshcollection.DecodeConfig(cfg); err != nil {
 			return nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 	}

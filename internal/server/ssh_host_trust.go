@@ -56,6 +56,9 @@ func (s *Server) SSHHostTrust(ctx context.Context, tenantID string) (api.SSHHost
 	}
 	now := time.Now().UTC()
 	for _, row := range rows {
+		if err := s.bindAgentlessSSHPosture(ctx, tenantID, &row); err != nil {
+			return api.SSHHostTrustView{}, err
+		}
 		host, err := judgeSSHHostTrust(row, view.Summary.TenantCAFingerprint, view.Summary.ServedKRLSHA256, now)
 		if err != nil {
 			return api.SSHHostTrustView{}, err
@@ -78,6 +81,10 @@ func judgeSSHHostTrust(row store.SSHTrustPosture, tenantCA, servedSHA string, no
 		AuthorizedKeysFile:    splitNonEmpty(meta["authorized_keys_file"], " "),
 		HostCertificates:      []api.SSHHostCertificate{},
 		FirstObserved:         row.FirstSeenAt.UTC(), LastObserved: row.LastSeenAt.UTC(),
+	}
+	if meta["collection_mode"] == "agentless" {
+		host.CollectionMode, host.TargetAddress, host.SourceID, host.Coverage = meta["collection_mode"], meta["target_address"], meta["source_id"], meta["coverage"]
+		host.SSHDConfig = meta["sshd_config"]
 	}
 	host.MatchBlocks, _ = strconv.Atoi(meta["match_blocks"])
 	if host.ConfigRead != "read" {

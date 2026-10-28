@@ -1,0 +1,176 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: BUSL-1.1
+"""One-shot read-only SSH trust profile. Install root-owned; takes no arguments."""
+import base64
+import json
+import os
+import selectors
+import stat
+import struct
+import subprocess
+import sys
+import time
+
+POLICY = "/etc/trstctl/ssh-collection-v1.json"
+SSHD = "/usr/sbin/sshd"
+KEYS = {"trustedusercakeys", "revokedkeys", "authorizedprincipalsfile", "authorizedkeysfile", "hostcertificate"}
+ROLES = {"trustedusercakeys": "ca", "revokedkeys": "revocations", "hostcertificate": "host_certificate"}
+PUBLIC_TYPES = {"ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"}
+FILE_LIMIT = 256 * 1024
+TOTAL_LIMIT = 1024 * 1024
+
+
+def bounded_file(name, limit, protected=False):
+    # Policy and final public file may not be symlinks or device/pipe files.
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            raise ValueError("not a bounded regular file")
+        if protected and (info.st_uid != 0 or info.st_mode & 0o022):
+            raise ValueError("policy must be root-owned and unwritable by the account")
+        with os.fdopen(fd, "rb", closefd=False) as source:
+            data = source.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError("file grew beyond its bound")
+        return data
+    finally:
+        os.close(fd)
+
+
+def effective_settings(config):
+    # No caller-supplied argv, shell, environment, Match context or stderr.
+    child = subprocess.Popen([SSHD, "-T", "-f", config], stdin=subprocess.DEVNULL,
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C"})
+    output = bytearray()
+    deadline = time.monotonic() + 5
+    try:
+        with selectors.DefaultSelector() as ready:
+            ready.register(child.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise ValueError("sshd settings timed out")
+                if not ready.select(remaining):
+                    raise ValueError("sshd settings timed out")
+                chunk = os.read(child.stdout.fileno(), 65536)
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > TOTAL_LIMIT:
+                    raise ValueError("sshd settings exceeded bound")
+        if child.wait(timeout=max(0.01, deadline - time.monotonic())) != 0:
+            raise ValueError("sshd rejected its configuration")
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait()
+        child.stdout.close()
+    settings = {key: ["none"] for key in KEYS}
+    seen = set()
+    for line in output.decode("utf-8", errors="strict").splitlines():
+        words = line.split()
+        if not words or words[0] not in KEYS:
+            continue
+        key, values = words[0], words[1:]
+        if not values or any(len(value) > 4096 for value in values):
+            raise ValueError("invalid effective setting")
+        if key in seen:
+            if key != "hostcertificate":
+                raise ValueError("duplicate scalar setting")
+            settings[key].extend(values)
+        else:
+            settings[key] = values
+        seen.add(key)
+    return settings
+
+
+def public_material(data, kind):
+    if b"PRIVATE KEY" in data:
+        raise ValueError("private material forbidden")
+    if kind == "revocations" and data.startswith(b"SSHKRL\n\x00"):
+        return data
+    canonical = []
+    for line in data.decode("ascii", errors="strict").splitlines():
+        words = line.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if len(words) < 2:
+            raise ValueError("not a public key list")
+        key_type = words[0]
+        permitted = {key + "-cert-v01@openssh.com" for key in PUBLIC_TYPES} if kind == "host_certificate" else PUBLIC_TYPES
+        if key_type not in permitted:
+            raise ValueError("not an allowed public key type")
+        wire = base64.b64decode(words[1], validate=True)
+        if len(wire) < 4:
+            raise ValueError("invalid public key wire")
+        length = struct.unpack(">I", wire[:4])[0]
+        if wire[4:4 + length] != key_type.encode("ascii"):
+            raise ValueError("public key type mismatch")
+        canonical.append(key_type + " " + words[1])
+    if kind == "host_certificate" and len(canonical) != 1:
+        raise ValueError("one host certificate required")
+    return (("\n".join(canonical) + "\n") if canonical else "").encode("ascii")
+
+
+def collect(policy):
+    if set(policy) != {"config_path", "allowed_public_files"}:
+        raise ValueError("unknown policy fields")
+    config = policy["config_path"]
+    allowed = policy["allowed_public_files"]
+    if not isinstance(config, str) or not os.path.isabs(config) or os.path.normpath(config) != config:
+        raise ValueError("canonical config path required")
+    if not isinstance(allowed, list) or len(allowed) > 66 or any(not isinstance(path, str) or not os.path.isabs(path) or os.path.normpath(path) != path for path in allowed):
+        raise ValueError("bounded explicit public paths required")
+    settings = effective_settings(config)
+    files, seen, total = [], set(), 0
+    for key, kind in ROLES.items():
+        for name in settings[key]:
+            if name == "none":
+                continue
+            if name in seen:
+                raise ValueError("duplicate or conflicting file role")
+            seen.add(name)
+            if len(seen) > 66:
+                raise ValueError("too many public files")
+            item = {"path": name, "kind": kind, "state": "unreadable"}
+            if not os.path.isabs(name):
+                item["state"] = "relative_path"
+            elif name not in allowed:
+                item["state"] = "not_allowed"
+            else:
+                try:
+                    data = public_material(bounded_file(name, FILE_LIMIT), kind)
+                    total += len(data)
+                    if total > TOTAL_LIMIT:
+                        item["state"] = "too_large"
+                    else:
+                        item["state"], item["data"] = "read", base64.b64encode(data).decode("ascii")
+                except FileNotFoundError:
+                    item["state"] = "missing"
+                except (ValueError, UnicodeError):
+                    item["state"] = "invalid_public_material"
+                except OSError:
+                    item["state"] = "unreadable"
+            files.append(item)
+    return {"version": 1, "profile": "ssh-trust-read-v1", "config_path": config, "settings": settings, "files": files}
+
+
+def main():
+    if len(sys.argv) != 1 or os.environ.get("SSH_ORIGINAL_COMMAND", "/usr/local/libexec/trstctl-ssh-collect-v1") != "/usr/local/libexec/trstctl-ssh-collect-v1":
+        return 1
+    try:
+        policy = json.loads(bounded_file(POLICY, 65536, protected=True))
+        result = json.dumps(collect(policy), separators=(",", ":")).encode("utf-8")
+        if len(result) > 2 * TOTAL_LIMIT:
+            return 1
+        sys.stdout.buffer.write(result)
+        return 0
+    except (OSError, ValueError, UnicodeError, subprocess.SubprocessError):
+        # Closed failure; local diagnostics never cross the SSH public profile.
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

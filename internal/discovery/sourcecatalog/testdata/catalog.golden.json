@@ -228,6 +228,106 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#network-and-ssh-scopes"
     },
     {
+      "kind": "ssh_trust",
+      "label": "Agentless SSH trust",
+      "purpose": "Read effective SSH trust posture through an explicitly selected network relay and a restricted remote account.",
+      "data_handling": "Authenticates only to pinned targets using vaulted PKCS#8 key references. Calls one fixed read-only helper; stores public trust evidence. No host agent is required. Match contexts and per-user keys are not assessed.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=ssh_trust",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "network-role relay",
+      "configuration": [
+        {
+          "path": "enabled",
+          "label": "Enable agentless collection",
+          "type": "boolean",
+          "required": true,
+          "description": "Explicit opt-in; host-agent inventory remains the default."
+        },
+        {
+          "path": "segment",
+          "label": "Authorized scope",
+          "type": "segment_ref",
+          "required": true,
+          "description": "Declared tenant scope containing every target."
+        },
+        {
+          "path": "relay_agent_id",
+          "label": "Network relay",
+          "type": "agent_ref",
+          "required": true,
+          "description": "One enrolled network-role relay with the collector enabled."
+        },
+        {
+          "path": "hosts[].address",
+          "label": "SSH targets",
+          "type": "string",
+          "required": true,
+          "description": "Canonical host:port; at most 100 explicit hosts."
+        },
+        {
+          "path": "hosts[].username",
+          "label": "Read-only account",
+          "type": "string",
+          "required": true,
+          "description": "Non-root forced-command account; no shell, forwarding or writes."
+        },
+        {
+          "path": "hosts[].host_key_fingerprint",
+          "label": "Host identity pin",
+          "type": "string",
+          "required": true,
+          "description": "Exact SHA256 fingerprint from a trusted administrative channel; no TOFU."
+        },
+        {
+          "path": "hosts[].credential_ref",
+          "label": "SSH credential reference",
+          "type": "credential_ref",
+          "required": true,
+          "secret_ref": true,
+          "description": "Vault secret:// reference to a PKCS#8 private key. The value never enters source configuration."
+        },
+        {
+          "path": "allow_rfc1918",
+          "label": "Allow approved RFC1918 targets",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Private targets must also belong to the declared scope and local relay egress grant."
+        },
+        {
+          "path": "allow_loopback",
+          "label": "Allow loopback",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Explicit owned local-test override."
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/ssh.md#agentless-trust-collection"
+    },
+    {
       "kind": "adcs",
       "label": "Microsoft AD CS",
       "purpose": "Inventory AD CS authorities, templates, enrollment rights, and exposed enrollment endpoints through a domain-reachable relay.",

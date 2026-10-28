@@ -64,6 +64,7 @@ const (
 	EventDiscoverySchedulePaused                  = "discovery.schedule.paused"
 	EventDiscoveryScheduleResumed                 = "discovery.schedule.resumed"
 	EventDiscoveryScheduleRetired                 = "discovery.schedule.retired"
+	EventSSHTrustCollectionQueued                 = "ssh.trust_collection.queued"
 	EventDiscoveryRunQueued                       = "discovery.run.queued"
 	EventRevocationProbeQueued                    = "revocation.probe.queued"
 	EventRevocationProbeRequested                 = "revocation.probe.requested"
@@ -226,7 +227,7 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "pause_schedule", "pauseDiscoverySchedule", []string{EventDiscoverySchedulePaused}},
 	{"F2", "Network discovery", "resume_schedule", "resumeDiscoverySchedule", []string{EventDiscoveryScheduleResumed}},
 	{"F2", "Network discovery", "retire_schedule", "retireDiscoverySchedule", []string{EventDiscoveryScheduleRetired}},
-	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued}},
+	{"F2", "Network discovery", "start_run", "startDiscoveryRun", []string{EventDiscoveryRunQueued, EventSSHTrustCollectionQueued}},
 	{"R1", "Revocation monitoring", "queue_probe", "listRevocationHealth", []string{EventRevocationProbeQueued}},
 	{"R1", "Revocation monitoring", "observe_health", "listRevocationHealth", []string{EventRevocationHealthObserved}},
 	{"R1", "Revocation monitoring", "request_probe", "probeRevocationHealth", []string{EventRevocationProbeRequested, EventRevocationProbeQueued}},

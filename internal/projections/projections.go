@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"github.com/google/uuid"
@@ -227,6 +228,7 @@ const (
 	EventDiscoverySchedulePaused             = "discovery.schedule.paused"
 	EventDiscoveryScheduleResumed            = "discovery.schedule.resumed"
 	EventDiscoveryScheduleRetired            = "discovery.schedule.retired"
+	EventSSHTrustCollectionQueued            = "ssh.trust_collection.queued"
 	EventDiscoveryRunQueued                  = "discovery.run.queued"
 	EventDiscoveryRunStarted                 = "discovery.run.started"
 	EventDiscoveryFindingRecorded            = "discovery.finding.recorded"
@@ -4715,6 +4717,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryScheduleResumed:                 {1: true, 2: true},
 	EventDiscoveryScheduleRetired:                 {1: true, 2: true},
 	EventDiscoveryRunQueued:                       {1: true},
+	EventSSHTrustCollectionQueued:                 {1: true},
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
@@ -6508,6 +6511,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyDiscoveryScheduleControlTx(ctx, tx, e.TenantID, pl.ID,
 			action, int64(e.Sequence), e.Time) // #nosec G115 -- checked against MaxInt64 above.
+	case EventSSHTrustCollectionQueued:
+		pl, err := sshcollection.DecodeCommand(e.Data)
+		if err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryRunQueuedTx(ctx, tx, store.DiscoveryRun{ID: pl.ID, TenantID: e.TenantID, SourceID: pl.SourceID, ScheduleID: pl.ScheduleID, RetryOfRunID: pl.RetryOfRunID, Status: "queued", RequestedBy: pl.RequestedBy, Execution: pl.Execution, Segment: pl.Segment, RequiredAgentRole: pl.RequiredAgentRole, RequiredAgentID: pl.RequiredAgentID, CreatedAt: e.Time})
 	case EventDiscoveryRunQueued:
 		var pl DiscoveryRunQueued
 		if err := decode(e, &pl); err != nil {

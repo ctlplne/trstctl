@@ -16,6 +16,7 @@ import (
 	"trstctl.com/trstctl/internal/agent/sshkrl"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/sshkeys"
+	"trstctl.com/trstctl/internal/sshcollection"
 )
 
 // A115: whether a host is under an SSH CA is a property of its sshd
@@ -112,6 +113,28 @@ func readSSHDTrust(configPath string) SSHDTrust {
 		trust.ConfigState = fileState(err)
 		return trust
 	}
+	return interpretTrust(configPath, settings, readTrustFile)
+}
+
+// TrustFromSnapshot interprets the fixed helper output without reading relay files.
+// sshd -T has resolved global includes/defaults; connection-specific Match contexts
+// are deliberately not assessed.
+func TrustFromSnapshot(snapshot sshcollection.Snapshot) (SSHDTrust, error) {
+	if err := snapshot.Validate(); err != nil {
+		return SSHDTrust{}, err
+	}
+	scalar := func(key string) string { return snapshot.Settings[key][0] }
+	settings := sshdSettings{trustedUserCAKeys: scalar("trustedusercakeys"), revokedKeys: scalar("revokedkeys"), authorizedPrincipalsFile: scalar("authorizedprincipalsfile"), authorizedKeysFile: snapshot.Settings["authorizedkeysfile"]}
+	for _, name := range snapshot.Settings["hostcertificate"] {
+		if name != "none" {
+			settings.hostCertificates = append(settings.hostCertificates, name)
+		}
+	}
+	return interpretTrust(snapshot.ConfigPath, settings, snapshot.ReadPublicFile), nil
+}
+
+func interpretTrust(configPath string, settings sshdSettings, readPublic func(string) ([]byte, string)) SSHDTrust {
+	trust := SSHDTrust{ConfigPath: configPath, ConfigState: StateRead}
 	trust.MatchBlocks, trust.IncludedFiles = settings.matchBlocks, settings.included
 	trust.AuthorizedKeysFile = settings.authorizedKeysFile
 	if len(trust.AuthorizedKeysFile) == 0 {
@@ -122,7 +145,7 @@ func readSSHDTrust(configPath string) SSHDTrust {
 	trust.TrustedUserCAKeys = orNone(settings.trustedUserCAKeys)
 	trust.TrustedCAState = StateNone
 	if trust.TrustedUserCAKeys != StateNone {
-		data, state := readTrustFile(trust.TrustedUserCAKeys)
+		data, state := readPublic(trust.TrustedUserCAKeys)
 		trust.TrustedCAState = state
 		if state == StateRead {
 			for _, ca := range sshkeys.ParseAuthorizedKeys(data) {
@@ -134,7 +157,7 @@ func readSSHDTrust(configPath string) SSHDTrust {
 	trust.RevokedKeys = orNone(settings.revokedKeys)
 	trust.RevocationState = StateNone
 	if trust.RevokedKeys != StateNone {
-		data, state := readTrustFile(trust.RevokedKeys)
+		data, state := readPublic(trust.RevokedKeys)
 		trust.RevocationState = state
 		if state == StateRead {
 			trust.RevokedKeysSHA256 = crypto.SHA256Hex(data)
@@ -155,7 +178,7 @@ func readSSHDTrust(configPath string) SSHDTrust {
 			break
 		}
 		certificate := HostCertificate{Path: path}
-		data, state := readTrustFile(path)
+		data, state := readPublic(path)
 		certificate.State = state
 		if state == StateRead {
 			info, err := sshkeys.ParseCertificate(data)

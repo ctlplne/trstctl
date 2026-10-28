@@ -3868,6 +3868,7 @@ func componentSchemas() map[string]*Schema {
 		"valid_after": str(), "valid_before": {Type: "string", Description: "RFC 3339, or \"forever\""},
 	}, "path", "judgment", "signature_verified", "principals")
 	sshHostTrust := object(map[string]*Schema{
+		"collection_mode": {Type: "string", Enum: []string{"agentless"}}, "target_address": str(), "source_id": uuid(), "coverage": str(),
 		"agent_id": str(), "agent": str(), "sshd_config": str(),
 		"config_read":             {Type: "string", Enum: []string{"read", "missing", "unreadable"}},
 		"user_ca":                 judgment("tenant_ca", "tenant_ca_and_other", "other_ca", "none"),

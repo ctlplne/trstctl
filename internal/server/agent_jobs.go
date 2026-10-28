@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"trstctl.com/trstctl/internal/sshcollection"
 	"trstctl.com/trstctl/internal/sshtrustrollout"
 
 	"google.golang.org/grpc/codes"
@@ -65,6 +66,7 @@ import (
 // ship. Handing out work nothing can perform is how a queue silently fills while
 // the control plane's own worker stops doing it.
 var agentJobKindAllowlist = map[string]bool{
+	sshcollection.Destination:   true,
 	sshtrustrollout.Destination: true,
 	"connector.deploy":          true,
 	"connector.rollback":        true,
@@ -255,6 +257,14 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 				"agent": info.CommonName, "job_id": job.ID, "kind": job.Destination,
 			})
 			continue
+		}
+		if job.Destination == sshcollection.Destination {
+			if !agentHasRole(info.Roles, "network") {
+				continue
+			}
+			if err := a.startSSHCollection(ctx, info.TenantID, info.CommonName, job.IdempotencyKey, payload); err != nil {
+				continue
+			}
 		}
 		if job.Destination == relay.KindADCSInventory {
 			if startErr := a.startClaimedADCSRun(ctx, info.TenantID, info.CommonName, job.IdempotencyKey, payload); startErr != nil {
@@ -966,16 +976,8 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket result receiver is not configured")
 		}
 		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-	case relay.KindDiscoveryRun:
-		if a.recordDiscoveryScan == nil {
-			return errors.New("discovery result receiver is not configured")
-		}
-		return a.recordDiscoveryScan(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-	case relay.KindADCSInventory:
-		if a.recordADCSInventory == nil {
-			return errors.New("AD CS inventory result receiver is not configured")
-		}
-		return a.recordADCSInventory(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory:
+		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
 		if a.recordRevocationHealth == nil {
 			return errors.New("revocation health result receiver is not configured")
@@ -1190,6 +1192,14 @@ func (a *agentService) recordFailedJobOutcome(ctx context.Context, info mtls.Pee
 			return false, "", status.Errorf(codes.Internal, "record failed host-managed lifecycle: %v", err)
 		}
 	}
+	if claim.Destination == sshcollection.Destination {
+		if a.recordSSHCollection == nil {
+			return false, "", errors.New("SSH collection failure receiver is unavailable")
+		}
+		if err := a.recordSSHCollection(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, "", ""); err != nil {
+			return false, "", err
+		}
+	}
 	if claim.Destination == agentJobKindCMDBSync {
 		if a.recordCMDBSyncFailure == nil {
 			return false, "", status.Error(codes.Internal, "CMDB failure receiver is not configured")
@@ -1234,7 +1244,7 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// A failed containment report may follow an attempted stop whose after
 	// probes could not complete. Re-executing it without an operator review
 	// would repeat an ambiguous emergency action indefinitely.
-	permanent := migrationHandled || claim.Destination == relay.KindEndpointContain ||
+	permanent := migrationHandled || claim.Destination == sshcollection.Destination || claim.Destination == relay.KindEndpointContain ||
 		claim.Destination == relay.KindEndpointPurge || claim.Destination == relay.KindConnectorTakedown ||
 		claim.Destination == relay.KindPQCPosture || claim.Destination == relay.KindPQCPostureRollback
 	terminalReason := detail
@@ -1776,6 +1786,16 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 }
 
 func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job store.AgentJob) ([]byte, error) {
+	if job.Destination == sshcollection.Destination {
+		if a.orch == nil {
+			return nil, errors.New("SSH collection source verifier is unavailable")
+		}
+		command, err := a.orch.BoundSSHCollectionCommand(ctx, job.TenantID, job.IdempotencyKey, job.Payload)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(command)
+	}
 	if job.Destination == sshtrustrollout.Destination {
 		return a.projectSSHTrustFleetClaim(ctx, job)
 	}

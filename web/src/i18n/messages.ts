@@ -10715,6 +10715,53 @@ export const messages = {
     description: "Client-side validation that reports every missing cross-system evidence surface together.",
   },
   "discovery.sourceForm.importTitle": { defaultMessage: "Import sanitized observations", description: "Heading for advanced metadata observation imports." },
+  "discovery.setup.sshCollection.hostNumber": { defaultMessage: "Pinned host {number}", description: "Accessible agentless SSH host binding group." },
+  "discovery.setup.sshCollection.label": { defaultMessage: "Agentless SSH trust", description: "Agentless SSH collection source label." },
+  "discovery.setup.sshCollection.optIn": {
+    defaultMessage: "Enable read-only agentless SSH collection",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.optInRequired": {
+    defaultMessage: "Explicitly enable agentless SSH collection.",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.relayRequired": {
+    defaultMessage: "Select an enrolled network relay.",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.hostsRequired": {
+    defaultMessage: "Choose between one and 100 pinned hosts.",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.invalidBinding": {
+    defaultMessage: "Use a canonical target, non-root account, SHA256 host pin and secret:// key reference.",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.scope": { defaultMessage: "Declared SSH scope", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.relay": { defaultMessage: "Collecting network relay", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.address": { defaultMessage: "SSH host:port", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.username": { defaultMessage: "Restricted account", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.pin": { defaultMessage: "Trusted host-key fingerprint", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.credential": { defaultMessage: "Vault key reference", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.add": { defaultMessage: "Add pinned host", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.remove": { defaultMessage: "Remove host", description: "Agentless SSH collection workflow and evidence scope." },
+  "discovery.setup.sshCollection.private": {
+    defaultMessage: "Allow approved RFC1918 targets",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.loopback": {
+    defaultMessage: "Allow owned loopback test targets",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "discovery.setup.sshCollection.help": {
+    defaultMessage:
+      "Install the root-owned read-only helper and forced-command account first. Global effective settings are collected; Match contexts and per-user keys are not assessed. The key travels over encrypted mTLS and exists briefly in locked relay memory.",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
+  "sshTrust.hostTrust.agentlessProvenance": {
+    defaultMessage: "Agentless via {relay}; global settings only. Match contexts and per-user keys are unassessed.",
+    description: "Agentless SSH collection workflow and evidence scope.",
+  },
   "discovery.setup.validation.name": { defaultMessage: "Give this source a clear name.", description: "Discovery setup source-name validation." },
   "discovery.setup.validation.scope": { defaultMessage: "Choose the authorized network scope.", description: "Discovery setup scope validation." },
   "discovery.setup.validation.target": { defaultMessage: "Add at least one host, address, or CIDR.", description: "Discovery setup target validation." },

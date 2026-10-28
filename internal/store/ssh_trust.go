@@ -20,6 +20,8 @@ const MaxSSHTrustPostures = 5000
 // configuration. Metadata is the agent's report as recorded, with the host and
 // agent ID the control plane stamped from the agent's certificate.
 type SSHTrustPosture struct {
+	SourceID    string
+	RunID       string
 	AgentID     string
 	AgentName   string
 	ConfigPath  string
@@ -39,8 +41,9 @@ func (s *Store) ListSSHTrustPostures(ctx context.Context, tenantID string, limit
 	var out []SSHTrustPosture
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
-			`SELECT agent_id, host, ref, fingerprint, metadata, first_seen_at, last_seen_at
+			`SELECT source_id, run_id, agent_id, host, ref, fingerprint, metadata, first_seen_at, last_seen_at
 			   FROM (SELECT DISTINCT ON (f.metadata->>'agent_id', f.ref)
+			                f.source_id::text AS source_id, f.run_id::text AS run_id,
 			                COALESCE(f.metadata->>'agent_id', '') AS agent_id,
 			                COALESCE(f.metadata->>'host', '') AS host,
 			                f.ref, f.fingerprint, f.metadata, f.first_seen_at, f.last_seen_at
@@ -55,7 +58,7 @@ func (s *Store) ListSSHTrustPostures(ctx context.Context, tenantID string, limit
 		defer rows.Close()
 		for rows.Next() {
 			var p SSHTrustPosture
-			if err := rows.Scan(&p.AgentID, &p.AgentName, &p.ConfigPath, &p.Fingerprint, &p.Metadata, &p.FirstSeenAt, &p.LastSeenAt); err != nil {
+			if err := rows.Scan(&p.SourceID, &p.RunID, &p.AgentID, &p.AgentName, &p.ConfigPath, &p.Fingerprint, &p.Metadata, &p.FirstSeenAt, &p.LastSeenAt); err != nil {
 				return err
 			}
 			out = append(out, p)

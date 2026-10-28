@@ -107,9 +107,12 @@ export function SSHHostTrustPanel({ view }: { view: SSHHostTrustView }) {
             </thead>
             <tbody>
               {hosts.map((host) => (
-                <tr key={`${host.agent_id}:${host.sshd_config}`}>
+                <tr key={`${host.agent_id}:${host.source_id ?? ""}:${host.target_address ?? ""}:${host.sshd_config}`}>
                   <td>
-                    <span className="block font-mono text-xs">{host.agent}</span>
+                    <span className="block font-mono text-xs">{host.target_address || host.agent}</span>
+                    {host.collection_mode === "agentless" ? (
+                      <span className="block text-xs text-muted-foreground">{t("sshTrust.hostTrust.agentlessProvenance", { relay: host.agent })}</span>
+                    ) : null}
                     <span className="block font-mono text-xs text-muted-foreground">{host.sshd_config}</span>
                     {host.match_blocks > 0 ? (
                       <span className="block text-xs text-muted-foreground">{t("sshTrust.hostTrust.matchBlocks", { count: host.match_blocks })}</span>

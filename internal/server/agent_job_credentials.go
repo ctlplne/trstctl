@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/sshcollection"
 )
 
 // RedeemJobCredential hands a claimed job's credential material to the agent
@@ -60,6 +61,15 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	}
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+	}
+	if job.Destination == sshcollection.Destination {
+		if a.orch == nil || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network") {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+		command, err := a.orch.BoundSSHCollectionCommand(ctx, info.TenantID, job.IdempotencyKey, job.Payload)
+		if err != nil || command.RequiredAgentID != agentID {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
 	}
 	if job.Destination == agentJobKindMDMSync && (job.RequiredAgentID == "" || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network")) {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)

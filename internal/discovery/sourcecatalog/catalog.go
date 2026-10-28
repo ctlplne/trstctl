@@ -80,6 +80,22 @@ var items = []Capability{
 		Permission:   "discovery:write", Edition: "core", Execution: "network-role relay",
 		Configuration: networkFields(), Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#network-and-ssh-scopes",
 	},
+	{Kind: "ssh_trust", Label: "Agentless SSH trust", Tool: "Discover", Route: "/discovery?tab=sources&kind=ssh_trust", SetupSurface: SetupSourceWizard,
+		Purpose:      "Read effective SSH trust posture through an explicitly selected network relay and a restricted remote account.",
+		DataHandling: "Authenticates only to pinned targets using vaulted PKCS#8 key references. Calls one fixed read-only helper; stores public trust evidence. No host agent is required. Match contexts and per-user keys are not assessed.",
+		Permission:   "discovery:write", Edition: "core", Execution: "network-role relay",
+		Configuration: []Field{
+			field("enabled", "Enable agentless collection", "boolean", true, false, false, "Explicit opt-in; host-agent inventory remains the default."),
+			field("segment", "Authorized scope", "segment_ref", true, false, false, "Declared tenant scope containing every target."),
+			field("relay_agent_id", "Network relay", "agent_ref", true, false, false, "One enrolled network-role relay with the collector enabled."),
+			field("hosts[].address", "SSH targets", "string", true, false, false, "Canonical host:port; at most 100 explicit hosts."),
+			field("hosts[].username", "Read-only account", "string", true, false, false, "Non-root forced-command account; no shell, forwarding or writes."),
+			field("hosts[].host_key_fingerprint", "Host identity pin", "string", true, false, false, "Exact SHA256 fingerprint from a trusted administrative channel; no TOFU."),
+			field("hosts[].credential_ref", "SSH credential reference", "credential_ref", true, true, false, "Vault secret:// reference to a PKCS#8 private key. The value never enters source configuration."),
+			field("allow_rfc1918", "Allow approved RFC1918 targets", "boolean", false, false, true, "Private targets must also belong to the declared scope and local relay egress grant."),
+			field("allow_loopback", "Allow loopback", "boolean", false, false, true, "Explicit owned local-test override.")},
+		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/ssh.md#agentless-trust-collection"},
+
 	{
 		Kind: "adcs", Label: "Microsoft AD CS", Tool: "Discover", Route: "/discovery?tab=sources&kind=adcs", SetupSurface: SetupSourceWizard,
 		Purpose:      "Inventory AD CS authorities, templates, enrollment rights, and exposed enrollment endpoints through a domain-reachable relay.",
