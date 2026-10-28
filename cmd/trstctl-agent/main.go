@@ -229,6 +229,7 @@ func main() {
 	edgeCertOut := flag.String("edge-cert-out", "edge-leaf.crt", "where edge-issue writes the leaf certificate")
 	edgeLeafKeyOut := flag.String("edge-leaf-key-out", "edge-leaf.key", "where edge-issue writes the leaf private key (0600)")
 	edgeJournalPath := flag.String("edge-journal", "edge-journal.json", "issuance journal, maintained in the exact shape `trstctl edge delegations reconcile -f` posts")
+	edgeJournalUpload := flag.Bool("edge-journal-upload", false, "send the edge issuance journal (--edge-journal) over the agent channel when the agent connects or reconnects, for the control plane to reconcile")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: unexpected command or argument; use --help for usage")
@@ -437,6 +438,7 @@ func main() {
 		allowInsecureDevBootstrapTokenArg: *allowInlineToken,
 		allowInsecureLoopbackEnrollment:   *allowLoopbackEnrollment,
 		inventoryCertRoots:                splitList(*inventoryCertRoots),
+		edgeJournalUpload:                 edgeJournalUploadPath(*edgeJournalUpload, *edgeJournalPath),
 		inventoryOSTrustRoots:             splitList(*inventoryOSTrustRoots),
 		inventoryJavaTrustStores:          splitList(*inventoryJavaTrustStores),
 		inventoryJavaTrustStorePassword:   *inventoryJavaTrustStorePassword,
@@ -565,6 +567,9 @@ type agentOptions struct {
 	inventoryPrivateKeyRoots          []string
 	inventorySSH                      sshdiscovery.Config
 	inventoryK8sSecrets               bool
+	// edgeJournalUpload is the edge journal the agent sends when it connects
+	// (A219); empty means it is not sent.
+	edgeJournalUpload string
 	// inventoryK8sNamespaces widens the k8s-secret source beyond the pod's own
 	// namespace: "all", or a comma-separated list (A19).
 	inventoryK8sNamespaces string
@@ -837,12 +842,14 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	// operator changed the roles this agent's next certificate carries.
 	renewRequested := false
 	var clock clockSkewNotice
+	journalUploader := &edgeJournalUploader{path: o.edgeJournalUpload}
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial heartbeat failed:", herr)
 		nextHeartbeat = rotateBackoff(heartbeatFailures, rng)
 		heartbeatFailures++
 	} else {
 		fmt.Printf("trstctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
+		journalUploader.afterHeartbeat(ctx, ch.c, true)
 		nextHeartbeat = heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng)
 		renewRequested = resp.RenewCertificate
 		if notice := clock.observe(resp, time.Now()); notice != "" {
@@ -1024,7 +1031,9 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 				resetTimer(heartbeatTimer, rotateBackoff(heartbeatFailures, rng))
 				heartbeatFailures++
 			} else {
+				reconnected := heartbeatFailures > 0
 				heartbeatFailures = 0
+				journalUploader.afterHeartbeat(ctx, ch.c, reconnected)
 				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
 				if notice := clock.observe(resp, time.Now()); notice != "" {
 					fmt.Fprintln(os.Stderr, notice)

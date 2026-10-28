@@ -293,6 +293,10 @@ type agentService struct {
 	// The permitted set is passed in already derived from the job payload, so
 	// the signing side cannot be handed names the caller did not authorize.
 	signSubjectCSR func(ctx context.Context, tenantID, agentName string, job store.AgentJobForRedemption, jobID int64, csrDER []byte, permitted []string, attempt int) (*transport.SignJobCSRResponse, error)
+	// reconcileEdgeJournal reconciles a host's edge issuance journal sent over
+	// the channel (A219). Nil means edge delegation is not served and
+	// ReportEdgeJournal fails closed.
+	reconcileEdgeJournal func(ctx context.Context, tenantID, host string, certificatesPEM []string) (*transport.EdgeJournalResponse, error)
 	// completeHostRenewal moves an identity out of StateRenewing once a host
 	// agent reports its renewal finished (epic B2). Nil means the transition is
 	// not completed and the identity would stay in renewing forever, so this is
@@ -417,6 +421,18 @@ func (b *bulkheadedAgentService) ClaimJobs(ctx context.Context, req *transport.C
 func (b *bulkheadedAgentService) RedeemJobCredential(ctx context.Context, req *transport.RedeemJobCredentialRequest) (*transport.RedeemJobCredentialResponse, error) {
 	return runAgentBulkhead(ctx, b.pool, "redeem_job_credential", b.metrics, func(ctx context.Context) (*transport.RedeemJobCredentialResponse, error) {
 		return b.next.RedeemJobCredential(ctx, req)
+	})
+}
+
+// ReportEdgeJournal (A219) shares the fire door: a fleet of edge hosts that
+// reconnects together uploads its journals through the same bounded pool.
+func (b *bulkheadedAgentService) ReportEdgeJournal(ctx context.Context, req *transport.EdgeJournalRequest) (*transport.EdgeJournalResponse, error) {
+	edge, ok := b.next.(transport.AgentEdgeServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not accept edge journals over the agent channel")
+	}
+	return runAgentBulkhead(ctx, b.pool, "report_edge_journal", b.metrics, func(ctx context.Context) (*transport.EdgeJournalResponse, error) {
+		return edge.ReportEdgeJournal(ctx, req)
 	})
 }
 

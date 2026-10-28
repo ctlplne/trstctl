@@ -19686,7 +19686,7 @@ export const messages = {
   "edge.actions.close": { defaultMessage: "Close actions", description: "Close the edge CA action form." },
   "edge.actions.guidance": {
     defaultMessage:
-      "Create the CSR and TPM proof on the host. Review their public request here before minting; the host key stays on that host. Reconcile its issuance journal after an offline period.",
+      "Create the CSR and TPM proof on the host. Review their public request here before minting; the host key stays on that host. A host agent started with --edge-journal-upload sends its issuance journal when it reconnects; otherwise reconcile the journal here after an offline period.",
     description: "Explain the host and control-plane halves of delegated edge CA operation.",
   },
   "edge.actions.mint": { defaultMessage: "Mint delegated edge CA", description: "Open the reviewed Edge CA mint action." },

@@ -150,6 +150,28 @@ The agent verifies that the certificate public key equals the handle public key
 before asking the TPM to sign. A missing TPM, unknown handle, changed provider,
 or mismatched certificate refuses issuance. None triggers a software fallback.
 
+To have the host send its journal itself, run the host agent with
+`--edge-journal-upload` and the same `--edge-journal` path:
+
+```sh
+trstctl-agent --name bunker-01 ... \
+  --edge-journal /var/lib/trstctl/edge-journal.json \
+  --edge-journal-upload
+```
+
+The agent sends the journal over its mutual-TLS agent channel when it connects,
+after a heartbeat that succeeds following failed ones (the host was offline),
+and when the journal grows while it is connected. The control plane reconciles
+each certificate against the delegation that issued it among the delegations
+minted for this host, where the host is the name in the agent's channel
+certificate, so `--name` must match the delegation's `host`. It records good
+leaves into the inventory and constraint breaches as violations, exactly as the
+console or CLI reconcile does, with the agent as the actor. Only a host-role
+agent may send a journal. The agent keeps `edge-journal.json.uploaded` beside
+the journal with the acknowledged prefix, so a reconnect sends only new
+entries; a failed upload is retried after the next heartbeat. The journal
+itself still only grows, and the CLI and console reconcile keep working.
+
 ## PKCS#11 alternative
 
 Set `--edge-key-provider pkcs11` and configure

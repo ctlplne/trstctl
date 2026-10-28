@@ -307,6 +307,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodRedeemJobCredential, Handler: redeemJobCredentialHandler},
 		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
+		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -760,6 +761,38 @@ type AgentJobServiceServer interface {
 	FetchWorkloadSVID(ctx context.Context, req *FetchWorkloadSVIDRequest) (*FetchWorkloadSVIDResponse, error)
 }
 
+// AgentEdgeServiceServer is the optional edge-CA extension of AgentService
+// (A219): a host holding a delegated edge CA sends its issuance journal when it
+// reconnects, instead of an operator posting the file. It is a separate
+// interface so an older service implementation stays source-compatible.
+type AgentEdgeServiceServer interface {
+	ReportEdgeJournal(ctx context.Context, req *EdgeJournalRequest) (*EdgeJournalResponse, error)
+}
+
+// Bounds on one journal upload; an agent sends a longer journal in parts.
+const (
+	EdgeJournalMaxCertificates     = 500
+	EdgeJournalMaxCertificateBytes = 16 << 10
+)
+
+// EdgeJournalRequest carries certificates a host's delegated edge CA issued,
+// public PEM only. The host is the channel certificate's name, never a field
+// the agent fills in.
+type EdgeJournalRequest struct {
+	CertificatesPEM []string `json:"certificates_pem"`
+}
+
+// EdgeJournalResponse counts the outcome per certificate: newly reconciled,
+// already recorded, recorded as a constraint violation, or rejected because no
+// delegation of this host issued it.
+type EdgeJournalResponse struct {
+	Reconciled  int      `json:"reconciled"`
+	Already     int      `json:"already"`
+	Violations  int      `json:"violations"`
+	Rejected    int      `json:"rejected"`
+	Delegations []string `json:"delegations,omitempty"`
+}
+
 // FetchWorkloadSVIDRequest asks for the SVIDs a locally attested workload is
 // entitled to (epic B3).
 //
@@ -868,6 +901,9 @@ const (
 	// down; no private key crosses it in either direction.
 	methodFetchWorkloadSVID     = "FetchWorkloadSVID"
 	fullMethodFetchWorkloadSVID = "/" + agentServiceName + "/" + methodFetchWorkloadSVID
+	// A219: a host's edge issuance journal, public certificates up.
+	methodReportEdgeJournal     = "ReportEdgeJournal"
+	fullMethodReportEdgeJournal = "/" + agentServiceName + "/" + methodReportEdgeJournal
 )
 
 func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -946,6 +982,25 @@ func fetchWorkloadSVIDHandler(srv any, ctx context.Context, dec func(any) error,
 	return interceptor(ctx, in, info, handler)
 }
 
+func reportEdgeJournalHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(EdgeJournalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	edge, ok := srv.(AgentEdgeServiceServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not accept edge journals over the agent channel")
+	}
+	if interceptor == nil {
+		return edge.ReportEdgeJournal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodReportEdgeJournal}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return edge.ReportEdgeJournal(ctx, req.(*EdgeJournalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func reportJobResultHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ReportJobResultRequest)
 	if err := dec(in); err != nil {
@@ -1005,6 +1060,15 @@ func (c *AgentClient) SignJobCSR(ctx context.Context, req *SignJobCSRRequest) (*
 func (c *AgentClient) FetchWorkloadSVID(ctx context.Context, req *FetchWorkloadSVIDRequest) (*FetchWorkloadSVIDResponse, error) {
 	out := new(FetchWorkloadSVIDResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodFetchWorkloadSVID, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReportEdgeJournal sends certificates this host's edge CA issued (A219).
+func (c *AgentClient) ReportEdgeJournal(ctx context.Context, req *EdgeJournalRequest) (*EdgeJournalResponse, error) {
+	out := new(EdgeJournalResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodReportEdgeJournal, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

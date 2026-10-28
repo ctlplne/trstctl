@@ -240,6 +240,9 @@ func currentAgentContract() agentContract {
 			"FetchWorkloadSVIDResponse": {Fields: jsonFieldsOf(FetchWorkloadSVIDResponse{})},
 			"WorkloadX509SVID":          {Fields: jsonFieldsOf(WorkloadX509SVID{})},
 			"WorkloadJWTSVID":           {Fields: jsonFieldsOf(WorkloadJWTSVID{})},
+			// A219: public certificates up, counts down.
+			"EdgeJournalRequest":  {Fields: jsonFieldsOf(EdgeJournalRequest{})},
+			"EdgeJournalResponse": {Fields: jsonFieldsOf(EdgeJournalResponse{})},
 		},
 	}
 }
@@ -262,6 +265,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"SignJobCSRRequest", "SignJobCSRResponse"}
 	case methodFetchWorkloadSVID:
 		return struct{ request, response string }{"FetchWorkloadSVIDRequest", "FetchWorkloadSVIDResponse"}
+	case methodReportEdgeJournal:
+		return struct{ request, response string }{"EdgeJournalRequest", "EdgeJournalResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}

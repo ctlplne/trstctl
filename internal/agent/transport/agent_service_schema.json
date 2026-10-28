@@ -107,6 +107,44 @@
         }
       ]
     },
+    "EdgeJournalRequest": {
+      "fields": [
+        {
+          "go_type": "[]string",
+          "name": "certificates_pem",
+          "presence": "required"
+        }
+      ]
+    },
+    "EdgeJournalResponse": {
+      "fields": [
+        {
+          "go_type": "int",
+          "name": "reconciled",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "already",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "violations",
+          "presence": "required"
+        },
+        {
+          "go_type": "int",
+          "name": "rejected",
+          "presence": "required"
+        },
+        {
+          "go_type": "[]string",
+          "name": "delegations",
+          "presence": "optional"
+        }
+      ]
+    },
     "EnrollmentProxyReport": {
       "fields": [
         {
@@ -918,6 +956,12 @@
         "name": "FetchWorkloadSVID",
         "request": "FetchWorkloadSVIDRequest",
         "response": "FetchWorkloadSVIDResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/ReportEdgeJournal",
+        "name": "ReportEdgeJournal",
+        "request": "EdgeJournalRequest",
+        "response": "EdgeJournalResponse"
       }
     ],
     "name": "trstctl.agent.v1.AgentService"

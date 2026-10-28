@@ -61,10 +61,14 @@ func (s *Server) buildEdgeDelegationService(d Deps, orch *orchestrator.Orchestra
 	if d.Store == nil || orch == nil || d.Signer == nil || d.Signer.Client() == nil || s.signAuthz == nil {
 		return nil
 	}
-	return &edgeDelegationService{
+	svc := &edgeDelegationService{
 		store: d.Store, orch: orch, signer: d.Signer, signAuthz: s.signAuthz,
 		signers: map[string]*signing.RemoteSigner{},
 	}
+	// A219: a host's edge journal from the agent channel reconciles through
+	// the same service.
+	s.edgeDelegations = svc
+	return svc
 }
 
 func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID string, req api.EdgeSegmentPolicyRequest) (api.EdgeSegmentPolicy, error) {

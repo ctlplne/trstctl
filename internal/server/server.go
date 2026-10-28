@@ -784,9 +784,12 @@ type Server struct {
 	// restart. agentSvc is the heartbeat+renewal gRPC service; agentChannelAddr is the
 	// listen address (default :9443). All three are unset (the channel does not serve)
 	// when the agent channel is disabled or no signer is available — fail closed.
-	agentCASigner           crypto.DigestSigner
-	agentCACertDER          []byte
-	agentSvc                agentChannelService
+	agentCASigner  crypto.DigestSigner
+	agentCACertDER []byte
+	agentSvc       agentChannelService
+	// edgeDelegations is the edge delegation service the API serves, kept so a
+	// host's edge journal from the agent channel reconciles through it (A219).
+	edgeDelegations         api.EdgeDelegationService
 	agentChannelAddr        string
 	agentHTTPRenewalAddr    string
 	estMTLSAddr             string
@@ -2506,6 +2509,9 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		completeHostRenewal: s.completeHostRenewal,
 		// B3: the Workload API moved to the hosts; this is the node API it calls.
 		issueWorkloadSVID: s.issueWorkloadSVID,
+		// A219: a host's edge journal reconciles through the edge delegation
+		// service the reconcile route uses.
+		reconcileEdgeJournal: s.reconcileEdgeJournal,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

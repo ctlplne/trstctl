@@ -641,7 +641,15 @@ never live in the API process. What you can do end to end against the running bi
   Neither hardware path silently falls back when its device/session is absent.
   Issuances made while the host is
   unreachable are invisible until its journal reconciles, and the console
-  panel says so rather than rendering silence as inactivity; there is no
+  panel says so rather than rendering silence as inactivity. A host agent run
+  with `--edge-journal-upload` sends the journal over its mutual-TLS channel
+  when it connects, after a heartbeat that follows failed ones, and when the
+  journal grows; the control plane reconciles it through the same path as the
+  CLI, counting each certificate against the delegation of that host that
+  issued it, as the agent. Only a host-role agent whose channel certificate
+  names the delegation's host reaches it, and `<journal>.uploaded` records the
+  acknowledged prefix, so only new entries travel. Without the flag the CLI
+  or console reconcile stays the path; there is no
   automatic renewal of a delegation — expiry is the design, and a host that
   needs longer asks again through the same attested flow. The exact TPM2,
   PKCS#11, and software-exception command/configuration lanes are documented in

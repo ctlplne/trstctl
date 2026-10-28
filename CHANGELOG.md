@@ -2,6 +2,13 @@
 
 ### Added
 
+- Edge journal upload: a host agent run with `--edge-journal-upload` sends its edge issuance journal
+  over the mutual-TLS agent channel when it connects, after a heartbeat that follows failed ones,
+  and when the journal grows, so issuances made while the host was offline reconcile without an
+  operator posting the file. The control plane reconciles each certificate against the delegation
+  of that host that issued it (the host is the agent's channel certificate name; host-role agents
+  only), through the same path as the CLI and console reconcile, with the agent as the actor. The
+  agent records the acknowledged prefix in `<journal>.uploaded` and sends only new entries.
 - External CA ledgers in reconciliation: a reconcile authority can read an EJBCA CA's issuance
   ledger (`ejbca` source: REST v2 certificate search over mutual TLS) or a step-ca CA's (`stepca`
   source: its PostgreSQL `x509_certs` and `revoked_x509_certs` tables, read-only), and an
