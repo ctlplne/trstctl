@@ -137,9 +137,12 @@ func TestProviderTemplatesOnboardDriftAndRollout(t *testing.T) {
 		t.Fatal("the customer's core tenant existed before onboarding; the test would not prove registration")
 	}
 
-	// Recording validates with core's own checks.
+	// Recording validates with core's own checks. A role name that is neither a
+	// built-in role nor a well-formed custom role name is refused here; a
+	// well-formed custom role name is checked against the tenant when applied
+	// (TestProviderTemplateNamingAnUndefinedCustomRoleFailsWhenApplied).
 	bad := templateBaseline("Ops")
-	bad.Members[0].Roles = []string{"no-such-role"}
+	bad.Members[0].Roles = []string{"No Such Role"}
 	if rec := templateRequest(t, h, http.MethodPost, "/provider/v1/templates", "record-bad",
 		TemplateRequest{ID: "standard", Name: "Standard customer", Baseline: bad}); rec.Code != http.StatusBadRequest ||
 		!strings.Contains(rec.Body.String(), "template_invalid") {
