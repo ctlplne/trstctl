@@ -13273,6 +13273,10 @@ export interface components {
             /** Format: date-time */
             not_before: string;
             permitted_dns_domains: string[];
+            /** @description the delegation that renewed this one */
+            renewed_by?: string;
+            /** @description the delegation this one renewed */
+            renewed_from?: string;
             revoke_reason?: string;
             /** Format: date-time */
             revoked_at?: string;
@@ -13337,6 +13341,10 @@ export interface components {
             enabled: boolean;
             excluded_dns_domains?: string[];
             permitted_dns_domains?: string[];
+            /** @description hosts may renew a delegation over the agent channel with fresh attestation */
+            renewal_enabled: boolean;
+            /** @description how many days before expiry a renewal opens */
+            renewal_window_days: number;
             segment_id: string;
             segment_name?: string;
             /** Format: date-time */
@@ -13348,6 +13356,10 @@ export interface components {
             enabled: boolean;
             excluded_dns_domains?: string[];
             permitted_dns_domains?: string[];
+            /** @description let hosts renew a delegation over the agent channel with fresh attestation (off by default) */
+            renewal_enabled?: boolean;
+            /** @description days before expiry a renewal opens, 1-29; 0 takes the 7-day default */
+            renewal_window_days?: number;
             segment_id?: string;
         };
         EdgeSegmentPolicyList: {

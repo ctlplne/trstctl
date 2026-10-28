@@ -26,7 +26,12 @@ type EdgeSegmentPolicy struct {
 	PermittedDNSDomains []string
 	ExcludedDNSDomains  []string
 	AllowedKeyProviders []string
-	UpdatedAt           time.Time
+	// RenewalEnabled lets the segment's hosts renew a delegation over the
+	// agent channel with fresh attestation (A220), within RenewalWindowDays of
+	// expiry (0 means the 7-day default).
+	RenewalEnabled    bool
+	RenewalWindowDays int
+	UpdatedAt         time.Time
 }
 
 // EdgeDelegation is one delegated CA the isolated signer minted.
@@ -53,8 +58,10 @@ type EdgeDelegation struct {
 	NotAfter              time.Time
 	RevokedAt             *time.Time
 	RevokeReason          string
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	// RenewedFrom is the delegation this one renewed (A220), empty for a mint.
+	RenewedFrom string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // Expired reports whether the delegation's certificate validity has passed —
@@ -83,20 +90,23 @@ func (s *Store) ApplyEdgeSegmentPolicyTx(ctx context.Context, tx pgx.Tx, p EdgeS
 		`INSERT INTO edge_segment_policies
 		        (tenant_id, segment_id, enabled, attestation_roots_pem,
 		         permitted_dns_domains, excluded_dns_domains, allowed_key_providers,
-		         updated_at, event_sequence)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		         renewal_enabled, renewal_window_days, updated_at, event_sequence)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		 ON CONFLICT (tenant_id, segment_id) DO UPDATE
 		    SET enabled = EXCLUDED.enabled,
 		        attestation_roots_pem = EXCLUDED.attestation_roots_pem,
 		        permitted_dns_domains = EXCLUDED.permitted_dns_domains,
 		        excluded_dns_domains = EXCLUDED.excluded_dns_domains,
 		        allowed_key_providers = EXCLUDED.allowed_key_providers,
+		        renewal_enabled = EXCLUDED.renewal_enabled,
+		        renewal_window_days = EXCLUDED.renewal_window_days,
 		        updated_at = EXCLUDED.updated_at,
 		        event_sequence = EXCLUDED.event_sequence
 		  WHERE edge_segment_policies.event_sequence <= EXCLUDED.event_sequence`,
 		p.TenantID, p.SegmentID, p.Enabled, textArray(p.AttestationRootsPEM),
 		textArray(p.PermittedDNSDomains), textArray(p.ExcludedDNSDomains),
-		textArray(edgeAllowedProvidersOrDefault(p.AllowedKeyProviders)), p.UpdatedAt.UTC(), eventSequence)
+		textArray(edgeAllowedProvidersOrDefault(p.AllowedKeyProviders)), p.RenewalEnabled, p.RenewalWindowDays,
+		p.UpdatedAt.UTC(), eventSequence)
 	return err
 }
 
@@ -111,16 +121,17 @@ func (s *Store) ApplyEdgeDelegationIssuedTx(ctx context.Context, tx pgx.Tx, d Ed
 		         certificate_pem, permitted_dns_domains, excluded_dns_domains,
 		         attested_key_sha256, attestation_cert_sha256, csr_key_sha256,
 		         key_provider, key_storage, key_exportable, custody_assurance, status,
-		         not_before, not_after, revoked_at, revoke_reason,
+		         not_before, not_after, revoked_at, revoke_reason, renewed_from,
 		         created_at, updated_at, event_sequence)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-		         $14, $15, $16, $17, 'active', $18, $19, NULL, '', $20, $20, $21)
+		         $14, $15, $16, $17, 'active', $18, $19, NULL, '', NULLIF($22, '')::uuid, $20, $20, $21)
 		 ON CONFLICT (tenant_id, id) DO NOTHING`,
 		d.TenantID, d.ID, d.SegmentID, d.CAID, d.Host, d.CommonName, d.Serial,
 		d.CertificatePEM, textArray(d.PermittedDNSDomains), textArray(d.ExcludedDNSDomains),
 		d.AttestedKeySHA256, d.AttestationCertSHA256, edgeCSRKeyDigestOrLegacy(d),
 		edgeProviderOrDefault(d.KeyProvider), edgeStorageOrDefault(d.KeyStorage), d.KeyExportable,
-		edgeAssuranceOrDefault(d.CustodyAssurance), d.NotBefore.UTC(), d.NotAfter.UTC(), d.CreatedAt.UTC(), eventSequence)
+		edgeAssuranceOrDefault(d.CustodyAssurance), d.NotBefore.UTC(), d.NotAfter.UTC(), d.CreatedAt.UTC(), eventSequence,
+		d.RenewedFrom)
 	return err
 }
 
@@ -160,12 +171,14 @@ func (s *Store) GetEdgeSegmentPolicy(ctx context.Context, tenantID, segmentID st
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		row := tx.QueryRow(ctx,
 			`SELECT tenant_id::text, segment_id::text, enabled, attestation_roots_pem,
-			        permitted_dns_domains, excluded_dns_domains, allowed_key_providers, updated_at
+			        permitted_dns_domains, excluded_dns_domains, allowed_key_providers,
+			        renewal_enabled, renewal_window_days, updated_at
 			   FROM edge_segment_policies
 			  WHERE tenant_id = $1 AND segment_id = $2`,
 			tenantID, segmentID)
 		err := row.Scan(&p.TenantID, &p.SegmentID, &p.Enabled, &p.AttestationRootsPEM,
-			&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.AllowedKeyProviders, &p.UpdatedAt)
+			&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.AllowedKeyProviders,
+			&p.RenewalEnabled, &p.RenewalWindowDays, &p.UpdatedAt)
 		if err == pgx.ErrNoRows {
 			return nil
 		}
@@ -183,7 +196,8 @@ func (s *Store) ListEdgeSegmentPolicies(ctx context.Context, tenantID string) ([
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT tenant_id::text, segment_id::text, enabled, attestation_roots_pem,
-			        permitted_dns_domains, excluded_dns_domains, allowed_key_providers, updated_at
+			        permitted_dns_domains, excluded_dns_domains, allowed_key_providers,
+			        renewal_enabled, renewal_window_days, updated_at
 			   FROM edge_segment_policies
 			  WHERE tenant_id = $1
 			  ORDER BY segment_id`,
@@ -195,7 +209,8 @@ func (s *Store) ListEdgeSegmentPolicies(ctx context.Context, tenantID string) ([
 		for rows.Next() {
 			var p EdgeSegmentPolicy
 			if err := rows.Scan(&p.TenantID, &p.SegmentID, &p.Enabled, &p.AttestationRootsPEM,
-				&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.AllowedKeyProviders, &p.UpdatedAt); err != nil {
+				&p.PermittedDNSDomains, &p.ExcludedDNSDomains, &p.AllowedKeyProviders,
+				&p.RenewalEnabled, &p.RenewalWindowDays, &p.UpdatedAt); err != nil {
 				return err
 			}
 			out = append(out, p)
@@ -209,7 +224,7 @@ const edgeDelegationCols = `tenant_id::text, id::text, segment_id::text, ca_id::
 	common_name, serial, certificate_pem, permitted_dns_domains, excluded_dns_domains,
 	attested_key_sha256, attestation_cert_sha256, csr_key_sha256,
 	key_provider, key_storage, key_exportable, custody_assurance, status, not_before, not_after,
-	revoked_at, revoke_reason, created_at, updated_at`
+	revoked_at, revoke_reason, coalesce(renewed_from::text, ''), created_at, updated_at`
 
 func scanEdgeDelegation(row pgx.Row) (EdgeDelegation, error) {
 	var d EdgeDelegation
@@ -218,7 +233,7 @@ func scanEdgeDelegation(row pgx.Row) (EdgeDelegation, error) {
 		&d.AttestedKeySHA256, &d.AttestationCertSHA256, &d.CSRKeySHA256,
 		&d.KeyProvider, &d.KeyStorage, &d.KeyExportable, &d.CustodyAssurance,
 		&d.Status, &d.NotBefore, &d.NotAfter,
-		&d.RevokedAt, &d.RevokeReason, &d.CreatedAt, &d.UpdatedAt)
+		&d.RevokedAt, &d.RevokeReason, &d.RenewedFrom, &d.CreatedAt, &d.UpdatedAt)
 	return d, err
 }
 
@@ -255,6 +270,23 @@ func edgeCSRKeyDigestOrLegacy(d EdgeDelegation) string {
 		return d.CSRKeySHA256
 	}
 	return d.AttestedKeySHA256
+}
+
+// EdgeDelegationRenewedBy returns the delegation that renewed id (A220), or
+// "" when none has.
+func (s *Store) EdgeDelegationRenewedBy(ctx context.Context, tenantID, id string) (string, error) {
+	var renewedBy string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx,
+			`SELECT id::text FROM edge_delegations
+			  WHERE tenant_id = $1 AND renewed_from = $2
+			  ORDER BY created_at LIMIT 1`, tenantID, id).Scan(&renewedBy)
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	})
+	return renewedBy, err
 }
 
 // GetEdgeDelegation loads one delegation.

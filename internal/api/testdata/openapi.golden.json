@@ -17239,6 +17239,14 @@
             },
             "type": "array"
           },
+          "renewed_by": {
+            "description": "the delegation that renewed this one",
+            "type": "string"
+          },
+          "renewed_from": {
+            "description": "the delegation this one renewed",
+            "type": "string"
+          },
           "revoke_reason": {
             "type": "string"
           },
@@ -17488,6 +17496,14 @@
             },
             "type": "array"
           },
+          "renewal_enabled": {
+            "description": "hosts may renew a delegation over the agent channel with fresh attestation",
+            "type": "boolean"
+          },
+          "renewal_window_days": {
+            "description": "how many days before expiry a renewal opens",
+            "type": "integer"
+          },
           "segment_id": {
             "type": "string"
           },
@@ -17504,6 +17520,8 @@
           "enabled",
           "attestation_roots",
           "allowed_key_providers",
+          "renewal_enabled",
+          "renewal_window_days",
           "updated_at"
         ],
         "type": "object"
@@ -17541,6 +17559,14 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "renewal_enabled": {
+            "description": "let hosts renew a delegation over the agent channel with fresh attestation (off by default)",
+            "type": "boolean"
+          },
+          "renewal_window_days": {
+            "description": "days before expiry a renewal opens, 1-29; 0 takes the 7-day default",
+            "type": "integer"
           },
           "segment_id": {
             "type": "string"

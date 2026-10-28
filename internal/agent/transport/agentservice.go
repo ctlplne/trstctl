@@ -308,6 +308,7 @@ var agentServiceDesc = grpc.ServiceDesc{
 		{MethodName: methodSignJobCSR, Handler: signJobCSRHandler},
 		{MethodName: methodFetchWorkloadSVID, Handler: fetchWorkloadSVIDHandler},
 		{MethodName: methodReportEdgeJournal, Handler: reportEdgeJournalHandler},
+		{MethodName: methodRenewEdgeDelegation, Handler: renewEdgeDelegationHandler},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "trstctl.agent.v1",
@@ -769,6 +770,32 @@ type AgentEdgeServiceServer interface {
 	ReportEdgeJournal(ctx context.Context, req *EdgeJournalRequest) (*EdgeJournalResponse, error)
 }
 
+// AgentEdgeRenewalServer is the optional edge-renewal extension (A220): a host
+// re-requests its delegated edge CA with a fresh TPM attestation over a new
+// CSR for the same key. Separate from AgentEdgeServiceServer so a journal-only
+// implementation stays source-compatible.
+type AgentEdgeRenewalServer interface {
+	RenewEdgeDelegation(ctx context.Context, req *EdgeRenewalRequest) (*EdgeRenewalResponse, error)
+}
+
+// EdgeRenewalRequest names the delegation by the serial of the certificate
+// the host holds and carries a new CSR for the same key with a TPM credential
+// over its challenge. Public material only: the key never travels.
+type EdgeRenewalRequest struct {
+	Serial                    string `json:"serial"`
+	CSRDER                    []byte `json:"csr_der"`
+	AttestationCredentialJSON []byte `json:"attestation_credential_json"`
+}
+
+// EdgeRenewalResponse is the renewed delegation: its id, serial and expiry,
+// and the certificate chain the host installs in place of the old one.
+type EdgeRenewalResponse struct {
+	DelegationID   string    `json:"delegation_id"`
+	Serial         string    `json:"serial"`
+	CertificatePEM string    `json:"certificate_pem"`
+	NotAfter       time.Time `json:"not_after"`
+}
+
 // Bounds on one journal upload; an agent sends a longer journal in parts.
 const (
 	EdgeJournalMaxCertificates     = 500
@@ -904,6 +931,9 @@ const (
 	// A219: a host's edge issuance journal, public certificates up.
 	methodReportEdgeJournal     = "ReportEdgeJournal"
 	fullMethodReportEdgeJournal = "/" + agentServiceName + "/" + methodReportEdgeJournal
+	// A220: an attested edge delegation renewal, a CSR and TPM credential up.
+	methodRenewEdgeDelegation     = "RenewEdgeDelegation"
+	fullMethodRenewEdgeDelegation = "/" + agentServiceName + "/" + methodRenewEdgeDelegation
 )
 
 func claimJobsHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
@@ -1001,6 +1031,25 @@ func reportEdgeJournalHandler(srv any, ctx context.Context, dec func(any) error,
 	return interceptor(ctx, in, info, handler)
 }
 
+func renewEdgeDelegationHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+	in := new(EdgeRenewalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	edge, ok := srv.(AgentEdgeRenewalServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not renew edge delegations over the agent channel")
+	}
+	if interceptor == nil {
+		return edge.RenewEdgeDelegation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: fullMethodRenewEdgeDelegation}
+	handler := func(ctx context.Context, req any) (any, error) {
+		return edge.RenewEdgeDelegation(ctx, req.(*EdgeRenewalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func reportJobResultHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
 	in := new(ReportJobResultRequest)
 	if err := dec(in); err != nil {
@@ -1069,6 +1118,15 @@ func (c *AgentClient) FetchWorkloadSVID(ctx context.Context, req *FetchWorkloadS
 func (c *AgentClient) ReportEdgeJournal(ctx context.Context, req *EdgeJournalRequest) (*EdgeJournalResponse, error) {
 	out := new(EdgeJournalResponse)
 	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodReportEdgeJournal, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// RenewEdgeDelegation re-requests this host's delegated edge CA (A220).
+func (c *AgentClient) RenewEdgeDelegation(ctx context.Context, req *EdgeRenewalRequest) (*EdgeRenewalResponse, error) {
+	out := new(EdgeRenewalResponse)
+	if err := c.cc.Invoke(c.withProtocol(ctx), fullMethodRenewEdgeDelegation, req, out, grpc.CallContentSubtype(AgentCodecName)); err != nil {
 		return nil, err
 	}
 	return out, nil

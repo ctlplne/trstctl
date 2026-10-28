@@ -96,6 +96,30 @@ func GenerateEdgeCAKeyHandleAndCSR(ctx context.Context, operationID, commonName 
 	return handle, csrDER, nil
 }
 
+// EdgeCSRForKeyHandle has an existing device-held edge CA key sign a fresh CSR
+// (A220): a renewal re-requests the delegation for the SAME key with a new
+// attestation, so it opens the key the handle names and never generates one.
+func EdgeCSRForKeyHandle(ctx context.Context, handle EdgeCAKeyHandle, provider EdgeCAKeyProvider, commonName string) ([]byte, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("crypto: edge CA key provider is required")
+	}
+	if strings.TrimSpace(commonName) == "" {
+		return nil, fmt.Errorf("crypto: edge CA CSR needs a common name")
+	}
+	if handle.KeyID == "" || len(handle.PublicKeyDER) == 0 || handle.Provider != provider.Name() {
+		return nil, fmt.Errorf("crypto: edge CA key handle does not name a %s key", provider.Name())
+	}
+	if err := validateEdgeHandlePublicAlgorithm(handle.PublicKeyDER, handle.Algorithm); err != nil {
+		return nil, err
+	}
+	digestSigner := edgeCAHandleDigestSigner{ctx: ctx, provider: provider, handle: handle}
+	csrDER, err := CreateCertificateRequest(CertificateRequestTemplate{CommonName: strings.TrimSpace(commonName)}, digestSigner)
+	if err != nil {
+		return nil, fmt.Errorf("crypto: create edge CA renewal CSR with %s key: %w", provider.Name(), err)
+	}
+	return csrDER, nil
+}
+
 type edgeCAHandleDigestSigner struct {
 	ctx      context.Context
 	provider EdgeCAKeyProvider

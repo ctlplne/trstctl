@@ -297,6 +297,9 @@ type agentService struct {
 	// the channel (A219). Nil means edge delegation is not served and
 	// ReportEdgeJournal fails closed.
 	reconcileEdgeJournal func(ctx context.Context, tenantID, host string, certificatesPEM []string) (*transport.EdgeJournalResponse, error)
+	// renewEdgeDelegation renews a host's delegated edge CA with fresh
+	// attestation (A220). Nil fails RenewEdgeDelegation closed.
+	renewEdgeDelegation func(ctx context.Context, tenantID, host string, req *transport.EdgeRenewalRequest) (*transport.EdgeRenewalResponse, error)
 	// completeHostRenewal moves an identity out of StateRenewing once a host
 	// agent reports its renewal finished (epic B2). Nil means the transition is
 	// not completed and the identity would stay in renewing forever, so this is
@@ -433,6 +436,17 @@ func (b *bulkheadedAgentService) ReportEdgeJournal(ctx context.Context, req *tra
 	}
 	return runAgentBulkhead(ctx, b.pool, "report_edge_journal", b.metrics, func(ctx context.Context) (*transport.EdgeJournalResponse, error) {
 		return edge.ReportEdgeJournal(ctx, req)
+	})
+}
+
+// RenewEdgeDelegation (A220) shares the same fire door.
+func (b *bulkheadedAgentService) RenewEdgeDelegation(ctx context.Context, req *transport.EdgeRenewalRequest) (*transport.EdgeRenewalResponse, error) {
+	edge, ok := b.next.(transport.AgentEdgeRenewalServer)
+	if !ok {
+		return nil, status.Error(codes.Unimplemented, "this control plane does not renew edge delegations over the agent channel")
+	}
+	return runAgentBulkhead(ctx, b.pool, "renew_edge_delegation", b.metrics, func(ctx context.Context) (*transport.EdgeRenewalResponse, error) {
+		return edge.RenewEdgeDelegation(ctx, req)
 	})
 }
 

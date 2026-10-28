@@ -76,6 +76,71 @@ describe("Edge segment setup", () => {
     );
   });
 
+  it("lets an operator allow attested renewal with a window and shows renewals", async () => {
+    const user = userEvent.setup();
+    apiMock.edgeSegmentPolicies.mockResolvedValue({
+      items: [
+        {
+          segment_id: segmentID,
+          enabled: true,
+          attestation_roots: 1,
+          permitted_dns_domains: ["edge.qa.invalid"],
+          allowed_key_providers: ["tpm2"],
+          renewal_enabled: true,
+          renewal_window_days: 7,
+          updated_at: "2026-10-18T09:00:00Z",
+        },
+      ],
+      guidance: "",
+    });
+    apiMock.edgeDelegations.mockResolvedValue({
+      items: [
+        {
+          id: "delegation-old",
+          segment_id: segmentID,
+          ca_id: "ca-1",
+          host: "bunker-01",
+          common_name: "bunker edge CA",
+          serial: "01",
+          permitted_dns_domains: ["edge.qa.invalid"],
+          csr_key_sha256: "aa",
+          key_provider: "tpm2",
+          key_storage: "device_bound",
+          key_exportable: false,
+          custody_assurance: "hardware_key_attested",
+          status: "active",
+          not_before: "2026-10-18T09:00:00Z",
+          not_after: "2026-10-25T09:00:00Z",
+          renewed_by: "delegation-new",
+        },
+      ],
+      guidance: "",
+    });
+    mount();
+    expect(await screen.findByText("On, 7-day window")).toBeInTheDocument();
+    expect(screen.getByText("Renewed as delegation-new")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Configure edge segment" }));
+    await user.type(screen.getByLabelText("Declared segment ID"), segmentID);
+    await user.type(screen.getByLabelText("TPM attestation root certificate"), publicRoot);
+    await user.type(screen.getByLabelText("Permitted DNS domains"), "edge.qa.invalid");
+    await user.click(screen.getByLabelText("Hosts may renew a delegation over the agent channel with a fresh TPM attestation"));
+    await user.type(screen.getByLabelText("Renewal window, in days before expiry (1 to 29; empty means 7)"), "40");
+    await user.click(screen.getByRole("button", { name: "Review segment policy" }));
+    expect(await screen.findByText("Enter a whole number of days from 1 to 29, or leave it empty for 7.")).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Renewal window, in days before expiry (1 to 29; empty means 7)"));
+    await user.type(screen.getByLabelText("Renewal window, in days before expiry (1 to 29; empty means 7)"), "10");
+    await user.click(screen.getByRole("button", { name: "Review segment policy" }));
+    expect(await screen.findByText("On, 10-day window")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save reviewed segment policy" }));
+    await waitFor(() =>
+      expect(apiMock.setEdgeSegmentPolicy).toHaveBeenCalledWith(
+        segmentID,
+        expect.objectContaining({ renewal_enabled: true, renewal_window_days: 10 }),
+        expect.any(String),
+      ),
+    );
+  });
+
   it("shows excluded DNS subtrees in the exact review before saving", async () => {
     const user = userEvent.setup();
     mount();

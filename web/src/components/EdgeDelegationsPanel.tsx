@@ -26,6 +26,8 @@ const setupSchema = z
     permittedDomains: z.string().trim(),
     excludedDomains: z.string().trim(),
     providers: z.array(z.enum(keyProviders)).min(1),
+    renewal: z.boolean(),
+    renewalWindowDays: z.string().trim(),
   })
   .superRefine((values, context) => {
     if (values.mode === "existing" && !z.string().uuid().safeParse(values.segmentID).success) {
@@ -41,6 +43,9 @@ const setupSchema = z
     }
     if (!values.permittedDomains.split(",").some((domain) => domain.trim())) {
       context.addIssue({ code: "custom", path: ["permittedDomains"], message: translateNow("edge.setup.domainError") });
+    }
+    if (values.renewal && values.renewalWindowDays && !/^(?:[1-9]|1\d|2[0-9])$/.test(values.renewalWindowDays)) {
+      context.addIssue({ code: "custom", path: ["renewalWindowDays"], message: translateNow("edge.setup.renewalWindowError") });
     }
   });
 
@@ -61,6 +66,8 @@ function policyInput(values: SetupValues): EdgeSegmentPolicyInput {
     permitted_dns_domains: values.enabled ? splitDomains(values.permittedDomains) : [],
     excluded_dns_domains: values.enabled ? splitDomains(values.excludedDomains) : [],
     allowed_key_providers: values.providers,
+    renewal_enabled: values.enabled && values.renewal,
+    renewal_window_days: values.enabled && values.renewal && values.renewalWindowDays ? Number(values.renewalWindowDays) : 0,
   };
 }
 
@@ -101,6 +108,8 @@ export function EdgeDelegationsPanel() {
       permittedDomains: "",
       excludedDomains: "",
       providers: ["tpm2"],
+      renewal: false,
+      renewalWindowDays: "",
     },
   });
   const mode = useWatch({ control: form.control, name: "mode" });
@@ -117,6 +126,8 @@ export function EdgeDelegationsPanel() {
       permittedDomains: (policy.permitted_dns_domains ?? []).join(", "),
       excludedDomains: (policy.excluded_dns_domains ?? []).join(", "),
       providers: policy.allowed_key_providers,
+      renewal: policy.renewal_enabled,
+      renewalWindowDays: policy.renewal_enabled ? String(policy.renewal_window_days) : "",
     });
     setReviewed(null);
     setSaveError(null);
@@ -237,6 +248,14 @@ export function EdgeDelegationsPanel() {
                   <dd>{(reviewed.input.allowed_key_providers ?? []).join(", ")}</dd>
                 </div>
                 <div>
+                  <dt>{translateNow("edge.setup.renewalReview")}</dt>
+                  <dd>
+                    {reviewed.input.renewal_enabled
+                      ? translateNow("edge.setup.renewalOn", { days: String(reviewed.input.renewal_window_days || 7) })
+                      : translateNow("edge.setup.renewalOff")}
+                  </dd>
+                </div>
+                <div>
                   <dt>{translateNow("edge.setup.root")}</dt>
                   <dd>
                     <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all">{(reviewed.input.attestation_roots_pem ?? []).join("\n")}</pre>
@@ -316,6 +335,17 @@ export function EdgeDelegationsPanel() {
                   </label>
                 ))}
               </fieldset>
+              {enabled ? (
+                <>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" {...form.register("renewal")} />
+                    {translateNow("edge.setup.renewal")}
+                  </label>
+                  <label htmlFor="edge-renewal-window">{translateNow("edge.setup.renewalWindow")}</label>
+                  <input id="edge-renewal-window" inputMode="numeric" {...form.register("renewalWindowDays")} className="rounded-md border border-border p-2" />
+                  {form.formState.errors.renewalWindowDays ? <span role="alert">{form.formState.errors.renewalWindowDays.message}</span> : null}
+                </>
+              ) : null}
               <p className="text-muted-foreground">{translateNow("edge.setup.custodyWarning")}</p>
               {mode === "existing" && enabled ? <p className="text-muted-foreground">{translateNow("edge.setup.rootReentry")}</p> : null}
               <div className="flex gap-2">
@@ -348,6 +378,7 @@ export function EdgeDelegationsPanel() {
                     <th className="pr-4 font-medium">{translateNow("source.edge.enabled.b6edge00011")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.attestation.roots.b6edge00012")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.allowed.custody.aud2600018")}</th>
+                    <th className="pr-4 font-medium">{translateNow("edge.policy.renewalHeader")}</th>
                     <th className="pr-4 font-medium">{translateNow("source.edge.constraints.b6edge00007")}</th>
                   </tr>
                 </thead>
@@ -366,6 +397,11 @@ export function EdgeDelegationsPanel() {
                       <td className="py-1 pr-4">{p.enabled ? translateNow("source.edge.on.b6edge00016") : translateNow("source.edge.off.b6edge00017")}</td>
                       <td className="py-1 pr-4 tabular-nums">{p.attestation_roots}</td>
                       <td className="py-1 pr-4 font-mono text-xs">{(p.allowed_key_providers ?? ["tpm2"]).join(", ")}</td>
+                      <td className="py-1 pr-4">
+                        {p.renewal_enabled
+                          ? translateNow("edge.setup.renewalOn", { days: String(p.renewal_window_days) })
+                          : translateNow("edge.setup.renewalOff")}
+                      </td>
                       <td className="py-1 pr-4 font-mono text-xs">
                         {(p.permitted_dns_domains ?? []).join(", ")}
                         {(p.excluded_dns_domains ?? []).length > 0 ? (
@@ -407,6 +443,12 @@ export function EdgeDelegationsPanel() {
                         }
                       >
                         {d.status}
+                        {d.renewed_by ? (
+                          <span className="block text-xs text-muted-foreground">{translateNow("edge.delegation.renewedBy", { id: d.renewed_by })}</span>
+                        ) : null}
+                        {d.renewed_from ? (
+                          <span className="block text-xs text-muted-foreground">{translateNow("edge.delegation.renewedFrom", { id: d.renewed_from })}</span>
+                        ) : null}
                       </td>
                       <td className="py-1 pr-4 font-mono text-xs">{(d.permitted_dns_domains ?? []).join(", ")}</td>
                       <td className="py-1 pr-4 tabular-nums">{new Date(d.not_after).toISOString().slice(0, 10)}</td>

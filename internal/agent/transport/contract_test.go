@@ -243,6 +243,9 @@ func currentAgentContract() agentContract {
 			// A219: public certificates up, counts down.
 			"EdgeJournalRequest":  {Fields: jsonFieldsOf(EdgeJournalRequest{})},
 			"EdgeJournalResponse": {Fields: jsonFieldsOf(EdgeJournalResponse{})},
+			// A220: a CSR and TPM credential up, the renewed chain down.
+			"EdgeRenewalRequest":  {Fields: jsonFieldsOf(EdgeRenewalRequest{})},
+			"EdgeRenewalResponse": {Fields: jsonFieldsOf(EdgeRenewalResponse{})},
 		},
 	}
 }
@@ -267,6 +270,8 @@ func methodMessageTypes(method string) struct{ request, response string } {
 		return struct{ request, response string }{"FetchWorkloadSVIDRequest", "FetchWorkloadSVIDResponse"}
 	case methodReportEdgeJournal:
 		return struct{ request, response string }{"EdgeJournalRequest", "EdgeJournalResponse"}
+	case methodRenewEdgeDelegation:
+		return struct{ request, response string }{"EdgeRenewalRequest", "EdgeRenewalResponse"}
 	default:
 		return struct{ request, response string }{"", ""}
 	}

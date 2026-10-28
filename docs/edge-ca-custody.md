@@ -243,3 +243,50 @@ only its public root certificate.
 
 Omitting `allowed_key_providers` means exactly `["tpm2"]`. Unknown providers,
 duplicate values, and unapproved PKCS#11/software mint requests fail closed.
+
+## Attested renewal
+
+A segment's hosts can renew their delegation before it expires, without an
+operator carrying a new mint request, when the segment policy allows it:
+
+```json
+{
+  "enabled": true,
+  "attestation_roots_pem": ["-----BEGIN CERTIFICATE-----..."],
+  "permitted_dns_domains": ["edge.example.test"],
+  "renewal_enabled": true,
+  "renewal_window_days": 7
+}
+```
+
+`renewal_window_days` is how long before expiry a renewal opens, 1 to 29
+(0 or omitted means 7). In the console, the same **Configure edge segment** form
+has the renewal checkbox and window. Run the host agent with `--edge-renew`
+beside its usual TPM flags:
+
+```sh
+trstctl-agent --name bunker-01 ... \
+  --edge-renew --edge-renew-before 168h \
+  --edge-key-provider tpm2 \
+  --edge-tenant <tenant-id> --edge-segment <segment-id> \
+  --edge-ca-cert /var/lib/trstctl/edge-ca.crt \
+  --edge-ca-key-handle /var/lib/trstctl/edge-ca.keyref.json \
+  --edge-aik-key-handle /var/lib/trstctl/aik.keyref.json \
+  --edge-aik-cert-chain /var/lib/trstctl/aik-chain.pem
+```
+
+When the certificate in `--edge-ca-cert` is within `--edge-renew-before` of
+expiry, the agent has the same TPM key sign a fresh CSR, certifies it with
+TPM2_Certify over the new challenge, and asks over its mutual-TLS channel. The
+control plane checks it exactly as it checks a mint, against the segment's
+current roots, constraints and provider allowlist. It also checks that the CSR
+is for the delegated CA's key, that the delegation belongs to this agent's
+host, and that the window is open. It then mints a delegation with the old
+one's lifetime, which names the old one in `renewed_from` (the old one shows
+`renewed_by`). The agent replaces `--edge-ca-cert` with the new chain, so
+`--edge-issue` moves to it. The old delegation stays valid until it expires.
+A refused renewal is logged and retried hourly; nothing is extended, so a host
+whose attestation keeps failing sees its delegation expire. An expired,
+revoked or already renewed delegation does not renew. Renewal attests with
+TPM2_Certify, so it serves the TPM2 lane; PKCS#11 and software delegations ask
+again through the attested mint.

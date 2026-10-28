@@ -19655,6 +19655,24 @@ export const messages = {
   "edge.setup.domains": { defaultMessage: "Permitted DNS domains", description: "Comma-separated DNS constraints pinned into delegated CA certificates." },
   "edge.setup.excluded": { defaultMessage: "Excluded DNS domains", description: "Optional comma-separated subtrees that cannot be issued." },
   "edge.setup.providers": { defaultMessage: "Allowed key providers", description: "Closed provider allowlist for delegated CA key custody." },
+  "edge.setup.renewal": {
+    defaultMessage: "Hosts may renew a delegation over the agent channel with a fresh TPM attestation",
+    description: "Opt a segment in to attested edge delegation renewal.",
+  },
+  "edge.setup.renewalWindow": {
+    defaultMessage: "Renewal window, in days before expiry (1 to 29; empty means 7)",
+    description: "How long before expiry a host may renew its delegation.",
+  },
+  "edge.setup.renewalWindowError": {
+    defaultMessage: "Enter a whole number of days from 1 to 29, or leave it empty for 7.",
+    description: "Reject an invalid renewal window.",
+  },
+  "edge.setup.renewalReview": { defaultMessage: "Renewal over the agent channel", description: "Review label for the segment renewal setting." },
+  "edge.setup.renewalOn": { defaultMessage: "On, {days}-day window", description: "Renewal is allowed within the window before expiry." },
+  "edge.setup.renewalOff": { defaultMessage: "Off", description: "Hosts cannot renew over the agent channel." },
+  "edge.policy.renewalHeader": { defaultMessage: "Renewal", description: "Segment policy column for attested renewal." },
+  "edge.delegation.renewedBy": { defaultMessage: "Renewed as {id}", description: "This delegation was renewed by a newer one." },
+  "edge.delegation.renewedFrom": { defaultMessage: "Renews {id}", description: "This delegation renewed an older one." },
   "edge.setup.custodyWarning": {
     defaultMessage: "TPM2 is the default. PKCS#11 and exportable software require an explicit policy exception and carry weaker custody evidence.",
     description: "Explain the assurance cost of widening the allowed key providers.",

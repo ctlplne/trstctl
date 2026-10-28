@@ -230,6 +230,8 @@ func main() {
 	edgeLeafKeyOut := flag.String("edge-leaf-key-out", "edge-leaf.key", "where edge-issue writes the leaf private key (0600)")
 	edgeJournalPath := flag.String("edge-journal", "edge-journal.json", "issuance journal, maintained in the exact shape `trstctl edge delegations reconcile -f` posts")
 	edgeJournalUpload := flag.Bool("edge-journal-upload", false, "send the edge issuance journal (--edge-journal) over the agent channel when the agent connects or reconnects, for the control plane to reconcile")
+	edgeRenew := flag.Bool("edge-renew", false, "renew the delegated edge CA in --edge-ca-cert over the agent channel with a fresh TPM attestation when it nears expiry; uses the --edge-* TPM handle, AIK, tenant and segment flags")
+	edgeRenewBefore := flag.Duration("edge-renew-before", 7*24*time.Hour, "with --edge-renew, how long before the delegation expires the agent asks to renew it")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: unexpected command or argument; use --help for usage")
@@ -249,7 +251,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if handled, err := runEdgeCAOps(edgeCAOptions{
+	edgeOpts := edgeCAOptions{
 		csrMode: *edgeCSRMode, attestMode: *edgeAttestMode, tenantID: *edgeTenant, segmentID: *edgeSegment,
 		commonName: *edgeCN, keyProvider: *edgeKeyProvider, keyGeneration: *edgeKeyGeneration,
 		allowSoftwareKey: *edgeAllowSoftwareKey, keyOut: *edgeKeyOut, keyHandleOut: *edgeKeyHandleOut, csrOut: *edgeCSROut,
@@ -261,7 +263,8 @@ func main() {
 		issueMode: *edgeIssueMode, caCert: *edgeCACert, caKey: *edgeCAKey, caKeyHandle: *edgeCAKeyHandle,
 		leafCN: *edgeIssueCN, leafDNS: *edgeIssueDNS, leafTTL: *edgeIssueTTL,
 		certOut: *edgeCertOut, leafKeyOut: *edgeLeafKeyOut, journal: *edgeJournalPath,
-	}, *commonName); handled {
+	}
+	if handled, err := runEdgeCAOps(edgeOpts, *commonName); handled {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)
@@ -439,6 +442,7 @@ func main() {
 		allowInsecureLoopbackEnrollment:   *allowLoopbackEnrollment,
 		inventoryCertRoots:                splitList(*inventoryCertRoots),
 		edgeJournalUpload:                 edgeJournalUploadPath(*edgeJournalUpload, *edgeJournalPath),
+		edgeRenewal:                       edgeRenewalOptions{edge: edgeOpts, enabled: *edgeRenew, before: *edgeRenewBefore},
 		inventoryOSTrustRoots:             splitList(*inventoryOSTrustRoots),
 		inventoryJavaTrustStores:          splitList(*inventoryJavaTrustStores),
 		inventoryJavaTrustStorePassword:   *inventoryJavaTrustStorePassword,
@@ -570,6 +574,8 @@ type agentOptions struct {
 	// edgeJournalUpload is the edge journal the agent sends when it connects
 	// (A219); empty means it is not sent.
 	edgeJournalUpload string
+	// edgeRenewal renews the delegated edge CA near expiry (A220).
+	edgeRenewal edgeRenewalOptions
 	// inventoryK8sNamespaces widens the k8s-secret source beyond the pod's own
 	// namespace: "all", or a comma-separated list (A19).
 	inventoryK8sNamespaces string
@@ -843,6 +849,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	renewRequested := false
 	var clock clockSkewNotice
 	journalUploader := &edgeJournalUploader{path: o.edgeJournalUpload}
+	renewer := newEdgeRenewer(o.edgeRenewal.edge, o.edgeRenewal.enabled, o.edgeRenewal.before)
 	if resp, herr := a.Heartbeat(ctx, ch, nil); herr != nil {
 		fmt.Fprintln(os.Stderr, "trstctl-agent: initial heartbeat failed:", herr)
 		nextHeartbeat = rotateBackoff(heartbeatFailures, rng)
@@ -850,6 +857,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	} else {
 		fmt.Printf("trstctl-agent: heartbeat ok (tenant %s, next in %ds)\n", resp.TenantID, resp.NextHeartbeatSeconds)
 		journalUploader.afterHeartbeat(ctx, ch.c, true)
+		renewer.afterHeartbeat(ctx, ch.c)
 		nextHeartbeat = heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng)
 		renewRequested = resp.RenewCertificate
 		if notice := clock.observe(resp, time.Now()); notice != "" {
@@ -1034,6 +1042,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 				reconnected := heartbeatFailures > 0
 				heartbeatFailures = 0
 				journalUploader.afterHeartbeat(ctx, ch.c, reconnected)
+				renewer.afterHeartbeat(ctx, ch.c)
 				resetTimer(heartbeatTimer, heartbeatDelaySeconds(resp.NextHeartbeatSeconds, defaultHeartbeatInterval, rng))
 				if notice := clock.observe(resp, time.Now()); notice != "" {
 					fmt.Fprintln(os.Stderr, notice)

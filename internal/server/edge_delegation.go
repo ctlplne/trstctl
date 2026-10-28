@@ -10,8 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
@@ -41,11 +39,6 @@ import (
 //   - local issuances reconcile back on reconnect, re-verified here, and a
 //     leaf outside the delegation's constraints is recorded AS A VIOLATION —
 //     visible, never silently dropped and never silently accepted.
-
-// tpmAttestationAlgorithms are the COSE algorithms accepted from edge TPMs:
-// ES256 (-7) and RS256 (-257), matching the WebAuthn TPM attestation formats
-// deviceattest verifies.
-var tpmAttestationAlgorithms = []int64{-7, -257}
 
 type edgeDelegationService struct {
 	store     *store.Store
@@ -110,6 +103,10 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 					"they become the name constraints of every delegation minted for it", api.ErrEdgeDelegationInvalid)
 		}
 	}
+	if req.RenewalWindowDays < 0 || req.RenewalWindowDays > maxEdgeRenewalWindowDays {
+		return api.EdgeSegmentPolicy{}, fmt.Errorf("%w: renewal_window_days must be between 1 and %d (0 takes the %d-day default)",
+			api.ErrEdgeDelegationInvalid, maxEdgeRenewalWindowDays, defaultEdgeRenewalWindowDays)
+	}
 	if err := s.orch.SetEdgeSegmentPolicy(ctx, tenantID, projections.EdgeSegmentPolicySet{
 		SegmentID:           segmentID,
 		Enabled:             req.Enabled,
@@ -117,6 +114,8 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 		PermittedDNSDomains: req.PermittedDNSDomains,
 		ExcludedDNSDomains:  req.ExcludedDNSDomains,
 		AllowedKeyProviders: allowedProviders,
+		RenewalEnabled:      req.RenewalEnabled,
+		RenewalWindowDays:   req.RenewalWindowDays,
 	}); err != nil {
 		return api.EdgeSegmentPolicy{}, err
 	}
@@ -169,92 +168,22 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 			api.ErrEdgeDelegationRefused, provider)
 	}
 
-	// The attestation gate. The TPM credential must verify against the roots
-	// the segment pinned, over a challenge binding tenant, segment and THIS
-	// CSR. In the TPM2 custody lane the attested key must also BE the CSR key.
-	// For an explicitly allowed PKCS#11/software lane it authenticates the host
-	// and request only; the stored assurance label preserves that distinction.
-	if len(req.AttestationCredentialJSON) == 0 {
-		return api.EdgeDelegation{}, fmt.Errorf(
-			"%w: an un-attested host cannot receive a delegated CA", api.ErrEdgeDelegationRefused)
-	}
-	roots := make([][]byte, 0, len(policy.AttestationRootsPEM))
-	for _, root := range policy.AttestationRootsPEM {
-		roots = append(roots, []byte(root))
-	}
-	challenge := crypto.EdgeAttestationChallenge(tenantID, segmentID, req.CSRDER)
-	attested, err := deviceattest.ParseAndVerifyTPMDeviceAttestation(
-		req.AttestationCredentialJSON, challenge, roots, tpmAttestationAlgorithms, time.Now().UTC())
+	// The attestation gate, shared with renewal (A220). The TPM credential
+	// must verify against the roots the segment pinned, over a challenge
+	// binding tenant, segment and THIS CSR. In the TPM2 custody lane the
+	// attested key must also BE the CSR key. For an explicitly allowed
+	// PKCS#11/software lane it authenticates the host and request only; the
+	// stored assurance label preserves that distinction.
+	attestation, err := deviceattest.VerifyEdgeCAAttestation(req.AttestationCredentialJSON, tenantID, segmentID, req.CSRDER,
+		edgeRootsPEM(policy), provider, time.Now().UTC())
 	if err != nil {
-		return api.EdgeDelegation{}, fmt.Errorf("%w: attestation: %v", api.ErrEdgeDelegationRefused, err)
+		return api.EdgeDelegation{}, edgeAttestationRefusal(err)
 	}
-	csrKeyDigest, err := deviceattest.CSRPublicKeySHA256(req.CSRDER)
-	if err != nil {
-		return api.EdgeDelegation{}, fmt.Errorf("%w: csr: %v", api.ErrEdgeDelegationInvalid, err)
-	}
-	if provider == "tpm2" && !bytesEqualConst(attested.PublicKeySHA256, csrKeyDigest) {
-		return api.EdgeDelegation{}, fmt.Errorf(
-			"%w: the attested key is not the CSR's key; a TPM vouching for a different key "+
-				"vouches for nothing here", api.ErrEdgeDelegationRefused)
-	}
-	if provider == "tpm2" && !attested.DeviceBound {
-		return api.EdgeDelegation{}, fmt.Errorf(
-			"%w: the attested TPM key could leave the TPM (fixedTPM, fixedParent and sensitiveDataOrigin "+
-				"are not all set), so it is not device-bound custody", api.ErrEdgeDelegationRefused)
-	}
-
-	ca, err := s.store.GetCAAuthority(ctx, tenantID, caID)
-	if err != nil {
-		return api.EdgeDelegation{}, err
-	}
-	if ca.Status != "active" {
-		return api.EdgeDelegation{}, fmt.Errorf("%w: CA %s is %s", api.ErrEdgeDelegationRefused, caID, ca.Status)
-	}
-	parentSigner, err := s.signerForAuthority(ctx, ca)
-	if err != nil {
-		return api.EdgeDelegation{}, err
-	}
-	parentDER, err := firstCertDER(ca.CertificatePEM)
-	if err != nil {
-		return api.EdgeDelegation{}, err
-	}
-	issued, err := crypto.MintDelegatedEdgeCAFromCSR(parentDER, parentSigner, req.CSRDER, crypto.EdgeCARequest{
-		CommonName: strings.TrimSpace(req.CommonName),
-		// Constraints come from the segment's POLICY, never from the request:
-		// an edge host does not get to choose its own scope.
-		PermittedDNSDomains: policy.PermittedDNSDomains,
-		ExcludedDNSDomains:  policy.ExcludedDNSDomains,
-		TTL:                 time.Duration(req.TTLSeconds) * time.Second,
+	delegation, err := s.mintAndRecord(ctx, tenantID, edgeMint{
+		segmentID: segmentID, caID: caID, host: host, commonName: strings.TrimSpace(req.CommonName),
+		ttl: time.Duration(req.TTLSeconds) * time.Second, csrDER: req.CSRDER, policy: policy,
+		provider: provider, custody: custody, attestation: attestation,
 	})
-	if err != nil {
-		return api.EdgeDelegation{}, fmt.Errorf("%w: %v", api.ErrEdgeDelegationInvalid, err)
-	}
-	info, err := certinfo.Inspect(issued.CertificateDER)
-	if err != nil {
-		return api.EdgeDelegation{}, err
-	}
-	id := uuid.NewString()
-	if err := s.orch.RecordEdgeDelegationIssued(ctx, tenantID, projections.EdgeDelegationIssued{
-		ID: id, SegmentID: segmentID, CAID: caID, Host: host,
-		CommonName: issued.CommonName, Serial: issued.Serial,
-		// Persist the exact chain returned to the host. The event is the
-		// recovery source after a lost mint response or a projection rebuild;
-		// storing only the delegated certificate made the parent disappear.
-		CertificatePEM:        string(issued.CertificatePEM) + ca.CertificatePEM,
-		PermittedDNSDomains:   policy.PermittedDNSDomains,
-		ExcludedDNSDomains:    policy.ExcludedDNSDomains,
-		AttestedKeySHA256:     crypto.SHA256Hex(attested.PublicKeySHA256),
-		AttestationCertSHA256: crypto.SHA256Hex(attested.AttestationCertificateSHA256),
-		CSRKeySHA256:          crypto.SHA256Hex(csrKeyDigest),
-		KeyProvider:           provider,
-		KeyStorage:            custody.storage,
-		KeyExportable:         custody.exportable,
-		CustodyAssurance:      custody.assurance,
-		NotBefore:             info.NotBefore, NotAfter: info.NotAfter,
-	}); err != nil {
-		return api.EdgeDelegation{}, err
-	}
-	delegation, _, err := s.store.GetEdgeDelegation(ctx, tenantID, id)
 	if err != nil {
 		return api.EdgeDelegation{}, err
 	}
@@ -269,11 +198,18 @@ func (s *edgeDelegationService) ListDelegations(ctx context.Context, tenantID st
 	now := time.Now().UTC()
 	out := make([]api.EdgeDelegation, 0, len(rows))
 	parentChains := make(map[string]string)
+	renewedBy := map[string]string{}
+	for _, d := range rows {
+		if d.RenewedFrom != "" {
+			renewedBy[d.RenewedFrom] = d.ID
+		}
+	}
 	for _, d := range rows {
 		view, err := s.edgeDelegationViewWithChain(ctx, tenantID, d, now, parentChains)
 		if err != nil {
 			return nil, err
 		}
+		view.RenewedBy = renewedBy[d.ID]
 		out = append(out, view)
 	}
 	return out, nil
@@ -293,6 +229,9 @@ func (s *edgeDelegationService) GetDelegation(ctx context.Context, tenantID, id 
 	}
 	view, err := s.edgeDelegationViewWithChain(ctx, tenantID, d, time.Now().UTC(), nil)
 	if err != nil {
+		return api.EdgeDelegationDetail{}, err
+	}
+	if view.RenewedBy, err = s.renewedBy(ctx, tenantID, id); err != nil {
 		return api.EdgeDelegationDetail{}, err
 	}
 	detail := api.EdgeDelegationDetail{Delegation: view}
@@ -467,6 +406,8 @@ func (s *edgeDelegationService) policyView(ctx context.Context, tenantID string,
 		PermittedDNSDomains: p.PermittedDNSDomains,
 		ExcludedDNSDomains:  p.ExcludedDNSDomains,
 		AllowedKeyProviders: edgeProvidersOrDefault(p.AllowedKeyProviders),
+		RenewalEnabled:      p.RenewalEnabled,
+		RenewalWindowDays:   int(edgeRenewalWindow(p) / (24 * time.Hour)),
 		UpdatedAt:           p.UpdatedAt,
 	}
 }
@@ -531,6 +472,7 @@ func edgeDelegationView(d store.EdgeDelegation, now time.Time) api.EdgeDelegatio
 		Status:              status,
 		NotBefore:           d.NotBefore, NotAfter: d.NotAfter,
 		RevokedAt: d.RevokedAt, RevokeReason: d.RevokeReason,
+		RenewedFrom: d.RenewedFrom,
 	}
 }
 
@@ -596,15 +538,4 @@ func containsEdgeProvider(allowed []string, provider string) bool {
 		}
 	}
 	return false
-}
-
-func bytesEqualConst(a, b []byte) bool {
-	if len(a) != len(b) || len(a) == 0 {
-		return false
-	}
-	var v byte
-	for i := range a {
-		v |= a[i] ^ b[i]
-	}
-	return v == 0
 }

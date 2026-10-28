@@ -649,9 +649,20 @@ never live in the API process. What you can do end to end against the running bi
   issued it, as the agent. Only a host-role agent whose channel certificate
   names the delegation's host reaches it, and `<journal>.uploaded` records the
   acknowledged prefix, so only new entries travel. Without the flag the CLI
-  or console reconcile stays the path; there is no
-  automatic renewal of a delegation — expiry is the design, and a host that
-  needs longer asks again through the same attested flow. The exact TPM2,
+  or console reconcile stays the path. Renewal is opt-in twice: the segment
+  policy's `renewal_enabled` (with `renewal_window_days`, default 7) and the
+  host agent's `--edge-renew`. Inside the window the TPM key signs a fresh CSR,
+  TPM2_Certify vouches for it over the new challenge, and the agent asks over
+  its channel; the control plane holds the renewal to the mint's gate (the
+  same attestation verifier, the segment's current roots, constraints and
+  provider allowlist), requires the same delegated CA key, and mints a
+  delegation with the old one's lifetime that names it in `renewed_from`. The
+  30-day bound stays: an expired, revoked or already renewed delegation does
+  not renew, and a refused attestation leaves the delegation to expire.
+  Renewal attests with TPM2_Certify, so it serves the TPM2 lane; a PKCS#11 or
+  software delegation asks again through the attested mint. Proven against
+  the TPM fixture end to end and, for the attestation itself, against swtpm.
+  The exact TPM2,
   PKCS#11, and software-exception command/configuration lanes are documented in
   [Disconnected edge CA key custody](edge-ca-custody.md).
   Authority agreement (C4): the pipeline now has a PRODUCER. A scheduled round

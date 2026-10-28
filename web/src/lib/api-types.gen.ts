@@ -4022,6 +4022,8 @@ export interface EdgeDelegation {
   not_after: string;
   not_before: string;
   permitted_dns_domains: string[];
+  renewed_by?: string;
+  renewed_from?: string;
   revoke_reason?: string;
   revoked_at?: string;
   segment_id: string;
@@ -4085,6 +4087,8 @@ export interface EdgeSegmentPolicy {
   enabled: boolean;
   excluded_dns_domains?: string[];
   permitted_dns_domains?: string[];
+  renewal_enabled: boolean;
+  renewal_window_days: number;
   segment_id: string;
   segment_name?: string;
   updated_at: string;
@@ -4096,6 +4100,8 @@ export interface EdgeSegmentPolicyInput {
   enabled: boolean;
   excluded_dns_domains?: string[];
   permitted_dns_domains?: string[];
+  renewal_enabled?: boolean;
+  renewal_window_days?: number;
   segment_id?: string;
 }
 

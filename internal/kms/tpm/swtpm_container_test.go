@@ -51,8 +51,9 @@ func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
 		"grep -q 'BEGIN PUBLIC KEY' /tmp/edge-public.pem",
 		// The served attestation parser against TPM2_Certify from the same swtpm,
 		// including the device-bound attribute check (A131).
-		"CGO_ENABLED=0 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test ./internal/crypto/deviceattest -run TestSwtpmEdgeTPMCertifiesTheActualCSRKey -count=1 -v | tee /tmp/swtpm-attest-test.txt",
+		"CGO_ENABLED=0 GOCACHE=/tmp/gocache GOMODCACHE=/gomodcache GOPROXY=off go test ./internal/crypto/deviceattest -run 'TestSwtpmEdgeTPMCertifiesTheActualCSRKey|TestSwtpmEdgeRenewalCertifiesTheSameKeyAgain' -count=1 -v | tee /tmp/swtpm-attest-test.txt",
 		"grep -q SWTPM_EDGE_CERTIFY_OK /tmp/swtpm-attest-test.txt",
+		"grep -q SWTPM_EDGE_RENEWAL_OK /tmp/swtpm-attest-test.txt",
 	}, "\n")
 	args := []string{
 		"run", "--rm", "-e", "TRSTCTL_SWTPM_INNER=1",
@@ -68,6 +69,9 @@ func TestSwtpmContainerEdgeCAHandle(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "SWTPM_EDGE_CERTIFY_OK") {
 		t.Fatalf("swtpm attestation journey did not report success:\n%s", out)
+	}
+	if !strings.Contains(string(out), "SWTPM_EDGE_RENEWAL_OK") {
+		t.Fatalf("swtpm renewal attestation did not report success:\n%s", out)
 	}
 }
 

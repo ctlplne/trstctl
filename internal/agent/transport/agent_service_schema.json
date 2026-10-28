@@ -145,6 +145,49 @@
         }
       ]
     },
+    "EdgeRenewalRequest": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "serial",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "csr_der",
+          "presence": "required"
+        },
+        {
+          "go_type": "bytes_base64",
+          "name": "attestation_credential_json",
+          "presence": "required"
+        }
+      ]
+    },
+    "EdgeRenewalResponse": {
+      "fields": [
+        {
+          "go_type": "string",
+          "name": "delegation_id",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "serial",
+          "presence": "required"
+        },
+        {
+          "go_type": "string",
+          "name": "certificate_pem",
+          "presence": "required"
+        },
+        {
+          "go_type": "time.Time",
+          "name": "not_after",
+          "presence": "required"
+        }
+      ]
+    },
     "EnrollmentProxyReport": {
       "fields": [
         {
@@ -962,6 +1005,12 @@
         "name": "ReportEdgeJournal",
         "request": "EdgeJournalRequest",
         "response": "EdgeJournalResponse"
+      },
+      {
+        "full_method": "/trstctl.agent.v1.AgentService/RenewEdgeDelegation",
+        "name": "RenewEdgeDelegation",
+        "request": "EdgeRenewalRequest",
+        "response": "EdgeRenewalResponse"
       }
     ],
     "name": "trstctl.agent.v1.AgentService"

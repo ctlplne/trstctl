@@ -789,7 +789,7 @@ type Server struct {
 	agentSvc       agentChannelService
 	// edgeDelegations is the edge delegation service the API serves, kept so a
 	// host's edge journal from the agent channel reconciles through it (A219).
-	edgeDelegations         api.EdgeDelegationService
+	edgeDelegations         *edgeDelegationService
 	agentChannelAddr        string
 	agentHTTPRenewalAddr    string
 	estMTLSAddr             string
@@ -2512,6 +2512,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 		// A219: a host's edge journal reconciles through the edge delegation
 		// service the reconcile route uses.
 		reconcileEdgeJournal: s.reconcileEdgeJournal,
+		renewEdgeDelegation:  s.renewEdgeDelegation,
 	}
 	wrapped, err := newBulkheadedAgentService(agentSvc, s.bulk.Pool(bulkhead.SubsystemAgent), s.agentMetrics)
 	if err != nil {

@@ -798,7 +798,11 @@ type EdgeSegmentPolicySet struct {
 	PermittedDNSDomains []string `json:"permitted_dns_domains,omitempty"`
 	ExcludedDNSDomains  []string `json:"excluded_dns_domains,omitempty"`
 	AllowedKeyProviders []string `json:"allowed_key_providers,omitempty"`
-	SetBy               string   `json:"set_by,omitempty"`
+	// RenewalEnabled and RenewalWindowDays (A220) let hosts renew over the
+	// agent channel; absent on older events, which therefore stay off.
+	RenewalEnabled    bool   `json:"renewal_enabled,omitempty"`
+	RenewalWindowDays int    `json:"renewal_window_days,omitempty"`
+	SetBy             string `json:"set_by,omitempty"`
 }
 
 type edgeSegmentPolicySetV1 struct {
@@ -830,6 +834,9 @@ type EdgeDelegationIssued struct {
 	CustodyAssurance      string    `json:"custody_assurance,omitempty"`
 	NotBefore             time.Time `json:"not_before"`
 	NotAfter              time.Time `json:"not_after"`
+	// RenewedFrom is the delegation a host renewed over the agent channel with
+	// fresh attestation (A220); empty for a mint.
+	RenewedFrom string `json:"renewed_from,omitempty"`
 }
 
 type edgeDelegationIssuedV1 struct {
@@ -5288,7 +5295,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			PermittedDNSDomains: pl.PermittedDNSDomains,
 			ExcludedDNSDomains:  pl.ExcludedDNSDomains,
 			AllowedKeyProviders: pl.AllowedKeyProviders,
-			UpdatedAt:           e.Time,
+			RenewalEnabled:      pl.RenewalEnabled, RenewalWindowDays: pl.RenewalWindowDays,
+			UpdatedAt: e.Time,
 		}, e.Sequence)
 	case EventEdgeDelegationIssued:
 		var pl EdgeDelegationIssued
@@ -5304,7 +5312,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			AttestedKeySHA256:   pl.AttestedKeySHA256, AttestationCertSHA256: pl.AttestationCertSHA256,
 			CSRKeySHA256: pl.CSRKeySHA256, KeyProvider: pl.KeyProvider, KeyStorage: pl.KeyStorage,
 			KeyExportable: pl.KeyExportable, CustodyAssurance: pl.CustodyAssurance,
-			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, CreatedAt: e.Time,
+			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, RenewedFrom: pl.RenewedFrom, CreatedAt: e.Time,
 		}, e.Sequence); err != nil {
 			return err
 		}

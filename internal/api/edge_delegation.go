@@ -57,6 +57,11 @@ type EdgeSegmentPolicyRequest struct {
 	// AllowedKeyProviders is a closed, explicit custody allowlist. Empty means
 	// TPM2 only; adding software is a visible policy exception, never a fallback.
 	AllowedKeyProviders []string `json:"allowed_key_providers,omitempty"`
+	// RenewalEnabled lets the segment's hosts renew a delegation over the
+	// agent channel with fresh attestation, within RenewalWindowDays of
+	// expiry (0 takes the 7-day default). Off unless set.
+	RenewalEnabled    bool `json:"renewal_enabled,omitempty"`
+	RenewalWindowDays int  `json:"renewal_window_days,omitempty"`
 }
 
 type EdgeSegmentPolicy struct {
@@ -65,11 +70,14 @@ type EdgeSegmentPolicy struct {
 	Enabled     bool   `json:"enabled"`
 	// AttestationRoots is a COUNT. The roots themselves are certificates, not
 	// secrets, but echoing them back adds nothing an operator needs here.
-	AttestationRoots    int       `json:"attestation_roots"`
-	PermittedDNSDomains []string  `json:"permitted_dns_domains,omitempty"`
-	ExcludedDNSDomains  []string  `json:"excluded_dns_domains,omitempty"`
-	AllowedKeyProviders []string  `json:"allowed_key_providers"`
-	UpdatedAt           time.Time `json:"updated_at"`
+	AttestationRoots    int      `json:"attestation_roots"`
+	PermittedDNSDomains []string `json:"permitted_dns_domains,omitempty"`
+	ExcludedDNSDomains  []string `json:"excluded_dns_domains,omitempty"`
+	AllowedKeyProviders []string `json:"allowed_key_providers"`
+	RenewalEnabled      bool     `json:"renewal_enabled"`
+	// RenewalWindowDays is the effective window, the default when unset.
+	RenewalWindowDays int       `json:"renewal_window_days"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 type EdgeSegmentPolicyList struct {
@@ -118,6 +126,10 @@ type EdgeDelegation struct {
 	NotAfter            time.Time  `json:"not_after"`
 	RevokedAt           *time.Time `json:"revoked_at,omitempty"`
 	RevokeReason        string     `json:"revoke_reason,omitempty"`
+	// RenewedFrom is the delegation this one renewed; RenewedBy the one that
+	// renewed this (A220).
+	RenewedFrom string `json:"renewed_from,omitempty"`
+	RenewedBy   string `json:"renewed_by,omitempty"`
 }
 
 type EdgeDelegationList struct {

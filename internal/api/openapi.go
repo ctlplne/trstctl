@@ -5895,8 +5895,10 @@ func componentSchemas() map[string]*Schema {
 		"permitted_dns_domains": {Type: "array", Items: str()},
 		"excluded_dns_domains":  {Type: "array", Items: str()},
 		"allowed_key_providers": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
+		"renewal_enabled":       {Type: "boolean", Description: "hosts may renew a delegation over the agent channel with fresh attestation"},
+		"renewal_window_days":   {Type: "integer", Description: "how many days before expiry a renewal opens"},
 		"updated_at":            {Type: "string", Format: "date-time"},
-	}, "segment_id", "enabled", "attestation_roots", "allowed_key_providers", "updated_at")
+	}, "segment_id", "enabled", "attestation_roots", "allowed_key_providers", "renewal_enabled", "renewal_window_days", "updated_at")
 	edgeSegmentPolicyInput := object(map[string]*Schema{
 		"segment_id":            str(),
 		"enabled":               {Type: "boolean"},
@@ -5904,6 +5906,8 @@ func componentSchemas() map[string]*Schema {
 		"permitted_dns_domains": {Type: "array", Items: str()},
 		"excluded_dns_domains":  {Type: "array", Items: str()},
 		"allowed_key_providers": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
+		"renewal_enabled":       {Type: "boolean", Description: "let hosts renew a delegation over the agent channel with fresh attestation (off by default)"},
+		"renewal_window_days":   {Type: "integer", Description: "days before expiry a renewal opens, 1-29; 0 takes the 7-day default"},
 	}, "enabled")
 	edgeDelegationSchema := object(map[string]*Schema{
 		"id": str(), "segment_id": str(), "ca_id": str(), "host": str(),
@@ -5921,6 +5925,8 @@ func componentSchemas() map[string]*Schema {
 		"not_after":             {Type: "string", Format: "date-time"},
 		"revoked_at":            {Type: "string", Format: "date-time"},
 		"revoke_reason":         str(),
+		"renewed_from":          {Type: "string", Description: "the delegation this one renewed"},
+		"renewed_by":            {Type: "string", Description: "the delegation that renewed this one"},
 	}, "id", "segment_id", "ca_id", "host", "common_name", "serial", "permitted_dns_domains", "csr_key_sha256", "key_provider", "key_storage", "key_exportable", "custody_assurance", "status", "not_before", "not_after")
 	edgeDelegationMintInput := object(map[string]*Schema{
 		"segment_id": str(), "ca_id": str(), "host": str(), "common_name": str(),

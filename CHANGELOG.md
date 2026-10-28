@@ -2,6 +2,14 @@
 
 ### Added
 
+- Attested edge delegation renewal: a segment policy can set `renewal_enabled` (with
+  `renewal_window_days`, default 7), and a host agent run with `--edge-renew` renews its delegated
+  edge CA over the agent channel inside that window. The TPM key signs a fresh CSR and TPM2_Certify
+  vouches for it over the new challenge; the control plane holds the renewal to the mint's gate
+  (one attestation verifier for both), requires the same delegated CA key, and mints a delegation
+  with the old one's lifetime, linked by `renewed_from` and `renewed_by`. An expired, revoked or
+  already renewed delegation does not renew, and a refused attestation leaves it to expire. The
+  console's segment form has the renewal setting and the delegation list shows renewals.
 - Edge journal upload: a host agent run with `--edge-journal-upload` sends its edge issuance journal
   over the mutual-TLS agent channel when it connects, after a heartbeat that follows failed ones,
   and when the journal grows, so issuances made while the host was offline reconcile without an

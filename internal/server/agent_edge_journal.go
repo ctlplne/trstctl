@@ -145,3 +145,68 @@ func (s *Server) reconcileEdgeJournal(ctx context.Context, tenantID, host string
 	}
 	return out, nil
 }
+
+// RenewEdgeDelegation implements transport.AgentEdgeRenewalServer (A220): a
+// host-role agent renews the delegation whose certificate it holds, for its own
+// host only.
+func (a *agentService) RenewEdgeDelegation(ctx context.Context, req *transport.EdgeRenewalRequest) (*transport.EdgeRenewalResponse, error) {
+	ctx, info, release, err := a.beginPeerWork(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	if !agentHasRole(info.Roles, mtls.AgentRoleHost) {
+		return nil, status.Error(codes.PermissionDenied, "edge delegations renew from host agents")
+	}
+	if a.renewEdgeDelegation == nil {
+		return nil, status.Error(codes.FailedPrecondition, errEdgeJournalNotServed.Error())
+	}
+	if _, err := a.store.GetAgent(ctx, info.TenantID, agentRowID(info.TenantID, info.CommonName)); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.FailedPrecondition, "send an authenticated heartbeat before an edge renewal")
+		}
+		return nil, status.Error(codes.Unavailable, "agent registration state is unavailable; retry later")
+	}
+	if req == nil || strings.TrimSpace(req.Serial) == "" || len(req.CSRDER) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "an edge renewal needs the delegation serial and a CSR")
+	}
+	if len(req.CSRDER) > transport.EdgeJournalMaxCertificateBytes || len(req.AttestationCredentialJSON) > 1<<20 {
+		return nil, status.Error(codes.InvalidArgument, "an edge renewal request is too large")
+	}
+	out, err := a.renewEdgeDelegation(ctx, info.TenantID, info.CommonName, req)
+	switch {
+	case err == nil:
+		return out, nil
+	case errors.Is(err, api.ErrEdgeDelegationNotFound):
+		return nil, status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, api.ErrEdgeDelegationInvalid):
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, api.ErrEdgeDelegationRefused):
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	case errors.Is(err, errEdgeRenewalTooEarly):
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, errEdgeJournalNotServed):
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	default:
+		if a.logger != nil {
+			a.logger.Warn("edge delegation renewal failed", "tenant_id", info.TenantID, "error", err)
+		}
+		return nil, status.Error(codes.Unavailable, "the edge delegation could not be renewed; retry later")
+	}
+}
+
+// renewEdgeDelegation renews through the edge delegation service as the agent.
+func (s *Server) renewEdgeDelegation(ctx context.Context, tenantID, host string, req *transport.EdgeRenewalRequest) (*transport.EdgeRenewalResponse, error) {
+	if s.edgeDelegations == nil {
+		return nil, errEdgeJournalNotServed
+	}
+	actorCtx := events.ContextWithActor(ctx, events.Actor{Subject: "agent:" + host, Roles: []string{"agent"}})
+	renewed, err := s.edgeDelegations.RenewDelegation(actorCtx, tenantID, edgeRenewal{
+		host: host, serial: req.Serial, csrDER: req.CSRDER, credentialJSON: req.AttestationCredentialJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &transport.EdgeRenewalResponse{DelegationID: renewed.ID, Serial: renewed.Serial,
+		CertificatePEM: renewed.CertificatePEM, NotAfter: renewed.NotAfter}, nil
+}

@@ -120,22 +120,11 @@ func runEdgeAttest(opts edgeCAOptions) error {
 	if err != nil {
 		return fmt.Errorf("read edge CA CSR: %w", err)
 	}
-	readHandle := func(path string) (crypto.EdgeCAKeyHandle, error) {
-		raw, err := os.ReadFile(path) // #nosec G304 -- explicit operator file path
-		if err != nil {
-			return crypto.EdgeCAKeyHandle{}, err
-		}
-		var handle crypto.EdgeCAKeyHandle
-		if err := json.Unmarshal(raw, &handle); err != nil {
-			return crypto.EdgeCAKeyHandle{}, err
-		}
-		return handle, nil
-	}
-	edgeHandle, err := readHandle(opts.caKeyHandle)
+	edgeHandle, err := readEdgeKeyHandle(opts.caKeyHandle)
 	if err != nil {
 		return fmt.Errorf("read edge TPM handle: %w", err)
 	}
-	aikHandle, err := readHandle(opts.aikKeyHandle)
+	aikHandle, err := readEdgeKeyHandle(opts.aikKeyHandle)
 	if err != nil {
 		return fmt.Errorf("read AIK TPM handle: %w", err)
 	}
