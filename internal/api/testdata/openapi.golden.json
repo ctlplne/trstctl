@@ -11833,6 +11833,11 @@
           "artifact_ref": {
             "type": "string"
           },
+          "artifact_removal_deferred_until": {
+            "description": "until when the archive's S3 Object Lock keeps the report from the report retention",
+            "format": "date-time",
+            "type": "string"
+          },
           "attempt": {
             "type": "integer"
           },

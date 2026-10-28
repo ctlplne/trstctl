@@ -2,6 +2,13 @@
 
 ### Added
 
+- S3 Object Lock on the archives trstctl writes: with `object_store.object_lock_mode`
+  (`GOVERNANCE` or `COMPLIANCE`) and `object_lock_retention` (at least `24h`), every
+  audit archive segment, report artifact and backup set written to the object store
+  carries that retention. `trstctl doctor` checks the bucket has Object Lock enabled
+  (OBJ-LOCK). The report retention reads a report object's lock first and leaves a
+  protected report in place, recording `artifact_removal_deferred_until` on its run
+  (a day at a time under a legal hold) and removing it once the lock has ended.
 - Tenant custom roles: `PUT /api/v1/access/roles/{name}` defines a role as a named
   subset of the permissions built-in roles grant (only from permissions the caller
   holds), `DELETE` removes one no member holds, and `GET /api/v1/access/roles` lists

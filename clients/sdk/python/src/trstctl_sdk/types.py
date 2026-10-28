@@ -4007,6 +4007,7 @@ ComplianceReportRun = TypedDict(
         'artifact_digest': str,
         'artifact_expired_at': str,
         'artifact_ref': str,
+        'artifact_removal_deferred_until': str,
         'attempt': int,
         'completed_at': str,
         'created_at': str,

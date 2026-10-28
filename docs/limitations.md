@@ -1459,8 +1459,14 @@ never live in the API process. What you can do end to end against the running bi
   and finding the report gone. A removal the object store refuses, or
   acknowledges without applying, retries in the outbox and the run stays
   unexpired. The run receipt and its SHA-256 remain after removal; a backup
-  taken before it still holds the report. Object Lock retention and legal holds
-  set on the bucket itself are what comes next.
+  taken before it still holds the report. With the archive object store under
+  S3 Object Lock (`object_store.object_lock_mode` and
+  `object_lock_retention`), every audit archive segment, report and backup set
+  trstctl writes carries that retention, and the report retention reads an
+  object's lock before removing it: a report the lock protects stays, and its
+  run shows until when (a day at a time under a legal hold on the object). A
+  legal hold a person places on one archive object from trstctl is what comes
+  next.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
   streams. The JWS response and browser download are one versioned JSON envelope
@@ -3778,7 +3784,8 @@ than sending an operator looking for a credential that was never there.
   prefix the tenancy router resolves (`tenant/<id>/`, or `silo/<id>/` for an
   isolated tenant), and the doctor's operator-run isolation suite proves that
   confinement against the deployment's configured store (OBJ-1 to OBJ-3 in
-  `docs/operations/doctor.md`). The silo provisioner itself is not wired into
+  `docs/operations/doctor.md`; OBJ-LOCK checks the bucket has Object Lock when
+  the deployment writes under it). The silo provisioner itself is not wired into
   the served binary: its planes, the object-prefix one included, have only
   in-memory implementations used by tests, so moving a tenant between isolation
   models neither creates nor clears anything in the store, and objects keep the

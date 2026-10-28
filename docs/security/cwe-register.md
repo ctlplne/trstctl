@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1896 annotated sites across 29 rules. Each row is
+1902 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -468,11 +468,12 @@ not this file.
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
 
-### G107 — CWE-88 Argument injection (variable URL request) (7 sites)
+### G107 — CWE-88 Argument injection (variable URL request) (8 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:586` | loopback-only assembled test listener (CWE-918) |
+| `internal/objectstore/minio_lock_test.go:56` | loopback URL of the container this test started (CWE-88) |
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:53` | the served test harness URL |
 | `internal/server/ca_hierarchy_pqc_served_test.go:55` | the served test harness URL |
@@ -502,7 +503,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (295 sites)
+### G115 — CWE-190 Integer overflow or wraparound (296 sites)
 
 | Location | Reason |
 |---|---|
@@ -590,7 +591,7 @@ not this file.
 | `internal/mdm/challenge/challenge.go:79` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
 | `internal/mdm/challenge/challenge.go:90` | unix-epoch seconds round-trip; in int64 range until year 292e9 (CWE-190) |
 | `internal/netsec/relay_egress.go:157` | LookupPort returned 0-65535, checked above (CWE-190) |
-| `internal/objectstore/s3.go:385` | page is at most listPageSize (CWE-190) |
+| `internal/objectstore/s3.go:405` | page is at most listPageSize (CWE-190) |
 | `internal/observ/trace.go:228` | deliberate byte packing of a trace id (CWE-190) |
 | `internal/orchestrator/discovery.go:365` | retained sequence was checked against MaxInt64 before conversion. |
 | `internal/orchestrator/main_test.go:74` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -605,10 +606,10 @@ not this file.
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6392` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6409` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6422` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6450` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6393` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6410` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6423` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6451` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -680,13 +681,14 @@ not this file.
 | `internal/store/ca.go:557` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/ca.go:637` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/certificate_reprotection_recovery.go:32` | MaxInt64 bound above rejects narrowing (CWE-190). |
-| `internal/store/compliance_report_retention.go:59` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:66` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:90` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:123` | event sequences fit int64 (CWE-190) |
-| `internal/store/compliance_report_retention.go:137` | non-negative by constraint (CWE-190) |
-| `internal/store/compliance_report_run.go:293` | non-negative by constraint (CWE-190) |
-| `internal/store/compliance_report_run.go:311` | event sequence is a positive PostgreSQL bigint. |
+| `internal/store/compliance_report_retention.go:62` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:69` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:93` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:125` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:145` | event sequences fit int64 (CWE-190) |
+| `internal/store/compliance_report_retention.go:159` | non-negative by constraint (CWE-190) |
+| `internal/store/compliance_report_run.go:294` | non-negative by constraint (CWE-190) |
+| `internal/store/compliance_report_run.go:312` | event sequence is a positive PostgreSQL bigint. |
 | `internal/store/compliance_report_run_lock.go:33` | advisory-lock keys intentionally use all 64 hash bits, including the sign bit. |
 | `internal/store/connector_lifecycle.go:468` | JetStream sequence fits PostgreSQL bigint by construction (CWE-190) |
 | `internal/store/connector_lifecycle.go:522` | constrained positive PostgreSQL bigint (CWE-190) |
@@ -909,7 +911,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (234 sites)
+### G204 — CWE-78 OS command injection (238 sites)
 
 | Location | Reason |
 |---|---|
@@ -1011,6 +1013,10 @@ not this file.
 | `internal/kms/wrapadapter/localstack_signer_test.go:215` | builds the repository's own command (CWE-78) |
 | `internal/kms/wrapadapter/softhsm_signer_container_test.go:30` | fixed docker invocation for the acceptance test (CWE-78) |
 | `internal/kms/wrapadapter/softhsm_signer_real_test.go:114` | fixed SoftHSM tool inside the test container (CWE-78) |
+| `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
+| `internal/objectstore/minio_lock_test.go:48` | test removes the container it started (CWE-78) |
+| `internal/objectstore/minio_lock_test.go:49` | test inspects the container it started (CWE-78) |
+| `internal/objectstore/minio_lock_test.go:64` | test reads the container it started (CWE-78) |
 | `internal/perf/live.go:755` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/perf/live.go:919` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/pqc/native_probe_test.go:74` | pinned local stock executable and owned loopback fixture. |
@@ -1504,7 +1510,7 @@ not this file.
 | `internal/config/config.go:3035` | the config loader reading the operator's own config file (CWE-22) |
 | `internal/config/config.go:4323` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/config/config.go:4342` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/config/object_store.go:127` | the operator's own config file (CWE-22) |
+| `internal/config/object_store.go:165` | the operator's own config file (CWE-22) |
 | `internal/connector/device_proof_census_test.go:47` | fixed in-tree path derived from the census (CWE-22) |
 | `internal/connector/localops.go:280` | operator-configured local-ops connector path; local file deploy is the feature (CWE-22) |
 | `internal/connector/localops.go:372` | clean is confined to operator-approved local roots above (CWE-22) |
@@ -2008,12 +2014,13 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (10 sites)
+### G702 — CWE-78 OS command injection (taint) (11 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
+| `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |

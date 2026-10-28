@@ -43,6 +43,19 @@ type ObjectStore struct {
 	// MaxInFlight bounds concurrent calls per process (default 8); a call over
 	// the bound is refused at once rather than queued.
 	MaxInFlight int `json:"max_in_flight,omitempty"`
+	// ObjectLockMode and ObjectLockRetention give every object trstctl writes
+	// S3 Object Lock retention (A208): GOVERNANCE or COMPLIANCE for at least a
+	// day. Both or neither; the bucket must have Object Lock enabled.
+	ObjectLockMode      string `json:"object_lock_mode,omitempty"`
+	ObjectLockRetention string `json:"object_lock_retention,omitempty"`
+}
+
+// ObjectLockRetentionDuration parses ObjectLockRetention; empty means no lock.
+func (o ObjectStore) ObjectLockRetentionDuration() (time.Duration, error) {
+	if strings.TrimSpace(o.ObjectLockRetention) == "" {
+		return 0, nil
+	}
+	return time.ParseDuration(strings.TrimSpace(o.ObjectLockRetention))
 }
 
 // Configured reports whether any object-store setting is present.
@@ -72,6 +85,8 @@ func applyObjectStoreEnv(getenv func(string) string, o *ObjectStore) {
 	setBool(getenv, "TRSTCTL_OBJECT_STORE_ALLOW_INSECURE_LOOPBACK", &o.AllowInsecureLoopback)
 	setString(getenv, "TRSTCTL_OBJECT_STORE_TIMEOUT", &o.Timeout)
 	setInt(getenv, "TRSTCTL_OBJECT_STORE_MAX_IN_FLIGHT", &o.MaxInFlight)
+	setString(getenv, "TRSTCTL_OBJECT_STORE_OBJECT_LOCK_MODE", &o.ObjectLockMode)
+	setString(getenv, "TRSTCTL_OBJECT_STORE_OBJECT_LOCK_RETENTION", &o.ObjectLockRetention)
 }
 
 func validateObjectStore(o ObjectStore) []error {
@@ -113,6 +128,29 @@ func validateObjectStore(o ObjectStore) []error {
 	}
 	if o.MaxInFlight < 0 || o.MaxInFlight > 64 {
 		errs = append(errs, fmt.Errorf("object_store.max_in_flight %d must be between 1 and 64 (0 means the default)", o.MaxInFlight))
+	}
+	errs = append(errs, validateObjectLock(o)...)
+	return errs
+}
+
+func validateObjectLock(o ObjectStore) []error {
+	mode, retention := strings.TrimSpace(o.ObjectLockMode), strings.TrimSpace(o.ObjectLockRetention)
+	if mode == "" && retention == "" {
+		return nil
+	}
+	var errs []error
+	if mode == "" || retention == "" {
+		errs = append(errs, errors.New("object_store.object_lock_mode and object_lock_retention are set together"))
+	}
+	if mode != "" && !strings.EqualFold(mode, "GOVERNANCE") && !strings.EqualFold(mode, "COMPLIANCE") {
+		errs = append(errs, fmt.Errorf("object_store.object_lock_mode %q must be GOVERNANCE or COMPLIANCE", mode))
+	}
+	if retention != "" {
+		if d, err := o.ObjectLockRetentionDuration(); err != nil {
+			errs = append(errs, fmt.Errorf("object_store.object_lock_retention: %w", err))
+		} else if d < 24*time.Hour {
+			errs = append(errs, errors.New("object_store.object_lock_retention must be at least 24h"))
+		}
 	}
 	return errs
 }

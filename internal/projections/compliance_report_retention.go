@@ -22,6 +22,9 @@ const (
 	EventComplianceReportArtifactExpiryRequested = "compliance.report_run.artifact_expiry_requested"
 	EventComplianceReportArtifactExpired         = "compliance.report_run.artifact_expired"
 	complianceReportLegalHoldReasonMax           = 512
+	// EventComplianceReportArtifactExpiryDeferred records a removal the
+	// archive's S3 Object Lock refused (A208).
+	EventComplianceReportArtifactExpiryDeferred = "compliance.report_run.artifact_expiry_deferred"
 )
 
 // ComplianceReportLegalHold is a hold placed or released; the person is the
@@ -39,6 +42,16 @@ type ComplianceReportArtifactExpiry struct {
 	RetentionSeconds int64 `json:"retention_seconds"`
 	// ExpiredAt is when the report was confirmed gone (expired events only).
 	ExpiredAt *time.Time `json:"expired_at,omitempty"`
+}
+
+// ComplianceReportArtifactExpiryDeferred is a removal the archive's Object
+// Lock refused: the retention asks again at LockedUntil (the retention's end,
+// or a day later under a legal hold, which has no end of its own).
+type ComplianceReportArtifactExpiryDeferred struct {
+	RunID       string    `json:"run_id"`
+	Digest      string    `json:"digest"`
+	LockedUntil time.Time `json:"locked_until"`
+	LegalHold   bool      `json:"legal_hold,omitempty"`
 }
 
 // ValidateComplianceReportLegalHold checks a hold event.
@@ -79,6 +92,15 @@ func (p *Projector) applyComplianceReportRetentionTx(ctx context.Context, tx pgx
 			return true, fmt.Errorf("projections: %s needs a run and a digest", e.Type)
 		}
 		return true, p.store.ApplyComplianceReportArtifactExpiryRequestedTx(ctx, tx, e.TenantID, pl.RunID, e.Time, e.Sequence, e.Data)
+	case EventComplianceReportArtifactExpiryDeferred:
+		var pl ComplianceReportArtifactExpiryDeferred
+		if err := decode(e, &pl); err != nil {
+			return true, err
+		}
+		if pl.RunID == "" || pl.LockedUntil.IsZero() {
+			return true, fmt.Errorf("projections: %s needs a run and a time", e.Type)
+		}
+		return true, p.store.ApplyComplianceReportArtifactExpiryDeferredTx(ctx, tx, e.TenantID, pl.RunID, pl.LockedUntil, e.Sequence)
 	case EventComplianceReportArtifactExpired:
 		var pl ComplianceReportArtifactExpiry
 		if err := decode(e, &pl); err != nil {

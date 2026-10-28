@@ -38,9 +38,12 @@ type complianceReportRunResponse struct {
 	// when the report retention removed it.
 	LegalHold         *complianceReportLegalHoldResponse `json:"legal_hold,omitempty"`
 	ArtifactExpiredAt *time.Time                         `json:"artifact_expired_at,omitempty"`
-	EventSequence     uint64                             `json:"event_sequence"`
-	CreatedAt         time.Time                          `json:"created_at"`
-	UpdatedAt         time.Time                          `json:"updated_at"`
+	// ArtifactRemovalDeferredUntil is until when the archive's S3 Object Lock
+	// keeps the report from the report retention (A208).
+	ArtifactRemovalDeferredUntil *time.Time `json:"artifact_removal_deferred_until,omitempty"`
+	EventSequence                uint64     `json:"event_sequence"`
+	CreatedAt                    time.Time  `json:"created_at"`
+	UpdatedAt                    time.Time  `json:"updated_at"`
 }
 
 func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceReportRunResponse {
@@ -65,6 +68,9 @@ func toComplianceReportRunResponse(run store.ComplianceReportRun) complianceRepo
 		}
 	}
 	out.ArtifactExpiredAt = run.Retention.ArtifactExpiredAt
+	if run.Retention.ArtifactExpiredAt == nil {
+		out.ArtifactRemovalDeferredUntil = run.Retention.StorageLockedUntil
+	}
 	return out
 }
 

@@ -21,8 +21,11 @@ type ComplianceReportRetention struct {
 	// ExpiryRequestedAt is when the retention queued the report's removal; a
 	// hold clears it, so a released run is queued again.
 	ExpiryRequestedAt *time.Time
-	ArtifactExpiredAt *time.Time
-	EventSequence     uint64
+	// StorageLockedUntil is until when a removal was deferred because the
+	// archive's S3 Object Lock protects the report (A208).
+	StorageLockedUntil *time.Time
+	ArtifactExpiredAt  *time.Time
+	EventSequence      uint64
 }
 
 // Held reports whether the run is under legal hold.
@@ -104,6 +107,25 @@ func (s *Store) ApplyComplianceReportArtifactExpiryRequestedTx(ctx context.Conte
 	return err
 }
 
+// ApplyComplianceReportArtifactExpiryDeferredTx projects a removal the
+// archive's Object Lock refused: the run waits until lockedUntil and its queued
+// removal is cleared, so the sweep asks again then.
+func (s *Store) ApplyComplianceReportArtifactExpiryDeferredTx(ctx context.Context, tx pgx.Tx, tenantID, runID string, lockedUntil time.Time, sequence uint64) error {
+	current, _, err := lockComplianceReportRetentionTx(ctx, tx, tenantID, runID)
+	if err != nil {
+		return err
+	}
+	if current.EventSequence >= sequence || current.ArtifactExpiredAt != nil {
+		return nil
+	}
+	_, err = tx.Exec(ctx,
+		`UPDATE compliance_report_runs
+		    SET artifact_storage_locked_until = $3, artifact_expiry_requested_at = NULL, retention_event_sequence = $4
+		  WHERE tenant_id = $1 AND id = $2`,
+		tenantID, runID, lockedUntil, int64(sequence)) // #nosec G115 -- event sequences fit int64 (CWE-190)
+	return err
+}
+
 // ApplyComplianceReportArtifactExpiredTx projects the retention's confirmed
 // removal of a run's report.
 func (s *Store) ApplyComplianceReportArtifactExpiredTx(ctx context.Context, tx pgx.Tx, tenantID, runID string, at time.Time, sequence uint64) error {
@@ -130,10 +152,10 @@ func lockComplianceReportRetentionTx(ctx context.Context, tx pgx.Tx, tenantID, r
 	var seq int64
 	err := tx.QueryRow(ctx,
 		`SELECT status, legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
-		        artifact_expired_at, retention_event_sequence
+		        artifact_storage_locked_until, artifact_expired_at, retention_event_sequence
 		   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenantID, runID).
 		Scan(&status, &current.LegalHoldReason, &current.LegalHoldBy, &current.LegalHoldAt,
-			&current.ExpiryRequestedAt, &current.ArtifactExpiredAt, &seq)
+			&current.ExpiryRequestedAt, &current.StorageLockedUntil, &current.ArtifactExpiredAt, &seq)
 	current.EventSequence = uint64(seq) // #nosec G115 -- non-negative by constraint (CWE-190)
 	return current, status, err
 }
@@ -141,7 +163,7 @@ func lockComplianceReportRetentionTx(ctx context.Context, tx pgx.Tx, tenantID, r
 // ComplianceReportRunsPastRetention returns up to limit completed runs that
 // finished before cutoff, are not held, have no removal queued and still have
 // their report, oldest first.
-func (s *Store) ComplianceReportRunsPastRetention(ctx context.Context, tenantID string, cutoff time.Time, limit int) ([]ComplianceReportRun, error) {
+func (s *Store) ComplianceReportRunsPastRetention(ctx context.Context, tenantID string, cutoff, now time.Time, limit int) ([]ComplianceReportRun, error) {
 	if limit < 1 || limit > 100 {
 		return nil, errors.New("store: report retention query limit must be 1-100")
 	}
@@ -152,11 +174,12 @@ func (s *Store) ComplianceReportRunsPastRetention(ctx context.Context, tenantID 
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
 			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
 			        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
-			        artifact_expired_at, retention_event_sequence
+			        artifact_storage_locked_until, artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND status = 'completed' AND completed_at < $2
 			    AND legal_hold_at IS NULL AND artifact_expiry_requested_at IS NULL AND artifact_expired_at IS NULL
-			  ORDER BY completed_at, id LIMIT $3`, tenantID, cutoff, limit)
+			    AND (artifact_storage_locked_until IS NULL OR artifact_storage_locked_until <= $4)
+			  ORDER BY completed_at, id LIMIT $3`, tenantID, cutoff, limit, now)
 		if err != nil {
 			return err
 		}

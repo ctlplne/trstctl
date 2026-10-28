@@ -321,8 +321,16 @@ trstctl-cli --idempotency-key release-soc2-run-1 compliance report-runs release-
 A hold placed while that run's removal is in progress is refused with a retry,
 never recorded after the report is gone. Holds, removal requests and removals are
 events, so a projection rebuild reaches the same state. The full backup skips
-reports the retention already removed. Object Lock retention and legal holds set
-on the bucket itself are what comes next.
+reports the retention already removed.
+
+When the archive object store writes under S3 Object Lock
+(`object_store.object_lock_mode` and `object_lock_retention`), the retention reads
+each report object's lock before removing it. A plain delete on such a bucket would
+only hide the locked version, so a report the lock protects is left in place: the
+run records `artifact_removal_deferred_until` (the retention's end, or a day later
+under a legal hold on the object), the console says so, and the retention removes the
+report once that time has passed and the lock no longer protects it. A legal hold a
+person places on one archive object from trstctl is what comes next.
 
 Recovery preserves evidence instead of erasing history:
 
@@ -441,8 +449,11 @@ trstctl enables the controls below; you operate them:
   `TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE`) makes a background worker enforce its
   logical query floor while preserving the AN-2 source envelopes: see
   [Audit retention and archive lifecycle](#audit-retention-and-archive-lifecycle)
-  below. WORM retention on the archive (a WORM-backed directory, or object lock
-  on the bucket) is still your call. Scheduled reports follow
+  below. WORM retention on the archive is opt-in: set
+  `object_store.object_lock_mode` and `object_lock_retention` and every archive
+  object trstctl writes carries S3 Object Lock retention (the bucket needs
+  Object Lock enabled; the doctor's OBJ-LOCK checks it), or use a WORM-backed
+  archive directory. Scheduled reports follow
   `audit.report_retention` and legal holds instead: see
   [Report retention and legal holds](#report-retention-and-legal-holds).
 - Schedule periodic signed exports to anchor the log over time (above).

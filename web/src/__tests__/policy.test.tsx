@@ -1172,11 +1172,17 @@ describe("policy governance surface", () => {
       updated_at: "2026-06-27T12:05:00Z",
     };
     const removed = { ...completed, id: "66666666-6666-4666-8666-666666666666", due_at: "2026-03-27T12:00:00Z", artifact_expired_at: "2026-06-25T00:00:00Z" };
+    const deferred = {
+      ...completed,
+      id: "77777777-7777-4777-8777-777777777777",
+      due_at: "2026-02-27T12:00:00Z",
+      artifact_removal_deferred_until: "2026-09-01T00:00:00Z",
+    };
     const held = { ...completed, legal_hold: { reason: "litigation hold 2026-117", by: "auditor@example.test", at: "2026-06-28T09:00:00Z" } };
     apiMock.complianceReportRuns
-      .mockResolvedValueOnce({ items: [completed, removed] })
-      .mockResolvedValueOnce({ items: [held, removed] })
-      .mockResolvedValue({ items: [completed, removed] });
+      .mockResolvedValueOnce({ items: [completed, removed, deferred] })
+      .mockResolvedValueOnce({ items: [held, removed, deferred] })
+      .mockResolvedValue({ items: [completed, removed, deferred] });
     apiMock.placeComplianceReportLegalHold.mockResolvedValue(held);
     apiMock.releaseComplianceReportLegalHold.mockResolvedValue(completed);
     renderPolicy();
@@ -1184,10 +1190,11 @@ describe("policy governance surface", () => {
     await screen.findByRole("heading", { name: "Compliance inventory report" });
     await user.click(screen.getByRole("button", { name: "Signed runs" }));
     expect(await screen.findByText(/The report retention removed this report on/)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Download signed report" })).toHaveLength(1);
-    expect(screen.getAllByRole("button", { name: "Place legal hold" })).toHaveLength(1);
+    expect(screen.getByText(/The archive's Object Lock keeps this report until/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Download signed report" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Place legal hold" })).toHaveLength(2);
 
-    await user.click(screen.getByRole("button", { name: "Place legal hold" }));
+    await user.click(screen.getAllByRole("button", { name: "Place legal hold" })[0]);
     expect(screen.getByRole("button", { name: "Hold report" })).toBeDisabled();
     await user.type(screen.getByLabelText("Hold reason"), "  litigation hold 2026-117 ");
     await user.click(screen.getByRole("button", { name: "Hold report" }));

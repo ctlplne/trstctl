@@ -103,6 +103,7 @@ the product cannot drift.
 | OBJ-1 | A marker written under probe tenant A's prefix reads back byte-for-byte with its SHA-256 | The store's durability or replication |
 | OBJ-2 | Probe tenant B's listing of its own prefix never shows A's marker, B cannot read it by its relative name, and every name that would climb out of B's prefix is refused before a request is sent | Isolation at the storage layer: the deployment's credential can read every prefix in the bucket, so per-tenant separation inside the store needs per-prefix bucket policies |
 | OBJ-3 | The store refuses a second write to an existing object (a conditional `If-None-Match` write) and keeps the original bytes; a store that ignores conditional writes fails here, because archives written to it could be overwritten | Object lock or retention settings on the bucket |
+| OBJ-LOCK | Runs when `object_store.object_lock_mode` is set: the bucket has S3 Object Lock enabled, so archives written under the configured retention land (a locked write to a bucket without it fails). The probe markers above are written without that retention so OBJ-CLEAN can remove them | That the chosen mode and period, or a default retention on the bucket, suit the records policy. A bucket default retention also applies to the probe markers, which then stay until it ends |
 | OBJ-CLEAN | Every probe object was deleted, verified by an empty listing of the reserved prefix | — |
 
 ### The groups that mostly skip, and why

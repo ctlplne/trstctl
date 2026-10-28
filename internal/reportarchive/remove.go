@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"trstctl.com/trstctl/internal/objectstore"
 )
@@ -35,6 +36,24 @@ func (a Archive) Remove(ctx context.Context, ref, tenantID, runID, digest string
 	}
 	if a.Objects == nil {
 		return errors.New("reportarchive: the report is in the object store, which is not configured")
+	}
+	// A208: on a bucket with S3 Object Lock a plain delete only hides a
+	// locked version behind a delete marker, so read the lock first and
+	// leave a protected report in place.
+	if locker, ok := a.Objects.(objectstore.Locker); ok {
+		state, err := locker.Lock(ctx, ref)
+		switch {
+		case errors.Is(err, objectstore.ErrNotFound):
+			return nil
+		case err != nil:
+			return fmt.Errorf("reportarchive: read the report's Object Lock: %w", err)
+		case state.Locked(time.Now()):
+			locked := &objectstore.ErrLocked{Name: ref, LegalHold: state.LegalHold}
+			if state.RetainUntil != nil {
+				locked.Until = *state.RetainUntil
+			}
+			return locked
+		}
 	}
 	return a.Objects.Delete(ctx, ref)
 }

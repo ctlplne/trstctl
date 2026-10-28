@@ -5,6 +5,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -62,7 +63,7 @@ func TestComplianceReportRetentionProjectsHoldsAndRemovals(t *testing.T) {
 	cutoff := due.Add(30 * 24 * time.Hour)
 	pastRetention := func() []string {
 		t.Helper()
-		runs, err := s.ComplianceReportRunsPastRetention(ctx, tenantA, cutoff, 100)
+		runs, err := s.ComplianceReportRunsPastRetention(ctx, tenantA, cutoff, cutoff, 100)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -202,7 +203,7 @@ func TestComplianceReportRetentionProjectsHoldsAndRemovals(t *testing.T) {
 	}
 
 	// Tenant B sees none of it.
-	if runs, err := s.ComplianceReportRunsPastRetention(ctx, tenantB, cutoff, 100); err != nil || len(runs) != 0 {
+	if runs, err := s.ComplianceReportRunsPastRetention(ctx, tenantB, cutoff, cutoff, 100); err != nil || len(runs) != 0 {
 		t.Fatalf("tenant B's retention listing = %+v %v", runs, err)
 	}
 	if err := s.WithTenant(ctx, tenantB, func(tx pgx.Tx) error {
@@ -210,7 +211,73 @@ func TestComplianceReportRetentionProjectsHoldsAndRemovals(t *testing.T) {
 	}); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("a cross-tenant hold = %v", err)
 	}
-	if _, err := s.ComplianceReportRunsPastRetention(ctx, tenantA, cutoff, 0); err == nil {
+	if _, err := s.ComplianceReportRunsPastRetention(ctx, tenantA, cutoff, cutoff, 0); err == nil {
 		t.Fatal("a zero listing limit was accepted")
+	}
+}
+
+// A208: a removal the archive's Object Lock refused leaves the run waiting:
+// its queued removal is cleared and the retention listing skips it until the
+// lock's end, then lists it again.
+func TestComplianceReportStorageLockDefersTheRetention(t *testing.T) {
+	ctx := context.Background()
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	const scheduleID, runID = "a2080000-0000-4000-8000-0000000005c1", "a2080000-0000-4000-8000-0000000005a1"
+	due := time.Date(2019, 5, 1, 0, 0, 0, 0, time.UTC)
+	apply := func(fn func(tx pgx.Tx) error) error { return s.WithTenant(ctx, tenantA, fn) }
+	if err := apply(func(tx pgx.Tx) error {
+		return s.ApplyComplianceReportScheduleUpsertedTx(ctx, tx, store.ComplianceReportSchedule{
+			ID: scheduleID, TenantID: tenantA, Framework: "soc2", Name: "a208 lock pack",
+			ReportType: "framework_evidence_pack", IntervalSeconds: 3600, Enabled: true, Delivery: "audit_export",
+			NextRunAt: due, CreatedAt: due.Add(-time.Hour), UpdatedAt: due.Add(-time.Hour),
+		})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	queued := store.ComplianceReportRun{ID: runID, TenantID: tenantA, ScheduleID: scheduleID, DueAt: due, Framework: "soc2",
+		ReportType: "framework_evidence_pack", Status: "queued", EventSequence: 1, CreatedAt: due, UpdatedAt: due}
+	completed := queued
+	completed.Status, completed.Attempt, completed.EventSequence = "completed", 1, 2
+	completed.CompletedAt, completed.UpdatedAt = due.Add(time.Minute), due.Add(time.Minute)
+	completed.ArtifactDigest = crypto.SHA256Hex([]byte(`{"run":"a208"}`))
+	completed.ArtifactRef = reportArtifactRef(completed)
+	for _, step := range []store.ComplianceReportRun{queued, completed} {
+		if err := apply(func(tx pgx.Tx) error { return s.ApplyComplianceReportRunTx(ctx, tx, step) }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cutoff := due.Add(30 * 24 * time.Hour)
+	listed := func(now time.Time) bool {
+		t.Helper()
+		runs, err := s.ComplianceReportRunsPastRetention(ctx, tenantA, cutoff, now, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(runs, func(r store.ComplianceReportRun) bool { return r.ID == runID })
+	}
+	if err := apply(func(tx pgx.Tx) error {
+		return s.ApplyComplianceReportArtifactExpiryRequestedTx(ctx, tx, tenantA, runID, cutoff, 208001, []byte(`{"run_id":"`+runID+`"}`))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	lockedUntil := cutoff.Add(48 * time.Hour)
+	for i := 0; i < 2; i++ { // the second is a replay
+		if err := apply(func(tx pgx.Tx) error {
+			return s.ApplyComplianceReportArtifactExpiryDeferredTx(ctx, tx, tenantA, runID, lockedUntil, 208002)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run, err := s.GetComplianceReportRun(ctx, tenantA, runID)
+	if err != nil || run.Retention.ExpiryRequestedAt != nil || run.Retention.StorageLockedUntil == nil ||
+		!run.Retention.StorageLockedUntil.Equal(lockedUntil) || run.Retention.ArtifactExpiredAt != nil {
+		t.Fatalf("deferred run reads %+v %v", run.Retention, err)
+	}
+	if listed(cutoff) || listed(lockedUntil.Add(-time.Second)) {
+		t.Fatal("the retention listed a run its storage lock still protects")
+	}
+	if !listed(lockedUntil) {
+		t.Fatal("the retention did not list the run once its storage lock ended")
 	}
 }

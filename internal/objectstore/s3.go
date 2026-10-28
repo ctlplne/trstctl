@@ -75,6 +75,9 @@ type Options struct {
 	AllowInsecureLoopback bool
 	Timeout               time.Duration
 	MaxInFlight           int
+	// ObjectLock, when set, gives every object Create writes that S3 Object
+	// Lock retention (A208). The bucket must have Object Lock enabled.
+	ObjectLock *ObjectLock
 }
 
 // S3 is a Store backed by an S3-compatible service.
@@ -85,6 +88,7 @@ type S3 struct {
 	root    string
 	timeout time.Duration
 	slots   chan struct{}
+	lock    *ObjectLock
 
 	mu              sync.RWMutex
 	accessKeyID     string
@@ -134,6 +138,14 @@ func Open(opts Options) (*S3, error) {
 	if !opts.PathStyle && strings.Contains(opts.Bucket, ".") {
 		return nil, fmt.Errorf("objectstore: bucket %q contains a dot, which breaks TLS for virtual-hosted requests; set path_style", opts.Bucket)
 	}
+	var lock *ObjectLock
+	if opts.ObjectLock != nil {
+		if err := opts.ObjectLock.Validate(); err != nil {
+			return nil, err
+		}
+		l := ObjectLock{Mode: strings.ToUpper(opts.ObjectLock.Mode), Retention: opts.ObjectLock.Retention}
+		lock = &l
+	}
 	client, err := httpClientFor(endpoint, opts, timeout)
 	if err != nil {
 		return nil, err
@@ -150,7 +162,7 @@ func Open(opts Options) (*S3, error) {
 		}
 	}
 	store := &S3{
-		http: client, bucket: opts.Bucket, root: root, timeout: timeout,
+		http: client, bucket: opts.Bucket, root: root, timeout: timeout, lock: lock,
 		slots: make(chan struct{}, maxInFlight), accessKeyID: opts.AccessKeyID,
 		secretAccessKey: secretKey, sessionToken: session,
 	}
@@ -279,14 +291,22 @@ func (s *S3) Create(ctx context.Context, name string, body io.ReadSeeker, size i
 		if _, err := body.Seek(0, io.SeekStart); err != nil {
 			return fmt.Errorf("objectstore: rewind %s: %w", name, err)
 		}
-		_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
+		input := &s3.PutObjectInput{
 			Bucket:         awssdk.String(s.bucket),
 			Key:            awssdk.String(key),
 			Body:           body,
 			ContentLength:  awssdk.Int64(size),
 			IfNoneMatch:    awssdk.String("*"),
 			ChecksumSHA256: awssdk.String(base64.StdEncoding.EncodeToString(sum)),
-		})
+		}
+		if s.lock != nil {
+			// A locked write must name its checksum algorithm (or carry
+			// Content-MD5); the SHA-256 above is that checksum.
+			input.ChecksumAlgorithm = types.ChecksumAlgorithmSha256
+			input.ObjectLockMode = types.ObjectLockMode(s.lock.Mode)
+			input.ObjectLockRetainUntilDate = awssdk.Time(time.Now().Add(s.lock.Retention).UTC())
+		}
+		_, err := s.client.PutObject(ctx, input)
 		return classify(err, name)
 	})
 }

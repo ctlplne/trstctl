@@ -4555,6 +4555,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventComplianceReportLegalHoldReleased:        {1: true},
 	EventComplianceReportArtifactExpiryRequested:  {1: true},
 	EventComplianceReportArtifactExpired:          {1: true},
+	EventComplianceReportArtifactExpiryDeferred:   {1: true},
 	EventTenantCustomRoleUpserted:                 {1: true},
 	EventTenantCustomRoleDeleted:                  {1: true},
 	EventTSACertificateRevoked:                    {1: true},

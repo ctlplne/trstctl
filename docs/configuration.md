@@ -2067,6 +2067,8 @@ isolates), beneath the optional deployment prefix.
 | `TRSTCTL_OBJECT_STORE_ALLOW_INSECURE_LOOPBACK` | `object_store.allow_insecure_loopback` | `false` | Permit a plain-`http` loopback endpoint (local labs and tests). |
 | `TRSTCTL_OBJECT_STORE_TIMEOUT` | `object_store.timeout` | `30s` | Deadline for one call that moves no payload, between `1s` and `10m`; a call that moves an object gets one more second per MiB. |
 | `TRSTCTL_OBJECT_STORE_MAX_IN_FLIGHT` | `object_store.max_in_flight` | `8` | Concurrent calls per process, at most `64`. A call over the bound is refused at once instead of queued, so a slow store cannot hold the workers that read from it. |
+| `TRSTCTL_OBJECT_STORE_OBJECT_LOCK_MODE` | `object_store.object_lock_mode` | — | `GOVERNANCE` or `COMPLIANCE`. With `object_lock_retention`, every object trstctl writes (audit archive segments, report artifacts, backup sets) carries S3 Object Lock retention in that mode. The bucket must have Object Lock enabled when it is created; `trstctl doctor` checks it (OBJ-LOCK). Off by default. |
+| `TRSTCTL_OBJECT_STORE_OBJECT_LOCK_RETENTION` | `object_store.object_lock_retention` | — | How long after it is written an object cannot be deleted, a Go duration of at least `24h` (e.g. `61320h` for seven years). Set with `object_lock_mode`. The report retention leaves a report this lock protects and removes it once the lock has ended. |
 
 The client sends requests only to the configured origin and follows no
 redirects. The endpoint may be on a private network; it does not pass through

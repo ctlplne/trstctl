@@ -11647,6 +11647,11 @@ export interface components {
              */
             artifact_expired_at?: string;
             artifact_ref?: string;
+            /**
+             * Format: date-time
+             * @description until when the archive's S3 Object Lock keeps the report from the report retention
+             */
+            artifact_removal_deferred_until?: string;
             attempt: number;
             /** Format: date-time */
             completed_at?: string;

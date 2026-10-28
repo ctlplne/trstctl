@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -467,5 +468,115 @@ func TestServedReportRetentionRunsWithEverySchedulePaused(t *testing.T) {
 	}
 	if got := r.run(t, r.runs[0].ID).Retention; got.ExpiryRequestedAt == nil {
 		t.Fatalf("the paused schedule's report was not queued for removal: %+v", got)
+	}
+}
+
+// lockingObjectStore reports the S3 Object Lock state a test sets, as a bucket
+// with Object Lock enabled would.
+type lockingObjectStore struct {
+	objectstore.Store
+	mu    sync.Mutex
+	until map[string]time.Time
+	holds map[string]bool
+}
+
+func (s *lockingObjectStore) SetLegalHold(_ context.Context, name string, on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.holds[name] = on
+	return nil
+}
+
+func (s *lockingObjectStore) Lock(ctx context.Context, name string) (objectstore.LockState, error) {
+	if _, err := s.Head(ctx, name); err != nil {
+		return objectstore.LockState{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := objectstore.LockState{LegalHold: s.holds[name]}
+	if until, ok := s.until[name]; ok {
+		state.Mode, state.RetainUntil = "COMPLIANCE", &until
+	}
+	return state, nil
+}
+
+func (s *lockingObjectStore) set(name string, until *time.Time, hold bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if until != nil {
+		s.until[name] = *until
+	} else {
+		delete(s.until, name)
+	}
+	s.holds[name] = hold
+}
+
+// A208: a report the archive's S3 Object Lock protects is not removed (a plain
+// delete would only hide the locked version). The removal is deferred until
+// the retention's end, or a day at a time under a legal hold; the sweep leaves
+// the run until then, the run says why, and once the lock has ended the report
+// is removed and confirmed gone.
+func TestServedReportRetentionWaitsForTheArchivesObjectLock(t *testing.T) {
+	srv := s3test.NewServer(t)
+	objects := &lockingObjectStore{Store: srv.Open(t), until: map[string]time.Time{}, holds: map[string]bool{}}
+	r := newA206Retention(t, objects, 24*time.Hour, 2)
+	retained, held := r.runs[0], r.runs[1]
+	lockEnd := time.Now().UTC().Add(72 * time.Hour).Truncate(time.Second)
+	objects.set(retained.ArtifactRef, &lockEnd, false)
+	objects.set(held.ArtifactRef, nil, true)
+
+	if n := r.expire(t, 25*time.Hour); n != 2 {
+		t.Fatalf("sweep queued %d", n)
+	}
+	r.drain(t)
+	for _, run := range r.runs {
+		got := r.run(t, run.ID).Retention
+		if got.ArtifactExpiredAt != nil || got.ExpiryRequestedAt != nil || got.StorageLockedUntil == nil {
+			t.Fatalf("locked run %s reads %+v", run.ID, got)
+		}
+		if _, found := srv.Object(run.ArtifactRef); !found {
+			t.Fatalf("the locked report of %s went", run.ID)
+		}
+	}
+	if got := r.run(t, retained.ID).Retention.StorageLockedUntil; !got.Equal(lockEnd) {
+		t.Fatalf("retained run deferred until %v, want the lock's end %v", got, lockEnd)
+	}
+	if got := r.run(t, held.ID).Retention.StorageLockedUntil; got.Before(time.Now().Add(23 * time.Hour)) {
+		t.Fatalf("held run deferred until %v, want about a day", got)
+	}
+	status, body := secretsReq(t, r.h, http.MethodGet, "/api/v1/compliance/report-runs/"+retained.ID, r.auditor, nil)
+	if status != http.StatusOK || !bytes.Contains(body, []byte(`"artifact_removal_deferred_until"`)) {
+		t.Fatalf("deferred run = %d %s", status, body)
+	}
+	if status, _ := r.download(t, retained.ID); status != http.StatusOK {
+		t.Fatalf("download of a deferred report = %d", status)
+	}
+
+	// Two days on, the retention's lock still holds its run; the legal hold
+	// is rechecked once its day has passed, and deferred again.
+	if n := r.expire(t, 48*time.Hour); n != 1 {
+		t.Fatalf("the sweep queued %d two days on, want only the held run's recheck", n)
+	}
+	r.drain(t)
+	if got := r.run(t, held.ID).Retention; got.ArtifactExpiredAt != nil || got.StorageLockedUntil == nil || got.ExpiryRequestedAt != nil {
+		t.Fatalf("the rechecked held run reads %+v", got)
+	}
+	if got := r.run(t, retained.ID).Retention; got.ExpiryRequestedAt != nil || !got.StorageLockedUntil.Equal(lockEnd) {
+		t.Fatalf("the retained run was queued before its lock ended: %+v", got)
+	}
+	// Past both: the retention ended for one, the other is still held.
+	objects.set(retained.ArtifactRef, nil, false)
+	if n := r.expire(t, 73*time.Hour); n != 2 {
+		t.Fatalf("the sweep queued %d after the locks' recheck times", n)
+	}
+	r.drain(t)
+	if got := r.run(t, retained.ID).Retention; got.ArtifactExpiredAt == nil {
+		t.Fatalf("the unlocked report was not removed: %+v", got)
+	}
+	if _, found := srv.Object(retained.ArtifactRef); found {
+		t.Fatal("the unlocked report is still in the store")
+	}
+	if got := r.run(t, held.ID).Retention; got.ArtifactExpiredAt != nil || got.StorageLockedUntil == nil {
+		t.Fatalf("the held report reads %+v", got)
 	}
 }

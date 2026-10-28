@@ -43,11 +43,17 @@ func FromConfig(cfg config.ObjectStore) (*S3, error) {
 	if err != nil {
 		return nil, fmt.Errorf("objectstore: timeout: %w", err)
 	}
+	var lock *ObjectLock
+	if retention, err := cfg.ObjectLockRetentionDuration(); err != nil {
+		return nil, fmt.Errorf("objectstore: object_lock_retention: %w", err)
+	} else if retention > 0 || cfg.ObjectLockMode != "" {
+		lock = &ObjectLock{Mode: cfg.ObjectLockMode, Retention: retention}
+	}
 	return Open(Options{
 		Endpoint: cfg.Endpoint, Region: cfg.Region, Bucket: cfg.Bucket, Prefix: cfg.Prefix,
 		PathStyle: cfg.PathStyle, AccessKeyID: cfg.AccessKeyID,
 		SecretAccessKey: bytes.TrimSpace(secretRaw), SessionToken: bytes.TrimSpace(sessionRaw),
 		CAPEM: caPEM, AllowInsecureLoopback: cfg.AllowInsecureLoopback,
-		Timeout: timeout, MaxInFlight: cfg.MaxInFlight,
+		Timeout: timeout, MaxInFlight: cfg.MaxInFlight, ObjectLock: lock,
 	})
 }

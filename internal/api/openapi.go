@@ -4664,6 +4664,8 @@ func componentSchemas() map[string]*Schema {
 	}, "reason")
 	complianceReportArtifactExpiredAt := &Schema{Type: "string", Format: "date-time",
 		Description: "when the report retention removed the report; the download then answers 410"}
+	complianceReportRemovalDeferredUntil := &Schema{Type: "string", Format: "date-time",
+		Description: "until when the archive's S3 Object Lock keeps the report from the report retention"}
 	complianceReportRun := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "schedule_id": uuid(),
 		"due_at": timestamp(), "framework": str(), "report_type": str(),
@@ -4671,7 +4673,7 @@ func componentSchemas() map[string]*Schema {
 		"retry_generation": {Type: "integer"}, "attempt": {Type: "integer"},
 		"next_attempt_at": timestamp(), "error_code": str(),
 		"artifact_ref": str(), "artifact_digest": str(), "completed_at": timestamp(),
-		"legal_hold": complianceReportLegalHold, "artifact_expired_at": complianceReportArtifactExpiredAt,
+		"legal_hold": complianceReportLegalHold, "artifact_expired_at": complianceReportArtifactExpiredAt, "artifact_removal_deferred_until": complianceReportRemovalDeferredUntil,
 		"dispatch":       ref("ComplianceReportRunDispatch"),
 		"event_sequence": {Type: "integer"}, "created_at": timestamp(), "updated_at": timestamp(),
 	}, "id", "tenant_id", "schedule_id", "due_at", "framework", "report_type", "status", "retry_generation", "attempt", "event_sequence", "created_at", "updated_at")

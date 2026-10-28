@@ -271,3 +271,28 @@ func TestFromConfigReadsPrivateCredentialFiles(t *testing.T) {
 		t.Fatalf("an unconfigured store = %v %v, want nil, nil", none, err)
 	}
 }
+
+// A208: an Object Lock option is checked when the store opens: GOVERNANCE or
+// COMPLIANCE, for at least a day.
+func TestOpenChecksTheObjectLockOption(t *testing.T) {
+	srv := s3test.NewServer(t)
+	opts := srv.Options()
+	for _, lock := range []objectstore.ObjectLock{{Mode: "legal", Retention: 48 * time.Hour}, {Mode: "COMPLIANCE", Retention: time.Hour}} {
+		o := opts
+		l := lock
+		o.ObjectLock = &l
+		if _, err := objectstore.Open(o); err == nil {
+			t.Fatalf("Open accepted Object Lock %+v", lock)
+		}
+	}
+	o := opts
+	o.ObjectLock = &objectstore.ObjectLock{Mode: "governance", Retention: 48 * time.Hour}
+	store, err := objectstore.Open(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Destroy()
+	if !store.LockConfigured() {
+		t.Fatal("the store does not report its Object Lock")
+	}
+}

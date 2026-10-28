@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -48,6 +49,9 @@ func runObjectStoreProbes(ctx context.Context, getenv func(string) string, write
 	defer store.Destroy()
 
 	out := []Probe{objectResidueProbe(ctx, store, "OBJ-LEAK")}
+	if strings.TrimSpace(cfg.ObjectLockMode) != "" {
+		out = append(out, objectLockProbe(ctx, cfg, store))
+	}
 	if !writeProbe {
 		skip := "write probe not permitted (run with --write-probe for the full proof)"
 		for _, id := range []string{"OBJ-1", "OBJ-2", "OBJ-3"} {
@@ -55,7 +59,37 @@ func runObjectStoreProbes(ctx context.Context, getenv func(string) string, write
 		}
 		return out
 	}
-	return append(out, runObjectWriteProbes(ctx, store)...)
+	// The probe markers are throwaway: write them without the deployment's
+	// Object Lock retention so their cleanup can remove them.
+	writeStore := store
+	if strings.TrimSpace(cfg.ObjectLockMode) != "" {
+		unlocked := cfg
+		unlocked.ObjectLockMode, unlocked.ObjectLockRetention = "", ""
+		if writeStore, err = objectstore.FromConfig(unlocked); err != nil {
+			return append(out, Probe{ID: "OBJ-1", Group: groupObjectStore, Status: StatusFail,
+				Detail: "could not open the object store for the probe markers: " + err.Error()})
+		}
+		defer writeStore.Destroy()
+	}
+	return append(out, runObjectWriteProbes(ctx, writeStore)...)
+}
+
+// objectLockProbe checks that a bucket the deployment writes under S3 Object
+// Lock has Object Lock enabled (A208); without it every archive write fails.
+func objectLockProbe(ctx context.Context, cfg config.ObjectStore, store *objectstore.S3) Probe {
+	enabled, err := store.BucketLockEnabled(ctx)
+	switch {
+	case err != nil:
+		return Probe{ID: "OBJ-LOCK", Group: groupObjectStore, Status: StatusFail,
+			Detail: "could not read the bucket's Object Lock configuration: " + err.Error()}
+	case !enabled:
+		return Probe{ID: "OBJ-LOCK", Group: groupObjectStore, Status: StatusFail,
+			Detail: "object_store.object_lock_mode is set but the bucket does not have Object Lock enabled; every archive write would fail"}
+	}
+	return Probe{ID: "OBJ-LOCK", Group: groupObjectStore, Status: StatusPass,
+		Detail: fmt.Sprintf("the bucket has Object Lock enabled; archives are written under %s retention for %s",
+			strings.ToUpper(cfg.ObjectLockMode), cfg.ObjectLockRetention),
+		Limits: "proves the bucket has Object Lock enabled, not that the chosen mode and period, or a default retention on the bucket, suit the records policy"}
 }
 
 // probeObjectPrefix is where every probe tenant's objects live: the pooled

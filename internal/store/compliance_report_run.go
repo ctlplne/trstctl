@@ -114,7 +114,7 @@ func (s *Store) ApplyComplianceReportRunTx(ctx context.Context, tx pgx.Tx, run C
 		        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
 		        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
 		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
-		        artifact_expired_at, retention_event_sequence
+		        artifact_storage_locked_until, artifact_expired_at, retention_event_sequence
 		   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2 FOR UPDATE`,
 		run.TenantID, run.ID), &old)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -213,7 +213,7 @@ func (s *Store) GetComplianceReportRun(ctx context.Context, tenantID, id string)
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
 			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
 		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
-		        artifact_expired_at, retention_event_sequence
+		        artifact_storage_locked_until, artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs WHERE tenant_id = $1 AND id = $2`, tenantID, id), &out)
 	})
 	return out, err
@@ -230,7 +230,7 @@ func (s *Store) GetComplianceReportRunByDue(ctx context.Context, tenantID, sched
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
 			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
 		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
-		        artifact_expired_at, retention_event_sequence
+		        artifact_storage_locked_until, artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND schedule_id = $2 AND due_at = $3`,
 			tenantID, scheduleID, dueAt), &out)
@@ -256,7 +256,7 @@ func (s *Store) ListComplianceReportRunsPage(ctx context.Context, tenantID, sche
 			        report_type, status, retry_generation, attempt, next_attempt_at, error_code, artifact_ref,
 			        artifact_digest, completed_at, event_sequence, created_at, updated_at, dispatch,
 		        legal_hold_reason, legal_hold_by, legal_hold_at, artifact_expiry_requested_at,
-		        artifact_expired_at, retention_event_sequence
+		        artifact_storage_locked_until, artifact_expired_at, retention_event_sequence
 			   FROM compliance_report_runs
 			  WHERE tenant_id = $1 AND schedule_id = $2
 			    AND ($3::timestamptz IS NULL OR due_at < $3)
@@ -287,7 +287,8 @@ func scanComplianceReportRun(row rowScanner, run *ComplianceReportRun) error {
 		&run.ErrorCode, &run.ArtifactRef, &run.ArtifactDigest, &completed, &sequence,
 		&run.CreatedAt, &run.UpdatedAt, &dispatch,
 		&run.Retention.LegalHoldReason, &run.Retention.LegalHoldBy, &run.Retention.LegalHoldAt,
-		&run.Retention.ExpiryRequestedAt, &run.Retention.ArtifactExpiredAt, &retentionSequence); err != nil {
+		&run.Retention.ExpiryRequestedAt, &run.Retention.StorageLockedUntil, &run.Retention.ArtifactExpiredAt,
+		&retentionSequence); err != nil {
 		return err
 	}
 	run.Retention.EventSequence = uint64(retentionSequence) // #nosec G115 -- non-negative by constraint (CWE-190)

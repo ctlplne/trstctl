@@ -244,6 +244,11 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
             {run.artifact_expired_at && (
               <p className="text-sm text-muted-foreground">{t("policy.reporting.reportRemoved", { date: formatDateTime(run.artifact_expired_at) })}</p>
             )}
+            {run.artifact_removal_deferred_until && !run.artifact_expired_at && (
+              <p className="text-sm text-muted-foreground">
+                {t("policy.reporting.removalDeferred", { date: formatDateTime(run.artifact_removal_deferred_until) })}
+              </p>
+            )}
             {holdFor === run.id && (
               <form
                 className="mt-2 grid gap-2"

@@ -2879,6 +2879,7 @@ export interface ComplianceReportRun {
   artifact_digest?: string;
   artifact_expired_at?: string;
   artifact_ref?: string;
+  artifact_removal_deferred_until?: string;
   attempt: number;
   completed_at?: string;
   created_at: string;

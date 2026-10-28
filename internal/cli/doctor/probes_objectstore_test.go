@@ -156,3 +156,41 @@ func TestDoctorObjectStoreLaneFailsOnResidueAndOverwrites(t *testing.T) {
 		t.Fatalf("doctor left %v after a failed proof", keys)
 	}
 }
+
+// A208: with object_lock_mode set, OBJ-LOCK proves the bucket has Object Lock
+// enabled and fails when it does not; the write probes' markers carry no
+// retention, so their cleanup still removes them.
+func TestDoctorObjectStoreLaneChecksTheBucketsObjectLock(t *testing.T) {
+	locked := func(srv *s3test.Server) func(string) string {
+		base := objectStoreEnv(t, srv)
+		return func(k string) string {
+			switch k {
+			case "TRSTCTL_OBJECT_STORE_OBJECT_LOCK_MODE":
+				return "GOVERNANCE"
+			case "TRSTCTL_OBJECT_STORE_OBJECT_LOCK_RETENTION":
+				return "720h"
+			}
+			return base(k)
+		}
+	}
+	srv := s3test.NewServer(t)
+	srv.LockEnabled = true
+	r, code := runDoctorWithEnv(t, locked(srv), "--prove-isolation", "--write-probe")
+	if code != 0 {
+		t.Fatalf("doctor exit = %d, want 0: %+v", code, r.Probes)
+	}
+	for _, id := range []string{"OBJ-LOCK", "OBJ-1", "OBJ-2", "OBJ-3", "OBJ-CLEAN"} {
+		if p := probeByID(t, r, id); p.Status != StatusPass {
+			t.Errorf("%s = %s (%s), want pass", id, p.Status, p.Detail)
+		}
+	}
+	if keys := srv.Keys(); len(keys) != 0 {
+		t.Fatalf("doctor left %d objects in the store: %v", len(keys), keys)
+	}
+
+	plain := s3test.NewServer(t)
+	r, code = runDoctorWithEnv(t, locked(plain), "--prove-isolation")
+	if p := probeByID(t, r, "OBJ-LOCK"); p.Status != StatusFail || !strings.Contains(p.Detail, "does not have Object Lock enabled") || code == 0 {
+		t.Fatalf("OBJ-LOCK on a bucket without Object Lock = %s %q (exit %d)", p.Status, p.Detail, code)
+	}
+}

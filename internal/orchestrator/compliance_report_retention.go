@@ -90,6 +90,19 @@ func (o *Orchestrator) RequestComplianceReportArtifactExpiry(ctx context.Context
 	return err
 }
 
+// DeferComplianceReportArtifactExpiry records that the archive's Object Lock
+// protects a run's report, so the retention asks again at lockedUntil.
+func (o *Orchestrator) DeferComplianceReportArtifactExpiry(ctx context.Context, tenantID, runID, digest string, lockedUntil time.Time, legalHold bool) error {
+	data, err := json.Marshal(projections.ComplianceReportArtifactExpiryDeferred{
+		RunID: runID, Digest: digest, LockedUntil: lockedUntil.UTC(), LegalHold: legalHold,
+	})
+	if err != nil {
+		return err
+	}
+	_, err = o.emit(ctx, projections.EventComplianceReportArtifactExpiryDeferred, tenantID, data)
+	return err
+}
+
 // RecordComplianceReportArtifactExpired records that a run's report is
 // confirmed gone.
 func (o *Orchestrator) RecordComplianceReportArtifactExpired(ctx context.Context, tenantID, runID, digest string, retention time.Duration, at time.Time) error {

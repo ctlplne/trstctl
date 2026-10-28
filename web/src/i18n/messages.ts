@@ -14567,6 +14567,10 @@ export const messages = {
     defaultMessage: "Legal hold by {by} since {date}: {reason}",
     description: "A206: who held this signed report, when, and why.",
   },
+  "policy.reporting.removalDeferred": {
+    defaultMessage: "The archive's Object Lock keeps this report until {date}. The report retention removes it after that.",
+    description: "A208: the report retention waits for the archive's S3 Object Lock.",
+  },
   "policy.reporting.reportRemoved": {
     defaultMessage: "The report retention removed this report on {date}. The run receipt and its digest remain.",
     description: "A206: the signed report is gone; its receipt stays.",

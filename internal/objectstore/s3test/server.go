@@ -31,6 +31,8 @@ type Server struct {
 	Bucket      string
 	AccessKeyID string
 	Secret      []byte
+	// LockEnabled makes the bucket report S3 Object Lock enabled (A208).
+	LockEnabled bool
 
 	mu        sync.Mutex
 	objects   map[string]object
@@ -175,6 +177,8 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case key == "" && r.Method == http.MethodGet && r.URL.Query().Get("list-type") == "2":
 		s.list(w, r)
+	case key == "" && r.Method == http.MethodGet && r.URL.Query().Has("object-lock"):
+		s.objectLockConfiguration(w, r)
 	case key == "":
 		writeError(w, r, http.StatusNotImplemented, "NotImplemented", key)
 	case r.Method == http.MethodPut:
@@ -308,4 +312,18 @@ func writeError(w http.ResponseWriter, r *http.Request, status int, code, key st
 		Message string   `xml:"Message"`
 		Key     string   `xml:"Key,omitempty"`
 	}{Code: code, Message: code, Key: key})
+}
+
+// objectLockConfiguration answers GetObjectLockConfiguration the way S3 does:
+// the configuration when the bucket has Object Lock, else an error.
+func (s *Server) objectLockConfiguration(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	enabled := s.LockEnabled
+	s.mu.Unlock()
+	if !enabled {
+		writeError(w, r, http.StatusNotFound, "ObjectLockConfigurationNotFoundError", "")
+		return
+	}
+	w.Header().Set("Content-Type", "application/xml")
+	_, _ = io.WriteString(w, xml.Header+`<ObjectLockConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><ObjectLockEnabled>Enabled</ObjectLockEnabled></ObjectLockConfiguration>`)
 }

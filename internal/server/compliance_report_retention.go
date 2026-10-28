@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/reportarchive"
@@ -28,6 +29,11 @@ import (
 
 const complianceReportRetentionSweepLimit = 100
 
+// complianceReportLegalHoldRecheck is how long a removal waits behind an S3
+// legal hold, which has no end date of its own, before the retention asks
+// again.
+const complianceReportLegalHoldRecheck = 24 * time.Hour
+
 // expireComplianceReportsOnce queues the removal of up to 100 reports past the
 // retention window.
 func (s *Server) expireComplianceReportsOnce(ctx context.Context, now time.Time) (int, error) {
@@ -44,7 +50,7 @@ func (s *Server) expireComplianceReportsOnce(ctx context.Context, now time.Time)
 		if requested >= complianceReportRetentionSweepLimit {
 			break
 		}
-		due, err := s.store.ComplianceReportRunsPastRetention(ctx, tenantID, cutoff, complianceReportRetentionSweepLimit-requested)
+		due, err := s.store.ComplianceReportRunsPastRetention(ctx, tenantID, cutoff, now, complianceReportRetentionSweepLimit-requested)
 		if err != nil {
 			return requested, err
 		}
@@ -58,7 +64,8 @@ func (s *Server) expireComplianceReportsOnce(ctx context.Context, now time.Time)
 					return err
 				}
 				if run.Status != "completed" || run.Retention.Held() || run.Retention.ExpiryRequestedAt != nil ||
-					run.Retention.ArtifactExpiredAt != nil || !run.CompletedAt.Before(cutoff) {
+					run.Retention.ArtifactExpiredAt != nil || !run.CompletedAt.Before(cutoff) ||
+					(run.Retention.StorageLockedUntil != nil && now.Before(*run.Retention.StorageLockedUntil)) {
 					return nil
 				}
 				if err := s.orch.RequestComplianceReportArtifactExpiry(ctx, run, s.reportRetention); err != nil {
@@ -100,6 +107,10 @@ func (e *complianceReportExpiry) Deliver(ctx context.Context, m orchestrator.Mes
 	if err != nil {
 		return err
 	}
+	now := time.Now
+	if e.now != nil {
+		now = e.now
+	}
 	var outcome error
 	acquired, err := e.store.WithComplianceReportRunLock(ctx, run.TenantID, run.ScheduleID, run.DueAt, func() error {
 		current, err := e.store.GetComplianceReportRun(ctx, run.TenantID, run.ID)
@@ -112,6 +123,16 @@ func (e *complianceReportExpiry) Deliver(ctx context.Context, m orchestrator.Mes
 			return nil
 		}
 		if err := e.archive.Remove(ctx, current.ArtifactRef, current.TenantID, current.ID, current.ArtifactDigest); err != nil {
+			// A208: the archive's Object Lock protects the report. Record
+			// until when, so the sweep asks again then instead of retrying.
+			var locked *objectstore.ErrLocked
+			if errors.As(err, &locked) {
+				until := locked.Until
+				if locked.LegalHold || until.IsZero() {
+					until = now().Add(complianceReportLegalHoldRecheck)
+				}
+				return e.orch.DeferComplianceReportArtifactExpiry(ctx, current.TenantID, current.ID, current.ArtifactDigest, until, locked.LegalHold)
+			}
 			outcome = fmt.Errorf("server: remove report %s under retention: %w", current.ID, err)
 			return nil
 		}
@@ -119,10 +140,6 @@ func (e *complianceReportExpiry) Deliver(ctx context.Context, m orchestrator.Mes
 		if err != nil || !gone {
 			outcome = fmt.Errorf("server: report %s is still present after removal (%v)", current.ID, err)
 			return nil
-		}
-		now := time.Now
-		if e.now != nil {
-			now = e.now
 		}
 		return e.orch.RecordComplianceReportArtifactExpired(ctx, current.TenantID, current.ID, current.ArtifactDigest,
 			time.Duration(pl.RetentionSeconds)*time.Second, now())
