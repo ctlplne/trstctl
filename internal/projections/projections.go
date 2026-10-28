@@ -4566,6 +4566,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventEndpointRecoveryCheckRequested:           {1: true},
 	EventEndpointRecoveryChecked:                  {1: true},
 	EventEndpointRecoveryCheckFailed:              {1: true},
+	EventScannedCertificateChainObserved:          {1: true},
 	EventTenantCustomRoleUpserted:                 {1: true},
 	EventTenantCustomRoleDeleted:                  {1: true},
 	EventTSACertificateRevoked:                    {1: true},
@@ -4968,6 +4969,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyEndpointRecoveryCheckTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyScannedCertificateChainTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyTenantCustomRoleTx(ctx, tx, e); handled {
@@ -6748,6 +6752,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 				ThisUpdate: finding.ThisUpdate, NextUpdate: finding.NextUpdate,
 				SignatureVerified: finding.SignatureVerified, RevokedCount: finding.RevokedCount,
 				ResponseStatus: finding.ResponseStatus, ResponderSubject: finding.ResponderSubject,
+				Scope: target.Scope, CertificateListed: finding.CertificateListed,
 				ProbeID: pl.ProbeID, Bucket: pl.Bucket, BatchIndex: pl.BatchIndex,
 				BatchCount: pl.BatchCount, ObservedByAgentID: pl.AgentID,
 				ObservedByAgentName: pl.AgentName, EvidenceDigest: pl.EvidenceDigest, ObservedAt: e.Time,

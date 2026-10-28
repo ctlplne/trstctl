@@ -1855,6 +1855,8 @@ func componentSchemas() map[string]*Schema {
 		"key_origin_proof_event_id": {Type: "string", Description: "The retained issuance event that proves a derived key_origin."},
 		"custody_summary":           str(),
 		"key_observations":          {Type: "array", Items: ref("CertificateKeyObservation"), Description: "A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held."},
+		"revocation_observations": {Type: "array", Items: ref("RevocationEndpointHealth"),
+			Description: "Relay-verified CRL and OCSP answers that name this certificate, newest first (detail reads only): checks of its own serial when it is known only from a scan, and endpoint checks it represents."},
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
 	certificateKeyObservation := object(map[string]*Schema{
 		"agent": str(), "path": str(), "file_mode": str(), "encrypted": {Type: "boolean"}, "key_format": str(),
@@ -2306,6 +2308,9 @@ func componentSchemas() map[string]*Schema {
 		"revoked_count": {Type: "integer"}, "response_status": {Type: "string", Enum: []string{"good", "revoked", "unknown"}},
 		"responder_subject": str(), "probe_id": str(), "observed_by_agent_id": str(),
 		"observed_by_agent_name": str(), "evidence_digest": str(), "observed_at": timestamp(),
+		"scope": {Type: "string", Enum: []string{"endpoint", "certificate"},
+			Description: "endpoint: the endpoint's health, checked through a representative certificate. certificate: one certificate known only from a scan, checked for its own serial."},
+		"certificate_listed": {Type: "boolean", Description: "Whether the signed CRL lists this certificate's serial. Absent for OCSP answers and for CRLs that could not be read."},
 	}, "target_key", "protocol", "endpoint", "issuer_subject", "certificate_id", "certificate_subject",
 		"certificate_fingerprint", "certificate_serial", "status", "detail_code", "latency_ms",
 		"signature_verified", "probe_id", "observed_by_agent_id", "observed_by_agent_name", "evidence_digest", "observed_at")

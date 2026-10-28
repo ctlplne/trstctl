@@ -797,7 +797,11 @@ trust bundle; requests inside one minute share one probe. The relay verifies CRL
 returns a signed lease-bound report. `GET /api/v1/revocation/health` and
 Certificates → Revocation & CT expose fresh, expiring, stale, unreachable, and invalid
 answers with latency, `nextUpdate`, relay identity, and evidence digest; non-fresh
-answers create notifications. An answer is expiring when its `nextUpdate` falls in the
+answers create notifications. With `agent_channel.probe_scanned_certificates` on, a
+certificate known only from a relay's network scan is also checked for its own serial,
+against the issuer the scan saw served with it; its certificate detail shows those
+answers (whether the CRL lists the serial, the OCSP status) with the relay and evidence,
+and the endpoint list stays one row per endpoint. An answer is expiring when its `nextUpdate` falls in the
 last quarter of its own signed lifetime, capped at 24 hours: a seven-day CRL warns in
 its last day and a ten-minute OCSP response in its last two and a half minutes, so a
 responder that keeps signing short-lived answers reads fresh. A missing observation is

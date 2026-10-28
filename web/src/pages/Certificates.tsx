@@ -50,6 +50,7 @@ import { LifecycleCockpit } from "@/components/certs/LifecycleCockpit";
 import type { GridViewPrimitive } from "@/lib/gridViews";
 import { revocationReasons } from "@/lib/revocation";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
+import { CertificateRevocationObservations } from "@/pages/certificates/CertificateRevocationObservations";
 import {
   certificateEnvironment,
   certificateProfile,
@@ -1558,6 +1559,7 @@ function CertificateWorkspace() {
                   <dd className="mt-1 text-xs text-muted-foreground">{t("certificateCockpit.detail.keyObservationsNote")}</dd>
                 </div>
               ) : null}
+              <CertificateRevocationObservations observations={detail.revocation_observations} />
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
                 <dd>{detail.source || "-"}</dd>

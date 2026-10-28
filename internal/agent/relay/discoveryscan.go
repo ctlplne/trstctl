@@ -59,8 +59,9 @@ type DiscoveryReport = segmentscan.Report
 // database — findings travel back over the channel the agent opened, and the
 // control plane is the only thing that writes them (AN-2).
 type relayScanSink struct {
-	mu       sync.Mutex
-	findings []DiscoveryFinding
+	mu        sync.Mutex
+	findings  []DiscoveryFinding
+	keepChain bool
 }
 
 func (s *relayScanSink) Record(_ context.Context, f netscan.Found) error {
@@ -72,6 +73,9 @@ func (s *relayScanSink) Record(_ context.Context, f netscan.Found) error {
 	finding.ChainSPKISHA256 = f.Keys.ChainSPKISHA256
 	finding.ChainCertSHA256 = f.Keys.ChainCertSHA256
 	finding.WeakKeyChecks = f.Keys.WeakKeyChecks
+	if s.keepChain {
+		finding.CertificateDER, finding.ChainDER = f.Keys.LeafDER, f.Keys.ChainDER
+	}
 	s.findings = append(s.findings, finding)
 	return nil
 }
@@ -128,7 +132,7 @@ func Sweep(ctx context.Context, intent DiscoveryScanIntent) (DiscoveryReport, er
 	}
 	switch intent.Mode {
 	case DiscoveryModeTLS:
-		sink := &relayScanSink{}
+		sink := &relayScanSink{keepChain: intent.KeepChain}
 		var opts []netscan.Option
 		opts = append(opts,
 			netscan.WithAllowRFC1918Targets(intent.AllowRFC1918 || intent.AllowReservedRanges),

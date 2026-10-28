@@ -38,14 +38,25 @@ type Found struct {
 }
 
 // KeyObservation is what the scanner's checks found on the served chain, as
-// hashes and closed check codes (Part 4); the bytes never leave the scanner.
+// hashes and closed check codes (Part 4). LeafDER and ChainDER hold the
+// certificates' public bytes; a sink keeps them only when its scan asked for
+// them, so a certificate known only from a scan can have its revocation probed
+// (A211). ChainDER[i] is the certificate ChainCertSHA256[i] names.
 type KeyObservation struct {
 	SPKISHA256      string
 	AuthorityKeyID  string
 	ChainSPKISHA256 []string
 	ChainCertSHA256 []string
 	WeakKeyChecks   []string
+	LeafDER         []byte
+	ChainDER        [][]byte
 }
+
+// Bounds on the public certificate bytes an observation holds.
+const (
+	MaxKeptCertificateBytes = 16 << 10
+	MaxKeptIssuers          = 4
+)
 
 // ChainProber captures the served leaf and observes the served chain.
 type ChainProber func(ctx context.Context, addr string) (certinfo.Info, KeyObservation, error)
@@ -71,11 +82,20 @@ func chainProbe(ctx context.Context, addr string, opts ...tlsprobe.Option) (cert
 		return certinfo.Info{}, KeyObservation{}, err
 	}
 	obs := KeyObservation{SPKISHA256: info.SPKISHA256, AuthorityKeyID: info.AuthorityKeyID}
+	if len(chain[0]) <= MaxKeptCertificateBytes {
+		obs.LeafDER = append([]byte(nil), chain[0]...)
+	}
 	for _, der := range chain[1:] {
 		if len(obs.ChainSPKISHA256) == maxObservedIssuers {
 			break
 		}
 		if issuer, err := certinfo.Inspect(der); err == nil {
+			// Bytes stay a prefix of the hashes: once one issuer is not kept,
+			// none after it is, so ChainDER[i] always matches ChainCertSHA256[i].
+			if obs.LeafDER != nil && len(obs.ChainDER) == len(obs.ChainCertSHA256) &&
+				len(obs.ChainDER) < MaxKeptIssuers && len(der) <= MaxKeptCertificateBytes {
+				obs.ChainDER = append(obs.ChainDER, append([]byte(nil), der...))
+			}
 			obs.ChainSPKISHA256 = append(obs.ChainSPKISHA256, issuer.SPKISHA256)
 			obs.ChainCertSHA256 = append(obs.ChainCertSHA256, issuer.SHA256Fingerprint)
 		}

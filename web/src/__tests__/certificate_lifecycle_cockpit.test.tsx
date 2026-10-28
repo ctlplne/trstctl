@@ -866,6 +866,55 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getByText("Key custody was not recorded for this credential.")).toBeInTheDocument();
   });
 
+  it("shows the relays' signed revocation answers for a certificate known only from a scan (A211)", async () => {
+    const observation = {
+      issuer_subject: "CN=A211 Scanned Issuing CA",
+      certificate_id: "scanned-cert",
+      certificate_subject: "CN=scanned.a211.example",
+      certificate_fingerprint: "fp-scanned",
+      certificate_serial: "a211",
+      status: "fresh",
+      detail_code: "",
+      latency_ms: 4,
+      signature_verified: true,
+      scope: "certificate",
+      probe_id: "probe-1",
+      observed_by_agent_id: "relay-1",
+      observed_by_agent_name: "relay-edge",
+      evidence_digest: "digest",
+      observed_at: "2026-10-28T03:00:00Z",
+    };
+    const certificate = {
+      id: "scanned-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=scanned.a211.example",
+      sans: ["scanned.a211.example"],
+      issuer: "CN=A211 Scanned Issuing CA",
+      status: "active",
+      fingerprint: "fp-scanned",
+      source: "discovery:network",
+      not_before: "2026-10-24T00:00:00Z",
+      not_after: "2027-10-24T00:00:00Z",
+      revocation_observations: [
+        { ...observation, target_key: "k-crl", protocol: "crl", endpoint: "http://pki.example/a211.crl", certificate_listed: true },
+        { ...observation, target_key: "k-ocsp", protocol: "ocsp", endpoint: "http://ocsp.example/a211", response_status: "revoked" },
+      ],
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /scanned\.a211\.example/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText("Revocation answers from relays")).toBeInTheDocument();
+    expect(
+      within(detail).getByText(/CRL http:\/\/pki\.example\/a211\.crl: the CRL lists this serial \(its own serial, signature verified\)/),
+    ).toBeInTheDocument();
+    expect(within(detail).getByText(/OCSP http:\/\/ocsp\.example\/a211: OCSP answered revoked \(its own serial, signature verified\)/)).toBeInTheDocument();
+    expect(within(detail).getAllByText(/by relay-edge$/)).toHaveLength(2);
+  });
+
   it("says when a key origin was derived from the retained issuance event, and names the event", async () => {
     const certificate = {
       id: "pre-custody-cert",

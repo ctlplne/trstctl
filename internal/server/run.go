@@ -828,7 +828,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		AgentClaimableJobKinds: cfg.AgentChannel.ClaimableJobKinds, AgentMaxLiveClaimsPerAgent: cfg.AgentChannel.MaxLiveClaimsPerAgent,
 		AgentUpgradePublisherKeyFile: cfg.AgentChannel.UpgradePublisherKeyFile,
 		AgentCACertFile:              agentCACertFile(cfg), AgentHeartbeatInterval: agentHeartbeatInterval(cfg), AgentChannelServerName: cfg.AgentChannel.ServerName,
-		AgentClockSkewWarning: agentClockSkewWarning(cfg),
+		AgentClockSkewWarning: agentClockSkewWarning(cfg), ProbeScannedCertificates: cfg.AgentChannel.ProbeScannedCertificates,
 	}, nil
 }
 

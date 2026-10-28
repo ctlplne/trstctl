@@ -3,12 +3,14 @@
 package netscan_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/pem"
 	"os"
 	"testing"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/discovery/netscan"
 )
@@ -41,5 +43,36 @@ func TestScanObservesTheServedChain(t *testing.T) {
 	if keys.AuthorityKeyID != "34eaea0cebc90adaf9d0c5e2ed9b78c9879e1b6c" || keys.SPKISHA256 == "" || len(keys.ChainSPKISHA256) != 1 ||
 		keys.ChainSPKISHA256[0] != "63ecefee431d49523bc1136c4e72d0206a477086caf606cd5cf025686c109cf8" || len(keys.ChainCertSHA256) != 1 || len(keys.WeakKeyChecks) != 0 {
 		t.Fatalf("observation = %+v", keys)
+	}
+}
+
+// A211: the observation also holds the served certificates' public bytes,
+// each matching the hash the scan reports for it, so a scan asked to keep them
+// can hand them to the control plane.
+func TestScanHoldsTheServedChainBytesBehindItsHashes(t *testing.T) {
+	data, err := os.ReadFile("../../keyposture/testdata/em-ov-tls-ca-g3c.pem") // #nosec G304 -- a fixed test fixture, named by the test itself (CWE-22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(data)
+	ski, _ := hex.DecodeString("34eaea0cebc90adaf9d0c5e2ed9b78c9879e1b6c")
+	srv, err := tlsprobe.NewServingTestServerUnder(ski, [][]byte{block.Bytes}, "shop.example.test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Close()
+	sink := netscan.NewMemorySink()
+	s := netscan.New(sink, netscan.WithAllowLoopbackTargets(true))
+	defer s.Close()
+	if rep := s.Scan(context.Background(), []string{srv.Addr}); rep.Discovered != 1 {
+		t.Fatalf("report = %+v", rep)
+	}
+	found := sink.All()[0]
+	if crypto.SHA256Hex(found.Keys.LeafDER) != found.Cert.SHA256Fingerprint {
+		t.Fatalf("leaf bytes do not hash to the reported fingerprint")
+	}
+	if len(found.Keys.ChainDER) != 1 || !bytes.Equal(found.Keys.ChainDER[0], block.Bytes) ||
+		crypto.SHA256Hex(found.Keys.ChainDER[0]) != found.Keys.ChainCertSHA256[0] {
+		t.Fatalf("served issuer bytes = %d entries, want the served intermediate behind its hash", len(found.Keys.ChainDER))
 	}
 }

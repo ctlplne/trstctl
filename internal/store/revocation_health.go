@@ -32,6 +32,8 @@ type RevocationEndpointHealth struct {
 	RevokedCount           int
 	ResponseStatus         string
 	ResponderSubject       string
+	Scope                  string
+	CertificateListed      *bool
 	ProbeID                string
 	Bucket                 string
 	BatchIndex             int
@@ -87,8 +89,8 @@ func (s *Store) ApplyRevocationEndpointHealthObservedTx(ctx context.Context, tx 
 			         status, detail_code, latency_ms, this_update, next_update, signature_verified,
 			         revoked_count, response_status, responder_subject, probe_id, bucket,
 			         batch_index, batch_count, observed_by_agent_id, observed_by_agent_name,
-			         evidence_digest, observed_at)
-			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+			         evidence_digest, observed_at, scope, certificate_listed)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
 			 ON CONFLICT (tenant_id, target_key) DO UPDATE SET
 			     protocol=EXCLUDED.protocol, endpoint=EXCLUDED.endpoint,
 			     issuer_subject=EXCLUDED.issuer_subject, issuer_fingerprint=EXCLUDED.issuer_fingerprint,
@@ -101,14 +103,15 @@ func (s *Store) ApplyRevocationEndpointHealthObservedTx(ctx context.Context, tx 
 			     probe_id=EXCLUDED.probe_id, bucket=EXCLUDED.bucket, batch_index=EXCLUDED.batch_index,
 			     batch_count=EXCLUDED.batch_count, observed_by_agent_id=EXCLUDED.observed_by_agent_id,
 			     observed_by_agent_name=EXCLUDED.observed_by_agent_name,
-			     evidence_digest=EXCLUDED.evidence_digest, observed_at=EXCLUDED.observed_at
+			     evidence_digest=EXCLUDED.evidence_digest, observed_at=EXCLUDED.observed_at,
+			     scope=EXCLUDED.scope, certificate_listed=EXCLUDED.certificate_listed
 			 WHERE revocation_endpoint_health.observed_at <= EXCLUDED.observed_at`,
 			row.TenantID, row.TargetKey, row.Protocol, row.Endpoint, row.IssuerSubject, row.IssuerFingerprint,
 			row.CertificateID, row.CertificateSubject, row.CertificateFingerprint, row.CertificateSerial,
 			row.Status, row.DetailCode, row.LatencyMS, row.ThisUpdate, row.NextUpdate, row.SignatureVerified,
 			row.RevokedCount, row.ResponseStatus, row.ResponderSubject, row.ProbeID, row.Bucket,
 			row.BatchIndex, row.BatchCount, row.ObservedByAgentID, row.ObservedByAgentName,
-			row.EvidenceDigest, row.ObservedAt.UTC())
+			row.EvidenceDigest, row.ObservedAt.UTC(), revocationScope(row.Scope), row.CertificateListed)
 		if err != nil {
 			return err
 		}
@@ -130,9 +133,9 @@ func (s *Store) ListRevocationEndpointHealth(ctx context.Context, tenantID strin
 			        status, detail_code, latency_ms, this_update, next_update, signature_verified,
 			        revoked_count, response_status, responder_subject, probe_id::text, bucket,
 			        batch_index, batch_count, observed_by_agent_id::text, observed_by_agent_name,
-			        evidence_digest, observed_at
+			        evidence_digest, observed_at, scope, certificate_listed
 			   FROM revocation_endpoint_health
-			  WHERE tenant_id = $1
+			  WHERE tenant_id = $1 AND scope = 'endpoint'
 			  ORDER BY CASE status WHEN 'stale' THEN 0 WHEN 'unparseable' THEN 1 WHEN 'unreachable' THEN 2 WHEN 'expiring' THEN 3 ELSE 4 END,
 			           observed_at DESC, target_key
 			  LIMIT $2`, tenantID, limit)
@@ -149,7 +152,54 @@ func (s *Store) ListRevocationEndpointHealth(ctx context.Context, tenantID strin
 				&row.SignatureVerified, &row.RevokedCount, &row.ResponseStatus,
 				&row.ResponderSubject, &row.ProbeID, &row.Bucket, &row.BatchIndex,
 				&row.BatchCount, &row.ObservedByAgentID, &row.ObservedByAgentName,
-				&row.EvidenceDigest, &row.ObservedAt); err != nil {
+				&row.EvidenceDigest, &row.ObservedAt, &row.Scope, &row.CertificateListed); err != nil {
+				return err
+			}
+			out = append(out, row)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+func revocationScope(scope string) string {
+	if scope == "" {
+		return "endpoint"
+	}
+	return scope
+}
+
+// CertificateRevocationObservations returns every revocation probe answer that
+// names a certificate (A211): checks of its own serial when it is known only
+// from a scan, and endpoint checks it represents. Newest first.
+func (s *Store) CertificateRevocationObservations(ctx context.Context, tenantID, certificateID string) ([]RevocationEndpointHealth, error) {
+	var out []RevocationEndpointHealth
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT tenant_id::text, target_key, protocol, endpoint, issuer_subject, issuer_fingerprint,
+			        certificate_id::text, certificate_subject, certificate_fingerprint, certificate_serial,
+			        status, detail_code, latency_ms, this_update, next_update, signature_verified,
+			        revoked_count, response_status, responder_subject, probe_id::text, bucket,
+			        batch_index, batch_count, observed_by_agent_id::text, observed_by_agent_name,
+			        evidence_digest, observed_at, scope, certificate_listed
+			   FROM revocation_endpoint_health
+			  WHERE tenant_id = $1 AND certificate_id = $2
+			  ORDER BY observed_at DESC, target_key
+			  LIMIT 32`, tenantID, certificateID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var row RevocationEndpointHealth
+			if err := rows.Scan(&row.TenantID, &row.TargetKey, &row.Protocol, &row.Endpoint,
+				&row.IssuerSubject, &row.IssuerFingerprint, &row.CertificateID,
+				&row.CertificateSubject, &row.CertificateFingerprint, &row.CertificateSerial,
+				&row.Status, &row.DetailCode, &row.LatencyMS, &row.ThisUpdate, &row.NextUpdate,
+				&row.SignatureVerified, &row.RevokedCount, &row.ResponseStatus,
+				&row.ResponderSubject, &row.ProbeID, &row.Bucket, &row.BatchIndex,
+				&row.BatchCount, &row.ObservedByAgentID, &row.ObservedByAgentName,
+				&row.EvidenceDigest, &row.ObservedAt, &row.Scope, &row.CertificateListed); err != nil {
 				return err
 			}
 			out = append(out, row)

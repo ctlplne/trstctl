@@ -81,6 +81,9 @@ type certificateResponse struct {
 	// a custody record. Detail reads only; absent when none was reported or
 	// trstctl does not hold the certificate's bytes.
 	KeyObservations []certificateKeyObservation `json:"key_observations,omitempty"`
+	// RevocationObservations (A211) are the relay-verified CRL and OCSP answers
+	// that name this certificate (detail reads only).
+	RevocationObservations []RevocationEndpointHealth `json:"revocation_observations,omitempty"`
 }
 
 // certificateKeyObservation is one agent-reported key file (metadata only).
@@ -359,6 +362,10 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.KeyObservations = observations
+	if response.RevocationObservations, err = a.certificateRevocationObservations(r.Context(), tenantID, c.ID); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	if c.IssuanceEventID != "" {
 		provenance, err := a.store.ListKubernetesCertificateProvenance(r.Context(), tenantID, []string{c.Fingerprint})
 		if err != nil {

@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	"trstctl.com/trstctl/internal/keyposture"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
 
@@ -142,14 +144,21 @@ func (s *Server) recordRelayDiscoveryFinding(ctx context.Context, tenantID, agen
 		riskScore = discoveryRiskScore(notAfter)
 		riskScore = applyRelayKeyObservation(metadata, finding, riskScore)
 		observation := intent.Mode + "\x00" + finding.Address + "\x00" + finding.Fingerprint
+		leafDER, chain := keptScanBytes(finding)
 		if _, err := s.orch.RecordCertificateWithEventID(ctx, tenantID,
 			orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "certificate\x00"+observation), store.Certificate{
 				Subject: finding.Subject, SANs: finding.SANs, Issuer: finding.Issuer, Serial: finding.Serial,
 				Fingerprint: finding.Fingerprint, KeyAlgorithm: finding.KeyType,
 				NotBefore: &notBefore, NotAfter: &notAfter, DeploymentLocation: finding.Address,
-				Source: "discovery:network",
+				Source: "discovery:network", CertificateDER: leafDER,
 			}); err != nil {
 			return err
+		}
+		if len(chain.Issuers) > 0 {
+			if err := s.orch.RecordScannedCertificateChainWithEventID(ctx, tenantID,
+				orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "chain\x00"+observation), chain); err != nil {
+				return err
+			}
 		}
 	} else {
 		kind = "ssh_key"
@@ -171,6 +180,24 @@ func (s *Server) recordRelayDiscoveryFinding(ctx context.Context, tenantID, agen
 			Metadata: encoded,
 		})
 	return err
+}
+
+// keptScanBytes returns the leaf bytes and served issuers a relay kept (A211),
+// each checked against the hash the relay reported: a leaf whose bytes do not
+// hash to its fingerprint keeps nothing, and the issuers stop at the first one
+// that does not match.
+func keptScanBytes(finding segmentscan.Finding) ([]byte, projections.ScannedCertificateChainObserved) {
+	chain := projections.ScannedCertificateChainObserved{LeafFingerprint: strings.ToLower(finding.Fingerprint)}
+	if len(finding.CertificateDER) == 0 || crypto.SHA256Hex(finding.CertificateDER) != chain.LeafFingerprint {
+		return nil, chain
+	}
+	for i, der := range finding.ChainDER {
+		if i >= len(finding.ChainCertSHA256) || crypto.SHA256Hex(der) != finding.ChainCertSHA256[i] {
+			break
+		}
+		chain.Issuers = append(chain.Issuers, projections.ScannedChainIssuerDER{SHA256: finding.ChainCertSHA256[i], CertificateDER: der})
+	}
+	return finding.CertificateDER, chain
 }
 
 func relayFindingTime(value string) (time.Time, error) {

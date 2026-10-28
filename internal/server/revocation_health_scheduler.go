@@ -266,6 +266,15 @@ func (s *Server) revocationTargets(ctx context.Context, tenantID string) ([]revo
 			upsertRevocationTarget(byKey, buildRevocationTarget(certificate, info, leafDER, issuer, revocationhealth.ProtocolOCSP, endpoint))
 		}
 	}
+	if s.probeScannedCertificates {
+		scanned, err := s.scannedRevocationTargets(ctx, tenantID, certificates, issuers)
+		if err != nil {
+			return nil, err
+		}
+		for _, target := range scanned {
+			byKey[target.Key] = target
+		}
+	}
 	targets := make([]revocationhealth.Target, 0, len(byKey))
 	for _, target := range byKey {
 		if err := revocationhealth.ValidateTarget(target); err == nil {

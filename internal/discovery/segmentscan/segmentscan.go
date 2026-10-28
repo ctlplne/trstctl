@@ -61,6 +61,10 @@ type Intent struct {
 	RequiredAgentID     string   `json:"required_agent_id,omitempty"`
 	ExcludedTargets     int      `json:"excluded_targets,omitempty"`
 	AppliedExclusions   []string `json:"applied_exclusions,omitempty"`
+	// KeepChain asks a TLS sweep to return the public bytes of each served leaf
+	// and its first issuers, so revocation can be probed for certificates known
+	// only from scans (A211, opt-in).
+	KeepChain bool `json:"keep_chain,omitempty"`
 }
 
 type sourceConfig struct {
@@ -351,8 +355,9 @@ func declarationCovers(declaration, host, target string) (bool, error) {
 }
 
 // Finding is public credential metadata observed at one assigned target. No
-// certificate bytes, SSH public-key bytes, credentials, or arbitrary relay text
-// are accepted by this protocol.
+// SSH public-key bytes, credentials, or arbitrary relay text are accepted by
+// this protocol, and certificate bytes only when the sweep asked to keep them
+// (KeepChain, A211).
 type Finding struct {
 	Address       string   `json:"address"`
 	Fingerprint   string   `json:"fingerprint"`
@@ -373,10 +378,21 @@ type Finding struct {
 	ChainSPKISHA256 []string `json:"chain_spki_sha256,omitempty"`
 	ChainCertSHA256 []string `json:"chain_cert_sha256,omitempty"`
 	WeakKeyChecks   []string `json:"weak_key_checks,omitempty"`
+	// CertificateDER and ChainDER are the leaf's and its first served issuers'
+	// public bytes, present only when the sweep was asked to keep them;
+	// ChainDER[i] is the certificate ChainCertSHA256[i] names.
+	CertificateDER []byte   `json:"certificate_der,omitempty"`
+	ChainDER       [][]byte `json:"chain_der,omitempty"`
 }
 
 // maxServedIssuers bounds the served chain a finding may describe.
 const maxServedIssuers = 8
+
+// Bounds on the public certificate bytes a finding may carry (A211).
+const (
+	maxKeptCertificateBytes = 16 << 10
+	maxKeptIssuers          = 4
+)
 
 func isLowerHex(s string, min, max int) bool {
 	if len(s) < min || len(s) > max || len(s)%2 != 0 {
@@ -405,6 +421,15 @@ func validateKeyObservation(f Finding) error {
 	for i := range f.ChainSPKISHA256 {
 		if !isLowerHex(f.ChainSPKISHA256[i], 64, 64) || !isLowerHex(f.ChainCertSHA256[i], 64, 64) {
 			return errors.New("served chain hashes must be 64 lowercase hex characters")
+		}
+	}
+	if len(f.CertificateDER) > maxKeptCertificateBytes || len(f.ChainDER) > maxKeptIssuers ||
+		len(f.ChainDER) > len(f.ChainCertSHA256) || (len(f.ChainDER) > 0 && len(f.CertificateDER) == 0) {
+		return errors.New("the kept certificate bytes are unbounded or do not follow the served chain")
+	}
+	for _, der := range f.ChainDER {
+		if len(der) == 0 || len(der) > maxKeptCertificateBytes {
+			return errors.New("a kept issuer certificate is empty or too large")
 		}
 	}
 	if len(f.WeakKeyChecks) > 16 {

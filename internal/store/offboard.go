@@ -152,6 +152,8 @@ var TenantScopedTables = []string{
 	"archive_legal_holds",
 	// A210: contained targets' recovery checks.
 	"endpoint_recovery_checks",
+	// A211: issuer certificates scans kept.
+	"scanned_certificate_chains",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

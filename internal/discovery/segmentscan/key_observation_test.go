@@ -30,3 +30,30 @@ func TestKeyObservationFieldsAreClosed(t *testing.T) {
 		}
 	}
 }
+
+// A211: the certificate bytes a relay keeps are bounded and follow the served
+// chain: issuers only behind a leaf, no more issuers than hashes, at most four,
+// none empty or over 16 KiB.
+func TestKeptCertificateBytesAreBounded(t *testing.T) {
+	hash := strings.Repeat("ab", 32)
+	leaf := make([]byte, 600)
+	issuer := make([]byte, 700)
+	good := Finding{CertificateDER: leaf, ChainDER: [][]byte{issuer}, ChainSPKISHA256: []string{hash}, ChainCertSHA256: []string{hash}}
+	if err := validateKeyObservation(good); err != nil {
+		t.Fatalf("good kept bytes: %v", err)
+	}
+	hashes := []string{hash, hash, hash, hash, hash}
+	for name, bad := range map[string]Finding{
+		"oversized leaf":        {CertificateDER: make([]byte, 16<<10+1)},
+		"issuer without a leaf": {ChainDER: [][]byte{issuer}, ChainSPKISHA256: []string{hash}, ChainCertSHA256: []string{hash}},
+		"more issuers than hashes": {CertificateDER: leaf, ChainDER: [][]byte{issuer, issuer},
+			ChainSPKISHA256: []string{hash}, ChainCertSHA256: []string{hash}},
+		"five issuers": {CertificateDER: leaf, ChainDER: [][]byte{issuer, issuer, issuer, issuer, issuer},
+			ChainSPKISHA256: hashes, ChainCertSHA256: hashes},
+		"empty issuer": {CertificateDER: leaf, ChainDER: [][]byte{{}}, ChainSPKISHA256: []string{hash}, ChainCertSHA256: []string{hash}},
+	} {
+		if err := validateKeyObservation(bad); err == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
+}

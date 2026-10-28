@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/authz"
+	"trstctl.com/trstctl/internal/store"
 )
 
 // RevocationEndpointHealth is one relay-verified CRL or OCSP observation.
@@ -35,6 +36,10 @@ type RevocationEndpointHealth struct {
 	ObservedByAgentName    string `json:"observed_by_agent_name"`
 	EvidenceDigest         string `json:"evidence_digest"`
 	ObservedAt             string `json:"observed_at"`
+	// Scope and CertificateListed (A211): a check of one scanned certificate's
+	// own serial, and whether a CRL lists it.
+	Scope             string `json:"scope"`
+	CertificateListed *bool  `json:"certificate_listed,omitempty"`
 }
 
 type RevocationHealthSummary struct {
@@ -75,24 +80,7 @@ func (a *API) listRevocationHealth(w http.ResponseWriter, r *http.Request) {
 		Summary: RevocationHealthSummary{Endpoints: len(rows)}, Guidance: revocationHealthGuidance,
 	}
 	for _, row := range rows {
-		item := RevocationEndpointHealth{
-			TargetKey: row.TargetKey, Protocol: row.Protocol, Endpoint: row.Endpoint,
-			IssuerSubject: row.IssuerSubject, IssuerFingerprint: row.IssuerFingerprint,
-			CertificateID: row.CertificateID, CertificateSubject: row.CertificateSubject,
-			CertificateFingerprint: row.CertificateFingerprint, CertificateSerial: row.CertificateSerial,
-			Status: row.Status, DetailCode: row.DetailCode, LatencyMS: row.LatencyMS,
-			SignatureVerified: row.SignatureVerified, RevokedCount: row.RevokedCount,
-			ResponseStatus: row.ResponseStatus, ResponderSubject: row.ResponderSubject,
-			ProbeID: row.ProbeID, ObservedByAgentID: row.ObservedByAgentID,
-			ObservedByAgentName: row.ObservedByAgentName, EvidenceDigest: row.EvidenceDigest,
-			ObservedAt: row.ObservedAt.UTC().Format(time.RFC3339),
-		}
-		if row.ThisUpdate != nil {
-			item.ThisUpdate = row.ThisUpdate.UTC().Format(time.RFC3339)
-		}
-		if row.NextUpdate != nil {
-			item.NextUpdate = row.NextUpdate.UTC().Format(time.RFC3339)
-		}
+		item := toRevocationEndpointHealth(row)
 		switch row.Status {
 		case "fresh":
 			out.Summary.Fresh++
@@ -108,6 +96,45 @@ func (a *API) listRevocationHealth(w http.ResponseWriter, r *http.Request) {
 		out.Items = append(out.Items, item)
 	}
 	a.writeJSON(w, http.StatusOK, out)
+}
+
+func toRevocationEndpointHealth(row store.RevocationEndpointHealth) RevocationEndpointHealth {
+	item := RevocationEndpointHealth{
+		TargetKey: row.TargetKey, Protocol: row.Protocol, Endpoint: row.Endpoint,
+		IssuerSubject: row.IssuerSubject, IssuerFingerprint: row.IssuerFingerprint,
+		CertificateID: row.CertificateID, CertificateSubject: row.CertificateSubject,
+		CertificateFingerprint: row.CertificateFingerprint, CertificateSerial: row.CertificateSerial,
+		Status: row.Status, DetailCode: row.DetailCode, LatencyMS: row.LatencyMS,
+		SignatureVerified: row.SignatureVerified, RevokedCount: row.RevokedCount,
+		ResponseStatus: row.ResponseStatus, ResponderSubject: row.ResponderSubject,
+		ProbeID: row.ProbeID, ObservedByAgentID: row.ObservedByAgentID,
+		ObservedByAgentName: row.ObservedByAgentName, EvidenceDigest: row.EvidenceDigest,
+		ObservedAt: row.ObservedAt.UTC().Format(time.RFC3339), Scope: row.Scope, CertificateListed: row.CertificateListed,
+	}
+	if item.Scope == "" {
+		item.Scope = "endpoint"
+	}
+	if row.ThisUpdate != nil {
+		item.ThisUpdate = row.ThisUpdate.UTC().Format(time.RFC3339)
+	}
+	if row.NextUpdate != nil {
+		item.NextUpdate = row.NextUpdate.UTC().Format(time.RFC3339)
+	}
+	return item
+}
+
+// certificateRevocationObservations are the probe answers that name one
+// certificate, for its detail read (A211).
+func (a *API) certificateRevocationObservations(ctx context.Context, tenantID, certificateID string) ([]RevocationEndpointHealth, error) {
+	rows, err := a.store.CertificateRevocationObservations(ctx, tenantID, certificateID)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	out := make([]RevocationEndpointHealth, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, toRevocationEndpointHealth(row))
+	}
+	return out, nil
 }
 
 // revocationHealthRoutes serves the relay-verified endpoint health and the

@@ -2793,6 +2793,12 @@ type AgentChannel struct {
 	// a Go duration, default "2m". The agent still times its own certificate
 	// renewal by its own clock.
 	ClockSkewWarning string `json:"clock_skew_warning,omitempty"`
+	// ProbeScannedCertificates has network discovery sweeps keep the public
+	// bytes of each certificate they find, with its first served issuers, and
+	// has the revocation health scheduler probe CRL and OCSP for certificates
+	// known only from those scans (A211). Off by default: it adds outbound
+	// revocation requests from relays.
+	ProbeScannedCertificates bool `json:"probe_scanned_certificates,omitempty"`
 }
 
 // DefaultAgentClockSkewWarning is the clock drift past which an agent is
@@ -3293,6 +3299,7 @@ func applyAgentChannelEnv(getenv func(string) string, a *AgentChannel) {
 	setCSV(getenv, "TRSTCTL_AGENT_CHANNEL_CLAIMABLE_JOB_KINDS", &a.ClaimableJobKinds)
 	setInt(getenv, "TRSTCTL_AGENT_CHANNEL_MAX_LIVE_CLAIMS_PER_AGENT", &a.MaxLiveClaimsPerAgent)
 	setString(getenv, "TRSTCTL_AGENT_CHANNEL_UPGRADE_PUBLISHER_KEY_FILE", &a.UpgradePublisherKeyFile)
+	setBool(getenv, "TRSTCTL_AGENT_CHANNEL_PROBE_SCANNED_CERTIFICATES", &a.ProbeScannedCertificates)
 }
 
 func applyServerAndSpineEnv(getenv func(string) string, c *Config) {

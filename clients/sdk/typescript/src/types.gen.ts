@@ -11413,6 +11413,8 @@ export interface components {
             not_before?: string;
             /** Format: uuid */
             owner_id?: string;
+            /** @description Relay-verified CRL and OCSP answers that name this certificate, newest first (detail reads only): checks of its own serial when it is known only from a scan, and endpoint checks it represents. */
+            revocation_observations?: components["schemas"]["RevocationEndpointHealth"][];
             /** @description An exact local issuer revocation command is authoritative while its event projection is pending; OCSP Good and predecessor CRLs are refused. */
             revocation_pending?: boolean;
             revocation_reason?: string;
@@ -17859,6 +17861,8 @@ export interface components {
         RevocationEndpointHealth: {
             certificate_fingerprint: string;
             certificate_id: string;
+            /** @description Whether the signed CRL lists this certificate's serial. Absent for OCSP answers and for CRLs that could not be read. */
+            certificate_listed?: boolean;
             certificate_serial: string;
             certificate_subject: string;
             detail_code: string;
@@ -17880,6 +17884,11 @@ export interface components {
             /** @enum {string} */
             response_status?: "good" | "revoked" | "unknown";
             revoked_count?: number;
+            /**
+             * @description endpoint: the endpoint's health, checked through a representative certificate. certificate: one certificate known only from a scan, checked for its own serial.
+             * @enum {string}
+             */
+            scope?: "endpoint" | "certificate";
             signature_verified: boolean;
             /** @enum {string} */
             status: "fresh" | "expiring" | "stale" | "unreachable" | "unparseable";

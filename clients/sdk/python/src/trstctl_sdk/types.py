@@ -3628,6 +3628,7 @@ Certificate = TypedDict(
         'not_after': str,
         'not_before': str,
         'owner_id': str,
+        'revocation_observations': list[dict[str, Any]],
         'revocation_pending': bool,
         'revocation_reason': str,
         'revoked_at': str,
@@ -11464,6 +11465,7 @@ RevocationEndpointHealth = TypedDict(
     {
         'certificate_fingerprint': str,
         'certificate_id': str,
+        'certificate_listed': bool,
         'certificate_serial': str,
         'certificate_subject': str,
         'detail_code': str,
@@ -11481,6 +11483,7 @@ RevocationEndpointHealth = TypedDict(
         'responder_subject': str,
         'response_status': str,
         'revoked_count': int,
+        'scope': str,
         'signature_verified': bool,
         'status': str,
         'target_key': str,

@@ -380,6 +380,10 @@ type Deps struct {
 	// dropped: an operator cannot move the control plane's own effects onto a host
 	// by naming them here.
 	AgentClaimableJobKinds []string
+	// ProbeScannedCertificates has TLS discovery sweeps keep the public bytes of
+	// the certificates they find and the revocation health scheduler probe CRL
+	// and OCSP for certificates known only from scans (A211, opt-in).
+	ProbeScannedCertificates bool
 	// AgentMaxLiveClaimsPerAgent caps the leases one agent may hold at once (A66);
 	// zero means no per-agent quota beyond the shared bulkhead.
 	AgentMaxLiveClaimsPerAgent int
@@ -787,6 +791,9 @@ type Server struct {
 	agentChannelServerName  string        // SAN the agent verifies (server-name); from config
 	agentHeartbeatInterval  time.Duration // next-beat hint and stale-heartbeat threshold base
 	agentClockSkewWarning   time.Duration // A194: clock drift that flags an agent
+	// probeScannedCertificates has the revocation scheduler probe certificates
+	// known only from scans (A211, agent_channel.probe_scanned_certificates).
+	probeScannedCertificates bool
 	// agentUpgradePublisherKeyDER is the pinned upgrade publisher key (A68), loaded
 	// from Deps.AgentUpgradePublisherKeyFile; nil accepts the sha256 pin alone.
 	agentUpgradePublisherKeyDER []byte
@@ -1432,6 +1439,7 @@ func (s *Server) configureMutationSpine(
 	orchOptions = append(orchOptions, orchestrator.WithTenantCommandService(d.Store.BeginTenantService, d.TenantServiceCheck))
 	if d.EnableAgentChannel {
 		orchOptions = append(orchOptions, orchestrator.WithClaimableAgentJobKinds(d.AgentClaimableJobKinds))
+		orchOptions = append(orchOptions, orchestrator.WithScannedCertificateChains(d.ProbeScannedCertificates))
 		orchOptions = append(orchOptions, orchestrator.WithAgentHeartbeatInterval(d.AgentHeartbeatInterval))
 	}
 	if d.OwnershipAttestationCadence > 0 {
@@ -2446,6 +2454,7 @@ func (s *Server) configureAgentChannelSurface(d Deps, idem *orchestrator.Idempot
 	s.agentChannelServerName = d.AgentChannelServerName
 	s.agentHeartbeatInterval = d.AgentHeartbeatInterval
 	s.agentClockSkewWarning = d.AgentClockSkewWarning
+	s.probeScannedCertificates = d.ProbeScannedCertificates
 	agentSvc := &agentService{
 		tenantServiceCheck: d.TenantServiceCheck,
 		logger:             s.logger,

@@ -9429,6 +9429,40 @@ export const messages = {
     defaultMessage: "Reported by host agents' key inventory: where a matching key file sits, not how the key was made.",
     description: "Explains that key observations are not custody records.",
   },
+  "certificateCockpit.detail.revocationObservations": {
+    defaultMessage: "Revocation answers from relays",
+    description: "A211: certificate detail label for relay-verified CRL and OCSP answers naming the certificate.",
+  },
+  "certificateCockpit.detail.revocationObservation": {
+    defaultMessage: "{protocol} {endpoint}: {answer} ({scope}, {signature}), {seen} by {agent}",
+    description: "A211: one relay's signed CRL or OCSP answer for the certificate.",
+  },
+  "certificateCockpit.detail.revocationListed": { defaultMessage: "the CRL lists this serial", description: "A211: a CRL lists the certificate's serial." },
+  "certificateCockpit.detail.revocationNotListed": {
+    defaultMessage: "the CRL does not list this serial",
+    description: "A211: a CRL does not list the certificate's serial.",
+  },
+  "certificateCockpit.detail.revocationOCSPGood": { defaultMessage: "OCSP answered good", description: "A211: OCSP good for the serial." },
+  "certificateCockpit.detail.revocationOCSPRevoked": { defaultMessage: "OCSP answered revoked", description: "A211: OCSP revoked for the serial." },
+  "certificateCockpit.detail.revocationNoAnswer": {
+    defaultMessage: "no status for this serial ({status})",
+    description: "A211: the probe gave no answer about the serial; the endpoint's status.",
+  },
+  "certificateCockpit.detail.revocationOwnSerial": { defaultMessage: "its own serial", description: "A211: the check asked about this certificate's serial." },
+  "certificateCockpit.detail.revocationEndpointCheck": {
+    defaultMessage: "endpoint check",
+    description: "A211: the check was the endpoint's health with this certificate as its example.",
+  },
+  "certificateCockpit.detail.revocationSignatureVerified": { defaultMessage: "signature verified", description: "A211: the CRL or OCSP signature verified." },
+  "certificateCockpit.detail.revocationSignatureUnverified": {
+    defaultMessage: "signature not verified",
+    description: "A211: the CRL or OCSP signature could not be verified.",
+  },
+  "certificateCockpit.detail.revocationObservationsNote": {
+    defaultMessage:
+      "Signed relay probes of this certificate's CRL and OCSP endpoints. A certificate known only from a network scan is checked for its own serial when the deployment keeps scanned certificates for revocation checks.",
+    description: "A211: explains the revocation answers and when scanned certificates are checked.",
+  },
   "certificateCockpit.detail.current": { defaultMessage: "Current ownership", description: "Current and attested certificate ownership state." },
   "certificateCockpit.detail.incomplete": { defaultMessage: "Ownership is incomplete", description: "Incomplete certificate ownership state." },
   "certificateCockpit.detail.notCurrent": { defaultMessage: "Ownership needs review", description: "Stale certificate ownership state." },

@@ -59,7 +59,17 @@ type Target struct {
 	CertificateFingerprint string `json:"certificate_fingerprint"`
 	CertificateSerial      string `json:"certificate_serial"`
 	CertificateDER         []byte `json:"certificate_der,omitempty"`
+	// Scope is ScopeEndpoint (empty) for an endpoint's health checked through a
+	// representative certificate, or ScopeCertificate for one certificate known
+	// only from a scan, checked for its own serial (A211).
+	Scope string `json:"scope,omitempty"`
 }
+
+// Target scopes.
+const (
+	ScopeEndpoint    = "endpoint"
+	ScopeCertificate = "certificate"
+)
 
 type FindingStatus string
 
@@ -85,6 +95,8 @@ type Finding struct {
 	RevokedCount      int           `json:"revoked_count,omitempty"`
 	ResponseStatus    string        `json:"response_status,omitempty"`
 	ResponderSubject  string        `json:"responder_subject,omitempty"`
+	// CertificateListed says whether a parsed CRL lists the target's serial.
+	CertificateListed *bool `json:"certificate_listed,omitempty"`
 }
 
 type Report struct {
@@ -242,6 +254,15 @@ func ValidateTarget(target Target) error {
 	}
 	if target.Protocol != ProtocolCRL && target.Protocol != ProtocolOCSP {
 		return errors.New("protocol must be crl or ocsp")
+	}
+	switch target.Scope {
+	case "", ScopeEndpoint:
+	case ScopeCertificate:
+		if len(target.CertificateDER) == 0 || len(target.IssuerDER) == 0 || target.CertificateSerial == "" {
+			return errors.New("a certificate-scope target names its certificate, serial and verified issuer")
+		}
+	default:
+		return errors.New("target scope must be endpoint or certificate")
 	}
 	if len(target.Endpoint) == 0 || len(target.Endpoint) > MaxEndpointBytes {
 		return errors.New("endpoint is empty or too large")

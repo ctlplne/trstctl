@@ -10668,6 +10668,13 @@
             "format": "uuid",
             "type": "string"
           },
+          "revocation_observations": {
+            "description": "Relay-verified CRL and OCSP answers that name this certificate, newest first (detail reads only): checks of its own serial when it is known only from a scan, and endpoint checks it represents.",
+            "items": {
+              "$ref": "#/components/schemas/RevocationEndpointHealth"
+            },
+            "type": "array"
+          },
           "revocation_pending": {
             "description": "An exact local issuer revocation command is authoritative while its event projection is pending; OCSP Good and predecessor CRLs are refused.",
             "type": "boolean"
@@ -34724,6 +34731,10 @@
           "certificate_id": {
             "type": "string"
           },
+          "certificate_listed": {
+            "description": "Whether the signed CRL lists this certificate's serial. Absent for OCSP answers and for CRLs that could not be read.",
+            "type": "boolean"
+          },
           "certificate_serial": {
             "type": "string"
           },
@@ -34785,6 +34796,14 @@
           },
           "revoked_count": {
             "type": "integer"
+          },
+          "scope": {
+            "description": "endpoint: the endpoint's health, checked through a representative certificate. certificate: one certificate known only from a scan, checked for its own serial.",
+            "enum": [
+              "endpoint",
+              "certificate"
+            ],
+            "type": "string"
           },
           "signature_verified": {
             "type": "boolean"

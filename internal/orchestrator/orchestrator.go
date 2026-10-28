@@ -125,6 +125,9 @@ type Orchestrator struct {
 	// under.
 	ldapWritebackBaseDNs             map[string]string
 	claimableAgentJobKindsConfigured bool
+	// keepScannedChains has TLS discovery sweeps return their certificates'
+	// public bytes (A211, agent_channel.probe_scanned_certificates).
+	keepScannedChains bool
 	// agentHeartbeatInterval is the served channel's next-beat hint. Discovery
 	// admission uses the same two-beat freshness window as Agents presence.
 	agentHeartbeatInterval time.Duration
@@ -191,6 +194,13 @@ func WithOwnershipAttestationCadence(cadence time.Duration) OrchestratorOption {
 			orchestrator.ownershipAttestationCadence = cadence
 		}
 	}
+}
+
+// WithScannedCertificateChains has TLS discovery sweeps keep the public bytes
+// of the certificates they find, so revocation can be probed for certificates
+// known only from scans (A211).
+func WithScannedCertificateChains(keep bool) OrchestratorOption {
+	return func(orchestrator *Orchestrator) { orchestrator.keepScannedChains = keep }
 }
 
 // WithClaimableAgentJobKinds gives queue admission the same allowlist the agent

@@ -74,3 +74,18 @@ func TestTheUpgradePublisherKeyFileIsSettableByEnvironment(t *testing.T) {
 		t.Fatalf("upgrade_publisher_key_file = %q, want the environment value", c.AgentChannel.UpgradePublisherKeyFile)
 	}
 }
+
+// A211: probing certificates known only from scans is off by default and
+// settable by environment like every sibling.
+func TestProbingScannedCertificatesIsOffByDefaultAndSettableByEnvironment(t *testing.T) {
+	t.Parallel()
+	if Default().AgentChannel.ProbeScannedCertificates {
+		t.Fatal("probe_scanned_certificates must default to off")
+	}
+	env := map[string]string{"TRSTCTL_AGENT_CHANNEL_PROBE_SCANNED_CERTIFICATES": "true"}
+	var c Config
+	c.applyEnv(func(k string) string { return env[k] })
+	if !c.AgentChannel.ProbeScannedCertificates {
+		t.Fatal("probe_scanned_certificates was not set from the environment")
+	}
+}

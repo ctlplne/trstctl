@@ -552,6 +552,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
 		resolved.RetryOfRunID = in.RetryOfRunID
 		resolved.DryRun, resolved.RequestedBy = in.DryRun, requestedBy
+		resolved.KeepChain = o.keepScannedChains && resolved.Mode == segmentscan.ModeTLS && !resolved.DryRun
 		queued = resolved
 		command = resolved
 	case adcsdiscovery.SourceKind:
@@ -822,8 +823,9 @@ func (o *Orchestrator) recordDiscoveryFinding(ctx context.Context, tenantID stri
 }
 
 // RecordCertificateWithEventID records public certificate metadata with both a
-// stable event ID and stable projected row ID. It is intentionally narrow: raw
-// certificate/key material does not enter this receiver path.
+// stable event ID and stable projected row ID. It is intentionally narrow: key
+// material never enters this receiver path, and a certificate's public bytes do
+// only when a scan kept them (A211).
 func (o *Orchestrator) RecordCertificateWithEventID(ctx context.Context, tenantID, eventID string, in store.Certificate) (store.Certificate, error) {
 	if strings.TrimSpace(eventID) == "" {
 		return store.Certificate{}, errors.New("orchestrator: certificate event id is required")

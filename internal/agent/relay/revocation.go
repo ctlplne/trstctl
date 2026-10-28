@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -247,6 +248,10 @@ func evaluateCRL(body []byte, target revocationhealth.Target, staleWithin time.D
 	}
 	finding.SignatureVerified = len(target.IssuerDER) > 0
 	finding.RevokedCount = len(info.RevokedSerials)
+	if serial := strings.ToLower(strings.TrimSpace(target.CertificateSerial)); serial != "" {
+		listed := slices.Contains(info.RevokedSerials, serial)
+		finding.CertificateListed = &listed
+	}
 	thisUpdate, nextUpdate := info.ThisUpdate, info.NextUpdate
 	finding.ThisUpdate, finding.NextUpdate = &thisUpdate, &nextUpdate
 

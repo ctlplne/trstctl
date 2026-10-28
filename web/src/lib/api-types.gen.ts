@@ -2596,6 +2596,7 @@ export interface Certificate {
   not_after?: string;
   not_before?: string;
   owner_id?: string;
+  revocation_observations?: RevocationEndpointHealth[];
   revocation_pending?: boolean;
   revocation_reason?: string;
   revoked_at?: string;
@@ -8300,6 +8301,7 @@ export interface RevocationCacheSummary {
 export interface RevocationEndpointHealth {
   certificate_fingerprint: string;
   certificate_id: string;
+  certificate_listed?: boolean;
   certificate_serial: string;
   certificate_subject: string;
   detail_code: string;
@@ -8317,6 +8319,7 @@ export interface RevocationEndpointHealth {
   responder_subject?: string;
   response_status?: "good" | "revoked" | "unknown";
   revoked_count?: number;
+  scope?: "endpoint" | "certificate";
   signature_verified: boolean;
   status: "fresh" | "expiring" | "stale" | "unreachable" | "unparseable";
   target_key: string;

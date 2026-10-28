@@ -2,6 +2,14 @@
 
 ### Added
 
+- Revocation checks for scanned certificates: with `agent_channel.probe_scanned_certificates`
+  on (off by default), a relay's TLS discovery sweep keeps the leaf it finds and up to four
+  issuers served after it, each only if it hashes to what the relay reported, and revocation
+  health probing checks that certificate's own serial at its CRL distribution points and
+  OCSP responders against the served issuer that signed it. `GET /api/v1/certificates/{id}`
+  and the certificate detail show those relay-signed answers (`revocation_observations`,
+  including whether the CRL lists the serial); probe answers carry `scope` and the endpoint
+  list stays one row per endpoint.
 - Host recovery after containment: a host profile's containment binding can name a
   `recovery_action`, and `POST /api/v1/connectors/targets/{id}/recovery-check` (CLI
   `connector target recovery-check`, console **Check host recovery readiness**) asks

@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"time"
@@ -174,6 +175,45 @@ func NewServingTestServerUnder(issuerKeyID []byte, chainDER [][]byte, dnsNames .
 	return &ServingTestServer{
 		Addr:    ln.Addr().String(),
 		LeafPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		Close:   func() { _ = ln.Close() },
+	}, nil
+}
+
+// NewServingTestServerChain starts a loopback TLS listener presenting chainDER
+// (leaf first) with the leaf's private key in PEM, so a test outside the
+// crypto boundary can serve a certificate it issued through this package
+// together with its issuer — for example a leaf that names CRL and OCSP
+// endpoints, which a scan keeps to probe (A211).
+func NewServingTestServerChain(chainDER [][]byte, keyPEM []byte) (*ServingTestServer, error) {
+	if len(chainDER) == 0 {
+		return nil, errors.New("tlsprobe: a serving chain needs a leaf")
+	}
+	pair, err := tls.X509KeyPair(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: chainDER[0]}), keyPEM)
+	if err != nil {
+		return nil, err
+	}
+	pair.Certificate = chainDER
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	cfg := &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12}
+	go func() {
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				tc := tls.Server(c, cfg)
+				_ = tc.Handshake()
+				_ = tc.Close()
+			}(conn)
+		}
+	}()
+	return &ServingTestServer{
+		Addr:    ln.Addr().String(),
+		LeafPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: chainDER[0]}),
 		Close:   func() { _ = ln.Close() },
 	}, nil
 }
