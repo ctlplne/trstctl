@@ -269,6 +269,10 @@ type Deps struct {
 	// CACeremonyMinApprovals is the CA key-ceremony approval floor (config
 	// ca.ceremony_min_approvals, raised to 2 by regulated governance; F264).
 	CACeremonyMinApprovals int
+	// CARolloverDraftBandMonths is ca.rollover_draft_band_months: the CA
+	// calendar band at which an authority gets a drafted re-key ceremony
+	// (A216); 0 drafts nothing.
+	CARolloverDraftBandMonths int
 	// APITokenMaxLifetime bounds served API tokens (auth.api_tokens.max_lifetime,
 	// F267). nil uses the product default of 90 days; 0 means unlimited.
 	APITokenMaxLifetime *time.Duration
@@ -3988,6 +3992,12 @@ func (s *Server) runLifecycleOnceAt(ctx context.Context, renewalAt time.Time) (i
 	if err != nil {
 		s.observeLifecycleSweep(queued, alerted+horizonAlerts, err)
 		return queued, err
+	}
+	// A216: an authority inside the configured rollover band gets a drafted
+	// re-key ceremony that custodians approve and a person executes. A draft
+	// that could not be opened is logged and retried on the next sweep.
+	if _, err := s.RunCARolloverDraftsOnce(ctx); err != nil && s.logger != nil {
+		s.logger.Warn("CA rollover drafts incomplete", slog.String("error", err.Error()))
 	}
 	ownershipAlerts, err := s.runOwnershipReattestationOnce(ctx)
 	if err != nil {

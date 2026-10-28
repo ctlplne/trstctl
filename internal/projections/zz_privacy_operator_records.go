@@ -31,6 +31,9 @@ func addOperatorRecordPrivacyShapes(shapes map[privacyEventPolicyKey]events.Priv
 		{EventEndpointRecoveryCheckRequested, 1}: privacyPayloadShape[EndpointRecoveryCheckRequested](),
 		{EventEndpointRecoveryChecked, 1}:        privacyPayloadShape[EndpointRecoveryChecked](),
 		{EventEndpointRecoveryCheckFailed, 1}:    privacyPayloadShape[EndpointRecoveryCheckFailed](),
+		// A216: a drafted CA rollover: the authority, band, expiry, the opened
+		// ceremony and the plan it binds, or why none was opened.
+		{EventCARolloverDrafted, 1}: privacyPayloadShape[CARolloverDrafted](),
 	} {
 		shapes[key] = shape
 	}

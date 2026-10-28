@@ -68,3 +68,13 @@ func (o *Orchestrator) RecordCertificateDERRecoveredWithEventID(ctx context.Cont
 	}
 	return o.recordExactEvent(ctx, tenantID, eventID, projections.EventCertificateDERRecovered, recovered)
 }
+
+// RecordCARolloverDraftedWithEventID records a drafted CA rollover (A216)
+// under an id derived from the authority and band, so one band drafts once.
+func (o *Orchestrator) RecordCARolloverDraftedWithEventID(ctx context.Context, tenantID, eventID string,
+	drafted projections.CARolloverDrafted) error {
+	if err := projections.ValidateCARolloverDrafted(drafted); err != nil {
+		return fmt.Errorf("orchestrator: %w", err)
+	}
+	return o.recordExactEvent(ctx, tenantID, eventID, projections.EventCARolloverDrafted, drafted)
+}

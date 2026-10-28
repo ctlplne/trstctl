@@ -2727,6 +2727,13 @@ type CA struct {
 	// people: the opener and one approver); regulated governance raises the floor
 	// to at least 2.
 	CeremonyMinApprovals int `json:"ceremony_min_approvals,omitempty"`
+
+	// RolloverDraftBandMonths opts into scheduled CA rollover drafts (A216):
+	// when an authority's remaining life enters this CA calendar band (36, 24,
+	// 12, 6 or 3 months), the leader opens a re-key ceremony for it, with the
+	// reviewed plan, that custodians approve and a person executes. 0 (the
+	// default) drafts nothing.
+	RolloverDraftBandMonths int `json:"rollover_draft_band_months,omitempty"`
 }
 
 // AgentChannel configures the served agent ↔ control-plane steady-state mTLS gRPC
@@ -3213,6 +3220,7 @@ func applyCAEnv(getenv func(string) string, ca *CA) {
 	setString(getenv, "TRSTCTL_CA_GOVERNANCE_MODE", &ca.GovernanceMode)
 	setBool(getenv, "TRSTCTL_CA_REQUIRE_FIPS", &ca.RequireFIPS)
 	setInt(getenv, "TRSTCTL_CA_CEREMONY_MIN_APPROVALS", &ca.CeremonyMinApprovals)
+	setInt(getenv, "TRSTCTL_CA_ROLLOVER_DRAFT_BAND_MONTHS", &ca.RolloverDraftBandMonths)
 }
 
 func applyWorkloadIdentityEnv(getenv func(string) string, a *AttestedIssuance) {
@@ -4966,6 +4974,11 @@ func validateGovernanceConfig(c *Config) []error {
 	var errs []error
 	if c.CA.CeremonyMinApprovals < 0 {
 		errs = append(errs, errors.New("ca.ceremony_min_approvals must not be negative; 0 keeps the default floor of 1 approval"))
+	}
+	switch c.CA.RolloverDraftBandMonths {
+	case 0, 36, 24, 12, 6, 3:
+	default:
+		errs = append(errs, errors.New("ca.rollover_draft_band_months must be 0 (off) or a CA calendar band: 36, 24, 12, 6 or 3"))
 	}
 	mode := c.CA.GovernanceModeValue()
 	switch mode {

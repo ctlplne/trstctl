@@ -56,10 +56,12 @@ type caAuthorityHorizon struct {
 	TruncatedLeafIDs []string `json:"truncated_leaf_ids"`
 }
 
-// caAuthorityResponse is a CA authority plus its computed horizon.
+// caAuthorityResponse is a CA authority plus its computed horizon and, when
+// the CA calendar drafted one, its rollover (A216).
 type caAuthorityResponse struct {
 	CAAuthority
-	Horizon *caAuthorityHorizon `json:"horizon,omitempty"`
+	Horizon       *caAuthorityHorizon `json:"horizon,omitempty"`
+	RolloverDraft *caRolloverDraft    `json:"rollover_draft,omitempty"`
 }
 
 // leafValidityReference is the leaf lifetime the horizon is measured against.

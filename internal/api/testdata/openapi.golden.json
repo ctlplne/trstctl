@@ -7915,6 +7915,9 @@
             "format": "date-time",
             "type": "string"
           },
+          "rollover_draft": {
+            "$ref": "#/components/schemas/CARolloverDraft"
+          },
           "serial": {
             "type": "string"
           },
@@ -9214,6 +9217,64 @@
           "certificate_sha256",
           "reason",
           "risk_accepted"
+        ],
+        "type": "object"
+      },
+      "CARolloverDraft": {
+        "properties": {
+          "approvals": {
+            "type": "integer"
+          },
+          "band_months": {
+            "description": "The CA calendar band the authority had entered when the draft was made.",
+            "type": "integer"
+          },
+          "ceremony_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ceremony_status": {
+            "description": "The drafted re-key ceremony's state: pending until custodians approve and a person executes the re-key with this plan.",
+            "enum": [
+              "pending",
+              "completed",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "drafted_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "not_drafted_reason": {
+            "description": "Why no ceremony could be opened, such as an offline root whose re-key needs its offline package.",
+            "type": "string"
+          },
+          "preview_fingerprint": {
+            "type": "string"
+          },
+          "reason": {
+            "description": "The re-key reason the ceremony binds; execute the re-key with it and ttl_seconds.",
+            "type": "string"
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "ttl_seconds": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "band_months",
+          "not_after",
+          "approvals",
+          "threshold",
+          "drafted_at"
         ],
         "type": "object"
       },

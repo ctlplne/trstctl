@@ -4570,6 +4570,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventCertificateSCTRecorded:                   {1: true},
 	EventCertificateSCTInclusion:                  {1: true},
 	EventCertificateDERRecovered:                  {1: true},
+	EventCARolloverDrafted:                        {1: true},
 	EventTenantCustomRoleUpserted:                 {1: true},
 	EventTenantCustomRoleDeleted:                  {1: true},
 	EventTSACertificateRevoked:                    {1: true},
@@ -4981,6 +4982,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	if handled, err := p.applyCertificateDERRecoveredTx(ctx, tx, e); handled {
+		return err
+	}
+	if handled, err := p.applyCARolloverDraftedTx(ctx, tx, e); handled {
 		return err
 	}
 	if handled, err := p.applyTenantCustomRoleTx(ctx, tx, e); handled {

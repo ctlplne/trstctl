@@ -185,3 +185,21 @@ func TestCeremonyApprovalFloorComesFromConfig(t *testing.T) {
 		t.Fatalf("negative ceremony floor validation = %v, want a refusal naming ca.ceremony_min_approvals", err)
 	}
 }
+
+// A216: scheduled CA rollover drafts are off by default and take only a CA
+// calendar band from ca.rollover_draft_band_months.
+func TestCARolloverDraftBandIsOptInAndMustBeACalendarBand(t *testing.T) {
+	if got := Default().CA.RolloverDraftBandMonths; got != 0 {
+		t.Fatalf("default rollover draft band = %d, want 0 (off)", got)
+	}
+	env := map[string]string{"TRSTCTL_CA_ROLLOVER_DRAFT_BAND_MONTHS": "12"}
+	loaded, err := Load(func(k string) string { return env[k] })
+	if err != nil || loaded.CA.RolloverDraftBandMonths != 12 {
+		t.Fatalf("load rollover draft band = %+v, %v; want 12", loaded, err)
+	}
+	odd := Default()
+	odd.CA.RolloverDraftBandMonths = 9
+	if err := odd.Validate(); err == nil || !strings.Contains(err.Error(), "ca.rollover_draft_band_months") {
+		t.Fatalf("a band the CA calendar does not use = %v, want a refusal naming ca.rollover_draft_band_months", err)
+	}
+}

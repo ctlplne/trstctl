@@ -2,6 +2,12 @@
 
 ### Added
 
+- Scheduled CA rollover drafts: with `ca.rollover_draft_band_months` (`TRSTCTL_CA_ROLLOVER_DRAFT_BAND_MONTHS`,
+  off by default) set to a CA calendar band, an active signer-backed authority entering it gets a
+  `rekey_ca` ceremony opened for it with the reviewed plan — its profile and lifetime and a
+  scheduled-rollover reason — at the approval floor. `GET /api/v1/ca/authorities` and the CA console
+  show the draft and its approvals; nothing rotates until custodians approve and a person executes
+  the re-key with that plan. An authority that cannot be re-keyed online records why.
 - Certificate byte recovery: `POST /api/v1/certificates/{id}/der-recovery` (`trstctl-cli
   certificates recover-der`, the certificate detail's **Certificate bytes** actions) gives an
   inventory row recorded without its certificate — a scan, a cloud listing, an older import — the

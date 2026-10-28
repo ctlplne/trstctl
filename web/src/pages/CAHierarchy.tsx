@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import { IssuerSetupDialog } from "./cahierarchy/CAIssuerSetupParts";
 import { CAHorizonBadge, CAHorizonRenewBy, CALineageTree, isOfflineRoot } from "./cahierarchy/CAHierarchyPageParts";
+import { CARolloverDraft } from "./cahierarchy/CARolloverDraft";
 import {
   CACeremonyReviewDialog,
   CancelCeremonyDialog,
@@ -2367,6 +2368,7 @@ function AuthorityDetailDialog({
           <KeyValue label="Signer handle" value={authority.signer_handle || "-"} mono />
         </dl>
         <CertificatePEMBlock label="Certificate PEM" pem={authority.certificate_pem} />
+        <CARolloverDraft authority={authority} />
         {offlineRoot && <p className="rounded-control border border-border bg-muted/40 p-3 text-sm">{t("caHierarchy.offline.rootReadOnly")}</p>}
         <footer className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
           {offlineRoot ? (

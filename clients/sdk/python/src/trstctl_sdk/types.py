@@ -2656,6 +2656,7 @@ CAAuthority = TypedDict(
         'replaces_id': str,
         'revocation_reason': str,
         'revoked_at': str,
+        'rollover_draft': dict[str, Any],
         'serial': str,
         'signer_handle': str,
         'status': str,
@@ -3153,6 +3154,24 @@ CAReleaseCeremonyReview = TypedDict(
         'source_event_id': str,
         'source_sequence': int,
         'subject': str,
+    },
+    total=False,
+)
+
+CARolloverDraft = TypedDict(
+    'CARolloverDraft',
+    {
+        'approvals': int,
+        'band_months': int,
+        'ceremony_id': str,
+        'ceremony_status': str,
+        'drafted_at': str,
+        'not_after': str,
+        'not_drafted_reason': str,
+        'preview_fingerprint': str,
+        'reason': str,
+        'threshold': int,
+        'ttl_seconds': int,
     },
     total=False,
 )

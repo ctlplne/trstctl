@@ -56,6 +56,8 @@ type caHierarchyService struct {
 	requireRevocationPointers bool
 	// minApprovals is the configured ceremony threshold floor (F264).
 	minApprovals int
+	// rolloverDraftBand is ca.rollover_draft_band_months (A216); 0 is off.
+	rolloverDraftBand int
 
 	mu      sync.Mutex
 	signers map[string]*signing.RemoteSigner
@@ -73,6 +75,7 @@ func (s *Server) buildCAHierarchyService(d Deps) api.CAHierarchyService {
 		requireRevocationPointers: d.CAHierarchyRequireRevocationPointers,
 		signers:                   map[string]*signing.RemoteSigner{},
 		minApprovals:              d.CACeremonyMinApprovals,
+		rolloverDraftBand:         d.CARolloverDraftBandMonths,
 	}
 }
 

@@ -774,7 +774,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		OutboundEnvCredentialRefs: append([]string(nil), cfg.OutboundEnvCredentialRefs...),
 		TelemetryReporter:         outbound.telemetryReporter,
 		APIOptions:                []api.Option{kubernetesCSRPostureFromConfig(st), kubernetesCertManagerPostureFromConfig(st), kubernetesTrustBundlePostureFromConfig(st), kubernetesTrustRolloutsFromConfig(st)},
-		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), HierarchyRevocationBaseURL: cfg.CA.HierarchyRevocationBaseURL, CAHierarchyRequireRevocationPointers: cfg.CA.GovernanceModeValue() == config.GovernanceRegulated, CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
+		CACertFile:                cfg.CA.CertFile, CAPublicCertFile: cfg.CA.PublicCertFile, LeafProfile: leafProfileFromConfig(cfg), HierarchyRevocationBaseURL: cfg.CA.HierarchyRevocationBaseURL, CAHierarchyRequireRevocationPointers: cfg.CA.GovernanceModeValue() == config.GovernanceRegulated, CACeremonyMinApprovals: cfg.CA.CeremonyApprovalFloor(), CARolloverDraftBandMonths: cfg.CA.RolloverDraftBandMonths, APITokenMaxLifetime: apiTokenMaxLifetimeFromConfig(cfg), DefaultProfile: cfg.CA.DefaultProfile,
 		PolicyModule: cfg.CA.Policy.Module, EnablePolicyGate: cfg.CA.Policy.Enabled,
 		ABACModule: cfg.Auth.ABAC.Module, EnableABAC: cfg.Auth.ABAC.Enabled, ABACEnvironment: cfg.Auth.ABAC.Environment,
 		BreakglassCACertDER: breakglassCACertDER, BreakglassPublicKeyDER: breakglassPublicKeyDER, BreakglassOfflineKit: breakglassOfflineKit,

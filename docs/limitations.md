@@ -239,7 +239,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Library-only backlog | Empty — nothing is stuck library-only right now | [Built and tested, but not yet served](#built-and-tested-but-not-yet-served-by-the-binary) |
 | Conditional/partial residuals | Real served spine; specific operator-facing edges remain | [Conditional, partial, and residual boundaries](#conditional-partial-and-residual-boundaries) |
 | Served status strings | Every status is registered with what the code actually did; CI blocks a status spelled stronger than its own flags | [Served status vocabulary](#served-status-vocabulary-what-each-status-claims) |
-| CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
+| CA hierarchy expiry horizon | Served; year-scale bands, re-alerting on each tightening, leaf-validity-compression check, horizon on the CA API and console, opt-in drafted re-key ceremonies at a chosen band | [The CA calendar](#the-ca-calendar-year-scale-hierarchy-expiry) |
 | ACME external account bindings | Served; kid persisted on the account, per-credential identifier scope / quota / window / profile enforced fail-closed, runtime disable, served policy replacement and rotation by secret-store reference (both replayed from the ACME state log) | [Protocols](#protocols) |
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Four paths still generate one in the control plane, each named with its successor and each governed by the tenant's control-plane key generation switch: the three deprecated paths (identity issuance without a CSR and its renewal, PKI-as-a-secret by common name and the Vault-compatible `pki/issue`, the compatibility Workload API socket) and the reissue step of a PQC migration run that predates host-csr migration. Kubernetes TLS auto-issuance never generates a key in the control plane: a `k8s_ingress_gateway` source bound to the host-role agent running in the cluster hands each TLS block to that agent, which generates the key inside the cluster, sends only a CSR and writes the TLS Secret with a signed receipt; a source without an agent records each resource and reports it not delivered, with the reason | [Key custody](custody.md) |
@@ -1847,9 +1847,19 @@ signature) and whose validity is shorter than the reference is counted, the
 compression alert says how many already carry the parent's expiry, and the
 served authority lists `horizon.truncated_leaves` with the first fifty
 `truncated_leaf_ids` by validity start, so the shortened certificates can be
-walked to rather than inferred. What is **not** served: nothing here schedules
-or performs the renewal — it tells you when to start, and the re-key and
-rotation routes remain the operator's action.
+walked to rather than inferred.
+
+Scheduled rollover drafts are opt-in: with `ca.rollover_draft_band_months` set to a
+band, an active signer-backed authority entering it gets a `rekey_ca` ceremony
+opened for it on the same sweep — the reviewed plan (its profile and lifetime, a
+"Scheduled rollover" reason) at the approval floor, opened by `trstctl:ca-calendar`
+so every custodian may approve it (`ca.rollover.drafted`). `GET
+/api/v1/ca/authorities` and the CA console show the draft with the ceremony's
+approvals. A repeated sweep drafts nothing new; a cancelled ceremony drafts again
+only at a tighter band; an authority that cannot be re-keyed online (an offline
+root needs its offline package) records why instead. Nothing rotates on its own:
+custodians approve the ceremony and a person executes the re-key with the drafted
+plan, as the re-key and rotation routes always required.
 
 ### Agent roles: a vantage in the certificate
 

@@ -1912,6 +1912,7 @@ export interface CAAuthority {
   replaces_id?: string;
   revocation_reason?: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
   revoked_at?: string;
+  rollover_draft?: CARolloverDraft;
   serial: string;
   signer_handle: string;
   status: string;
@@ -2249,6 +2250,20 @@ export interface CAReleaseCeremonyReview {
   source_event_id: string;
   source_sequence: number;
   subject?: string;
+}
+
+export interface CARolloverDraft {
+  approvals: number;
+  band_months: number;
+  ceremony_id?: string;
+  ceremony_status?: "pending" | "completed" | "cancelled";
+  drafted_at: string;
+  not_after: string;
+  not_drafted_reason?: string;
+  preview_fingerprint?: string;
+  reason?: string;
+  threshold: number;
+  ttl_seconds?: number;
 }
 
 export interface CASpec {

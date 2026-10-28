@@ -158,6 +158,8 @@ var TenantScopedTables = []string{
 	"certificate_scts",
 	// A215: how certificate bytes were recovered.
 	"certificate_der_recoveries",
+	// A216: drafted CA rollover ceremonies.
+	"ca_rollover_drafts",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

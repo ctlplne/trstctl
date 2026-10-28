@@ -239,6 +239,7 @@ public final class OpenApiSchemas {
       "CAOfflineRootRekeyRequest",
       "CAPrepareExistingImportCSRRequest",
       "CAReleaseCeremonyReview",
+      "CARolloverDraft",
       "CASpec",
       "CBOMAsset",
       "CBOMInventory",

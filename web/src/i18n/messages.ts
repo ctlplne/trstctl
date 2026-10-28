@@ -9526,6 +9526,17 @@ export const messages = {
     defaultMessage: "Suggestions come only from discovery scans that saw a certificate trstctl delivered here. Set any other address by editing the target.",
     description: "Where suggestions come from.",
   },
+  "caHierarchy.rollover.heading": { defaultMessage: "Scheduled rollover", description: "Heading for the re-key ceremony the CA calendar drafted." },
+  "caHierarchy.rollover.drafted": {
+    defaultMessage:
+      "Drafted at the {band}-month band on {when}: re-key ceremony {ceremony} is {status} ({approvals} of {threshold} approvals). Nothing changes until custodians approve and a person executes the re-key with this plan.",
+    description: "The drafted re-key ceremony and its approvals.",
+  },
+  "caHierarchy.rollover.plan": { defaultMessage: "Plan: {reason} Lifetime {ttl} seconds.", description: "The re-key plan a person executes." },
+  "caHierarchy.rollover.notDrafted": {
+    defaultMessage: "The {band}-month band was reached, but no re-key ceremony could be opened: {reason}",
+    description: "Why the CA calendar could not draft a re-key ceremony.",
+  },
   "certificateCockpit.detail.bytes": {
     defaultMessage: "Certificate bytes",
     description: "Certificate detail label for whether trstctl holds the certificate itself.",

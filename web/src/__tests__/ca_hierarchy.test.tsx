@@ -876,6 +876,46 @@ describe("CA hierarchy and custody surface", () => {
     expect(await within(dialog).findByText("leaf-1")).toBeInTheDocument();
   });
 
+  it("shows the re-key ceremony the CA calendar drafted and that nothing changes until a person executes it", async () => {
+    const user = userEvent.setup();
+    apiMock.caAuthorities.mockResolvedValue({
+      items: [
+        {
+          id: "ca-rollover-1",
+          tenant_id: "tenant-1",
+          common_name: "Rollover Root CA",
+          kind: "root",
+          status: "active",
+          certificate_pem: "public certificate",
+          signer_handle: "ca/rollover-1",
+          serial: "7",
+          max_path_len: 1,
+          created_at: "2026-04-01T00:00:00Z",
+          rollover_draft: {
+            band_months: 6,
+            not_after: "2027-05-16T00:00:00Z",
+            ceremony_id: "ceremony-rollover-1",
+            ceremony_status: "pending",
+            approvals: 0,
+            threshold: 1,
+            reason: "Scheduled rollover: Rollover Root CA entered the 6-month band of the CA calendar and expires 2027-05-16.",
+            ttl_seconds: 17280000,
+            drafted_at: "2026-10-28T09:00:00Z",
+          },
+        },
+      ],
+    });
+    renderCAHierarchy("/ca-hierarchy?tab=authorities");
+
+    await within(await screen.findByRole("table", { name: "Served CA authorities" })).findByText("Rollover Root CA");
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    const detail = await screen.findByRole("dialog", { name: "Rollover Root CA" });
+    const draft = within(detail).getByRole("region", { name: "Scheduled rollover" });
+    expect(within(draft).getByText(/re-key ceremony ceremony-rollover-1 is pending \(0 of 1 approvals\)/)).toBeInTheDocument();
+    expect(within(draft).getByText(/Nothing changes until custodians approve and a person executes the re-key/)).toBeInTheDocument();
+    expect(within(draft).getByText(/Lifetime 17280000 seconds/)).toBeInTheDocument();
+  });
+
   it("reviews and opens the exact external intermediate CSR ceremony before signing", async () => {
     const user = userEvent.setup();
     const authority = {

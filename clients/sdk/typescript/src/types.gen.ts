@@ -10731,6 +10731,7 @@ export interface components {
             revocation_reason?: "key_compromise" | "ca_compromise" | "affiliation_changed" | "superseded" | "cessation_of_operation" | "privilege_withdrawn";
             /** Format: date-time */
             revoked_at?: string;
+            rollover_draft?: components["schemas"]["CARolloverDraft"];
             serial: string;
             signer_handle: string;
             status: string;
@@ -11111,6 +11112,30 @@ export interface components {
             source_event_id: string;
             source_sequence: number;
             subject?: string;
+        };
+        CARolloverDraft: {
+            approvals: number;
+            /** @description The CA calendar band the authority had entered when the draft was made. */
+            band_months: number;
+            /** Format: uuid */
+            ceremony_id?: string;
+            /**
+             * @description The drafted re-key ceremony's state: pending until custodians approve and a person executes the re-key with this plan.
+             * @enum {string}
+             */
+            ceremony_status?: "pending" | "completed" | "cancelled";
+            /** Format: date-time */
+            drafted_at: string;
+            /** Format: date-time */
+            not_after: string;
+            /** @description Why no ceremony could be opened, such as an offline root whose re-key needs its offline package. */
+            not_drafted_reason?: string;
+            preview_fingerprint?: string;
+            /** @description The re-key reason the ceremony binds; execute the re-key with it and ttl_seconds. */
+            reason?: string;
+            threshold: number;
+            /** Format: int64 */
+            ttl_seconds?: number;
         };
         CASpec: {
             common_name: string;

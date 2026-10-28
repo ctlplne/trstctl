@@ -612,6 +612,10 @@ func (a *API) listCAAuthorities(w http.ResponseWriter, r *http.Request) {
 		a.attachTruncatedLeaves(r.Context(), tenantID, &resp)
 		out = append(out, resp)
 	}
+	if err := a.attachRolloverDrafts(r.Context(), tenantID, out); err != nil {
+		a.writeError(w, err)
+		return
+	}
 	a.writeJSON(w, http.StatusOK, listResponse{Items: out})
 }
 
