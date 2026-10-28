@@ -2,6 +2,11 @@
 
 ### Added
 
+- Per-tenant private HTTPS notification receivers: an operator can grant exact
+  networks through `notifications.tenant_private_egress`. API endpoint validation
+  and outbox delivery use the same tenant grant. Tenants cannot grant themselves
+  access; DNS, redirect, TLS and air-gap checks remain in force.
+
 - Provider console sign-in through OIDC: with `provider.oidc.login` configured, the Provider console
   signs operators in with the IdP's authorization code flow (state, nonce and PKCE S256) and holds
   an HttpOnly, SameSite=Strict Provider session instead of a pasted bearer token. The ID token is

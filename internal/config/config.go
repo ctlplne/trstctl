@@ -1560,6 +1560,10 @@ type Notifications struct {
 	SIEM      NotificationSIEM      `json:"siem,omitempty"`
 	PagerDuty NotificationPagerDuty `json:"pagerduty,omitempty"`
 	OpsGenie  NotificationOpsGenie  `json:"opsgenie,omitempty"`
+
+	// TenantPrivateEgress is the operator's grant of private networks to one
+	// tenant's own notification channels (A223). Tenants never set it.
+	TenantPrivateEgress []TenantPrivateEgress `json:"tenant_private_egress,omitempty"`
 }
 
 // NotificationWebhook configures one incoming-webhook-style channel. The
@@ -4299,7 +4303,7 @@ func validateLoggingAndLifecycle(c *Config) []error {
 }
 
 func validateNotifications(n Notifications) []error {
-	var errs []error
+	errs := validateTenantPrivateEgress(n.TenantPrivateEgress)
 	if n.Slack.Enabled && strings.TrimSpace(n.Slack.WebhookURL) == "" {
 		errs = append(errs, errors.New("notifications.slack.webhook_url is required when Slack notifications are enabled"))
 	}

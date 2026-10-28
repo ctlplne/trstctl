@@ -441,11 +441,16 @@ held in wipeable memory where the provider allows it and never logged.
 HTTP-based channels default to the shared SSRF-safe client and accept only public HTTPS
 endpoints, so an operator callback can't turn the control plane into a request to
 loopback, RFC1918, or cloud-metadata addresses.
-Tenant channel create and replace reject plain HTTP and literal private addresses
-before recording a configured channel. The delivery transport rechecks DNS at
-dial time, including redirects, so a later DNS change cannot turn a public name
-into a private-address request. Operator-configured private alert channels use
-their separate explicit allowlist; tenant-authored channels never inherit it.
+Tenant channel create and replace require HTTPS. Literal private receivers also
+require a deployment-operator grant for that exact tenant in
+`notifications.tenant_private_egress`; no channel request can grant itself access.
+The delivery worker reuses the same grant and checks DNS at every dial. Loopback,
+link-local and metadata ranges stay unavailable to tenant channels; redirects
+cannot change origin, TLS verification remains required, and air-gap policy also
+applies. With no grant, channels retain public-HTTPS-only delivery.
+The served private-TLS test drives a real outbox delivery to an owned private
+receiver and refuses another tenant's dial; console and cold-restart qualification
+are separate running-image proofs.
 
 The `/notifications` console names this journey **Alerts and delivery**. Its opening
 summary says whether any ready channel and routing rule actually connect an event to a

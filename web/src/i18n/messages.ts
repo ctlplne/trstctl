@@ -17146,7 +17146,7 @@ export const messages = {
   },
   "notifications.channels.familyDelivery": {
     defaultMessage:
-      "Each family delivers in its own format: Slack and Teams incoming webhooks, PagerDuty and OpsGenie with the referenced key, a webhook signed under the referenced secret, and a bearer-authenticated SIEM event. The credential reference names a secret in this tenant's secret store (secret://name). Email and SMS are configured by the operator on the server.",
+      "Each family delivers in its own format: Slack and Teams incoming webhooks, PagerDuty and OpsGenie with the referenced key, a webhook signed under the referenced secret, and a bearer-authenticated SIEM event. The credential reference names a secret in this tenant's secret store (secret://name). Email and SMS are configured by the operator on the server. Private HTTPS receivers require a network grant for this tenant in the server configuration; ask your deployment operator.",
     description: "Help text under the tenant notification channel form explaining per-family delivery and the credential reference.",
   },
   "notifications.channels.enabled": {

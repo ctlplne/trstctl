@@ -623,6 +623,37 @@ registered channel workers. Tenant-scoped routing policy authoring and channel-t
 delivery are served from the console; channel secrets remain in operator-managed secret
 references or files.
 
+A tenant can deliver to a private HTTPS receiver after the deployment operator
+adds a grant for that tenant. This grants network reachability; the receiver's
+certificate must still chain to a trusted CA. Tenants can save their endpoint
+and credential reference, but cannot create or widen the grant.
+
+Set the grant in deployment configuration, then restart the control plane:
+
+```json
+{
+  "notifications": {
+    "tenant_private_egress": [
+      {
+        "tenant_id": "11111111-1111-1111-1111-111111111111",
+        "cidrs": ["10.40.0.9/32"],
+        "reason": "Tenant alert receiver"
+      }
+    ]
+  }
+}
+```
+
+The default is no grant. Each tenant has at most one entry, with one or more
+exact private network CIDRs; prefer a `/32` or `/128` for one receiver.
+Startup rejects an invalid or empty tenant UUID, duplicate tenant entries,
+wildcards, host bits, ranges extending into public space, loopback, link-local
+and metadata ranges. Neither a grant nor a tenant channel enables HTTP.
+Removing a grant blocks the next delivery after restart, including an endpoint
+saved earlier. DNS answers are checked at each socket dial, redirects keep the
+same origin, and air-gap destination rules also apply. A delivery receipt proves
+receiver acceptance, not downstream incident handling.
+
 The Alerts and delivery console lets an operator edit or delete saved tenant channels
 and routing policies from their cards. A channel update replaces the entire channel.
 The API hides configured endpoint URLs and credential references on readback, so the

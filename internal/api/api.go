@@ -165,6 +165,7 @@ type API struct {
 	fipsRequired                       bool
 	remediation                        bool
 	notificationChannels               []string
+	notificationEgress                 func(string, string) error
 	notificationOutbox                 *orchestrator.Outbox
 	outboxCircuits                     func() []orchestrator.CircuitSnapshot
 	bulkheadStats                      func() []bulkhead.Stats
@@ -309,6 +310,7 @@ type config struct {
 	fipsRequired                bool
 	remediation                 bool
 	notificationChannels        []string
+	notificationEgress          func(string, string) error
 	notificationOutbox          *orchestrator.Outbox
 	outboxCircuits              func() []orchestrator.CircuitSnapshot
 	bulkheadStats               func() []bulkhead.Stats
@@ -630,6 +632,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		fipsRequired:                cfg.fipsRequired,
 		remediation:                 cfg.remediation,
 		notificationChannels:        append([]string(nil), cfg.notificationChannels...),
+		notificationEgress:          cfg.notificationEgress,
 		notificationOutbox:          cfg.notificationOutbox,
 		outboxCircuits:              cfg.outboxCircuits,
 		bulkheadStats:               cfg.bulkheadStats,

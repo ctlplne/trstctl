@@ -791,6 +791,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		LifecycleLeafValidity:        leafValidity,
 		OwnershipAttestationCadence:  windows.ownershipAttestationCadence,
 		NotificationChannels:         notificationChannels,
+		NotificationTenantEgress:     cfg.Notifications.TenantPrivateEgress,
 		notificationChannelOwner:     notificationOwner,
 		CodeSigning:                  codeSigning,
 		ConnectorRegistry:            outbound.connectorRegistry,

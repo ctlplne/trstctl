@@ -45,7 +45,6 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/jose"
-	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/custody"
 	"trstctl.com/trstctl/internal/decommission/release"
@@ -57,7 +56,6 @@ import (
 	"trstctl.com/trstctl/internal/license"
 	"trstctl.com/trstctl/internal/lifecycle"
 	"trstctl.com/trstctl/internal/notify"
-	"trstctl.com/trstctl/internal/notify/tenantchannel"
 	"trstctl.com/trstctl/internal/objectstore"
 	"trstctl.com/trstctl/internal/observ"
 	"trstctl.com/trstctl/internal/observ/otlp"
@@ -418,6 +416,8 @@ type Deps struct {
 	// (NOTIF-01/F29). They are driven only by notification.* outbox rows; the
 	// scheduler never calls a channel directly, preserving AN-6 at-least-once delivery.
 	NotificationChannels []notify.Notifier
+	// NotificationTenantEgress is operator-owned configuration, never tenant input.
+	NotificationTenantEgress []config.TenantPrivateEgress
 	// notificationChannelOwner follows production-created channel credentials from
 	// buildRunDeps through edition attachment and Build. It is deliberately private:
 	// successful Build transfers ownership to the notification Dispatcher, while
@@ -890,6 +890,7 @@ type Server struct {
 	// notificationTenantChannels resolves tenant-authored channels at delivery
 	// time into their family's notifier with the tenant's own credential (A98).
 	notificationTenantChannels *notify.StoreChannelResolver
+	tenantNotificationEgress   tenantNotificationEgress
 	// observerEvents posts rotation and rollback events to external observers
 	// (A180); tests point its client at a stand-in observer.
 	observerEvents            *observerEventDelivery
@@ -1395,6 +1396,9 @@ func (s *Server) configureMutationSpine(
 	d Deps,
 	proj *projections.Projector,
 ) (*orchestrator.Orchestrator, *orchestrator.Idempotency, error) {
+	if err := s.configureTenantNotificationEgress(d); err != nil {
+		return nil, nil, err
+	}
 	if d.IdempotencyResultMigrator != nil {
 		statuses, err := d.IdempotencyResultMigrator.MigrateAll(ctx)
 		if err != nil {
@@ -1780,6 +1784,7 @@ func (s *Server) baseAPIOptions(d Deps, ea enrollAuthority) []api.Option {
 		api.WithFeatureObserver(s.featureMetrics.Hook()),
 		api.WithCBOM(s.buildCBOMService(d)),
 		api.WithNotificationChannels(notificationChannelNames(d.NotificationChannels)...),
+		api.WithNotificationEndpointValidator(s.tenantNotificationEgress.validate),
 		api.WithNotificationOutbox(s.outbox),
 		api.WithServiceNowBindings(d.ServiceNowBindings...),
 		api.WithOutboundEnvCredentialRefs(d.OutboundEnvCredentialRefs...),
@@ -2178,9 +2183,7 @@ func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator,
 			s.notifications.SetPolicyResolver(notify.NewStorePolicyResolver(d.Store))
 			tenantChannels := notify.NewStoreChannelResolver(d.Store)
 			tenantChannels.SetCredentialResolver(integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto})
-			tenantChannels.SetChannelFactory(func(row store.NotificationChannel, credential *secret.Buffer, client notify.HTTPDoer) (notify.EphemeralNotifier, error) {
-				return tenantchannel.Build(row, credential, client)
-			})
+			tenantChannels.SetChannelFactory(s.tenantNotificationEgress.factory(d.EgressGuard))
 			s.notificationTenantChannels = tenantChannels
 			s.notifications.SetChannelResolver(tenantChannels)
 			s.notifications.SetThresholdDedupLedger(notify.NewStoreThresholdDedupLedger(d.Store, d.Log))

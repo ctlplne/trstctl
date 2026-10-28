@@ -327,12 +327,12 @@ func (a *API) decodeNotificationChannelRequest(r *http.Request, tenantID, pathID
 	if err := decodeJSON(r, &req); err != nil {
 		return store.NotificationChannel{}, errWithStatus(http.StatusBadRequest, err)
 	}
-	return notificationChannelFromRequest(tenantID, pathID, req)
+	return notificationChannelFromRequest(tenantID, pathID, req, a.notificationEgress)
 }
 
 // notificationChannelFromRequest normalizes and validates one channel
 // definition, whether an operator's request or a tenant baseline names it.
-func notificationChannelFromRequest(tenantID, pathID string, req notificationChannelRequest) (store.NotificationChannel, error) {
+func notificationChannelFromRequest(tenantID, pathID string, req notificationChannelRequest, validators ...func(string, string) error) (store.NotificationChannel, error) {
 	id := canonicalNotificationChannelID(pathID)
 	if id == "" {
 		id = canonicalNotificationChannelID(req.ID)
@@ -374,11 +374,14 @@ func notificationChannelFromRequest(tenantID, pathID string, req notificationCha
 		if parsed.User != nil {
 			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must not contain userinfo credentials")
 		}
-		// Tenant-authored channels cannot use operator private-CIDR exceptions.
-		// Reject unusable endpoints before appending a configured channel event;
-		// the delivery transport checks DNS again at dial time.
-		if err := netsec.ValidatePublicHTTPSURL(endpointURL); err != nil {
-			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must be public HTTPS")
+		// The operator owns private-address grants. The tenant request carries
+		// only the endpoint; the delivery transport checks DNS at dial time.
+		validate := func(_ string, endpoint string) error { return netsec.ValidatePublicHTTPSURL(endpoint) }
+		if len(validators) > 0 && validators[0] != nil {
+			validate = validators[0]
+		}
+		if err := validate(tenantID, endpointURL); err != nil {
+			return store.NotificationChannel{}, errStatus(http.StatusBadRequest, "endpoint_url must be public HTTPS or HTTPS inside an operator-granted private range for this tenant")
 		}
 	}
 	label := strings.TrimSpace(req.Label)
@@ -1584,4 +1587,10 @@ func canonicalNotificationChannelID(name string) string {
 	default:
 		return id
 	}
+}
+
+// WithNotificationEndpointValidator wires the deployment-owned per-tenant
+// egress policy. No field on a tenant-authored channel can change that policy.
+func WithNotificationEndpointValidator(validate func(tenantID, endpoint string) error) Option {
+	return func(c *config) { c.notificationEgress = validate }
 }

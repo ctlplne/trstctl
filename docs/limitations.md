@@ -357,8 +357,16 @@ never live in the API process. What you can do end to end against the running bi
   receive alerts while every other destination stays behind the SSRF guard; a
   channel with a policy also carries the air-gap guard when air-gap mode is on,
   and a channel without one keeps the public-HTTPS-only default. The partner
-  lab grants only `127.0.0.1/32`. Tenant-authored channels remain
-  public-HTTPS-only by design: no tenant-controlled bypass exists.
+  lab grants only `127.0.0.1/32`. Tenant-authored channels may use private
+  HTTPS receivers only after the deployment operator grants their exact
+  tenant UUID and networks in `notifications.tenant_private_egress`.
+  Without that grant they remain public-HTTPS-only. The API and delivery
+  worker use the same grant; DNS is checked again at every dial and redirects
+  cannot change origin. Tenants cannot grant themselves access. Tenant grants
+  refuse loopback, metadata, link-local, wildcard and partly public ranges;
+  HTTPS certificate validation and the air-gap guard still apply. The served
+  private-TLS/outbox test proves one receiver and tenant isolation; fresh-image
+  console and restart proof is recorded separately in the build replay.
 - Deployment connector orchestration serves target metadata, identity binding,
   outbox intent, receipts, provenance-verified WASM dispatch, and all 24 advertised native connectors.
   Device proof (E1): every appliance family — a10, cisco, f5, fortigate, kemp,
