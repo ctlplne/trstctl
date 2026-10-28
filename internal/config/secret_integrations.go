@@ -162,6 +162,21 @@ type SecretSyncTargetConfig struct {
 	Field          string `json:"field,omitempty"`
 	VaultNamespace string `json:"vault_namespace,omitempty"`
 
+	// Signed webhook (type webhook): the HMAC key reference the receiver
+	// shares, and an optional JSON body template with ${key}, ${value},
+	// ${value_base64}, ${delivery_id} and ${timestamp} placeholders.
+	SigningKeyRef string `json:"signing_key_ref,omitempty"`
+	BodyTemplate  string `json:"body_template,omitempty"`
+	// Netlify (type netlify): the account (team) and optional site that own
+	// the variables, the deploy context of the value, and a new variable's scopes.
+	AccountID     string   `json:"account_id,omitempty"`
+	SiteID        string   `json:"site_id,omitempty"`
+	DeployContext string   `json:"deploy_context,omitempty"`
+	Scopes        []string `json:"scopes,omitempty"`
+	// Parameter Store (type aws-parameter-store): the KMS key that encrypts
+	// SecureString values; empty uses the account's key for SSM.
+	KMSKeyID string `json:"kms_key_id,omitempty"`
+
 	TokenRef        string `json:"token_ref,omitempty"`
 	SecretAccessRef string `json:"secret_access_key_ref,omitempty"`
 	SessionTokenRef string `json:"session_token_ref,omitempty"`
@@ -191,6 +206,7 @@ var secretSyncTypes = map[string]struct{}{
 	"github-actions": {}, "gitlab-ci": {}, "vercel": {},
 	"generic-ci-json": {}, "kubernetes-secrets": {},
 	"terraform-cloud-opentofu": {}, "vault-kv-v2": {},
+	"webhook": {}, "aws-parameter-store": {}, "netlify": {},
 }
 
 // ValidateSecretIntegrations is exported for config-focused tests and embedders.
@@ -595,6 +611,8 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 		if category == "env" && c.HCL {
 			errs = append(errs, fmt.Errorf("%s hcl=true is valid only for terraform variables", where))
 		}
+	case "webhook", "aws-parameter-store", "netlify":
+		errs = append(errs, validateDeliverySyncTarget(where, c)...)
 	case "vault-kv-v2":
 		require(c.Mount, "mount")
 		ref(c.TokenRef, "token_ref", false)
@@ -607,6 +625,43 @@ func validateSyncTarget(where string, c SecretSyncTargetConfig) []error {
 		if strings.ContainsRune(c.Field, '\x00') {
 			errs = append(errs, fmt.Errorf("%s field must not contain a NUL byte", where))
 		}
+	}
+	return errs
+}
+
+// validateDeliverySyncTarget checks the signed webhook, Parameter Store and
+// Netlify targets (A202).
+func validateDeliverySyncTarget(where string, c SecretSyncTargetConfig) []error {
+	var errs []error
+	require := func(value, name string) {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
+		}
+	}
+	ref := func(value, name string, optional bool) {
+		if strings.TrimSpace(value) == "" && optional {
+			return
+		}
+		if err := validateCredentialRef(value); err != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", where, name, err))
+		}
+	}
+	require(c.Endpoint, "endpoint")
+	switch c.Type {
+	case "webhook":
+		ref(c.SigningKeyRef, "signing_key_ref", false)
+		ref(c.TokenRef, "token_ref", true)
+	case "aws-parameter-store":
+		require(c.Region, "region")
+		require(c.AccessKeyID, "access_key_id")
+		ref(c.SecretAccessRef, "secret_access_key_ref", false)
+		ref(c.SessionTokenRef, "session_token_ref", true)
+		if err := validateVaultSyncPath(c.PathPrefix, true); err != nil {
+			errs = append(errs, fmt.Errorf("%s path_prefix %w", where, err))
+		}
+	case "netlify":
+		require(c.AccountID, "account_id")
+		ref(c.TokenRef, "token_ref", false)
 	}
 	return errs
 }

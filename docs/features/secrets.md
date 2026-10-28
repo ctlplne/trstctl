@@ -779,9 +779,12 @@ enqueued/delivered flags). `GET /api/v1/secrets/syncs/{id}` reads the exact job'
 tenant-scoped pending, delivered, or failed projection; `delivered` records the
 worker's target receipt, so independently read the target to verify its value.
 `GET /api/v1/secrets/syncs/targets` lists the catalog and marks which targets
-are configured. Shipped concrete pushers: AWS Secrets Manager, GCP Secret Manager,
-Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu,
-HashiCorp Vault/OpenBao KV v2, and a generic CI/JSON endpoint.
+are configured. Shipped concrete pushers: AWS Secrets Manager, AWS Systems Manager
+Parameter Store, GCP Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI,
+Vercel, Netlify, Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2,
+a signed webhook (templated JSON with an HMAC-SHA256 signature over a timestamp and
+the body; see [configuration](../configuration.md#signed-webhook-parameter-store-and-netlify-targets)),
+and a generic CI/JSON endpoint with no payload signature.
 The console's **Check a previous delivery** field accepts a job ID from any
 receipt or CLI run. It reads the same durable status and keeps the ID in the
 page URL, including when the target is no longer configured. A pending status
@@ -822,7 +825,8 @@ and once more after any delivery that needed more than one receiver start. A mat
 delivers, or settles the delivered command with one retained
 `secret.sync.receiver_settled` receipt that releases the lane; a provable absence
 fails the command with reconciled authority so the next version proceeds. Targets
-with no readable state (GitHub, GitLab, Vercel and the generic CI JSON receiver)
+with no readable state (GitHub, GitLab, Vercel, Netlify, the signed webhook and the
+generic CI JSON receiver), and Parameter Store, whose readback is what comes next,
 keep the lane closed after a multi-start delivery until an operator reconciles the
 job: `POST /api/v1/secrets/syncs/{id}/reconcile`, `trstctl-cli secrets syncs
 reconcile`, or the Secrets console, with `operator_verified` and what they saw at
@@ -1409,9 +1413,10 @@ curl -fsS -H "Authorization: Bearer $TRSTCTL_TOKEN" \
   SymmetricKey Create/Register/Get/Locate/Revoke/Destroy and RSA/ECDSA Create Key Pair,
   Activate, Sign, Signature Verify and the attribute operations, default address
   `:5696`, tenant bound by `TRSTCTL_PROTOCOLS_KMIP_TENANT_ID`.
-- **Sync targets:** AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, GitHub
-  Actions, GitLab CI, Vercel, Kubernetes, Terraform Cloud/OpenTofu, HashiCorp
-  Vault/OpenBao KV v2, generic CI/JSON.
+- **Sync targets:** AWS Secrets Manager, AWS Systems Manager Parameter Store, GCP
+  Secret Manager, Azure Key Vault, GitHub Actions, GitLab CI, Vercel, Netlify,
+  Kubernetes, Terraform Cloud/OpenTofu, HashiCorp Vault/OpenBao KV v2, signed webhook,
+  generic CI/JSON.
 - **Scanning:** `GET /api/v1/secrets/scans/repositories`,
   `POST /api/v1/secrets/scans/repositories/{provider}/webhook`,
   `GET /api/v1/secrets/scans/third-party`,

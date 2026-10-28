@@ -2,6 +2,10 @@
 
 ### Added
 
+- Three secret-sync targets: `webhook` POSTs templated JSON signed with HMAC-SHA256
+  over a timestamp and the body (`X-Trstctl-Signature`, `X-Trstctl-Timestamp`), so
+  a receiver can refuse a changed or replayed delivery; `aws-parameter-store`
+  writes SecureString parameters; `netlify` sets secret environment variables.
 - Dynamic-lease rotation: `POST /api/v1/secrets/rotations` with
   `dynamic-lease:<provider>` and `ttl_seconds` replaces the lease an application
   secret publishes with a new lease of that lifetime on a PostgreSQL, MySQL or

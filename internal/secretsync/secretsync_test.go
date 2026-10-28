@@ -170,7 +170,9 @@ func TestNativeResidualTargetsAreNotCatalogedAsGenericPushers(t *testing.T) {
 // nothing. A catalog entry may say "signed" only for a pusher that signs its
 // payload, and none does today.
 func TestProviderCatalogClaimsNoSignatureThePushersDoNotMake(t *testing.T) {
-	signsPayload := map[string]bool{}
+	// webhook: WebhookPusher signs every delivery (A202), proven by
+	// TestWebhookDeliveryVerifiesAtTheReceiverAndATamperedBodyFails.
+	signsPayload := map[string]bool{"webhook": true}
 	for _, entry := range ProviderCatalog() {
 		text := strings.ToLower(entry.DeliveryMode + " " + entry.WireFormat)
 		if strings.Contains(text, "signed") && !signsPayload[entry.ID] {

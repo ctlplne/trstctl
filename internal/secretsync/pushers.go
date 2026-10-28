@@ -210,14 +210,21 @@ func (p *AWSSecretsManagerPusher) Close() {
 }
 
 func (p *AWSSecretsManagerPusher) signV4(req *http.Request, body []byte, t time.Time) {
+	signAWSJSONRequest(req, body, t, p.host, p.region, "secretsmanager", p.accessKeyID, p.secretKey, p.sessionToken)
+}
+
+// signAWSJSONRequest signs an AWS JSON-protocol request with SigV4 for service
+// in region: content type, host, date, target and an optional session token
+// are signed, and the payload hash covers the exact body.
+func signAWSJSONRequest(req *http.Request, body []byte, t time.Time, host, region, service, accessKeyID string, secretKey, sessionToken *secret.Buffer) {
 	amzDate := t.Format("20060102T150405Z")
 	dateStamp := t.Format("20060102")
 	req.Header.Set("X-Amz-Date", amzDate)
-	if session := secretBufferBytes(p.sessionToken); len(session) > 0 {
+	if session := secretBufferBytes(sessionToken); len(session) > 0 {
 		req.Header.Set("X-Amz-Security-Token", secrettext.String(session))
 	}
 	signed := []string{"content-type", "host", "x-amz-date", "x-amz-target"}
-	if p.sessionToken != nil && p.sessionToken.Len() > 0 {
+	if sessionToken != nil && sessionToken.Len() > 0 {
 		signed = append(signed, "x-amz-security-token")
 	}
 	sort.Strings(signed)
@@ -225,7 +232,7 @@ func (p *AWSSecretsManagerPusher) signV4(req *http.Request, body []byte, t time.
 	for _, h := range signed {
 		v := strings.TrimSpace(req.Header.Get(h))
 		if h == "host" {
-			v = p.host
+			v = host
 		}
 		canonHeaders.WriteString(h + ":" + v + "\n")
 	}
@@ -238,18 +245,18 @@ func (p *AWSSecretsManagerPusher) signV4(req *http.Request, body []byte, t time.
 		signedHeaders,
 		crypto.SHA256Hex(body),
 	}, "\n")
-	credScope := dateStamp + "/" + p.region + "/secretsmanager/aws4_request"
+	credScope := dateStamp + "/" + region + "/" + service + "/aws4_request"
 	stringToSign := strings.Join([]string{
 		"AWS4-HMAC-SHA256",
 		amzDate,
 		credScope,
 		crypto.SHA256Hex([]byte(canonicalRequest)),
 	}, "\n")
-	kSigning := awsSyncSigningKey(secretBufferBytes(p.secretKey), dateStamp, p.region, "secretsmanager")
+	kSigning := awsSyncSigningKey(secretBufferBytes(secretKey), dateStamp, region, service)
 	defer secret.Wipe(kSigning)
 	signature := hex.EncodeToString(crypto.HMACSHA256(kSigning, []byte(stringToSign)))
 	req.Header.Set("Authorization", "AWS4-HMAC-SHA256 "+
-		"Credential="+p.accessKeyID+"/"+credScope+", "+
+		"Credential="+accessKeyID+"/"+credScope+", "+
 		"SignedHeaders="+signedHeaders+", "+
 		"Signature="+signature)
 }
@@ -863,6 +870,13 @@ func marshalVercelEnvironmentVariable(key string, value []byte, targets []string
 // on their vendor wire contracts, so the request body itself is wiped by callers.
 func appendJSONValueBytes(dst, src []byte) []byte {
 	dst = append(dst, '"')
+	dst = appendJSONStringContent(dst, src)
+	return append(dst, '"')
+}
+
+// appendJSONStringContent writes src as the escaped inside of a JSON string,
+// without quotes, again without a Go string of the bytes.
+func appendJSONStringContent(dst, src []byte) []byte {
 	const hexDigits = "0123456789abcdef"
 	for _, value := range src {
 		switch value {
@@ -886,7 +900,7 @@ func appendJSONValueBytes(dst, src []byte) []byte {
 			}
 		}
 	}
-	return append(dst, '"')
+	return dst
 }
 
 func lockOptionalSecret(value []byte) (*secret.Buffer, error) {

@@ -4630,8 +4630,14 @@ in API/status/audit/pod-template metadata); and
 `GET /api/v1/secrets/unvaulted` (CAP-SECR-07 — combines
 configured repository/third-party scan sources, redacted `leaked_secret`
 findings, AWS/GCP/Azure/Vault discovery visibility, and vault-augmentation
-sync targets). Arbitrary webhooks intentionally remain the generic JSON
-target; Terraform/OpenTofu and Vault no longer depend on it. If a target is
+sync targets). A `webhook` target delivers templated JSON signed with HMAC-SHA256
+over a timestamp and the body, so a receiver can verify it and refuse a changed or
+replayed delivery; `generic-ci-json` stays the bearer-token-only push with no
+payload signature. `aws-parameter-store` writes SecureString parameters (proven
+against LocalStack, not a live AWS account), and `netlify` sets secret environment
+variables through Netlify's API, proven against a double built from Netlify's API
+reference; a live Netlify account proof is what comes next. Terraform/OpenTofu and
+Vault no longer depend on the generic JSON target. If a target is
 not configured, the route returns `503` rather than attempting an external
 call.
 

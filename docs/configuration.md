@@ -1698,13 +1698,53 @@ the connection value and creating a workload credential.
 
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
 `azure-entra`, `kubernetes`, and `redis`. Sync `type` values are
-`aws-secrets-manager`, `gcp-secret-manager`, `azure-key-vault`, `github-actions`,
-`gitlab-ci`, `vercel`, `generic-ci-json`, `kubernetes-secrets`,
-`terraform-cloud-opentofu`, and `vault-kv-v2`. Startup validates each provider's
-required native fields, role bindings, endpoint scheme, private-egress CIDRs, and
-credential-reference form before accepting traffic. An absent tenant target or
-provider fails its served mutation closed; it never falls back to another tenant or
-to a test registry.
+`aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
+`azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
+`generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and
+`vault-kv-v2`. Startup validates each provider's required native fields, role
+bindings, endpoint scheme, private-egress CIDRs, and credential-reference form before
+accepting traffic. An absent tenant target or provider fails its served mutation
+closed; it never falls back to another tenant or to a test registry.
+
+#### Signed webhook, Parameter Store and Netlify targets
+
+A `webhook` target POSTs JSON to `endpoint` and signs every delivery with the HMAC
+key `signing_key_ref` names (an optional `token_ref` adds a bearer token):
+
+```text
+X-Trstctl-Timestamp: <unix seconds>
+X-Trstctl-Signature: sha256=<hex HMAC-SHA256(key, timestamp + "." + body)>
+X-Trstctl-Delivery:  <delivery id, the same on every retry of one delivery>
+```
+
+A receiver recomputes the MAC over the timestamp header, a `.`, and the exact body
+bytes it received, compares it in constant time, and refuses a timestamp more than a
+few minutes from its clock (trstctl's own check, `secretsync.VerifyWebhookSignature`,
+allows five), so a changed body fails and a captured delivery cannot be replayed later
+to roll a secret back. `body_template` shapes the body: JSON with `${key}` (the remote
+key), `${value}` (the secret, which must then be UTF-8), `${value_base64}`,
+`${delivery_id}` and `${timestamp}` placeholders; string placeholders go inside
+quotes, and startup refuses a template that does not render valid JSON or carries no
+value. Without one the body is
+`{"key":"…","value_base64":"…","delivery_id":"…","timestamp":…}`. `generic-ci-json`
+stays the bearer-token-only JSON push with no payload signature.
+
+An `aws-parameter-store` target writes each secret as a SecureString parameter at
+`/<path_prefix>/<remote key>` with `PutParameter` (`Overwrite`, so every delivery is
+the parameter's next version), SigV4-signed for `ssm` in `region` with
+`access_key_id`, `secret_access_key_ref` and an optional `session_token_ref`;
+`kms_key_id` picks the KMS key (empty is the account's key for SSM), and `endpoint` is
+the regional SSM endpoint (`https://ssm.<region>.amazonaws.com`). Parameter values are
+text, so a non-UTF-8 secret is refused.
+
+A `netlify` target sets a secret environment variable through Netlify's API
+(`endpoint` `https://api.netlify.com/api/v1`, `token_ref` a personal access token):
+`account_id` is the team that owns the variables and the optional `site_id` scopes
+them to one site. Each delivery reads the variable first, then sets its value for
+`deploy_context` (`all` by default; also `dev`, `dev-server`, `branch-deploy`,
+`deploy-preview`, `production`) or creates it as a secret variable with `scopes`
+(`builds`, `functions`, `runtime` by default; also `post-processing`). Netlify applies
+the value on the site's next deploy.
 
 ### Privileged access broker targets
 

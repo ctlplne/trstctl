@@ -274,7 +274,7 @@ func NewVaultKVV2Target(p Pusher) *Target { return NewTarget("vault-kv-v2", p) }
 // NewVercelTarget syncs secrets to Vercel/Netlify.
 func NewVercelTarget(p Pusher) *Target { return NewTarget("vercel-netlify", p) }
 
-// NewAWSParamStoreTarget syncs secrets to AWS Parameter Store / Secrets Manager.
+// NewAWSParamStoreTarget syncs secrets to AWS Systems Manager Parameter Store.
 func NewAWSParamStoreTarget(p Pusher) *Target { return NewTarget("aws-parameter-store", p) }
 
 // NewAWSSecretsManagerTarget syncs secrets to AWS Secrets Manager.
@@ -289,9 +289,12 @@ func NewAzureKeyVaultTarget(p Pusher) *Target { return NewTarget("azure-key-vaul
 // NewCITarget syncs secrets to a generic CI/CD secret endpoint.
 func NewCITarget(p Pusher) *Target { return NewTarget("ci", p) }
 
-// NewWebhookTarget syncs secrets to a generic webhook: JSON over HTTPS,
-// authenticated by the operator's bearer token. The payload is not signed.
+// NewWebhookTarget syncs secrets to a signed webhook: templated JSON over HTTPS
+// with an HMAC-SHA256 signature over a timestamp and the body (WebhookPusher).
 func NewWebhookTarget(p Pusher) *Target { return NewTarget("webhook", p) }
+
+// NewNetlifyTarget syncs secrets to Netlify environment variables.
+func NewNetlifyTarget(p Pusher) *Target { return NewTarget("netlify", p) }
 
 // ProviderCatalog returns the built-in sync provider templates exposed by the API
 // and UI. Configured targets have operator-chosen IDs and retain their provider
@@ -360,6 +363,33 @@ func ProviderCatalog() []ProviderCatalogEntry {
 			AuthMode:     "Bearer token supplied by operator config",
 			WireFormat:   "provider/key/encoded_value JSON envelope",
 			Capabilities: []string{"ci-secret", "generic-json", "outbox-delivery"},
+		},
+		{
+			ID:           "webhook",
+			Name:         "Signed webhook",
+			Platform:     "webhook",
+			DeliveryMode: "timestamped, HMAC-SHA256-signed JSON POST over HTTPS; the receiver verifies X-Trstctl-Signature with the shared key",
+			AuthMode:     "HMAC signing key reference, optional bearer token",
+			WireFormat:   "operator JSON template with ${key}, ${value}, ${value_base64}, ${delivery_id} and ${timestamp}, or a value_base64 envelope",
+			Capabilities: []string{"generic-json", "signed-payload", "templated-body", "outbox-delivery"},
+		},
+		{
+			ID:           "aws-parameter-store",
+			Name:         "AWS Systems Manager Parameter Store",
+			Platform:     "aws",
+			DeliveryMode: "ssm.PutParameter (SecureString, Overwrite) over HTTPS",
+			AuthMode:     "AWS SigV4 access key, secret access key, optional session token",
+			WireFormat:   "SecureString parameter at /<path_prefix>/<key>, optionally under a KMS key",
+			Capabilities: []string{"cloud-parameter-store", "secure-string", "sigv4", "outbox-delivery"},
+		},
+		{
+			ID:           "netlify",
+			Name:         "Netlify",
+			Platform:     "netlify",
+			DeliveryMode: "account environment-variable read, then a value set or a secret variable create, over HTTPS",
+			AuthMode:     "Bearer token supplied by operator config",
+			WireFormat:   "secret environment variable with a deploy-context value and scopes",
+			Capabilities: []string{"ci-secret", "deployment-env", "read-before-write", "outbox-delivery"},
 		},
 		{
 			ID:           "kubernetes",

@@ -659,6 +659,18 @@ func secretSyncTargetsFromConfig(
 				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s Azure workload identity endpoint: %w", entry.TenantID, entry.ID, err)
 			}
 		}
+		if entry.Type == "webhook" {
+			if err := secretsync.ValidateWebhookTemplate(entry.BodyTemplate); err != nil {
+				minter.Close()
+				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s body_template: %w", entry.TenantID, entry.ID, err)
+			}
+		}
+		if entry.Type == "netlify" {
+			if err := secretsync.ValidateNetlifyTarget(entry.DeployContext, entry.Scopes); err != nil {
+				minter.Close()
+				return nil, nil, fmt.Errorf("server: secret-sync target %s/%s: %w", entry.TenantID, entry.ID, err)
+			}
+		}
 		if _, ok := registry[entry.TenantID]; !ok {
 			registry[entry.TenantID] = map[string]*secretsync.Target{}
 		}
@@ -871,6 +883,8 @@ func withConfiguredSecretSyncPusher(ctx context.Context, p *configuredSyncPusher
 			Endpoint: cfg.Endpoint, HTTPClient: client, WorkspaceID: cfg.WorkspaceID,
 			Token: token, Category: cfg.VariableCategory, HCL: cfg.HCL, Description: cfg.Description,
 		})
+	case "webhook", "aws-parameter-store", "netlify":
+		concrete, err = newDeliverySyncPusher(cfg, client, resolve)
 	case "vault-kv-v2":
 		token, resolveErr := resolve(cfg.TokenRef)
 		if resolveErr != nil {
@@ -890,6 +904,53 @@ func withConfiguredSecretSyncPusher(ctx context.Context, p *configuredSyncPusher
 		defer closer.Close()
 	}
 	return use(concrete)
+}
+
+// newDeliverySyncPusher builds the signed webhook, Parameter Store and Netlify
+// pushers (A202) with credentials resolved for this one delivery.
+func newDeliverySyncPusher(cfg config.SecretSyncTargetConfig, client *http.Client, resolve func(string) ([]byte, error)) (secretsync.Pusher, error) {
+	switch cfg.Type {
+	case "webhook":
+		signingKey, resolveErr := resolve(cfg.SigningKeyRef)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		var token []byte
+		if strings.TrimSpace(cfg.TokenRef) != "" {
+			if token, resolveErr = resolve(cfg.TokenRef); resolveErr != nil {
+				return nil, resolveErr
+			}
+		}
+		return secretsync.NewWebhookPusher(secretsync.WebhookConfig{
+			Endpoint: cfg.Endpoint, HTTPClient: client, SigningKey: signingKey, BearerToken: token, BodyTemplate: cfg.BodyTemplate,
+		})
+	case "aws-parameter-store":
+		secretKey, resolveErr := resolve(cfg.SecretAccessRef)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		var session []byte
+		if strings.TrimSpace(cfg.SessionTokenRef) != "" {
+			if session, resolveErr = resolve(cfg.SessionTokenRef); resolveErr != nil {
+				return nil, resolveErr
+			}
+		}
+		return secretsync.NewAWSParameterStorePusher(secretsync.AWSParameterStoreConfig{
+			Endpoint: cfg.Endpoint, HTTPClient: client, Region: cfg.Region, AccessKeyID: cfg.AccessKeyID,
+			SecretAccessKey: secretKey, SessionToken: session, PathPrefix: cfg.PathPrefix, KMSKeyID: cfg.KMSKeyID,
+		})
+	case "netlify":
+		token, resolveErr := resolve(cfg.TokenRef)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		return secretsync.NewNetlifyPusher(secretsync.NetlifyConfig{
+			Endpoint: cfg.Endpoint, HTTPClient: client, Token: token, AccountID: cfg.AccountID,
+			SiteID: cfg.SiteID, Context: cfg.DeployContext, Scopes: cfg.Scopes,
+		})
+	default:
+		return nil, fmt.Errorf("server: %q is not a signed webhook, Parameter Store or Netlify target", cfg.Type)
+	}
 }
 
 func (p *configuredSyncPusher) awsSyncCredentials(
