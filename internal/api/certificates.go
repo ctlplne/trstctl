@@ -84,6 +84,9 @@ type certificateResponse struct {
 	// RevocationObservations (A211) are the relay-verified CRL and OCSP answers
 	// that name this certificate (detail reads only).
 	RevocationObservations []RevocationEndpointHealth `json:"revocation_observations,omitempty"`
+	// Transparency (A213) is what each CT log answered for this certificate
+	// (detail reads only).
+	Transparency []CertificateTransparencyEntry `json:"transparency,omitempty"`
 }
 
 // certificateKeyObservation is one agent-reported key file (metadata only).
@@ -363,6 +366,10 @@ func (a *API) getCertificate(w http.ResponseWriter, r *http.Request) {
 	}
 	response.KeyObservations = observations
 	if response.RevocationObservations, err = a.certificateRevocationObservations(r.Context(), tenantID, c.ID); err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if response.Transparency, err = a.certificateTransparency(r.Context(), tenantID, c.Fingerprint); err != nil {
 		a.writeError(w, err)
 		return
 	}

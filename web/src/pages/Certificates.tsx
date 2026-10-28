@@ -51,6 +51,7 @@ import type { GridViewPrimitive } from "@/lib/gridViews";
 import { revocationReasons } from "@/lib/revocation";
 import { RevocationCenter } from "@/pages/certificates/RevocationCenter";
 import { CertificateRevocationObservations } from "@/pages/certificates/CertificateRevocationObservations";
+import { CertificateTransparency } from "@/pages/certificates/CertificateTransparency";
 import {
   certificateEnvironment,
   certificateProfile,
@@ -148,6 +149,21 @@ function splitCertificateLines(value: string): string[] {
     .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+// parseCTLogLines reads one CT log per line: its URL, then optionally the
+// log's base64 public key, which lets trstctl verify its SCTs and prove
+// inclusion.
+function parseCTLogLines(value: string): { logs: string[]; keys?: Record<string, string> } {
+  const logs: string[] = [];
+  const keys: Record<string, string> = {};
+  for (const line of value.split(/\r?\n|,/)) {
+    const [url, key] = line.trim().split(/\s+/);
+    if (!url) continue;
+    logs.push(url);
+    if (key) keys[url] = key;
+  }
+  return { logs, keys: Object.keys(keys).length > 0 ? keys : undefined };
 }
 
 function splitPEMBlocks(value: string): string[] {
@@ -435,17 +451,23 @@ function CTSubmissionPanel({
               placeholder={t("certificates.ct.chainPlaceholder")}
             />
           </label>
-          <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
-            {t("certificates.ct.logs")}
-            <textarea
-              id="ct-log-urls"
-              value={logs}
-              onChange={(event) => onLogs(event.target.value)}
-              rows={4}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
-              placeholder={t("certificates.ct.logsPlaceholder")}
-            />
-          </label>
+          <div className="grid gap-1">
+            <label className="grid gap-1 text-sm font-medium" htmlFor="ct-log-urls">
+              {t("certificates.ct.logs")}
+              <textarea
+                id="ct-log-urls"
+                value={logs}
+                onChange={(event) => onLogs(event.target.value)}
+                rows={4}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+                placeholder={t("certificates.ct.logsPlaceholder")}
+                aria-describedby="ct-log-urls-hint"
+              />
+            </label>
+            <span id="ct-log-urls-hint" className="text-xs text-muted-foreground">
+              {t("certificates.ct.logsHint")}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label className="inline-flex items-center gap-2 text-sm font-medium" htmlFor="ct-allow-private">
@@ -475,6 +497,11 @@ function CTSubmissionPanel({
           {t(result.logs.length === 1 ? "certificates.ct.acceptedOne" : "certificates.ct.acceptedMany", { count: formatNumberPolicy(result.logs.length) })}
         </p>
       )}
+      {result?.residuals?.map((note) => (
+        <p key={note.code} className="mt-1 text-xs text-muted-foreground">
+          {note.detail}
+        </p>
+      ))}
     </section>
   );
 }
@@ -765,7 +792,7 @@ function CertificateWorkspace() {
     e.preventDefault();
     setCTError(null);
     setCTResult(null);
-    const logs = splitCertificateLines(ctLogs);
+    const { logs, keys } = parseCTLogLines(ctLogs);
     if (!ctCertificatePEM.trim()) {
       setCTError({ kind: "error", message: t("certificates.ct.errorCertificateRequired") });
       return;
@@ -782,6 +809,7 @@ function CertificateWorkspace() {
           precertificate_pem: ctPrecertificatePEM.trim() || undefined,
           chain_pem: splitPEMBlocks(ctChainPEM),
           logs,
+          log_public_keys: keys,
           allow_private_endpoint: ctAllowPrivate || undefined,
         }),
       );
@@ -1560,6 +1588,7 @@ function CertificateWorkspace() {
                 </div>
               ) : null}
               <CertificateRevocationObservations observations={detail.revocation_observations} />
+              <CertificateTransparency entries={detail.transparency} />
               <div>
                 <dt className="font-medium text-muted-foreground">{translateNow("source.source.0e570ca6fa")}</dt>
                 <dd>{detail.source || "-"}</dd>

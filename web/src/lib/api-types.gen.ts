@@ -2451,6 +2451,7 @@ export interface CTLogSubmissionRequest {
   allow_private_endpoint?: boolean;
   certificate_pem: string;
   chain_pem?: string[];
+  log_public_keys?: Record<string, unknown>;
   logs: string[];
   operator_correlation_ref?: string;
   precertificate_pem?: string;
@@ -2606,6 +2607,7 @@ export interface Certificate {
   status: "active" | "superseded" | "revoked";
   subject: string;
   tenant_id: string;
+  transparency?: CertificateTransparencyEntry[];
 }
 
 export interface CertificateAssuranceRecord {
@@ -2736,6 +2738,22 @@ export interface CertificateSourceHealth {
   expiring_30d: number;
   external: boolean;
   source: string;
+}
+
+export interface CertificateTransparencyEntry {
+  entry_type: "certificate" | "precertificate";
+  inclusion_checked_at?: string;
+  inclusion_reason?: string;
+  inclusion_status: "pending" | "verified" | "not_included" | "proof_invalid" | "not_checked";
+  leaf_index?: number;
+  log_id?: string;
+  log_url: string;
+  root_hash?: string;
+  sct_reason?: string;
+  sct_status: "verified" | "invalid" | "unverified";
+  sct_timestamp: string;
+  submission_id: string;
+  tree_size?: number;
 }
 
 export interface CloudSecretManagerIntegration {

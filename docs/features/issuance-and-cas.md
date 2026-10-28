@@ -824,8 +824,15 @@ An unreported relay is unknown, not healthy.
 CT submission is served at `POST /api/v1/revocation/ct-submissions` /
 `trstctl-cli revocation ct-submit`: the outbox queues a precertificate and final
 certificate to configured RFC 6962 CT logs, recording `ct.submission.queued` then
-`ct.submission.delivered` after `add-pre-chain`/`add-chain` — inclusion proof remains
-the external log's responsibility.
+`ct.submission.delivered` after `add-pre-chain`/`add-chain`. Name each log's public key
+in `log_public_keys` and every SCT that log returns is verified against it and kept
+(`ct.sct.recorded`: verified, or invalid with the reason); the leader then proves the
+entry is in the log by checking an audit path against a tree head the same key signed
+(`ct.inclusion.recorded`: verified with index, tree size and root; pending until the log
+merges it; not included once a tree head signed 24 hours after the SCT still lacks it;
+or a failed proof). A log without a key keeps its SCT unverified, and a log that serves
+only the static CT API is not checked for inclusion. The certificate detail
+(`GET /api/v1/certificates/{id}`, `transparency`) shows each log's answer.
 
 Rogue and non-compliant certificate posture is served at
 `GET /api/v1/revocation/rogue-certificates` / `trstctl-cli revocation

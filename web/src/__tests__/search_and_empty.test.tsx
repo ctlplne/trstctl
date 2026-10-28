@@ -617,6 +617,48 @@ describe("certificate inventory gap closure", () => {
     expect(screen.getByRole("status")).toHaveTextContent("1 log target accepted.");
   });
 
+  it("sends a CT log's public key named after its URL and shows the note for a log without one", async () => {
+    apiMock.certificatePage.mockResolvedValue({
+      items: [{ id: "c1", subject: "CN=ct-keyed.example.com", issuer: "CN=CA", status: "active", fingerprint: "fp1" }],
+    });
+    apiMock.submitCertificateTransparency.mockResolvedValue({
+      capability: "CAP-REV-06",
+      queued: 2,
+      logs: [
+        { log_url: "https://ct.example.com/keyed", precertificate_queued: false, certificate_queued: true },
+        { log_url: "https://ct.example.com/plain", precertificate_queued: false, certificate_queued: true },
+      ],
+      residuals: [
+        {
+          code: "ct-log-key-not-named",
+          detail: "No public key was named for https://ct.example.com/plain; trstctl keeps those logs' SCTs unverified and does not check their inclusion.",
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    const certPEM = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----";
+    renderCerts();
+
+    await user.click(await screen.findByRole("tab", { name: "Revocation & CT" }));
+    await user.click(screen.getByRole("button", { name: "Submit to CT" }));
+    await user.type(screen.getByLabelText("Certificate PEM"), certPEM);
+    expect(screen.getByLabelText("CT logs")).toHaveAccessibleDescription(/Add the log's base64 public key after its URL/);
+    await user.type(screen.getByLabelText("CT logs"), "https://ct.example.com/keyed MFkwEwYHKoZI{Enter}https://ct.example.com/plain");
+    await user.click(screen.getByRole("button", { name: /queue ct submission/i }));
+
+    await waitFor(() =>
+      expect(apiMock.submitCertificateTransparency).toHaveBeenCalledWith({
+        certificate_pem: certPEM,
+        precertificate_pem: undefined,
+        chain_pem: [],
+        logs: ["https://ct.example.com/keyed", "https://ct.example.com/plain"],
+        log_public_keys: { "https://ct.example.com/keyed": "MFkwEwYHKoZI" },
+        allow_private_endpoint: undefined,
+      }),
+    );
+    expect(await screen.findByText(/No public key was named for https:\/\/ct\.example\.com\/plain/)).toBeInTheDocument();
+  });
+
   it("surfaces problem+json detail when ingest rejects invalid PEM", async () => {
     apiMock.certificatePage.mockResolvedValue({ items: [] });
     apiMock.ingestCertificate.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "could not parse certificate: bad PEM" })));

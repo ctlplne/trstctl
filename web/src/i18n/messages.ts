@@ -8779,8 +8779,13 @@ export const messages = {
     description: "Label for CT log URL input.",
   },
   "certificates.ct.logsPlaceholder": {
-    defaultMessage: "https://ct.example.com",
-    description: "Placeholder CT log URL in the CT submission form.",
+    defaultMessage: "https://ct.example.com MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...",
+    description: "Placeholder CT log URL, followed by an optional log public key, in the CT submission form.",
+  },
+  "certificates.ct.logsHint": {
+    defaultMessage:
+      "One log per line. Add the log's base64 public key after its URL to verify its SCTs and prove inclusion; a log without a key keeps its SCT unverified.",
+    description: "Hint under the CT log field explaining the optional log public key.",
   },
   "certificates.ct.allowPrivate": {
     defaultMessage: "Allow private log endpoint",
@@ -9477,6 +9482,54 @@ export const messages = {
     defaultMessage:
       "Signed relay probes of this certificate's CRL and OCSP endpoints. A certificate known only from a network scan is checked for its own serial when the deployment keeps scanned certificates for revocation checks.",
     description: "A211: explains the revocation answers and when scanned certificates are checked.",
+  },
+  "certificateCockpit.detail.transparency": {
+    defaultMessage: "Certificate Transparency",
+    description: "Certificate detail label for what each CT log answered for the certificate.",
+  },
+  "certificateCockpit.detail.transparencyEntry": {
+    defaultMessage: "{log} ({entry}, logged {logged}): {sct}; {inclusion}",
+    description: "One CT log's SCT for the certificate and whether the log proved the entry is in its tree.",
+  },
+  "certificateCockpit.detail.ctCertificate": { defaultMessage: "certificate", description: "The certificate itself was logged." },
+  "certificateCockpit.detail.ctPrecertificate": { defaultMessage: "precertificate", description: "The certificate's precertificate was logged." },
+  "certificateCockpit.detail.ctSCTVerified": {
+    defaultMessage: "SCT signature verified with the log's key",
+    description: "The SCT's signature checked against the log key named at submission.",
+  },
+  "certificateCockpit.detail.ctSCTInvalid": { defaultMessage: "SCT invalid: {reason}", description: "The SCT did not verify; the reason." },
+  "certificateCockpit.detail.ctSCTUnverified": {
+    defaultMessage: "SCT not verified: {reason}",
+    description: "The SCT was kept unverified: no log key was named at submission, or the submitted chain cannot check it.",
+  },
+  "certificateCockpit.detail.ctIncluded": {
+    defaultMessage: "inclusion proven: entry {index} of a signed tree of {size}",
+    description: "The log's audit path led to the root of a tree head the log key verified.",
+  },
+  "certificateCockpit.detail.ctInclusionPending": {
+    defaultMessage: "inclusion not proven yet",
+    description: "The log has not yet shown the entry in a tree head it signed.",
+  },
+  "certificateCockpit.detail.ctNotIncluded": {
+    defaultMessage: "not included: {reason}",
+    description: "The log did not include the entry within its merge delay.",
+  },
+  "certificateCockpit.detail.ctProofInvalid": {
+    defaultMessage: "inclusion proof failed: {reason}",
+    description: "The log's proof or tree head did not verify.",
+  },
+  "certificateCockpit.detail.ctInclusionNotChecked": {
+    defaultMessage: "inclusion not checked",
+    description: "Inclusion is not checked for an SCT that did not verify.",
+  },
+  "certificateCockpit.detail.ctInclusionNotCheckedBecause": {
+    defaultMessage: "inclusion not checked: {reason}",
+    description: "Inclusion is not checked; the reason.",
+  },
+  "certificateCockpit.detail.transparencyNote": {
+    defaultMessage:
+      "Each SCT is checked against the public key named for its log when the certificate was submitted, and inclusion is proven against a tree head the log signed. A log submitted to without a key keeps its SCT unverified.",
+    description: "Explains how SCTs and inclusion are verified.",
   },
   "certificateCockpit.detail.current": { defaultMessage: "Current ownership", description: "Current and attested certificate ownership state." },
   "certificateCockpit.detail.incomplete": { defaultMessage: "Ownership is incomplete", description: "Incomplete certificate ownership state." },

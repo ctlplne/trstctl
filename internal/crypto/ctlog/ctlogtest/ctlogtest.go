@@ -144,6 +144,9 @@ type Server struct {
 	entries    []LogEntry
 	mu         sync.Mutex
 	submission []Submission
+	// signing is set by NewSigningServer: real SCTs, signed tree heads and
+	// inclusion proofs over what the log accepted.
+	signing *signingLog
 }
 
 // NewServer starts a CT log whose tree contains the given entries in order.
@@ -154,6 +157,7 @@ func NewServer(entries ...LogEntry) *Server {
 	mux.HandleFunc("/ct/v1/get-entries", s.getEntries)
 	mux.HandleFunc("/ct/v1/add-pre-chain", s.addPreChain)
 	mux.HandleFunc("/ct/v1/add-chain", s.addChain)
+	mux.HandleFunc("/ct/v1/get-proof-by-hash", s.getProofByHash)
 	s.httptest = httptest.NewServer(mux)
 	return s
 }
@@ -175,6 +179,15 @@ func (s *Server) CertSubmissions() []Submission {
 }
 
 func (s *Server) getSTH(w http.ResponseWriter, _ *http.Request) {
+	if s.signing != nil {
+		sth, err := s.signing.signedTreeHead()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, sth)
+		return
+	}
 	writeJSON(w, map[string]any{
 		"tree_size":           len(s.entries),
 		"timestamp":           timestampMillis(),
@@ -247,6 +260,15 @@ func (s *Server) addChainLike(w http.ResponseWriter, r *http.Request, endpoint s
 	s.mu.Lock()
 	s.submission = append(s.submission, sub)
 	s.mu.Unlock()
+	if s.signing != nil {
+		sct, err := s.signing.sign(sub.Chain, endpoint == "/ct/v1/add-pre-chain")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, sct)
+		return
+	}
 	writeJSON(w, map[string]any{
 		"sct_version": 0,
 		"id":          base64.StdEncoding.EncodeToString([]byte("ctlogtest-log-id")),
@@ -254,6 +276,14 @@ func (s *Server) addChainLike(w http.ResponseWriter, r *http.Request, endpoint s
 		"extensions":  "",
 		"signature":   base64.StdEncoding.EncodeToString([]byte("ctlogtest-sct-signature")),
 	})
+}
+
+func (s *Server) getProofByHash(w http.ResponseWriter, r *http.Request) {
+	if s.signing == nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.signing.proofByHash(w, r)
 }
 
 func (s *Server) submissionsFor(endpoint string) []Submission {

@@ -268,6 +268,10 @@ func TestSystemPoolProductionUseInventory(t *testing.T) {
 		// lifecycle.go. It reads tenant ids only; the authority rows themselves are
 		// then loaded under each tenant's RLS context.
 		"internal/store/ca_horizon.go": 1,
+		// A213: the CT inclusion poll's leader enumerator lists only the tenant
+		// IDs holding a verified SCT whose inclusion is not yet proven; every SCT
+		// row is then read inside that tenant's RLS context.
+		"internal/store/certificate_sct.go": 1,
 		// The ARI leader enumerates tenant IDs with an active leaf missing its
 		// first upstream poll. It reads no certificate material through this
 		// system pool; each candidate is loaded inside its tenant's RLS context.

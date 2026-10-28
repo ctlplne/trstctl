@@ -915,6 +915,71 @@ describe("Certificate Lifecycle cockpit", () => {
     expect(within(detail).getAllByText(/by relay-edge$/)).toHaveLength(2);
   });
 
+  it("shows each CT log's SCT check and inclusion proof for an issued certificate", async () => {
+    const certificate = {
+      id: "logged-cert",
+      tenant_id: "tenant-1",
+      subject: "CN=logged.example",
+      sans: ["logged.example"],
+      issuer: "CN=trstctl Issuing CA",
+      status: "active",
+      fingerprint: "fp-logged",
+      source: "issued",
+      not_before: "2026-10-24T00:00:00Z",
+      not_after: "2027-10-24T00:00:00Z",
+      transparency: [
+        {
+          submission_id: "sub-1",
+          log_url: "https://ct.example/good",
+          entry_type: "certificate",
+          sct_timestamp: "2026-10-28T03:00:00Z",
+          sct_status: "verified",
+          inclusion_status: "verified",
+          leaf_index: 41,
+          tree_size: 42,
+          root_hash: "ab".repeat(32),
+        },
+        {
+          submission_id: "sub-2",
+          log_url: "https://ct.example/bad",
+          entry_type: "precertificate",
+          sct_timestamp: "2026-10-28T03:00:00Z",
+          sct_status: "invalid",
+          sct_reason: "ctlog: SCT signature: the signature does not verify",
+          inclusion_status: "not_checked",
+        },
+        {
+          submission_id: "sub-3",
+          log_url: "https://ct.example/unkeyed",
+          entry_type: "certificate",
+          sct_timestamp: "2026-10-28T03:00:00Z",
+          sct_status: "unverified",
+          sct_reason: "no public key was named for this log",
+          inclusion_status: "not_checked",
+        },
+      ],
+    };
+    apiMock.certificatePage.mockResolvedValue({ items: [certificate] });
+    apiMock.getCertificate.mockResolvedValue(certificate);
+    renderPage();
+    const inventory = await screen.findByRole("table", { name: "Inventoried certificates" });
+    const row = within(inventory).getByRole("row", { name: /logged\.example/ });
+    fireEvent.click(within(row).getByRole("button", { name: "Review" }));
+    const detail = await screen.findByRole("dialog", { name: "Certificate details" });
+    expect(within(detail).getByText("Certificate Transparency")).toBeInTheDocument();
+    expect(
+      within(detail).getByText(
+        /https:\/\/ct\.example\/good \(certificate, logged .*\): SCT signature verified with the log's key; inclusion proven: entry 41 of a signed tree of 42/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(detail).getByText(
+        /https:\/\/ct\.example\/bad \(precertificate, .*\): SCT invalid: ctlog: SCT signature: the signature does not verify; inclusion not checked$/,
+      ),
+    ).toBeInTheDocument();
+    expect(within(detail).getByText(/SCT not verified: no public key was named for this log; inclusion not checked$/)).toBeInTheDocument();
+  });
+
   it("says when a key origin was derived from the retained issuance event, and names the event", async () => {
     const certificate = {
       id: "pre-custody-cert",

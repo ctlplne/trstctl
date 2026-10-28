@@ -11260,6 +11260,10 @@ export interface components {
             allow_private_endpoint?: boolean;
             certificate_pem: string;
             chain_pem?: string[];
+            /** @description Log URL to the log's public key, as base64 DER or a PUBLIC KEY PEM block. An SCT from a log with a key is verified against it and its inclusion is proven against the log's signed tree head; a log without one is submitted to and its SCT is kept unverified. */
+            log_public_keys?: {
+                [key: string]: string;
+            };
             logs: string[];
             operator_correlation_ref?: string;
             precertificate_pem?: string;
@@ -11445,6 +11449,8 @@ export interface components {
             subject: string;
             /** Format: uuid */
             tenant_id: string;
+            /** @description What each Certificate Transparency log answered for this certificate's submissions, newest first (detail reads only). */
+            transparency?: components["schemas"]["CertificateTransparencyEntry"][];
         };
         CertificateAssuranceRecord: {
             /** @description The signer's public JWK set, for convenience; an offline verifier pins its own copy */
@@ -11593,6 +11599,36 @@ export interface components {
             expiring_30d: number;
             external: boolean;
             source: string;
+        };
+        CertificateTransparencyEntry: {
+            /** @enum {string} */
+            entry_type: "certificate" | "precertificate";
+            /** Format: date-time */
+            inclusion_checked_at?: string;
+            inclusion_reason?: string;
+            /**
+             * @description verified: the log's audit path leads from the entry to the root of a signed tree head checked against the log key; pending: not proven yet; not_included: a tree head the log signed after its maximum merge delay does not include the entry; proof_invalid: the proof or the tree head did not verify; not_checked: the SCT did not verify or the log serves no RFC 6962 proofs.
+             * @enum {string}
+             */
+            inclusion_status: "pending" | "verified" | "not_included" | "proof_invalid" | "not_checked";
+            /** Format: int64 */
+            leaf_index?: number;
+            /** @description The log id the SCT names: hex SHA-256 of the log's public key. */
+            log_id?: string;
+            log_url: string;
+            root_hash?: string;
+            sct_reason?: string;
+            /**
+             * @description verified: the SCT's signature checked against the log key the submission named; invalid: it did not, or the SCT was malformed (sct_reason says which); unverified: no key was named for the log, or the SCT cannot be checked from the chain submitted (sct_reason says which).
+             * @enum {string}
+             */
+            sct_status: "verified" | "invalid" | "unverified";
+            /** Format: date-time */
+            sct_timestamp: string;
+            /** Format: uuid */
+            submission_id: string;
+            /** Format: int64 */
+            tree_size?: number;
         };
         CloudSecretManagerIntegration: {
             architecture_controls: string[];

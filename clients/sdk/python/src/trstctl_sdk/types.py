@@ -3435,6 +3435,7 @@ CTLogSubmissionRequest = TypedDict(
         'allow_private_endpoint': bool,
         'certificate_pem': str,
         'chain_pem': list[str],
+        'log_public_keys': dict[str, Any],
         'logs': list[str],
         'operator_correlation_ref': str,
         'precertificate_pem': str,
@@ -3638,6 +3639,7 @@ Certificate = TypedDict(
         'status': str,
         'subject': str,
         'tenant_id': str,
+        'transparency': list[dict[str, Any]],
     },
     total=False,
 )
@@ -3816,6 +3818,26 @@ CertificateSourceHealth = TypedDict(
         'expiring_30d': int,
         'external': bool,
         'source': str,
+    },
+    total=False,
+)
+
+CertificateTransparencyEntry = TypedDict(
+    'CertificateTransparencyEntry',
+    {
+        'entry_type': str,
+        'inclusion_checked_at': str,
+        'inclusion_reason': str,
+        'inclusion_status': str,
+        'leaf_index': int,
+        'log_id': str,
+        'log_url': str,
+        'root_hash': str,
+        'sct_reason': str,
+        'sct_status': str,
+        'sct_timestamp': str,
+        'submission_id': str,
+        'tree_size': int,
     },
     total=False,
 )

@@ -1914,6 +1914,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventSecretSyncWorkloadIdentityDeleted, 1}:                                        privacyPayloadShape[SecretSyncWorkloadIdentitySourceDeleted](),
 	}
 	addOperatorRecordPrivacyShapes(shapes)
+	addTransparencyPrivacyShapes(shapes)
 	return shapes
 }
 

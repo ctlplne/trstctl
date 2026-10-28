@@ -9982,6 +9982,13 @@
             },
             "type": "array"
           },
+          "log_public_keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Log URL to the log's public key, as base64 DER or a PUBLIC KEY PEM block. An SCT from a log with a key is verified against it and its inclusion is proven against the log's signed tree head; a log without one is submitted to and its SCT is kept unverified.",
+            "type": "object"
+          },
           "logs": {
             "items": {
               "type": "string"
@@ -10712,6 +10719,13 @@
           "tenant_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "transparency": {
+            "description": "What each Certificate Transparency log answered for this certificate's submissions, newest first (detail reads only).",
+            "items": {
+              "$ref": "#/components/schemas/CertificateTransparencyEntry"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -11239,6 +11253,82 @@
           "external",
           "expired",
           "expiring_30d"
+        ],
+        "type": "object"
+      },
+      "CertificateTransparencyEntry": {
+        "properties": {
+          "entry_type": {
+            "enum": [
+              "certificate",
+              "precertificate"
+            ],
+            "type": "string"
+          },
+          "inclusion_checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "inclusion_reason": {
+            "type": "string"
+          },
+          "inclusion_status": {
+            "description": "verified: the log's audit path leads from the entry to the root of a signed tree head checked against the log key; pending: not proven yet; not_included: a tree head the log signed after its maximum merge delay does not include the entry; proof_invalid: the proof or the tree head did not verify; not_checked: the SCT did not verify or the log serves no RFC 6962 proofs.",
+            "enum": [
+              "pending",
+              "verified",
+              "not_included",
+              "proof_invalid",
+              "not_checked"
+            ],
+            "type": "string"
+          },
+          "leaf_index": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "log_id": {
+            "description": "The log id the SCT names: hex SHA-256 of the log's public key.",
+            "type": "string"
+          },
+          "log_url": {
+            "type": "string"
+          },
+          "root_hash": {
+            "type": "string"
+          },
+          "sct_reason": {
+            "type": "string"
+          },
+          "sct_status": {
+            "description": "verified: the SCT's signature checked against the log key the submission named; invalid: it did not, or the SCT was malformed (sct_reason says which); unverified: no key was named for the log, or the SCT cannot be checked from the chain submitted (sct_reason says which).",
+            "enum": [
+              "verified",
+              "invalid",
+              "unverified"
+            ],
+            "type": "string"
+          },
+          "sct_timestamp": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "submission_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "tree_size": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "submission_id",
+          "log_url",
+          "entry_type",
+          "sct_timestamp",
+          "sct_status",
+          "inclusion_status"
         ],
         "type": "object"
       },

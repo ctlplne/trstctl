@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1921 annotated sites across 29 rules. Each row is
+1937 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -468,11 +468,13 @@ not this file.
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
 
-### G107 — CWE-88 Argument injection (variable URL request) (9 sites)
+### G107 — CWE-88 Argument injection (variable URL request) (11 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:586` | loopback-only assembled test listener (CWE-918) |
+| `internal/crypto/ctlog/sct_test.go:27` | loopback test log (CWE-918) |
+| `internal/crypto/ctlog/sct_test.go:45` | loopback test log (CWE-918) |
 | `internal/objectstore/minio_lock_test.go:56` | loopback URL of the container this test started (CWE-88) |
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
 | `internal/server/archive_minio_served_test.go:58` | loopback URL of the container this test started (CWE-88) |
@@ -504,7 +506,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (308 sites)
+### G115 — CWE-190 Integer overflow or wraparound (322 sites)
 
 | Location | Reason |
 |---|---|
@@ -535,8 +537,14 @@ not this file.
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:71` | ParseUint bounds authority to 48 bits and this loop emits one byte at a time (CWE-190). |
 | `internal/connector/wasm/host/host.go:159` | a wasm32 address, bounded by math.MaxUint32 just above (CWE-190). |
 | `internal/crypto/argon2id.go:69` | length of a stored KDF hash, far under the uint32 bound (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:286` | test-support package compiled only into test binaries (CWE-190) |
-| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:303` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:316` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/ctlogtest.go:333` | test-support package compiled only into test binaries (CWE-190) |
+| `internal/crypto/ctlog/ctlogtest/signing.go:184` | a positive test clock offset (CWE-190) |
+| `internal/crypto/ctlog/merkle.go:58` | non-negative checked above (CWE-190) |
+| `internal/crypto/ctlog/merkle.go:95` | non-negative checked above (CWE-190) |
+| `internal/crypto/ctlog/sct.go:263` | RFC 6962 16-bit fields; callers bound v (CWE-190) |
+| `internal/crypto/ctlog/sct.go:267` | byte extraction from a fixed-width value (CWE-190) |
+| `internal/crypto/ctlog/sct.go:277` | bounded to 24 bits above (CWE-190) |
 | `internal/crypto/seal/generation.go:168` | bounded to maxUint16Value by the guard above (CWE-190) |
 | `internal/crypto/seal/seal.go:117` | slice lengths cannot exceed uint64. |
 | `internal/crypto/seal/seal.go:120` | slice lengths cannot exceed uint64. |
@@ -605,12 +613,13 @@ not this file.
 | `internal/projections/application_secret_rebuild_test.go:50` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/application_secret_rebuild_test.go:76` | the binding validator proved this fixture version is positive (CWE-190). |
 | `internal/projections/aud64_test.go:43` | every generated fixture sequence is a positive small integer (CWE-190). |
+| `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6425` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6442` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6455` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6483` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6430` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6447` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6460` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6488` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -635,6 +644,10 @@ not this file.
 | `internal/server/backup.go:388` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/crypto_risk_report_served_test.go:58` | fixture sequences are single-digit seconds (CWE-190). |
+| `internal/server/ct_inclusion.go:162` | a log timestamp after 1970 (CWE-190) |
+| `internal/server/ct_inclusion.go:168` | a log timestamp in milliseconds fits int64 (CWE-190) |
+| `internal/server/ct_inclusion.go:175` | a log's tree fits int64 (CWE-190) |
+| `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:720` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/protocol_mounts.go:991` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
@@ -688,6 +701,9 @@ not this file.
 | `internal/store/ca.go:557` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/ca.go:637` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/certificate_reprotection_recovery.go:32` | MaxInt64 bound above rejects narrowing (CWE-190). |
+| `internal/store/certificate_sct.go:63` | positive by constraint (CWE-190) |
+| `internal/store/certificate_sct.go:91` | event sequences fit int64 (CWE-190) |
+| `internal/store/certificate_sct.go:104` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:62` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:69` | event sequences fit int64 (CWE-190) |
 | `internal/store/compliance_report_retention.go:93` | event sequences fit int64 (CWE-190) |
@@ -764,8 +780,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:571` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:586` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:572` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:587` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -860,8 +876,8 @@ not this file.
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/design_test.go:137` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:388` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:434` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:392` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:438` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 
 ### G124 — CWE-1004 Sensitive cookie without protective attributes (42 sites)
 
@@ -1692,7 +1708,7 @@ not this file.
 | `internal/server/run.go:585` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1198` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1382` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1804` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1807` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
@@ -1726,8 +1742,8 @@ not this file.
 | `internal/spireupstream/plugin.go:455` | operator-configured upstream-authority plugin config path (CWE-22) |
 | `internal/store/dynamic_secret_lock_order_test.go:124` | fixed sibling path inside this package's own directory (CWE-22) |
 | `internal/store/migration_safety_test.go:87` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/store/store_isolation_test.go:388` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/store/store_isolation_test.go:434` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:392` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/store/store_isolation_test.go:438` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/succession/delegation/durable.go:253` | signer-owned keystore directory selected at signer startup; fsync makes the scope rename durable (CWE-22) |
 | `internal/succession/minter/spentstore.go:70` | signer-owned custody directory selected at signer startup (CWE-22). |
 | `internal/succession/minter/spentstore.go:113` | claim path is signer-owned custody dir plus a fixed SHA-256 hex nonce digest (CWE-22). |

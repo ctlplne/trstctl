@@ -5532,9 +5532,28 @@ API call: the API validates public certificate PEM and CT log URLs,
 records `ct.submit` outbox rows in the tenant transaction, and the worker
 posts RFC 6962 `add-pre-chain` / `add-chain` requests. Public HTTPS logs
 are required by default; `allow_private_endpoint` additionally requires
-`egress:private` and `private_egress_cidrs` destination grants. trstctl
-records queued and delivered events, but final inclusion and SCT
-acceptance remain external CT log facts.
+`egress:private` and `private_egress_cidrs` destination grants. A request
+may name each log's public key in `log_public_keys` (base64 DER or a PEM
+block). trstctl keeps every SCT a log returns (`ct.sct.recorded`): one from a
+log with a key is verified against it over the exact RFC 6962 signed entry
+— the certificate, or a precertificate's issuer key hash and TBSCertificate
+without its poison — and the log id that key implies, and is recorded
+verified or invalid with the reason. One from a log without a key, or a
+precertificate SCT the submitted chain cannot check (no issuer, the wrong
+issuer, or a precertificate signing certificate), is kept unverified, and
+the response names the logs without a key. For each verified SCT the
+leader fetches the log's `get-sth`, checks the tree head's signature with
+the same key, asks `get-proof-by-hash` for the entry in that tree and
+verifies the audit path to the signed root (`ct.inclusion.recorded`): an
+entry not yet merged stays pending; a tree head the log signed more than 24
+hours after the SCT that still lacks the entry records it not included; a
+proof or tree head that does not verify records a failed proof. The 24
+hours is the maximum merge delay RFC 6962 logs publish; a log that publishes
+a longer one is not read from its metadata. Logs that serve only the static
+CT API (tiles instead of `get-sth`) are submitted to and their SCTs
+verified, but their inclusion is recorded not checked; proving it from
+tiles is what comes next. `GET /api/v1/certificates/{id}` and the
+certificate detail show each log's answer.
 
 ## Single sign-on
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // CTSubmissionService queues Certificate Transparency precert/cert submission.
@@ -31,6 +32,9 @@ type CTLogSubmissionRequest struct {
 	PrivateEgressCIDRs     []string `json:"private_egress_cidrs,omitempty"`
 	SubmissionProfile      string   `json:"submission_profile,omitempty"`
 	OperatorCorrelationRef string   `json:"operator_correlation_ref,omitempty"`
+	// LogPublicKeys maps a log URL to its public key, base64 DER or PEM (A213):
+	// an SCT from that log is verified against it and its inclusion is proven.
+	LogPublicKeys map[string]string `json:"log_public_keys,omitempty"`
 }
 
 type CTLogSubmissionResponse struct {
@@ -112,4 +116,46 @@ func (a *API) submitCertificateTransparency(w http.ResponseWriter, r *http.Reque
 		}
 		return http.StatusAccepted, res, nil
 	})
+}
+
+// CertificateTransparencyEntry is one CT log's SCT for a certificate (A213):
+// whether it verified against the log key the submission named, and whether
+// the log proved the entry is in its tree against a signed tree head.
+type CertificateTransparencyEntry struct {
+	SubmissionID       string `json:"submission_id"`
+	LogURL             string `json:"log_url"`
+	LogID              string `json:"log_id,omitempty"`
+	EntryType          string `json:"entry_type"`
+	SCTTimestamp       string `json:"sct_timestamp"`
+	SCTStatus          string `json:"sct_status"`
+	SCTReason          string `json:"sct_reason,omitempty"`
+	InclusionStatus    string `json:"inclusion_status"`
+	InclusionReason    string `json:"inclusion_reason,omitempty"`
+	LeafIndex          *int64 `json:"leaf_index,omitempty"`
+	TreeSize           *int64 `json:"tree_size,omitempty"`
+	RootHash           string `json:"root_hash,omitempty"`
+	InclusionCheckedAt string `json:"inclusion_checked_at,omitempty"`
+}
+
+// certificateTransparency is what CT logs answered for one certificate, for
+// its detail read.
+func (a *API) certificateTransparency(ctx context.Context, tenantID, fingerprint string) ([]CertificateTransparencyEntry, error) {
+	rows, err := a.store.CertificateSCTs(ctx, tenantID, fingerprint)
+	if err != nil || len(rows) == 0 {
+		return nil, err
+	}
+	out := make([]CertificateTransparencyEntry, 0, len(rows))
+	for _, row := range rows {
+		entry := CertificateTransparencyEntry{
+			SubmissionID: row.SubmissionID, LogURL: row.LogURL, LogID: row.LogID, EntryType: row.EntryType,
+			SCTTimestamp: row.SCTTimestamp.UTC().Format(time.RFC3339Nano), SCTStatus: row.SCTStatus,
+			SCTReason: row.SCTReason, InclusionStatus: row.InclusionStatus, InclusionReason: row.InclusionReason,
+			LeafIndex: row.LeafIndex, TreeSize: row.TreeSize, RootHash: row.RootHash,
+		}
+		if row.InclusionCheckedAt != nil {
+			entry.InclusionCheckedAt = row.InclusionCheckedAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, entry)
+	}
+	return out, nil
 }

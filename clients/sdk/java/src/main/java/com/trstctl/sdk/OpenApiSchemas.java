@@ -283,6 +283,7 @@ public final class OpenApiSchemas {
       "CertificateList",
       "CertificateProfileSpec",
       "CertificateSourceHealth",
+      "CertificateTransparencyEntry",
       "CloudSecretManagerIntegration",
       "CloudSecretManagerProvider",
       "CloudSecretManagerSummary",

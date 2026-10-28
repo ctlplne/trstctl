@@ -154,6 +154,8 @@ var TenantScopedTables = []string{
 	"endpoint_recovery_checks",
 	// A211: issuer certificates scans kept.
 	"scanned_certificate_chains",
+	// A213: CT logs' SCTs and inclusion proofs.
+	"certificate_scts",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

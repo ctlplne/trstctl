@@ -337,12 +337,13 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 	case "ct.submission.delivered":
 		return shape(`{"capability":"","submission_id":"","log_url":"","entry_type":"","leaf_sha256_fingerprint":"","subject":"","serial_number":"","delivered_at":""}`), true
 	case "ct.submission.queued":
-		return shape(`{"capability":"","requested_by":"","queued_at":"","submission_ids":[""],"outbox_keys":[""],"logs":[""],"fingerprints":[""],"payloads":[{"capability":"","submission_id":"","log_url":"","entry_type":"","leaf_der":"","chain_der":[""],"leaf_sha256_fingerprint":"","subject":"","serial_number":"","requested_by":"","idempotency_key":"","allow_private_endpoint":true,"private_egress_cidrs":[""],"submission_profile":"","operator_correlation_ref":"","queued_at":""}]}`,
+		return shape(`{"capability":"","requested_by":"","queued_at":"","submission_ids":[""],"outbox_keys":[""],"logs":[""],"fingerprints":[""],"payloads":[{"capability":"","submission_id":"","log_url":"","entry_type":"","leaf_der":"","chain_der":[""],"leaf_sha256_fingerprint":"","subject":"","serial_number":"","requested_by":"","idempotency_key":"","allow_private_endpoint":true,"private_egress_cidrs":[""],"submission_profile":"","operator_correlation_ref":"","queued_at":"","log_public_key":"","certificate_sha256_fingerprint":""}]}`,
 			catalogPrivacyShapeOptions{
 				Optional: []string{
 					"/requested_by", "/payloads", "/payloads/*/chain_der", "/payloads/*/requested_by",
 					"/payloads/*/allow_private_endpoint", "/payloads/*/private_egress_cidrs",
 					"/payloads/*/submission_profile", "/payloads/*/operator_correlation_ref",
+					"/payloads/*/log_public_key", "/payloads/*/certificate_sha256_fingerprint",
 				},
 				Nullable: []string{"/payloads/*/leaf_der"},
 			}), true

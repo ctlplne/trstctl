@@ -2,6 +2,17 @@
 
 ### Added
 
+- Certificate Transparency SCT verification and inclusion proofs: a CT submission can name
+  each log's public key in `log_public_keys` (the console takes it after the log's URL).
+  Every SCT a log returns is kept: verified against that key over the exact RFC 6962
+  entry (the certificate, or a precertificate's issuer key hash and TBS) or flagged invalid
+  with the reason; a log without a key keeps its SCT unverified and the response says so.
+  For each verified SCT the leader fetches the log's signed tree head, checks it with the
+  same key and verifies the entry's audit path to its root, recording the inclusion proven
+  (index, tree size, root), pending, not included once a tree head signed past the 24-hour
+  merge delay still lacks it, or a failed proof. `GET /api/v1/certificates/{id}` and the
+  certificate detail show each log's answer (`transparency`). Logs that serve only the
+  static CT API are submitted to and their SCTs verified, but their inclusion is not checked.
 - Addresses outside the declared segments: `GET /api/v1/discovery/coverage/candidates`
   (`trstctl-cli discovery coverage candidates`) lists the addresses trstctl's own sources
   recorded in the last 30 days — certificate deployment locations, verified endpoints,

@@ -1857,7 +1857,25 @@ func componentSchemas() map[string]*Schema {
 		"key_observations":          {Type: "array", Items: ref("CertificateKeyObservation"), Description: "A121: private-key files host agents reported whose public key matches this certificate, newest first (detail reads only). Where a matching key was seen, from the agent's metadata-only report; not a custody record. Absent when none was reported or the certificate's bytes are not held."},
 		"revocation_observations": {Type: "array", Items: ref("RevocationEndpointHealth"),
 			Description: "Relay-verified CRL and OCSP answers that name this certificate, newest first (detail reads only): checks of its own serial when it is known only from a scan, and endpoint checks it represents."},
+		"transparency": {Type: "array", Items: ref("CertificateTransparencyEntry"),
+			Description: "What each Certificate Transparency log answered for this certificate's submissions, newest first (detail reads only)."},
 	}, "id", "tenant_id", "subject", "fingerprint", "status")
+	certificateTransparencyEntry := object(map[string]*Schema{
+		"submission_id": uuid(), "log_url": str(),
+		"log_id":        {Type: "string", Description: "The log id the SCT names: hex SHA-256 of the log's public key."},
+		"entry_type":    {Type: "string", Enum: []string{"certificate", "precertificate"}},
+		"sct_timestamp": {Type: "string", Format: "date-time"},
+		"sct_status": {Type: "string", Enum: []string{"verified", "invalid", "unverified"},
+			Description: "verified: the SCT's signature checked against the log key the submission named; invalid: it did not, or the SCT was malformed (sct_reason says which); unverified: no key was named for the log, or the SCT cannot be checked from the chain submitted (sct_reason says which)."},
+		"sct_reason": str(),
+		"inclusion_status": {Type: "string", Enum: []string{"pending", "verified", "not_included", "proof_invalid", "not_checked"},
+			Description: "verified: the log's audit path leads from the entry to the root of a signed tree head checked against the log key; pending: not proven yet; not_included: a tree head the log signed after its maximum merge delay does not include the entry; proof_invalid: the proof or the tree head did not verify; not_checked: the SCT did not verify or the log serves no RFC 6962 proofs."},
+		"inclusion_reason":     str(),
+		"leaf_index":           {Type: "integer", Format: "int64"},
+		"tree_size":            {Type: "integer", Format: "int64"},
+		"root_hash":            str(),
+		"inclusion_checked_at": {Type: "string", Format: "date-time"},
+	}, "submission_id", "log_url", "entry_type", "sct_timestamp", "sct_status", "inclusion_status")
 	certificateKeyObservation := object(map[string]*Schema{
 		"agent": str(), "path": str(), "file_mode": str(), "encrypted": {Type: "boolean"}, "key_format": str(),
 		"first_observed": timestamp(), "last_observed": timestamp(),
@@ -2043,6 +2061,8 @@ func componentSchemas() map[string]*Schema {
 		"private_egress_cidrs":     {Type: "array", Items: str()},
 		"submission_profile":       str(),
 		"operator_correlation_ref": str(),
+		"log_public_keys": {Type: "object", AdditionalProperties: str(),
+			Description: "Log URL to the log's public key, as base64 DER or a PUBLIC KEY PEM block. An SCT from a log with a key is verified against it and its inclusion is proven against the log's signed tree head; a log without one is submitted to and its SCT is kept unverified."},
 	}, "certificate_pem", "logs")
 	ctLogSubmissionLog := object(map[string]*Schema{
 		"log_url":                      str(),
@@ -7658,6 +7678,7 @@ func componentSchemas() map[string]*Schema {
 		"IdentityDeploymentEvidence":               identityDeploymentEvidence,
 		"Certificate":                              certificate,
 		"CertificateKeyObservation":                certificateKeyObservation,
+		"CertificateTransparencyEntry":             certificateTransparencyEntry,
 		"KubernetesCertificateProvenance":          kubernetesCertificateProvenance,
 		"CertificateIngest":                        certificateIngest,
 		"CertificateList":                          list("Certificate"),
