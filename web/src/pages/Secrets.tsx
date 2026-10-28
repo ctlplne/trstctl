@@ -67,10 +67,8 @@ import { useCapabilityExecution } from "@/lib/capabilities";
 import { SecretSyncWorkloadIdentityPanel } from "./secrets/SecretSyncWorkloadIdentityPanel";
 import { PKISecretWorkflow } from "./secrets/PKISecretWorkflow";
 import { MachineAuthWorkflow } from "./secrets/MachineAuthWorkflow";
-import { HoneyTokenWorkflow } from "./secrets/HoneyTokenWorkflow";
 import { SecretScanningWorkflow } from "./secrets/SecretScanningWorkflow";
 import { DynamicSecretWorkflow } from "./secrets/DynamicSecretWorkflow";
-import { AWSHoneyTokenWorkflow } from "./secrets/AWSHoneyTokenWorkflow";
 
 const SecretImport = lazy(() => import("@/components/secrets/SecretImport").then((module) => ({ default: module.SecretImport })));
 const SecretRotationScheduleTable = lazy(() =>
@@ -78,6 +76,8 @@ const SecretRotationScheduleTable = lazy(() =>
 );
 const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow"));
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
+const HoneyTokenWorkflow = lazy(() => import("./secrets/HoneyTokenWorkflow").then((module) => ({ default: module.HoneyTokenWorkflow })));
+const AWSHoneyTokenWorkflow = lazy(() => import("./secrets/AWSHoneyTokenWorkflow").then((module) => ({ default: module.AWSHoneyTokenWorkflow })));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
 const SecretSyncWorkflow = lazy(() => import("./secrets/SecretSyncWorkflow").then((module) => ({ default: module.SecretSyncWorkflow })));
 
@@ -2647,10 +2647,10 @@ export function Secrets() {
           )}
 
           {engineTask === "honeytokens" && (
-            <>
+            <Suspense fallback={<SecretsWorkflowFallback />}>
               <HoneyTokenWorkflow />
               <AWSHoneyTokenWorkflow />
-            </>
+            </Suspense>
           )}
 
           {engineTask === "transit" && (

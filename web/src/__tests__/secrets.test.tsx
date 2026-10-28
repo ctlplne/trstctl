@@ -1386,7 +1386,8 @@ describe("secrets surface", () => {
     renderSecrets("/secrets/engines");
     await user.click(await screen.findByRole("button", { name: "Open decoy credentials" }));
     const aws = within(await screen.findByRole("region", { name: "AWS IAM decoy keys" }));
-    await user.type(aws.getByRole("textbox", { name: "Decoy name" }), " qa-bait ");
+    // The decoy workflows load on demand; the form follows its account list.
+    await user.type(await aws.findByRole("textbox", { name: "Decoy name" }), " qa-bait ");
     await user.type(aws.getByRole("textbox", { name: "Intended placement" }), " qa/trap ");
     await user.clear(aws.getByRole("spinbutton", { name: "Key lifetime in seconds" }));
     await user.type(aws.getByRole("spinbutton", { name: "Key lifetime in seconds" }), "120");
