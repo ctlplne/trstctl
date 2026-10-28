@@ -5017,7 +5017,8 @@ This is a deliberate, documented trust boundary, not an accident.
   - Host-served Workload API (B3): a host agent started with
     `--workload-api-socket` serves the same Workload API on its OWN machine, for
     the workloads that run there. It attests each caller from the kernel's record
-    of the connecting process (SO_PEERCRED on Linux, LOCAL_PEERCRED on darwin) and
+    of the connecting process (SO_PEERCRED on Linux; LOCAL_PEERCRED,
+    LOCAL_PEERTOKEN and LOCAL_PEERPID on darwin) and
     renders SPIRE-shaped `unix:uid:`/`unix:gid:`/`unix:path:` selectors; a
     platform with no peer-credential mechanism REFUSES to serve rather than
     issuing without attestation. The SVID key is generated on that host and only
@@ -5030,9 +5031,14 @@ This is a deliberate, documented trust boundary, not an accident.
     deliverable by no agent at all and stays on the control plane's socket — so a
     forgotten field refuses rather than widening who may impersonate a workload,
     and scoping an entry moves it rather than duplicating it.
-    SCOPE, stated exactly: darwin reports uid and gid but not the peer's pid, so
-    `unix:path:` selectors are unavailable there and an entry requiring one will
-    not match on a darwin host. The control plane's own socket no longer issues
+    On darwin the path comes from the connecting process's audit token
+    (LOCAL_PEERTOKEN): its pid and pid version, read at connect time. The path is
+    resolved only while that pid version still owns the pid, checked before and
+    after the read, and LOCAL_PEERPID must agree, so a pid reused by a later
+    process yields no path selector rather than the new process's; an entry
+    requiring `unix:path:` then does not match. As on Linux, the path is the
+    executable's at attestation time: a process that execs another binary after
+    connecting is attested as that binary. The control plane's own socket no longer issues
     SVIDs to workloads unless `protocols.spiffe.serve_local_workloads: true` is
     set: `FetchX509SVID` and `FetchJWTSVID` on it are refused with a message
     naming the host agent's `--workload-api-socket`, while trust bundles and JWT

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1860 annotated sites across 28 rules. Each row is
+1867 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -456,6 +456,13 @@ not this file.
 |---|---|
 | `internal/kmip/pykmip_client_test.go:108` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
 | `internal/kmip/pykmip_tenants_test.go:114` | a test listener the PyKMIP container dials through the Docker host gateway; mutual TLS still applies (CWE-200) |
+
+### G103 — CWE-? (unmapped rule) (2 sites)
+
+| Location | Reason |
+|---|---|
+| `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
+| `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
 
 ### G107 — CWE-88 Argument injection (variable URL request) (7 sites)
 
@@ -886,7 +893,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (223 sites)
+### G204 — CWE-78 OS command injection (226 sites)
 
 | Location | Reason |
 |---|---|
@@ -957,6 +964,7 @@ not this file.
 | `internal/agent/sshtrust/sshd_live_test.go:179` | live-sshd test harness validating its own config with the resolved sshd binary (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:188` | HUPs the harness's own child sshd by pid (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:240` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/agent/workloadapi/attest_darwin_test.go:75` | test runs the system nc against its own socket (CWE-78) |
 | `internal/agentid/delegation/signer_subprocess_test.go:284` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:49` | executable and argv are fixed; output is confined to TempDir (CWE-78). |
 | `internal/agentid/verify/wasm_parity_test.go:59` | execShim is Go's fixed wasm_exec_node shim and wasmOut is this test's TempDir artifact (CWE-78). |
@@ -1023,6 +1031,8 @@ not this file.
 | `internal/secretscan/gitleaks.go:218` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscan/repository.go:96` | fixed git/gitleaks binaries over the operator's own repository (CWE-78) |
 | `internal/secretscli/secretscli.go:87` | runs the operator's own command line verbatim; injecting secrets into their process is the feature (CWE-78) |
+| `internal/server/agent_workload_api_darwin_path_test.go:42` | test builds a fixed local fixture (CWE-78) |
+| `internal/server/agent_workload_api_darwin_path_test.go:96` | test runs the client it built (CWE-78) |
 | `internal/server/agent_workload_api_gospiffe_test.go:215` | test executes a fixed local fixture (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:267` | fixed binary built by this test; arguments are fixed/test-owned paths and enum values (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:292` | fixed repository binary and test-owned destination (CWE-78) |
@@ -1186,7 +1196,7 @@ not this file.
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
-| `internal/agent/workloadapi/attest.go:141` | a DIRECTORY, not a file. 0700 is the tightest mode that |
+| `internal/agent/workloadapi/attest.go:145` | a DIRECTORY, not a file. 0700 is the tightest mode that |
 | `internal/crypto/mtls/custody_other_test.go:36` | deliberate over-permissive negative fixture (CWE-276) |
 | `internal/crypto/samltest/material_test.go:50` | deliberately unsafe test fixture must be refused |
 | `internal/crypto/secretfile/custody_unix.go:16` | this is a directory; owner execute is required to traverse it, and 0700 grants nothing to group/other (CWE-276) |
@@ -1223,7 +1233,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (534 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (535 sites)
 
 | Location | Reason |
 |---|---|
@@ -1567,6 +1577,7 @@ not this file.
 | `internal/secretscan/thirdparty_signature_test.go:47` | test-owned temp path |
 | `internal/server/agent_roles_served_test.go:509` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
+| `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agentchannel.go:128` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/backup.go:143` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:207` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -1762,7 +1773,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (105 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (106 sites)
 
 | Location | Reason |
 |---|---|
@@ -1832,6 +1843,7 @@ not this file.
 | `internal/secrets/vault_test.go:180` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/secretscan/gitleaks_options_test.go:72` | executable is an isolated test fixture |
 | `internal/secretscan/gitleaks_options_test.go:178` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
@@ -1985,7 +1997,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (102 sites)
+### G703 — CWE-22 Path traversal (taint) (104 sites)
 
 | Location | Reason |
 |---|---|
@@ -2038,6 +2050,8 @@ not this file.
 | `internal/reconcile/kmipsource_pykmip_test.go:67` | test-named files in the test's temp dir, readable by the container's server user (CWE-22, CWE-276) |
 | `internal/secretscan/gitleaks.go:406` | locates the pinned gitleaks binary in known tool dirs (CWE-22) |
 | `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
+| `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
+| `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:229` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:357` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |

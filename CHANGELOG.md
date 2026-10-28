@@ -2,6 +2,10 @@
 
 ### Added
 
+- The host Workload API offers `unix:path:` selectors on macOS: the agent reads
+  the caller's executable from its audit token (`LOCAL_PEERTOKEN`, with
+  `LOCAL_PEERPID`), and only while the token's pid version still owns the pid,
+  so an entry can require a workload's binary path there as it can on Linux.
 - Vault-path dynamic credentials: a stock Vault or OpenBao client reads native
   leases at `database/creds/<role>` (username and password), `aws/creds/<role>`
   and `aws/sts/<role>` (an STS session with its assumed-role ARN) and

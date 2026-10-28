@@ -91,7 +91,9 @@ func AttestPeer(conn net.Conn) (PeerIdentity, error) {
 	if err != nil {
 		return PeerIdentity{}, err
 	}
-	id.Path = executablePath(id.PID)
+	if id.Path == "" {
+		id.Path = executablePath(id.PID)
+	}
 	return id, nil
 }
 
@@ -106,8 +108,10 @@ func executablePath(pid int) string {
 	if pid <= 0 {
 		return ""
 	}
-	// Linux exposes it directly. Other platforms fall through to empty, which
-	// costs a selector rather than correctness.
+	// Linux exposes it directly; darwin resolves it while reading the peer's
+	// credentials, against the connecting process's audit token. Other
+	// platforms fall through to empty, which costs a selector rather than
+	// correctness.
 	if resolved, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "exe")); err == nil {
 		return resolved
 	}
