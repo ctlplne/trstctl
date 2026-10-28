@@ -328,8 +328,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// compliance reporting row.
 	// A207's tenant custom role define and delete raised it to 570, mapped onto
 	// the access row.
-	if len(out) != 570 {
-		t.Fatalf("OpenAPI operationIds = %d, want 570", len(out))
+	// A208's archive legal hold place, release and list raised it to 573,
+	// mapped onto the compliance reporting row.
+	if len(out) != 573 {
+		t.Fatalf("OpenAPI operationIds = %d, want 573", len(out))
 	}
 	return out
 }

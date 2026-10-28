@@ -4742,6 +4742,95 @@
         ],
         "type": "object"
       },
+      "ArchiveLegalHold": {
+        "properties": {
+          "applied_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "object": {
+            "type": "string"
+          },
+          "placed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "placed_by": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "released_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "report_run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "applied",
+              "release_pending",
+              "released",
+              "failed"
+            ],
+            "type": "string"
+          },
+          "status_detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "reason",
+          "placed_by",
+          "placed_at",
+          "status"
+        ],
+        "type": "object"
+      },
+      "ArchiveLegalHoldList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ArchiveLegalHold"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "ArchiveLegalHoldRequest": {
+        "properties": {
+          "object": {
+            "description": "the archive object's name, under this tenant's prefix",
+            "type": "string"
+          },
+          "reason": {
+            "description": "why the object is held, 1 to 512 characters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "object",
+          "reason"
+        ],
+        "type": "object"
+      },
       "AssuranceApproval": {
         "properties": {
           "evidence_id": {
@@ -11880,6 +11969,32 @@
               },
               "reason": {
                 "type": "string"
+              },
+              "storage": {
+                "properties": {
+                  "detail": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "applied",
+                      "release_pending",
+                      "released",
+                      "failed"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "status"
+                ],
+                "type": "object"
               }
             },
             "required": [
@@ -46626,6 +46741,186 @@
         ],
         "summary": "Deny one exact immutable operation request without mutating its target",
         "x-trstctl-permission": "approvals:review"
+      }
+    },
+    "/api/v1/archives/legal-holds": {
+      "get": {
+        "operationId": "listArchiveLegalHolds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveLegalHoldList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the tenant's archive legal holds and what the bucket read back",
+        "x-trstctl-permission": "audit:read"
+      },
+      "post": {
+        "operationId": "placeArchiveLegalHold",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveLegalHoldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveLegalHold"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Hold one archive object under this tenant's prefix in the bucket with an S3 legal hold, read back before it reads applied",
+        "x-trstctl-permission": "audit:write"
+      }
+    },
+    "/api/v1/archives/legal-holds/{id}": {
+      "delete": {
+        "operationId": "releaseArchiveLegalHold",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArchiveLegalHold"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Release an archive object's S3 legal hold, read back before it reads released",
+        "x-trstctl-permission": "audit:write"
       }
     },
     "/api/v1/audit/anchors": {

@@ -1018,6 +1018,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/archives/legal-holds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the tenant's archive legal holds and what the bucket read back */
+        get: operations["listArchiveLegalHolds"];
+        put?: never;
+        /** Hold one archive object under this tenant's prefix in the bucket with an S3 legal hold, read back before it reads applied */
+        post: operations["placeArchiveLegalHold"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/archives/legal-holds/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Release an archive object's S3 legal hold, read back before it reads released */
+        delete: operations["releaseArchiveLegalHold"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/anchors": {
         parameters: {
             query?: never;
@@ -9711,6 +9746,34 @@ export interface components {
             items: components["schemas"]["PendingApprovalRequest"][];
             next_cursor?: string;
         };
+        ArchiveLegalHold: {
+            /** Format: date-time */
+            applied_at?: string;
+            /** Format: uuid */
+            id: string;
+            object: string;
+            /** Format: date-time */
+            placed_at: string;
+            placed_by: string;
+            reason: string;
+            /** Format: date-time */
+            released_at?: string;
+            /** Format: uuid */
+            report_run_id?: string;
+            /** @enum {string} */
+            status: "pending" | "applied" | "release_pending" | "released" | "failed";
+            status_detail?: string;
+        };
+        ArchiveLegalHoldList: {
+            items: components["schemas"]["ArchiveLegalHold"][];
+            next_cursor?: string;
+        };
+        ArchiveLegalHoldRequest: {
+            /** @description the archive object's name, under this tenant's prefix */
+            object: string;
+            /** @description why the object is held, 1 to 512 characters */
+            reason: string;
+        };
         AssuranceApproval: {
             evidence_id: string;
             intent_digest: string;
@@ -11670,6 +11733,13 @@ export interface components {
                 at: string;
                 by: string;
                 reason: string;
+                storage?: {
+                    detail?: string;
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "pending" | "applied" | "release_pending" | "released" | "failed";
+                };
             };
             /** Format: date-time */
             next_attempt_at?: string;
@@ -22758,6 +22828,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalDecision"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listArchiveLegalHolds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveLegalHoldList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    placeArchiveLegalHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveLegalHoldRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveLegalHold"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    releaseArchiveLegalHold: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchiveLegalHold"];
                 };
             };
             /** @description client error */

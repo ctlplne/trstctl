@@ -2,6 +2,13 @@
 
 ### Added
 
+- Archive legal holds: `POST /api/v1/archives/legal-holds` (object and reason,
+  `audit:write`), `DELETE` on `/{id}` and `GET` (CLI `archives legal-holds
+  place|release|list`) place and release an S3 legal hold on one archive object under
+  the tenant's prefix; the outbox sets or clears it in the bucket and the hold reads
+  applied or released only after the bucket reads it back. With the archive under
+  Object Lock, a report legal hold also holds the report's object, and the run and
+  console show that hold's state.
 - S3 Object Lock on the archives trstctl writes: with `object_store.object_lock_mode`
   (`GOVERNANCE` or `COMPLIANCE`) and `object_lock_retention` (at least `24h`), every
   audit archive segment, report artifact and backup set written to the object store

@@ -329,8 +329,26 @@ each report object's lock before removing it. A plain delete on such a bucket wo
 only hide the locked version, so a report the lock protects is left in place: the
 run records `artifact_removal_deferred_until` (the retention's end, or a day later
 under a legal hold on the object), the console says so, and the retention removes the
-report once that time has passed and the lock no longer protects it. A legal hold a
-person places on one archive object from trstctl is what comes next.
+report once that time has passed and the lock no longer protects it.
+
+On such an archive a report legal hold also places an S3 legal hold on the report's
+object, recorded in the same event: the run shows that storage hold as pending until
+the outbox has set it in the bucket and read it back, then applied, and releasing the
+report's hold clears it the same way. Any other archive object under the tenant's
+prefix, such as an audit archive segment, can be held on its own (`audit:write`):
+
+```sh
+cat > hold.json <<'JSON'
+{"object":"tenant/TENANT_ID/audit/audit-12345.jws","reason":"litigation hold 2026-208"}
+JSON
+trstctl-cli --idempotency-key hold-segment-1 archives legal-holds place -f hold.json
+trstctl-cli archives legal-holds list
+trstctl-cli --idempotency-key release-segment-1 archives legal-holds release HOLD_ID
+```
+
+A hold reads failed, with the reason, when the bucket does not have Object Lock or
+the object is gone; a bucket that acknowledges a hold without applying it leaves the
+hold pending while the outbox retries.
 
 Recovery preserves evidence instead of erasing history:
 

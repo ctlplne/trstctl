@@ -78,6 +78,8 @@ type complianceReportLegalHoldResponse struct {
 	Reason string    `json:"reason"`
 	By     string    `json:"by"`
 	At     time.Time `json:"at"`
+	// Storage is the hold on the report's object in the bucket (A208).
+	Storage *archiveStorageHoldStatus `json:"storage,omitempty"`
 }
 
 func reportPathUUID(r *http.Request) (string, error) {
@@ -129,9 +131,10 @@ func (a *API) listComplianceReportRuns(w http.ResponseWriter, r *http.Request) {
 	if hasMore {
 		runs = runs[:limit]
 	}
-	items := make([]complianceReportRunResponse, 0, len(runs))
-	for _, run := range runs {
-		items = append(items, toComplianceReportRunResponse(run))
+	items, err := a.complianceReportRunResponses(r.Context(), tenantID, runs...)
+	if err != nil {
+		a.writeError(w, err)
+		return
 	}
 	next := ""
 	if hasMore {
@@ -146,7 +149,12 @@ func (a *API) getComplianceReportRun(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	a.writeJSON(w, http.StatusOK, toComplianceReportRunResponse(run))
+	responses, err := a.complianceReportRunResponses(r.Context(), run.TenantID, run)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	a.writeJSON(w, http.StatusOK, responses[0])
 }
 
 func (a *API) downloadComplianceReportArtifact(w http.ResponseWriter, r *http.Request) {

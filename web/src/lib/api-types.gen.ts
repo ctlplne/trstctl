@@ -1161,6 +1161,29 @@ export interface ApprovalRequestList {
   next_cursor?: string;
 }
 
+export interface ArchiveLegalHold {
+  applied_at?: string;
+  id: string;
+  object: string;
+  placed_at: string;
+  placed_by: string;
+  reason: string;
+  released_at?: string;
+  report_run_id?: string;
+  status: "pending" | "applied" | "release_pending" | "released" | "failed";
+  status_detail?: string;
+}
+
+export interface ArchiveLegalHoldList {
+  items: ArchiveLegalHold[];
+  next_cursor?: string;
+}
+
+export interface ArchiveLegalHoldRequest {
+  object: string;
+  reason: string;
+}
+
 export interface AssuranceApproval {
   evidence_id: string;
   intent_digest: string;
@@ -2889,7 +2912,7 @@ export interface ComplianceReportRun {
   event_sequence: number;
   framework: string;
   id: string;
-  legal_hold?: { at: string; by: string; reason: string };
+  legal_hold?: { at: string; by: string; reason: string; storage?: { detail?: string; id: string; status: "pending" | "applied" | "release_pending" | "released" | "failed" } };
   next_attempt_at?: string;
   report_type: string;
   retry_generation: number;

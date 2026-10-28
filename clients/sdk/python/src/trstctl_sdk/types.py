@@ -1615,6 +1615,41 @@ ApprovalRequestList = TypedDict(
     total=False,
 )
 
+ArchiveLegalHold = TypedDict(
+    'ArchiveLegalHold',
+    {
+        'applied_at': str,
+        'id': str,
+        'object': str,
+        'placed_at': str,
+        'placed_by': str,
+        'reason': str,
+        'released_at': str,
+        'report_run_id': str,
+        'status': str,
+        'status_detail': str,
+    },
+    total=False,
+)
+
+ArchiveLegalHoldList = TypedDict(
+    'ArchiveLegalHoldList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+ArchiveLegalHoldRequest = TypedDict(
+    'ArchiveLegalHoldRequest',
+    {
+        'object': str,
+        'reason': str,
+    },
+    total=False,
+)
+
 AssuranceApproval = TypedDict(
     'AssuranceApproval',
     {

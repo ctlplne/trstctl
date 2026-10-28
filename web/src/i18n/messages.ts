@@ -14567,6 +14567,26 @@ export const messages = {
     defaultMessage: "Legal hold by {by} since {date}: {reason}",
     description: "A206: who held this signed report, when, and why.",
   },
+  "policy.reporting.storageHoldPending": {
+    defaultMessage: "Setting the legal hold in the archive bucket.",
+    description: "A208: the report hold's S3 legal hold is queued.",
+  },
+  "policy.reporting.storageHoldApplied": {
+    defaultMessage: "The archive bucket holds this report too; its legal hold read back.",
+    description: "A208: the report hold's S3 legal hold is set and read back.",
+  },
+  "policy.reporting.storageHoldReleasePending": {
+    defaultMessage: "Clearing the legal hold in the archive bucket.",
+    description: "A208: the S3 legal hold's release is queued.",
+  },
+  "policy.reporting.storageHoldReleased": {
+    defaultMessage: "The archive bucket's legal hold is cleared.",
+    description: "A208: the S3 legal hold is cleared and read back.",
+  },
+  "policy.reporting.storageHoldFailed": {
+    defaultMessage: "The archive bucket could not hold this report: {detail}",
+    description: "A208: the S3 legal hold failed, with the reason.",
+  },
   "policy.reporting.removalDeferred": {
     defaultMessage: "The archive's Object Lock keeps this report until {date}. The report retention removes it after that.",
     description: "A208: the report retention waits for the archive's S3 Object Lock.",

@@ -478,13 +478,38 @@ type lockingObjectStore struct {
 	mu    sync.Mutex
 	until map[string]time.Time
 	holds map[string]bool
+	// configured reports the deployment writing under Object Lock; ignore
+	// acknowledges a legal hold change without applying it; noLock answers
+	// as a bucket without Object Lock.
+	configured, ignore, noLock bool
 }
 
-func (s *lockingObjectStore) SetLegalHold(_ context.Context, name string, on bool) error {
+func (s *lockingObjectStore) SetLegalHold(ctx context.Context, name string, on bool) error {
+	if _, err := s.Head(ctx, name); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	switch {
+	case s.noLock:
+		return objectstore.ErrNoObjectLock
+	case s.ignore:
+		return nil
+	}
 	s.holds[name] = on
 	return nil
+}
+
+func (s *lockingObjectStore) LockConfigured() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.configured
+}
+
+func (s *lockingObjectStore) held(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.holds[name]
 }
 
 func (s *lockingObjectStore) Lock(ctx context.Context, name string) (objectstore.LockState, error) {

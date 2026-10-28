@@ -49,11 +49,19 @@ func (a *API) placeComplianceReportLegalHold(w http.ResponseWriter, r *http.Requ
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, err
 		}
-		run, err := a.orch.PlaceComplianceReportLegalHold(ctx, tenantID, id, req.Reason)
+		current, err := a.store.GetComplianceReportRun(ctx, tenantID, id)
 		if err != nil {
 			return 0, nil, mapComplianceReportHoldError(err)
 		}
-		return http.StatusOK, toComplianceReportRunResponse(run), nil
+		run, err := a.orch.PlaceComplianceReportLegalHold(ctx, tenantID, id, req.Reason, a.reportStorageHoldObject(current))
+		if err != nil {
+			return 0, nil, mapComplianceReportHoldError(err)
+		}
+		responses, err := a.complianceReportRunResponses(ctx, tenantID, run)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, responses[0], nil
 	})
 }
 
@@ -71,6 +79,10 @@ func (a *API) releaseComplianceReportLegalHold(w http.ResponseWriter, r *http.Re
 		if err != nil {
 			return 0, nil, mapComplianceReportHoldError(err)
 		}
-		return http.StatusOK, toComplianceReportRunResponse(run), nil
+		responses, err := a.complianceReportRunResponses(ctx, tenantID, run)
+		if err != nil {
+			return 0, nil, err
+		}
+		return http.StatusOK, responses[0], nil
 	})
 }

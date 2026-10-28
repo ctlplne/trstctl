@@ -99,6 +99,9 @@ type Locker interface {
 
 var _ Locker = (*S3)(nil)
 
+// ErrNoObjectLock is a legal hold asked of a bucket without S3 Object Lock.
+var ErrNoObjectLock = errors.New("objectstore: the bucket does not have S3 Object Lock enabled")
+
 // SetLegalHold turns one object's legal hold on or off.
 func (s *S3) SetLegalHold(ctx context.Context, name string, on bool) error {
 	key, err := s.key(name)
@@ -115,6 +118,9 @@ func (s *S3) SetLegalHold(ctx context.Context, name string, on bool) error {
 			LegalHold:         &types.ObjectLockLegalHold{Status: status},
 			ChecksumAlgorithm: types.ChecksumAlgorithmSha256,
 		})
+		if noLockConfiguration(err) {
+			return ErrNoObjectLock
+		}
 		return classify(err, name)
 	})
 }

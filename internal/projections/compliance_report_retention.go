@@ -28,10 +28,15 @@ const (
 )
 
 // ComplianceReportLegalHold is a hold placed or released; the person is the
-// event's actor.
+// event's actor. When the report is in an object store with S3 Object Lock,
+// the same event holds (or releases) its object there too (A208).
 type ComplianceReportLegalHold struct {
 	RunID  string `json:"run_id"`
 	Reason string `json:"reason,omitempty"`
+	// StorageHoldID and StorageObject name the archive legal hold on the
+	// report's object; empty when the archive cannot hold it.
+	StorageHoldID string `json:"storage_hold_id,omitempty"`
+	StorageObject string `json:"storage_object,omitempty"`
 }
 
 // ComplianceReportArtifactExpiry is a retention removal, requested or done.
@@ -80,7 +85,20 @@ func (p *Projector) applyComplianceReportRetentionTx(ctx context.Context, tx pgx
 		if e.Actor != nil {
 			by = e.Actor.Subject
 		}
-		return true, p.store.ApplyComplianceReportLegalHoldTx(ctx, tx, e.TenantID, pl.RunID, placed, pl.Reason, by, e.Time, e.Sequence)
+		if err := p.store.ApplyComplianceReportLegalHoldTx(ctx, tx, e.TenantID, pl.RunID, placed, pl.Reason, by, e.Time, e.Sequence); err != nil {
+			return true, err
+		}
+		if pl.StorageHoldID == "" {
+			return true, nil
+		}
+		if placed {
+			err := p.store.PlaceArchiveLegalHoldTx(ctx, tx, archiveLegalHoldFromEvent(e, ArchiveLegalHoldPlaced{
+				ID: pl.StorageHoldID, Object: pl.StorageObject, Reason: pl.Reason, ReportRunID: pl.RunID,
+			}))
+			return true, err
+		}
+		// The report's hold is released whatever its storage hold's state.
+		return true, p.store.RequestArchiveLegalHoldReleaseTx(ctx, tx, e.TenantID, pl.StorageHoldID, e.Time, e.Sequence)
 	case EventComplianceReportArtifactExpiryRequested:
 		// The request queues the removal in this transaction (AN-6); the
 		// report is recorded expired only when the removal is confirmed.

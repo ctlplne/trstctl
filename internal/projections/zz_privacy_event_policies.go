@@ -1690,6 +1690,11 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventComplianceReportArtifactExpiryRequested, 1}: privacyPayloadShape[ComplianceReportArtifactExpiry](),
 		{EventComplianceReportArtifactExpired, 1}:         privacyPayloadShape[ComplianceReportArtifactExpiry](),
 		{EventComplianceReportArtifactExpiryDeferred, 1}:  privacyPayloadShape[ComplianceReportArtifactExpiryDeferred](),
+		// A208: an archive object's legal hold (a free-text reason the person
+		// wrote, the person being the event's actor) and its read-back.
+		{EventArchiveLegalHoldPlaced, 1}:           privacyPayloadShape[ArchiveLegalHoldPlaced](),
+		{EventArchiveLegalHoldReleaseRequested, 1}: privacyPayloadShape[ArchiveLegalHoldRelease](),
+		{EventArchiveLegalHoldRecorded, 1}:         privacyPayloadShape[ArchiveLegalHoldRecorded](),
 		// A207: a tenant custom role's name, description and permissions.
 		{EventTenantCustomRoleUpserted, 1}: privacyPayloadShape[TenantCustomRoleUpserted](),
 		{EventTenantCustomRoleDeleted, 1}:  privacyPayloadShape[TenantCustomRoleDeleted](),

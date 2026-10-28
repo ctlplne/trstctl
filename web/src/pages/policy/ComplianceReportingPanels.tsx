@@ -6,6 +6,15 @@ import type { MessageKey } from "@/i18n/messages";
 import { api, type ComplianceInventoryReport, type ComplianceReportSchedule, type NHIComplianceReport } from "@/lib/api";
 import { useApiQuery, useQueryClient } from "@/lib/query";
 
+// A208: the state of the legal hold a report hold sets in the archive bucket.
+const storageHoldMessageKeys: Record<string, MessageKey> = {
+  pending: "policy.reporting.storageHoldPending",
+  applied: "policy.reporting.storageHoldApplied",
+  release_pending: "policy.reporting.storageHoldReleasePending",
+  released: "policy.reporting.storageHoldReleased",
+  failed: "policy.reporting.storageHoldFailed",
+};
+
 const reportTypeMessageKeys: Record<string, MessageKey> = {
   inventory_snapshot: "policy.reportType.inventorySnapshot",
   framework_evidence_pack: "policy.reportType.frameworkEvidencePack",
@@ -239,6 +248,13 @@ function ScheduledReportRuns({ schedule }: { schedule: ComplianceReportSchedule 
             {run.legal_hold && (
               <p className="text-sm">
                 {t("policy.reporting.legalHold", { by: run.legal_hold.by, date: formatDateTime(run.legal_hold.at), reason: run.legal_hold.reason })}
+              </p>
+            )}
+            {run.legal_hold?.storage && (
+              <p className="text-sm text-muted-foreground">
+                {t(storageHoldMessageKeys[run.legal_hold.storage.status] ?? "policy.reporting.storageHoldPending", {
+                  detail: run.legal_hold.storage.detail ?? "",
+                })}
               </p>
             )}
             {run.artifact_expired_at && (

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -21,8 +23,10 @@ import (
 var ErrComplianceReportHoldState = errors.New("orchestrator: the report run cannot take that hold change")
 
 // PlaceComplianceReportLegalHold holds a completed run's report until a person
-// releases it; the report retention leaves it.
-func (o *Orchestrator) PlaceComplianceReportLegalHold(ctx context.Context, tenantID, runID, reason string) (store.ComplianceReportRun, error) {
+// releases it; the report retention leaves it. With storageObject (the
+// report's object in an archive store with S3 Object Lock, A208) the same
+// event also holds that object in the bucket, unless another hold already does.
+func (o *Orchestrator) PlaceComplianceReportLegalHold(ctx context.Context, tenantID, runID, reason, storageObject string) (store.ComplianceReportRun, error) {
 	reason = strings.TrimSpace(reason)
 	pl := projections.ComplianceReportLegalHold{RunID: runID, Reason: reason}
 	if err := projections.ValidateComplianceReportLegalHold(true, pl); err != nil {
@@ -31,6 +35,13 @@ func (o *Orchestrator) PlaceComplianceReportLegalHold(ctx context.Context, tenan
 	return o.withComplianceReportRun(ctx, tenantID, runID, func(run store.ComplianceReportRun) (store.ComplianceReportRun, error) {
 		if run.Status != "completed" || run.Retention.Held() || run.Retention.ArtifactExpiredAt != nil {
 			return store.ComplianceReportRun{}, ErrComplianceReportHoldState
+		}
+		if storageObject != "" && storageObject == run.ArtifactRef {
+			if _, active, err := o.store.ActiveArchiveLegalHoldFor(ctx, tenantID, storageObject); err != nil {
+				return store.ComplianceReportRun{}, err
+			} else if !active {
+				pl.StorageHoldID, pl.StorageObject = uuid.NewString(), storageObject
+			}
 		}
 		return o.emitComplianceReportRetention(ctx, tenantID, runID, projections.EventComplianceReportLegalHoldPlaced, pl)
 	})
@@ -43,8 +54,14 @@ func (o *Orchestrator) ReleaseComplianceReportLegalHold(ctx context.Context, ten
 		if !run.Retention.Held() {
 			return store.ComplianceReportRun{}, ErrComplianceReportHoldState
 		}
-		return o.emitComplianceReportRetention(ctx, tenantID, runID, projections.EventComplianceReportLegalHoldReleased,
-			projections.ComplianceReportLegalHold{RunID: runID})
+		pl := projections.ComplianceReportLegalHold{RunID: runID}
+		// The storage hold the report's hold placed is released with it.
+		if hold, active, err := o.store.ActiveArchiveLegalHoldFor(ctx, tenantID, run.ArtifactRef); err != nil {
+			return store.ComplianceReportRun{}, err
+		} else if active && hold.ReportRunID == runID {
+			pl.StorageHoldID = hold.ID
+		}
+		return o.emitComplianceReportRetention(ctx, tenantID, runID, projections.EventComplianceReportLegalHoldReleased, pl)
 	})
 }
 

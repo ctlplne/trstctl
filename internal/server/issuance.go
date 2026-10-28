@@ -113,6 +113,7 @@ type issuanceDispatcher struct {
 	// (A180).
 	observerEvents          *observerEventDelivery
 	reportExpiry            *complianceReportExpiry // removes reports under the report retention (A206)
+	archiveHolds            *archiveLegalHoldDelivery
 	parseSubjectCSR         LicensedCSRParser
 	inspectHybridSubjectCSR LicensedCSRInspector
 	// relayPresence overrides the store for the E1 control-plane refusal; nil in
@@ -356,8 +357,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleAuditFeedBatch(ctx, m)
 	case store.ObserverEventDestination:
 		return d.deliverObserverEvent(ctx, m)
-	case store.ComplianceReportArtifactExpiryDestination:
-		return d.reportExpiry.Deliver(ctx, m)
+	case store.ComplianceReportArtifactExpiryDestination, store.ArchiveLegalHoldDestination:
+		return d.deliverArchiveEffect(ctx, m)
 	case ctSubmissionDestination:
 		return d.handleCTSubmission(ctx, m)
 	default:
@@ -1971,4 +1972,13 @@ func (d *issuanceDispatcher) handleRevocationProbeRequest(ctx context.Context, m
 	}
 	_, err := d.revocationProbeNow(ctx, m.TenantID, request.Bucket)
 	return err
+}
+
+// deliverArchiveEffect routes the archive's own effects: a report removal under
+// the report retention (A206) and an archive object's legal hold (A208).
+func (d *issuanceDispatcher) deliverArchiveEffect(ctx context.Context, m orchestrator.Message) error {
+	if m.Destination == store.ArchiveLegalHoldDestination {
+		return d.archiveHolds.Deliver(ctx, m)
+	}
+	return d.reportExpiry.Deliver(ctx, m)
 }

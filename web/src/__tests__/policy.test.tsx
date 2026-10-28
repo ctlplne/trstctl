@@ -1178,7 +1178,15 @@ describe("policy governance surface", () => {
       due_at: "2026-02-27T12:00:00Z",
       artifact_removal_deferred_until: "2026-09-01T00:00:00Z",
     };
-    const held = { ...completed, legal_hold: { reason: "litigation hold 2026-117", by: "auditor@example.test", at: "2026-06-28T09:00:00Z" } };
+    const held = {
+      ...completed,
+      legal_hold: {
+        reason: "litigation hold 2026-117",
+        by: "auditor@example.test",
+        at: "2026-06-28T09:00:00Z",
+        storage: { id: "88888888-8888-4888-8888-888888888888", status: "applied" },
+      },
+    };
     apiMock.complianceReportRuns
       .mockResolvedValueOnce({ items: [completed, removed, deferred] })
       .mockResolvedValueOnce({ items: [held, removed, deferred] })
@@ -1200,6 +1208,7 @@ describe("policy governance surface", () => {
     await user.click(screen.getByRole("button", { name: "Hold report" }));
     await waitFor(() => expect(apiMock.placeComplianceReportLegalHold).toHaveBeenCalledWith(completed.id, { reason: "litigation hold 2026-117" }));
     expect(await screen.findByText(/Legal hold by auditor@example.test since/)).toBeInTheDocument();
+    expect(screen.getByText(/The archive bucket holds this report too/)).toBeInTheDocument();
     expect(screen.getByText(/Report held\./)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Release legal hold" }));

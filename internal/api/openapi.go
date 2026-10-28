@@ -4656,9 +4656,23 @@ func componentSchemas() map[string]*Schema {
 		"updated_at":       timestamp(),
 	}, "id", "tenant_id", "framework", "name", "report_type", "interval_seconds", "enabled", "delivery", "next_run_at", "created_at", "updated_at")
 	// A206: a person's legal hold on a run's report, and the hold request.
+	// A208: the hold on the report's object in the bucket, and archive holds.
+	archiveStorageHold := object(map[string]*Schema{
+		"id": uuid(), "detail": str(),
+		"status": {Type: "string", Enum: []string{"pending", "applied", "release_pending", "released", "failed"}},
+	}, "id", "status")
 	complianceReportLegalHold := object(map[string]*Schema{
-		"reason": str(), "by": str(), "at": timestamp(),
+		"reason": str(), "by": str(), "at": timestamp(), "storage": archiveStorageHold,
 	}, "reason", "by", "at")
+	archiveLegalHold := object(map[string]*Schema{
+		"id": uuid(), "object": str(), "reason": str(), "report_run_id": uuid(), "placed_by": str(), "placed_at": timestamp(),
+		"status":        {Type: "string", Enum: []string{"pending", "applied", "release_pending", "released", "failed"}},
+		"status_detail": str(), "applied_at": timestamp(), "released_at": timestamp(),
+	}, "id", "object", "reason", "placed_by", "placed_at", "status")
+	archiveLegalHoldRequest := object(map[string]*Schema{
+		"object": {Type: "string", Description: "the archive object's name, under this tenant's prefix"},
+		"reason": {Type: "string", Description: "why the object is held, 1 to 512 characters"},
+	}, "object", "reason")
 	complianceReportLegalHoldRequest := object(map[string]*Schema{
 		"reason": {Type: "string", Description: "why the report is held, 1 to 512 characters"},
 	}, "reason")
@@ -7957,6 +7971,9 @@ func componentSchemas() map[string]*Schema {
 		"ComplianceReportScheduleList":             list("ComplianceReportSchedule"),
 		"ComplianceReportRun":                      complianceReportRun,
 		"ComplianceReportLegalHoldRequest":         complianceReportLegalHoldRequest,
+		"ArchiveLegalHold":                         archiveLegalHold,
+		"ArchiveLegalHoldRequest":                  archiveLegalHoldRequest,
+		"ArchiveLegalHoldList":                     list("ArchiveLegalHold"),
 		"ComplianceReportDispatch":                 complianceReportDispatch,
 		"ComplianceReportTicket":                   complianceReportTicket,
 		"ComplianceReportRunDispatch":              complianceReportRunDispatch,

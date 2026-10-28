@@ -148,6 +148,8 @@ var TenantScopedTables = []string{
 	"spiffe_upstream_jwt_keys",
 	// A207: tenant custom roles.
 	"tenant_custom_roles",
+	// A208: archive objects' legal holds.
+	"archive_legal_holds",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

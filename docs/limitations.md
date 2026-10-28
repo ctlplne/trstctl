@@ -1465,8 +1465,13 @@ never live in the API process. What you can do end to end against the running bi
   trstctl writes carries that retention, and the report retention reads an
   object's lock before removing it: a report the lock protects stays, and its
   run shows until when (a day at a time under a legal hold on the object). A
-  legal hold a person places on one archive object from trstctl is what comes
-  next.
+  person places an S3 legal hold on one archive object under the tenant's prefix
+  (`POST /api/v1/archives/legal-holds`, `archives legal-holds place`) and
+  releases it; the outbox sets or clears it in the bucket and the hold reads
+  applied or released only after the bucket reads it back, or failed with the
+  reason (a bucket without Object Lock). A report legal hold placed while the
+  archive writes under Object Lock also holds the report's object, in the same
+  event, and its release clears that hold.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
   streams. The JWS response and browser download are one versioned JSON envelope
