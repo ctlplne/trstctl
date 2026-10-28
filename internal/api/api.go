@@ -1659,6 +1659,7 @@ func (a *API) routes() []route {
 	routes = append(routes, a.acmeRoutes(acmeEABKeyPath, acmeAccountPath, page)...)
 	routes = append(routes, a.notificationRoutes(notificationChannelPath, notificationIDPath, notificationQuery, notificationRoutingPolicyPath)...)
 	routes = append(routes, a.observerRoutes(idPath)...)
+	routes = append(routes, a.spiffeUpstreamJWTKeyRoutes()...)
 	routes = append(routes, a.complianceReportRoutes(idPath, page)...)
 	routes = append(routes, a.breakglassRoutes(idPath)...) // see routes_breakglass.go
 	routes = append(routes, a.profileEditApprovalRoutes()...)

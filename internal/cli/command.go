@@ -171,6 +171,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"observers", "update"}, Method: "PUT", Path: "/api/v1/observers/{id}", Body: bodyFile, Summary: "Replace an external observer's configuration"},
 	{Name: []string{"observations", "record"}, Method: "POST", Path: "/api/v1/observations", Body: bodyFile, Summary: "Report what an observer saw at an endpoint; trstctl compares it with the certificate deployed there"},
 	{Name: []string{"observations", "list"}, Method: "GET", Path: "/api/v1/observations", Query: []string{"observer_id", "endpoint", "fingerprint", "limit"}, Summary: "List external observations and their verdicts"},
+	{Name: []string{"spiffe", "upstream-jwt-keys", "publish"}, Method: "POST", Path: "/api/v1/spiffe/upstream-jwt-keys", Body: bodyFile, Summary: "Publish a SPIRE server's JWT signing key and get every unexpired key the tenant's SPIRE servers have published"},
+	{Name: []string{"spiffe", "upstream-jwt-keys", "list"}, Method: "GET", Path: "/api/v1/spiffe/upstream-jwt-keys", Summary: "List the unexpired JWT signing keys the tenant's SPIRE servers have published"},
 	{Name: []string{"endpoints", "key-custody"}, Method: "GET", Path: "/api/v1/endpoints/key-custody", Summary: "List where each deployment target's private key is generated: host agent or control plane"},
 	{Name: []string{"enrollment", "diagnostics"}, Method: "GET", Path: "/api/v1/enrollment/diagnostics", Summary: "List recent enrollment refusals with the failing step, cause and remediation"},
 	{Name: []string{"enrollment", "diagnostics", "support-addendum"}, Method: "GET", Path: "/api/v1/enrollment/diagnostics/support-addendum", Summary: "Get the authorized aggregate-only support-bundle addendum"},

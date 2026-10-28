@@ -11635,6 +11635,38 @@ SPIFFEQualificationCheck = TypedDict(
     total=False,
 )
 
+SPIFFEUpstreamJWTKey = TypedDict(
+    'SPIFFEUpstreamJWTKey',
+    {
+        'expires_at': str,
+        'key_id': str,
+        'public_key': str,
+        'published_at': str,
+        'published_by': str,
+        'tainted': bool,
+    },
+    total=False,
+)
+
+SPIFFEUpstreamJWTKeyList = TypedDict(
+    'SPIFFEUpstreamJWTKeyList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+SPIFFEUpstreamJWTKeyRequest = TypedDict(
+    'SPIFFEUpstreamJWTKeyRequest',
+    {
+        'expires_at': str,
+        'key_id': str,
+        'public_key': str,
+        'tainted': bool,
+    },
+    total=False,
+)
+
 SSHAttestedUserCert = TypedDict(
     'SSHAttestedUserCert',
     {

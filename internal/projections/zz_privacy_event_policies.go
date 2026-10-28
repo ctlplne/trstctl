@@ -1679,6 +1679,9 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventObserverRegistered, 1}:  privacyPayloadShape[ObserverRegistered](),
 		{EventObserverUpdated, 1}:     privacyPayloadShape[ObserverRegistered](),
 		{EventObservationRecorded, 1}: privacyPayloadShape[ObservationRecorded](),
+		// A205: a SPIRE server's JWT signing key: a key ID, a public key and
+		// an expiry, no personal data.
+		{EventSPIFFEUpstreamJWTKeyPublished, 1}: privacyPayloadShape[SPIFFEUpstreamJWTKeyPublished](),
 		// Both producers already emit v1. The required managed_offering field
 		// distinguishes the managed variant; each alternative remains closed.
 		{EventTenantRegistered, 1}: events.PrivacyPayloadShapeOneOf(

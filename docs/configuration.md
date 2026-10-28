@@ -2820,17 +2820,18 @@ environment variables.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
-| `endpoint` | yes | Base URL of the trstctl control plane, for example `https://trstctl.example.com:8443`. The plugin calls `/api/v1/ca/authorities/{id}/intermediates/csr`. |
+| `endpoint` | yes | Base URL of the trstctl control plane, for example `https://trstctl.example.com:8443`. The plugin calls `/api/v1/ca/authorities/{id}/intermediates/csr` for SPIRE's X.509 CA and `/api/v1/spiffe/upstream-jwt-keys` for its JWT signing keys. |
 | `ca_bundle_file` | no | PEM CA bundle used only to verify the HTTPS trstctl endpoint. Set this to trstctl's published internal trust file for a self-signed/private deployment; omit it to use the host's normal trust store. Plain HTTP cannot use this field. |
 | `allow_private_cidrs` | no | Exact private network ranges the endpoint is allowed to resolve into, for example `["10.96.42.15/32"]`. Private addresses are blocked by default; link-local, metadata, multicast, unspecified, CGNAT, and IPv6 unique-local addresses remain blocked even if listed. Prefer a host-sized `/32` or `/128` over a whole network. |
 | `ca_authority_id` | yes | The trstctl CA authority that signs SPIRE's intermediate CA CSR. |
-| `token_file` | yes | File containing a trstctl API token with `certs:issue`. Mount it as a secret file readable only by the SPIRE server process. |
+| `token_file` | yes | File containing a trstctl API token with `issuers:write` and `issuers:read` on the owning tenant (the intermediate CSR route and JWT key publication need `issuers:write`, the JWT key refresh `issuers:read`). Mount it as a secret file readable only by the SPIRE server process. |
 | `common_name` | no | Subject common name for the SPIRE intermediate; defaults to `SPIRE Server CA`. |
 | `ttl_seconds` | no | Intermediate CA TTL. If SPIRE sends a preferred TTL, the plugin honors SPIRE's value for that mint. |
 | `max_path_len` | no | Path length for the SPIRE intermediate; use `0` so it can sign workload leaves but not another CA below it. |
 | `permitted_dns_domains` | no | Optional DNS name constraints copied into the intermediate CA profile. |
 | `extended_key_usages` | no | Optional extended key usages to request for the intermediate profile. |
 | `idempotency_prefix` | no | Prefix for the stable `Idempotency-Key`; defaults to `spire-upstream`. |
+| `jwt_key_refresh_seconds` | no | How often an open JWT key subscription asks trstctl for keys the tenant's other SPIRE servers published; defaults to `30`. |
 
 Example:
 

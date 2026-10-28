@@ -322,8 +322,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A197's KMIP client registrations raised it to 562, mapped onto the
 	// Transit/KMIP row; A198's deployment KEK status and rotation to 564, on
 	// the platform custody row.
-	if len(out) != 564 {
-		t.Fatalf("OpenAPI operationIds = %d, want 564", len(out))
+	// A205's SPIRE JWT key publication and listing raised it to 566, mapped
+	// onto the SPIFFE Workload API row.
+	if len(out) != 566 {
+		t.Fatalf("OpenAPI operationIds = %d, want 566", len(out))
 	}
 	return out
 }

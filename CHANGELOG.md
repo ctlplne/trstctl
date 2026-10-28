@@ -2,6 +2,13 @@
 
 ### Added
 
+- SPIRE JWT authorities through trstctl: the SPIRE upstream authority plugin
+  publishes each SPIRE server's JWT signing key to
+  `POST /api/v1/spiffe/upstream-jwt-keys` and returns every unexpired key the
+  tenant's SPIRE servers have published, sending the set again when another
+  server publishes, so SPIRE servers that share a trust domain through trstctl
+  verify each other's JWT-SVIDs. `GET` on the same path (and
+  `trstctl-cli spiffe upstream-jwt-keys list`) shows the published keys.
 - The host Workload API offers `unix:path:` selectors on macOS: the agent reads
   the caller's executable from its audit token (`LOCAL_PEERTOKEN`, with
   `LOCAL_PEERPID`), and only while the token's pid version still owns the pid,
@@ -554,6 +561,9 @@
 
 ### Fixed
 
+- The SPIRE upstream authority docs said the plugin's token needs `certs:issue`;
+  the intermediate CSR route needs `issuers:write`, and it signs only under an
+  approved ceremony for each CSR, which the docs now say.
 - Moving a tenant into its own key domain, or rotating that domain, now re-wraps
   the tenant's shared transit keyring with its other secrets. The keyring stayed
   under the previous key, so a replica that started afterwards, or any replica

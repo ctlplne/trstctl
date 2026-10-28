@@ -43,6 +43,9 @@ type Config struct {
 	PermittedDNSDomains []string `hcl:"permitted_dns_domains"`
 	ExtendedKeyUsages   []string `hcl:"extended_key_usages"`
 	IdempotencyPrefix   string   `hcl:"idempotency_prefix"`
+	// JWTKeyRefreshSeconds is how often a JWT key subscription asks trstctl
+	// for keys other servers have published since (default 30).
+	JWTKeyRefreshSeconds int64 `hcl:"jwt_key_refresh_seconds"`
 }
 
 // Plugin implements SPIRE's UpstreamAuthority v1 interface by calling trstctl's
@@ -123,11 +126,139 @@ func (p *Plugin) MintX509CAAndSubscribe(req *upstreamauthorityv1.MintX509CAReque
 	})
 }
 
-// PublishJWTKeyAndSubscribe is optional in SPIRE's UpstreamAuthority contract. trstctl
-// backs the X.509 CA chain for this plugin; JWT bundle publication is intentionally
-// not claimed.
-func (p *Plugin) PublishJWTKeyAndSubscribe(*upstreamauthorityv1.PublishJWTKeyRequest, upstreamauthorityv1.UpstreamAuthority_PublishJWTKeyAndSubscribeServer) error {
-	return status.Error(codes.Unimplemented, "trstctl upstream authority publishes X.509 roots only")
+// PublishJWTKeyAndSubscribe publishes this SPIRE server's JWT signing key to
+// trstctl and answers with every unexpired key the tenant's SPIRE servers have
+// published, which SPIRE adds to its bundle; servers that share a trust domain
+// through trstctl then verify each other's JWT-SVIDs. The subscription stays
+// open and sends the set again whenever another server's publication changes
+// it. A failed refresh keeps the stream open, as SPIRE reopens it only at its
+// next JWT key rotation.
+func (p *Plugin) PublishJWTKeyAndSubscribe(req *upstreamauthorityv1.PublishJWTKeyRequest, stream upstreamauthorityv1.UpstreamAuthority_PublishJWTKeyAndSubscribeServer) error {
+	key := req.GetJwtKey()
+	if key == nil || len(key.GetPublicKey()) == 0 || strings.TrimSpace(key.GetKeyId()) == "" {
+		return status.Error(codes.InvalidArgument, "a JWT key with a key ID and public key is required")
+	}
+	cfg, client, err := p.currentConfig()
+	if err != nil {
+		return err
+	}
+	ctx := stream.Context()
+	keys, err := publishJWTKey(ctx, cfg, client, key)
+	if err != nil {
+		return err
+	}
+	if err := stream.Send(&upstreamauthorityv1.PublishJWTKeyResponse{UpstreamJwtKeys: keys}); err != nil {
+		return err
+	}
+	last := jwtKeySetDigest(keys)
+	refresh := time.Duration(cfg.JWTKeyRefreshSeconds) * time.Second
+	ticker := time.NewTicker(refresh)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+		keys, err := listJWTKeys(ctx, cfg, client)
+		if err != nil {
+			continue
+		}
+		if digest := jwtKeySetDigest(keys); digest != last {
+			if err := stream.Send(&upstreamauthorityv1.PublishJWTKeyResponse{UpstreamJwtKeys: keys}); err != nil {
+				return err
+			}
+			last = digest
+		}
+	}
+}
+
+// trstctlJWTKey is one key as /api/v1/spiffe/upstream-jwt-keys carries it.
+type trstctlJWTKey struct {
+	KeyID     string     `json:"key_id"`
+	PublicKey []byte     `json:"public_key"`
+	ExpiresAt *time.Time `json:"expires_at"`
+	Tainted   bool       `json:"tainted"`
+}
+
+func publishJWTKey(ctx context.Context, cfg *Config, client *http.Client, key *typesv1.JWTKey) ([]*typesv1.JWTKey, error) {
+	body := trstctlJWTKey{KeyID: key.GetKeyId(), PublicKey: key.GetPublicKey(), Tainted: key.GetTainted()}
+	if key.GetExpiresAt() > 0 {
+		expires := time.Unix(key.GetExpiresAt(), 0).UTC()
+		body.ExpiresAt = &expires
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "encode JWT key: %v", err)
+	}
+	return jwtKeysCall(ctx, cfg, client, http.MethodPost, raw, jwtKeyIdempotencyKey(cfg, key))
+}
+
+func listJWTKeys(ctx context.Context, cfg *Config, client *http.Client) ([]*typesv1.JWTKey, error) {
+	return jwtKeysCall(ctx, cfg, client, http.MethodGet, nil, "")
+}
+
+func jwtKeysCall(ctx context.Context, cfg *Config, client *http.Client, method string, body []byte, idempotencyKey string) ([]*typesv1.JWTKey, error) {
+	token, err := readTokenFile(cfg.TokenFile)
+	if err != nil {
+		return nil, status.Errorf(codes.FailedPrecondition, "read token file: %v", err)
+	}
+	defer zero(token)
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, method, cfg.Endpoint+"/api/v1/spiffe/upstream-jwt-keys", reader)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "build trstctl request: %v", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+string(token))
+	if body != nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "call trstctl: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "read trstctl response: %v", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, status.Errorf(codes.Unavailable, "trstctl returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	var listed struct {
+		Items []trstctlJWTKey `json:"items"`
+	}
+	if err := json.Unmarshal(respBody, &listed); err != nil {
+		return nil, status.Errorf(codes.Internal, "decode trstctl JWT keys: %v", err)
+	}
+	keys := make([]*typesv1.JWTKey, 0, len(listed.Items))
+	for _, item := range listed.Items {
+		key := &typesv1.JWTKey{KeyId: item.KeyID, PublicKey: item.PublicKey, Tainted: item.Tainted}
+		if item.ExpiresAt != nil {
+			key.ExpiresAt = item.ExpiresAt.Unix()
+		}
+		keys = append(keys, key)
+	}
+	return keys, nil
+}
+
+// jwtKeySetDigest identifies a key set so the subscription sends only changes.
+func jwtKeySetDigest(keys []*typesv1.JWTKey) uint64 {
+	h := fnv.New64a()
+	for _, key := range keys {
+		_, _ = fmt.Fprintf(h, "%s|%x|%d|%t\n", key.GetKeyId(), key.GetPublicKey(), key.GetExpiresAt(), key.GetTainted())
+	}
+	return h.Sum64()
+}
+
+func jwtKeyIdempotencyKey(cfg *Config, key *typesv1.JWTKey) string {
+	h := fnv.New64a()
+	_, _ = fmt.Fprintf(h, "%s|%x|%d|%t", key.GetKeyId(), key.GetPublicKey(), key.GetExpiresAt(), key.GetTainted())
+	return fmt.Sprintf("%s-jwt-%016x", cfg.IdempotencyPrefix, h.Sum64())
 }
 
 func (p *Plugin) issueIntermediate(ctx context.Context, cfg *Config, client *http.Client, csrDER []byte, ttl int64) ([]byte, error) {
@@ -310,6 +441,12 @@ func (c *Config) validate() error {
 	}
 	if c.IdempotencyPrefix == "" {
 		c.IdempotencyPrefix = "spire-upstream"
+	}
+	if c.JWTKeyRefreshSeconds < 0 {
+		return status.Error(codes.InvalidArgument, "jwt_key_refresh_seconds cannot be negative")
+	}
+	if c.JWTKeyRefreshSeconds == 0 {
+		c.JWTKeyRefreshSeconds = 30
 	}
 	return nil
 }

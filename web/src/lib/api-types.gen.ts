@@ -8437,6 +8437,26 @@ export interface SPIFFEQualificationCheck {
   recovery?: string;
 }
 
+export interface SPIFFEUpstreamJWTKey {
+  expires_at: string;
+  key_id: string;
+  public_key: string;
+  published_at: string;
+  published_by: string;
+  tainted: boolean;
+}
+
+export interface SPIFFEUpstreamJWTKeyList {
+  items: SPIFFEUpstreamJWTKey[];
+}
+
+export interface SPIFFEUpstreamJWTKeyRequest {
+  expires_at?: string;
+  key_id: string;
+  public_key: string;
+  tainted?: boolean;
+}
+
 export interface SSHAttestedUserCert {
   approver: string;
   attestation: Attestation;

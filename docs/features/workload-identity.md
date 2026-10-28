@@ -412,10 +412,23 @@ configured scheme and host. If a private trstctl name resolves to RFC 1918 space
 list only its expected address or smallest practical range in
 `allow_private_cidrs`; private destinations are refused by default.
 
-This is container-proven end to end: CI runs a real SPIRE server, loads the plugin,
-mints an X.509-SVID, and verifies the chain as workload leaf -> SPIRE intermediate ->
-trstctl root. SPIRE's optional JWT upstream method isn't claimed by this plugin —
-X.509-SVID trust anchoring only.
+The served route signs a CSR only under an approved `issue_intermediate_csr`
+ceremony for that exact CSR, and the plugin sends no ceremony ID: each SPIRE CA
+rotation (every half of `ca_ttl`) needs custodians to open and approve a ceremony
+for the new CSR before SPIRE's retry succeeds. CI's SPIRE container test signs with
+a stand-in for trstctl; the served container test below opens and approves each
+ceremony through the API as custodians would.
+
+SPIRE's JWT signing keys go through trstctl too. The plugin publishes each SPIRE
+server's JWT key to `POST /api/v1/spiffe/upstream-jwt-keys` and answers SPIRE with
+every unexpired key the tenant's SPIRE servers have published, then keeps the
+subscription open and sends the set again when another server publishes
+(`jwt_key_refresh_seconds`, default 30). SPIRE adds those keys to its bundle, so
+servers that share a trust domain through trstctl verify each other's JWT-SVIDs:
+in containers, two SPIRE servers mint JWT-SVIDs that verify with the other
+server's bundle. trstctl keeps public keys only (`GET /api/v1/spiffe/upstream-jwt-keys`,
+`trstctl-cli spiffe upstream-jwt-keys list`); a key ID published again with a
+different key is refused.
 
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
@@ -680,7 +693,7 @@ revokes or retires them via these same transitions. Canonical home:
 
 Deploying against an existing SPIRE cluster requires installing the plugin binary (or
 mounting it read-only) and adding the `UpstreamAuthority "trstctl"` block above with a
-`token_file` scoped to `certs:issue` on the owning tenant.
+`token_file` scoped to `issuers:write` and `issuers:read` on the owning tenant.
 
 Attested X.509-SVID issuance needs an enabled trust source first
 (`POST /api/v1/workloads/attester-trust-sources`; name, method, issuer, audience,
@@ -785,7 +798,7 @@ Replaying the same key returns the same response without minting twice.
 |---|---|
 | NHI lifecycle routes (F59) | Served — `/api/v1/identities`, `/transitions` |
 | SPIFFE Workload API (F24) | Served — gRPC over a UDS (`protocols.spiffe.enabled`); `FetchX509SVID`, `FetchJWTSVID`, bundle fetches, and `ValidateJWTSVID` wired to the signer-backed path |
-| SPIRE upstream authority | Served and container-proven for X.509 — SPIRE loads `trstctl-spire-upstream-authority`, trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr`, and the e2e verifies a minted SVID chain to the trstctl root |
+| SPIRE upstream authority | Served — SPIRE loads `trstctl-spire-upstream-authority`; trstctl signs its intermediate CA CSR via `/api/v1/ca/authorities/{id}/intermediates/csr` under an approved per-CSR ceremony, and SPIRE servers share JWT authorities through `/api/v1/spiffe/upstream-jwt-keys` (two SPIRE server containers verify each other's JWT-SVIDs) |
 | Ephemeral issuance (F25) | Served — direct attested X.509-SVID mint at `POST /api/v1/workloads/attested-issuance`; effect-free exact JIT review at `POST /api/v1/ephemeral/preview`; approval-gated mint at `POST /api/v1/ephemeral` plus `/api/v1/ephemeral/{id}/approvals`; and a dedicated review/approval/recovery workflow on Workloads |
 | Attestation chain (F30) | Served — tenant trust-source lifecycle at `/api/v1/workloads/attester-trust-sources`; exact effect-free review at `/api/v1/workloads/attested-issuance/preview`; the six-attester verifier gates `POST /api/v1/workloads/attested-issuance`; the console separates request, review, and result with unchanged-key retries; conformance covers each attester |
 | AI-agent broker (F61) | Served when configured — `POST /api/v1/broker/agent-identities` verifies proof, gates policy, mints a short-lived credential, and projects the graph grant |

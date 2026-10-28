@@ -7910,6 +7910,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spiffe/upstream-jwt-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the unexpired JWT signing keys the tenant's SPIRE servers have published */
+        get: operations["listSPIFFEUpstreamJWTKeys"];
+        put?: never;
+        /** Publish a SPIRE server's JWT signing key and get every unexpired key the tenant's SPIRE servers have published */
+        post: operations["publishSPIFFEUpstreamJWTKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ssh/attested-user-certs": {
         parameters: {
             query?: never;
@@ -17863,6 +17881,44 @@ export interface components {
             label: string;
             passed: boolean;
             recovery?: string;
+        };
+        SPIFFEUpstreamJWTKey: {
+            /**
+             * Format: date-time
+             * @description when the key expires; null for a key without an expiry
+             */
+            expires_at: string;
+            key_id: string;
+            /**
+             * Format: byte
+             * @description PKIX (SubjectPublicKeyInfo) DER public key, base64
+             */
+            public_key: string;
+            /** Format: date-time */
+            published_at: string;
+            /** @description the token subject that first published the key */
+            published_by: string;
+            /** @description the publishing server no longer considers the key safe to use */
+            tainted: boolean;
+        };
+        SPIFFEUpstreamJWTKeyList: {
+            items: components["schemas"]["SPIFFEUpstreamJWTKey"][];
+        };
+        SPIFFEUpstreamJWTKeyRequest: {
+            /**
+             * Format: date-time
+             * @description when the key expires; omit for a key without an expiry
+             */
+            expires_at?: string;
+            /** @description the key ID SPIRE signs JWT-SVIDs with (the JWT kid) */
+            key_id: string;
+            /**
+             * Format: byte
+             * @description PKIX (SubjectPublicKeyInfo) DER public key, base64: EC P-256/P-384/P-521, RSA or Ed25519
+             */
+            public_key: string;
+            /** @description mark an already published key as no longer safe to use */
+            tainted?: boolean;
         };
         SSHAttestedUserCert: {
             /** @description Authenticated issuer subject recorded for this certificate, not an independently approved identity. */
@@ -42387,6 +42443,89 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProtocolProfileStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSPIFFEUpstreamJWTKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SPIFFEUpstreamJWTKeyList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    publishSPIFFEUpstreamJWTKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SPIFFEUpstreamJWTKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SPIFFEUpstreamJWTKeyList"];
                 };
             };
             /** @description client error */

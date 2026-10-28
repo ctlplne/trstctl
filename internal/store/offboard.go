@@ -144,6 +144,8 @@ var TenantScopedTables = []string{
 	// A180: external observations, then the observers they reference.
 	"external_observations",
 	"external_observers",
+	// A205: JWT signing keys SPIRE servers published.
+	"spiffe_upstream_jwt_keys",
 	"managed_keys",
 	"code_signing_operations",
 	"access_change_request_decisions",

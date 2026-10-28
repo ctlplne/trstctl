@@ -5187,17 +5187,25 @@ This is a deliberate, documented trust boundary, not an accident.
   format is byte-identical without a build-time go-spiffe dependency.
 - SPIRE upstream authority: the `trstctl-spire-upstream-authority` plugin puts
   the served CA hierarchy behind SPIRE as its X.509 upstream: SPIRE sends its
-  local CA CSR to `/api/v1/ca/authorities/{id}/intermediates/csr`, trstctl
-  signs it through the served CA hierarchy, and a real SPIRE server container
-  mints an SVID chained to the trstctl root in CI. The plugin binary is built
+  local CA CSR to `/api/v1/ca/authorities/{id}/intermediates/csr`. The served
+  route signs only under an approved `issue_intermediate_csr` ceremony for that
+  exact CSR and the plugin sends no ceremony ID, so every SPIRE CA rotation
+  needs custodians to approve a ceremony for its new CSR; there is no standing
+  approval for an upstream authority. CI's SPIRE container test signs with a
+  stand-in for trstctl; a served container test opens and approves each
+  ceremony through the API. The plugin binary is built
   by `make build` and published from every release tag as
   `trstctl-spire-upstream-authority-linux-{amd64,arm64}` GitHub Release
   assets with a SHA-256 manifest and SLSA provenance. SPIRE loads it from its
   own host filesystem (`plugin_cmd`), so it ships as a standalone binary and
-  is **not** part of the trstctl container image. The plugin intentionally
-  returns `Unimplemented` for SPIRE's optional JWT upstream publication RPC;
-  it anchors X.509-SVID trust, while SPIRE's local JWT key remains
-  SPIRE-managed for same-domain JWT-SVID use.
+  is **not** part of the trstctl container image. The plugin also publishes
+  each SPIRE server's JWT signing key to `/api/v1/spiffe/upstream-jwt-keys`
+  and returns every unexpired key the tenant's SPIRE servers published, with
+  updates on the open subscription, so SPIRE servers sharing a trust domain
+  through trstctl verify each other's JWT-SVIDs (two SPIRE server containers,
+  each verifying the other's JWT-SVID with its own bundle). trstctl keeps the
+  public keys only; its own SPIFFE JWT authority is not added to that set, and
+  SPIRE's optional `SubscribeToLocalBundle` is not implemented.
 - Attested issuance transport (REST): `POST /api/v1/workloads/attested-issuance`
   is the served proof-before-trust mint for workloads that already have
   their own key pair. The request carries the attestation method, base64

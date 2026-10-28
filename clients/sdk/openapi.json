@@ -35304,6 +35304,85 @@
         ],
         "type": "object"
       },
+      "SPIFFEUpstreamJWTKey": {
+        "properties": {
+          "expires_at": {
+            "description": "when the key expires; null for a key without an expiry",
+            "format": "date-time",
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "public_key": {
+            "description": "PKIX (SubjectPublicKeyInfo) DER public key, base64",
+            "format": "byte",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "published_by": {
+            "description": "the token subject that first published the key",
+            "type": "string"
+          },
+          "tainted": {
+            "description": "the publishing server no longer considers the key safe to use",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_id",
+          "public_key",
+          "expires_at",
+          "tainted",
+          "published_by",
+          "published_at"
+        ],
+        "type": "object"
+      },
+      "SPIFFEUpstreamJWTKeyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SPIFFEUpstreamJWTKey"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SPIFFEUpstreamJWTKeyRequest": {
+        "properties": {
+          "expires_at": {
+            "description": "when the key expires; omit for a key without an expiry",
+            "format": "date-time",
+            "type": "string"
+          },
+          "key_id": {
+            "description": "the key ID SPIRE signs JWT-SVIDs with (the JWT kid)",
+            "type": "string"
+          },
+          "public_key": {
+            "description": "PKIX (SubjectPublicKeyInfo) DER public key, base64: EC P-256/P-384/P-521, RSA or Ed25519",
+            "format": "byte",
+            "type": "string"
+          },
+          "tainted": {
+            "description": "mark an already published key as no longer safe to use",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key_id",
+          "public_key"
+        ],
+        "type": "object"
+      },
       "SSHAttestedUserCert": {
         "properties": {
           "approver": {
@@ -75386,6 +75465,119 @@
           }
         ],
         "summary": "Activate the tenant-bound eval protocol profile",
+        "x-trstctl-permission": "issuers:write"
+      }
+    },
+    "/api/v1/spiffe/upstream-jwt-keys": {
+      "get": {
+        "operationId": "listSPIFFEUpstreamJWTKeys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SPIFFEUpstreamJWTKeyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the unexpired JWT signing keys the tenant's SPIRE servers have published",
+        "x-trstctl-permission": "issuers:read"
+      },
+      "post": {
+        "operationId": "publishSPIFFEUpstreamJWTKey",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SPIFFEUpstreamJWTKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SPIFFEUpstreamJWTKeyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Publish a SPIRE server's JWT signing key and get every unexpired key the tenant's SPIRE servers have published",
         "x-trstctl-permission": "issuers:write"
       }
     },
