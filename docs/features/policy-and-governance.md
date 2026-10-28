@@ -920,3 +920,27 @@ SQL rollback recovery is `TestCMDBExportRecoversAnAppendWhoseOutboxTransactionRo
 Live ServiceNow class/source/ACL behavior needs an instance. See
 [configuration](../configuration.md#certificate-ci-export-to-servicenow) for
 prerequisites, field semantics and failure recovery.
+
+
+### Named ticket intake and ownership
+
+Configure several ServiceNow tables or Jira projects under distinct schedule names.
+Each source keeps its own tenant-scoped relay job and bounded page cursor. API,
+CLI and the Approvals console list and edit those schedules; removal refuses an
+unfinished sweep or pending job and preserves the request and audit history.
+Omitted names remain bound to the legacy `default` source.
+
+An optional `owner_field` reads an exact email and resolves it to one existing
+tenant owner. Hidden, missing, ambiguous and foreign mailboxes leave a request
+unassigned, visibly and without guessing. Existing requests keep their recorded
+owner; a new ticket/request is needed to correct an unassigned one. The existing
+request lifecycle carries a mapped OwnerID into identity preparation and issuance.
+No approval, ownership-readiness or requester separation check is bypassed.
+
+`TestServedNamedTicketIntakesKeepTheirSourcesAndMapTenantOwners` covers two tables
+and two Jira projects with independent jobs, owner mapping and cross-schedule
+report refusal. The named lifecycle test covers removal idempotency, active-sweep
+and permission refusal, and ambiguous/foreign-owner boundaries. Migration content
+checks preserve the old default cursor. These served observations and protocol
+fixtures still owe final-image relay/provider replay; live vendor accounts are
+separate qualification inputs. See [configuration](../configuration.md#named-ticket-intake-schedules).

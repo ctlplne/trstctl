@@ -4,6 +4,9 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { SectionCard } from "@/components/dashboard";
 import { Num } from "@/components/typography";
 import { useTranslation } from "@/i18n/I18nProvider";
@@ -48,21 +51,21 @@ export function CMDBCertificateExportPanel() {
       {!bindings.loading && !bindings.error && enabled.length === 0 ? <p>{t("integrate.cmdb.noBinding")}</p> : null}
       {enabled.length > 0 ? (
         <form className="grid gap-3" onSubmit={(event) => void queue(event)}>
-          <label className="grid gap-1 text-sm">
-            {t("integrate.cmdb.binding")}
-            <select className="ui-input" {...form.register("binding_id")} aria-invalid={Boolean(form.formState.errors.binding_id)}>
-              <option value="">{t("integrate.cmdb.chooseBinding")}</option>
-              {enabled.map((binding) => (
-                <option key={binding.id} value={binding.id}>
-                  {binding.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            {t("integrate.cmdb.certificate")}
-            <input className="ui-input" {...form.register("certificate_id")} aria-invalid={Boolean(form.formState.errors.certificate_id)} />
-          </label>
+          <Field label={t("integrate.cmdb.binding")} error={form.formState.errors.binding_id ? t("integrate.cmdb.invalid") : undefined} required>
+            {(control) => (
+              <Select {...control} {...form.register("binding_id")}>
+                <option value="">{t("integrate.cmdb.chooseBinding")}</option>
+                {enabled.map((binding) => (
+                  <option key={binding.id} value={binding.id}>
+                    {binding.id}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label={t("integrate.cmdb.certificate")} error={form.formState.errors.certificate_id ? t("integrate.cmdb.invalid") : undefined} required>
+            {(control) => <Input {...control} {...form.register("certificate_id")} />}
+          </Field>
           {form.formState.errors.certificate_id || form.formState.errors.binding_id ? <p role="alert">{t("integrate.cmdb.invalid")}</p> : null}
           <p className="text-sm text-muted-foreground">{t("integrate.cmdb.review")}</p>
           <Button type="submit" disabled={form.formState.isSubmitting}>

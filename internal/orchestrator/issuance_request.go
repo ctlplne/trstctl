@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/issuancerequest"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 // defaultIssuanceRequestTTL is how long an unattended request waits.
@@ -492,12 +493,16 @@ func (o *Orchestrator) CompleteIssuanceRequestForIdentity(ctx context.Context, t
 // ConfigureTicketIntake records the standing instruction to read the ITSM for
 // certificate-request tickets (I3). TokenRef is a reference, never a value.
 func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID string, in projections.TicketIntakeConfigured) error {
+	in.Name = ticketintake.ScheduleName(in.Name)
+	if !ticketintake.ValidScheduleName(in.Name) {
+		return errors.New("orchestrator: invalid ticket intake schedule name")
+	}
 	payload, err := json.Marshal(in)
 	if err != nil {
 		return err
 	}
 	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
-		if current, found, loadErr := o.store.GetTicketIntakeSchedule(lockCtx, tenantID, in.System); loadErr != nil {
+		if current, found, loadErr := o.store.GetTicketIntakeSchedule(lockCtx, tenantID, in.System, in.Name); loadErr != nil {
 			return loadErr
 		} else if found {
 			// A lost Save response can be retried with a new HTTP key. Reusing the
@@ -509,17 +514,47 @@ func (o *Orchestrator) ConfigureTicketIntake(ctx context.Context, tenantID strin
 				return ErrTicketIntakeSweepInProgress
 			}
 		}
-		_, err := o.emit(lockCtx, projections.EventTicketIntakeConfigured, tenantID, payload)
+		_, err := o.emitVersioned(lockCtx, projections.EventTicketIntakeConfigured, tenantID, 2, payload)
 		return err
 	})
 }
 
 func sameTicketIntakeConfig(current store.TicketIntakeSchedule, in projections.TicketIntakeConfigured) bool {
-	return current.System == in.System &&
+	return current.System == in.System && current.Name == ticketintake.ScheduleName(in.Name) && current.OwnerField == in.OwnerField &&
 		current.InstanceURL == in.InstanceURL && current.TokenRef == in.TokenRef &&
 		current.SNTable == in.SNTable && current.JiraProject == in.JiraProject && current.Query == in.Query &&
 		current.SubjectField == in.SubjectField && current.ProfileField == in.ProfileField &&
 		current.RequesterField == in.RequesterField && current.JustificationField == in.JustificationField &&
 		current.IntervalSeconds == in.IntervalSeconds && current.Enabled == in.Enabled &&
 		current.AllowPrivateEndpoint == in.AllowPrivate && slices.Equal(current.PrivateEgressCIDRs, in.PrivateCIDRs)
+}
+
+// DeleteTicketIntakeSchedule retains a removal fact only after its last sweep finished.
+func (o *Orchestrator) DeleteTicketIntakeSchedule(ctx context.Context, tenantID, system, name string) error {
+	name = ticketintake.ScheduleName(name)
+	if !ticketintake.ValidScheduleName(name) {
+		return errors.New("orchestrator: invalid ticket intake schedule name")
+	}
+	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
+		current, found, err := o.store.GetTicketIntakeSchedule(lockCtx, tenantID, system, name)
+		if err != nil || !found {
+			return err
+		}
+		if current.CurrentSweepID != "" && !current.CoverageComplete {
+			return ErrTicketIntakeSweepInProgress
+		}
+		pending, err := o.store.HasPendingTicketSyncJob(lockCtx, tenantID, system, name)
+		if err != nil {
+			return err
+		}
+		if pending {
+			return ErrTicketIntakeSweepInProgress
+		}
+		body, err := json.Marshal(projections.TicketIntakeDeleted{System: system, Name: name})
+		if err != nil {
+			return err
+		}
+		_, err = o.emit(lockCtx, projections.EventTicketIntakeDeleted, tenantID, body)
+		return err
+	})
 }

@@ -90,6 +90,7 @@ const (
 	// I3: a tenant's standing instruction to read its ITSM for
 	// certificate-request tickets.
 	EventTicketIntakeConfigured = "ticket.intake.configured"
+	EventTicketIntakeDeleted    = "ticket.intake.deleted"
 	// AUD-47: a ticket sweep is a named chain of signed provider pages. The
 	// event log is both the durable checkpoint authority and the outbox repair
 	// source after an append/SQL crash window.
@@ -707,6 +708,8 @@ type IssuanceRequestOpened struct {
 // TicketIntakeConfigured is the payload of ticket.intake.configured (I3).
 // TokenRef is a REFERENCE, never a token value.
 type TicketIntakeConfigured struct {
+	Name               string   `json:"name,omitempty"`
+	OwnerField         string   `json:"owner_field,omitempty"`
 	System             string   `json:"system"`
 	InstanceURL        string   `json:"instance_url"`
 	TokenRef           string   `json:"token_ref"`
@@ -742,6 +745,7 @@ type TicketIntakeSweepPageObserved struct {
 }
 
 type TicketIntakeSweepFailed struct {
+	Schedule string    `json:"schedule,omitempty"`
 	System   string    `json:"system"`
 	SweepID  string    `json:"sweep_id"`
 	Cursor   string    `json:"cursor,omitempty"`
@@ -4610,10 +4614,11 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventApprovalRequested:                        {1: true},
 	EventApprovalDecisionRecorded:                 {1: true},
 	EventApprovalStatusChanged:                    {1: true},
-	EventTicketIntakeConfigured:                   {1: true},
-	EventTicketIntakeSweepDispatched:              {1: true},
-	EventTicketIntakeSweepPageObserved:            {1: true},
-	EventTicketIntakeSweepFailed:                  {1: true},
+	EventTicketIntakeConfigured:                   {1: true, 2: true},
+	EventTicketIntakeDeleted:                      {1: true},
+	EventTicketIntakeSweepDispatched:              {1: true, 2: true},
+	EventTicketIntakeSweepPageObserved:            {1: true, 2: true},
+	EventTicketIntakeSweepFailed:                  {1: true, 2: true},
 	EventEnrollmentDiagnosticObserved:             {1: true, EnrollmentDiagnosticEventSchemaVersion: true},
 	EventEnrollmentDiagnosticVerificationQueued:   {1: true},
 	EventMDMDeviceCorrelated:                      {1: true},
@@ -5213,6 +5218,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyTicketIntakeConfiguredTx(ctx, tx, e.TenantID, store.TicketIntakeSchedule{
+			Name: pl.Name, OwnerField: pl.OwnerField,
 			System: pl.System, InstanceURL: pl.InstanceURL, TokenRef: pl.TokenRef,
 			SNTable: pl.SNTable, JiraProject: pl.JiraProject, Query: pl.Query,
 			SubjectField: pl.SubjectField, ProfileField: pl.ProfileField,
@@ -5232,7 +5238,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyTicketIntakeSweepPageTx(ctx, tx, e.TenantID, store.TicketIntakeSweepPage{
-			System: pl.Intent.System, SweepID: pl.Intent.SweepID, Cursor: pl.Intent.Cursor,
+			Schedule: pl.Intent.Schedule, System: pl.Intent.System, SweepID: pl.Intent.SweepID, Cursor: pl.Intent.Cursor,
 			ReadBefore: pl.Intent.ReadCount, PageLimit: pl.Intent.PageLimit, ObservedAt: pl.ObservedAt,
 			ReadCount: pl.ReadCount, ExpectedCount: pl.ExpectedCount, Complete: pl.Complete,
 			NextCursor: pl.NextCursor, Eligible: pl.Eligible, Skipped: pl.Skipped,
@@ -5242,7 +5248,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyTicketIntakeSweepFailedTx(ctx, tx, e.TenantID, pl.System, pl.SweepID, pl.Cursor, pl.FailedAt, pl.Detail)
+		return p.store.ApplyTicketIntakeSweepFailedTx(ctx, tx, e.TenantID, pl.System, pl.SweepID, pl.Cursor, pl.FailedAt, pl.Detail, pl.Schedule)
+	case EventTicketIntakeDeleted:
+		var pl TicketIntakeDeleted
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyTicketIntakeDeletedTx(ctx, tx, e.TenantID, pl.System, pl.Name)
 	case EventEnrollmentDiagnosticObserved:
 		var pl EnrollmentDiagnosticObserved
 		if err := decode(e, &pl); err != nil {
@@ -10013,4 +10025,10 @@ func projectionADCSWorstSeverity(findings []adcsdiscovery.Finding) string {
 		}
 	}
 	return worst
+}
+
+// TicketIntakeDeleted names one tenant-local schedule; it never drops its audit history.
+type TicketIntakeDeleted struct {
+	System string `json:"system"`
+	Name   string `json:"name"`
 }

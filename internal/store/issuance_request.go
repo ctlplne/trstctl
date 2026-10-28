@@ -5,9 +5,11 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/ticketintake"
 )
 
 // IssuanceRequest is a first-class request for a credential (I3).
@@ -154,6 +156,8 @@ var ErrIssuanceRequestNotFound = errors.New("store: issuance request not found")
 // TicketIntakeSchedule is a tenant's standing instruction to read its ITSM for
 // certificate-request tickets (I3).
 type TicketIntakeSchedule struct {
+	Name        string
+	OwnerField  string
 	TenantID    string
 	System      string
 	InstanceURL string
@@ -191,7 +195,7 @@ const ticketIntakeCols = `tenant_id::text, system, instance_url, token_ref, sn_t
 	interval_seconds, enabled, allow_private_endpoint, coalesce(private_egress_cidrs, '{}'),
 	last_run_at, last_error, coalesce(current_sweep_id::text, ''), sweep_started_at,
 	last_attempt_at, cursor, read_count, expected_count, pages_completed, coverage_complete,
-	eligible_count, skipped_count`
+	eligible_count, skipped_count, name, owner_field`
 
 // Keep this statement literal so the AN-1 analyzer can prove the tenant
 // predicate instead of having to trust a dynamically assembled SELECT list.
@@ -201,9 +205,9 @@ const ticketIntakeDueSQL = `SELECT tenant_id::text, system, instance_url, token_
 	coalesce(private_egress_cidrs, '{}'), last_run_at, last_error,
 	coalesce(current_sweep_id::text, ''), sweep_started_at, last_attempt_at,
 	cursor, read_count, expected_count, pages_completed, coverage_complete,
-	eligible_count, skipped_count
+	eligible_count, skipped_count, name, owner_field
 	FROM ticket_intake_schedules WHERE tenant_id = $1 AND enabled AND interval_seconds > 0
-	ORDER BY system`
+	ORDER BY system, name`
 
 func scanTicketIntake(row pgx.Row) (TicketIntakeSchedule, error) {
 	var s TicketIntakeSchedule
@@ -212,18 +216,18 @@ func scanTicketIntake(row pgx.Row) (TicketIntakeSchedule, error) {
 		&s.IntervalSeconds, &s.Enabled, &s.AllowPrivateEndpoint, &s.PrivateEgressCIDRs,
 		&s.LastRunAt, &s.LastError, &s.CurrentSweepID, &s.SweepStartedAt, &s.LastAttemptAt,
 		&s.Cursor, &s.ReadCount, &s.ExpectedCount, &s.PagesCompleted, &s.CoverageComplete,
-		&s.EligibleCount, &s.SkippedCount)
+		&s.EligibleCount, &s.SkippedCount, &s.Name, &s.OwnerField)
 	return s, err
 }
 
-// GetTicketIntakeSchedule returns the tenant's intake schedule for one system.
-func (s *Store) GetTicketIntakeSchedule(ctx context.Context, tenantID, system string) (TicketIntakeSchedule, bool, error) {
+// GetTicketIntakeSchedule reads one named source. Legacy callers read default.
+func (s *Store) GetTicketIntakeSchedule(ctx context.Context, tenantID, system string, names ...string) (TicketIntakeSchedule, bool, error) {
 	var out TicketIntakeSchedule
 	found := false
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		sched, err := scanTicketIntake(tx.QueryRow(ctx,
 			`SELECT `+ticketIntakeCols+` FROM ticket_intake_schedules
-			  WHERE tenant_id = $1 AND system = $2`, tenantID, system))
+			  WHERE tenant_id = $1 AND system = $2 AND name = $3`, tenantID, system, intakeScheduleName(names)))
 		switch {
 		case err == nil:
 			out, found = sched, true
@@ -301,10 +305,10 @@ func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, te
 		`INSERT INTO ticket_intake_schedules
 		   (tenant_id, system, instance_url, token_ref, sn_table, jira_project, query,
 		    subject_field, profile_field, requester_field, justification_field,
-		    interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-		 ON CONFLICT (tenant_id, system) DO UPDATE SET
-		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref,
+		    interval_seconds, enabled, allow_private_endpoint, private_egress_cidrs, name, owner_field)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+		 ON CONFLICT (tenant_id, system, name) DO UPDATE SET
+		   instance_url = EXCLUDED.instance_url, token_ref = EXCLUDED.token_ref, owner_field = EXCLUDED.owner_field,
 		   sn_table = EXCLUDED.sn_table, jira_project = EXCLUDED.jira_project, query = EXCLUDED.query,
 		   subject_field = EXCLUDED.subject_field, profile_field = EXCLUDED.profile_field,
 		   requester_field = EXCLUDED.requester_field, justification_field = EXCLUDED.justification_field,
@@ -317,7 +321,7 @@ func (s *Store) ApplyTicketIntakeConfiguredTx(ctx context.Context, tx pgx.Tx, te
 		   last_error = '', updated_at = now()`,
 		tenantID, in.System, in.InstanceURL, in.TokenRef, in.SNTable, in.JiraProject, in.Query,
 		in.SubjectField, in.ProfileField, in.RequesterField, in.JustificationField,
-		in.IntervalSeconds, in.Enabled, false, nil)
+		in.IntervalSeconds, in.Enabled, false, nil, ticketintake.ScheduleName(in.Name), in.OwnerField)
 	return err
 }
 
@@ -334,4 +338,49 @@ func (s *Store) IssuanceRequestExistsForTicket(ctx context.Context, tenantID, ti
 			tenantID, ticketRef).Scan(&exists)
 	})
 	return exists, err
+}
+
+func intakeScheduleName(names []string) string {
+	if len(names) == 0 {
+		return ticketintake.DefaultSchedule
+	}
+	return ticketintake.ScheduleName(names[0])
+}
+
+// ListTicketIntakeSchedules reads every named schedule under the tenant's RLS context.
+func (s *Store) ListTicketIntakeSchedules(ctx context.Context, tenantID string) ([]TicketIntakeSchedule, error) {
+	out := []TicketIntakeSchedule{}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT `+ticketIntakeCols+` FROM ticket_intake_schedules WHERE tenant_id = $1 ORDER BY system, name`, tenantID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			schedule, err := scanTicketIntake(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, schedule)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// ApplyTicketIntakeDeletedTx projects a removal; active cursors cannot be abandoned.
+func (s *Store) ApplyTicketIntakeDeletedTx(ctx context.Context, tx pgx.Tx, tenantID, system, name string) error {
+	var incomplete bool
+	err := tx.QueryRow(ctx, `SELECT current_sweep_id IS NOT NULL AND NOT coverage_complete FROM ticket_intake_schedules WHERE tenant_id = $1 AND system = $2 AND name = $3 FOR UPDATE`, tenantID, system, ticketintake.ScheduleName(name)).Scan(&incomplete)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if incomplete {
+		return fmt.Errorf("store: an incomplete intake schedule cannot be removed")
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM ticket_intake_schedules WHERE tenant_id = $1 AND system = $2 AND name = $3`, tenantID, system, ticketintake.ScheduleName(name))
+	return err
 }

@@ -17,7 +17,7 @@ const { apiMock } = vi.hoisted(() => ({
     profileEditApprovals: vi.fn(),
     approveProfileEditApproval: vi.fn(),
     issuanceRequests: vi.fn(),
-    ticketIntakeSchedule: vi.fn(),
+    ticketIntakeSchedules: vi.fn(),
     approveApprovalRequest: vi.fn(),
     denyApprovalRequest: vi.fn(),
     approveIssuanceRequest: vi.fn(),
@@ -82,17 +82,7 @@ describe("dedicated approvals inbox", () => {
     apiMock.approvalRequestHistory.mockResolvedValue({ items: [], next_cursor: "" });
     apiMock.profileEditApprovals.mockResolvedValue({ items: [] });
     apiMock.issuanceRequests.mockResolvedValue({ items: [], open: 0, guidance: "" });
-    apiMock.ticketIntakeSchedule.mockImplementation(async (system: "servicenow" | "jira") => ({
-      configured: false,
-      system,
-      enabled: false,
-      read_count: 0,
-      pages_completed: 0,
-      coverage_complete: false,
-      eligible_count: 0,
-      skipped_count: 0,
-      guidance: "",
-    }));
+    apiMock.ticketIntakeSchedules.mockResolvedValue({ items: [] });
     apiMock.approveApprovalRequest.mockResolvedValue({
       id: "approval-request-1",
       status: "approved",
@@ -311,7 +301,7 @@ describe("dedicated approvals inbox", () => {
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(document.querySelectorAll("main input, main select, main textarea")).toHaveLength(0);
-    expect(apiMock.ticketIntakeSchedule).not.toHaveBeenCalled();
+    expect(apiMock.ticketIntakeSchedules).not.toHaveBeenCalled();
 
     for (const title of ["All pending requests and evidence", "Decision lifecycle and history", "Specialized approval tools"]) {
       expect(screen.getByText(title, { exact: true }).closest("details")).not.toHaveAttribute("open");
@@ -320,7 +310,7 @@ describe("dedicated approvals inbox", () => {
     await user.click(await screen.findByText("Decision lifecycle and history", { exact: true }));
     expect(await screen.findByRole("heading", { name: "Issuance requests" })).toBeInTheDocument();
     expect(screen.getByText("qa-design-partner-mtls", { exact: true })).toBeInTheDocument();
-    await waitFor(() => expect(apiMock.ticketIntakeSchedule).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(apiMock.ticketIntakeSchedules).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByText("Specialized approval tools", { exact: true }));
     expect(screen.getByRole("form", { name: "Approve ephemeral credential" })).toBeInTheDocument();

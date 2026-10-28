@@ -4246,6 +4246,24 @@ export interface paths {
         /** Configure bounded ServiceNow or Jira ticket intake with durable relay paging */
         put: operations["putTicketIntakeSchedule"];
         post?: never;
+        /** Remove one named intake schedule after its sweep completes */
+        delete: operations["deleteTicketIntakeSchedule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/issuance-requests/intake-schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List this tenant's named ServiceNow and Jira intake schedules */
+        get: operations["listTicketIntakeSchedules"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -19775,6 +19793,9 @@ export interface components {
             interval_seconds: number;
             jira_project?: string;
             justification_field?: string;
+            /** @description Tenant-local schedule name: 1-40 lowercase letters, digits, underscores or hyphens; default when omitted */
+            name?: string;
+            owner_field?: string;
             private_egress_cidrs?: string[];
             profile_field: string;
             query?: string;
@@ -19802,7 +19823,10 @@ export interface components {
             last_attempt_at?: string;
             last_error?: string;
             last_run_at?: string;
+            /** @description Tenant-local schedule name: 1-40 lowercase letters, digits, underscores or hyphens; default when omitted */
+            name?: string;
             next_cursor?: string;
+            owner_field?: string;
             pages_completed: number;
             private_egress_cidrs?: string[];
             profile_field?: string;
@@ -19820,6 +19844,9 @@ export interface components {
             /** @enum {string} */
             system?: "servicenow" | "jira";
             token_ref?: string;
+        };
+        TicketIntakeScheduleList: {
+            items: components["schemas"]["TicketIntakeSchedule"][];
         };
         TransitCiphertext: {
             ciphertext: string;
@@ -32289,8 +32316,10 @@ export interface operations {
     getTicketIntakeSchedule: {
         parameters: {
             query?: {
-                /** @description provider schedule to read: servicenow (default) or jira */
+                /** @description provider: servicenow (default) or jira */
                 system?: string;
+                /** @description schedule name (default when omitted) */
+                name?: string;
             };
             header?: never;
             path?: never;
@@ -32350,6 +32379,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TicketIntakeSchedule"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteTicketIntakeSchedule: {
+        parameters: {
+            query?: {
+                /** @description provider: servicenow (default) or jira */
+                system?: string;
+                /** @description schedule name (default when omitted) */
+                name?: string;
+            };
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listTicketIntakeSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketIntakeScheduleList"];
                 };
             };
             /** @description client error */

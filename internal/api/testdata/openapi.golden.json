@@ -41278,6 +41278,13 @@
           "justification_field": {
             "type": "string"
           },
+          "name": {
+            "description": "Tenant-local schedule name: 1-40 lowercase letters, digits, underscores or hyphens; default when omitted",
+            "type": "string"
+          },
+          "owner_field": {
+            "type": "string"
+          },
           "private_egress_cidrs": {
             "items": {
               "type": "string"
@@ -41371,7 +41378,14 @@
           "last_run_at": {
             "type": "string"
           },
+          "name": {
+            "description": "Tenant-local schedule name: 1-40 lowercase letters, digits, underscores or hyphens; default when omitted",
+            "type": "string"
+          },
           "next_cursor": {
+            "type": "string"
+          },
+          "owner_field": {
             "type": "string"
           },
           "pages_completed": {
@@ -41438,6 +41452,20 @@
           "eligible_count",
           "skipped_count",
           "guidance"
+        ],
+        "type": "object"
+      },
+      "TicketIntakeScheduleList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TicketIntakeSchedule"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -61045,13 +61073,86 @@
       }
     },
     "/api/v1/issuance-requests/intake-schedule": {
+      "delete": {
+        "operationId": "deleteTicketIntakeSchedule",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "provider: servicenow (default) or jira",
+            "in": "query",
+            "name": "system",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "schedule name (default when omitted)",
+            "in": "query",
+            "name": "name",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Remove one named intake schedule after its sweep completes",
+        "x-trstctl-permission": "certs:write"
+      },
       "get": {
         "operationId": "getTicketIntakeSchedule",
         "parameters": [
           {
-            "description": "provider schedule to read: servicenow (default) or jira",
+            "description": "provider: servicenow (default) or jira",
             "in": "query",
             "name": "system",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "schedule name (default when omitted)",
+            "in": "query",
+            "name": "name",
             "schema": {
               "type": "string"
             }
@@ -61165,6 +61266,53 @@
         ],
         "summary": "Configure bounded ServiceNow or Jira ticket intake with durable relay paging",
         "x-trstctl-permission": "certs:write"
+      }
+    },
+    "/api/v1/issuance-requests/intake-schedules": {
+      "get": {
+        "operationId": "listTicketIntakeSchedules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketIntakeScheduleList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List this tenant's named ServiceNow and Jira intake schedules",
+        "x-trstctl-permission": "certs:read"
       }
     },
     "/api/v1/issuance-requests/issuers": {

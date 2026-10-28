@@ -50,7 +50,12 @@ type TicketIntakeResult struct {
 }
 
 func ticketSyncIntent(sched store.TicketIntakeSchedule) ticketintake.SyncIntent {
+	name := sched.Name
+	if name == ticketintake.DefaultSchedule {
+		name = ""
+	}
 	return ticketintake.SyncIntent{
+		Schedule: name, OwnerField: sched.OwnerField,
 		System: sched.System, InstanceURL: sched.InstanceURL, TokenRef: sched.TokenRef,
 		SNTable: sched.SNTable, JiraProject: sched.JiraProject, Query: sched.Query,
 		SubjectField: sched.SubjectField, ProfileField: sched.ProfileField,
@@ -102,6 +107,10 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 		return out, err
 	}
 	out.Read = len(report.Tickets)
+	owners, err := s.ticketIntakeOwners(ctx, tenantID, intent, report.Tickets)
+	if err != nil {
+		return out, err
+	}
 	for _, ticket := range report.Tickets {
 		sourceRef, subject, profile := strings.TrimSpace(ticket.SourceRef), strings.TrimSpace(ticket.Subject), strings.TrimSpace(ticket.Profile)
 		if sourceRef == "" {
@@ -144,6 +153,7 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 		}
 		if _, err := s.orch.OpenIssuanceRequestFromRelay(ctx, tenantID, resultKey, projections.IssuanceRequestOpened{
 			Subject:       subject,
+			OwnerID:       owners[strings.ToLower(strings.TrimSpace(ticket.OwnerEmail))],
 			Profile:       profile,
 			Requester:     requester,
 			Justification: strings.TrimSpace(ticket.Justification),
@@ -159,7 +169,7 @@ func (s *Server) ingestTicketReport(ctx context.Context, tenantID, resultKey str
 }
 
 func (s *Server) dispatchTicketSyncJob(ctx context.Context, tenantID string, sched store.TicketIntakeSchedule) {
-	pending, err := s.store.HasPendingTicketSyncJob(ctx, tenantID, sched.System)
+	pending, err := s.store.HasPendingTicketSyncJob(ctx, tenantID, sched.System, sched.Name)
 	if err != nil {
 		s.logger.Warn("ticket relay dispatch: pending check failed", slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
 		return
@@ -251,4 +261,35 @@ func (s *Server) recordTicketSyncFailure(
 		return fmt.Errorf("server: decode failed ticket sync intent: %w", err)
 	}
 	return s.orch.RecordTicketIntakeSweepFailure(ctx, tenantID, idempotencyKey, attempt, intent, failedAt, detail)
+}
+
+// ticketIntakeOwners resolves only a page's configured mailboxes. Duplicate
+// tenant owners with the same email remain unassigned instead of choosing one.
+func (s *Server) ticketIntakeOwners(ctx context.Context, tenantID string, intent ticketintake.SyncIntent, tickets []ticketintake.Ticket) (map[string]string, error) {
+	out := map[string]string{}
+	if intent.OwnerField == "" {
+		return out, nil
+	}
+	emails := make([]string, 0, len(tickets))
+	for _, ticket := range tickets {
+		if ticket.OwnerEmail != "" {
+			emails = append(emails, ticket.OwnerEmail)
+		}
+	}
+	owners, err := s.store.ListOwnersByEmails(ctx, tenantID, emails)
+	if err != nil {
+		return nil, err
+	}
+	ambiguous := map[string]bool{}
+	for _, owner := range owners {
+		email := strings.ToLower(strings.TrimSpace(owner.Email))
+		if _, found := out[email]; found {
+			ambiguous[email] = true
+		}
+		out[email] = owner.ID
+	}
+	for email := range ambiguous {
+		delete(out, email)
+	}
+	return out, nil
 }

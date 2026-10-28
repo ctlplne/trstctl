@@ -5989,6 +5989,8 @@ func componentSchemas() map[string]*Schema {
 	ticketIntakeSchema := object(map[string]*Schema{
 		"configured":   {Type: "boolean"},
 		"system":       {Type: "string", Enum: []string{"servicenow", "jira"}},
+		"name":         {Type: "string", Description: "Tenant-local schedule name: 1-40 lowercase letters, digits, underscores or hyphens; default when omitted"},
+		"owner_field":  str(),
 		"instance_url": str(), "token_ref": str(),
 		"sn_table":     {Type: "string", Enum: []string{"incident", "sc_req_item", "sc_request", "change_request"}},
 		"jira_project": str(), "query": str(),
@@ -6005,6 +6007,8 @@ func componentSchemas() map[string]*Schema {
 	}, "configured", "enabled", "read_count", "pages_completed", "coverage_complete", "eligible_count", "skipped_count", "guidance")
 	ticketIntakeInput := object(map[string]*Schema{
 		"system":       {Type: "string", Enum: []string{"servicenow", "jira"}},
+		"name":         {Type: "string", Description: "Tenant-local schedule name: 1-40 lowercase letters, digits, underscores or hyphens; default when omitted"},
+		"owner_field":  str(),
 		"instance_url": str(), "token_ref": str(),
 		"sn_table":     {Type: "string", Enum: []string{"incident", "sc_req_item", "sc_request", "change_request"}},
 		"jira_project": str(), "query": str(),
@@ -8250,6 +8254,7 @@ func componentSchemas() map[string]*Schema {
 		"ADCSDatabaseIngest":                    adcsDatabaseIngestSchema,
 		"ADCSDatabaseList":                      adcsDatabaseListSchema,
 		"TicketIntakeSchedule":                  ticketIntakeSchema,
+		"TicketIntakeScheduleList":              object(map[string]*Schema{"items": {Type: "array", Items: ref("TicketIntakeSchedule")}}, "items"),
 		"TicketIntakeInput":                     ticketIntakeInput,
 		"EdgeSegmentPolicy":                     edgeSegmentPolicySchema,
 		"EdgeSegmentPolicyInput":                edgeSegmentPolicyInput,

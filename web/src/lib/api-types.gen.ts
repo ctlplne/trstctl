@@ -9835,6 +9835,8 @@ export interface TicketIntakeInput {
   interval_seconds: number;
   jira_project?: string;
   justification_field?: string;
+  name?: string;
+  owner_field?: string;
   private_egress_cidrs?: string[];
   profile_field: string;
   query?: string;
@@ -9860,7 +9862,9 @@ export interface TicketIntakeSchedule {
   last_attempt_at?: string;
   last_error?: string;
   last_run_at?: string;
+  name?: string;
   next_cursor?: string;
+  owner_field?: string;
   pages_completed: number;
   private_egress_cidrs?: string[];
   profile_field?: string;
@@ -9874,6 +9878,10 @@ export interface TicketIntakeSchedule {
   sweep_started_at?: string;
   system?: "servicenow" | "jira";
   token_ref?: string;
+}
+
+export interface TicketIntakeScheduleList {
+  items: TicketIntakeSchedule[];
 }
 
 export interface TransitCiphertext {

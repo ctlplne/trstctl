@@ -13551,6 +13551,8 @@ TicketIntakeInput = TypedDict(
         'interval_seconds': int,
         'jira_project': str,
         'justification_field': str,
+        'name': str,
+        'owner_field': str,
         'private_egress_cidrs': list[str],
         'profile_field': str,
         'query': str,
@@ -13580,7 +13582,9 @@ TicketIntakeSchedule = TypedDict(
         'last_attempt_at': str,
         'last_error': str,
         'last_run_at': str,
+        'name': str,
         'next_cursor': str,
+        'owner_field': str,
         'pages_completed': int,
         'private_egress_cidrs': list[str],
         'profile_field': str,
@@ -13594,6 +13598,14 @@ TicketIntakeSchedule = TypedDict(
         'sweep_started_at': str,
         'system': str,
         'token_ref': str,
+    },
+    total=False,
+)
+
+TicketIntakeScheduleList = TypedDict(
+    'TicketIntakeScheduleList',
+    {
+        'items': list[dict[str, Any]],
     },
     total=False,
 )

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/mail"
 	"net/url"
 	"regexp"
 	"sort"
@@ -21,6 +22,21 @@ import (
 )
 
 const MaxTickets = 100
+const DefaultSchedule = "default"
+
+var schedulePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,39}$`)
+
+// ScheduleName binds legacy work to default instead of matching every schedule.
+func ScheduleName(name string) string {
+	if name == "" {
+		return DefaultSchedule
+	}
+	return name
+}
+
+func ValidScheduleName(name string) bool {
+	return schedulePattern.MatchString(ScheduleName(name))
+}
 
 const (
 	SystemServiceNow = "servicenow"
@@ -39,6 +55,7 @@ var allowedTables = map[string]bool{
 // SyncIntent is durable outbox data. TokenRef names material redeemed for one
 // attempt; it is never the bearer token itself.
 type SyncIntent struct {
+	Schedule           string `json:"schedule,omitempty"`
 	System             string `json:"system"`
 	InstanceURL        string `json:"instance_url"`
 	TokenRef           string `json:"token_ref"`
@@ -49,6 +66,7 @@ type SyncIntent struct {
 	ProfileField       string `json:"profile_field"`
 	RequesterField     string `json:"requester_field,omitempty"`
 	JustificationField string `json:"justification_field,omitempty"`
+	OwnerField         string `json:"owner_field,omitempty"`
 	PageLimit          int    `json:"page_limit"`
 	SweepID            string `json:"sweep_id"`
 	Cursor             string `json:"cursor,omitempty"`
@@ -65,9 +83,11 @@ type Ticket struct {
 	Profile       string `json:"profile,omitempty"`
 	Requester     string `json:"requester,omitempty"`
 	Justification string `json:"justification,omitempty"`
+	OwnerEmail    string `json:"owner_email,omitempty"`
 }
 
 type SyncReport struct {
+	Schedule      string    `json:"schedule,omitempty"`
 	System        string    `json:"system"`
 	SweepID       string    `json:"sweep_id"`
 	Cursor        string    `json:"cursor,omitempty"`
@@ -92,6 +112,9 @@ type Page struct {
 }
 
 func Endpoint(intent SyncIntent) (string, error) {
+	if !ValidScheduleName(intent.Schedule) {
+		return "", errors.New("ticket intake: schedule must contain 1-40 lowercase letters, digits, underscores or hyphens")
+	}
 	base, err := url.Parse(strings.TrimSpace(intent.InstanceURL))
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return "", errors.New("ticket intake: instance URL must be absolute")
@@ -150,6 +173,7 @@ func serviceNowEndpoint(base *url.URL, intent SyncIntent) (string, error) {
 	base.Path = strings.TrimRight(base.Path, "/") + "/api/now/table/" + table
 	q := url.Values{}
 	q.Set("sysparm_display_value", "all")
+	q.Set("sysparm_fields", strings.Join(append(uniqueFields(intent), "sys_id"), ","))
 	q.Set("sysparm_limit", fmt.Sprintf("%d", intent.PageLimit))
 	q.Set("sysparm_query", strings.Join(parts, "^"))
 	base.RawQuery = q.Encode()
@@ -175,7 +199,7 @@ func jiraEndpoint(base *url.URL, intent SyncIntent) (string, error) {
 	q := url.Values{}
 	q.Set("jql", jql)
 	q.Set("maxResults", strconv.Itoa(intent.PageLimit))
-	q.Set("fields", strings.Join(uniqueFields(intent), ","))
+	q.Set("fields", strings.Join(jiraTopLevelFields(intent), ","))
 	if intent.Cursor != "" {
 		if len(intent.Cursor) > 2048 || strings.TrimSpace(intent.Cursor) != intent.Cursor {
 			return "", errors.New("ticket intake: Jira continuation token is not bounded")
@@ -191,7 +215,7 @@ func validateFields(intent SyncIntent) error {
 	if strings.TrimSpace(intent.SubjectField) == "" || strings.TrimSpace(intent.ProfileField) == "" {
 		return errors.New("ticket intake: subject and profile fields are required")
 	}
-	for _, field := range []string{intent.SubjectField, intent.ProfileField, intent.RequesterField, intent.JustificationField} {
+	for _, field := range []string{intent.SubjectField, intent.ProfileField, intent.RequesterField, intent.JustificationField, intent.OwnerField} {
 		field = strings.TrimSpace(field)
 		if field != "" && !fieldPattern.MatchString(field) {
 			return errors.New("ticket intake: mapped field name is not bounded")
@@ -203,7 +227,7 @@ func validateFields(intent SyncIntent) error {
 func uniqueFields(intent SyncIntent) []string {
 	seen := map[string]bool{}
 	fields := make([]string, 0, 4)
-	for _, field := range []string{intent.SubjectField, intent.ProfileField, intent.RequesterField, intent.JustificationField} {
+	for _, field := range []string{intent.SubjectField, intent.ProfileField, intent.RequesterField, intent.JustificationField, intent.OwnerField} {
 		field = strings.TrimSpace(field)
 		if field != "" && !seen[field] {
 			seen[field] = true
@@ -256,6 +280,7 @@ func parseServiceNowPage(r io.Reader, intent SyncIntent) (Page, error) {
 			SourceRef: field(raw, "sys_id"), Subject: field(raw, intent.SubjectField),
 			Profile: field(raw, intent.ProfileField), Requester: field(raw, intent.RequesterField),
 			Justification: field(raw, intent.JustificationField),
+			OwnerEmail:    ownerEmailField(raw, intent.OwnerField, false),
 		}
 		if err := validateTicket(row); err != nil {
 			return Page{}, err
@@ -310,6 +335,7 @@ func parseJiraPage(r io.Reader, intent SyncIntent) (Page, error) {
 			SourceRef: issue.ID, ExternalKey: strings.TrimSpace(issue.Key),
 			Subject: jiraField(issue.Fields, intent.SubjectField), Profile: jiraField(issue.Fields, intent.ProfileField),
 			Requester: jiraField(issue.Fields, intent.RequesterField), Justification: jiraField(issue.Fields, intent.JustificationField),
+			OwnerEmail: ownerEmailField(issue.Fields, intent.OwnerField, true),
 		}
 		if err := validateTicket(row); err != nil {
 			return Page{}, err
@@ -330,8 +356,11 @@ func parseJiraPage(r io.Reader, intent SyncIntent) (Page, error) {
 }
 
 func ValidateReport(intent SyncIntent, report SyncReport) error {
+	if !ValidScheduleName(intent.Schedule) || !ValidScheduleName(report.Schedule) || ScheduleName(report.Schedule) != ScheduleName(intent.Schedule) {
+		return errors.New("ticket intake: report schedule differs from its durable intent; named schedules require an upgraded relay")
+	}
 	if report.ObservedAt.IsZero() || report.System != intent.System || report.SweepID != intent.SweepID || report.Cursor != intent.Cursor {
-		return errors.New("ticket intake: report has no observation time")
+		return errors.New("ticket intake: report time or source does not match its durable intent")
 	}
 	if len(report.Tickets) > MaxTickets || len(report.SourceRefs) > intent.PageLimit {
 		return fmt.Errorf("ticket intake: report exceeds the %d-ticket bound", MaxTickets)
@@ -439,7 +468,7 @@ func validateTicket(ticket Ticket) error {
 	for name, value := range map[string]string{
 		"source_ref": ticket.SourceRef, "external_key": ticket.ExternalKey,
 		"subject": ticket.Subject, "profile": ticket.Profile,
-		"requester": ticket.Requester, "justification": ticket.Justification,
+		"requester": ticket.Requester, "justification": ticket.Justification, "owner_email": ticket.OwnerEmail,
 	} {
 		if len(value) > 4096 {
 			return fmt.Errorf("ticket intake: %s exceeds the 4096-byte field bound", name)
@@ -472,4 +501,64 @@ func field(row map[string]json.RawMessage, name string) string {
 		return displayed
 	}
 	return strings.TrimSpace(object.Value)
+}
+
+// jiraTopLevelFields requests the parent object for a configured dotted mapping.
+func jiraTopLevelFields(intent SyncIntent) []string {
+	seen := map[string]bool{}
+	var fields []string
+	for _, name := range uniqueFields(intent) {
+		parent, _, _ := strings.Cut(name, ".")
+		if !seen[parent] {
+			seen[parent] = true
+			fields = append(fields, parent)
+		}
+	}
+	return fields
+}
+
+// ownerEmailField reads only the chosen scalar. Provider display names and IDs
+// cannot stand in for a mailbox when the email is unavailable.
+func ownerEmailField(fields map[string]json.RawMessage, name string, nested bool) string {
+	if name == "" {
+		return ""
+	}
+	raw, ok := fields[name]
+	if !ok && nested {
+		parts := strings.Split(name, ".")
+		current := fields
+		for i, part := range parts {
+			raw, ok = current[part]
+			if !ok {
+				return ""
+			}
+			if i < len(parts)-1 {
+				var next map[string]json.RawMessage
+				if json.Unmarshal(raw, &next) != nil {
+					return ""
+				}
+				current = next
+			}
+		}
+	}
+	var value string
+	if json.Unmarshal(raw, &value) != nil {
+		// ServiceNow display_value=all can wrap a scalar email in value.
+		if nested {
+			return ""
+		}
+		var wrapped struct {
+			Value string `json:"value"`
+		}
+		if json.Unmarshal(raw, &wrapped) != nil {
+			return ""
+		}
+		value = wrapped.Value
+	}
+	value = strings.ToLower(strings.TrimSpace(value))
+	address, err := mail.ParseAddress(value)
+	if err != nil || address.Address != value || len(value) > 320 {
+		return ""
+	}
+	return value
 }

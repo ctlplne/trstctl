@@ -3292,11 +3292,16 @@ than sending an operator looking for a credential that was never there.
   preview and links to Profiles, Owners, and CA hierarchy for configuration.
   Missing/malformed identifiers return 400 before event append; missing and
   cross-tenant owners share one 422 response so the endpoint does not reveal another
-  tenant's roster. Historical and ticket-intake events predate this binding and can
-  still project with no owner; that absence remains explicit instead of being
-  backfilled with a guessed account. TICKET-DRIVEN INTAKE is now real: `PUT/GET
+  tenant's roster. Historical requests and intakes without a unique configured owner match
+  can still project with no owner; that absence stays explicit and blocks
+  preparation instead of being backfilled with a guessed account. TICKET-DRIVEN INTAKE is now real: `PUT/GET
   /api/v1/issuance-requests/intake-schedule` (`trstctl issuance-requests
-  intake-schedule set|show`) configures a per-tenant ServiceNow or Jira read.
+  intake-schedule set|show|list|delete`) configures named ServiceNow or Jira
+  reads within a tenant. `name` is a 1-40 character lowercase slug; omitted
+  names and retained legacy jobs bind only to `default`. The list route is
+  `GET /api/v1/issuance-requests/intake-schedules`; exact reads and removals
+  take `?system=servicenow|jira&name=<name>`. Removal preserves requests and
+  audit history and refuses an unfinished sweep or pending relay job.
   The Approvals console can configure either provider, shows its exact HTTPS
   destination, secret reference, ticket source, field mapping and enabled state
   for review, and retains the idempotency key when a save response is uncertain.
@@ -3304,8 +3309,17 @@ than sending an operator looking for a credential that was never there.
   its retained sweep cursor without replacing the running job. Changing a schedule
   during an incomplete sweep returns 409 until that sweep reaches a terminal page.
   The console reports schedule acceptance separately from relay read coverage.
-  Each provider has its own schedule row, so a slow ServiceNow sweep cannot
-  hide or replace Jira progress. ServiceNow is bounded to one of the four
+  Each `(tenant, provider, name)` has its own schedule, job lane and cursor,
+  so one table or project cannot replace or suppress another source's progress.
+  An optional `owner_field` reads an exact mailbox: a ServiceNow scalar or
+  dot-walk such as `assigned_to.email`, or a Jira scalar or dotted user field
+  such as `assignee.emailAddress`. Jira privacy settings may hide that field.
+  Exactly one matching tenant owner supplies `owner_id`; missing, ambiguous
+  or foreign owners remain unassigned. The console shows that absence.
+  Existing requests retain their originally recorded owner; correcting the
+  mapping applies to new tickets, and an unassigned request needs a new
+  ticket/request naming a real owner before issuance. Named jobs require
+  upgraded relays, because an old report cannot identify their schedule. ServiceNow is bounded to one of the four
   request-shaped tables (`incident`, `sc_req_item`, `sc_request`,
   `change_request`); Jira is bounded to one validated project key. Both bounds
   are database CHECKs, because an unbounded source name would aim the intake

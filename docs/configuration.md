@@ -3192,3 +3192,56 @@ otherwise inherits the ordinary outbox limits. Verified receipts are immutable
 that evidence. Ownership sync remains a separate relay-only GET workflow.
 A real ServiceNow instance is required to qualify its class dictionary, ACLs,
 source choice and reconciliation behavior beyond the local TLS stand-in.
+
+
+## Named ticket-intake schedules
+
+Use several ServiceNow tables or Jira projects without replacing another source's
+cursor. Each schedule is keyed by tenant, `system` and `name`. Existing schedules
+and clients that omit a name keep `default`. Names use 1-40 lowercase letters,
+digits, underscores or hyphens.
+
+```json
+{
+  "name": "service-requests",
+  "system": "servicenow",
+  "instance_url": "https://example.service-now.com",
+  "token_ref": "secret://tickets/reader",
+  "sn_table": "sc_req_item",
+  "subject_field": "u_certificate_subject",
+  "profile_field": "u_certificate_profile",
+  "owner_field": "assigned_to.email",
+  "interval_seconds": 3600,
+  "enabled": true
+}
+```
+
+Send this body to `PUT /api/v1/issuance-requests/intake-schedule`, or save it to a
+file and run `trstctl-cli issuance-requests intake-schedule set -f intake.json`.
+Create another name with its own table, or use `system: jira` and `jira_project`
+instead of `sn_table`. List all sources with `intake-schedule list`; read one with
+`intake-schedule show --system servicenow --name service-requests`. The Approvals
+console lists each named source and offers a source → mapping → review setup.
+Saving configures a read; only terminal relay coverage claims that tickets were
+read. Updates and removals refuse an incomplete sweep. A removal also waits for
+its last pending relay job, then stops future reads while retaining requests and
+audit evidence. Use `intake-schedule delete --system servicenow --name <name>`.
+
+Owner mapping is optional and explicit. ServiceNow reference dot-walk fields are
+requested through `sysparm_fields`, as documented in its
+[Table API guidance](https://developer.servicenow.com/blog.do?p=/post/dot-walking-in-the-rest-table-api-2/).
+For Jira, choose a scalar custom email field or a dotted field such as
+`assignee.emailAddress`; only its parent object is requested. Jira may omit email
+under its [profile privacy rules](https://developer.atlassian.com/cloud/jira/platform/deprecation-notice-user-privacy-api-migration-guide/).
+A display name, account ID, requester or reference ID never substitutes for an
+email. Exactly one existing owner in this tenant must match the mailbox without
+regard to case. No match or multiple matches leaves `owner_id` empty and the
+console shows the request as unassigned. No owner is created automatically.
+
+Re-seeing a ticket never changes its existing request's owner or reopens a denied
+request. Correct mappings apply to new tickets. An unassigned request needs a new
+ticket or request that names a unique owner before it can be prepared for issuance.
+The normal approval and ownership-readiness checks still apply. Upgrade relays
+before using named schedules; a report that omits the name can settle only the
+legacy `default` schedule. The provider credential stays a per-attempt vault
+reference, and the control plane never dials either provider.

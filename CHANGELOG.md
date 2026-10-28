@@ -2,6 +2,11 @@
 
 ### Added
 
+- Named ServiceNow and Jira ticket-intake schedules with independent relay jobs
+  and cursors, explicit mailbox-to-owner mapping, and an Approvals setup wizard.
+  Legacy sources remain `default`; removal preserves history and blocks active
+  work. Missing or ambiguous ownership remains visible and cannot bypass issuance.
+
 - Opt-in certificate CI export through a separate tenant-bound ServiceNow write
   binding. The outbox worker uses IRE and independently reads the fixed certificate
   class before recording a durable verification receipt. API, CLI and console show

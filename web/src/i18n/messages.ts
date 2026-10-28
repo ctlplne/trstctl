@@ -10,6 +10,49 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "ticket.intake.named.name": { defaultMessage: "Schedule name", description: "Named ticket intake workflow." },
+  "ticket.intake.named.nameHelp": {
+    defaultMessage: "Use a distinct name for each table or project. Existing clients use default.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.named.nameInvalid": {
+    defaultMessage: "Use 1–40 lowercase letters, digits, underscores or hyphens.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.named.sourceStep": { defaultMessage: "Choose the ticket source", description: "Named ticket intake workflow." },
+  "ticket.intake.named.mappingStep": { defaultMessage: "Map fields and set the interval", description: "Named ticket intake workflow." },
+  "ticket.intake.named.ownerHelp": {
+    defaultMessage:
+      "An optional owner field must contain an email matching exactly one owner in this tenant. A hidden, missing or ambiguous email leaves the request unassigned. Existing requests keep their recorded owner.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.setup.owner_field": { defaultMessage: "Owner email field", description: "Named ticket intake workflow." },
+  "ticket.intake.named.saveFailed": {
+    defaultMessage: "The schedule could not be saved. Check the named source and retry the reviewed request.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.named.removeFailed": {
+    defaultMessage: "The schedule could not be removed. An unfinished sweep or pending job must complete first.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.named.remove": { defaultMessage: "Remove schedule", description: "Named ticket intake workflow." },
+  "ticket.intake.named.removeReview": { defaultMessage: "Review schedule removal", description: "Named ticket intake workflow." },
+  "ticket.intake.named.removeHelp": {
+    defaultMessage: "Remove schedule {name} from {system}? Future reads stop. Existing requests and audit history remain.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.named.removeConfirm": { defaultMessage: "Remove reviewed schedule", description: "Named ticket intake workflow." },
+  "ticket.intake.named.coverage": { defaultMessage: "Relay coverage", description: "Named ticket intake workflow." },
+  "ticket.intake.named.actions": { defaultMessage: "Schedule actions", description: "Named ticket intake workflow." },
+  "ticket.intake.named.evidence": { defaultMessage: "Read and recovery details", description: "Named ticket intake workflow." },
+  "ticket.intake.named.list": { defaultMessage: "Ticket intake schedules", description: "Named ticket intake workflow." },
+  "ticket.intake.named.empty": { defaultMessage: "No ticket intake schedules", description: "Named ticket intake workflow." },
+  "ticket.intake.named.emptyHelp": {
+    defaultMessage: "Configure a named ServiceNow table or Jira project to open requests from its tickets.",
+    description: "Named ticket intake workflow.",
+  },
+  "ticket.intake.named.requestOwner": { defaultMessage: "Request owner", description: "Named ticket intake workflow." },
+  "ticket.intake.named.unassigned": { defaultMessage: "Unassigned; a new request must name an owner", description: "Named ticket intake workflow." },
   "integrate.cmdb.heading": { defaultMessage: "Certificate export to the CMDB", description: "Certificate CI export workflow." },
   "integrate.cmdb.description": {
     defaultMessage:

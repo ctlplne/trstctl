@@ -17,6 +17,7 @@ import (
 // events are projected separately; these counts and the cursor are the durable
 // coverage checkpoint that says which provider rows have been considered.
 type TicketIntakeSweepPage struct {
+	Schedule      string
 	System        string
 	SweepID       string
 	Cursor        string
@@ -45,7 +46,7 @@ func (s *Store) ApplyTicketIntakeSweepDispatchedTx(
 	err := tx.QueryRow(ctx,
 		`SELECT coalesce(current_sweep_id::text, ''), cursor, coverage_complete
 		   FROM ticket_intake_schedules
-		  WHERE tenant_id = $1 AND system = $2 FOR UPDATE`, tenantID, intent.System).
+		  WHERE tenant_id = $1 AND system = $2 AND name = $3 FOR UPDATE`, tenantID, intent.System, ticketintake.ScheduleName(intent.Schedule)).
 		Scan(&currentID, &cursor, &complete)
 	if err != nil {
 		return err
@@ -65,7 +66,7 @@ func (s *Store) ApplyTicketIntakeSweepDispatchedTx(
 		        cursor = '', read_count = 0, expected_count = NULL, pages_completed = 0,
 		        coverage_complete = false, eligible_count = 0, skipped_count = 0,
 		        last_error = '', updated_at = now()
-		  WHERE tenant_id = $1 AND system = $2`, tenantID, intent.System, intent.SweepID, at.UTC())
+		  WHERE tenant_id = $1 AND system = $2 AND name = $5`, tenantID, intent.System, intent.SweepID, at.UTC(), ticketintake.ScheduleName(intent.Schedule))
 	return err
 }
 
@@ -84,7 +85,7 @@ func (s *Store) ApplyTicketIntakeSweepPageTx(
 	err := tx.QueryRow(ctx,
 		`SELECT coalesce(current_sweep_id::text, ''), cursor, read_count, coverage_complete
 		   FROM ticket_intake_schedules
-		  WHERE tenant_id = $1 AND system = $2 FOR UPDATE`, tenantID, page.System).
+		  WHERE tenant_id = $1 AND system = $2 AND name = $3 FOR UPDATE`, tenantID, page.System, ticketintake.ScheduleName(page.Schedule)).
 		Scan(&currentID, &cursor, &readCount, &complete)
 	if err != nil {
 		return err
@@ -117,9 +118,9 @@ func (s *Store) ApplyTicketIntakeSweepPageTx(
 		        eligible_count = eligible_count + $7, skipped_count = skipped_count + $8,
 		        last_attempt_at = $9, last_run_at = coalesce($10, last_run_at),
 		        last_error = '', updated_at = now()
-		  WHERE tenant_id = $1 AND system = $2`,
+		  WHERE tenant_id = $1 AND system = $2 AND name = $11`,
 		tenantID, page.System, page.NextCursor, page.ReadCount, page.ExpectedCount, page.Complete,
-		page.Eligible, page.Skipped, page.ObservedAt.UTC(), lastRun)
+		page.Eligible, page.Skipped, page.ObservedAt.UTC(), lastRun, ticketintake.ScheduleName(page.Schedule))
 	return err
 }
 
@@ -131,13 +132,14 @@ func (s *Store) ApplyTicketIntakeSweepFailedTx(
 	tenantID, system, sweepID, cursor string,
 	at time.Time,
 	detail string,
+	names ...string,
 ) error {
 	command, err := tx.Exec(ctx,
 		`UPDATE ticket_intake_schedules
 		    SET last_attempt_at = $5, last_error = $6, updated_at = now()
 		  WHERE tenant_id = $1 AND system = $2 AND current_sweep_id = $3
-		    AND cursor = $4 AND NOT coverage_complete`,
-		tenantID, system, sweepID, cursor, at.UTC(), detail)
+		    AND cursor = $4 AND NOT coverage_complete AND name = $7`,
+		tenantID, system, sweepID, cursor, at.UTC(), detail, intakeScheduleName(names))
 	if err != nil {
 		return err
 	}
@@ -162,7 +164,7 @@ func (s *Store) ValidateTicketIntakeIntentTx(
 	err := tx.QueryRow(ctx,
 		`SELECT coalesce(current_sweep_id::text, ''), cursor, read_count, expected_count, coverage_complete
 		   FROM ticket_intake_schedules
-		  WHERE tenant_id = $1 AND system = $2 FOR UPDATE`, tenantID, intent.System).
+		  WHERE tenant_id = $1 AND system = $2 AND name = $3 FOR UPDATE`, tenantID, intent.System, ticketintake.ScheduleName(intent.Schedule)).
 		Scan(&sweepID, &cursor, &readCount, &expected, &complete)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("store: ticket intake schedule not found")

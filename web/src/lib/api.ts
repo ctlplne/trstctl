@@ -50,6 +50,7 @@ import type {
   MDMPollScheduleInput,
   MDMPollScheduleList,
   TicketIntakeSchedule,
+  TicketIntakeScheduleList,
   TicketIntakeInput,
   AgentUpgradeCampaign,
   OwnershipConflictList,
@@ -769,7 +770,7 @@ export interface ProviderAccessConsent {
   decided_at: string;
 }
 export type { IssuanceRequestList, IssuanceRequest, IssuanceRequestInput, IssuanceRequestPreparation, IssuanceRequestPreview } from "./api-types.gen";
-export type { TicketIntakeInput, TicketIntakeSchedule } from "./api-types.gen";
+export type { TicketIntakeInput, TicketIntakeSchedule, TicketIntakeScheduleList } from "./api-types.gen";
 export type { MDMDeviceList, MDMDevice, MDMDeviceTrace, MDMPollSchedule, MDMPollScheduleInput, MDMPollScheduleList } from "./api-types.gen";
 export type { AgentUpgradeCampaign } from "./api-types.gen";
 export type { ACMEDNS01CAAPolicyEvidence, ACMEDNS01CAAPolicyRecord } from "./api-types.gen";
@@ -1967,7 +1968,9 @@ export interface Api {
   /** I3: close only after matching signer-backed certificate evidence exists. */
   completeIssuanceRequest(id: string): Promise<IssuanceRequest>;
   /** I3/AUD-47: one provider's durable relay cursor, coverage, terminal run, and failure. */
-  ticketIntakeSchedule(system?: "servicenow" | "jira"): Promise<TicketIntakeSchedule>;
+  ticketIntakeSchedule(system?: "servicenow" | "jira", name?: string): Promise<TicketIntakeSchedule>;
+  ticketIntakeSchedules(): Promise<TicketIntakeScheduleList>;
+  deleteTicketIntakeSchedule(system: "servicenow" | "jira", name: string, idempotencyKey: string): Promise<void>;
   /** I3: save one reviewed relay binding; retry the same key after an uncertain response. */
   putTicketIntakeSchedule(input: TicketIntakeInput, idempotencyKey: string): Promise<TicketIntakeSchedule>;
   /** I5: read-only MDM device correlation; unobserved is counted apart from failed. */
@@ -2652,7 +2655,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     mutate<IssuanceRequestPreparation>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/prepare`, undefined, `issuance-request-prepare:${id}`),
   completeIssuanceRequest: (id) =>
     mutate<IssuanceRequest>("POST", `/api/v1/issuance-requests/${encodeURIComponent(id)}/complete`, undefined, `issuance-request-complete:${id}`),
-  ticketIntakeSchedule: (system = "servicenow") => req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}`),
+  ticketIntakeSchedule: (system = "servicenow", name = "default") =>
+    req<TicketIntakeSchedule>(`/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}&name=${encodeURIComponent(name)}`),
+  ticketIntakeSchedules: () => req<TicketIntakeScheduleList>("/api/v1/issuance-requests/intake-schedules"),
+  deleteTicketIntakeSchedule: (system, name, key) =>
+    mutate<void>("DELETE", `/api/v1/issuance-requests/intake-schedule?system=${encodeURIComponent(system)}&name=${encodeURIComponent(name)}`, undefined, key),
   putTicketIntakeSchedule: (input, idempotencyKey) => mutate<TicketIntakeSchedule>("PUT", "/api/v1/issuance-requests/intake-schedule", input, idempotencyKey),
   mdmDevices: () => req<MDMDeviceList>("/api/v1/mdm/devices"),
   mdmPollSchedules: () => req<MDMPollScheduleList>("/api/v1/mdm/poll-schedule"),

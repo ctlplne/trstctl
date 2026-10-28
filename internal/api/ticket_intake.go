@@ -19,6 +19,8 @@ import (
 // requests, with the existing lifecycle deciding them.
 
 type ticketIntakeBody struct {
+	Name        string `json:"name,omitempty"`
+	OwnerField  string `json:"owner_field,omitempty"`
 	System      string `json:"system"`
 	InstanceURL string `json:"instance_url"`
 	TokenRef    string `json:"token_ref"`
@@ -41,6 +43,8 @@ type ticketIntakeBody struct {
 }
 
 type ticketIntakeResponse struct {
+	Name                 string   `json:"name,omitempty"`
+	OwnerField           string   `json:"owner_field,omitempty"`
 	Configured           bool     `json:"configured"`
 	System               string   `json:"system,omitempty"`
 	InstanceURL          string   `json:"instance_url,omitempty"`
@@ -92,6 +96,10 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &body); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
+		name := ticketintake.ScheduleName(strings.TrimSpace(body.Name))
+		if !ticketintake.ValidScheduleName(name) {
+			return 0, nil, errStatus(http.StatusBadRequest, "name must contain 1-40 lowercase letters, digits, underscores or hyphens")
+		}
 		system := strings.TrimSpace(body.System)
 		if system != ticketintake.SystemServiceNow && system != ticketintake.SystemJira {
 			return 0, nil, errStatus(http.StatusBadRequest, "system must be servicenow or jira")
@@ -129,6 +137,7 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 				"allow_private_endpoint is a control-plane egress grant and is not valid for relay-only ticket intake")
 		}
 		if _, err := ticketintake.Endpoint(ticketintake.SyncIntent{
+			Schedule: name, OwnerField: strings.TrimSpace(body.OwnerField),
 			System: system, InstanceURL: strings.TrimSpace(body.InstanceURL),
 			SNTable: table, JiraProject: project, Query: strings.TrimSpace(body.Query),
 			SubjectField: strings.TrimSpace(body.SubjectField), ProfileField: strings.TrimSpace(body.ProfileField),
@@ -138,7 +147,7 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
 		saved := store.TicketIntakeSchedule{
-			TenantID: tenantID, System: system,
+			TenantID: tenantID, System: system, Name: name, OwnerField: strings.TrimSpace(body.OwnerField),
 			InstanceURL: strings.TrimSpace(body.InstanceURL),
 			TokenRef:    strings.TrimSpace(body.TokenRef),
 			SNTable:     table, JiraProject: project, Query: strings.TrimSpace(body.Query),
@@ -151,6 +160,7 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 			PrivateEgressCIDRs:   nil,
 		}
 		if err := a.orch.ConfigureTicketIntake(ctx, tenantID, projections.TicketIntakeConfigured{
+			Name: saved.Name, OwnerField: saved.OwnerField,
 			System: saved.System, InstanceURL: saved.InstanceURL, TokenRef: saved.TokenRef,
 			SNTable: saved.SNTable, JiraProject: saved.JiraProject, Query: saved.Query,
 			SubjectField: saved.SubjectField, ProfileField: saved.ProfileField,
@@ -163,7 +173,7 @@ func (a *API) putTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 		} else if err != nil {
 			return 0, nil, err
 		}
-		persisted, found, err := a.store.GetTicketIntakeSchedule(ctx, tenantID, system)
+		persisted, found, err := a.store.GetTicketIntakeSchedule(ctx, tenantID, system, name)
 		if err != nil {
 			return 0, nil, err
 		}
@@ -188,7 +198,12 @@ func (a *API) getTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, errStatus(http.StatusBadRequest, "system must be servicenow or jira"))
 		return
 	}
-	sched, found, err := a.store.GetTicketIntakeSchedule(r.Context(), tenantID, system)
+	name := ticketintake.ScheduleName(strings.TrimSpace(r.URL.Query().Get("name")))
+	if !ticketintake.ValidScheduleName(name) {
+		a.writeError(w, errStatus(http.StatusBadRequest, "invalid intake schedule name"))
+		return
+	}
+	sched, found, err := a.store.GetTicketIntakeSchedule(r.Context(), tenantID, system, name)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -198,7 +213,7 @@ func (a *API) getTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
 
 func ticketIntakeFrom(s store.TicketIntakeSchedule, found bool) ticketIntakeResponse {
 	out := ticketIntakeResponse{
-		Configured: found, System: s.System, InstanceURL: s.InstanceURL, TokenRef: s.TokenRef,
+		Configured: found, Name: s.Name, OwnerField: s.OwnerField, System: s.System, InstanceURL: s.InstanceURL, TokenRef: s.TokenRef,
 		SNTable: s.SNTable, JiraProject: s.JiraProject, Query: s.Query,
 		SubjectField: s.SubjectField, ProfileField: s.ProfileField,
 		RequesterField: s.RequesterField, JustificationField: s.JustificationField,
@@ -219,4 +234,44 @@ func ticketIntakeFrom(s store.TicketIntakeSchedule, found bool) ticketIntakeResp
 		out.LastAttemptAt = s.LastAttemptAt.UTC().Format(time.RFC3339)
 	}
 	return out
+}
+
+func (a *API) listTicketIntakeSchedules(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := a.tenant(r)
+	if !ok {
+		a.writeProblem(w, problemUnauthorized())
+		return
+	}
+	schedules, err := a.store.ListTicketIntakeSchedules(r.Context(), tenantID)
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	items := make([]ticketIntakeResponse, 0, len(schedules))
+	for _, schedule := range schedules {
+		items = append(items, ticketIntakeFrom(schedule, true))
+	}
+	a.writeJSON(w, http.StatusOK, struct {
+		Items []ticketIntakeResponse `json:"items"`
+	}{items})
+}
+
+//trstctl:mutation
+func (a *API) deleteTicketIntakeSchedule(w http.ResponseWriter, r *http.Request) {
+	key := r.Header.Get("Idempotency-Key")
+	a.mutate(w, r, key, func(ctx context.Context, tenantID string) (int, any, error) {
+		system := strings.TrimSpace(r.URL.Query().Get("system"))
+		if system == "" {
+			system = ticketintake.SystemServiceNow
+		}
+		name := ticketintake.ScheduleName(strings.TrimSpace(r.URL.Query().Get("name")))
+		if (system != ticketintake.SystemServiceNow && system != ticketintake.SystemJira) || !ticketintake.ValidScheduleName(name) {
+			return 0, nil, errStatus(http.StatusBadRequest, "system and schedule name are invalid")
+		}
+		err := a.orch.DeleteTicketIntakeSchedule(ctx, tenantID, system, name)
+		if errors.Is(err, orchestrator.ErrTicketIntakeSweepInProgress) {
+			return 0, nil, errStatus(http.StatusConflict, "the named intake has an incomplete sweep; finish its cursor before removal")
+		}
+		return http.StatusNoContent, nil, err
+	})
 }

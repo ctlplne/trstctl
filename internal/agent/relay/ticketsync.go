@@ -92,7 +92,8 @@ func runTicketSync(ctx context.Context, ch Channel, client *http.Client, job Job
 		nextCursor = ""
 	}
 	detail, err := json.Marshal(ticketintake.SyncReport{
-		System: intent.System, SweepID: intent.SweepID, Cursor: intent.Cursor,
+		Schedule: ticketintake.ScheduleName(intent.Schedule),
+		System:   intent.System, SweepID: intent.SweepID, Cursor: intent.Cursor,
 		ObservedAt: time.Now().UTC(), SourceRefs: page.SourceRefs, Tickets: page.Tickets,
 		ReadCount: intent.ReadCount + len(page.SourceRefs), ExpectedCount: expected,
 		Complete: page.Complete, NextCursor: nextCursor,

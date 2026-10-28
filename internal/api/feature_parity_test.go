@@ -340,8 +340,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A215's certificate byte recovery raised it to 580, on the PKI secrets
 	// row beside the historical leaf recoveries.
 	// A224 adds the certificate export binding/queue/receipt routes.
-	if len(out) != 583 {
-		t.Fatalf("OpenAPI operationIds = %d, want 583", len(out))
+	// A225 adds list and removal for named ticket-intake schedules.
+	if len(out) != 585 {
+		t.Fatalf("OpenAPI operationIds = %d, want 585", len(out))
 	}
 	return out
 }

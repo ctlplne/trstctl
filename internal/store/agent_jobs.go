@@ -920,9 +920,9 @@ func (s *Store) HasPendingMDMSyncJob(ctx context.Context, tenantID, provider str
 	return pending, err
 }
 
-// HasPendingTicketSyncJob keeps one page in flight per ITSM system. Jira and
-// ServiceNow intentionally share the agent capability but not the queue lane.
-func (s *Store) HasPendingTicketSyncJob(ctx context.Context, tenantID, system string) (bool, error) {
+// HasPendingTicketSyncJob keeps one page in flight per named provider source.
+// Providers and names share the relay capability, but never a queue lane.
+func (s *Store) HasPendingTicketSyncJob(ctx context.Context, tenantID, system string, names ...string) (bool, error) {
 	if tenantID == "" || (system != "servicenow" && system != "jira") {
 		return false, errors.New("store: pending ticket sync lookup requires tenant and known system")
 	}
@@ -936,7 +936,8 @@ func (s *Store) HasPendingTicketSyncJob(ctx context.Context, tenantID, system st
 			       AND status IN ('pending', 'processing')
 			       AND claim_completed_at IS NULL
 			       AND convert_from(payload, 'UTF8')::jsonb ->> 'system' = $2
-			)`, tenantID, system).Scan(&pending)
+			       AND coalesce(nullif(convert_from(payload, 'UTF8')::jsonb ->> 'schedule', ''), 'default') = $3
+			)`, tenantID, system, intakeScheduleName(names)).Scan(&pending)
 	})
 	return pending, err
 }

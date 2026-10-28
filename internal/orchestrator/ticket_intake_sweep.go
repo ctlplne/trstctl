@@ -41,10 +41,10 @@ func (o *Orchestrator) QueueTicketIntakeSweep(
 		return err
 	}
 	eventID := uuid.NewSHA1(ticketIntakeSweepNamespace,
-		[]byte("dispatch\x00"+tenantID+"\x00"+intent.System+"\x00"+intent.SweepID)).String()
+		[]byte("dispatch\x00"+tenantID+"\x00"+ticketIntakeLane(intent)+"\x00"+intent.SweepID)).String()
 	return o.store.WithProjectionLock(ctx, func(lockCtx context.Context) error {
 		return o.emitTicketIntakeEventWithContinuation(lockCtx, events.Event{
-			ID: eventID, Type: projections.EventTicketIntakeSweepDispatched, TenantID: tenantID, Data: payload,
+			ID: eventID, Type: projections.EventTicketIntakeSweepDispatched, SchemaVersion: 2, TenantID: tenantID, Data: payload,
 		}, &intent)
 	})
 }
@@ -81,7 +81,7 @@ func (o *Orchestrator) RecordTicketIntakeSweepPage(
 	eventID := uuid.NewSHA1(ticketIntakeSweepNamespace,
 		[]byte("page\x00"+tenantID+"\x00"+resultKey)).String()
 	return o.emitTicketIntakeEventWithContinuation(ctx, events.Event{
-		ID: eventID, Type: projections.EventTicketIntakeSweepPageObserved, TenantID: tenantID, Data: payload,
+		ID: eventID, Type: projections.EventTicketIntakeSweepPageObserved, SchemaVersion: 2, TenantID: tenantID, Data: payload,
 	}, page.NextIntent)
 }
 
@@ -101,7 +101,8 @@ func (o *Orchestrator) RecordTicketIntakeSweepFailure(
 		return err
 	}
 	payload, err := json.Marshal(projections.TicketIntakeSweepFailed{
-		System: intent.System, SweepID: intent.SweepID, Cursor: intent.Cursor,
+		Schedule: ticketintake.ScheduleName(intent.Schedule),
+		System:   intent.System, SweepID: intent.SweepID, Cursor: intent.Cursor,
 		FailedAt: failedAt.UTC(), Detail: detail,
 	})
 	if err != nil {
@@ -110,7 +111,7 @@ func (o *Orchestrator) RecordTicketIntakeSweepFailure(
 	eventID := uuid.NewSHA1(ticketIntakeSweepNamespace,
 		[]byte(fmt.Sprintf("failure\x00%s\x00%s\x00%d", tenantID, resultKey, attempt))).String()
 	event, err := o.emitPrepared(ctx, events.Event{
-		ID: eventID, Type: projections.EventTicketIntakeSweepFailed, TenantID: tenantID, Data: payload,
+		ID: eventID, Type: projections.EventTicketIntakeSweepFailed, SchemaVersion: 2, TenantID: tenantID, Data: payload,
 	})
 	if err != nil {
 		return err
@@ -178,7 +179,7 @@ func ticketIntakeOutboxEntry(tenantID string, intent ticketintake.SyncIntent) (E
 	}
 	return Entry{
 		TenantID: tenantID, Destination: ticketSyncDestination,
-		IdempotencyKey: "ticket-sync:" + tenantID + ":" + intent.System + ":" + intent.SweepID + ":" + cursor,
+		IdempotencyKey: "ticket-sync:" + tenantID + ":" + ticketIntakeLane(intent) + ":" + intent.SweepID + ":" + cursor,
 		Payload:        payload, RequiredAgentRole: "network",
 	}, nil
 }
@@ -229,7 +230,7 @@ func validateTicketIntakePageEvent(tenantID, resultKey string, page projections.
 		}
 		return nil
 	}
-	if page.NextIntent == nil || page.NextIntent.System != page.Intent.System ||
+	if page.NextIntent == nil || ticketintake.ScheduleName(page.NextIntent.Schedule) != ticketintake.ScheduleName(page.Intent.Schedule) || page.NextIntent.OwnerField != page.Intent.OwnerField || page.NextIntent.System != page.Intent.System ||
 		page.NextIntent.InstanceURL != page.Intent.InstanceURL || page.NextIntent.TokenRef != page.Intent.TokenRef ||
 		page.NextIntent.SNTable != page.Intent.SNTable || page.NextIntent.JiraProject != page.Intent.JiraProject ||
 		page.NextIntent.Query != page.Intent.Query || page.NextIntent.SubjectField != page.Intent.SubjectField ||
@@ -241,4 +242,13 @@ func validateTicketIntakePageEvent(tenantID, resultKey string, page projections.
 		return fmt.Errorf("orchestrator: ticket page continuation differs from its committed boundary")
 	}
 	return nil
+}
+
+// Keep historical default keys stable while giving named schedules their own lane.
+func ticketIntakeLane(intent ticketintake.SyncIntent) string {
+	name := ticketintake.ScheduleName(intent.Schedule)
+	if name == ticketintake.DefaultSchedule {
+		return intent.System
+	}
+	return intent.System + ":" + name
 }

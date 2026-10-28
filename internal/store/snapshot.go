@@ -197,7 +197,10 @@ import (
 // Version 64 carries the tenants' KMIP client registrations (A197). A v63
 // snapshot has none, so a restore would refuse every enrolled KMIP client
 // while its covered offset skipped the events that registered them.
-const SnapshotFormatVersion = 64
+// Version 65 carries named ticket-intake schedules and their owner-field
+// mappings. Older snapshots contain only default schedules; a current writer
+// must not hand named rows to an older restorer that uses a two-column key.
+const SnapshotFormatVersion = 65
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
