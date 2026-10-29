@@ -46,6 +46,8 @@ type Lifetime struct {
 type SourcePolicy struct {
 	Log   *events.Log
 	Trust *jose.JWKSet
+	// VerificationKeys are separately pinned historical public keys.
+	VerificationKeys *jose.JWKSet
 }
 
 // LatestLifetime returns authority only after the complete finite source fold
@@ -164,7 +166,7 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 				if err != nil || current.Activation == nil || current.Offboard == nil {
 					return ErrSource
 				}
-				claims, err := eventprotect.VerifyDestructionReceipt(policy.Trust, completion.JWS)
+				claims, err := policy.verifyDestructionReceipt(completion.JWS)
 				if err != nil || !matchesLifetimeDestruction(current, claims.Request) || event.Time.Before(claims.RemovedAt) {
 					return ErrSource
 				}

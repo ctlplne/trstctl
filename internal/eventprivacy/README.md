@@ -15,9 +15,10 @@ can find authority without first opening the key it is trying to locate.
 unexplained key loss and a signed completion contradicted by current custody fail.
 Only independently verified destruction gives the erased logical view.
 
-These are integration components. Production startup, the preparation receiver,
-offboarding destruction intents, backup rows, audit archives and operator routes
-are not attached here yet. The component tests do not qualify those workflows.
+These are integration components. Production startup does not yet attach the
+preparation or offboard paths. Backup rows, audit archives, the destructive
+worker and operator routes remain required. Component tests do not qualify
+those production workflows.
 The software custodian does not prove removal of host snapshots or copied keys.
 
 Preparation now consumes an exact committed outbox invocation, resolves its
@@ -28,3 +29,21 @@ that command's old invocation holds only through the configured verifier: it
 checks exact retained source and current creation under the custody file fence.
 Missing proof retains the holds. Generic outbox status, leases and quiescence
 rules stay unchanged. Production startup/routes still do not attach this path.
+
+The optional offboard projection derives the exact destruction intent from its
+retained lifetime without opening a key. In one SQL transaction it verifies the
+ordinary erase and adds one public, control-plane-only pending outbox row. Its
+attestation remains incomplete while that row exists. An exact retry inspects
+that sole residue and preserves unresolved invocations; it never erases a new
+registration or silently discards unexpected rows. Default-off offboarding keeps
+its existing zero-row guarantee. The dedicated post-delete claim check verifies
+the processing lease, attempt token, payload, effect lane and receiver role;
+source, retention, legal holds and current custody still gate actual removal.
+
+Read-only verification of an exact historical activation can finish after a
+later offboard, while preparation still refuses that lifetime. Destruction never
+becomes an activation-verification success. Historical receipt trust is explicit
+through separately pinned public `VerificationKeys`; an embedded signer does not
+grant itself trust. Only the existing allowlist for the reserved historical
+Provider audit scope keeps its legacy behavior, under its mapped UUID fence.
+Unknown scope, event type or control schema still refuses.

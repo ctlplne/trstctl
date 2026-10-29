@@ -10,6 +10,7 @@ import (
 
 	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/store"
 )
 
 var (
@@ -38,10 +39,21 @@ func (admission SourceAdmission) WithTenantEventProtection(ctx context.Context, 
 	if admission.Guard == nil || visit == nil {
 		return ErrSource
 	}
-	return admission.Guard.WithTenantEventProtection(ctx, tenantID, visit)
+	guardTenant := tenantID
+	if tenantID == events.LegacyProviderGlobalAuditScope {
+		var err error
+		guardTenant, err = store.AuditCheckpointRLSID(tenantID)
+		if err != nil {
+			return err
+		}
+	}
+	return admission.Guard.WithTenantEventProtection(ctx, guardTenant, visit)
 }
 
 func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event events.Event) (events.EventProtectionDecision, error) {
+	if event.Protection == nil && !event.SensitiveErased && event.SchemaVersion == 1 && events.IsLegacyProviderGlobalAudit(event) {
+		return events.EventProtectionDecision{Mode: events.EventProtectionLegacy}, nil
+	}
 	tenant, err := uuid.Parse(event.TenantID)
 	if err != nil || tenant == uuid.Nil || event.Protection != nil || event.SensitiveErased {
 		return events.EventProtectionDecision{}, ErrSource
@@ -103,7 +115,7 @@ func (admission SourceAdmission) completionDecision(ctx context.Context, event e
 	if err != nil || admission.Custody == nil {
 		return events.EventProtectionDecision{}, ErrSource
 	}
-	claims, err := eventprotect.VerifyDestructionReceipt(admission.Policy.Trust, completion.JWS)
+	claims, err := admission.Policy.verifyDestructionReceipt(completion.JWS)
 	if err != nil || !matchesLifetimeDestruction(lifetime, claims.Request) || event.Time.Before(claims.RemovedAt) {
 		return events.EventProtectionDecision{}, ErrSource
 	}

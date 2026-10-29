@@ -3859,6 +3859,7 @@ type Projector struct {
 	ownershipAttestationCadence       time.Duration
 	restoreDrillVerificationKeys      *jose.JWKSet
 	eventProtectionActivationVerifier EventProtectionActivationVerifier
+	eventProtectionOffboardPolicy     EventProtectionOffboardPolicy
 }
 
 // Option customizes the generic projector without coupling core to any
@@ -4346,7 +4347,10 @@ func (p *Projector) applyCore(ctx context.Context, e events.Event) error {
 		// the log. OffboardTenant is idempotent on an already-erased tenant (every
 		// per-table count is 0 and the verify pass still passes), so replaying the
 		// event after the rows are gone is a safe no-op.
-		if _, err := p.store.ProjectTenantOffboard(ctx, e.TenantID); err != nil {
+		if err := p.store.WithTenant(ctx, e.TenantID, func(tx pgx.Tx) error {
+			_, err := p.offboardTenantTx(ctx, tx, e)
+			return err
+		}); err != nil {
 			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
 		}
 		return nil
@@ -4961,7 +4965,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := json.Unmarshal(e.Data, &payload); err != nil {
 			return fmt.Errorf("projections: decode %s: %w", e.Type, err)
 		}
-		if _, err := p.store.OffboardTenantTx(ctx, tx, e.TenantID); err != nil {
+		if _, err := p.offboardTenantTx(ctx, tx, e); err != nil {
 			return fmt.Errorf("projections: apply %s: %w", e.Type, err)
 		}
 		return nil

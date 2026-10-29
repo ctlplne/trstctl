@@ -35,7 +35,11 @@ func (verifier ActivationVerifier) WithVerifiedActivation(ctx context.Context, e
 		if err != nil {
 			return err
 		}
-		if !found || life.Request == nil || life.Activation == nil || life.Offboard != nil || life.Activation.Meta.ID != event.ID || life.Activation.Meta.Sequence != event.Sequence || !life.Activation.Meta.Time.Equal(event.Time) {
+		// Catchup can verify this exact historical activation after a later
+		// offboard is retained. This is creation readback/settlement only; the
+		// preparation receiver still refuses any offboarded lifetime. Current
+		// custody below must remain active, and destruction is never waived.
+		if !found || life.Request == nil || life.Activation == nil || life.Activation.Meta.ID != event.ID || life.Activation.Meta.Sequence != event.Sequence || !life.Activation.Meta.Time.Equal(event.Time) {
 			return ErrSource
 		}
 		wire, err := json.Marshal(life.Activation.Body)
