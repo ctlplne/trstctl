@@ -129,6 +129,7 @@ nav:
       - Authoring guides:
           - Connectors: guides/connector-authoring.md
           - Plugins: guides/plugin-authoring.md
+          - Splunk app: guides/splunk-app.md
           - Certificate profiles: guides/profile-authoring.md
           - EST enrollment: guides/est-enrollment.md
           - SCEP enrollment: guides/scep-enrollment.md

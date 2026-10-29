@@ -1,0 +1,10 @@
+<dashboard version="1.1">
+  <label>trstctl Security Correlations</label>
+  <description>Two audit-feed triage searches. Searches and schedules start disabled.</description>
+  <row><panel><html>
+    <p>Configure a dedicated HEC input and restricted index access. In local/macros.conf, set trstctl_scope to the exact index and tenant ID. Tenant search filters do not replace Splunk role permissions.</p>
+    <p>After validating ingestion and an ad hoc copy of each search, enable the saved searches and their schedules in local/savedsearches.conf. Outbound alert actions are absent; configure any action separately with your Splunk administrator.</p>
+    <p>Repeated renewal failures means three distinct failures for one identity in 15 minutes. Certificate revocation burst means five distinct revocations for one tenant in 15 minutes. Results carry stable audit event IDs; repeated feed delivery does not increase counts.</p>
+    <p>These signals do not prove compromise, current renewal state, revocation enforcement or recovery. Inspect the referenced audit evidence. Read this app's README for installation, validation and proof limits.</p>
+  </html></panel></row>
+</dashboard>

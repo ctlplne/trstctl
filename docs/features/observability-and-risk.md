@@ -18,6 +18,14 @@ tenant attributes for dedupe and gap detection.
 In air-gapped installs, that collector must be operator-owned on a private host or
 explicitly allowlisted; the no-phone-home guard blocks public collector endpoints.
 
+The tenant audit feed can also deliver native Splunk HEC batches through the
+outbox. The [Splunk app](../guides/splunk-app.md) packages two disabled correlation
+searches over that stream: repeated renewal failures for one identity and a
+certificate-revocation burst for one tenant. Counts deduplicate immutable audit
+IDs. Configure the exact index, tenant and Splunk role permissions before enabling
+them. The owned scaffold checks these query contracts; Splunk's search engine,
+scheduler and RBAC remain unverified until tested in an authorized vendor runtime.
+
 ## Why it exists
 
 A list of credentials only helps if you can act on it. Security teams drown in findings,

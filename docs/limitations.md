@@ -1277,10 +1277,17 @@ never live in the API process. What you can do end to end against the running bi
   `POST /api/v1/incidents/response-integrations/dispatch`, which records
   `response.integration.dispatched` and queues Splunk HEC, Jira issue, configured Slack
   notification, and ServiceNow Table API outbox rows in the same event-backed workflow.
-  The served boundary is dispatch plus evidence: Splunk correlation searches, Jira
-  automation rules, Slack app/channel installation, arbitrary third-party SOAR
-  playbook execution, and bidirectional ServiceNow ticket-status sync remain
-  customer/operator configuration outside trstctl. Fleet-wide re-issuance is served
+  The served boundary is dispatch plus evidence. The separately packaged
+  [Splunk app](guides/splunk-app.md) supplies two disabled audit-feed correlation
+  searches for renewal failures and revocation bursts, with tenant/index scope
+  placeholders and immutable event-ID deduplication. Its owned scaffold
+  evaluates the actual query text ad hoc and tests native audit-feed delivery and
+  retries; it does not qualify Splunk's parser, scheduler, RBAC or product version.
+  Those vendor-runtime checks remain unverified without an authorized Splunk
+  environment. Custom incident-response correlations, Jira automation rules,
+  Slack app/channel installation, arbitrary third-party SOAR playbook execution,
+  and bidirectional ServiceNow ticket-status sync remain operator configuration.
+  Fleet-wide re-issuance is served
   separately at `POST /api/v1/incidents/fleet-reissuance-runs`: it freezes exact
   certificate/SPKI H1 trust consumers and ordered H2 member bindings before work,
   installs replacement trust before host-CSR issuance, waits for lease-bound signed
@@ -1529,6 +1536,10 @@ never live in the API process. What you can do end to end against the running bi
   retries, safe terminal error codes, and collector request IDs; it does not store
   credential values or remote response bodies. This native feed is separate from
   the metadata-only OTLP log exporter and from incident-response SIEM dispatch.
+  The [Splunk app](guides/splunk-app.md) consumes this native `trstctl:audit`
+  stream; generic `siem` notifications and `trstctl:response` packets do not enter
+  its two shipped searches. Collector HTTP acceptance alone is not indexing or
+  correlation proof: independently read the stored event and search result.
   When
   `protocols.tsa` is enabled the chain
   head is countersigned with an RFC 3161 timestamp over a domain-separated

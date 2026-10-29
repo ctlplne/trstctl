@@ -884,3 +884,8 @@ ee-lint-ratchet: ## Lint ee/ uncapped and fail if the finding count grew past .e
 		"$$golangci_lint" run --timeout 25m --issues-exit-code=1 \
 		--max-issues-per-linter=0 --max-same-issues=0 --uniq-by-line=false \
 		--output.text.path=/dev/null --output.json.path=stdout --show-stats=false ./ee/...
+
+.PHONY: splunk-app
+splunk-app: ## Build the deterministic trstctl Splunk app package (no vendor runtime included)
+	@mkdir -p bin
+	PYTHONDONTWRITEBYTECODE=1 python3 deploy/splunk/tools/package_app.py --output bin/trstctl-splunk.spl

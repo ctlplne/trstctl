@@ -429,6 +429,14 @@ workload issuance, not just events containing the word “ssh.” Unknown tools 
 with HTTP 400. Every export encoding preserves the same scope and retained-prefix
 chain. See [the CLI filter examples](../cli.md#verify-audit-exports-offline).
 
+The native audit feed's `trstctl:audit` events can enter the packaged
+[Splunk app](../guides/splunk-app.md). It supplies two disabled searches for
+renewal-failure and revocation bursts. Configure an exact index and tenant scope
+and restricted Splunk role permissions before enabling them. Both searches count
+immutable event IDs once across feed retries. The owned scaffold proof covers
+ad hoc query contracts and real product outbox delivery; vendor search-engine,
+scheduler and role qualification remain unverified.
+
 ### Notifications (F29)
 
 When something matters — a certificate nearing expiry, a CT-log anomaly — trstctl alerts
