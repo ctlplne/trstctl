@@ -11,13 +11,13 @@ import (
 
 // TestDockerBackedAcceptanceHarnessesHaveCommandDeadlines prevents a wedged
 // local engine from consuming an entire package timeout and hiding later test
-// results. These three acceptance harnesses all run Docker directly.
+// results. Server acceptance harnesses share one bounded command helper.
 func TestDockerBackedAcceptanceHarnessesHaveCommandDeadlines(t *testing.T) {
 	root := filepath.Clean("..")
 	for _, rel := range []string{
 		"internal/kms/pkcs11/softhsm_container_test.go",
 		"internal/kms/tpm/swtpm_container_test.go",
-		"internal/server/pam_served_test.go",
+		"internal/server/docker_fixture_command_test.go",
 	} {
 		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel))) // #nosec G304 -- test reads a fixed repository path (CWE-22)
 		if err != nil {
@@ -29,6 +29,22 @@ func TestDockerBackedAcceptanceHarnessesHaveCommandDeadlines(t *testing.T) {
 		}
 		if strings.Contains(text, `exec.Command("docker"`) {
 			t.Errorf("%s still contains an unbounded direct Docker command", rel)
+		}
+	}
+	for rel, helper := range map[string]string{
+		"internal/server/pam_served_test.go":                 "dockerFixtureTimedOutput(t, timeout, args...)",
+		"internal/server/mcp_authorization_keycloak_test.go": "dockerFixtureTimedOutput(t, 30*time.Second, args...)",
+	} {
+		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel))) // #nosec G304 -- test reads a fixed repository path (CWE-22)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		if !strings.Contains(text, helper) || !strings.Contains(text, "dockerFixtureCleanup(") {
+			t.Errorf("%s must use the bounded Docker helper for startup and cleanup", rel)
+		}
+		if strings.Contains(text, `exec.Command("docker"`) || strings.Contains(text, "exec.Command(docker,") {
+			t.Errorf("%s bypasses the bounded Docker helper", rel)
 		}
 	}
 }

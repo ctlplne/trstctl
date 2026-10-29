@@ -45,7 +45,7 @@ const (
 // certificate is revoked in trstctl, Keycloak refuses the agent a token once its key
 // cache refreshes.
 func TestServedMCPAuthorizationWithKeycloak(t *testing.T) {
-	docker := requireKeycloakLab(t)
+	requireKeycloakLab(t)
 	h, owner, body := servedPublicBrokerRevocationFixture(t)
 	dir := t.TempDir()
 
@@ -74,7 +74,7 @@ func TestServedMCPAuthorizationWithKeycloak(t *testing.T) {
 		t.Fatal(err)
 	}
 	jwksURL := fmt.Sprintf("http://host.docker.internal:%s/agent-keys/%s/agent-7/jwks.json", trstctlURL.Port(), h.tenant)
-	keycloak := startKeycloakLab(t, docker, dir, keycloakLabRealm(resource, jwksURL))
+	keycloak := startKeycloakLab(t, dir, keycloakLabRealm(resource, jwksURL))
 	issuer := keycloak + "/realms/agents"
 
 	toolBin, agentBin := buildKeycloakLabReferences(t)
@@ -175,15 +175,15 @@ func TestServedMCPAuthorizationWithKeycloak(t *testing.T) {
 
 // requireKeycloakLab skips when Docker or the pinned image is absent, unless
 // TRSTCTL_REQUIRE_KEYCLOAK=1 makes their absence a failure.
-func requireKeycloakLab(t *testing.T) string {
+func requireKeycloakLab(t *testing.T) {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("starts a Keycloak container; skipped in -short")
 	}
 	required := os.Getenv("TRSTCTL_REQUIRE_KEYCLOAK") == "1"
-	docker, err := exec.LookPath("docker")
+	_, err := exec.LookPath("docker")
 	if err == nil {
-		err = exec.Command(docker, "image", "inspect", keycloakLabImage).Run() // #nosec G204 -- test inspects a pinned image with the local docker client (CWE-78)
+		_, err = dockerFixtureTimedOutput(t, 10*time.Second, "image", "inspect", keycloakLabImage)
 	}
 	if err != nil {
 		if required {
@@ -191,7 +191,6 @@ func requireKeycloakLab(t *testing.T) string {
 		}
 		t.Skipf("the Keycloak lab needs docker and the pinned image (docker pull %s)", keycloakLabImage)
 	}
-	return docker
 }
 
 // keycloakLabRealm is the authorization server's configuration: client agent-7
@@ -240,7 +239,7 @@ const keycloakLabCacheConfig = `<?xml version="1.0" encoding="UTF-8"?>
 
 // startKeycloakLab runs the pinned Keycloak with the realm imported and a short
 // keys cache lifespan, and returns its base URL once the realm answers.
-func startKeycloakLab(t *testing.T, docker, dir string, realm []byte) string {
+func startKeycloakLab(t *testing.T, dir string, realm []byte) string {
 	t.Helper()
 	importDir := filepath.Join(dir, "keycloak-import")
 	if err := os.MkdirAll(importDir, 0o755); err != nil { // #nosec G301 -- the container's keycloak user must read the import directory (CWE-276)
@@ -254,24 +253,23 @@ func startKeycloakLab(t *testing.T, docker, dir string, realm []byte) string {
 		t.Fatal(err)
 	}
 	name := fmt.Sprintf("trstctl-a182-keycloak-%d", time.Now().UnixNano())
+	t.Cleanup(func() { dockerFixtureCleanup("rm", "-f", name) })
 	args := []string{"run", "-d", "--rm", "--name", name, "-p", "127.0.0.1::8080",
 		"--add-host=host.docker.internal:host-gateway", "-v", importDir + ":/opt/keycloak/data/import:ro",
 		"-v", cacheFile + ":/opt/keycloak/conf/cache-lab.xml:ro",
 		keycloakLabImage, "start-dev", "--import-realm", "--cache-config-file=cache-lab.xml"}
-	if out, err := exec.Command(docker, args...).CombinedOutput(); err != nil { // #nosec G204 -- test runs the pinned image with fixed arguments (CWE-78)
+	if out, err := dockerFixtureTimedOutput(t, 30*time.Second, args...); err != nil {
 		t.Fatalf("start Keycloak: %v\n%s", err, out)
 	}
-	t.Cleanup(func() {
-		_ = exec.Command(docker, "rm", "-f", name).Run() // #nosec G204 -- test removes the container it started (CWE-78)
-	})
-	out, err := exec.Command(docker, "port", name, "8080/tcp").Output() // #nosec G204 -- test reads its own container's port (CWE-78)
+	out, err := dockerFixtureTimedOutput(t, 10*time.Second, "port", name, "8080/tcp")
 	if err != nil {
 		t.Fatalf("Keycloak port: %v", err)
 	}
 	base := "http://" + strings.TrimSpace(strings.Split(string(out), "\n")[0])
 	deadline := time.Now().Add(150 * time.Second)
+	client := &http.Client{Timeout: 3 * time.Second}
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(base + "/realms/agents/.well-known/openid-configuration") // #nosec G107 -- the lab container's own loopback URL (CWE-88)
+		resp, err := client.Get(base + "/realms/agents/.well-known/openid-configuration") // #nosec G107 -- the lab container's own loopback URL (CWE-88)
 		if err == nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
@@ -281,7 +279,7 @@ func startKeycloakLab(t *testing.T, docker, dir string, realm []byte) string {
 		}
 		time.Sleep(time.Second)
 	}
-	logs, _ := exec.Command(docker, "logs", "--tail", "40", name).CombinedOutput() // #nosec G204 -- test reads its own container's logs (CWE-78)
+	logs, _ := dockerFixtureTimedOutput(t, 10*time.Second, "logs", "--tail", "40", name)
 	t.Fatalf("Keycloak did not serve the realm in time:\n%s", logs)
 	return ""
 }

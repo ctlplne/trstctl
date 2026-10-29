@@ -839,19 +839,19 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 		t.Fatalf("write sshd Dockerfile: %v", err)
 	}
 	image := "trstctl-pam-sshd:" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	t.Cleanup(func() { pamDockerCleanup("image", "rm", "-f", image) })
 	// The acceptance test needs the image in this daemon, not only in BuildKit's cache.
 	if out, err := pamDockerOutput(t, 10*time.Minute, "build", "--load", "-t", image, dir); err != nil {
 		t.Fatalf("build sshd container image: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { pamDockerCleanup("image", "rm", "-f", image) })
 	if out, err := pamDockerOutput(t, 30*time.Second, "image", "inspect", image); err != nil {
 		t.Fatalf("sshd image build did not load %s into the local daemon: %v\n%s", image, err, out)
 	}
 	name := "trstctl-pam-sshd-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	t.Cleanup(func() { pamDockerCleanup("rm", "-f", name) })
 	if out, err := pamDockerOutput(t, 30*time.Second, "run", "-d", "--pull=never", "--name", name, "-p", "127.0.0.1::22", image); err != nil {
 		t.Fatalf("run sshd container: %v\n%s", err, out)
 	}
-	t.Cleanup(func() { pamDockerCleanup("rm", "-f", name) })
 	var addr string
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
@@ -878,19 +878,11 @@ CMD ["/usr/sbin/sshd","-D","-e","-f","/etc/ssh/sshd_config"]
 
 func pamDockerOutput(t *testing.T, timeout time.Duration, args ...string) ([]byte, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput() // #nosec G204 -- fixed Docker test-harness operations bounded by a context deadline (CWE-78)
-	if ctx.Err() == context.DeadlineExceeded {
-		t.Fatalf("docker %s exceeded %s; the daemon may be unresponsive", strings.Join(args, " "), timeout)
-	}
-	return out, err
+	return dockerFixtureTimedOutput(t, timeout, args...)
 }
 
 func pamDockerCleanup(args ...string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	_ = exec.CommandContext(ctx, "docker", args...).Run() // #nosec G204 -- fixed best-effort test cleanup bounded by a context deadline (CWE-78)
+	dockerFixtureCleanup(args...)
 }
 
 type pamSSHD struct {
