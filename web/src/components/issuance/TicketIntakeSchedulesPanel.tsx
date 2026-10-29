@@ -16,7 +16,7 @@ const identity = (schedule: TicketIntakeSchedule) => `${schedule.system}:${sched
 
 function Coverage({ schedule }: { schedule: TicketIntakeSchedule }) {
   return (
-    <div className="space-y-1 text-caption">
+    <div role={schedule.sweep_id ? "status" : undefined} className="space-y-1 text-caption">
       <p>
         {schedule.system} · {t(schedule.enabled ? "protocols.ari.schedulerEnabled" : "protocols.ari.schedulerDisabled")} ·{" "}
         {t("discovery.monitoring.columnLastRun")}: <Num>{schedule.last_run_at?.slice(0, 16).replace("T", " ") ?? "—"}</Num>

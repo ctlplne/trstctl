@@ -807,6 +807,9 @@ describe("exported API surface census", () => {
       // The exact key-compromise plan only reads identity and target evidence.
       // The separate /compromise command performs the idempotent mutation.
       "/api/v1/identities/item%2Fid/compromise/preview",
+      // Additive SSH trust review reads local opt-in and source evidence only;
+      // approval and execution use separate idempotent mutation routes.
+      "/api/v1/ssh/trust-fleet/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);
