@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -33,6 +35,14 @@ const ProjectionAdvisoryLockKey int64 = 0x63746C70726A // "ctlprj"
 // this is only the bounded error returned by the projector.
 const maxProjectionTailErrorBytes = 2048
 
+type projectionSessionKey struct{}
+type projectionSession struct {
+	store  *Store
+	conn   *pgxpool.Conn
+	active atomic.Bool
+	use    sync.Mutex
+}
+
 // ProjectionTailHealth is the persisted, tenant-neutral state of the ordered
 // projection cursor. FailedSequence == 0 means there is no unresolved poison.
 // LastError is bounded operational metadata that can still contain tenant or
@@ -58,8 +68,23 @@ func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context)
 	// it into the acquire window (DP2-061). The callback still runs its own
 	// transactions on the pool ctx is entitled to.
 	var conn *pgxpool.Conn
-	if fence, _ := ctx.Value(identityIssuanceFenceKey{}).(*identityIssuanceFence); fence != nil && fence.store == s {
-		if !fence.active.Load() {
+	if parent, _ := ctx.Value(projectionSessionKey{}).(*projectionSession); parent != nil &&
+		(parent.store != s || !parent.active.Load()) {
+		return errors.New("store: projection session has ended or belongs to another store")
+	}
+	if custody, _ := ctx.Value(eventProtectionGuardKey{}).(*eventProtectionGuard); custody != nil {
+		if custody.store != s || !custody.active.Load() {
+			return errors.New("store: event protection fence has ended or belongs to another store")
+		}
+		conn = custody.conn
+	} else if parent, _ := ctx.Value(projectionSessionKey{}).(*projectionSession); parent != nil {
+		if !parent.use.TryLock() {
+			return ErrDatastoreBusy
+		}
+		defer parent.use.Unlock()
+		conn = parent.conn
+	} else if fence, _ := ctx.Value(identityIssuanceFenceKey{}).(*identityIssuanceFence); fence != nil {
+		if fence.store != s || !fence.active.Load() {
 			return errors.New("store: identity issuance fence has ended")
 		}
 		conn = fence.conn
@@ -89,7 +114,10 @@ func (s *Store) WithProjectionLock(ctx context.Context, fn func(context.Context)
 			_ = conn.Conn().Close(unlockCtx)
 		}
 	}()
-	return fn(ctx)
+	grant := &projectionSession{store: s, conn: conn}
+	grant.active.Store(true)
+	defer grant.active.Store(false)
+	return fn(context.WithValue(ctx, projectionSessionKey{}, grant))
 }
 
 // ProjectionCheckpoint reads the relational read model's high-water mark: the

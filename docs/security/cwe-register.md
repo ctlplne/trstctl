@@ -788,15 +788,15 @@ not this file.
 | `internal/store/projection.go:796` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:957` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:971` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:163` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
-| `internal/store/projection_checkpoint.go:219` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:248` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:303` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:312` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:334` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:341` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:364` | log sequence fits PostgreSQL bigint (CWE-190) |
-| `internal/store/projection_checkpoint.go:371` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
+| `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:331` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:340` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:362` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:369` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:392` | log sequence fits PostgreSQL bigint (CWE-190) |
+| `internal/store/projection_checkpoint.go:399` | log sequence fits PostgreSQL bigint (CWE-190) |
 | `internal/store/scanned_certificate_chain.go:23` | event sequences fit int64 (CWE-190) |
 | `internal/store/secret_rotation_schedule.go:235` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:248` | checked against MaxInt64 above (CWE-190). |

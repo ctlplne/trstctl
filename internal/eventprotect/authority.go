@@ -40,6 +40,10 @@ type FileAuthorityConfig struct {
 	Locker               KeyLocker
 	DestructionAuthority DestructionAuthorizer
 	EvidenceKey          *jose.SigningKey
+	// VerificationKeys is separately pinned public receipt trust, including
+	// historical signing keys needed by signerless restore. The current
+	// EvidenceKey is also trusted while its signing capability is attached.
+	VerificationKeys *jose.JWKSet
 }
 
 // FileAuthority owns a separate private key directory. Its directory is not an
@@ -54,6 +58,7 @@ type FileAuthority struct {
 	closed               bool
 	destructionAuthority DestructionAuthorizer
 	evidenceKey          *jose.SigningKey
+	verificationKeys     *jose.JWKSet
 	now                  func() time.Time
 }
 
@@ -119,7 +124,8 @@ func NewFileAuthority(config FileAuthorityConfig) (*FileAuthority, error) {
 	}
 	return &FileAuthority{directory: directory, root: root, locker: config.Locker,
 		destructionAuthority: config.DestructionAuthority, evidenceKey: config.EvidenceKey,
-		now: func() time.Time { return time.Now().UTC() }}, nil
+		verificationKeys: config.VerificationKeys,
+		now:              func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func canonicalAbsolutePath(path string) (string, error) {

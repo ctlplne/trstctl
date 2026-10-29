@@ -125,11 +125,20 @@ func decodeDestructionClaims(wire []byte) (DestructionClaims, error) {
 	return claims, nil
 }
 
+func (a *FileAuthority) verifyReceipt(receipt string) (DestructionClaims, error) {
+	if a.evidenceKey != nil {
+		if claims, err := VerifyDestructionReceipt(a.evidenceKey.JWKS(), receipt); err == nil {
+			return claims, nil
+		}
+	}
+	return VerifyDestructionReceipt(a.verificationKeys, receipt)
+}
+
 func (a *FileAuthority) destroyedState(record fileKeyRecord) error {
-	if a.evidenceKey == nil || record.Destruction == nil {
+	if record.Destruction == nil {
 		return ErrKey
 	}
-	claims, err := VerifyDestructionReceipt(a.evidenceKey.JWKS(), record.Destruction.Receipt)
+	claims, err := a.verifyReceipt(record.Destruction.Receipt)
 	if err != nil || !sameDestructionRequest(claims.Request, record.Destruction.Request) ||
 		!claims.RemovedAt.Equal(record.Destruction.RemovedAt) || claims.Request.Ref != record.Ref ||
 		creationEvidenceFor(record).Digest() != claims.Request.CreationDigest {
