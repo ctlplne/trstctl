@@ -291,6 +291,7 @@ func compareTemplate(before, after Template) []TemplateChange {
 			"nTSecurityDescriptor enrollment trustees",
 			canonicalStrings(before.EnrollmentPrincipals), canonicalStrings(after.EnrollmentPrincipals))
 	}
+	out = append(out, compareEnrollmentMembership(before, after)...)
 	return out
 }
 

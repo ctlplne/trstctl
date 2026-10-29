@@ -30673,6 +30673,47 @@ export const messages = {
     defaultMessage: "AD CS certificate templates",
     description: "F1: AD CS certificate template posture panel on the Posture page.",
   },
+  "discovery.setup.adcsMembership.enabled": { defaultMessage: "Read nested enrollment groups", description: "Read-only AD CS nested enrollment evidence." },
+  "discovery.setup.adcsMembership.help": {
+    defaultMessage:
+      "Use bounded, read-only LDAP in-chain queries to show user and computer paths through security groups. Select an upgraded network relay that advertises this reader. Conditional policy and complete Windows authorization remain unassessed.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "discovery.setup.adcsMembership.domain": { defaultMessage: "Membership domain naming context", description: "Read-only AD CS nested enrollment evidence." },
+  "discovery.setup.adcsMembership.domainHelp": {
+    defaultMessage: "The explicit domain partition, such as DC=corp,DC=example. Cross-forest membership is outside this read.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "discovery.setup.adcsMembership.domainRequired": {
+    defaultMessage: "Provide the domain naming context for nested membership reads.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "discovery.setup.adcsMembership.relayRequired": {
+    defaultMessage: "Select the network relay for nested membership reads.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "source.adcs.membership.heading": { defaultMessage: "Nested enrollment links", description: "Read-only AD CS nested enrollment evidence." },
+  "source.adcs.membership.disabled": { defaultMessage: "Not requested", description: "Read-only AD CS nested enrollment evidence." },
+  "source.adcs.membership.complete": { defaultMessage: "Account-visible links read completely", description: "Read-only AD CS nested enrollment evidence." },
+  "source.adcs.membership.incomplete": {
+    defaultMessage: "Read incomplete; enrollment members are unassessed.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "source.adcs.membership.members": { defaultMessage: "Observed member paths ({count})", description: "Read-only AD CS nested enrollment evidence." },
+  "source.adcs.membership.limits": {
+    defaultMessage: "This read does not evaluate conditional ACEs, primary groups, SID history, cross-forest tokens or full Windows AccessCheck.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "source.adcs.membership.recover": {
+    defaultMessage: "Check the selected relay, readable group links, matching-rule support and query limits, then run the source again.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
+  "source.adcs.membership.sid": { defaultMessage: "Member SID", description: "Read-only AD CS nested enrollment evidence." },
+  "source.adcs.membership.trustee": { defaultMessage: "Enrollment trustee", description: "Read-only AD CS nested enrollment evidence." },
+  "source.adcs.membership.budget": {
+    defaultMessage: "The bounded report could not include this template\u2019s group evidence.",
+    description: "Read-only AD CS nested enrollment evidence.",
+  },
   "source.adcs.description.f1adcs0002": {
     defaultMessage:
       "Templates define what a Windows PKI may issue. An in-domain network relay reads each template, its publishing CAs, and the SIDs granted enrollment rights.",

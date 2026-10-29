@@ -9220,6 +9220,11 @@ export interface components {
         ADCSDriftHistory: {
             items: components["schemas"]["ADCSTemplateDrift"][];
         };
+        ADCSEnrollmentACL: {
+            allowed: string[];
+            denied: string[];
+            unassessed_aces: number;
+        };
         ADCSEnrollmentEndpoint: {
             authentication: string[];
             /** @enum {string} */
@@ -9231,6 +9236,27 @@ export interface components {
             state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other";
             tls_verified: boolean;
             url: string;
+        };
+        ADCSEnrollmentMember: {
+            dn: string;
+            /** @enum {string} */
+            kind: "user" | "computer";
+            path: string[];
+            sid: string;
+            via_trustees: string[];
+        };
+        ADCSEnrollmentMembership: {
+            budget_exceeded?: boolean;
+            domain_dn: string;
+            limitations: string[];
+            /** @enum {string} */
+            matching_rule: "1.2.840.113556.1.4.1941";
+            members: components["schemas"]["ADCSEnrollmentMember"][];
+            /** Format: date-time */
+            observed_at: string;
+            /** @enum {string} */
+            state: "complete" | "incomplete";
+            trustees: components["schemas"]["ADCSEnrollmentTrustee"][];
         };
         ADCSEnrollmentService: {
             agent_restriction_source: string;
@@ -9247,6 +9273,15 @@ export interface components {
             service: string;
             /** @enum {string} */
             worst_severity: "" | "medium" | "high" | "critical";
+        };
+        ADCSEnrollmentTrustee: {
+            direct_member_dns?: string[];
+            dn?: string;
+            nodes?: components["schemas"]["ADCSMembershipNode"][];
+            positive_control: boolean;
+            sid: string;
+            /** @enum {string} */
+            state: "complete" | "unresolved" | "read_failed" | "invalid_identity" | "non_security_group" | "membership_unconfirmed" | "incomplete_search" | "incomplete_attributes" | "ambiguous_identity" | "matching_rule_unconfirmed";
         };
         ADCSFindingEvidence: {
             attribute: string;
@@ -9270,6 +9305,14 @@ export interface components {
             /** Format: uuid */
             source_id: string;
         };
+        ADCSMembershipNode: {
+            dn: string;
+            /** @enum {string} */
+            kind: "group" | "user" | "computer";
+            parents?: string[];
+            security_group?: boolean;
+            sid: string;
+        };
         ADCSObservedInventory: {
             enrollment_services: components["schemas"]["ADCSObservedService"][];
             templates: components["schemas"]["ADCSObservedTemplate"][];
@@ -9287,6 +9330,8 @@ export interface components {
             ekus?: string[];
             enrollee_supplies_san: boolean;
             enrollee_supplies_subject: boolean;
+            enrollment_acl?: components["schemas"]["ADCSEnrollmentACL"];
+            enrollment_membership?: components["schemas"]["ADCSEnrollmentMembership"];
             enrollment_principals?: string[];
             exportable_key: boolean;
             name: string;
@@ -9321,6 +9366,7 @@ export interface components {
         ADCSTemplate: {
             display_name?: string;
             domain: string;
+            enrollment_membership?: components["schemas"]["ADCSEnrollmentMembership"];
             enrollment_principals?: string[];
             findings: components["schemas"]["ADCSTemplateFinding"][];
             /** Format: date-time */

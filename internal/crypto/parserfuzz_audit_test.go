@@ -94,6 +94,7 @@ func TestEveryUntrustedParserIsFuzzed(t *testing.T) {
 		"FuzzParsePublicCSRPEM": "exact bounded public CSR envelope used by served issuance and renewal",
 		"FuzzInspectCSR":        "profile-validation CSR inspection + EKU ASN.1 decode (csr.go InspectCSR, eku.go)",
 	})
+	requireFuzzFuncByName(t, "ldapbind", map[string]string{"FuzzLDAPBindResponse": "bounded LDAPv3 StartTLS and simple-bind BER replies"})
 	requireFuzzFuncByName(t, "tlsprobe", map[string]string{
 		"FuzzNativeProbeOutput":     "bounded native TLS chain and completed-handshake evidence",
 		"FuzzMySQLSSLRequestPacket": "bounded unauthenticated MySQL greeting before certificate observation",

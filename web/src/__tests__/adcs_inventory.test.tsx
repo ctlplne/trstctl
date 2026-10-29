@@ -167,3 +167,71 @@ describe("AD CS inventory posture", () => {
     expect(screen.queryByText(/security_descriptor/i)).not.toBeInTheDocument();
   });
 });
+
+describe("nested enrollment evidence", () => {
+  it("shows the observed user, security-group path and incomplete coverage honestly", async () => {
+    apiMock.adcsPosture.mockResolvedValue({
+      observed: true,
+      sources: [],
+      enrollment_services: [],
+      templates: [
+        {
+          domain: "CORP",
+          template: "Nested",
+          enrollment_principals: ["S-1-5-21-1-1101"],
+          published_by: [],
+          findings: [],
+          worst_severity: "",
+          observed_at: "2026-10-28T12:00:00Z",
+          enrollment_membership: {
+            state: "complete",
+            domain_dn: "DC=corp,DC=example",
+            observed_at: "2026-10-28T12:00:00Z",
+            matching_rule: "1.2.840.113556.1.4.1941",
+            members: [
+              {
+                sid: "S-1-5-21-1-1103",
+                dn: "CN=Nested User,DC=corp,DC=example",
+                kind: "user",
+                via_trustees: ["S-1-5-21-1-1101"],
+                path: ["CN=Nested User,DC=corp,DC=example", "CN=Inner,DC=corp,DC=example", "CN=Outer,DC=corp,DC=example"],
+              },
+            ],
+            trustees: [],
+            limitations: ["conditional_aces_unassessed"],
+          },
+        },
+        {
+          domain: "CORP",
+          template: "Unconfirmed",
+          enrollment_principals: [],
+          published_by: [],
+          findings: [],
+          worst_severity: "",
+          observed_at: "2026-10-28T12:00:00Z",
+          enrollment_membership: {
+            state: "incomplete",
+            domain_dn: "DC=corp,DC=example",
+            observed_at: "2026-10-28T12:00:00Z",
+            matching_rule: "1.2.840.113556.1.4.1941",
+            members: [],
+            trustees: [{ sid: "S-1-5-21-1-1101", state: "matching_rule_unconfirmed", positive_control: false }],
+            limitations: ["conditional_aces_unassessed"],
+          },
+        },
+      ],
+    });
+    apiMock.adcsDrift.mockResolvedValue({ items: [] });
+    render(
+      <AppQueryProvider>
+        <ADCSTemplatePanel />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByRole("columnheader", { name: "Nested enrollment links" })).toBeInTheDocument();
+    expect(await screen.findByText("CN=Nested User,DC=corp,DC=example")).toBeInTheDocument();
+    expect(screen.getByText("CN=Nested User,DC=corp,DC=example → CN=Inner,DC=corp,DC=example → CN=Outer,DC=corp,DC=example")).toBeInTheDocument();
+    expect(screen.getByText("Read incomplete; enrollment members are unassessed.")).toBeInTheDocument();
+    expect(screen.getByText("matching_rule_unconfirmed", { exact: false })).toBeInTheDocument();
+    expect(screen.getAllByText(/This read does not evaluate conditional ACEs/).length).toBeGreaterThan(0);
+  });
+});

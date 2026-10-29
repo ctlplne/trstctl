@@ -354,6 +354,21 @@
           "description": "The AD Configuration partition to inspect."
         },
         {
+          "path": "nested_groups_enabled",
+          "label": "Read nested enrollment groups",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Opt-in bounded LDAP in-chain reads; needs an explicit upgraded network relay. Full Windows AccessCheck is unassessed."
+        },
+        {
+          "path": "membership_domain_dn",
+          "label": "Membership domain naming context",
+          "type": "string",
+          "required": false,
+          "description": "Required with nested groups: an explicit domain partition, never an inferred forest scope."
+        },
+        {
           "path": "bind_dn",
           "label": "Bind identity",
           "type": "string",

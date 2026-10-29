@@ -90,7 +90,7 @@ func (r *relayCredentialResolver) resolveJobCredential(
 			return redeemedMaterial{}, err
 		}
 		return r.resolveReferenceNames(ctx, tenantID, command.CredentialRefs())
-	case "adcs.inventory":
+	case "adcs.inventory", "adcs.inventory.enrollment_groups":
 		// F1: an AD CS inventory redeems a directory bind credential. Its
 		// payload is not a sealed connector deploy, so it resolves the
 		// secret:// references named in the job payload directly.

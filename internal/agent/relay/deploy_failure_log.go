@@ -194,7 +194,7 @@ func recordDeployFailure(job Job, intent DeployIntent, step, reason string) {
 // inventory shares the path up to redemption but is not a deploy, so it only
 // reports.
 func failDeploy(ctx context.Context, ch Channel, job Job, intent DeployIntent, step, phrase string, cause error, material Material) {
-	if job.Kind != KindADCSInventory {
+	if job.Kind != KindADCSInventory && job.Kind != KindADCSNestedGroups {
 		reason := phrase
 		if cause != nil {
 			reason = phrase + ": " + scrubFailure(cause.Error(), material)

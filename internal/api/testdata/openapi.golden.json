@@ -1904,6 +1904,33 @@
         ],
         "type": "object"
       },
+      "ADCSEnrollmentACL": {
+        "properties": {
+          "allowed": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1024,
+            "type": "array"
+          },
+          "denied": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1024,
+            "type": "array"
+          },
+          "unassessed_aces": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "allowed",
+          "denied",
+          "unassessed_aces"
+        ],
+        "type": "object"
+      },
       "ADCSEnrollmentEndpoint": {
         "properties": {
           "authentication": {
@@ -1956,6 +1983,99 @@
           "authentication",
           "tls_verified",
           "extended_protection"
+        ],
+        "type": "object"
+      },
+      "ADCSEnrollmentMember": {
+        "properties": {
+          "dn": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "user",
+              "computer"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "sid": {
+            "type": "string"
+          },
+          "via_trustees": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sid",
+          "dn",
+          "kind",
+          "via_trustees",
+          "path"
+        ],
+        "type": "object"
+      },
+      "ADCSEnrollmentMembership": {
+        "properties": {
+          "budget_exceeded": {
+            "type": "boolean"
+          },
+          "domain_dn": {
+            "type": "string"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "matching_rule": {
+            "enum": [
+              "1.2.840.113556.1.4.1941"
+            ],
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSEnrollmentMember"
+            },
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "complete",
+              "incomplete"
+            ],
+            "type": "string"
+          },
+          "trustees": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSEnrollmentTrustee"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "state",
+          "domain_dn",
+          "matching_rule",
+          "observed_at",
+          "trustees",
+          "members",
+          "limitations"
         ],
         "type": "object"
       },
@@ -2030,6 +2150,54 @@
         ],
         "type": "object"
       },
+      "ADCSEnrollmentTrustee": {
+        "properties": {
+          "direct_member_dns": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1024,
+            "type": "array"
+          },
+          "dn": {
+            "type": "string"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSMembershipNode"
+            },
+            "maxItems": 1025,
+            "type": "array"
+          },
+          "positive_control": {
+            "type": "boolean"
+          },
+          "sid": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "complete",
+              "unresolved",
+              "read_failed",
+              "invalid_identity",
+              "non_security_group",
+              "membership_unconfirmed",
+              "incomplete_search",
+              "incomplete_attributes",
+              "ambiguous_identity",
+              "matching_rule_unconfirmed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "sid",
+          "state",
+          "positive_control"
+        ],
+        "type": "object"
+      },
       "ADCSFindingEvidence": {
         "properties": {
           "attribute": {
@@ -2094,6 +2262,40 @@
           "name",
           "schedule_enabled",
           "last_run_status"
+        ],
+        "type": "object"
+      },
+      "ADCSMembershipNode": {
+        "properties": {
+          "dn": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "group",
+              "user",
+              "computer"
+            ],
+            "type": "string"
+          },
+          "parents": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "type": "array"
+          },
+          "security_group": {
+            "type": "boolean"
+          },
+          "sid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sid",
+          "dn",
+          "kind"
         ],
         "type": "object"
       },
@@ -2170,6 +2372,12 @@
           },
           "enrollee_supplies_subject": {
             "type": "boolean"
+          },
+          "enrollment_acl": {
+            "$ref": "#/components/schemas/ADCSEnrollmentACL"
+          },
+          "enrollment_membership": {
+            "$ref": "#/components/schemas/ADCSEnrollmentMembership"
           },
           "enrollment_principals": {
             "items": {
@@ -2316,6 +2524,9 @@
           },
           "domain": {
             "type": "string"
+          },
+          "enrollment_membership": {
+            "$ref": "#/components/schemas/ADCSEnrollmentMembership"
           },
           "enrollment_principals": {
             "items": {

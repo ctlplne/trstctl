@@ -3,6 +3,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -18,6 +19,34 @@ import (
 
 	"trstctl.com/trstctl/internal/discovery/adcs"
 )
+
+func TestADCSMembershipWirePreservesSIDBytes(t *testing.T) {
+	client, server := net.Pipe()
+	conn := ldap.NewConn(client, false)
+	conn.SetTimeout(time.Second)
+	conn.Start()
+	defer func() { _ = conn.Close() }()
+	want := []byte{1, 1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0}
+	done := make(chan error, 1)
+	go func() {
+		defer func() { _ = server.Close() }()
+		request, err := ber.ReadPacket(server)
+		if err == nil {
+			err = writeLDAPSearchResult(server, request.Children[0].Value, "CN=Reader,DC=example", map[string][][]byte{"objectSid": {want}})
+		}
+		done <- err
+	}()
+	entries, err := (ldapSearcher{conn: conn}).Search(t.Context(), adcs.SearchRequest{BaseDN: "DC=example", Filter: "(objectClass=user)", Attributes: []string{"objectSid"}, MaxEntries: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || len(entries[0].BinaryAttributes["objectSid"]) != 1 || !bytes.Equal(entries[0].BinaryAttributes["objectSid"][0], want) {
+		t.Fatalf("SID lost its binary authority: %+v", entries)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestADCSCollectsEnrollmentACLOverReadOnlyLDAPWireAUD35 is a real LDAP BER
 // client/server exchange, not an in-memory Searcher. The fixture accepts exactly
@@ -230,4 +259,48 @@ func wireEnrollmentDescriptor() []byte {
 	binary.LittleEndian.PutUint16(acl[4:6], 1)
 	copy(acl[8:], ace)
 	return descriptor
+}
+
+func TestADCSLDAPSearchCancellationClosesAndJoinsTheRead(t *testing.T) {
+	client, server := net.Pipe()
+	conn := ldap.NewConn(client, false)
+	conn.SetTimeout(2 * time.Second)
+	conn.Start()
+	defer func() { _ = conn.Close(); _ = server.Close() }()
+	requested := make(chan struct{})
+	peerDone := make(chan error, 1)
+	go func() {
+		_, err := ber.ReadPacket(server)
+		close(requested)
+		if err == nil {
+			var out [1]byte
+			_, err = server.Read(out[:])
+		}
+		peerDone <- err
+	}()
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, err := (ldapSearcher{conn: conn}).Search(ctx, adcs.SearchRequest{BaseDN: "DC=example", Filter: "(objectClass=user)", Attributes: []string{"objectSid"}, MaxEntries: 2})
+		result <- err
+	}()
+	<-requested
+	cancel()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled LDAP search=%v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("LDAP request outlived its cancelled collection context")
+	}
+	select {
+	case err := <-peerDone:
+		if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("cancelled LDAP connection stayed open: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("cancelled directory connection did not close")
+	}
 }

@@ -628,6 +628,16 @@ ADCSDriftHistory = TypedDict(
     total=False,
 )
 
+ADCSEnrollmentACL = TypedDict(
+    'ADCSEnrollmentACL',
+    {
+        'allowed': list[str],
+        'denied': list[str],
+        'unassessed_aces': int,
+    },
+    total=False,
+)
+
 ADCSEnrollmentEndpoint = TypedDict(
     'ADCSEnrollmentEndpoint',
     {
@@ -638,6 +648,33 @@ ADCSEnrollmentEndpoint = TypedDict(
         'state': str,
         'tls_verified': bool,
         'url': str,
+    },
+    total=False,
+)
+
+ADCSEnrollmentMember = TypedDict(
+    'ADCSEnrollmentMember',
+    {
+        'dn': str,
+        'kind': str,
+        'path': list[str],
+        'sid': str,
+        'via_trustees': list[str],
+    },
+    total=False,
+)
+
+ADCSEnrollmentMembership = TypedDict(
+    'ADCSEnrollmentMembership',
+    {
+        'budget_exceeded': bool,
+        'domain_dn': str,
+        'limitations': list[str],
+        'matching_rule': str,
+        'members': list[dict[str, Any]],
+        'observed_at': str,
+        'state': str,
+        'trustees': list[dict[str, Any]],
     },
     total=False,
 )
@@ -656,6 +693,19 @@ ADCSEnrollmentService = TypedDict(
         'observed_by': str,
         'service': str,
         'worst_severity': str,
+    },
+    total=False,
+)
+
+ADCSEnrollmentTrustee = TypedDict(
+    'ADCSEnrollmentTrustee',
+    {
+        'direct_member_dns': list[str],
+        'dn': str,
+        'nodes': list[dict[str, Any]],
+        'positive_control': bool,
+        'sid': str,
+        'state': str,
     },
     total=False,
 )
@@ -682,6 +732,18 @@ ADCSInventorySource = TypedDict(
         'schedule_enabled': bool,
         'schedule_id': str,
         'source_id': str,
+    },
+    total=False,
+)
+
+ADCSMembershipNode = TypedDict(
+    'ADCSMembershipNode',
+    {
+        'dn': str,
+        'kind': str,
+        'parents': list[str],
+        'security_group': bool,
+        'sid': str,
     },
     total=False,
 )
@@ -715,6 +777,8 @@ ADCSObservedTemplate = TypedDict(
         'ekus': list[str],
         'enrollee_supplies_san': bool,
         'enrollee_supplies_subject': bool,
+        'enrollment_acl': dict[str, Any],
+        'enrollment_membership': dict[str, Any],
         'enrollment_principals': list[str],
         'exportable_key': bool,
         'name': str,
@@ -762,6 +826,7 @@ ADCSTemplate = TypedDict(
     {
         'display_name': str,
         'domain': str,
+        'enrollment_membership': dict[str, Any],
         'enrollment_principals': list[str],
         'findings': list[dict[str, Any]],
         'observed_at': str,

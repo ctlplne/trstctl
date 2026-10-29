@@ -23,3 +23,22 @@ type privacyDiscoveryRunQueued struct {
 	AllowPrivateEndpoint bool                                     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string                                 `json:"private_egress_cidrs,omitempty"`
 }
+
+// DiscoveryEnrollmentGroupsQueuedSchemaVersion adds explicit domain membership
+// scope. The historical v1 union above stays closed.
+const DiscoveryEnrollmentGroupsQueuedSchemaVersion = 2
+
+type privacyDiscoveryEnrollmentGroupsQueued struct {
+	privacyDiscoveryRunQueued
+	NestedGroupsEnabled bool   `json:"nested_groups_enabled,omitempty"`
+	MembershipDomainDN  string `json:"membership_domain_dn,omitempty"`
+}
+
+// The row's anchor is derived only by the projector, never accepted in a relay
+// report or added to the immutable Template wire shape.
+func adcsProjectionObservationID(template adcsdiscovery.Template, eventID string) string {
+	if template.EnrollmentMembership != nil {
+		return eventID
+	}
+	return ""
+}

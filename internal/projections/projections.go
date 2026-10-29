@@ -4716,13 +4716,13 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoverySchedulePaused:                  {1: true, 2: true},
 	EventDiscoveryScheduleResumed:                 {1: true, 2: true},
 	EventDiscoveryScheduleRetired:                 {1: true, 2: true},
-	EventDiscoveryRunQueued:                       {1: true},
+	EventDiscoveryRunQueued:                       {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true},
 	EventSSHTrustCollectionQueued:                 {1: true},
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryRunCompleted:                    {1: true, DiscoveryTargetResultsEventSchemaVersion: true},
-	EventADCSInventoryObserved:                    {1: true, adcsdiscovery.InventoryEventSchemaVersion: true},
+	EventADCSInventoryObserved:                    {1: true, 2: true, adcsdiscovery.InventoryEventSchemaVersion: true},
 	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventADCSTemplateDriftWorsened:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventRevocationProbeQueued:                    {1: true},
@@ -6639,12 +6639,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			if err := decode(e, &legacy); err != nil {
 				return err
 			}
-			pl = adcsdiscovery.InventoryObserved{
-				RunID: legacy.RunID, SourceID: legacy.SourceID, Domain: legacy.Domain,
-				AgentID: legacy.AgentID, AgentName: legacy.AgentName,
-				DirectoryVerified: legacy.DirectoryVerified,
-				Templates:         legacy.Templates, Findings: legacy.Findings,
+			pl = legacy.Current()
+		} else if schemaVersionOf(e) == 2 {
+			var legacy adcsdiscovery.InventoryObservedV2
+			if err := decode(e, &legacy); err != nil {
+				return err
 			}
+			pl = legacy.Current()
 		} else if err := decode(e, &pl); err != nil {
 			return err
 		}
@@ -6652,7 +6653,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			pl.AgentID == "" || strings.TrimSpace(pl.AgentName) == "" {
 			return errors.New("projections: AD CS inventory observation is missing run/source/domain/agent authority")
 		}
-		if schemaVersionOf(e) == adcsdiscovery.InventoryEventSchemaVersion {
+		if schemaVersionOf(e) >= 2 {
 			endpoints := make([]adcsdiscovery.EnrollmentEndpointTarget, 0)
 			for _, service := range pl.EnrollmentServices {
 				for _, endpoint := range service.Endpoints {
@@ -6661,8 +6662,13 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 					})
 				}
 			}
+			jobKind := adcsdiscovery.JobKind
+			if pl.NestedGroupsEnabled {
+				jobKind = adcsdiscovery.NestedGroupsJobKind
+			}
 			if err := adcsdiscovery.ValidateInventoryReport(adcsdiscovery.InventoryIntent{
-				ID: pl.RunID, SourceID: pl.SourceID, JobKind: adcsdiscovery.JobKind,
+				ID: pl.RunID, SourceID: pl.SourceID, JobKind: jobKind,
+				NestedGroupsEnabled: pl.NestedGroupsEnabled, MembershipDomainDN: pl.MembershipDomainDN,
 				Execution: adcsdiscovery.ExecutionRelay, RequiredAgentRole: adcsdiscovery.RequiredRoleNetwork,
 				EnrollmentEndpoints: endpoints,
 			}, adcsdiscovery.InventoryReport{
@@ -6688,7 +6694,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			if findings == nil {
 				encodedFindings = []byte("[]")
 			}
-			observedTemplate, err := json.Marshal(template)
+			observedTemplate, err := json.Marshal(struct {
+				adcsdiscovery.Template
+				ObservationEventID string `json:"observation_event_id,omitempty"`
+			}{Template: template, ObservationEventID: adcsProjectionObservationID(template, e.ID)})
 			if err != nil {
 				return err
 			}

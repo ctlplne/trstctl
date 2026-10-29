@@ -62,6 +62,15 @@ func (a *agentService) RedeemJobCredential(ctx context.Context, req *transport.R
 	if !held || job.ClaimAttempts != req.Attempt {
 		return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
 	}
+	if job.Destination == "adcs.inventory.enrollment_groups" {
+		if a.orch == nil || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network") {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+		command, err := a.orch.BoundADCSNestedCommand(ctx, info.TenantID, job.IdempotencyKey, job.Payload)
+		if err != nil || command.RequiredAgentID != agentID {
+			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)
+		}
+	}
 	if job.Destination == sshcollection.Destination {
 		if a.orch == nil || job.RequiredAgentID != agentID || !agentHasRole(info.Roles, "network") {
 			return nil, a.refuseRedemption(ctx, info.TenantID, info.CommonName, agentID, req, now)

@@ -89,8 +89,9 @@ var agentJobKindAllowlist = map[string]bool{
 	// F1: AD CS template inventory. In-domain only — a domain controller's LDAP
 	// is not reachable from a hosted control plane, which is why this is a job
 	// rather than something the brain does itself.
-	"adcs.inventory":   true,
-	"trust.distribute": true,
+	"adcs.inventory":                   true,
+	"adcs.inventory.enrollment_groups": true,
+	"trust.distribute":                 true,
 	// B2: host-generated renewal. The agent makes the key, sends a CSR up, and
 	// the control plane never holds the private half. Separate from
 	// connector.deploy on purpose — the two differ in custody, not in mechanics,
@@ -266,7 +267,7 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 				continue
 			}
 		}
-		if job.Destination == relay.KindADCSInventory {
+		if job.Destination == relay.KindADCSInventory || job.Destination == relay.KindADCSNestedGroups {
 			if startErr := a.startClaimedADCSRun(ctx, info.TenantID, info.CommonName, job.IdempotencyKey, payload); startErr != nil {
 				// A run that cannot enter running is not handed out. Its lease
 				// expires and the same event ID converges on the next claim.
@@ -976,7 +977,7 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket result receiver is not configured")
 		}
 		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory:
+	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
 		if a.recordRevocationHealth == nil {
@@ -1786,6 +1787,17 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 }
 
 func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job store.AgentJob) ([]byte, error) {
+	if job.Destination == relay.KindADCSNestedGroups {
+		if a.orch == nil {
+			return nil, errors.New("AD CS nested source verifier is unavailable")
+		}
+		command, err := a.orch.BoundADCSNestedCommand(ctx, job.TenantID, job.IdempotencyKey, job.Payload)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(command)
+	}
+
 	if job.Destination == sshcollection.Destination {
 		if a.orch == nil {
 			return nil, errors.New("SSH collection source verifier is unavailable")

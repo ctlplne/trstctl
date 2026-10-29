@@ -38,7 +38,37 @@ var enrollmentExtendedRightGUID = [16]byte{
 	0x90, 0xd4, 0x00, 0xc0, 0x4f, 0x79, 0xdc, 0x55,
 }
 
-// EnrollmentPrincipalsFromSecurityDescriptor decodes the trustees that the
+// EnrollmentACL retains unconditional enrollment grants and denies before
+// membership expansion. UnassessedACEs prevent link evidence from becoming a
+// claim of complete Windows authorization.
+type EnrollmentACL struct {
+	Allowed        []string `json:"allowed"`
+	Denied         []string `json:"denied"`
+	UnassessedACEs int      `json:"unassessed_aces"`
+}
+
+func (a EnrollmentACL) DirectPrincipals() []string {
+	denied := map[string]bool{}
+	for _, sid := range a.Denied {
+		denied[sid] = true
+	}
+	out := make([]string, 0, len(a.Allowed))
+	for _, sid := range a.Allowed {
+		if !denied[sid] {
+			out = append(out, sid)
+		}
+	}
+	return out
+}
+func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
+	acl, err := EnrollmentACLFromSecurityDescriptor(raw)
+	if err != nil {
+		return nil, err
+	}
+	return acl.DirectPrincipals(), nil
+}
+
+// EnrollmentACLFromSecurityDescriptor decodes the trustees that the
 // template DACL grants certificate enrollment. The result is canonical SID
 // text, sorted and deduplicated; directory name resolution is intentionally a
 // separate concern because names can change while SIDs are the ACL authority.
@@ -47,7 +77,7 @@ var enrollmentExtendedRightGUID = [16]byte{
 // Group-membership expansion and conditional ACE evaluation are deliberately
 // not guessed: the output describes normalized ACL trustees, not an invented
 // effective-token authorization result.
-func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
+func EnrollmentACLFromSecurityDescriptor(raw []byte) (*EnrollmentACL, error) {
 	if len(raw) < 20 {
 		return nil, errors.New("security descriptor is shorter than its fixed header")
 	}
@@ -64,11 +94,11 @@ func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
 	if control&securityDescriptorDACLPresent == 0 {
 		// A null DACL grants full access. Reporting nobody here would invert the
 		// most dangerous possible descriptor into the safest-looking answer.
-		return []string{"S-1-1-0"}, nil
+		return &EnrollmentACL{Allowed: []string{"S-1-1-0"}, Denied: []string{}}, nil
 	}
 	daclOffset := uint64(binary.LittleEndian.Uint32(raw[16:20]))
 	if daclOffset == 0 {
-		return []string{"S-1-1-0"}, nil
+		return &EnrollmentACL{Allowed: []string{"S-1-1-0"}, Denied: []string{}}, nil
 	}
 	if daclOffset+8 > uint64(len(raw)) {
 		return nil, errors.New("security descriptor DACL offset is outside the value")
@@ -88,6 +118,7 @@ func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
 	acl = acl[:aclSize]
 	allowed := make(map[string]struct{}, aceCount)
 	denied := make(map[string]struct{}, aceCount)
+	unassessed := 0
 	offset := 8
 	for i := 0; i < aceCount; i++ {
 		if offset+4 > len(acl) {
@@ -101,6 +132,14 @@ func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
 		offset += aceSize
 		if ace[1]&aceFlagInheritOnly != 0 {
 			continue
+		}
+		// Callback/compound permission ACEs are not evaluated. Keep that gap
+		// explicit even if an unconditional allow elsewhere names the same SID.
+		if len(ace) >= 8 && (ace[0] == 0x04 || (ace[0] >= 0x09 && ace[0] <= 0x0c)) {
+			mask := binary.LittleEndian.Uint32(ace[4:8])
+			if mask&(accessMaskGenericAll|accessMaskControlAccess) != 0 {
+				unassessed++
+			}
 		}
 		grant, deny, sidOffset, applies, err := enrollmentACE(ace)
 		if err != nil {
@@ -123,14 +162,16 @@ func EnrollmentPrincipalsFromSecurityDescriptor(raw []byte) ([]string, error) {
 	if offset != len(acl) {
 		return nil, errors.New("DACL ACE count does not cover its encoded size")
 	}
-	out := make([]string, 0, len(allowed))
+	result := &EnrollmentACL{Allowed: []string{}, Denied: []string{}, UnassessedACEs: unassessed}
 	for sid := range allowed {
-		if _, blocked := denied[sid]; !blocked {
-			out = append(out, sid)
-		}
+		result.Allowed = append(result.Allowed, sid)
 	}
-	sort.Strings(out)
-	return out, nil
+	for sid := range denied {
+		result.Denied = append(result.Denied, sid)
+	}
+	sort.Strings(result.Allowed)
+	sort.Strings(result.Denied)
+	return result, nil
 }
 
 func enrollmentACE(ace []byte) (grant, deny bool, sidOffset int, applies bool, err error) {

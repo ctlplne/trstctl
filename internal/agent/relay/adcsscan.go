@@ -15,7 +15,9 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 
+	"trstctl.com/trstctl/internal/crypto/ldapbind"
 	"trstctl.com/trstctl/internal/crypto/mtls"
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/netsec"
 )
@@ -34,7 +36,8 @@ import (
 // controller must be structurally incapable of modifying one.
 
 // KindADCSInventory is the job kind for a template sweep.
-const KindADCSInventory = "adcs.inventory"
+const KindADCSInventory = adcs.JobKind
+const KindADCSNestedGroups = adcs.NestedGroupsJobKind
 
 // ADCSInventoryIntent is the shared reference-only job payload.
 type ADCSInventoryIntent = adcs.InventoryIntent
@@ -64,14 +67,16 @@ const ldapServerSDFlagsOID = "1.2.840.113556.1.4.801"
 // for owner/group/SACL too, which is more privilege and data than this reader
 // needs. The value is BER(SEQUENCE(INTEGER(0x4))).
 func ldapSearchControls(request adcs.SearchRequest) []ldap.Control {
-	if !request.DACLOnly {
-		return nil
+	var controls []ldap.Control
+	if request.DACLOnly {
+		controls = append(controls, &ldap.ControlString{ControlType: ldapServerSDFlagsOID, Criticality: true, ControlValue: string([]byte{0x30, 0x03, 0x02, 0x01, 0x04})})
 	}
-	return []ldap.Control{&ldap.ControlString{
-		ControlType:  ldapServerSDFlagsOID,
-		Criticality:  true,
-		ControlValue: string([]byte{0x30, 0x03, 0x02, 0x01, 0x04}),
-	}}
+	// Refuse continuation referrals rather than silently searching another
+	// partition. Criticality makes an unsupported server report incompleteness.
+	if request.DomainScope {
+		controls = append(controls, &ldap.ControlString{ControlType: "1.2.840.113556.1.4.1339", Criticality: true})
+	}
+	return controls
 }
 
 func (l ldapSearcher) Search(ctx context.Context, request adcs.SearchRequest) ([]adcs.Entry, error) {
@@ -86,21 +91,38 @@ func (l ldapSearcher) Search(ctx context.Context, request adcs.SearchRequest) ([
 		request.MaxEntries, int(adcsDialTimeout.Seconds()), false,
 		request.Filter, request.Attributes, ldapSearchControls(request),
 	)
+	req.EnforceSizeLimit = true
+	// The synchronous LDAP API has no context parameter. Close this one-scan
+	// connection when the collector's own deadline expires, and join the callback
+	// before returning so no cancellation work escapes the request lifetime.
+	cancelled := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { defer close(cancelled); _ = l.conn.Close() })
+	defer func() {
+		if !stop() {
+			<-cancelled
+		}
+	}()
 	res, err := l.conn.Search(req)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	if err != nil {
 		return nil, err
+	}
+	if len(res.Referrals) != 0 {
+		return nil, errors.New("relay: directory referrals are outside the pinned LDAP origin")
 	}
 	out := make([]adcs.Entry, 0, len(res.Entries))
 	for _, entry := range res.Entries {
 		attrs := make(map[string][]string, len(entry.Attributes))
 		binaryAttrs := make(map[string][][]byte, 1)
 		for _, a := range entry.Attributes {
-			if strings.EqualFold(a.Name, "nTSecurityDescriptor") {
+			if strings.EqualFold(a.Name, "nTSecurityDescriptor") || strings.EqualFold(a.Name, "objectSid") {
 				values := make([][]byte, 0, len(a.ByteValues))
 				for _, value := range a.ByteValues {
 					values = append(values, append([]byte(nil), value...))
 				}
-				binaryAttrs["nTSecurityDescriptor"] = values
+				binaryAttrs[a.Name] = values
 				continue
 			}
 			attrs[a.Name] = append([]string(nil), a.Values...)
@@ -133,31 +155,36 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 		return ADCSReport{}, errors.New("relay: the directory bind credential was not redeemed for this attempt")
 	}
 
-	// The TLS policy comes from the crypto boundary (AN-3): this package never
-	// names crypto/tls, it obtains the configured value and hands it to the
-	// LDAP library.
-	tlsConfig := mtls.DirectoryClientTLSConfig(intent.InsecureSkipVerify)
-	conn, err := ldap.DialURL(url,
-		ldap.DialWithDialer(&net.Dialer{Timeout: adcsDialTimeout, Control: egressControl(nil)}),
-		ldap.DialWithTLSConfig(tlsConfig))
+	// Authenticate once through AN-3 without creating an immutable password
+	// string. Release the borrowed bytes before reading public directory data.
+	defer secret.Wipe(password)
+	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	wire, err := ldapbind.Dial(bounded, url, intent.BindDN, password, intent.InsecureSkipVerify, egressControl(nil))
+	secret.Wipe(password)
 	if err != nil {
-		return ADCSReport{}, fmt.Errorf("relay: connect to the directory: %w", err)
+		return ADCSReport{}, fmt.Errorf("relay: directory authentication failed: %w", err)
 	}
+	conn := ldap.NewConn(wire, true)
+	conn.SetTimeout(adcsDialTimeout)
+	conn.Start()
 	defer func() { _ = conn.Close() }()
-
-	if strings.HasPrefix(strings.ToLower(url), "ldap://") {
-		// A template inventory is the map of a domain's escalation paths.
-		// Reading it in the clear publishes that map to anyone on the segment,
-		// so a plain connection is upgraded or the read does not happen.
-		if err := conn.StartTLS(tlsConfig); err != nil {
-			return ADCSReport{}, fmt.Errorf("relay: the directory would not start TLS, and this inventory is not read in the clear: %w", err)
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case <-bounded.Done():
+			_ = conn.Close()
+		case <-stop:
 		}
+	}()
+	defer func() { close(stop); <-done }()
+	var inventory adcs.Inventory
+	if intent.NestedGroupsEnabled {
+		inventory, err = adcs.CollectWithMembership(bounded, ldapSearcher{conn: conn}, intent.ConfigurationDN, intent.MembershipDomainDN)
+	} else {
+		inventory, err = adcs.Collect(bounded, ldapSearcher{conn: conn}, intent.ConfigurationDN)
 	}
-	if err := conn.Bind(intent.BindDN, string(password)); err != nil {
-		return ADCSReport{}, fmt.Errorf("relay: directory bind failed: %w", err)
-	}
-
-	inventory, err := adcs.Collect(ctx, ldapSearcher{conn: conn}, intent.ConfigurationDN)
 	if err != nil {
 		return ADCSReport{}, err
 	}
@@ -168,7 +195,7 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	if err != nil {
 		return ADCSReport{}, err
 	}
-	if err := enrichADCSInventory(ctx, intent, &inventory, endpointClient, observeCAAgentRestrictions); err != nil {
+	if err := enrichADCSInventory(bounded, intent, &inventory, endpointClient, observeCAAgentRestrictions); err != nil {
 		return ADCSReport{}, err
 	}
 	report := ADCSReport{

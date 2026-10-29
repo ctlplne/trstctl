@@ -81,3 +81,28 @@ func TestInventoryReportCannotInventOrOmitPostureAUD37(t *testing.T) {
 		t.Fatal("report omitted configured live endpoint")
 	}
 }
+
+func TestNestedSourceRequiresExplicitDomainAndVersionedRelay(t *testing.T) {
+	base := map[string]any{"url": "ldaps://dc.example", "configuration_dn": "CN=Configuration,DC=example", "bind_dn": "CN=reader,DC=example", "password_ref": "secret://adcs/reader", "nested_groups_enabled": true, "membership_domain_dn": "DC=example", "relay_agent_id": "11111111-1111-4111-8111-111111111111"} // #nosec G101 -- public secret:// reference fixture; contains no credential value (CWE-798).
+	raw, _ := json.Marshal(base)
+	intent, err := adcs.ResolveInventoryIntent(raw)
+	if err != nil || intent.JobKind != adcs.NestedGroupsJobKind || !intent.NestedGroupsEnabled {
+		t.Fatalf("nested capability lost: %+v %v", intent, err)
+	}
+	for _, field := range []string{"membership_domain_dn", "relay_agent_id"} {
+		copy := map[string]any{}
+		for k, v := range base {
+			copy[k] = v
+		}
+		delete(copy, field)
+		raw, _ = json.Marshal(copy)
+		if _, err := adcs.ResolveInventoryIntent(raw); err == nil {
+			t.Fatalf("missing %s accepted", field)
+		}
+	}
+	base["membership_domain_dn"] = "OU=People,DC=example"
+	raw, _ = json.Marshal(base)
+	if _, err := adcs.ResolveInventoryIntent(raw); err == nil {
+		t.Fatal("OU mistaken for domain naming context")
+	}
+}

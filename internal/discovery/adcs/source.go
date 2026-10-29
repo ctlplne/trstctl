@@ -22,15 +22,16 @@ const (
 	SourceKind = "adcs"
 	// JobKind is the estate-owned outbox destination a network relay claims.
 	JobKind             = "adcs.inventory"
+	NestedGroupsJobKind = "adcs.inventory.enrollment_groups"
 	ExecutionRelay      = "relay"
 	RequiredRoleNetwork = "network"
 	maxIntentTextBytes  = 4_096
 	maxPrincipals       = 1_024
 	maxEndpointTargets  = 24
 	maxPrivateCIDRs     = 16
-	// InventoryEventSchemaVersion adds normalized enrollment-service evidence.
-	// V1 remains replayable as template-only history.
-	InventoryEventSchemaVersion = 2
+	// InventoryEventSchemaVersion adds explicit ACL and nested link evidence.
+	// V1/template-only and V2/service evidence retain frozen payload shapes.
+	InventoryEventSchemaVersion = 3
 )
 
 // EnrollmentEndpointTarget is one operator-scoped IIS surface the in-domain
@@ -47,18 +48,20 @@ type EnrollmentEndpointTarget struct {
 // what to read. Connection fields stay in the outbox command and are not copied
 // into the immutable discovery.run.queued event.
 type InventoryIntent struct {
-	ID              string  `json:"id"`
-	SourceID        string  `json:"source_id"`
-	JobKind         string  `json:"job_kind"`
-	ScheduleID      *string `json:"schedule_id,omitempty"`
-	RetryOfRunID    string  `json:"retry_of_run_id,omitempty"`
-	DryRun          bool    `json:"dry_run"`
-	RequestedBy     string  `json:"requested_by,omitempty"`
-	Execution       string  `json:"execution"`
-	URL             string  `json:"url"`
-	ConfigurationDN string  `json:"configuration_dn"`
-	BindDN          string  `json:"bind_dn"`
-	PasswordRef     string  `json:"password_ref"`
+	NestedGroupsEnabled bool    `json:"nested_groups_enabled,omitempty"`
+	MembershipDomainDN  string  `json:"membership_domain_dn,omitempty"`
+	ID                  string  `json:"id"`
+	SourceID            string  `json:"source_id"`
+	JobKind             string  `json:"job_kind"`
+	ScheduleID          *string `json:"schedule_id,omitempty"`
+	RetryOfRunID        string  `json:"retry_of_run_id,omitempty"`
+	DryRun              bool    `json:"dry_run"`
+	RequestedBy         string  `json:"requested_by,omitempty"`
+	Execution           string  `json:"execution"`
+	URL                 string  `json:"url"`
+	ConfigurationDN     string  `json:"configuration_dn"`
+	BindDN              string  `json:"bind_dn"`
+	PasswordRef         string  `json:"password_ref"`
 	// InsecureSkipVerify is a lab-only escape hatch and remains visible in the
 	// command/report so unverified directory identity cannot masquerade as
 	// verified evidence.
@@ -71,6 +74,8 @@ type InventoryIntent struct {
 }
 
 type sourceConfig struct {
+	NestedGroupsEnabled  bool                       `json:"nested_groups_enabled,omitempty"`
+	MembershipDomainDN   string                     `json:"membership_domain_dn,omitempty"`
 	URL                  string                     `json:"url"`
 	ConfigurationDN      string                     `json:"configuration_dn"`
 	BindDN               string                     `json:"bind_dn"`
@@ -125,6 +130,21 @@ func ResolveInventoryIntent(raw json.RawMessage) (InventoryIntent, error) {
 			return InventoryIntent{}, errors.New("adcs: relay_agent_id must be a UUID")
 		}
 	}
+	domainDN := strings.TrimSpace(cfg.MembershipDomainDN)
+	if cfg.NestedGroupsEnabled {
+		if _, err := membershipDomain(domainDN); err != nil {
+			return InventoryIntent{}, err
+		}
+		if relayAgentID == "" {
+			return InventoryIntent{}, errors.New("adcs: nested enrollment reads require an explicit relay_agent_id advertising adcs.inventory.enrollment_groups")
+		}
+	} else if domainDN != "" {
+		return InventoryIntent{}, errors.New("adcs: membership_domain_dn requires nested_groups_enabled")
+	}
+	jobKind := JobKind
+	if cfg.NestedGroupsEnabled {
+		jobKind = NestedGroupsJobKind
+	}
 	endpoints, err := normalizeEnrollmentEndpointTargets(cfg.EnrollmentEndpoints)
 	if err != nil {
 		return InventoryIntent{}, err
@@ -134,7 +154,8 @@ func ResolveInventoryIntent(raw json.RawMessage) (InventoryIntent, error) {
 		return InventoryIntent{}, err
 	}
 	return InventoryIntent{
-		JobKind: JobKind, Execution: ExecutionRelay, URL: directoryURL, ConfigurationDN: configurationDN,
+		NestedGroupsEnabled: cfg.NestedGroupsEnabled, MembershipDomainDN: domainDN,
+		JobKind: jobKind, Execution: ExecutionRelay, URL: directoryURL, ConfigurationDN: configurationDN,
 		BindDN: bindDN, PasswordRef: passwordRef, InsecureSkipVerify: cfg.InsecureSkipVerify,
 		RequiredAgentRole: RequiredRoleNetwork, RequiredAgentID: relayAgentID,
 		EnrollmentEndpoints:  endpoints,
@@ -277,9 +298,19 @@ var inventoryFailureCodes = map[string]bool{
 // ValidateInventoryReport binds normalized relay output to a valid command and
 // enforces report bounds before any immutable event or read model changes.
 func ValidateInventoryReport(intent InventoryIntent, report InventoryReport) error {
-	if intent.ID == "" || intent.SourceID == "" || intent.JobKind != JobKind || intent.Execution != ExecutionRelay ||
+	if intent.ID == "" || intent.SourceID == "" || !IsInventoryJobKind(intent.JobKind) || intent.Execution != ExecutionRelay ||
 		intent.RequiredAgentRole != RequiredRoleNetwork {
 		return errors.New("adcs: command is not a relay-owned discovery run")
+	}
+	if intent.NestedGroupsEnabled != (intent.JobKind == NestedGroupsJobKind) {
+		return errors.New("adcs: nested command has the wrong capability kind")
+	}
+	if intent.NestedGroupsEnabled {
+		if _, err := membershipDomain(intent.MembershipDomainDN); err != nil {
+			return err
+		}
+	} else if intent.MembershipDomainDN != "" {
+		return errors.New("adcs: undeclared membership scope")
 	}
 	switch report.Status {
 	case "failed":
@@ -328,6 +359,9 @@ func ValidateInventoryReport(intent InventoryIntent, report InventoryReport) err
 			}
 			previous = principal
 		}
+	}
+	if err := validateMembershipInventory(intent, report.Inventory); err != nil {
+		return err
 	}
 	if err := validateEnrollmentServices(intent, report.Inventory.EnrollmentServices); err != nil {
 		return err
@@ -428,26 +462,37 @@ func validateCanonicalSIDText(value string) error {
 // InventoryObserved is the immutable normalized posture event. It deliberately
 // has no bind credential and no raw descriptor field.
 type InventoryObserved struct {
-	RunID              string              `json:"run_id"`
-	SourceID           string              `json:"source_id"`
-	Domain             string              `json:"domain"`
-	AgentID            string              `json:"agent_id"`
-	AgentName          string              `json:"agent_name"`
-	DirectoryVerified  bool                `json:"directory_verified"`
-	Templates          []Template          `json:"templates"`
-	EnrollmentServices []EnrollmentService `json:"enrollment_services"`
-	Findings           []Finding           `json:"findings"`
+	MembershipDomainDN  string              `json:"membership_domain_dn,omitempty"`
+	NestedGroupsEnabled bool                `json:"nested_groups_enabled,omitempty"`
+	RunID               string              `json:"run_id"`
+	SourceID            string              `json:"source_id"`
+	Domain              string              `json:"domain"`
+	AgentID             string              `json:"agent_id"`
+	AgentName           string              `json:"agent_name"`
+	DirectoryVerified   bool                `json:"directory_verified"`
+	Templates           []Template          `json:"templates"`
+	EnrollmentServices  []EnrollmentService `json:"enrollment_services"`
+	Findings            []Finding           `json:"findings"`
 }
 
-// InventoryObservedV1 is the exact historical template-only event shape.
-// Keeping it closed prevents adding a v2 field under the old privacy schema.
-type InventoryObservedV1 struct {
-	RunID             string     `json:"run_id"`
-	SourceID          string     `json:"source_id"`
-	Domain            string     `json:"domain"`
-	AgentID           string     `json:"agent_id"`
-	AgentName         string     `json:"agent_name"`
-	DirectoryVerified bool       `json:"directory_verified"`
-	Templates         []Template `json:"templates"`
-	Findings          []Finding  `json:"findings"`
+// IsInventoryJobKind recognizes only shipped AD CS inventory capabilities.
+func IsInventoryJobKind(kind string) bool { return kind == JobKind || kind == NestedGroupsJobKind }
+
+// Validate checks the complete normalized v2/v3 observation without inferring
+// a missing matching-rule scope. V1 callers retain their historical decoder.
+func (o InventoryObserved) Validate() error {
+	if o.RunID == "" || o.SourceID == "" || o.Domain == "" || o.AgentID == "" || o.AgentName == "" {
+		return errors.New("adcs: observation lacks source/run/relay authority")
+	}
+	endpoints := make([]EnrollmentEndpointTarget, 0)
+	for _, service := range o.EnrollmentServices {
+		for _, endpoint := range service.Endpoints {
+			endpoints = append(endpoints, EnrollmentEndpointTarget{EnrollmentService: service.Name, Kind: endpoint.Kind, URL: endpoint.URL})
+		}
+	}
+	kind := JobKind
+	if o.NestedGroupsEnabled {
+		kind = NestedGroupsJobKind
+	}
+	return ValidateInventoryReport(InventoryIntent{ID: o.RunID, SourceID: o.SourceID, JobKind: kind, Execution: ExecutionRelay, RequiredAgentRole: RequiredRoleNetwork, NestedGroupsEnabled: o.NestedGroupsEnabled, MembershipDomainDN: o.MembershipDomainDN, EnrollmentEndpoints: endpoints}, InventoryReport{Status: "succeeded", Inventory: Inventory{Templates: o.Templates, EnrollmentServices: o.EnrollmentServices}, Findings: o.Findings, DirectoryVerified: o.DirectoryVerified})
 }

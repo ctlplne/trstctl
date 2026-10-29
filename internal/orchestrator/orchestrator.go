@@ -1690,8 +1690,13 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			case "":
 				// Historical network/SSH/control-plane events predate the explicit
 				// job-kind discriminator and always used discovery.run.
-			case adcsdiscovery.JobKind:
-				destination = adcsdiscovery.JobKind
+			case adcsdiscovery.JobKind, adcsdiscovery.NestedGroupsJobKind:
+				destination = pl.JobKind
+				if pl.JobKind == adcsdiscovery.NestedGroupsJobKind {
+					if _, err := o.BoundADCSNestedCommand(ctx, ev.TenantID, ev.ID, ev.Data); err != nil {
+						return err
+					}
+				}
 			case ExposureProbeJobKind:
 				// The probe's relay sweep was enqueued in the event's own
 				// transaction; there is no discovery.run job to restore.

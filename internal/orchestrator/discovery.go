@@ -531,6 +531,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	}
 	destination := discoveryRunDestination
 	eventType := projections.EventDiscoveryRunQueued
+	eventSchemaVersion := 1
 	var command any = queued
 	switch source.Kind {
 	case "network", "ssh":
@@ -596,7 +597,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		if err != nil {
 			return store.DiscoveryRun{}, err
 		}
-		if err := o.requireDiscoveryNetworkRelayForJob(ctx, tenantID, resolved.RequiredAgentID, adcsdiscovery.JobKind); err != nil {
+		if err := o.requireDiscoveryNetworkRelayForJob(ctx, tenantID, resolved.RequiredAgentID, resolved.JobKind); err != nil {
 			return store.DiscoveryRun{}, err
 		}
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
@@ -609,7 +610,10 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			RequiredAgentID: resolved.RequiredAgentID,
 		}
 		command = resolved
-		destination = adcsdiscovery.JobKind
+		destination = resolved.JobKind
+		if resolved.NestedGroupsEnabled {
+			eventSchemaVersion = projections.DiscoveryEnrollmentGroupsQueuedSchemaVersion
+		}
 	}
 	commandPayload, err := json.Marshal(command)
 	if err != nil {
@@ -657,7 +661,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			}
 		}
 		var err error
-		ev, err = o.log.Append(ctx, events.Event{Type: eventType, TenantID: tenantID, Data: commandPayload})
+		ev, err = o.log.Append(ctx, events.Event{Type: eventType, SchemaVersion: eventSchemaVersion, TenantID: tenantID, Data: commandPayload})
 		if err != nil {
 			return err
 		}
@@ -745,6 +749,9 @@ func (o *Orchestrator) DiscoveryNetworkRelayReadinessForJob(ctx context.Context,
 				ConnectionOrigin: "Selected network relay has no fresh authenticated heartbeat",
 				BlockedReason:    "Restore the selected network relay's authenticated heartbeat or re-enroll its expired certificate before starting this source.",
 			}, nil
+		}
+		if jobKind == adcsdiscovery.NestedGroupsJobKind && !nestedADCSReaderReady(agent, staleBefore, futureLimit) {
+			return DiscoveryRelayReadiness{ConnectionOrigin: "Selected relay has not advertised the enabled nested enrollment reader", BlockedReason: "Upgrade the selected network relay, enable --relay-claim and restore its authenticated executor census for adcs.inventory.enrollment_groups before starting this source."}, nil
 		}
 		return DiscoveryRelayReadiness{
 			Ready: true, ConnectionOrigin: "Network relay " + agent.ID,

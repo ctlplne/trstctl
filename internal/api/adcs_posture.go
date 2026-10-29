@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"time"
+	"trstctl.com/trstctl/internal/discovery/adcs"
 )
 
 // The AD CS template posture surface (epic F1).
@@ -48,12 +49,13 @@ type ADCSFindingEvidence struct {
 
 // ADCSTemplate is one observed certificate template.
 type ADCSTemplate struct {
-	Domain               string   `json:"domain"`
-	Template             string   `json:"template"`
-	DisplayName          string   `json:"display_name,omitempty"`
-	SchemaVersion        int      `json:"schema_version,omitempty"`
-	PublishedBy          []string `json:"published_by"`
-	EnrollmentPrincipals []string `json:"enrollment_principals"`
+	EnrollmentMembership *adcs.EnrollmentMembership `json:"enrollment_membership,omitempty"`
+	Domain               string                     `json:"domain"`
+	Template             string                     `json:"template"`
+	DisplayName          string                     `json:"display_name,omitempty"`
+	SchemaVersion        int                        `json:"schema_version,omitempty"`
+	PublishedBy          []string                   `json:"published_by"`
+	EnrollmentPrincipals []string                   `json:"enrollment_principals"`
 	// WorstSeverity is empty when the template has no findings. That is a real
 	// state and the console renders it as clean, not as unknown.
 	WorstSeverity string                `json:"worst_severity"`
@@ -189,7 +191,7 @@ func WithADCSDrift(provider ADCSDriftProvider) Option {
 
 // adcsPostureGuidance is the honest caveat, carried on the response so it
 // travels with the data rather than living only in documentation.
-const adcsPostureGuidance = "Enrollment trustees are canonical SIDs from template DACLs. IIS endpoints are only probed when explicitly configured. CA Enrollment Agent Restrictions require a Windows relay with certutil access; inaccessible evidence stays unobserved. Group expansion, inherited/conditional policy, and effective access remain directory-side decisions."
+const adcsPostureGuidance = "Enrollment trustees are canonical SIDs from template DACLs. IIS endpoints are only probed when explicitly configured. CA Enrollment Agent Restrictions require a Windows relay with certutil access; inaccessible evidence stays unobserved. Opt-in nested reads show observed user/computer paths through security groups, their timestamp and completeness. Conditional ACEs, primary groups, SID history, cross-forest tokens and full Windows AccessCheck remain unassessed."
 
 func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)

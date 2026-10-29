@@ -2073,7 +2073,10 @@ func TestSchemaCompatibilityStrengthGuardsStayRequired(t *testing.T) {
 		"EventCAEndEntityIssued: {1: true, CAIssuedCertificateEvidenceSchemaVersion: true, CAEndEntityInventorySchemaVersion: true}",
 		"EventDiscoverySourceUpserted: {1: true}",
 		"EventDiscoveryScheduleUpserted: {1: true}",
-		"EventDiscoveryRunQueued: {1: true}",
+		// Nested enrollment commands have a distinct, closed v2 shape; v1
+		// remains required for historical discovery and direct AD CS jobs.
+		"EventDiscoveryRunQueued: {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true}",
+		"EventADCSInventoryObserved: {1: true, 2: true, adcsdiscovery.InventoryEventSchemaVersion: true}",
 		"EventDiscoveryRunStarted: {1: true}",
 		"EventDiscoveryFindingRecorded: {1: true}",
 		"EventDiscoveryFindingTriageChanged: {1: true}",

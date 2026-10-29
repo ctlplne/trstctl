@@ -3,7 +3,6 @@
 package governance
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -14,8 +13,8 @@ import (
 	"trstctl.com/trstctl/internal/projections"
 )
 
-// buildADCSComplianceEvidence selects only complete, internally consistent v2
-// observations. Historical v1 template events remain valid audit history, but
+// buildADCSComplianceEvidence selects only internally consistent normalized
+// observations with service evidence. Historical v1 template events remain valid audit history, but
 // they cannot prove IIS or CA-side restriction posture and therefore do not
 // masquerade as complete F3 evidence.
 func buildADCSComplianceEvidence(tenantID string, records []audit.Record, window EvidenceWindow) (api.ADCSComplianceEvidence, error) {
@@ -41,13 +40,8 @@ func buildADCSComplianceEvidence(tenantID string, records []audit.Record, window
 			if observed.RunID == "" || observed.SourceID == "" || observed.Domain == "" || observed.AgentID == "" || observed.AgentName == "" {
 				return api.ADCSComplianceEvidence{}, fmt.Errorf("governance: AD CS observation %s lacks relay authority", record.ID)
 			}
-			want, err := json.Marshal(adcsdiscovery.Findings(adcsdiscovery.Inventory{Templates: observed.Templates, EnrollmentServices: observed.EnrollmentServices}))
-			if err != nil {
-				return api.ADCSComplianceEvidence{}, err
-			}
-			got, err := json.Marshal(observed.Findings)
-			if err != nil || !bytes.Equal(got, want) {
-				return api.ADCSComplianceEvidence{}, fmt.Errorf("governance: AD CS observation %s findings disagree with its live facts", record.ID)
+			if err := observed.Validate(); err != nil {
+				return api.ADCSComplianceEvidence{}, fmt.Errorf("governance: AD CS observation %s has inconsistent evidence: %w", record.ID, err)
 			}
 			candidate := api.ADCSComplianceObservation{
 				Reference: auditReference(record), RunID: observed.RunID, SourceID: observed.SourceID,

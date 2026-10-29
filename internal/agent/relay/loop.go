@@ -96,7 +96,7 @@ const (
 func ClaimableKinds() []string {
 	return []string{
 		"connector.deploy", "connector.test", KindConnectorRollback,
-		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindSSHTrustCollect, KindEndpointVerify,
+		KindRevocationProbe, KindDiscoveryRun, KindADCSInventory, KindADCSNestedGroups, KindSSHTrustCollect, KindEndpointVerify,
 		// I2: the CMDB read. Network-vantage work like the sweeps above; the
 		// server's role gate refuses it to host agents.
 		KindCMDBSync,
@@ -422,7 +422,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 		// credential was deployed.
 		return runConnectorTest(ctx, ch, client, hostProfile, plugins, job, intent, hostJob, pluginJob)
 	}
-	if job.Kind == KindADCSInventory {
+	if job.Kind == KindADCSInventory || job.Kind == KindADCSNestedGroups {
 		// An AD CS inventory names no connector; its executor is the directory
 		// reader. Skip the connector checks rather than failing it for not
 		// naming one it has no use for.
@@ -463,7 +463,7 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// unlocked memory for the rest of the process's life.
 	defer destroy()
 
-	if job.Kind == KindADCSInventory {
+	if job.Kind == KindADCSInventory || job.Kind == KindADCSNestedGroups {
 		// Unlike the other probe kinds this one redeems: reading a domain's
 		// template posture needs a directory bind, and anonymous reads are
 		// refused. So it runs here, after the material is in locked memory.

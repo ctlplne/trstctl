@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1988 annotated sites across 29 rules. Each row is
+1998 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (394 sites)
+### G101 — CWE-798 Use of hardcoded credentials (400 sites)
 
 | Location | Reason |
 |---|---|
@@ -266,6 +266,7 @@ not this file.
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/custody/custody.go:98` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
+| `internal/discovery/adcs/source_test.go:86` | public secret:// reference fixture; contains no credential value (CWE-798). |
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
@@ -320,6 +321,11 @@ not this file.
 | `internal/server/acme_eab_rotation_served_test.go:41` | a reference, not secret material (CWE-798) |
 | `internal/server/adcs_inventory_served_test.go:42` | this is a logical fixture name, not secret material (CWE-798). |
 | `internal/server/adcs_inventory_served_test.go:43` | this is a non-secret reference, not secret material (CWE-798). |
+| `internal/server/adcs_nested_command_test.go:23` | public secret:// reference fixture; contains no credential value (CWE-798). |
+| `internal/server/adcs_nested_command_test.go:78` | a public reference fixture, no credential value (CWE-798). |
+| `internal/server/adcs_nested_command_test.go:122` | public secret:// reference fixture; contains no credential value (CWE-798). |
+| `internal/server/adcs_nested_samba_test.go:65` | public logical fixture reference (CWE-798). |
+| `internal/server/adcs_nested_samba_test.go:66` | public reference, never a credential value (CWE-798). |
 | `internal/server/agent_jobs_served_test.go:23` | secret-store reference/pointer, never credential material (CWE-798) |
 | `internal/server/aisurface_served_test.go:111` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
@@ -510,7 +516,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (328 sites)
+### G115 — CWE-190 Integer overflow or wraparound (331 sites)
 
 | Location | Reason |
 |---|---|
@@ -519,8 +525,8 @@ not this file.
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
 | `ee/silo/lanedrill_test.go:96` | bounds-checked to [1, MaxUint16] above (CWE-190) |
-| `internal/agent/relay/adcsscan_wire_test.go:217` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
-| `internal/agent/relay/adcsscan_wire_test.go:229` | this fixed fixture is below MaxUint16 (CWE-190). |
+| `internal/agent/relay/adcsscan_wire_test.go:246` | this fixed fixture is 40 bytes, below MaxUint16 (CWE-190). |
+| `internal/agent/relay/adcsscan_wire_test.go:258` | this fixed fixture is below MaxUint16 (CWE-190). |
 | `internal/agent/sshkrl/revocations_test.go:159` | test fixture strings are a few bytes, far under the uint32 bound |
 | `internal/api/application_secret_approval.go:412` | ApplicationSecretApprovalBinding just proved the version is positive (CWE-190). |
 | `internal/api/machine_sessions_served_test.go:64` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -569,13 +575,16 @@ not this file.
 | `internal/crypto/weakkey/weakkey.go:398` | the sieve index is below 2^16, so it fits a uint64 (CWE-190) |
 | `internal/decommission/reprotect/completion_durable_test.go:37` | port was checked against the uint16 maximum above. |
 | `internal/decommission/store/projection.go:180` | rejected values above MaxInt64 immediately above. |
-| `internal/discovery/adcs/acl.go:76` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
+| `internal/discovery/adcs/acl.go:106` | the offset is uint32-derived and bounded against len(raw) above (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:205` | the fixed malformed fixture is below MaxUint16 (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:232` | test SID inputs have at most 255 sub-authorities (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:234` | ParseUint limits authority to 48 bits and this loop emits one byte at a time (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:247` | deterministic test SIDs keep the ACE below MaxUint16 (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:256` | deterministic test SIDs keep the object ACE below MaxUint16 (CWE-190). |
 | `internal/discovery/adcs/adcs_test.go:276` | test call sites pass a bounded literal ACE set (CWE-190). |
+| `internal/discovery/adcs/membership.go:287` | the signed LDAP groupType bitfield is range-checked as signed/unsigned 32-bit above (CWE-190). |
+| `internal/discovery/adcs/membership.go:357` | the checked 3..18 field count makes this 0..15 (CWE-190). |
+| `internal/discovery/adcs/membership.go:368` | ParseUint's 32-bit bound proves the conversion (CWE-190). |
 | `internal/dns/rfc2136/rfc2136.go:246` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:263` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:283` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
@@ -874,7 +883,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:889` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:955` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4683` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4686` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -1451,7 +1460,7 @@ not this file.
 | `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:889` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:955` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4683` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4686` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention.go:56` | the archive path built above under the operator's archive dir (CWE-22) |
@@ -1606,7 +1615,7 @@ not this file.
 | `internal/crypto/mtls/signer.go:109` | operator-configured peer CA trust anchor path from the signer's own config (CWE-22) |
 | `internal/crypto/mtls/signer_test.go:47` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/mtls/syncdir_other.go:10` | parent of a validated internal TLS state path (CWE-22) |
-| `internal/crypto/parserfuzz_audit_test.go:266` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/crypto/parserfuzz_audit_test.go:267` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/alias_test.go:120` | reads the stock JDK output inside this test's private temporary directory (CWE-22). |
 | `internal/crypto/pfx/pfx_test.go:43` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/crypto/pfx/pfx_test.go:44` | test reads its own fixture/tempdir path (CWE-22) |
@@ -2039,7 +2048,7 @@ not this file.
 | `internal/crypto/possession_test.go:283` | a throwaway test root key |
 | `internal/crypto/weakkey/weakkey_test.go:413` | a deliberately weak RSA-1024 key, to prove it is rated weak (CWE-326) |
 
-### G404 — CWE-338 Cryptographically weak PRNG (31 sites)
+### G404 — CWE-338 Cryptographically weak PRNG (32 sites)
 
 | Location | Reason |
 |---|---|
@@ -2068,6 +2077,7 @@ not this file.
 | `internal/crypto/x509_property_test.go:126` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/x509_property_test.go:175` | deterministic property-test name, not security randomness (CWE-338) |
 | `internal/crypto/x509_property_test.go:196` | deterministic property-test stream, not security randomness (CWE-338) |
+| `internal/discovery/adcs/membership_paths_test.go:48` | deterministic property-test permutations, never a cryptographic choice (CWE-330). |
 | `internal/orchestrator/outbox.go:527` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/acme/property_test.go:90` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |

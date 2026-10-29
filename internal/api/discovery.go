@@ -310,7 +310,7 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		if resolveErr != nil {
 			return discoveryPlanPreviewResponse{}, errStatus(http.StatusBadRequest, resolveErr.Error())
 		}
-		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, intent.RequiredAgentID, adcsdiscovery.JobKind)
+		readiness, relayErr := a.orch.DiscoveryNetworkRelayReadinessForJob(ctx, tenantID, intent.RequiredAgentID, intent.JobKind)
 		if relayErr != nil {
 			return discoveryPlanPreviewResponse{}, relayErr
 		}

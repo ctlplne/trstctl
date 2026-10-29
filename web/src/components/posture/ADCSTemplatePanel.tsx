@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ADCSMembershipEvidence } from "./ADCSMembershipEvidence";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, type ADCSEnrollmentService, type ADCSInventorySource, type ADCSTemplate } from "@/lib/api";
@@ -48,6 +49,11 @@ export function ADCSTemplatePanel() {
             {(template.enrollment_principals ?? []).join(", ") || translateNow("source.none.dc937b5989")}
           </span>
         ),
+      },
+      {
+        id: "membership",
+        header: translateNow("source.adcs.membership.heading"),
+        cell: (template) => <ADCSMembershipEvidence evidence={template.enrollment_membership} />,
       },
       {
         id: "published",

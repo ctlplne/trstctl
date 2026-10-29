@@ -104,6 +104,8 @@ var items = []Capability{
 		Configuration: []Field{
 			field("url", "Directory URL", "url", true, false, false, "LDAPS or LDAP endpoint reachable from the selected relay."),
 			field("configuration_dn", "Configuration naming context", "string", true, false, false, "The AD Configuration partition to inspect."),
+			field("nested_groups_enabled", "Read nested enrollment groups", "boolean", false, false, true, "Opt-in bounded LDAP in-chain reads; needs an explicit upgraded network relay. Full Windows AccessCheck is unassessed."),
+			field("membership_domain_dn", "Membership domain naming context", "string", false, false, false, "Required with nested groups: an explicit domain partition, never an inferred forest scope."),
 			field("bind_dn", "Bind identity", "string", true, false, false, "A least-privilege directory reader."),
 			field("password_ref", "Password reference", "credential_ref", true, true, false, "Reference to the bind password; the value is never sent in this configuration."),
 			field("relay_agent_id", "Network relay", "agent_ref", false, false, false, "An enrolled network-role agent that can reach the directory."),

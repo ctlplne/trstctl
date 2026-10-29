@@ -37,6 +37,13 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 	if err := decodeStrictJSON(jobPayload, &intent); err != nil {
 		return fmt.Errorf("decode AD CS inventory command: %w", err)
 	}
+	if intent.NestedGroupsEnabled || intent.JobKind == adcs.NestedGroupsJobKind {
+		var err error
+		intent, err = s.orch.BoundADCSNestedCommand(ctx, tenantID, idempotencyKey, jobPayload)
+		if err != nil {
+			return err
+		}
+	}
 	var report adcs.InventoryReport
 	if err := decodeStrictJSON([]byte(reportJSON), &report); err != nil {
 		return fmt.Errorf("decode AD CS inventory report: %w", err)
@@ -92,6 +99,7 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-inventory-observed"),
 		adcs.InventoryObserved{
 			RunID: intent.ID, SourceID: intent.SourceID, Domain: domain,
+			NestedGroupsEnabled: intent.NestedGroupsEnabled, MembershipDomainDN: intent.MembershipDomainDN,
 			AgentID: agentID, AgentName: agentName, DirectoryVerified: report.DirectoryVerified,
 			Templates: report.Inventory.Templates, EnrollmentServices: report.Inventory.EnrollmentServices,
 			Findings: report.Findings,
@@ -170,6 +178,10 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 			published = []string{}
 		}
 		principals := []string{}
+		membership, err := s.boundADCSMembership(ctx, tenantID, row)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		if len(row.ObservedTemplate) > 0 {
 			var observed adcs.Template
 			if json.Unmarshal(row.ObservedTemplate, &observed) == nil && observed.EnrollmentPrincipals != nil {
@@ -178,7 +190,7 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 		}
 		out = append(out, api.ADCSTemplate{
 			Domain: row.Domain, Template: row.Template, DisplayName: row.DisplayName,
-			SchemaVersion: row.SchemaVersion, PublishedBy: published, EnrollmentPrincipals: principals,
+			SchemaVersion: row.SchemaVersion, PublishedBy: published, EnrollmentPrincipals: principals, EnrollmentMembership: membership,
 			WorstSeverity: row.WorstSeverity, Findings: findings,
 			ObservedBy: row.ObservedBy, ObservedAt: row.ObservedAt,
 		})

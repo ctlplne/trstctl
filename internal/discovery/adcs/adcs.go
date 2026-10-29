@@ -100,11 +100,12 @@ type Entry struct {
 // keeping that request explicit is what lets tests prove the directory reader
 // neither pulls SACLs nor relies on a server default.
 type SearchRequest struct {
-	BaseDN     string
-	Filter     string
-	Attributes []string
-	MaxEntries int
-	DACLOnly   bool
+	BaseDN      string
+	Filter      string
+	Attributes  []string
+	MaxEntries  int
+	DomainScope bool
+	DACLOnly    bool
 }
 
 // Searcher is the narrow LDAP surface this package depends on.
@@ -140,7 +141,9 @@ type Template struct {
 	// EnrollmentPrincipals are the security principals granted enrollment
 	// rights, as the directory reports them. Who can use a dangerous template
 	// is most of how dangerous it is.
-	EnrollmentPrincipals []string `json:"enrollment_principals,omitempty"`
+	EnrollmentPrincipals []string              `json:"enrollment_principals,omitempty"`
+	EnrollmentACL        *EnrollmentACL        `json:"enrollment_acl,omitempty"`
+	EnrollmentMembership *EnrollmentMembership `json:"enrollment_membership,omitempty"`
 	// PublishedBy names the enrollment services (CAs) that offer this template.
 	// A dangerous template nobody publishes is a latent risk; one published by
 	// an issuing CA is a live one.
@@ -365,7 +368,7 @@ func templateFromEntry(entry Entry) (Template, error) {
 	if len(descriptors) != 1 {
 		return Template{}, errors.New("directory returned no single nTSecurityDescriptor")
 	}
-	principals, err := EnrollmentPrincipalsFromSecurityDescriptor(descriptors[0])
+	facts, err := EnrollmentACLFromSecurityDescriptor(descriptors[0])
 	if err != nil {
 		return Template{}, err
 	}
@@ -379,7 +382,8 @@ func templateFromEntry(entry Entry) (Template, error) {
 		RequiresManagerApproval: enrollFlag&EnrollmentFlagPendManagerApproval != 0,
 		ExportableKey:           keyFlag&PrivateKeyFlagExportableKey != 0,
 		EKUs:                    ekus,
-		EnrollmentPrincipals:    principals,
+		EnrollmentPrincipals:    facts.DirectPrincipals(),
+		EnrollmentACL:           facts,
 	}, nil
 }
 

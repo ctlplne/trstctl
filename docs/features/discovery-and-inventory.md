@@ -141,7 +141,8 @@ heartbeat. The console explains the fix instead of leaving an impossible run
 silently queued.
 
 Readiness also checks the server's agent dispatch allowlist. A healthy relay is not
-enough when `discovery.run` (or `adcs.inventory` for AD CS) is absent from
+enough when `discovery.run` (or the source’s exact `adcs.inventory` /
+`adcs.inventory.enrollment_groups` kind) is absent from
 `agent_channel.claimable_job_kinds`: preview and saved-source preflight name that
 exact configuration gap, and run admission returns a conflict before creating an
 event or outbox row. The console therefore cannot report “ready” for work the
@@ -877,3 +878,22 @@ glossary: [certificate](../glossary.md), [fingerprint](../glossary.md),
 [bulkhead](../glossary.md), [event sourcing](../glossary.md)
 
 **Covers:** F1, F2, F3, F42, F49, F35, F36
+
+
+### Nested AD CS enrollment links
+
+Discovery’s AD CS source wizard can opt into read-only nested group reads. Select
+an upgraded network relay, enable **Read nested enrollment groups**, and provide
+the explicit membership domain naming context. Preview checks both the server’s
+job allowlist and that relay’s fresh enabled executor census. Posture displays
+the observed users/computers, canonical SIDs, security-group paths, trustee,
+observation time and completeness. An incomplete or refused read gives a recovery
+action and no verified member list. This does not evaluate a full Windows token
+or authorize issuance. The default direct-ACL reader stays available.
+
+The [nested enrollment runbook](../guides/adcs-nested-enrollment.md) includes exact
+source JSON, CLI operations, bounds, matching-rule verification and the Windows
+forest proof boundary. The focused served journey exercises real Samba AD,
+vaulted single-attempt credentials, mTLS signed results, immutable projections,
+CLI readback, tenant isolation and replay. The final image/browser/restart
+qualification follows the release replay.

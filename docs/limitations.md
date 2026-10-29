@@ -244,7 +244,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Four paths still generate one in the control plane, each named with its successor and each governed by the tenant's control-plane key generation switch: the three deprecated paths (identity issuance without a CSR and its renewal, PKI-as-a-secret by common name and the Vault-compatible `pki/issue`, the compatibility Workload API socket) and the reissue step of a PQC migration run that predates host-csr migration. Kubernetes TLS auto-issuance never generates a key in the control plane: a `k8s_ingress_gateway` source bound to the host-role agent running in the cluster hands each TLS block to that agent, which generates the key inside the cluster, sends only a CSR and writes the TLS Secret with a signed receipt; a source without an agent records each resource and reports it not delivered, with the reason | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped get the origin their own retained issuance event proves, marked as derived and naming the rule and the event ([Key custody](custody.md) lists the rules); the rest of them, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance. A certificate ordered through an external CA records requester custody (A121), and where a host agent's key inventory found a matching key file the detail lists where it was seen, as an observation rather than a custody claim (A121) | [Key custody](custody.md) |
-| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.recovery_check` (enabled with `endpoint.contain`), `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.recovery_check` (enabled with `endpoint.contain`), `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links), `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. A successful host-generated renewal uses the v2 statement, which also binds the installed certificate fingerprint plus origin, storage, exportability, and generator; the projected custody event is replayable. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the changed listener — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
@@ -2142,7 +2142,7 @@ outbox-key replay guards keep a retried signed receipt from duplicating either.
 Pre-v2 drift events lacked run/source authority and therefore replay as audit
 history only rather than being attached to a guessed source.
 
-Licensed compliance evidence packs copy the latest complete v2 observation for
+Licensed compliance evidence packs copy the latest internally consistent service observation for
 each domain in the bounded window plus every authoritative v2 drift record into
 the signed manifest. Each carries tenant-local event ID, type, sequence, chain
 digest, source, run, relay, and observation time. The outer API copy is the same
@@ -2159,13 +2159,48 @@ that column existed is skipped and re-baselines on one quiet sweep, rather than
 being reconstructed into a template whose flags all read false and reported as
 becoming dangerous.
 
-**What is not inferred:** effective user access. The descriptor parser handles
-self-relative DACLs, standard and object allow/deny ACEs, Generic All, the
+**Nested enrollment links are served with an explicit opt-in.** Set
+`nested_groups_enabled: true`, `membership_domain_dn` to the domain naming
+context, and `relay_agent_id` to the exact upgraded network relay. Enable
+`adcs.inventory.enrollment_groups` in `agent_channel.claimable_job_kinds` and
+start that relay with `--relay-claim`. Preflight and run admission require its
+fresh authenticated census to advertise the enabled reader. An older relay
+cannot silently ignore the nested settings. Default `adcs.inventory` retains
+direct-trustee collection.
+
+The reader resolves canonical grant/deny SIDs inside that domain and uses the
+LDAP in-chain rule `1.2.840.113556.1.4.1941`, with a critical single-naming-context
+control and no referral following. Known direct member links positively check
+the matching rule. Users/computers appear only with a reconstructed path through
+observed security groups. Direct and expanded denies win conservatively;
+conditional/compound permission ACEs keep the result incomplete. Unreadable,
+unresolved, range-limited, unsupported or budget-limited evidence carries no
+verified member list. An empty LDAP result alone never proves an empty group.
+The console and `trstctl-cli posture adcs` show completeness, observation time,
+domain, path and trustee. A failed later read is a coverage change, never proof
+that rights were removed. Signed receipt retry, source-log replay and tenant
+isolation preserve these facts. The served member list is checked against its
+retained immutable observation; a changed SQL path is refused until replay.
+
+Bounds are 256 membership queries, 4,096 returned nodes, 1,024 descendants per
+trustee, 16 path nodes, 256 KiB of membership attributes and 384 KiB of serialized
+membership evidence across templates. The nested collector has 45 seconds inside
+a 60-second relay attempt. LDAP authentication has a 20-second deadline, and
+searches have 20-second request timeouts. The TLS-only byte-backed bind wipes the
+borrowed password immediately after authentication; directory frames are capped
+at 2 MiB and the connection at 16 MiB before library allocation. Exceeding a
+bound is an explicit incomplete/failed read, not successful absence.
+
+**What is not inferred:** a complete effective Windows token. The parser handles
+self-relative DACLs, ordinary/object allow and deny ACEs, Generic All, the
 certificate-enrollment extended-right GUID, SID byte order, exact-trustee deny,
-null DACLs, and malformed-value refusal. It reports stable ACL trustees as
-canonical SIDs. It does not expand nested groups, evaluate conditional ACEs, or
-invent a user's effective token; those are directory-side authorization
-decisions and the console says so.
+null DACLs and malformed-value refusal. Link evidence does not evaluate
+conditional ACEs, primary groups, SID history, cross-forest tokens or full
+Windows AccessCheck; it is never permission to issue. Focused served tests use
+real Samba AD 4.15.13 and a user → inner → outer enrollment grant. Samba's lab
+TLS identity override is explicitly unverified. Live Windows forest and trusted
+production directory identity qualification remain release-lab work. See the
+[nested enrollment runbook](guides/adcs-nested-enrollment.md).
 
 **External Windows-lab boundary.** The repository fixture runs the real LDAP
 client over a BER wire, accepts exactly the two bounded SearchRequest operations,
@@ -2742,7 +2777,7 @@ rather than unfinished: handing out work nothing can perform fills a queue while
 control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.recovery_check` (the read-only check a replacement reads after a
-containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`,
+containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links),
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `connector.right_size`, `cmdb.sync`,
 `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (the
 post-upgrade functional check every polling agent answers, A71) —

@@ -458,6 +458,12 @@ export interface ADCSDriftHistory {
   items: ADCSTemplateDrift[];
 }
 
+export interface ADCSEnrollmentACL {
+  allowed: string[];
+  denied: string[];
+  unassessed_aces: number;
+}
+
 export interface ADCSEnrollmentEndpoint {
   authentication: string[];
   extended_protection: "enabled" | "disabled" | "unobserved";
@@ -466,6 +472,25 @@ export interface ADCSEnrollmentEndpoint {
   state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other";
   tls_verified: boolean;
   url: string;
+}
+
+export interface ADCSEnrollmentMember {
+  dn: string;
+  kind: "user" | "computer";
+  path: string[];
+  sid: string;
+  via_trustees: string[];
+}
+
+export interface ADCSEnrollmentMembership {
+  budget_exceeded?: boolean;
+  domain_dn: string;
+  limitations: string[];
+  matching_rule: "1.2.840.113556.1.4.1941";
+  members: ADCSEnrollmentMember[];
+  observed_at: string;
+  state: "complete" | "incomplete";
+  trustees: ADCSEnrollmentTrustee[];
 }
 
 export interface ADCSEnrollmentService {
@@ -480,6 +505,15 @@ export interface ADCSEnrollmentService {
   observed_by: string;
   service: string;
   worst_severity: "" | "medium" | "high" | "critical";
+}
+
+export interface ADCSEnrollmentTrustee {
+  direct_member_dns?: string[];
+  dn?: string;
+  nodes?: ADCSMembershipNode[];
+  positive_control: boolean;
+  sid: string;
+  state: "complete" | "unresolved" | "read_failed" | "invalid_identity" | "non_security_group" | "membership_unconfirmed" | "incomplete_search" | "incomplete_attributes" | "ambiguous_identity" | "matching_rule_unconfirmed";
 }
 
 export interface ADCSFindingEvidence {
@@ -498,6 +532,14 @@ export interface ADCSInventorySource {
   schedule_enabled: boolean;
   schedule_id?: string;
   source_id: string;
+}
+
+export interface ADCSMembershipNode {
+  dn: string;
+  kind: "group" | "user" | "computer";
+  parents?: string[];
+  security_group?: boolean;
+  sid: string;
 }
 
 export interface ADCSObservedInventory {
@@ -519,6 +561,8 @@ export interface ADCSObservedTemplate {
   ekus?: string[];
   enrollee_supplies_san: boolean;
   enrollee_supplies_subject: boolean;
+  enrollment_acl?: ADCSEnrollmentACL;
+  enrollment_membership?: ADCSEnrollmentMembership;
   enrollment_principals?: string[];
   exportable_key: boolean;
   name: string;
@@ -554,6 +598,7 @@ export interface ADCSRuleFinding {
 export interface ADCSTemplate {
   display_name?: string;
   domain: string;
+  enrollment_membership?: ADCSEnrollmentMembership;
   enrollment_principals?: string[];
   findings: ADCSTemplateFinding[];
   observed_at: string;

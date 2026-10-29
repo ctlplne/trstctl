@@ -122,6 +122,7 @@ function seedDiscoveryMocks() {
     items: [
       wizardCapability("network"),
       wizardCapability("ssh"),
+      wizardCapability("ssh_trust"),
       wizardCapability("adcs"),
       wizardCapability("cloud_certificate", [
         {
@@ -1217,6 +1218,8 @@ describe("discovery control-plane surface", () => {
     await user.type(form.getByLabelText("Bind identity"), "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example");
     await user.type(form.getByLabelText("Password reference"), "secret://adcs/domain-reader");
     await user.type(form.getByLabelText("Network relay"), "11111111-1111-4111-8111-111111111111");
+    await user.click(form.getByRole("checkbox", { name: /Read nested enrollment groups/ }));
+    await user.type(form.getByLabelText("Membership domain naming context"), "DC=corp,DC=example");
     await user.click(form.getByText("Enrollment endpoint boundary"));
     await user.type(form.getByLabelText("Enrollment endpoints"), "Corporate web enrollment | web_enrollment | https://certs.corp.example/certsrv/");
     await user.click(form.getByRole("checkbox", { name: /Allow an approved private endpoint/ }));
@@ -1228,6 +1231,8 @@ describe("discovery control-plane surface", () => {
       name: "corp-adcs",
       kind: "adcs",
       config: {
+        nested_groups_enabled: true,
+        membership_domain_dn: "DC=corp,DC=example",
         url: "ldaps://dc01.corp.example:636",
         configuration_dn: "CN=Configuration,DC=corp,DC=example",
         bind_dn: "CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example",

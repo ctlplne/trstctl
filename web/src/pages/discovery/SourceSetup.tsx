@@ -78,7 +78,18 @@ export const sourceWizardFieldPaths: Record<PrimaryKind, readonly string[]> = {
     "allow_rfc1918",
     "allow_loopback",
   ],
-  adcs: ["url", "configuration_dn", "bind_dn", "password_ref", "relay_agent_id", "enrollment_endpoints", "allow_private_endpoint", "private_egress_cidrs"],
+  adcs: [
+    "url",
+    "configuration_dn",
+    "bind_dn",
+    "password_ref",
+    "relay_agent_id",
+    "enrollment_endpoints",
+    "allow_private_endpoint",
+    "private_egress_cidrs",
+    "nested_groups_enabled",
+    "membership_domain_dn",
+  ],
   cloud_certificate: cloudFieldPaths,
   cloud_secret: secretFieldPaths,
   secret_store: secretFieldPaths,
@@ -104,7 +115,7 @@ const examples = {
   agentID: "Agent UUID",
   scope: "production-edge",
   sourceName: "Production edge TLS",
-  adcsPasswordRef: "env:TRSTCTL_ADCS_BIND_PASSWORD",
+  adcsPasswordRef: "secret://adcs/domain-reader",
   awsAccessKeyRef: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
   awsSecretKeyRef: "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
   awsSessionTokenRef: "env:TRSTCTL_DISCOVERY_AWS_SESSION_TOKEN",
@@ -156,6 +167,8 @@ const setupSchema = z
     bindDN: z.string().trim(),
     passwordRef: z.string().trim(),
     adcsEnrollmentEndpoints: z.string(),
+    adcsNestedGroups: z.boolean(),
+    membershipDomainDN: z.string().trim(),
     tagKey: z.string().trim(),
     tagValue: z.string().trim(),
     labelKey: z.string().trim(),
@@ -208,6 +221,10 @@ const setupSchema = z
       requireField(ctx, value.configurationDN, "configurationDN", translateNow("discovery.setup.validation.configurationDn"));
       requireField(ctx, value.bindDN, "bindDN", translateNow("discovery.setup.validation.bindDn"));
       requireField(ctx, value.passwordRef, "passwordRef", translateNow("discovery.setup.validation.passwordRef"));
+      if (value.adcsNestedGroups) {
+        requireField(ctx, value.membershipDomainDN, "membershipDomainDN", translateNow("discovery.setup.adcsMembership.domainRequired"));
+        requireField(ctx, value.relayAgentID, "relayAgentID", translateNow("discovery.setup.adcsMembership.relayRequired"));
+      }
       try {
         parseADCSEndpoints(value.adcsEnrollmentEndpoints);
       } catch (error) {
@@ -291,6 +308,8 @@ const defaults: SetupValues = {
   bindDN: "",
   passwordRef: "",
   adcsEnrollmentEndpoints: "",
+  adcsNestedGroups: false,
+  membershipDomainDN: "",
   tagKey: "",
   tagValue: "",
   labelKey: "",
@@ -492,7 +511,7 @@ export function SourceSetup({ onCreated }: { onCreated: (source: DiscoverySource
               />
             ) : null}
             {values.kind === "ssh_trust" ? <SSHCollectionFields form={form} segments={declaredScopes} agents={relayAgents.list} /> : null}
-            {values.kind === "adcs" ? <ADCSFields form={form} /> : null}
+            {values.kind === "adcs" ? <ADCSFields form={form} agents={relayAgents.list} /> : null}
             {values.kind === "cloud_certificate" || values.kind === "cloud_secret" || values.kind === "secret_store" ? (
               <CloudFields form={form} providers={providers} />
             ) : null}
@@ -778,7 +797,7 @@ function NetworkFields({
   );
 }
 
-function ADCSFields({ form }: { form: ReturnType<typeof useForm<SetupValues>> }) {
+function ADCSFields({ form, agents }: { form: ReturnType<typeof useForm<SetupValues>>; agents: Agent[] }) {
   const { t } = useTranslation();
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -786,7 +805,18 @@ function ADCSFields({ form }: { form: ReturnType<typeof useForm<SetupValues>> })
         {(control) => <Input {...control} {...form.register("adcsURL")} className="font-mono text-xs" />}
       </Field>
       <Field label={t("discovery.setup.relay")} error={form.formState.errors.relayAgentID?.message}>
-        {(control) => <Input {...control} {...form.register("relayAgentID")} className="font-mono text-xs" placeholder={examples.agentID} />}
+        {(control) => (
+          <>
+            <Input {...control} {...form.register("relayAgentID")} list="adcs-network-relays" className="font-mono text-xs" placeholder={examples.agentID} />
+            <datalist id="adcs-network-relays">
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name}
+                </option>
+              ))}
+            </datalist>
+          </>
+        )}
       </Field>
       <Field label={t("discovery.setup.configurationDn")} error={form.formState.errors.configurationDN?.message} required>
         {(control) => (
@@ -811,6 +841,23 @@ function ADCSFields({ form }: { form: ReturnType<typeof useForm<SetupValues>> })
       >
         {(control) => <Input {...control} {...form.register("passwordRef")} className="font-mono text-xs" placeholder={examples.adcsPasswordRef} />}
       </Field>
+      <label htmlFor="source-setup-adcs-membership" className="flex items-start gap-3 text-sm lg:col-span-2">
+        <Checkbox {...form.register("adcsNestedGroups")} id="source-setup-adcs-membership" className="mt-0.5" />
+        <span>
+          <strong>{t("discovery.setup.adcsMembership.enabled")}</strong>
+          <span className="mt-0.5 block text-muted-foreground">{t("discovery.setup.adcsMembership.help")}</span>
+        </span>
+      </label>
+      {form.watch("adcsNestedGroups") ? (
+        <Field
+          label={t("discovery.setup.adcsMembership.domain")}
+          description={t("discovery.setup.adcsMembership.domainHelp")}
+          error={form.formState.errors.membershipDomainDN?.message}
+          required
+        >
+          {(control) => <Input {...control} {...form.register("membershipDomainDN")} className="font-mono text-xs" placeholder="DC=corp,DC=example" />}
+        </Field>
+      ) : null}
       <details className="rounded-panel border border-border p-4 lg:col-span-2">
         <summary className="cursor-pointer font-medium">{t("discovery.setup.adcsAdvanced")}</summary>
         <div className="mt-4 grid gap-4">
@@ -1105,6 +1152,7 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
   if (values.kind === "adcs") {
     return compact({
       url: values.adcsURL,
+      ...(values.adcsNestedGroups ? { nested_groups_enabled: true, membership_domain_dn: values.membershipDomainDN } : {}),
       configuration_dn: values.configurationDN,
       bind_dn: values.bindDN,
       password_ref: values.passwordRef,
