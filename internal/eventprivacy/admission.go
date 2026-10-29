@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+package eventprivacy
+
+import (
+	"context"
+	"errors"
+
+	"github.com/google/uuid"
+
+	"trstctl.com/trstctl/internal/eventprotect"
+	"trstctl.com/trstctl/internal/events"
+)
+
+var (
+	ErrPreparing  = errors.New("event privacy: key preparation is pending")
+	ErrOffboarded = errors.New("event privacy: this tenant lifetime is offboarded")
+)
+
+type TenantGuard interface {
+	WithTenantEventProtection(context.Context, string, func(context.Context) error) error
+}
+
+type ActivationCustody interface {
+	CreationEvidence(context.Context, eventprotect.KeyRef) (eventprotect.KeyCreationEvidence, error)
+	DestructionReceipt(context.Context, eventprotect.KeyRef) (string, bool, error)
+}
+
+// SourceAdmission holds the same tenant fence as custody through append. Policy
+// comes from retained events; deleting or changing a SQL view cannot disable it.
+type SourceAdmission struct {
+	Policy  SourcePolicy
+	Guard   TenantGuard
+	Custody ActivationCustody
+}
+
+func (admission SourceAdmission) WithTenantEventProtection(ctx context.Context, tenantID string, visit func(context.Context) error) error {
+	if admission.Guard == nil || visit == nil {
+		return ErrSource
+	}
+	return admission.Guard.WithTenantEventProtection(ctx, tenantID, visit)
+}
+
+func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event events.Event) (events.EventProtectionDecision, error) {
+	tenant, err := uuid.Parse(event.TenantID)
+	if err != nil || tenant == uuid.Nil || event.Protection != nil || event.SensitiveErased {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	lifetime, err := admission.Policy.LatestLifetime(ctx, tenant.String())
+	if err != nil {
+		return events.EventProtectionDecision{}, err
+	}
+	switch event.Type {
+	case EventRequested:
+		request, err := ParseRequested(tenant.String(), event.Data)
+		if err != nil || event.SchemaVersion != 1 || event.ID != RequestedEventID(request) || request.RegistrationIdentity != lifetime.Registration.ID ||
+			(lifetime.Request != nil && lifetime.Request.Body != request) || (lifetime.Request == nil && lifetime.Offboard != nil) {
+			return events.EventProtectionDecision{}, ErrSource
+		}
+		return events.EventProtectionDecision{Mode: events.EventProtectionPublicControl}, nil
+	case EventActivated:
+		return admission.activationDecision(ctx, event, lifetime)
+	case EventDestroyed:
+		return admission.completionDecision(ctx, event, lifetime)
+	}
+	if lifetime.Offboard != nil {
+		if event.Type == eventRegistered {
+			return events.EventProtectionDecision{Mode: events.EventProtectionLegacy}, nil
+		}
+		return events.EventProtectionDecision{}, ErrOffboarded
+	}
+	if lifetime.Request == nil {
+		return events.EventProtectionDecision{Mode: events.EventProtectionLegacy}, nil
+	}
+	if lifetime.Activation == nil {
+		return events.EventProtectionDecision{}, ErrPreparing
+	}
+	return events.EventProtectionDecision{Mode: events.EventProtectionSensitive, Ref: lifetime.Activation.Body.Creation.Ref}, nil
+}
+
+func (admission SourceAdmission) activationDecision(ctx context.Context, event events.Event, lifetime Lifetime) (events.EventProtectionDecision, error) {
+	activation, err := parseActivated(event, false)
+	if err != nil || admission.Custody == nil || lifetime.Request == nil || activation.Requested() != lifetime.Request.Body ||
+		activation.RequestedEventID != lifetime.Request.Meta.ID || activation.RequestedSequence != lifetime.Request.Meta.Sequence ||
+		!activation.RequestedAt.Equal(lifetime.Request.Meta.Time) || (lifetime.Activation == nil && lifetime.Offboard != nil) {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	if lifetime.Activation != nil && lifetime.Activation.Body.Creation.Digest() != activation.Creation.Digest() {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	creation, err := admission.Custody.CreationEvidence(ctx, activation.Creation.Ref)
+	if err != nil {
+		return events.EventProtectionDecision{}, err
+	}
+	if creation.Digest() != activation.Creation.Digest() {
+		return events.EventProtectionDecision{}, eventprotect.ErrKey
+	}
+	return events.EventProtectionDecision{Mode: events.EventProtectionPublicControl}, nil
+}
+
+func (admission SourceAdmission) completionDecision(ctx context.Context, event events.Event, lifetime Lifetime) (events.EventProtectionDecision, error) {
+	completion, err := ParseDestroyed(event)
+	if err != nil || admission.Custody == nil {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	claims, err := eventprotect.VerifyDestructionReceipt(admission.Policy.Trust, completion.JWS)
+	if err != nil || !matchesLifetimeDestruction(lifetime, claims.Request) || event.Time.Before(claims.RemovedAt) {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	receipt, erased, err := admission.Custody.DestructionReceipt(ctx, claims.Request.Ref)
+	if err != nil {
+		return events.EventProtectionDecision{}, err
+	}
+	if !erased || receipt != completion.JWS {
+		return events.EventProtectionDecision{}, eventprotect.ErrKey
+	}
+	return events.EventProtectionDecision{Mode: events.EventProtectionPublicControl}, nil
+}

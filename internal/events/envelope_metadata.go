@@ -15,6 +15,7 @@ import (
 
 // EnvelopeMetadata is routing/source identity. It intentionally has no readable
 // payload, actor or ciphertext buffer and does not assert body authentication.
+// TenantID canonicalizes UUID spelling for routing; stored source stays exact.
 type EnvelopeMetadata struct {
 	ID            string
 	Type          string
@@ -26,7 +27,7 @@ type EnvelopeMetadata struct {
 }
 
 func envelopeMetadata(e Event) EnvelopeMetadata {
-	result := EnvelopeMetadata{ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time, SchemaVersion: e.SchemaVersion, Sequence: e.Sequence}
+	result := EnvelopeMetadata{ID: e.ID, Type: e.Type, TenantID: normalizedTenantScope(e.TenantID), Time: e.Time, SchemaVersion: e.SchemaVersion, Sequence: e.Sequence}
 	if e.Protection != nil {
 		result.DeclaredKeyID = e.Protection.KeyID
 	}
@@ -41,6 +42,7 @@ func (l *Log) ReplayTenantMetadataTypesThrough(ctx context.Context, tenantID str
 	if l == nil || tenantID == "" || visit == nil || len(types) > 16 {
 		return errors.New("events: metadata replay requires bounded tenant/type scope")
 	}
+	tenantID = normalizedTenantScope(tenantID)
 	selected := make(map[string]bool, len(types))
 	for _, kind := range types {
 		if kind == "" || strings.ContainsAny(kind, "*>") || strings.HasPrefix(kind, ".") || strings.HasSuffix(kind, ".") || strings.Contains(kind, "..") {
@@ -140,7 +142,7 @@ func (l *Log) ReplayTenantMetadataTypesThrough(ctx context.Context, tenantID str
 					if err != nil {
 						return err
 					}
-					if event.TenantID != tenantID || !selected[event.Type] || cursor.raw.Subject != tenantIndexTypedEventSubject(epoch, tenantID, event.Type) {
+					if normalizedTenantScope(event.TenantID) != tenantID || !selected[event.Type] || cursor.raw.Subject != tenantIndexTypedEventSubject(epoch, tenantID, event.Type) {
 						return errors.New("events: metadata index selected another scope")
 					}
 					if err := visit(envelopeMetadata(event)); err != nil {

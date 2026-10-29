@@ -45,9 +45,12 @@ func (a *storageProtectionAdmission) WithTenantEventProtection(ctx context.Conte
 	return fn(ctx)
 }
 
-func (a *storageProtectionAdmission) EventProtectionKey(_ context.Context, tenantID string) (eventprotect.KeyRef, bool, error) {
-	ref, found := a.active[tenantID]
-	return ref, found, nil
+func (a *storageProtectionAdmission) EventProtectionFor(_ context.Context, event Event) (EventProtectionDecision, error) {
+	ref, found := a.active[event.TenantID]
+	if !found {
+		return EventProtectionDecision{Mode: EventProtectionLegacy}, nil
+	}
+	return EventProtectionDecision{Mode: EventProtectionSensitive, Ref: ref}, nil
 }
 
 type storageKeyLocker struct{}

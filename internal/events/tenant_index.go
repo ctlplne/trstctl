@@ -9,14 +9,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"trstctl.com/trstctl/internal/crypto"
 )
 
 const (
-	tenantIndexPrefix    = "TRSTCTL_TENANT_EVENTS_V2_"
-	tenantIndexSubject   = "trstctl_tenant_events_v2"
+	tenantIndexPrefix    = "TRSTCTL_TENANT_EVENTS_V3_"
+	tenantIndexSubject   = "trstctl_tenant_events_v3"
 	tenantIndexBatch     = uint64(256)
 	tenantIndexReadLimit = uint64(1024)
 )
@@ -32,7 +33,17 @@ type tenantIndexEntry struct {
 }
 
 func tenantIndexEventRoot(epoch, tenantID string) string {
-	return tenantIndexSubject + "." + epoch + ".tenant." + crypto.SHA256Hex([]byte(tenantID))
+	return tenantIndexSubject + "." + epoch + ".tenant." + crypto.SHA256Hex([]byte(normalizedTenantScope(tenantID)))
+}
+
+// PostgreSQL treats UUID spellings as one tenant. Derived event indexes must
+// use the same scope while preserving the original source envelope bytes.
+// Historical non-UUID administrative scopes remain exact strings.
+func normalizedTenantScope(tenantID string) string {
+	if parsed, err := uuid.Parse(tenantID); err == nil && parsed != uuid.Nil {
+		return parsed.String()
+	}
+	return tenantID
 }
 
 func tenantIndexEventSubject(epoch, tenantID string) string {
@@ -227,6 +238,7 @@ func (l *Log) ReplayTenantThrough(ctx context.Context, tenantID string, from, th
 	if l == nil || tenantID == "" || fn == nil {
 		return errors.New("events: tenant replay requires log, tenant, and callback")
 	}
+	tenantID = normalizedTenantScope(tenantID)
 	if from == 0 {
 		from = 1
 	}
@@ -308,7 +320,7 @@ func (l *Log) ReplayTenantThrough(ctx context.Context, tenantID string, from, th
 					if err != nil {
 						return err
 					}
-					if event.TenantID != tenantID {
+					if normalizedTenantScope(event.TenantID) != tenantID {
 						return errors.New("events: tenant projection selected a different tenant")
 					}
 					event, err = l.openProtectedEvent(readCtx, event)
@@ -377,6 +389,7 @@ func (l *Log) deleteTenantIndexesExcept(ctx context.Context, sourceName, keepEpo
 	}
 	for _, retired := range []struct{ prefix, subject string }{
 		{tenantIndexPrefix, tenantIndexSubject},
+		{"TRSTCTL_TENANT_EVENTS_V2_", "trstctl_tenant_events_v2"},
 		{"TRSTCTL_TENANT_EVENTS_", "trstctl_tenant_events"},
 	} {
 		if err := l.deleteTenantIndexGeneration(ctx, sourceName, keepEpoch, retired.prefix, retired.subject); err != nil {

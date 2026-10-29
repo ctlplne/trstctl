@@ -28,7 +28,20 @@ var protectedWireMarker = []byte("trstctl.protected-source.v1")
 // selection must verify retained source authority rather than trust SQL alone.
 type EventProtectionAdmission interface {
 	WithTenantEventProtection(context.Context, string, func(context.Context) error) error
-	EventProtectionKey(context.Context, string) (eventprotect.KeyRef, bool, error)
+	EventProtectionFor(context.Context, Event) (EventProtectionDecision, error)
+}
+
+type EventProtectionMode uint8
+
+const (
+	EventProtectionLegacy EventProtectionMode = iota
+	EventProtectionSensitive
+	EventProtectionPublicControl
+)
+
+type EventProtectionDecision struct {
+	Mode EventProtectionMode
+	Ref  eventprotect.KeyRef
 }
 
 type EventProtectionKeys interface {
@@ -81,16 +94,20 @@ func (l *Log) appendWithEventProtection(ctx context.Context, e Event, explicitTi
 	var result Event
 	err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
 		return l.eventProtection.Admission.WithTenantEventProtection(readCtx, e.TenantID, func(guardCtx context.Context) error {
-			ref, active, err := l.eventProtection.Admission.EventProtectionKey(guardCtx, e.TenantID)
+			decision, err := l.eventProtection.Admission.EventProtectionFor(guardCtx, e)
 			if err != nil {
 				return err
 			}
+			if decision.Mode > EventProtectionPublicControl {
+				return eventprotect.ErrContext
+			}
+			ref := decision.Ref
 			canonical, found, err := l.rawEventByID(guardCtx, e.ID)
 			if err != nil {
 				return err
 			}
-			if found && (active || canonical.Protection != nil) {
-				if canonical.TenantID != e.TenantID || canonical.Type != e.Type || canonical.SchemaVersion != e.SchemaVersion {
+			if found && (decision.Mode != EventProtectionLegacy || canonical.Protection != nil) {
+				if normalizedTenantScope(canonical.TenantID) != normalizedTenantScope(e.TenantID) || canonical.Type != e.Type || canonical.SchemaVersion != e.SchemaVersion {
 					return ErrConflictingEventIdentity
 				}
 				canonical, err = l.openProtectedEvent(guardCtx, canonical)
@@ -104,7 +121,7 @@ func (l *Log) appendWithEventProtection(ctx context.Context, e Event, explicitTi
 				result = canonical
 				return nil
 			}
-			if !active {
+			if decision.Mode != EventProtectionSensitive {
 				result, err = l.publishPreparedEvent(guardCtx, e)
 				return err
 			}
