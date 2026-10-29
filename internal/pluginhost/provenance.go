@@ -117,7 +117,7 @@ func (tp *TrustPolicy) VerifyProvenance(wasm, signature []byte) (Provenance, err
 
 // LoadVerified is the only admission path a SERVED plugin surface uses: it
 // verifies the module's provenance against tp BEFORE instantiating anything,
-// then loads it under grant exactly as Load does. A module that is unsigned, was
+// then loads it under the capability grant. A module that is unsigned, was
 // signed by an untrusted key, was tampered after signing, or is not in the
 // pinned allowlist is REFUSED — the runtime is never even created for it. The
 // wazero sandbox still applies as defense-in-depth (AN-7 bulkhead, no ambient
@@ -127,7 +127,7 @@ func (h *Host) LoadVerified(ctx context.Context, wasm, signature []byte, tp *Tru
 	if err := tp.Verify(wasm, signature); err != nil {
 		return nil, err
 	}
-	return h.Load(ctx, wasm, grant)
+	return h.instantiateUnverified(ctx, wasm, grant)
 }
 
 // LoadVerifiedWithProvenance is LoadVerified plus the matched admission
@@ -137,7 +137,7 @@ func (h *Host) LoadVerifiedWithProvenance(ctx context.Context, wasm, signature [
 	if err != nil {
 		return nil, Provenance{}, err
 	}
-	p, err := h.Load(ctx, wasm, grant)
+	p, err := h.instantiateUnverified(ctx, wasm, grant)
 	if err != nil {
 		return nil, Provenance{}, err
 	}

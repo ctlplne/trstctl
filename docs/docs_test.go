@@ -2226,15 +2226,15 @@ func pluginHostVerifiesSignatures(t *testing.T) bool {
 // verification. While the host source contains no signature/trusted-key check,
 // limitations.md must disclose the absent gate and link EXC-WIRE-05; if a future
 // change adds verification, the stale "no verification" disclosure must be retired.
-// The reality anchor (Host.Load instantiating raw bytes) must keep existing so the
+// The private loader compiles raw bytes only after verified admission; retain the
 // disclosure is grounded in real code.
 func TestPluginHostProvenanceDisclosedAsAbsent(t *testing.T) {
 	host := read(t, "../internal/pluginhost/host.go")
-	// Reality anchor: Load still accepts and compiles the supplied raw bytes
+	// Reality anchor: the private loader compiles the supplied raw bytes
 	// directly (J2/V8 moved instantiation to per-call from the compiled
 	// module; nothing verifies a signature over the bytes on the way in).
 	if !strings.Contains(host, "rt.CompileModule(ctx, wasm)") {
-		t.Fatal("internal/pluginhost/host.go no longer compiles raw wasm bytes in Load; revisit this reality test (SUPPLY-004)")
+		t.Fatal("internal/pluginhost/host.go no longer compiles raw wasm bytes in the private loader; revisit this reality test (SUPPLY-004)")
 	}
 
 	lim := read(t, "limitations.md")

@@ -5099,10 +5099,15 @@ This is a deliberate, documented trust boundary, not an accident.
   operator-configured trusted-key set (`plugins.trusted_key_files`), with an
   optional content-digest pin (`plugins.pinned_digests`). An unsigned,
   wrong-key, byte-tampered, or unpinned module is refused and the binary
-  fails closed at startup — it never instantiates an unverified plugin. A raw
-  unverified load path remains only for the in-process/conformance path; the
-  served surface always runs the provenance gate first and keeps the wazero
-  sandbox as defense-in-depth.
+  fails closed at startup — it never instantiates an unverified plugin. The raw
+  `Host.Load`, `Conformance` and `ConformanceUnderGrant` methods exist only in
+  builds explicitly tagged `trstctl_conformance` and in package tests. Normal
+  and Core production builds cannot compile a call to them. An architecture
+  guard confines the private loader to verified admission and conformance
+  helpers. Author-side conformance executes guest code under its grant; it
+  checks compatibility, not publisher trust. The served surface runs the
+  provenance gate before guest start code and keeps the wazero sandbox as
+  defense-in-depth.
 
 ## Protocols
 

@@ -100,7 +100,7 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 // TestSupply102PluginProvenanceVerifiesBeforeLoad locks SUPPLY-102: the served
 // plugin admission path must verify provenance (signature + optional content pin)
 // BEFORE the module is ever instantiated. The guard reads provenance.go and asserts
-// (1) LoadVerified calls tp.Verify before h.Load (textual ordering), (2) Verify
+// (1) LoadVerified calls tp.Verify before h.instantiateUnverified (textual ordering), (2) Verify
 // fails closed with no trusted key / no signature, and (3) the pin check precedes
 // the signature check. ELI5: code the core team did not write must prove who signed
 // it before it is allowed to run at all.
@@ -117,17 +117,32 @@ func TestSupply102PluginProvenanceVerifiesBeforeLoad(t *testing.T) {
 	)
 
 	// Verify-before-Load ordering: in LoadVerified, the tp.Verify(...) call and its
-	// fail-closed early return must appear before h.Load(...). If a refactor reorders
+	// fail-closed early return must appear before h.instantiateUnverified(...). If a refactor reorders
 	// them (instantiate, then verify), this anchor breaks.
 	lv := src[strings.Index(src, "func (h *Host) LoadVerified("):]
 	verifyAt := strings.Index(lv, "tp.Verify(wasm, signature)")
 	earlyReturn := strings.Index(lv, "return nil, err")
-	loadAt := strings.Index(lv, "h.Load(ctx, wasm, grant)")
+	loadAt := strings.Index(lv, "h.instantiateUnverified(ctx, wasm, grant)")
 	if verifyAt < 0 || earlyReturn < 0 || loadAt < 0 {
 		t.Fatal("SUPPLY-102: LoadVerified no longer verifies-then-loads; provenance gate may have moved")
 	}
 	if verifyAt >= earlyReturn || earlyReturn >= loadAt {
-		t.Error("SUPPLY-102: LoadVerified must Verify (and fail closed) BEFORE h.Load; instantiation-before-verification would be a supply-chain bypass")
+		t.Error("SUPPLY-102: LoadVerified must Verify (and fail closed) BEFORE h.instantiateUnverified; instantiation-before-verification would be a supply-chain bypass")
+	}
+
+	// A230: both public verified loaders must reject before guest start code. The
+	// native canary test exercises this ordering independently of these anchors.
+	matched := src[strings.Index(src, "func (h *Host) LoadVerifiedWithProvenance("):]
+	metadataVerify := strings.Index(matched, "tp.VerifyProvenance(wasm, signature)")
+	metadataReturn := strings.Index(matched, "return nil, Provenance{}, err")
+	metadataLoad := strings.Index(matched, "h.instantiateUnverified(ctx, wasm, grant)")
+	if metadataVerify < 0 || metadataReturn < 0 || metadataLoad < 0 || metadataVerify >= metadataReturn || metadataReturn >= metadataLoad {
+		t.Error("SUPPLY-102: LoadVerifiedWithProvenance must fail closed before instantiation")
+	}
+	for _, testName := range []string{"TestProductionHostRejectsRawAdmissionAtCompileTime", "TestPrivateRawAdmissionStaysInsideVerifiedAndConformancePaths", "TestVerifiedAdmissionRefusesBeforeGuestStart"} {
+		if !anyTestDeclaresUnder(t, "../internal/pluginhost", testName) {
+			t.Errorf("SUPPLY-102: missing raw-admission boundary regression %s", testName)
+		}
 	}
 
 	// Inside Verify, the content-pin rejection must come before the signature loop, so

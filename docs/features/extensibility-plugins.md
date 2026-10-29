@@ -20,8 +20,8 @@ Extensibility usually means running someone else's code with your privileges —
 security disaster waiting to happen, especially for a system that holds the keys to your
 infrastructure. The whole point of the plugin model is to make extension **safe by
 construction**: the host process holds no privileged handle a plugin could grab, the
-plugin gets a least-privilege capability grant, and a conformance gate proves a plugin
-behaves before you admit it. That's what lets trstctl have an open ecosystem of CA and
+plugin gets a least-privilege capability grant, and signature verification checks
+its publisher before any guest code runs. That's what lets trstctl have an open ecosystem of CA and
 connector plugins without widening its attack surface.
 
 ## How it works
@@ -95,14 +95,14 @@ Three properties make this trustworthy:
   reach of plugin code.
 - **Bounded execution.** Plugin invocations run in a shared bounded lane; a slow or
   runaway plugin is rejected fast rather than starving other subsystems.
-- **A conformance gate.** `Conformance` runs a candidate plugin under an *empty* grant and
-  asserts it instantiates, exports its entry point, runs without trapping, and performs
-  zero privileged operations — the admission check a plugin author runs before shipping.
-  Because the environment is shaped by the grant, passing it proves something specific:
-  the plugin declares no privileged import at all. A plugin that legitimately needs
-  capabilities is admitted with `ConformanceUnderGrant` against the grant it will actually
-  run under, which additionally reports whether it reached past that grant.
-  A misbehaving-plugin **containment test** proves a hostile plugin is actually contained.
+- **Verified admission and author-side checks.** Production callers use `LoadVerified`
+  or `LoadVerifiedWithProvenance`. They verify the detached signature, trusted key
+  and optional content pin before creating the runtime or executing guest start code.
+  Raw `Load`, `Conformance` and `ConformanceUnderGrant` methods are available only
+  with the `trstctl_conformance` build tag or in package tests. Conformance checks
+  exports and execution under an empty or explicitly supplied grant; passing does
+  not establish publisher trust or prove all future behavior. Run these author
+  checks against disposable resources because guest code can use the supplied grant.
 
 This same capability model is what governs the [deployment connectors](deployment-connectors.md)
 and [DNS providers](acme-and-dns.md) — they declare a grant and run sandboxed.
@@ -142,11 +142,14 @@ h := pluginhost.New()
 grant := pluginhost.NewGrant(pluginhost.CapFSWrite).
     WithPathPrefix(pluginhost.CapFSWrite, "/data")
 
-p, _ := h.Load(ctx, wasmBytes, grant)
-out, _ := h.Invoke(ctx, p, "run")
-
-// admission gate: must pass under an EMPTY grant before you trust it
-report := h.Conformance(ctx, wasmBytes)   // report.OK() == true to admit
+// trustPolicy comes from the operator's trusted public keys and optional pins.
+// signature is the detached signature of these exact wasmBytes.
+p, err := h.LoadVerified(ctx, wasmBytes, signature, trustPolicy, grant)
+if err != nil {
+    return err
+}
+defer p.Close(ctx)
+out, err := h.Invoke(ctx, p, "run")
 ```
 
 To build a CA or connector plugin, follow the
@@ -162,13 +165,17 @@ To build a CA or connector plugin, follow the
   capability for the operation it attempted — that's the sandbox working.
 - **WASM constrains what plugins can do** (no arbitrary syscalls); plugins integrate
   through the host functions their grant exposes, not by reaching out directly.
-- **Always run `Conformance` before admitting a plugin** — it's the gate that keeps a
-  broken or hostile plugin out.
+- **Keep production builds free of `trstctl_conformance`.** The tagged API executes
+  unverified bytes for author tests. Ordinary and `trstctl_core` builds refuse calls
+  to those methods at compile time. Publish conformance results separately from
+  the release signature.
 
 ## Reference
 
-- **Host:** `Host.Load(wasm, grant)`, `Host.Invoke(plugin, fn)`,
-  `Host.Conformance(wasm)`.
+- **Production host:** `Host.LoadVerified(ctx, wasm, signature, trustPolicy, grant)`,
+  `Host.LoadVerifiedWithProvenance(...)`, `Host.Invoke(ctx, plugin, fn)`.
+- **Author tests only:** `Host.Load`, `Host.Conformance` and
+  `Host.ConformanceUnderGrant` with `-tags=trstctl_conformance`.
 - **Served paths:** `GET /api/v1/external-cas`,
   `POST /api/v1/external-cas/{id}/issue`, and `connector.deploy` delivery.
 - **Capabilities:** `CapFSRead`, `CapFSWrite`, `CapNetDial` (and `process.exec` for

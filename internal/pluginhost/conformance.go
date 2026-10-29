@@ -30,7 +30,7 @@ func (r *Report) add(name string, passed bool, detail string) {
 	r.Checks = append(r.Checks, Check{Name: name, Passed: passed, Detail: detail})
 }
 
-// Conformance validates that a plugin meets the host contract at ZERO
+// conformance validates that a plugin meets the host contract at ZERO
 // capabilities: it is a valid WASM module, instantiates under an empty grant,
 // exports the required run function, executes without trapping, and performs no
 // privileged operation.
@@ -40,23 +40,23 @@ func (r *Report) add(name string, passed bool, detail string) {
 // privileged import at all. A plugin that does declare one fails this check —
 // correctly, since it is not a zero-capability plugin — and should be admitted
 // with ConformanceUnderGrant against the grant it will actually run under.
-func (h *Host) Conformance(ctx context.Context, wasm []byte) Report {
-	return h.ConformanceUnderGrant(ctx, wasm, NewGrant())
+func (h *Host) conformance(ctx context.Context, wasm []byte) Report {
+	return h.conformanceUnderGrant(ctx, wasm, NewGrant())
 }
 
-// ConformanceUnderGrant validates a plugin against the grant it will be run with.
-// It is the admission check for a plugin that legitimately needs capabilities: a
-// connector that writes certificates has to be judged under a grant that permits
+// conformanceUnderGrant validates a plugin against the grant it will be run with.
+// This is an author-side compatibility check, not a publisher trust decision. A
+// connector that writes certificates has to be tested under a grant that permits
 // writing them, not under an empty one it could never satisfy.
 //
 // The privileged-operation check is relative to the grant: under an empty grant it
 // asserts the plugin did nothing privileged; under a real grant it asserts the
 // plugin was never DENIED, which is the signal that it is reaching for something
 // its grant does not cover.
-func (h *Host) ConformanceUnderGrant(ctx context.Context, wasm []byte, grant Grant) Report {
+func (h *Host) conformanceUnderGrant(ctx context.Context, wasm []byte, grant Grant) Report {
 	var r Report
 
-	p, err := h.Load(ctx, wasm, grant)
+	p, err := h.instantiateUnverified(ctx, wasm, grant)
 	if err != nil {
 		r.add("instantiates under sandbox", false, err.Error())
 		return r

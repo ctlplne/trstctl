@@ -3511,7 +3511,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		"crypto.ConstantTimeEqual",
 		"crypto.VerifyEd25519",
 		"func (h *Host) LoadVerified(",
-		"return h.Load(ctx, wasm, grant)",
+		"return h.instantiateUnverified(ctx, wasm, grant)",
 	)
 	servedPlugins := read(t, "../internal/server/plugins.go")
 	check("internal/server/plugins.go", servedPlugins,

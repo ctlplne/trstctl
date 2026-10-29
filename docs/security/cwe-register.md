@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2003 annotated sites across 29 rules. Each row is
+2008 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -885,7 +885,7 @@ not this file.
 | `docs/docs_test.go:2591` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_completeness_test.go:276` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:889` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:955` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4686` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -970,7 +970,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (255 sites)
+### G204 — CWE-78 OS command injection (256 sites)
 
 | Location | Reason |
 |---|---|
@@ -1083,6 +1083,7 @@ not this file.
 | `internal/objectstore/minio_lock_test.go:64` | test reads the container it started (CWE-78) |
 | `internal/perf/live.go:755` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
 | `internal/perf/live.go:919` | perf harness building/running the repo's own signer with the go toolchain (CWE-78) |
+| `internal/pluginhost/raw_api_boundary_test.go:44` | fixed go build command, literal tag table, owned temp output; no shell or user arguments (CWE-78). |
 | `internal/pqc/native_probe_test.go:74` | pinned local stock executable and owned loopback fixture. |
 | `internal/pqc/prepared_leaf_openssl_test.go:63` | LookPath-resolved OpenSSL, fixed verbs, loopback and TempDir artifacts. |
 | `internal/pqc/prepared_leaf_openssl_test.go:83` | Fixed stock TLS validation command against the owned loopback server. |
@@ -1340,7 +1341,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (553 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (556 sites)
 
 | Location | Reason |
 |---|---|
@@ -1462,7 +1463,7 @@ not this file.
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
-| `docs/protect_guards_completeness_test.go:261` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_completeness_test.go:276` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:889` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:955` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4686` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1659,6 +1660,9 @@ not this file.
 | `internal/objectstore/config.go:38` | operator-configured CA bundle path (CWE-22) |
 | `internal/perf/smoke.go:173` | perf harness reading its own artifact path (CWE-22) |
 | `internal/pluginhost/containment_test.go:122` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/pluginhost/provenance_start_test.go:96` | owned canary under t.TempDir (CWE-22). |
+| `internal/pluginhost/raw_api_boundary_test.go:30` | fixed repository checksum manifest, no external path input (CWE-22). |
+| `internal/pluginhost/raw_architecture_test.go:72` | enumerated Go source in this package only (CWE-22). |
 | `internal/pluginhost/reference_plugin_test.go:54` | fixed in-repo reference plugin path (CWE-22) |
 | `internal/pluginhost/reference_plugin_test.go:134` | test reads the path it granted (CWE-22) |
 | `internal/pluginhost/sandbox_test.go:95` | test reads the fixture path it just granted (CWE-22) |
@@ -2131,7 +2135,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (107 sites)
+### G703 — CWE-22 Path traversal (taint) (108 sites)
 
 | Location | Reason |
 |---|---|
@@ -2172,6 +2176,7 @@ not this file.
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/kmip/pykmip_tenants_test.go:72` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
+| `internal/pluginhost/raw_api_boundary_test.go:34` | writes fixed manifest name only under the owned t.TempDir (CWE-22). |
 | `internal/protocols/acme/certbot_client_test.go:275` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/acme/certbot_client_test.go:308` | test reads its own fixture/tempdir path (CWE-22) |

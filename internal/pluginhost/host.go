@@ -107,7 +107,7 @@ func (p *Plugin) Close(ctx context.Context) error {
 	return p.runtime.Close(ctx)
 }
 
-// Load instantiates a WASM plugin in its own runtime, exposing only the host
+// instantiateUnverified instantiates a WASM plugin in its own runtime, exposing only the host
 // functions its grant permits. The guest has no ambient capabilities — no
 // filesystem, network, or syscalls — beyond those host functions.
 //
@@ -116,7 +116,7 @@ func (p *Plugin) Close(ctx context.Context) error {
 // module, so a guest that imports it fails to instantiate and never runs at all.
 // That is a stronger property than a runtime deny, because the plugin's reach is
 // closed before its first instruction executes.
-func (h *Host) Load(ctx context.Context, wasm []byte, grant Grant) (*Plugin, error) {
+func (h *Host) instantiateUnverified(ctx context.Context, wasm []byte, grant Grant) (*Plugin, error) {
 	// WithCloseOnContextDone is what makes a guest INTERRUPTIBLE. wazero's default
 	// runtime runs guest code to completion regardless of the context, so a plugin
 	// containing `loop { }` — a bug or a hostile plugin — occupied its bounded-pool

@@ -64,9 +64,20 @@ in [Extensibility and plugins](../features/extensibility-plugins.md).
 
 ## Conformance
 
-Before a plugin is admitted, run it through the host's **conformance suite**,
-which validates that it meets the host contract (it exports the required
-functions, respects its grant, and behaves under the sandbox):
+Run the host's **conformance suite** in an explicit author-test build. It checks
+exports and execution under the supplied grant. It executes unverified guest
+start and run code, so use disposable resources. Passing checks does not establish
+publisher trust or prove the plugin's future behavior.
+
+From the repository root, run the host checks with:
+
+```bash
+go test -tags=trstctl_conformance ./internal/pluginhost/...
+```
+
+Compile an author-side Go harness that calls these methods with
+`go run -tags=trstctl_conformance ./path/to/harness`. For a plugin with no privileged
+imports:
 
 ```go
 report := host.Conformance(ctx, wasmBytes)
@@ -75,8 +86,15 @@ if !report.OK() {
 }
 ```
 
-Keep conformance green and publish the result alongside your plugin so downstream
-users can self-validate.
+Use `ConformanceUnderGrant(ctx, wasmBytes, grant)` for a plugin that imports
+capability functions. Constrain that grant to the test target. Publish the result
+alongside your plugin so downstream users can self-validate.
+
+Normal and `trstctl_core` production builds have no exported `Load`, `Conformance`
+or `ConformanceUnderGrant` methods; calls fail to compile. Keep the conformance
+tag out of production builds. Production admission uses `LoadVerified` or
+`LoadVerifiedWithProvenance`, which check the release signature before guest start
+code executes.
 
 ## Signing and trusted keys
 
