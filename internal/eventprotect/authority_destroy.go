@@ -5,6 +5,7 @@ package eventprotect
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -29,12 +30,16 @@ const destructionReceiptSchema = "trstctl.event-key-destruction/v1"
 // DestructionRequest binds a single key and durable command to its retained
 // offboard event and retention deadline. It contains no readable tenant data.
 type DestructionRequest struct {
-	Ref              KeyRef    `json:"ref"`
-	OperationID      string    `json:"operation_id"`
-	OffboardEventID  string    `json:"offboard_event_id"`
-	OffboardSequence uint64    `json:"offboard_sequence"`
-	OffboardedAt     time.Time `json:"offboarded_at"`
-	NotBefore        time.Time `json:"not_before"`
+	Ref                  KeyRef    `json:"ref"`
+	OperationID          string    `json:"operation_id"`
+	RegistrationIdentity string    `json:"registration_identity"`
+	ActivationEventID    string    `json:"activation_event_id"`
+	ActivationSequence   uint64    `json:"activation_sequence"`
+	CreationDigest       string    `json:"creation_digest"`
+	OffboardEventID      string    `json:"offboard_event_id"`
+	OffboardSequence     uint64    `json:"offboard_sequence"`
+	OffboardedAt         time.Time `json:"offboarded_at"`
+	NotBefore            time.Time `json:"not_before"`
 }
 
 // DestructionAuthorizer verifies the retained source, exact protection policy
@@ -65,9 +70,19 @@ func validateDestructionRequest(request DestructionRequest) error {
 	if err != nil || operation == uuid.Nil || operation.String() != request.OperationID {
 		return ErrContext
 	}
-	if request.OffboardEventID == "" || len(request.OffboardEventID) > 512 ||
-		!utf8.ValidString(request.OffboardEventID) || strings.TrimSpace(request.OffboardEventID) != request.OffboardEventID ||
-		strings.ContainsFunc(request.OffboardEventID, unicode.IsControl) || request.OffboardSequence == 0 ||
+	for _, identity := range []string{request.RegistrationIdentity, request.ActivationEventID, request.OffboardEventID} {
+		if identity == "" || len(identity) > 512 || !utf8.ValidString(identity) || strings.TrimSpace(identity) != identity ||
+			strings.ContainsFunc(identity, unicode.IsControl) {
+			return ErrContext
+		}
+	}
+	if len(request.CreationDigest) != 64 || strings.ToLower(request.CreationDigest) != request.CreationDigest {
+		return ErrContext
+	}
+	if _, err := hex.DecodeString(request.CreationDigest); err != nil {
+		return ErrContext
+	}
+	if request.ActivationSequence == 0 || request.ActivationSequence >= request.OffboardSequence ||
 		request.OffboardedAt.IsZero() || !request.NotBefore.After(request.OffboardedAt) {
 		return ErrContext
 	}
@@ -116,7 +131,8 @@ func (a *FileAuthority) destroyedState(record fileKeyRecord) error {
 	}
 	claims, err := VerifyDestructionReceipt(a.evidenceKey.JWKS(), record.Destruction.Receipt)
 	if err != nil || !sameDestructionRequest(claims.Request, record.Destruction.Request) ||
-		!claims.RemovedAt.Equal(record.Destruction.RemovedAt) || claims.Request.Ref != record.Ref {
+		!claims.RemovedAt.Equal(record.Destruction.RemovedAt) || claims.Request.Ref != record.Ref ||
+		creationEvidenceFor(record).Digest() != claims.Request.CreationDigest {
 		return ErrKey
 	}
 	if _, err := a.root.Lstat(keyName(record.Ref)); !errors.Is(err, os.ErrNotExist) {
@@ -145,6 +161,9 @@ func (a *FileAuthority) Destroy(ctx context.Context, request DestructionRequest)
 		if err != nil || !found || record.CreatedAt.After(request.OffboardedAt) {
 			return ErrKey
 		}
+		if creationEvidenceFor(record).Digest() != request.CreationDigest {
+			return ErrKey
+		}
 		if record.Destruction != nil && !sameDestructionRequest(record.Destruction.Request, request) {
 			return ErrDestructionConflict
 		}
@@ -160,7 +179,7 @@ func (a *FileAuthority) Destroy(ctx context.Context, request DestructionRequest)
 		}
 		if record.Phase == "active" {
 			// Refuse to turn unexplained prior loss into a destruction claim.
-			key, err := a.loadKey(ref)
+			key, err := a.loadKey(ref, record)
 			if err != nil {
 				return err
 			}

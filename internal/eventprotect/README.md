@@ -25,11 +25,22 @@ for one callback and destroys that handle before returning. Every authority
 user must share the same cross-replica `KeyLocker`; `store.Store` supplies a
 bounded PostgreSQL implementation. A missing active key never regenerates.
 
+An active key must open a sealed probe containing a fixed public value. That
+probe binds its reference, creation time and record format. Replacement key
+bytes therefore fail before a callback can use them. Activation must retain
+`CreationEvidence` and use `WithVerifiedKey` to compare the local identity with
+that immutable evidence. The private key-record format is version 2; earlier
+unshipped draft records are refused.
+
 Destruction requires a `DestructionAuthorizer` and an audit-evidence signing
 capability. The production authorizer must verify the exact retained offboard
 event, applicable retention policy and committed outbox command. That adapter
 is still to be built. Production signatures must use the existing isolated
 signer; tests may use an in-memory signing fixture.
+
+The signed request includes the registration identity, activation ID/sequence
+and creation-evidence digest. Restoring an older data cut must still reconcile
+that lifetime's destruction rather than resurrect it or erase a newer lifetime.
 
 The authority writes a durable removal intent before deleting the key. It
 syncs the tenant directory, reads back absence, records the removal time, then

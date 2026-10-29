@@ -5,6 +5,7 @@ package eventprotect
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,7 +55,9 @@ func FuzzDestructionClaims(f *testing.F) {
 		Request: DestructionRequest{
 			Ref:         KeyRef{TenantID: "d59b4292-1adc-4d43-a405-781f95b1779c", ID: "02f0b795-3f17-46a9-a9cc-a7bdd7ee21eb"},
 			OperationID: "93ba00d2-9108-4f7f-8c9d-f6e887ba0612", OffboardEventID: "fixture-offboard", OffboardSequence: 9,
-			OffboardedAt: at, NotBefore: at.Add(time.Hour),
+			RegistrationIdentity: "fixture-registration", ActivationEventID: "fixture-activation", ActivationSequence: 5,
+			CreationDigest: strings.Repeat("a", 64),
+			OffboardedAt:   at, NotBefore: at.Add(time.Hour),
 		},
 		RemovedAt: at.Add(time.Hour),
 	}

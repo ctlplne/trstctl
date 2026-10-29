@@ -62,6 +62,7 @@ type fileKeyRecord struct {
 	Ref         KeyRef           `json:"ref"`
 	Phase       string           `json:"phase"`
 	CreatedAt   time.Time        `json:"created_at"`
+	Probe       []byte           `json:"key_probe,omitempty"`
 	Destruction *fileDestruction `json:"destruction,omitempty"`
 }
 
@@ -220,7 +221,7 @@ func (a *FileAuthority) Provision(ctx context.Context, ref KeyRef) error {
 			return err
 		}
 		if found && record.Phase == "active" {
-			key, err := a.loadKey(ref)
+			key, err := a.loadKey(ref, record)
 			if err != nil {
 				return err
 			}
@@ -255,7 +256,7 @@ func (a *FileAuthority) Provision(ctx context.Context, ref KeyRef) error {
 			if closeErr != nil {
 				return closeErr
 			}
-			record = fileKeyRecord{Version: 1, Ref: ref, Phase: "creating", CreatedAt: a.now().UTC()}
+			record = fileKeyRecord{Version: keyRecordVersion, Ref: ref, Phase: "creating", CreatedAt: a.now().UTC()}
 			if err := a.writeRecord(record); err != nil {
 				return err
 			}
@@ -281,6 +282,15 @@ func (a *FileAuthority) Provision(ctx context.Context, ref KeyRef) error {
 		if closeErr != nil {
 			return closeErr
 		}
+		key, err := seal.NewLocalKEK(raw)
+		if err != nil {
+			return err
+		}
+		defer key.Destroy()
+		record.Probe, err = makeKeyProbe(key, record)
+		if err != nil {
+			return err
+		}
 		record.Phase = "active"
 		return a.writeRecord(record)
 	})
@@ -298,7 +308,7 @@ func (a *FileAuthority) WithKey(ctx context.Context, ref KeyRef, fn func(seal.Ke
 		if err != nil || !found || record.Phase != "active" {
 			return ErrKey
 		}
-		key, err := a.loadKey(ref)
+		key, err := a.loadKey(ref, record)
 		if err != nil {
 			return err
 		}
@@ -310,7 +320,7 @@ func (a *FileAuthority) WithKey(ctx context.Context, ref KeyRef, fn func(seal.Ke
 func keyName(ref KeyRef) string    { return filepath.Join(ref.TenantID, ref.ID+".key") }
 func recordName(ref KeyRef) string { return filepath.Join(ref.TenantID, ref.ID+".json") }
 
-func (a *FileAuthority) loadKey(ref KeyRef) (*seal.LocalKEK, error) {
+func (a *FileAuthority) loadKey(ref KeyRef, record fileKeyRecord) (*seal.LocalKEK, error) {
 	info, err := a.root.Lstat(keyName(ref))
 	if err != nil || !info.Mode().IsRegular() || info.Size() != 32 {
 		return nil, ErrKey
@@ -323,7 +333,15 @@ func (a *FileAuthority) loadKey(ref KeyRef) (*seal.LocalKEK, error) {
 	if len(raw) != 32 {
 		return nil, ErrKey
 	}
-	return seal.NewLocalKEK(raw)
+	key, err := seal.NewLocalKEK(raw)
+	if err != nil {
+		return nil, ErrKey
+	}
+	if record.Ref != ref || verifyKeyProbe(key, record) != nil {
+		key.Destroy()
+		return nil, ErrKey
+	}
+	return key, nil
 }
 
 func (a *FileAuthority) readRecord(ref KeyRef) (fileKeyRecord, bool, error) {
@@ -346,7 +364,7 @@ func (a *FileAuthority) readRecord(ref KeyRef) (fileKeyRecord, bool, error) {
 	var record fileKeyRecord
 	decoder := json.NewDecoder(bytes.NewReader(wire))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&record); err != nil || record.Version != 1 || record.Ref != ref || record.CreatedAt.IsZero() ||
+	if err := decoder.Decode(&record); err != nil || record.Version != keyRecordVersion || record.Ref != ref || record.CreatedAt.IsZero() ||
 		(record.Phase != "creating" && record.Phase != "active" && record.Phase != "destroying" && record.Phase != "destroyed") {
 		return fileKeyRecord{}, false, ErrKey
 	}
@@ -358,6 +376,10 @@ func (a *FileAuthority) readRecord(ref KeyRef) (fileKeyRecord, bool, error) {
 		return fileKeyRecord{}, false, ErrKey
 	}
 	if (record.Phase == "creating" || record.Phase == "active") != (record.Destruction == nil) {
+		return fileKeyRecord{}, false, ErrKey
+	}
+	if (record.Phase == "creating" && len(record.Probe) != 0) ||
+		(record.Phase != "creating" && (len(record.Probe) == 0 || len(record.Probe) > maxKeyProbeBytes)) {
 		return fileKeyRecord{}, false, ErrKey
 	}
 	return record, true, nil

@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,12 +143,18 @@ func destructionFixture(t *testing.T) (*FileAuthority, FileAuthorityConfig, Dest
 	if err := initial.Provision(t.Context(), ref); err != nil {
 		t.Fatal(err)
 	}
+	creation, err := initial.CreationEvidence(t.Context(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := initial.Close(); err != nil {
 		t.Fatal(err)
 	}
 	offboarded := time.Now().UTC()
 	request := DestructionRequest{
 		Ref: ref, OperationID: "93ba00d2-9108-4f7f-8c9d-f6e887ba0612",
+		RegistrationIdentity: "A233RegisteredSource", ActivationEventID: "A233ProtectionActivated", ActivationSequence: 5,
+		CreationDigest:  creation.Digest(),
 		OffboardEventID: "A233OffboardSource", OffboardSequence: 9,
 		OffboardedAt: offboarded, NotBefore: offboarded.Add(time.Hour),
 	}
@@ -164,6 +171,28 @@ func destructionFixture(t *testing.T) (*FileAuthority, FileAuthorityConfig, Dest
 	authority.now = func() time.Time { return request.NotBefore }
 	t.Cleanup(func() { _ = authority.Close() })
 	return authority, cfg, request, grant, key
+}
+
+func TestFileAuthorityDestructionBindsLifetimeAndCreation(t *testing.T) {
+	authority, _, request, grant, _ := destructionFixture(t)
+	for name, change := range map[string]func(*DestructionRequest){
+		"missing registration":      func(r *DestructionRequest) { r.RegistrationIdentity = "" },
+		"missing activation":        func(r *DestructionRequest) { r.ActivationEventID = "" },
+		"activation after offboard": func(r *DestructionRequest) { r.ActivationSequence = r.OffboardSequence },
+		"wrong creation":            func(r *DestructionRequest) { r.CreationDigest = strings.Repeat("0", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := request
+			change(&changed)
+			grant.want = changed
+			if _, err := authority.Destroy(t.Context(), changed); err == nil {
+				t.Fatal("unbound destruction reached key removal")
+			}
+			if err := authority.WithKey(t.Context(), request.Ref, func(seal.KeyWrapper) error { return nil }); err != nil {
+				t.Fatalf("rejected request affected key material: %v", err)
+			}
+		})
+	}
 }
 
 func TestFileAuthorityDestructionRequiresOffboardAuthorityAndRetention(t *testing.T) {
