@@ -131,6 +131,21 @@ func TestAuditEvidenceOverRealSignerBinary(t *testing.T) {
 	if _, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactAuditAnchorLog); err == nil {
 		t.Fatal("an assurance record verified as an anchor log head")
 	}
+	// A233: destruction evidence has its own core artifact domain. Its private
+	// operation stays in this real child process after a cold signer restart.
+	res, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
+		Kind: jose.ArtifactEventKeyDestruction, TenantID: "deployment", AuthorityID: "audit-evidence",
+		KeyID: "audit-export", Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("sign event-key destruction evidence through the isolated signer: %v", err)
+	}
+	if got, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactEventKeyDestruction); err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("verify event-key destruction evidence: payload=%q err=%v", got, err)
+	}
+	if _, err := legacy.JWKS().VerifyArtifact(string(res.Signature), jose.ArtifactHistoryContinuity); err == nil {
+		t.Fatal("key destruction evidence verified as history rewrite authority")
+	}
 	_, err = client.SignArtifact(ctx, signing.ArtifactSignRequest{
 		Kind: "trstctl.audit-evidence/forged-kind/v1", TenantID: "deployment", AuthorityID: "audit-evidence",
 		KeyID: "audit-export", Payload: payload,

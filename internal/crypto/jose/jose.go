@@ -295,14 +295,15 @@ type ArtifactSigner interface {
 
 // Stable artifact-kind domains admitted by the core audit-evidence signer.
 const (
-	ArtifactAuditExport        = "trstctl.audit-evidence/audit-export/v1"
-	ArtifactAuditRetention     = "trstctl.audit-evidence/audit-retention/v1"
-	ArtifactHistoryContinuity  = "trstctl.audit-evidence/history-continuity/v1"
-	ArtifactBillingInvoice     = "trstctl.audit-evidence/billing-invoice/v1"
-	ArtifactDoctorReceipt      = "trstctl.audit-evidence/doctor-receipt/v1"
-	ArtifactPQCCampaignClosure = "trstctl.audit-evidence/pqc-campaign-closure/v1"
-	ArtifactCryptoReadiness    = "trstctl.audit-evidence/crypto-readiness-export/v1"
-	ArtifactRestoreDrill       = "trstctl.audit-evidence/restore-drill/v1"
+	ArtifactAuditExport         = "trstctl.audit-evidence/audit-export/v1"
+	ArtifactAuditRetention      = "trstctl.audit-evidence/audit-retention/v1"
+	ArtifactHistoryContinuity   = "trstctl.audit-evidence/history-continuity/v1"
+	ArtifactEventKeyDestruction = "trstctl.audit-evidence/event-key-destruction/v1"
+	ArtifactBillingInvoice      = "trstctl.audit-evidence/billing-invoice/v1"
+	ArtifactDoctorReceipt       = "trstctl.audit-evidence/doctor-receipt/v1"
+	ArtifactPQCCampaignClosure  = "trstctl.audit-evidence/pqc-campaign-closure/v1"
+	ArtifactCryptoReadiness     = "trstctl.audit-evidence/crypto-readiness-export/v1"
+	ArtifactRestoreDrill        = "trstctl.audit-evidence/restore-drill/v1"
 	// ArtifactAuditAnchorLog signs a tenant's audit anchor log tree head.
 	ArtifactAuditAnchorLog = "trstctl.audit-evidence/audit-anchor-log/v1"
 	// ArtifactAssuranceRecord signs one credential's lifecycle assurance

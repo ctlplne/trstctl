@@ -50,3 +50,14 @@ type Actor struct {
 	Subject string   `json:"subject"`         // authenticated subject (token subject or OIDC sub)
 	Roles   []string `json:"roles,omitempty"` // role names the subject acted under (the "authorization")
 }
+
+// ProtectedPayload is a storage envelope, never a readable event body. It keeps
+// only public routing metadata and authenticated ciphertext. The crypto codec
+// lives outside this dependency-light package; signer-side users still import
+// no event bus, database or crypto implementation through this type surface.
+type ProtectedPayload struct {
+	Version      int    `json:"version"`
+	KeyID        string `json:"key_id"`
+	PolicyDigest string `json:"policy_digest"`
+	Ciphertext   []byte `json:"ciphertext"`
+}
