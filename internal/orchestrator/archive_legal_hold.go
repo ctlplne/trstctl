@@ -17,8 +17,8 @@ import (
 
 // A208: a person's S3 legal hold on one archive object.
 
-// ErrArchiveLegalHoldLinked refuses releasing a storage hold that belongs to a
-// report's legal hold directly; releasing the report's hold releases it.
+// ErrArchiveLegalHoldLinked refuses a direct storage release while its report
+// remains held. After report release, its failed storage step can be retried.
 var ErrArchiveLegalHoldLinked = errors.New("orchestrator: this storage hold belongs to a report's legal hold; release that hold")
 
 // PlaceArchiveLegalHold records a person's legal hold on one archive object;
@@ -51,9 +51,20 @@ func (o *Orchestrator) ReleaseArchiveLegalHold(ctx context.Context, tenantID, id
 		return store.ArchiveLegalHold{}, err
 	}
 	if hold.ReportRunID != "" {
-		return store.ArchiveLegalHold{}, ErrArchiveLegalHoldLinked
+		run, err := o.store.GetComplianceReportRun(ctx, tenantID, hold.ReportRunID)
+		if err != nil {
+			return store.ArchiveLegalHold{}, err
+		}
+		if run.Retention.Held() {
+			return store.ArchiveLegalHold{}, ErrArchiveLegalHoldLinked
+		}
 	}
-	if hold.Status != "pending" && hold.Status != "applied" {
+	if hold.Status != "pending" && hold.Status != "applied" && hold.Status != "failed" {
+		return store.ArchiveLegalHold{}, store.ErrArchiveLegalHoldState
+	}
+	if active, found, err := o.store.ActiveArchiveLegalHoldFor(ctx, tenantID, hold.Object); err != nil {
+		return store.ArchiveLegalHold{}, err
+	} else if found && active.ID != id {
 		return store.ArchiveLegalHold{}, store.ErrArchiveLegalHoldState
 	}
 	data, err := json.Marshal(projections.ArchiveLegalHoldRelease{ID: id})

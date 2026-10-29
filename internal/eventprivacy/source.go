@@ -26,6 +26,11 @@ type ActivationSource struct {
 	Meta events.EnvelopeMetadata
 	Body Activated
 }
+type HoldClearanceSource struct {
+	Meta events.EnvelopeMetadata
+	Body HoldClearance
+}
+
 type CompletionSource struct {
 	Meta   events.EnvelopeMetadata
 	JWS    string
@@ -36,11 +41,12 @@ type CompletionSource struct {
 // tenant.registered again; the FIRST registration after offboarding is the key
 // lifetime. No SQL row or readable registration/offboard body chooses that key.
 type Lifetime struct {
-	Registration events.EnvelopeMetadata
-	Request      *RequestSource
-	Activation   *ActivationSource
-	Offboard     *events.EnvelopeMetadata
-	Completion   *CompletionSource
+	Registration  events.EnvelopeMetadata
+	Request       *RequestSource
+	Activation    *ActivationSource
+	Offboard      *events.EnvelopeMetadata
+	Completion    *CompletionSource
+	HoldClearance *HoldClearanceSource
 }
 
 type SourcePolicy struct {
@@ -77,7 +83,7 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 		var lifetimes []*Lifetime
 		byKey := make(map[string]*Lifetime)
 		seen := make(map[string]events.EnvelopeMetadata)
-		err = policy.Log.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
+		err = policy.Log.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventHoldClearance, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
 			if meta.SchemaVersion != 1 {
 				return ErrSource
 			}
@@ -163,6 +169,21 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 					return ErrSource
 				}
 				byKey[activation.KeyID] = current
+			case EventHoldClearance:
+				clearance, err := ParseHoldClearance(event)
+				if err != nil {
+					return ErrSource
+				}
+				target := byKey[clearance.Request.Ref.ID]
+				if target == nil || !matchesLifetimeDestruction(*target, clearance.Request) {
+					return ErrSource
+				}
+				if target.HoldClearance != nil && target.HoldClearance.Meta.ID != meta.ID {
+					return ErrSource
+				}
+				if target.HoldClearance == nil {
+					target.HoldClearance = &HoldClearanceSource{Meta: meta, Body: clearance}
+				}
 			case EventDestroyed:
 				completion, err := ParseDestroyed(event)
 				if err != nil {

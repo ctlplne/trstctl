@@ -635,10 +635,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6494` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6511` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6524` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6558` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6495` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6512` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6525` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6559` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -692,12 +692,12 @@ not this file.
 | `internal/store/acme_upstream_ari.go:361` | JetStream sequence is bounded by PostgreSQL bigint (CWE-190) |
 | `internal/store/acme_upstream_ari.go:388` | DB CHECK keeps event_sequence positive (CWE-190) |
 | `internal/store/application_secret_approval_test.go:49` | the binding validator proved this fixture version is positive (CWE-190). |
-| `internal/store/archive_legal_hold.go:88` | event sequences fit int64 (CWE-190) |
-| `internal/store/archive_legal_hold.go:111` | event sequences fit int64 (CWE-190) |
-| `internal/store/archive_legal_hold.go:132` | event sequences fit int64 (CWE-190) |
-| `internal/store/archive_legal_hold.go:136` | event sequences fit int64 (CWE-190) |
-| `internal/store/archive_legal_hold.go:140` | event sequences fit int64 (CWE-190) |
-| `internal/store/archive_legal_hold.go:174` | positive by constraint (CWE-190) |
+| `internal/store/archive_legal_hold.go:90` | event sequences fit int64 (CWE-190) |
+| `internal/store/archive_legal_hold.go:124` | event sequences fit int64 (CWE-190) |
+| `internal/store/archive_legal_hold.go:145` | event sequences fit int64 (CWE-190) |
+| `internal/store/archive_legal_hold.go:149` | event sequences fit int64 (CWE-190) |
+| `internal/store/archive_legal_hold.go:153` | event sequences fit int64 (CWE-190) |
+| `internal/store/archive_legal_hold.go:192` | positive by constraint (CWE-190) |
 | `internal/store/assurance_evidence.go:248` | non-negative by construction (CWE-190) |
 | `internal/store/audit_anchor.go:47` | tenant-local audit ordinal fits a Postgres bigint (CWE-190) |
 | `internal/store/audit_anchor.go:49` | event-log sequence fits a Postgres bigint (CWE-190) |

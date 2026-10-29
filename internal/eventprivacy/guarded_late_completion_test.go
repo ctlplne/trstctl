@@ -35,7 +35,11 @@ func TestGuardedLateDestructionCompletionPreservesNewKeyAndFirstTerminalIdentity
 	admission := &eventprivacy.SourceAdmission{Guard: guard, Custody: keys, Policy: eventprivacy.SourcePolicy{Trust: signer.JWKS()}}
 	reader := &eventprivacy.SourceKeys{Custody: keys, Policy: eventprivacy.SourcePolicy{Trust: signer.JWKS()}}
 	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
-		func(log *events.Log) { admission.Policy.Log = log; reader.Policy.Log = log }, events.WithEventProtection(events.EventProtection{Admission: admission, Keys: reader}))
+		func(log *events.Log) {
+			admission.Policy.Log = log
+			reader.Policy.Log = log
+			admission.Holds = eventprivacy.RetainedHoldPolicy{Policy: admission.Policy}
+		}, events.WithEventProtection(events.EventProtection{Admission: admission, Keys: reader}))
 	if err != nil {
 		t.Fatal(err)
 	}

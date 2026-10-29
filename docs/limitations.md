@@ -1522,6 +1522,11 @@ never live in the API process. What you can do end to end against the running bi
   reason (a bucket without Object Lock). A report legal hold placed while the
   archive writes under Object Lock also holds the report's object, in the same
   event, and its release clears that hold.
+  A failed release remains uncertain. After fixing the bucket problem, an
+  operator retries `archives legal-holds release HOLD_ID` with a new idempotency
+  key and waits for `released` readback. Earlier command evidence stays. A
+  report-linked storage hold can use that retry after its report hold is released;
+  it cannot bypass a held report or clear another active hold on the object.
 - Audit chain anchoring (J1): `GET /api/v1/audit/export?format=` serves the signed
   JWS bundle (default) plus NDJSON, CSV, Splunk HEC and Microsoft Sentinel record
   streams. The JWS response and browser download are one versioned JSON envelope

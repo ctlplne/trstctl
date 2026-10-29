@@ -33,6 +33,7 @@ type SourceAdmission struct {
 	Policy  SourcePolicy
 	Guard   TenantGuard
 	Custody ActivationCustody
+	Holds   HoldClearancePolicy
 }
 
 func (admission SourceAdmission) WithTenantEventProtection(ctx context.Context, tenantID string, visit func(context.Context) error) error {
@@ -74,6 +75,8 @@ func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event e
 		return admission.activationDecision(ctx, event, lifetime)
 	case EventDestroyed:
 		return admission.completionDecision(ctx, event)
+	case EventHoldClearance:
+		return admission.holdClearanceDecision(ctx, event)
 	}
 	if lifetime.Offboard != nil {
 		if event.Type == eventRegistered {
@@ -86,6 +89,14 @@ func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event e
 	}
 	if lifetime.Activation == nil {
 		return events.EventProtectionDecision{}, ErrPreparing
+	}
+	if event.Type == eventOffboarded {
+		if admission.Holds == nil {
+			return events.EventProtectionDecision{}, ErrSource
+		}
+		if err := admission.Holds.RequireOffboardClear(ctx, lifetime); err != nil {
+			return events.EventProtectionDecision{}, err
+		}
 	}
 	return events.EventProtectionDecision{Mode: events.EventProtectionSensitive, Ref: lifetime.Activation.Body.Creation.Ref}, nil
 }

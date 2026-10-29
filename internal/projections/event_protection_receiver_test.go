@@ -61,6 +61,7 @@ func runPreparationReceiverFixtureMode(t *testing.T, interrupt, missingCustody, 
 	log, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "events")},
 		func(log *events.Log) {
 			admission.Policy.Log = log
+			admission.Holds = eventprivacy.RetainedHoldPolicy{Policy: admission.Policy}
 			reader.Policy.Log = log
 			receiver.Policy.Log = log
 			verifier.Policy.Log = log

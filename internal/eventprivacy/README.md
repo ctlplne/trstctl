@@ -55,3 +55,17 @@ verified. Completion admission checks tenant scope before historical lookup and
 refuses a different second completion identity before append. An exact retry
 keeps its first sequence. The new lifetime keeps its own key and readable data;
 neither lifetime's stored ciphertext is rewritten.
+
+Retained hold checks replay only the exact registration-to-offboard source cut,
+not SQL hold rows removed by offboarding. Pending, release-pending and failed
+archive holds block removal until a fresh release request has a verified released
+outcome. Report holds block as well. Neighbor and later-registration holds cannot
+change the old cut. Duplicate or unknown JSON members do not grant clearance.
+
+Before a new protected offboard is admitted, the same source check keeps a held
+tenant live so its normal permissioned release path stays usable. A closed public
+`holds_cleared` fact binds the complete exact destruction request and immutable
+old cut. Initial admission independently verifies retained holds; an exact retry
+can reuse that fact after key removal makes private hold bodies unreadable. This
+fact alone grants no removal, elapsed-retention claim or completed erasure. The
+production worker, artifacts, restore and operator feature remain unserved.

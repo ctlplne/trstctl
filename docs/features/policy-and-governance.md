@@ -551,6 +551,12 @@ body. A person can hold a completed run's report (`POST|DELETE
 /api/v1/compliance/report-runs/{id}/legal-hold`, with a reason), and the opt-in
 `audit.report_retention` removes unheld reports older than its window, recording a run
 expired only once a read of the archive finds the report gone.
+When the archive supports S3 Object Lock, the storage hold's release is complete
+only after bucket readback. A failed storage release can be requested again with
+`archives legal-holds release HOLD_ID` and a new idempotency key after the report
+hold is released. The old attempt stays in the evidence, and another active hold
+on the same object still prevents the older hold's release. See
+[Report retention and legal holds](../compliance.md#report-retention-and-legal-holds).
 `POST /api/v1/compliance/report-schedules/preview` validates and
 fingerprints the exact unsaved definition without appending an event, projecting a row,
 generating a report, or calling a destination. The console invalidates that review after

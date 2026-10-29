@@ -47,6 +47,16 @@ func (d *archiveLegalHoldDelivery) Deliver(ctx context.Context, m orchestrator.M
 	case errors.Is(err, objectstore.ErrNoObjectLock):
 		return fail("the bucket does not have S3 Object Lock enabled")
 	case errors.Is(err, objectstore.ErrNotFound):
+		if !pl.On {
+			// A failed earlier step is not clearance. A fresh independent read
+			// proving this exact object absent can finish its explicit release.
+			if _, readErr := d.objects.Head(ctx, pl.Object); errors.Is(readErr, objectstore.ErrNotFound) {
+				return d.orch.RecordArchiveLegalHoldOutcome(ctx, m.TenantID, pl.ID, "released", "object_absence_verified", now())
+			} else if readErr != nil {
+				return readErr
+			}
+			return errors.New("server: archive object reappeared during hold release verification; retrying")
+		}
 		return fail("the object is not in the archive")
 	case err != nil:
 		return err

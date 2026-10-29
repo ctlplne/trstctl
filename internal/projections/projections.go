@@ -4613,6 +4613,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTenantEventProtectionRequested:           {1: true},
 	EventTenantEventProtectionActivated:           {1: true},
 	EventTenantEventProtectionDestroyed:           {1: true},
+	EventTenantEventProtectionHoldsCleared:        {1: true},
 	EventRestoreDrillRecorded:                     {1: true},
 	EventOwnerCreated:                             {1: true, OwnerDepthEventSchemaVersion: true},
 	EventOwnerUpdated:                             {1: true, OwnerDepthEventSchemaVersion: true},

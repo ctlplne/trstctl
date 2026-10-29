@@ -58,7 +58,7 @@ func mapArchiveLegalHoldError(err error) error {
 	case errors.As(err, &invalid):
 		return errStatus(http.StatusBadRequest, strings.TrimPrefix(invalid.Error(), "orchestrator: "))
 	case errors.Is(err, store.ErrArchiveLegalHoldState):
-		return errStatus(http.StatusConflict, "the object already has an active legal hold, or this hold is not pending or applied")
+		return errStatus(http.StatusConflict, "the object has another active legal hold, or this hold cannot be released from its current state")
 	case errors.Is(err, orchestrator.ErrArchiveLegalHoldLinked):
 		return errStatus(http.StatusConflict, "this storage hold belongs to a report's legal hold; release that hold instead")
 	case errors.Is(err, pgx.ErrNoRows):

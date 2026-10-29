@@ -14,14 +14,16 @@ import (
 )
 
 const (
-	EventTenantEventProtectionRequested = eventprivacy.EventRequested
-	EventTenantEventProtectionActivated = eventprivacy.EventActivated
-	EventTenantEventProtectionDestroyed = eventprivacy.EventDestroyed
+	EventTenantEventProtectionRequested    = eventprivacy.EventRequested
+	EventTenantEventProtectionActivated    = eventprivacy.EventActivated
+	EventTenantEventProtectionDestroyed    = eventprivacy.EventDestroyed
+	EventTenantEventProtectionHoldsCleared = eventprivacy.EventHoldClearance
 )
 
 type TenantEventProtectionRequested = eventprivacy.Requested
 type TenantEventProtectionActivated = eventprivacy.Activated
 type TenantEventProtectionDestroyed = eventprivacy.Destroyed
+type TenantEventProtectionHoldsCleared = eventprivacy.HoldClearance
 
 type EventProtectionActivationVerifier interface {
 	WithVerifiedActivation(context.Context, events.Event, func(context.Context, store.EventKeyPreparationCommand) error) error
@@ -54,6 +56,9 @@ func (p *Projector) applyEventProtectionTx(ctx context.Context, tx pgx.Tx, event
 		return true, p.eventProtectionActivationVerifier.WithVerifiedActivation(ctx, event, func(verified context.Context, command store.EventKeyPreparationCommand) error {
 			return p.store.SettleEventKeyPreparationTx(verified, tx, command)
 		})
+	case EventTenantEventProtectionHoldsCleared:
+		_, err := eventprivacy.ParseHoldClearance(event)
+		return true, err
 	case EventTenantEventProtectionDestroyed:
 		// Syntax is not destruction authority. No SQL completion/effect is derived
 		// here: the current-custody reconciler must verify the exact pinned signed

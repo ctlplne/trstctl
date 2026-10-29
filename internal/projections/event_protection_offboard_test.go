@@ -53,6 +53,7 @@ func newEventProtectionOffboardFixture(t *testing.T) eventProtectionOffboardFixt
 		func(log *events.Log) {
 			policy.Log = log
 			admission.Policy.Log, reader.Policy.Log, receiver.Policy.Log, verifier.Policy.Log = log, log, log, log
+			admission.Holds = eventprivacy.RetainedHoldPolicy{Policy: admission.Policy}
 		},
 		events.WithEventProtection(events.EventProtection{Admission: admission, Keys: reader}),
 		events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(s)), events.WithRequiredPrivacyEventPolicies())

@@ -350,6 +350,23 @@ A hold reads failed, with the reason, when the bucket does not have Object Lock 
 the object is gone; a bucket that acknowledges a hold without applying it leaves the
 hold pending while the outbox retries.
 
+A failed release does not prove the bucket hold is off. Fix the reported bucket
+problem, then request release again with a **new** idempotency key; it creates a
+new outbox command and keeps the earlier attempt's evidence. Wait for `released`,
+which means clear-bucket readback or a fresh read proving that exact object absent.
+A failed older hold cannot clear an object protected by a different active hold.
+
+For a report-linked storage hold, release the report's hold first. If the storage
+release fails, find its ID with `archives legal-holds list` (the row names its
+`report_run_id`), then retry that storage release:
+
+```sh
+trstctl-cli --idempotency-key release-segment-retry-2 archives legal-holds release HOLD_ID
+```
+
+The storage route refuses direct release while the report remains held. Once the
+report hold is released, its failed storage operation can use this recovery path.
+
 Recovery preserves evidence instead of erasing history:
 
 ```sh

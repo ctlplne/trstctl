@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -47,7 +48,8 @@ type ArchiveLegalHoldEffect struct {
 }
 
 // ErrArchiveLegalHoldState is a change the hold's state does not allow: a
-// second active hold on one object, or releasing a hold that is not active.
+// second active hold on one object, or releasing a hold outside pending,
+// applied or failed state.
 // Commands refuse it before they record anything; the projections themselves
 // treat such an event as a no-op, so a race can never leave an event that does
 // not project.
@@ -88,12 +90,12 @@ func (s *Store) PlaceArchiveLegalHoldTx(ctx context.Context, tx pgx.Tx, h Archiv
 		int64(h.EventSequence)); err != nil { // #nosec G115 -- event sequences fit int64 (CWE-190)
 		return err
 	}
-	return queueArchiveLegalHoldEffectTx(ctx, tx, h.TenantID, h.ID, h.Object, true, h.EventSequence)
+	return queueArchiveLegalHoldEffectTx(ctx, tx, h.TenantID, h.ID, h.Object, true, h.EventSequence, false)
 }
 
-// RequestArchiveLegalHoldReleaseTx moves an active hold to release_pending and
+// RequestArchiveLegalHoldReleaseTx moves a pending, applied or failed hold to release_pending and
 // queues clearing it in the bucket. A replay, or a release of a hold that is
-// no longer pending or applied, changes nothing.
+// no longer releasable, changes nothing. Failed readback needs a fresh release.
 func (s *Store) RequestArchiveLegalHoldReleaseTx(ctx context.Context, tx pgx.Tx, tenantID, id string, at time.Time, sequence uint64) error {
 	current, err := lockArchiveLegalHoldTx(ctx, tx, tenantID, id)
 	if err != nil {
@@ -102,8 +104,19 @@ func (s *Store) RequestArchiveLegalHoldReleaseTx(ctx context.Context, tx pgx.Tx,
 	if current.EventSequence >= sequence {
 		return nil
 	}
-	if current.Status != "pending" && current.Status != "applied" {
+	if current.Status != "pending" && current.Status != "applied" && current.Status != "failed" {
 		return nil
+	}
+	// Failed readback remains uncertain. A new explicit release may recover it,
+	// but must not clear an object now protected by another active hold.
+	if current.Status == "failed" {
+		var other bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM archive_legal_holds WHERE tenant_id=$1 AND object=$2 AND id<>$3 AND status IN ('pending','applied','release_pending'))`, tenantID, current.Object, id).Scan(&other); err != nil {
+			return err
+		}
+		if other {
+			return nil
+		}
 	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE archive_legal_holds SET status = 'release_pending', updated_at = $3, event_sequence = $4
@@ -111,7 +124,7 @@ func (s *Store) RequestArchiveLegalHoldReleaseTx(ctx context.Context, tx pgx.Tx,
 		tenantID, id, at, int64(sequence)); err != nil { // #nosec G115 -- event sequences fit int64 (CWE-190)
 		return err
 	}
-	return queueArchiveLegalHoldEffectTx(ctx, tx, tenantID, id, current.Object, false, sequence)
+	return queueArchiveLegalHoldEffectTx(ctx, tx, tenantID, id, current.Object, false, sequence, current.Status == "failed")
 }
 
 // RecordArchiveLegalHoldOutcomeTx records what the bucket read back: applied
@@ -131,9 +144,9 @@ func (s *Store) RecordArchiveLegalHoldOutcomeTx(ctx context.Context, tx pgx.Tx, 
 		                         updated_at = $3, event_sequence = $4 WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id, at, int64(sequence)) // #nosec G115 -- event sequences fit int64 (CWE-190)
 	case status == "released" && current.Status == "release_pending":
-		_, err = tx.Exec(ctx, `UPDATE archive_legal_holds SET status = 'released', status_detail = '', released_at = $3,
-		                         updated_at = $3, event_sequence = $4 WHERE tenant_id = $1 AND id = $2`,
-			tenantID, id, at, int64(sequence)) // #nosec G115 -- event sequences fit int64 (CWE-190)
+		_, err = tx.Exec(ctx, `UPDATE archive_legal_holds SET status = 'released', status_detail = $3, released_at = $4,
+		                         updated_at = $4, event_sequence = $5 WHERE tenant_id = $1 AND id = $2`,
+			tenantID, id, detail, at, int64(sequence)) // #nosec G115 -- event sequences fit int64 (CWE-190)
 	case status == "failed" && current.Active():
 		_, err = tx.Exec(ctx, `UPDATE archive_legal_holds SET status = 'failed', status_detail = $3, updated_at = $4,
 		                         event_sequence = $5 WHERE tenant_id = $1 AND id = $2`,
@@ -142,7 +155,7 @@ func (s *Store) RecordArchiveLegalHoldOutcomeTx(ctx context.Context, tx pgx.Tx, 
 	return err
 }
 
-func queueArchiveLegalHoldEffectTx(ctx context.Context, tx pgx.Tx, tenantID, id, object string, on bool, sequence uint64) error {
+func queueArchiveLegalHoldEffectTx(ctx context.Context, tx pgx.Tx, tenantID, id, object string, on bool, sequence uint64, retry bool) error {
 	payload, err := json.Marshal(ArchiveLegalHoldEffect{ID: id, Object: object, On: on})
 	if err != nil {
 		return err
@@ -150,6 +163,11 @@ func queueArchiveLegalHoldEffectTx(ctx context.Context, tx pgx.Tx, tenantID, id,
 	key := "archive-legal-hold:" + id + ":off"
 	if on {
 		key = "archive-legal-hold:" + id + ":on"
+	} else if retry {
+		// A fresh source release after failure is a new command. Choose from
+		// the source transition, never row existence, so rebuild preserves the
+		// same initial/retry keys with old outbox evidence still present.
+		key += ":" + strconv.FormatUint(sequence, 10)
 	}
 	var exists bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM outbox WHERE tenant_id = $1 AND idempotency_key = $2)`,

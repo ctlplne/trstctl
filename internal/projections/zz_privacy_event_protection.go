@@ -21,11 +21,17 @@ func addEventProtectionPrivacyPolicies(policies map[privacyEventPolicyKey]events
 		privacyRule("/creation/created_at", opaque), privacyRule("/creation/probe", opaque),
 	)
 	policies[privacyEventPolicyKey{EventTenantEventProtectionActivated, 1}] = privacyRules(activation...)
+	policies[privacyEventPolicyKey{EventTenantEventProtectionHoldsCleared, 1}] = privacyRules(
+		privacyRule("/request/ref/tenant_id", opaque), privacyRule("/request/ref/key_id", opaque), privacyRule("/request/operation_id", opaque), privacyRule("/request/registration_identity", opaque),
+		privacyRule("/request/activation_event_id", opaque), privacyRule("/request/activation_sequence", opaque), privacyRule("/request/creation_digest", opaque),
+		privacyRule("/request/offboard_event_id", opaque), privacyRule("/request/offboard_sequence", opaque), privacyRule("/request/offboarded_at", opaque), privacyRule("/request/not_before", opaque),
+	)
 	policies[privacyEventPolicyKey{EventTenantEventProtectionDestroyed, 1}] = privacyRules(privacyRule("/jws", opaque))
 }
 
 func addEventProtectionPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
 	shapes[privacyEventPolicyKey{EventTenantEventProtectionRequested, 1}] = privacyPayloadShape[TenantEventProtectionRequested]()
 	shapes[privacyEventPolicyKey{EventTenantEventProtectionActivated, 1}] = privacyPayloadShape[TenantEventProtectionActivated]()
+	shapes[privacyEventPolicyKey{EventTenantEventProtectionHoldsCleared, 1}] = privacyPayloadShape[TenantEventProtectionHoldsCleared]()
 	shapes[privacyEventPolicyKey{EventTenantEventProtectionDestroyed, 1}] = privacyPayloadShape[TenantEventProtectionDestroyed]()
 }
