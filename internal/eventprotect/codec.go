@@ -81,9 +81,8 @@ func Protect(key seal.KeyWrapper, context Context, keyID, policyDigest string, p
 }
 
 func Open(key seal.KeyWrapper, context Context, expectedPolicy string, envelope Envelope) (Payload, error) {
-	if envelope.Version != formatVersion || envelope.PolicyDigest != expectedPolicy ||
-		len(envelope.Ciphertext) == 0 || len(envelope.Ciphertext) > maxCipherBytes {
-		return Payload{}, ErrEnvelope
+	if err := ValidateEnvelope(context, expectedPolicy, envelope); err != nil {
+		return Payload{}, err
 	}
 	aad, domain, err := protectionBindings(context, envelope.KeyID, expectedPolicy)
 	if err != nil {
@@ -98,6 +97,18 @@ func Open(key seal.KeyWrapper, context Context, expectedPolicy string, envelope 
 	}
 	defer secret.Wipe(frame)
 	return decodePayload(frame)
+}
+
+// ValidateEnvelope checks the public framing and bindings without opening any
+// data. Backup/source-index code can preserve ciphertext without key access.
+// This is structural validation; it never claims ciphertext authentication.
+func ValidateEnvelope(context Context, expectedPolicy string, envelope Envelope) error {
+	if envelope.Version != formatVersion || envelope.PolicyDigest != expectedPolicy ||
+		len(envelope.Ciphertext) == 0 || len(envelope.Ciphertext) > maxCipherBytes {
+		return ErrEnvelope
+	}
+	_, _, err := protectionBindings(context, envelope.KeyID, expectedPolicy)
+	return err
 }
 
 func protectionBindings(context Context, keyID, policyDigest string) ([]byte, []byte, error) {

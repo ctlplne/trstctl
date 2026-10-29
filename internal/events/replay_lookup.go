@@ -40,6 +40,11 @@ func (l *Log) ReplayThroughAndLookup(ctx context.Context, from, through uint64, 
 			if !found {
 				canonical = event
 				canonical.Data = bytes.Clone(event.Data)
+				if event.Protection != nil {
+					protection := *event.Protection
+					protection.Ciphertext = bytes.Clone(event.Protection.Ciphertext)
+					canonical.Protection = &protection
+				}
 				if event.Actor != nil {
 					actor := *event.Actor
 					actor.Roles = slices.Clone(event.Actor.Roles)
@@ -64,5 +69,6 @@ func (l *Log) ReplayThroughAndLookup(ctx context.Context, from, through uint64, 
 func sameRetainedEvent(left, right Event) bool {
 	return left.Type == right.Type && left.TenantID == right.TenantID &&
 		left.Time.Equal(right.Time) && left.SchemaVersion == right.SchemaVersion &&
-		bytes.Equal(left.Data, right.Data) && reflect.DeepEqual(left.Actor, right.Actor)
+		bytes.Equal(left.Data, right.Data) && reflect.DeepEqual(left.Actor, right.Actor) &&
+		left.SensitiveErased == right.SensitiveErased && reflect.DeepEqual(left.Protection, right.Protection)
 }

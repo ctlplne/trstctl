@@ -4,6 +4,14 @@ This package is A233 groundwork. The running product does not yet attach it to
 event append, offboarding, projection rebuild, backups, snapshots or WORM audit
 archives. Its component tests do not establish those workflows.
 
+The optional `internal/events.WithEventProtection` seam now preserves ciphertext
+in stored envelopes, identity indexes and exact history transfers, while opening
+logical reads. Its admission adapter must serialize activation, append and
+destruction for a tenant and verify retained lifecycle authority. Protected
+retries recover the original ciphertext beyond the broker's duplicate window.
+Missing custody fails; a verified destroyed key produces an explicit erased view.
+Projection handling of that view and production admission are still to be built.
+
 `Protect` encrypts the original payload bytes and a separately encoded actor
 using `internal/crypto/seal`. It binds the tenant, source ID, event type, schema,
 time, storage purpose, key reference and privacy-policy digest. `Open` requires

@@ -303,6 +303,10 @@ func (l *Log) ReplayTenantThrough(ctx context.Context, tenantID string, from, th
 					if event.TenantID != tenantID {
 						return errors.New("events: tenant projection selected a different tenant")
 					}
+					event, err = l.openProtectedEvent(readCtx, event)
+					if err != nil {
+						return err
+					}
 					if err := fn(event); err != nil {
 						return err
 					}

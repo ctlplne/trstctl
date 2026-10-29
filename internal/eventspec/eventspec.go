@@ -39,6 +39,12 @@ type Event struct {
 	// payload-shape change to an existing type cannot silently mis-project on a
 	// rebuild — the new shape carries a new version and old events keep theirs.
 	SchemaVersion int
+
+	// Protection retains the immutable storage envelope beside a readable view.
+	// SensitiveErased is set only by an opener with verified key-destruction
+	// evidence. Producers must never set either field on an ordinary append.
+	Protection      *ProtectedPayload `json:"protection,omitempty"`
+	SensitiveErased bool              `json:"sensitive_erased,omitempty"`
 }
 
 // Actor identifies the authenticated caller responsible for an event — the "who" of

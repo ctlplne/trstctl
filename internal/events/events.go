@@ -3,6 +3,7 @@
 package events
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/schedulerhistory"
 	"trstctl.com/trstctl/internal/tenancy"
@@ -66,13 +68,15 @@ func NewID() string {
 // omitted for v1 so legacy envelopes (which never carried it) decode to the same
 // bytes and read back as DefaultSchemaVersion (SCHEMA-001).
 type storedEvent struct {
-	ID            string    `json:"id"`
-	Type          string    `json:"type"`
-	TenantID      string    `json:"tenant_id"`
-	Time          time.Time `json:"time"`
-	SchemaVersion int       `json:"v,omitempty"`
-	Data          []byte    `json:"data,omitempty"`
-	Actor         *Actor    `json:"actor,omitempty"`
+	ID                   string                      `json:"id"`
+	Type                 string                      `json:"type"`
+	TenantID             string                      `json:"tenant_id"`
+	Time                 time.Time                   `json:"time"`
+	SchemaVersion        int                         `json:"v,omitempty"`
+	Data                 []byte                      `json:"data,omitempty"`
+	Actor                *Actor                      `json:"actor,omitempty"`
+	Protection           *eventspec.ProtectedPayload `json:"protection,omitempty"`
+	PayloadSchemaVersion int                         `json:"payload_v,omitempty"`
 }
 
 // EnvelopeDecodeError identifies a malformed event-log record before it can
@@ -127,6 +131,7 @@ type Log struct {
 	// privacy disposition has been registered, so a later subject erasure never
 	// discovers an unsupported schema only after the mutation was accepted.
 	requirePrivacyEventPolicies bool
+	eventProtection             *EventProtection
 	// rejectLegacySchedulerRuns is installed only after startup sanitation. It
 	// closes every normal live/federated ingress path while the restore-only path
 	// remains able to stage an authenticated pre-patch artifact for sanitation.
@@ -258,6 +263,10 @@ func Open(ctx context.Context, cfg config.NATS, opts ...OpenOption) (*Log, error
 		if opt != nil {
 			opt(l)
 		}
+	}
+	if l.eventProtection != nil && (l.eventProtection.Keys == nil || l.eventProtection.Admission == nil) {
+		shutdown(srv, nc)
+		return nil, ErrEventProtectionUnavailable
 	}
 	scfg := streamConfig(cfg)
 	scfg.Duplicates = l.duplicateWindow
@@ -442,6 +451,10 @@ func (l *Log) EnforceLegacySchedulerWriteFloor() {
 }
 
 func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (Event, error) {
+	if e.Protection != nil || e.SensitiveErased {
+		return Event{}, errors.New("events: append requires an original readable producer payload")
+	}
+	explicitTime := !e.Time.IsZero()
 	if e.Type == "" {
 		return Event{}, errors.New("events: event type is required")
 	}
@@ -481,10 +494,15 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 			e.Actor = &actor
 		}
 	}
-	payload, err := json.Marshal(storedEvent{
-		ID: e.ID, Type: e.Type, TenantID: e.TenantID, Time: e.Time,
-		SchemaVersion: e.SchemaVersion, Data: e.Data, Actor: e.Actor,
-	})
+	return l.appendWithEventProtection(ctx, e, explicitTime)
+}
+
+func (l *Log) publishPreparedEvent(ctx context.Context, e Event) (Event, error) {
+	stored, err := storedForEvent(e)
+	if err != nil {
+		return Event{}, err
+	}
+	payload, err := json.Marshal(stored)
 	if err != nil {
 		return Event{}, err
 	}
@@ -518,7 +536,10 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 		if canonical.ID != e.ID {
 			return Event{}, fmt.Errorf("events: duplicate id %q resolved to canonical id %q", e.ID, canonical.ID)
 		}
-		return canonical, nil
+		if canonical.Protection != nil && (canonical.TenantID != e.TenantID || canonical.Type != e.Type) {
+			return Event{}, ErrConflictingEventIdentity
+		}
+		return l.openProtectedEvent(ctx, canonical)
 	}
 	e.Sequence = ack.Sequence
 	return e, nil
@@ -530,6 +551,22 @@ func (l *Log) append(ctx context.Context, e Event, requireSourceEnvelope bool) (
 // catch-up can advance the cursor after another replica's append; larger lag is
 // retried without scanning the full history on this request path.
 func (l *Log) EventByID(ctx context.Context, eventID string) (Event, bool, error) {
+	var event Event
+	var found bool
+	err := l.withHistoryRead(ctx, func(readCtx context.Context) error {
+		var err error
+		event, found, err = l.rawEventByID(readCtx, eventID)
+		if found && (err == nil || errors.Is(err, ErrConflictingEventIdentity)) {
+			var openErr error
+			event, openErr = l.openProtectedEvent(readCtx, event)
+			err = errors.Join(err, openErr)
+		}
+		return err
+	})
+	return event, found, err
+}
+
+func (l *Log) rawEventByID(ctx context.Context, eventID string) (Event, bool, error) {
 	if strings.TrimSpace(eventID) == "" {
 		return Event{}, false, errors.New("events: event id lookup is empty")
 	}
@@ -657,6 +694,10 @@ func (l *Log) EventAtSequence(ctx context.Context, sequence uint64) (Event, bool
 		if err != nil {
 			return err
 		}
+		event, err = l.openProtectedEvent(readCtx, event)
+		if err != nil {
+			return err
+		}
 		unsafe, inspectErr := schedulerhistory.RequiresSanitation(
 			event.Type, event.SchemaVersion, event.Data,
 		)
@@ -761,7 +802,13 @@ func (l *Log) replayResolved(
 	if from == 0 {
 		from = 1
 	}
-	if err := readRetainedEventsThrough(ctx, stream, from, through, fn); err != nil {
+	if err := readRetainedEventsThrough(ctx, stream, from, through, func(event Event) error {
+		opened, err := l.openProtectedEvent(ctx, event)
+		if err != nil {
+			return err
+		}
+		return fn(opened)
+	}); err != nil {
 		return err
 	}
 	current, err := l.activeStreamName(ctx)
@@ -1079,13 +1126,25 @@ func decodeStored(data []byte, seq uint64) (Event, error) {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return Event{}, &EnvelopeDecodeError{Sequence: seq, Err: err}
 	}
+	if err := validateStoredProtection(s); err != nil {
+		return Event{}, &EnvelopeDecodeError{Sequence: seq, Err: err}
+	}
+	if s.Protection != nil {
+		canonical, err := json.Marshal(s)
+		if err != nil || !bytes.Equal(canonical, data) {
+			return Event{}, &EnvelopeDecodeError{Sequence: seq, Err: eventprotect.ErrEnvelope}
+		}
+	}
 	ver := s.SchemaVersion
+	if s.Protection != nil {
+		ver = s.PayloadSchemaVersion
+	}
 	if ver == 0 {
 		ver = DefaultSchemaVersion
 	}
 	return Event{
 		ID: s.ID, Type: s.Type, TenantID: s.TenantID, Time: s.Time,
-		SchemaVersion: ver, Data: s.Data, Sequence: seq, Actor: s.Actor,
+		SchemaVersion: ver, Data: s.Data, Sequence: seq, Actor: s.Actor, Protection: s.Protection,
 	}, nil
 }
 
@@ -1222,6 +1281,11 @@ func (l *Log) tailFrom(
 					return fmt.Errorf("events: tail metadata: %w", metadataErr)
 				}
 				ev, decodeErr := decodeStored(msg.Data(), md.Sequence.Stream)
+				if decodeErr != nil {
+					_ = msg.Nak()
+					return decodeErr
+				}
+				ev, decodeErr = l.openProtectedEvent(readCtx, ev)
 				if decodeErr != nil {
 					_ = msg.Nak()
 					return decodeErr
