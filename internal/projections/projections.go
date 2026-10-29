@@ -3853,11 +3853,12 @@ type identityTransitionEffect struct {
 // read model is always a projection of the log; nothing writes the served
 // domain read model except through here.
 type Projector struct {
-	store                            *store.Store
-	eventProjections                 []EventProjection
-	allowSecretSyncRecoveryBootstrap bool
-	ownershipAttestationCadence      time.Duration
-	restoreDrillVerificationKeys     *jose.JWKSet
+	store                             *store.Store
+	eventProjections                  []EventProjection
+	allowSecretSyncRecoveryBootstrap  bool
+	ownershipAttestationCadence       time.Duration
+	restoreDrillVerificationKeys      *jose.JWKSet
+	eventProtectionActivationVerifier EventProtectionActivationVerifier
 }
 
 // Option customizes the generic projector without coupling core to any
@@ -4605,6 +4606,9 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventTSACertificateRevoked:                    {1: true},
 	EventTenantRegistered:                         {1: true},
 	EventTenantOffboarded:                         {1: true},
+	EventTenantEventProtectionRequested:           {1: true},
+	EventTenantEventProtectionActivated:           {1: true},
+	EventTenantEventProtectionDestroyed:           {1: true},
 	EventRestoreDrillRecorded:                     {1: true},
 	EventOwnerCreated:                             {1: true, OwnerDepthEventSchemaVersion: true},
 	EventOwnerUpdated:                             {1: true, OwnerDepthEventSchemaVersion: true},
@@ -4930,6 +4934,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 	// schema version must be one it knows. An unrecognized version fails closed
 	// rather than being decoded against the wrong struct.
 	if err := ValidateSchemaVersion(e); err != nil {
+		return err
+	}
+	if handled, err := p.applyEventProtectionTx(ctx, tx, e); handled {
 		return err
 	}
 	switch e.Type {

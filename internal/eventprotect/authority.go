@@ -205,6 +205,19 @@ func (a *FileAuthority) withLock(ctx context.Context, ref KeyRef, fn func(contex
 	if err != nil {
 		return err
 	}
+	if held, _ := ctx.Value(custodyFenceKey{}).(*custodyFence); held != nil {
+		if held.authority != a || held.tenantID != ref.TenantID || !held.active.Load() || !held.borrow.TryLock() {
+			return ErrContext
+		}
+		defer held.borrow.Unlock()
+		if !held.active.Load() {
+			return ErrContext
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return fn(ctx, ref)
+	}
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if a.closed {
@@ -214,7 +227,23 @@ func (a *FileAuthority) withLock(ctx context.Context, ref KeyRef, fn func(contex
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return fn(ctx, ref)
+		// A lost database session releases its advisory lock before a local
+		// callback necessarily returns. The independent custodian's file lock
+		// keeps that callback fenced until its key buffer is destroyed.
+		release, err := a.lockCustodyFile(ctx, ref.TenantID)
+		if err != nil {
+			return err
+		}
+		grant := &custodyFence{authority: a, tenantID: ref.TenantID}
+		grant.active.Store(true)
+		defer func() {
+			grant.active.Store(false)
+			grant.borrow.Lock()
+			defer grant.borrow.Unlock()
+			// Join any admitted nested key callback before releasing its inode.
+			release()
+		}()
+		return fn(context.WithValue(ctx, custodyFenceKey{}, grant), ref)
 	})
 }
 

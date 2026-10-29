@@ -19,3 +19,12 @@ These are integration components. Production startup, the preparation receiver,
 offboarding destruction intents, backup rows, audit archives and operator routes
 are not attached here yet. The component tests do not qualify those workflows.
 The software custodian does not prove removal of host snapshots or copied keys.
+
+Preparation now consumes an exact committed outbox invocation, resolves its
+retained request under independent custody, creates only a never-activated key,
+and independently reads creation evidence before public activation. An active
+retry cannot provision missing historical custody. Activation projection settles
+that command's old invocation holds only through the configured verifier: it
+checks exact retained source and current creation under the custody file fence.
+Missing proof retains the holds. Generic outbox status, leases and quiescence
+rules stay unchanged. Production startup/routes still do not attach this path.

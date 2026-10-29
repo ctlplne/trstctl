@@ -1115,6 +1115,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	policies[privacyEventPolicyKey{EventType: EventIdentityIssued, Version: LifecycleIssuanceEventSchemaVersion}] = identityTransitionV5
 	policies[privacyEventPolicyKey{EventType: EventIdentityRevoked, Version: LifecycleKeyCompromiseEventSchemaVersion}] = identityTransitionV8
 	addCACeremonyPrivacyPolicies(policies)
+	addEventProtectionPrivacyPolicies(policies)
 	addSSHTrustFleetPrivacyPolicies(policies)
 	current := agentHeartbeat
 	current.Rules = append(append([]events.PrivacyFieldRule{}, agentHeartbeat.Rules...), privacyRule("/executors/ssh_trust/enabled", opaque), privacyRule("/executors/ssh_trust/confirmed", opaque), privacyRule("/executors/ssh_trust/ca_fingerprint", opaque), privacyRule("/executors/ssh_trust/policy_digest", opaque), privacyRule("/executors/ssh_trust/issue_code", opaque))
@@ -1641,6 +1642,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		shapes[privacyEventPolicyKey{EventType: eventType, Version: LifecycleCompletedSideEffectEventSchemaVersion}] = privacyPayloadShape[privacyIdentityTransitionV7]()
 	}
 	addCACeremonyPrivacyShapes(shapes)
+	addEventProtectionPrivacyShapes(shapes)
 	addSSHTrustFleetPrivacyShapes(shapes)
 	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = privacyPayloadShape[AgentHeartbeat]()
 	return shapes

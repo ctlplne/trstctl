@@ -76,3 +76,13 @@ media or plaintext already exported elsewhere. Ordinary data restore must use
 the current independent custodian, and must never restore an old key copy or
 fall back to a deployment key. Native Windows, network-filesystem and multiple
 host behavior have not been qualified by these Mac tests.
+
+Custody callbacks also hold a per-tenant operating-system file lock in the
+independent directory. It remains held if the PostgreSQL session disappears,
+and releases only after nested key callbacks finish. Lock inodes are retained;
+unlinking them would allow overlapping lock generations. A fence-only callback
+can verify source/current custody and join its SQL result without retaining key
+bytes. Its private authority/tenant grant expires on return and refuses concurrent
+borrows. Native session-loss/close/cancellation tests run on macOS; Windows amd64
+and Linux arm64 locking paths have compile-only checks until native qualification.
+Independent host snapshots and copied keys remain outside physical-erasure proof.
