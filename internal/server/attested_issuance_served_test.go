@@ -378,10 +378,11 @@ type servedAttestedIssueResponse struct {
 	Subject        string    `json:"subject"`
 	NotAfter       time.Time `json:"not_after"`
 	Attestation    struct {
-		ID        string   `json:"id"`
-		Method    string   `json:"method"`
-		Subject   string   `json:"subject"`
-		Selectors []string `json:"selectors"`
+		ID        string            `json:"id"`
+		Method    string            `json:"method"`
+		Subject   string            `json:"subject"`
+		Selectors []string          `json:"selectors"`
+		Claims    map[string]string `json:"claims"`
 	} `json:"attestation"`
 }
 

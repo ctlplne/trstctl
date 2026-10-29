@@ -70,20 +70,22 @@ type attestedIssuerService struct {
 	store       *store.Store
 	log         *events.Log
 	orch        *orchestrator.Orchestrator
+	idem        *orchestrator.Idempotency
 	caSigner    crypto.DigestSigner
 	caCertDER   []byte
 	caID        string
 }
 
 type attestedIssuerDeps struct {
-	Config    AttestedIssuanceConfig
-	Store     *store.Store
-	Log       *events.Log
-	Orch      *orchestrator.Orchestrator
-	CASigner  crypto.DigestSigner
-	CACertDER []byte
-	CAID      string
-	Audit     auditsink.Auditor
+	Config      AttestedIssuanceConfig
+	Store       *store.Store
+	Log         *events.Log
+	Orch        *orchestrator.Orchestrator
+	Idempotency *orchestrator.Idempotency
+	CASigner    crypto.DigestSigner
+	CACertDER   []byte
+	CAID        string
+	Audit       auditsink.Auditor
 }
 
 func newAttestedIssuerService(d attestedIssuerDeps) (*attestedIssuerService, error) {
@@ -132,6 +134,7 @@ func newAttestedIssuerService(d attestedIssuerDeps) (*attestedIssuerService, err
 		store:       d.Store,
 		log:         d.Log,
 		orch:        d.Orch,
+		idem:        d.Idempotency,
 		caSigner:    d.CASigner,
 		caCertDER:   append([]byte(nil), d.CACertDER...),
 		caID:        d.CAID,
@@ -211,12 +214,14 @@ func (s *attestedIssuerService) PreviewAttestedSVID(ctx context.Context, tenantI
 		Blockers: blockers,
 		RecoverySteps: []string{
 			"If a response is lost, retry the exact request with the same Idempotency-Key to recover the original result instead of minting twice.",
+			"For GitHub Actions, a new signed run_id/run_attempt may issue once. A second public key within the same attempt is refused; changing the runner environment or HTTP retry key does not grant another mint.",
 			"If proof verification fails, correct the trust configuration or obtain fresh proof, then review a new request. Never disable verification to continue.",
 			"If the signer is unavailable, restore the isolated signer and retry the unchanged request. An expired proof requires a fresh preview.",
 			"If initial revocation-list publication fails after the certificate was recorded, retry the same command. The server recovers that certificate and completes publication instead of issuing another leaf.",
 		},
 		DataHandling: []string{
 			"The preview returns only SHA-256 digests and operational metadata, never the raw proof or public-key body. Decoded proof buffers are wiped after the response.",
+			"GitHub certificate evidence retains the verified run ID, attempt and original verification time. A rerun leaves earlier certificates valid until their normal expiry or explicit revocation.",
 			"Proof verification happens only during issuance so preview cannot consume one-time evidence or create verification audit events.",
 			"No private key is uploaded, generated, stored, or returned by this workflow.",
 		},
@@ -288,6 +293,9 @@ func (s *attestedIssuerService) IssueAttestedSVID(ctx context.Context, tenantID,
 	}
 
 	ttl := s.ttl(req.TTLSeconds)
+	if method == "github_oidc" {
+		return s.issueGitHubAttempt(ctx, tenantID, verifier, att, req.PublicKeyDER, ttl)
+	}
 	// The attested subject is folded into the recovery key, not just the caller's
 	// Idempotency-Key. Today the only caller is the API handler, which runs this
 	// behind mutateDurableBound — that rejects an empty key and binds it to
@@ -513,14 +521,18 @@ func (s *attestedIssuerService) finish(ctx context.Context, tenantID string, ver
 		return api.AttestedSVID{}, fmt.Errorf("server: bind attestation: %w", err)
 	}
 	s.emitIssued(ctx, tenantID, att, ttl, info.NotAfter, minted)
+	return attestedSVIDResult(att, certDER, info.NotAfter), nil
+}
+
+func attestedSVIDResult(att attest.Attestation, certDER []byte, notAfter time.Time) api.AttestedSVID {
 	return api.AttestedSVID{
 		CertificatePEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})),
 		SPIFFEID:       certificateSPIFFEID(certDER),
-		CredentialID:   credentialID,
+		CredentialID:   "cred:" + crypto.SHA256Hex(certDER),
 		Subject:        att.Subject,
-		NotAfter:       info.NotAfter,
+		NotAfter:       notAfter,
 		Attestation:    att,
-	}, nil
+	}
 }
 
 func (s *attestedIssuerService) emitIssued(ctx context.Context, tenantID string, att attest.Attestation, ttl time.Duration, notAfter time.Time, minted bool) {

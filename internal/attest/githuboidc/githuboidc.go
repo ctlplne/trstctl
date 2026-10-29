@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,6 +54,8 @@ type ghClaims struct {
 	SHA               string `json:"sha"`
 	JobWorkflowRef    string `json:"job_workflow_ref"`
 	RunnerEnvironment string `json:"runner_environment"`
+	RunID             string `json:"run_id"`
+	RunAttempt        string `json:"run_attempt"`
 }
 
 // ownerAllowed matches the pin the way GitHub treats owner names: without
@@ -113,6 +116,9 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 	if err := attest.ValidateJWTTimeWindow(raw, now()); err != nil {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: %w", err)
 	}
+	if !validRunID(c.RunID) || !validRunID(c.RunAttempt) {
+		return attest.Attestation{}, fmt.Errorf("github_oidc: signed run_id and run_attempt must be canonical positive decimal strings")
+	}
 	if c.Repository == "" {
 		return attest.Attestation{}, fmt.Errorf("github_oidc: token missing repository")
 	}
@@ -136,6 +142,8 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 		},
 		Claims: map[string]string{
 			"repository":    c.Repository,
+			"run_id":        c.RunID,
+			"run_attempt":   c.RunAttempt,
 			"owner":         c.RepositoryOwner,
 			"workflow":      c.Workflow,
 			"ref":           c.Ref,
@@ -144,4 +152,19 @@ func (a *Attestor) Attest(_ context.Context, payload []byte) (attest.Attestation
 			"fulcio_issuer": c.Iss,
 		},
 	}, nil
+}
+
+// validRunID uses one representation for the signed scope. Leading zeroes,
+// signs, whitespace, floats and oversized values must not create aliases.
+func validRunID(value string) bool {
+	if len(value) == 0 || len(value) > 20 || value[0] == '0' {
+		return false
+	}
+	for _, digit := range []byte(value) {
+		if digit < '0' || digit > '9' {
+			return false
+		}
+	}
+	_, err := strconv.ParseUint(value, 10, 64)
+	return err == nil
 }

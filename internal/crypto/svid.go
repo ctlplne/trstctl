@@ -23,6 +23,22 @@ const MaxSPIFFEIDLength = 2048
 // issued certificate is verified against the CA before return, so a misbehaving
 // signer fails closed instead of emitting an unverifiable SVID.
 func SignSVID(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffeID string, ttl time.Duration) ([]byte, error) {
+	prepared, err := NewLeafPreparation()
+	if err != nil {
+		return nil, err
+	}
+	return SignSVIDWithPreparation(caCertDER, caSigner, leafPubDER, spiffeID, ttl, prepared)
+}
+
+// SignSVIDWithPreparation uses a retained serial and validity anchor. Callers
+// must bind the preparation to all public inputs before signing, and use an
+// operation-journaled signer to recover an identical certificate after a crash.
+// Public-key policy, SPIFFE grammar and signature verification stay identical.
+func SignSVIDWithPreparation(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffeID string, ttl time.Duration, prepared LeafPreparation) ([]byte, error) {
+	serial, err := prepared.validatedSerial()
+	if err != nil {
+		return nil, err
+	}
 	id, err := ParseSPIFFEID(spiffeID)
 	if err != nil {
 		return nil, err
@@ -42,15 +58,11 @@ func SignSVID(caCertDER []byte, caSigner DigestSigner, leafPubDER []byte, spiffe
 	if err != nil {
 		return nil, err
 	}
-	serial, err := randomSerial()
-	if err != nil {
-		return nil, err
-	}
 	ski, err := subjectKeyID(pub)
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now()
+	now := prepared.ValidityAnchor
 	leaf := &x509.Certificate{
 		SerialNumber:          serial,
 		URIs:                  []*url.URL{id},

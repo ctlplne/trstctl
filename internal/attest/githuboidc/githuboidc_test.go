@@ -14,12 +14,13 @@ import (
 func ghToken(t *testing.T, signer crypto.DigestSigner, kid string, mut func(map[string]any)) string {
 	t.Helper()
 	claims := map[string]any{
-		"iss":                DefaultIssuer,
-		"aud":                "trstctl",
-		"exp":                time.Now().Add(time.Hour).Unix(),
-		"sub":                "repo:acme/widgets:ref:refs/heads/main",
-		"repository":         "acme/widgets",
-		"repository_owner":   "acme",
+		"iss":              DefaultIssuer,
+		"aud":              "trstctl",
+		"exp":              time.Now().Add(time.Hour).Unix(),
+		"sub":              "repo:acme/widgets:ref:refs/heads/main",
+		"repository":       "acme/widgets",
+		"repository_owner": "acme",
+		"run_id":           "47001", "run_attempt": "1",
 		"workflow":           "release",
 		"ref":                "refs/heads/main",
 		"sha":                "deadbeef",
@@ -89,7 +90,7 @@ func TestAllowedOwnersMatchCaseInsensitively(t *testing.T) {
 	}
 	token, err := crypto.SignJWT(signer, "k1", map[string]any{
 		"iss": DefaultIssuer, "aud": "trstctl", "exp": time.Now().Add(5 * time.Minute).Unix(),
-		"sub": "repo:Acme/payments:ref:refs/heads/main", "repository": "Acme/payments", "repository_owner": "Acme",
+		"sub": "repo:Acme/payments:ref:refs/heads/main", "repository": "Acme/payments", "repository_owner": "Acme", "run_id": "47001", "run_attempt": "1",
 	})
 	if err != nil {
 		t.Fatal(err)

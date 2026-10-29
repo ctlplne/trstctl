@@ -11,11 +11,9 @@ import (
 
 // The GitHub Action's contract with the served route (I3).
 //
-// The action is YAML the Go suite cannot execute, and the served test that
-// proves the flow (internal/server github_action_served_test.go) sends the
-// request itself. What CAN drift silently is the action file: a renamed field
-// or moved route would break every consumer's workflow while both the server
-// and its tests stayed green. These checks pin the action to the exact route,
+// The served suite executes the literal composite run block against the real
+// API; a separate push proves GitHub's execution environment. These source
+// checks also pin the action to the exact route,
 // method name and field names the served contract uses — rename either side
 // and this fails by name.
 func TestGitHubActionMatchesTheServedContract(t *testing.T) {
@@ -37,7 +35,7 @@ func TestGitHubActionMatchesTheServedContract(t *testing.T) {
 		"ACTIONS_ID_TOKEN_REQUEST_URL", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "audience=",
 		// The failure that names its own fix.
 		"permissions: id-token: write",
-		// Idempotency: a re-run attempt must be a replay, not a second cert.
+		// Idempotency: one certificate per signed workflow attempt (owner Q1).
 		"Idempotency-Key",
 	} {
 		if !strings.Contains(action, want) {
@@ -68,17 +66,17 @@ func TestGitHubActionMatchesTheServedContract(t *testing.T) {
 	}
 }
 
-func TestGitHubActionIsRerunStableForkClosedAndReleaseReadyAUD47(t *testing.T) {
+func TestGitHubActionIsAttemptStableForkClosedAndReleaseReadyAUD47(t *testing.T) {
 	t.Parallel()
 	actionRaw, err := os.ReadFile("../clients/github-action/action.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
 	action := string(actionRaw)
-	if strings.Contains(action, "GITHUB_RUN_ATTEMPT") {
-		t.Fatal("Action idempotency changes on a GitHub rerun; the same workflow run would mint again")
-	}
-	for _, want := range []string{"GITHUB_EVENT_PATH", "pull_request", ".head.repo.fork", "GITHUB_RUN_ID", "GITHUB_JOB", "GITHUB_ACTION"} {
+	// Owner Q1 (A232) intentionally replaces the old one-certificate-per-run
+	// contract: a new signed run_attempt owns a new slot; a second key within
+	// one attempt stays refused. Environment changes alone are not authority.
+	for _, want := range []string{"GITHUB_EVENT_PATH", "pull_request", ".head.repo.fork", "GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", `"$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"`} {
 		if !strings.Contains(action, want) {
 			t.Errorf("action.yml missing AUD-47 trust/replay anchor %q", want)
 		}

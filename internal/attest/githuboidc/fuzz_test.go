@@ -37,6 +37,7 @@ func FuzzGitHubOIDCAttest(f *testing.F) {
 			"sub":              "repo:octo/app:ref:refs/heads/main",
 			"repository":       "octo/app",
 			"repository_owner": "octo",
+			"run_id":           "47001", "run_attempt": "1",
 			"workflow":         "release",
 			"ref":              "refs/heads/main",
 			"sha":              "deadbeef",
@@ -58,6 +59,19 @@ func FuzzGitHubOIDCAttest(f *testing.F) {
 	if tok, err := crypto.SignJWT(signer, "gh1", big); err == nil {
 		f.Add([]byte(tok))
 	}
+	for _, field := range []string{"run_id", "run_attempt"} {
+		for _, invalid := range []any{nil, "", "0", "01", "+1", "1e3", "18446744073709551616", 1, true} {
+			claims := mkClaims()
+			if invalid == nil {
+				delete(claims, field)
+			} else {
+				claims[field] = invalid
+			}
+			if token, err := crypto.SignJWT(signer, "gh1", claims); err == nil {
+				f.Add([]byte(token))
+			}
+		}
+	}
 
 	f.Add([]byte(nil))
 	f.Add([]byte("not a jwt"))
@@ -69,6 +83,9 @@ func FuzzGitHubOIDCAttest(f *testing.F) {
 	f.Fuzz(func(t *testing.T, payload []byte) {
 		// Only the absence of a panic is asserted; a forged, malformed, or
 		// wrong-shaped token legitimately returns an error.
-		_, _ = a.Attest(context.Background(), payload)
+		att, err := a.Attest(context.Background(), payload)
+		if err == nil && (!validRunID(att.Claims["run_id"]) || !validRunID(att.Claims["run_attempt"])) {
+			t.Fatal("accepted proof lost its canonical signed attempt coordinates")
+		}
 	})
 }

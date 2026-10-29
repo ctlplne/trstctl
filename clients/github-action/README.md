@@ -75,12 +75,33 @@ on the server is the signed-token security boundary.
 
 ## Reruns and idempotency
 
-The idempotency key binds `GITHUB_RUN_ID`, `GITHUB_JOB`, and `GITHUB_ACTION`;
-it deliberately excludes `GITHUB_RUN_ATTEMPT`. A rerun on a fresh runner
-creates a different private key, so the server's exact request binding returns
-HTTP 409 instead of minting a second certificate or returning a certificate
-that does not match the new key. Start a new workflow run when a new credential
-is required.
+One certificate belongs to each GitHub-signed `run_id` and `run_attempt`, scoped
+to the issuer, repository and trstctl tenant. A rerun with a new signed attempt
+can generate a new key and receive a new certificate. Earlier certificates keep
+their normal expiry; a rerun does not revoke them.
+
+Within one attempt, the same public key and effective request recover the original
+certificate. A different key, identity or effective lifetime returns HTTP409,
+including under a different caller idempotency key. The Action's HTTP retry key
+uses `GITHUB_RUN_ID` and `GITHUB_RUN_ATTEMPT`; the server grants authority only
+from the verified token's claims. Changing an environment variable cannot grant
+another mint. Missing or noncanonical signed run/attempt claims are refused.
+
+The Action preserves existing `key.pem` and `certificate.pem` files. Use a fresh
+output directory for a new attempt. After an uncertain outcome, keep the key and
+recover through the API with its same public key and effective request; generating
+a replacement key within that attempt is refused. A refreshed OIDC token requires
+a fresh HTTP idempotency key, while the signed-attempt fence still recovers the
+same certificate. Each certificate's issuance event retains the run ID, attempt
+and original verification time; raw OIDC tokens are not added to that evidence.
+
+Keep the public issuance template and the signer's operation journal until the
+certificate event is durable. If an unfinished mint loses its template, the
+signer refuses changed signing input. Restore the original bookkeeping or start
+a new signed attempt; changing retry keys cannot safely reconstruct that mint.
+
+GitHub documents these signed coordinates in its
+[OIDC reference](https://docs.github.com/en/actions/reference/security/oidc).
 
 ## Verify the released Action
 

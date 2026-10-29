@@ -2126,7 +2126,7 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 	if err := s.configureProtocolSurfaces(ctx, d); err != nil {
 		return err
 	}
-	if err := s.configureAttestedIssuanceSurface(d); err != nil {
+	if err := s.configureAttestedIssuanceSurface(d, idem); err != nil {
 		return err
 	}
 	if err := s.configureAgentBrokerSurface(d); err != nil {
@@ -2390,11 +2390,12 @@ func (s *Server) configurePluginSurface(ctx context.Context, d Deps) error {
 	return nil
 }
 
-func (s *Server) configureAttestedIssuanceSurface(d Deps) error {
+func (s *Server) configureAttestedIssuanceSurface(d Deps, idem *orchestrator.Idempotency) error {
 	svc, err := newAttestedIssuerService(attestedIssuerDeps{
 		Config: d.AttestedIssuance, Store: d.Store, Log: d.Log, Orch: s.orch,
 		CASigner: s.caSigner, CACertDER: s.caCertDER, CAID: IssuingCAID(),
-		Audit: attestedIssuanceAuditor(d.Log),
+		Idempotency: idem,
+		Audit:       attestedIssuanceAuditor(d.Log),
 	})
 	if err != nil {
 		return err

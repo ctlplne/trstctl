@@ -240,7 +240,7 @@ func TestShippedGitHubActionRunsWithoutAnAPITokenA84(t *testing.T) {
 	if status, body := servedSelfAuthenticatingGitHubSource(t, h, admin, "a84-action", jwk, map[string]any{"self_authenticating": true, "allowed_owners": []string{"acme"}}); status != http.StatusCreated {
 		t.Fatalf("create self-authenticating source: %d %s", status, body)
 	}
-	jwt := githubWorkflowToken(t, signer, "gha-a84-action", "acme")
+	jwt := githubWorkflowAttemptToken(t, signer, "gha-a84-action", "acme", "84001", "1")
 	oidc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"value": string(jwt)})
 	}))
@@ -254,7 +254,7 @@ func TestShippedGitHubActionRunsWithoutAnAPITokenA84(t *testing.T) {
 	env := []string{
 		"TRSTCTL_URL=" + h.ts.URL, "TRSTCTL_TOKEN=", "TRSTCTL_TENANT=" + h.tenant, "TRSTCTL_AUDIENCE=trstctl", "TRSTCTL_TTL_SECONDS=900",
 		"ACTIONS_ID_TOKEN_REQUEST_URL=" + oidc.URL + "?request=1", "ACTIONS_ID_TOKEN_REQUEST_TOKEN=github-oidc-request-token",
-		"GITHUB_RUN_ID=84001", "GITHUB_JOB=issue", "GITHUB_ACTION=ctlplne-trstctl", "GITHUB_EVENT_NAME=push",
+		"GITHUB_RUN_ID=84001", "GITHUB_RUN_ATTEMPT=1", "GITHUB_JOB=issue", "GITHUB_ACTION=ctlplne-trstctl", "GITHUB_EVENT_NAME=push",
 		"GITHUB_EVENT_PATH=" + eventFile, "TRSTCTL_OUT_DIR=" + outDir, "GITHUB_OUTPUT=" + filepath.Join(t.TempDir(), "github-output"),
 	}
 	before := servedCertificateCountAUD47(t, h)

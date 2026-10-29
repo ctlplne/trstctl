@@ -70,9 +70,15 @@ runs:
         TRSTCTL_OUT_DIR: ${{ inputs.out-dir }}
       run: |
         set -euo pipefail
-        for required in GITHUB_RUN_ID GITHUB_JOB GITHUB_ACTION GITHUB_EVENT_PATH; do
+        for required in GITHUB_RUN_ID GITHUB_RUN_ATTEMPT GITHUB_EVENT_PATH; do
           if [ -z "${!required:-}" ]; then
             echo "::error::GitHub did not provide $required; refusing an unbound issuance request" >&2
+            exit 1
+          fi
+        done
+        for coordinate in "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"; do
+          if [[ ! "$coordinate" =~ ^[1-9][0-9]{0,19}$ ]]; then
+            echo "::error::GitHub run ID and attempt must be canonical positive decimal strings" >&2
             exit 1
           fi
         done
@@ -100,11 +106,21 @@ runs:
           echo "::error::no OIDC token available: add 'permissions: id-token: write' to the job" >&2
           exit 1
         fi
-        mkdir -p "$TRSTCTL_OUT_DIR"
         umask 077
+        mkdir -p "$TRSTCTL_OUT_DIR"
 
-        # Key stays here. Only the public half travels.
-        openssl ecparam -name prime256v1 -genkey -noout -out "$TRSTCTL_OUT_DIR/key.pem"
+        # Preserve a prior attempt's material, including a key whose response
+        # was lost. Never overwrite it before discovering a repeat is refused.
+        if [ -e "$TRSTCTL_OUT_DIR/certificate.pem" ] || [ -L "$TRSTCTL_OUT_DIR/certificate.pem" ]; then
+          echo "::error::preserving existing runner certificate; inspect the prior attempt and use a fresh output directory" >&2
+          exit 1
+        fi
+        # noclobber creates the key slot exclusively, including under concurrent
+        # invocations. The private key stays here; only its public half travels.
+        if ! (set -o noclobber; openssl ecparam -name prime256v1 -genkey -noout > "$TRSTCTL_OUT_DIR/key.pem"); then
+          echo "::error::preserving existing runner key or failed key generation; inspect the output directory" >&2
+          exit 1
+        fi
         openssl ec -in "$TRSTCTL_OUT_DIR/key.pem" -pubout -out "$TRSTCTL_OUT_DIR/public.pem"
 
         OIDC_JWT="$(curl --fail --silent --show-error \
@@ -121,7 +137,9 @@ runs:
           AUTH_ARGS+=(-H "X-Tenant-ID: ${TRSTCTL_TENANT}")
         fi
         PUBKEY_JSON="$(jq -Rs '.' < "$TRSTCTL_OUT_DIR/public.pem")"
-        RUN_BINDING="$(printf '%s\0%s\0%s' "$GITHUB_RUN_ID" "$GITHUB_JOB" "$GITHUB_ACTION" \
+        # The server independently derives authority from the signed claims.
+        # These runner values choose only the HTTP retry key, never mint rights.
+        RUN_BINDING="$(printf '%s\0%s' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
           | openssl dgst -sha256 | awk '{print $2}')"
 
         HTTP_CODE="$(jq -n \

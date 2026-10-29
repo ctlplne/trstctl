@@ -68,7 +68,7 @@ func TestJWTAttesterTimeWindows(t *testing.T) {
 					claims := map[string]any{
 						"iss": issuer, "aud": "trstctl", "sub": "system:serviceaccount:qa:clock-reader",
 						"exp": now.Unix() + 7200, "nbf": now.Unix() - 60, "iat": now.Unix() - 60,
-						"repository": "qa/clock-proof", "repository_owner": "qa",
+						"repository": "qa/clock-proof", "repository_owner": "qa", "run_id": "47001", "run_attempt": "1",
 						"kubernetes.io": map[string]any{"namespace": "qa", "serviceaccount": map[string]any{"name": "clock-reader"}},
 						"google":        map[string]any{"compute_engine": map[string]any{"instance_id": "qa-instance", "project_id": "qa-project"}},
 					}

@@ -232,7 +232,7 @@ func dodGitHubOIDCIdentity(t *testing.T) ([]byte, []byte) {
 	}
 	token, err := crypto.SignJWT(signer, "dod-github-oidc-key", map[string]any{
 		"iss": githuboidc.DefaultIssuer, "aud": "sigstore", "exp": time.Now().Add(10 * time.Minute).Unix(),
-		"sub": "repo:acme/payments:ref:refs/heads/main", "repository": "acme/payments", "repository_owner": "acme",
+		"sub": "repo:acme/payments:ref:refs/heads/main", "repository": "acme/payments", "repository_owner": "acme", "run_id": "47001", "run_attempt": "1",
 		"workflow": "release", "ref": "refs/heads/main", "sha": "0123456789abcdef0123456789abcdef01234567",
 		"job_workflow_ref": "acme/payments/.github/workflows/release.yml@refs/heads/main", "runner_environment": "github-hosted",
 	})

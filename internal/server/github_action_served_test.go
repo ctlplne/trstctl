@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,12 +35,17 @@ import (
 // these field names, so the two cannot drift apart silently.
 
 func githubWorkflowToken(t *testing.T, signer *crypto.LockedSigner, kid, owner string) []byte {
+	return githubWorkflowAttemptToken(t, signer, kid, owner, "47001", "1")
+}
+
+func githubWorkflowAttemptToken(t *testing.T, signer *crypto.LockedSigner, kid, owner, runID, attempt string) []byte {
 	t.Helper()
 	token, err := crypto.SignJWT(signer, kid, map[string]any{
 		"iss": githuboidc.DefaultIssuer, "aud": "trstctl",
 		"exp":        time.Now().Add(10 * time.Minute).Unix(),
 		"sub":        "repo:" + owner + "/payments:ref:refs/heads/main",
 		"repository": owner + "/payments", "repository_owner": owner,
+		"run_id": runID, "run_attempt": attempt,
 		"workflow": "issue-deploy-cert", "ref": "refs/heads/main",
 		"sha":              "0123456789abcdef0123456789abcdef01234567",
 		"job_workflow_ref": owner + "/payments/.github/workflows/issue.yml@refs/heads/main",
@@ -124,15 +130,20 @@ func TestShippedGitHubActionRunsAgainstServedDeploymentAUD47(t *testing.T) {
 	})
 	apiToken := seedScopedToken(t, h.store, h.tenant, "certs:issue")
 	jwt := githubWorkflowToken(t, signer, "gha-aud47", "acme")
-	oidcReads := 0
+	rerunJWT := githubWorkflowAttemptToken(t, signer, "gha-aud47", "acme", "47001", "2")
+	var oidcReads atomic.Int64
 	oidc := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		oidcReads++
+		oidcReads.Add(1)
 		if r.Header.Get("Authorization") != "bearer github-oidc-request-token" || r.URL.Query().Get("audience") != "trstctl" {
 			t.Errorf("OIDC request authorization=%q query=%v", r.Header.Get("Authorization"), r.URL.Query())
 			http.Error(w, "bad OIDC request", http.StatusBadRequest)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"value": string(jwt)})
+		proof := jwt
+		if r.URL.Query().Get("request") == "2" {
+			proof = rerunJWT
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"value": string(proof)})
 	}))
 	t.Cleanup(oidc.Close)
 
@@ -144,7 +155,7 @@ func TestShippedGitHubActionRunsAgainstServedDeploymentAUD47(t *testing.T) {
 	baseEnv := []string{
 		"TRSTCTL_URL=" + h.ts.URL, "TRSTCTL_TOKEN=" + apiToken, "TRSTCTL_AUDIENCE=trstctl", "TRSTCTL_TTL_SECONDS=900",
 		"ACTIONS_ID_TOKEN_REQUEST_URL=" + oidc.URL + "?request=1", "ACTIONS_ID_TOKEN_REQUEST_TOKEN=github-oidc-request-token",
-		"GITHUB_RUN_ID=47001", "GITHUB_JOB=issue", "GITHUB_ACTION=ctlplne-trstctl", "GITHUB_EVENT_NAME=push",
+		"GITHUB_RUN_ID=47001", "GITHUB_RUN_ATTEMPT=1", "GITHUB_JOB=issue", "GITHUB_ACTION=ctlplne-trstctl", "GITHUB_EVENT_NAME=push",
 		"GITHUB_EVENT_PATH=" + eventFile,
 	}
 	before := servedCertificateCountAUD47(t, h)
@@ -164,19 +175,30 @@ func TestShippedGitHubActionRunsAgainstServedDeploymentAUD47(t *testing.T) {
 		t.Fatalf("certificate rows after Action = %d, want %d", after, before+1)
 	}
 
-	// GitHub changes GITHUB_RUN_ATTEMPT on a rerun, but the shipped key does not
-	// include it. A fresh runner creates a different public key, so exact request
-	// binding rejects the reused key with 409 instead of returning a certificate
-	// that cannot match the new private key or minting a second certificate.
+	// Owner Q1/A232: a second mint in attempt1 remains refused, including on a
+	// fresh runner. Signed attempt2 may mint once with its new public key.
+	repeatEnv := append(append([]string{}, baseEnv...), "TRSTCTL_OUT_DIR="+t.TempDir(), "GITHUB_OUTPUT="+filepath.Join(t.TempDir(), "github-output"))
+	if output, err := runShippedGitHubActionAUD47(t, script, repeatEnv); err == nil || !strings.Contains(output, "HTTP 409") {
+		t.Fatalf("fresh key in the same attempt was not refused: err=%v\n%s", err, output)
+	}
 	secondDir := t.TempDir()
 	secondOutput := filepath.Join(t.TempDir(), "github-output")
-	secondEnv := append(append([]string{}, baseEnv...), "TRSTCTL_OUT_DIR="+secondDir, "GITHUB_OUTPUT="+secondOutput, "GITHUB_RUN_ATTEMPT=2")
+	secondEnv := append(append([]string{}, baseEnv...), "TRSTCTL_OUT_DIR="+secondDir, "GITHUB_OUTPUT="+secondOutput, "GITHUB_RUN_ATTEMPT=2", "ACTIONS_ID_TOKEN_REQUEST_URL="+oidc.URL+"?request=2")
 	output, rerunErr := runShippedGitHubActionAUD47(t, script, secondEnv)
-	if rerunErr == nil || !strings.Contains(output, "HTTP 409") {
-		t.Fatalf("fresh-runner rerun did not fail closed on its new key: err=%v\n%s", rerunErr, output)
+	if rerunErr != nil {
+		t.Fatalf("new signed attempt on a fresh runner was refused: err=%v\n%s", rerunErr, output)
 	}
-	if after := servedCertificateCountAUD47(t, h); after != before+1 {
-		t.Fatalf("rerun minted again: certificate rows=%d want=%d", after, before+1)
+	if after := servedCertificateCountAUD47(t, h); after != before+2 {
+		t.Fatalf("two signed attempts: certificate rows=%d want=%d", after, before+2)
+	}
+	// Unsigned runner metadata cannot allocate another attempt. The issuer
+	// still signs attempt2, so the new key remains refused under a new HTTP key.
+	unsignedEnv := append(append([]string{}, secondEnv...), "TRSTCTL_OUT_DIR="+t.TempDir(), "GITHUB_OUTPUT="+filepath.Join(t.TempDir(), "github-output"), "GITHUB_RUN_ATTEMPT=3")
+	if output, err := runShippedGitHubActionAUD47(t, script, unsignedEnv); err == nil || !strings.Contains(output, "HTTP 409") {
+		t.Fatalf("unsigned attempt change bypassed the signed fence: err=%v\n%s", err, output)
+	}
+	if after := servedCertificateCountAUD47(t, h); after != before+2 {
+		t.Fatalf("unsigned attempt metadata minted another certificate: rows=%d", after)
 	}
 
 	// The local guard is defense in depth before OIDC acquisition; the server's
@@ -192,8 +214,8 @@ func TestShippedGitHubActionRunsAgainstServedDeploymentAUD47(t *testing.T) {
 	if forkErr == nil || !strings.Contains(output, ".head.repo.fork is true") {
 		t.Fatalf("fork pull request was not refused before OIDC: err=%v\n%s", forkErr, output)
 	}
-	if oidcReads != 2 {
-		t.Fatalf("OIDC endpoint read %d times, want only the issued run and its rerun", oidcReads)
+	if oidcReads.Load() != 4 {
+		t.Fatalf("OIDC endpoint read %d times, want two attempts plus two refused repeats and no fork request", oidcReads.Load())
 	}
 }
 

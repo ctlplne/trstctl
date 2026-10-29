@@ -3471,15 +3471,26 @@ than sending an operator looking for a credential that was never there.
   workflow): the workflow's ambient OIDC token is fetched with the requested
   audience, an EC key is generated INSIDE the runner (only the public half
   travels), and `POST /api/v1/workloads/attested-issuance` with
-  `method=github_oidc` returns the certificate. Its idempotency identity binds
-  run, job, and Action but excludes `GITHUB_RUN_ATTEMPT`; a fresh-runner rerun
-  presents a new public key and receives HTTP 409 from exact request binding,
-  so it cannot mint twice or receive a certificate for the wrong private key.
+  `method=github_oidc` returns the certificate. One certificate belongs to the
+  GitHub-signed `run_id` and `run_attempt`, scoped by issuer, repository and
+  tenant. A fresh runner on a new signed attempt receives its own certificate.
+  Within an attempt, the same effective command/public key recovers the original;
+  a second key or changed effective command returns HTTP409 even under a new
+  caller idempotency key. Unsigned environment changes cannot allocate an attempt.
+  Missing/noncanonical signed coordinates are refused. Issuance evidence retains
+  each certificate's run ID, attempt and original verification time; earlier
+  certificates expire normally. The Action preserves existing runner key and
+  certificate files, so a new attempt needs a fresh output directory.
+  An unfinished mint whose public template was lost requires its original
+  bookkeeping to be restored; the signer journal refuses changed signing input.
   Fork pull requests are refused locally before OIDC, and the server still
   verifies the signed `repository_owner` against `allowed_owners`. CI extracts
   and executes the shipped composite run block against the full served test
-  deployment, then proves success, foreign-owner refusal, rerun conflict, and
-  one certificate row. The tag release pipeline packages the Action,
+  deployment, then proves success, foreign-owner and same-attempt mint refusals,
+  a successful new signed attempt, and unsigned-attempt refusal. Local native
+  tests also cover concurrent issuers and source-backed recovery after cache
+  cleanup/read-model rebuild. A real Actions run still needs the owner's push.
+  The tag release pipeline packages the Action,
   `SHA256SUMS`, and SLSA provenance. Repository state is release-ready for
   `v0.6.0`, but that immutable tag is not published until an authenticated
   maintainer pushes the reviewed commits and creates the tag; the current

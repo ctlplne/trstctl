@@ -115,7 +115,7 @@ func TestServedWorkloadIdentitiesVerifyWithStockSPIFFE(t *testing.T) {
 	const githubSubject = "repo:org/project:ref:refs/heads/main"
 	proof, err := crypto.SignJWT(githubKey, "identity-gh", map[string]any{
 		"iss": "https://token.actions.githubusercontent.com", "aud": "trstctl", "sub": githubSubject,
-		"repository": "org/project", "repository_owner": "org", "exp": time.Now().Add(10 * time.Minute).Unix(),
+		"repository": "org/project", "repository_owner": "org", "run_id": "47001", "run_attempt": "1", "exp": time.Now().Add(10 * time.Minute).Unix(),
 	})
 	if err != nil {
 		t.Fatal(err)

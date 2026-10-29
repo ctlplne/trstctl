@@ -61,6 +61,28 @@ proof, signs an X.509-SVID through the isolated signer, records the certificate 
 `certificate.recorded`, and binds the attestation with `attestation.bound` — or fails
 closed if no enabled trust source matches the method.
 
+#### GitHub Actions attempts
+
+GitHub OIDC proofs must contain canonical positive-decimal string `run_id` and
+`run_attempt` claims, alongside the existing signature, issuer, audience, time and
+owner checks. The server scopes each attempt to its tenant, issuer and repository.
+A new signed attempt may issue one certificate with a fresh runner key. Another
+key or changed effective command in that attempt returns HTTP409, even when its
+caller changes the HTTP idempotency key. Changing runner environment values does
+not change the signed authority. Fork pull requests remain refused by the shipped
+Action before it acquires OIDC proof.
+
+An unchanged effective command/public key can recover its original certificate
+using fresh valid proof. Its immutable issuance event retains only the operational
+run ID, attempt and original verification time alongside the public certificate;
+raw OIDC proof and duplicate identity claims are not added to that recovery record.
+The original certificate remains the result after cache cleanup and read-model
+rebuild. A rerun leaves prior certificates valid until expiry or explicit revocation.
+The [Action guide](https://github.com/ctlplne/trstctl/tree/main/clients/github-action#reruns-and-idempotency)
+explains output-directory preservation and response-loss recovery. Local served
+tests cover the shipped run block and both authentication modes; real Actions
+qualification requires an owner-pushed run.
+
 #### Review before issuing
 
 On **Workloads & Machines**, open **Issue attested SVID**. An SVID is the workload's
