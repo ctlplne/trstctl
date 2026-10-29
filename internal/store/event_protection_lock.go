@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,21 +14,43 @@ import (
 	"trstctl.com/trstctl/internal/eventprotect"
 )
 
-// WithKeyLock implements eventprotect.KeyLocker using the bounded lock pool.
-// Tenant UUID aliases share a lock. This session lock is intentionally outside
-// a tenant transaction: the custodian must still verify destruction evidence
-// after offboarding has erased that tenant's relational rows.
+type eventProtectionGuardKey struct{}
+type eventProtectionGuard struct {
+	store  *Store
+	tenant string
+	active atomic.Bool
+}
+
+// WithKeyLock also excludes activation/publication for this tenant. Sharing one
+// tenant lock lets nested key use borrow its caller's grant without acquiring a
+// second lock-pool connection. Different tenants remain independent.
 func (s *Store) WithKeyLock(ctx context.Context, ref eventprotect.KeyRef, fn func(context.Context) error) error {
-	tenant, tenantErr := uuid.Parse(ref.TenantID)
-	key, keyErr := uuid.Parse(ref.ID)
-	if tenantErr != nil || keyErr != nil || tenant == uuid.Nil || key == uuid.Nil || fn == nil {
-		return errors.New("event protection: tenant, key and callback are required")
+	key, err := uuid.Parse(ref.ID)
+	if err != nil || key == uuid.Nil {
+		return errors.New("event protection: key UUID is required")
 	}
-	acquireWindow := s.acquireTimeout
-	if acquireWindow <= 0 {
-		acquireWindow = defaultAcquireTimeout
+	return s.WithTenantEventProtection(ctx, ref.TenantID, fn)
+}
+
+func (s *Store) WithTenantEventProtection(ctx context.Context, tenantID string, fn func(context.Context) error) error {
+	tenant, err := uuid.Parse(tenantID)
+	if s == nil || err != nil || tenant == uuid.Nil || fn == nil {
+		return errors.New("event protection: tenant and callback are required")
 	}
-	bounded, cancel := context.WithTimeout(ctx, acquireWindow)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if held, _ := ctx.Value(eventProtectionGuardKey{}).(*eventProtectionGuard); held != nil {
+		if held.store != s || held.tenant != tenant.String() || !held.active.Load() {
+			return errors.New("event protection: invalid nested tenant grant")
+		}
+		return fn(ctx)
+	}
+	window := s.acquireTimeout
+	if window <= 0 {
+		window = defaultAcquireTimeout
+	}
+	bounded, cancel := context.WithTimeout(ctx, window)
 	conn, err := s.lockSessionPool(ctx).Acquire(bounded)
 	cancel()
 	if err != nil {
@@ -37,29 +60,30 @@ func (s *Store) WithKeyLock(ctx context.Context, ref eventprotect.KeyRef, fn fun
 		return fmt.Errorf("%w: event protection lock pool", ErrDatastoreBusy)
 	}
 	defer conn.Release()
-	identity := "event-protection-key:" + tenant.String() + ":" + key.String()
-	var held bool
-	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1,0))`, identity).Scan(&held); err != nil {
-		// An interrupted statement could have acquired a session lock before
-		// its response was lost. Never return that session to the pool.
-		closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Second)
-		defer closeCancel()
-		_ = conn.Conn().Close(closeCtx)
+	identity := "event-protection-tenant:" + tenant.String()
+	var acquired bool
+	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended($1,0))`, identity).Scan(&acquired); err != nil {
+		cleanup, stop := context.WithTimeout(context.Background(), time.Second)
+		defer stop()
+		_ = conn.Conn().Close(cleanup)
 		return err
 	}
-	if !held {
-		return fmt.Errorf("%w: event protection key is in use", ErrDatastoreBusy)
+	if !acquired {
+		return fmt.Errorf("%w: tenant event protection is in use", ErrDatastoreBusy)
 	}
+	grant := &eventProtectionGuard{store: s, tenant: tenant.String()}
+	grant.active.Store(true)
 	defer func() {
-		unlockCtx, unlockCancel := context.WithTimeout(context.Background(), time.Second)
-		defer unlockCancel()
-		var unlocked bool
-		if err := conn.QueryRow(unlockCtx, `SELECT pg_advisory_unlock(hashtextextended($1,0))`, identity).Scan(&unlocked); err != nil || !unlocked {
-			_ = conn.Conn().Close(unlockCtx)
+		grant.active.Store(false)
+		cleanup, stop := context.WithTimeout(context.Background(), time.Second)
+		defer stop()
+		var released bool
+		if err := conn.QueryRow(cleanup, `SELECT pg_advisory_unlock(hashtextextended($1,0))`, identity).Scan(&released); err != nil || !released {
+			_ = conn.Conn().Close(cleanup)
 		}
 	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return fn(ctx)
+	return fn(context.WithValue(ctx, eventProtectionGuardKey{}, grant))
 }

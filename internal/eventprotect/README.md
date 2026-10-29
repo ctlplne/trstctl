@@ -12,6 +12,16 @@ retries recover the original ciphertext beyond the broker's duplicate window.
 Missing custody fails; a verified destroyed key produces an explicit erased view.
 Projection handling of that view and production admission are still to be built.
 
+Tenant lifecycle metadata can now be read without opening a payload or actor.
+Its tenant/type index checks each selected pointer against the retained source
+digest and scope, keeps source order and pins the history generation. The new
+index format rebuilds from source on upgrade; it does not rewrite event bytes.
+This metadata is routing evidence, not authentication of an encrypted body.
+PostgreSQL custody locks now share the tenant admission fence, so nested key
+use borrows one live grant rather than taking a second pool connection. Grants
+are scoped to the same store and tenant, expire with the callback and still
+honor cancellation. Production activation and destruction must use this fence.
+
 `Protect` encrypts the original payload bytes and a separately encoded actor
 using `internal/crypto/seal`. It binds the tenant, source ID, event type, schema,
 time, storage purpose, key reference and privacy-policy digest. `Open` requires

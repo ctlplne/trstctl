@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	tenantIndexPrefix    = "TRSTCTL_TENANT_EVENTS_"
-	tenantIndexSubject   = "trstctl_tenant_events"
+	tenantIndexPrefix    = "TRSTCTL_TENANT_EVENTS_V2_"
+	tenantIndexSubject   = "trstctl_tenant_events_v2"
 	tenantIndexBatch     = uint64(256)
 	tenantIndexReadLimit = uint64(1024)
 )
@@ -31,8 +31,16 @@ type tenantIndexEntry struct {
 	Digest         string `json:"digest"`
 }
 
-func tenantIndexEventSubject(epoch, tenantID string) string {
+func tenantIndexEventRoot(epoch, tenantID string) string {
 	return tenantIndexSubject + "." + epoch + ".tenant." + crypto.SHA256Hex([]byte(tenantID))
+}
+
+func tenantIndexEventSubject(epoch, tenantID string) string {
+	return tenantIndexEventRoot(epoch, tenantID) + ".>"
+}
+
+func tenantIndexTypedEventSubject(epoch, tenantID, eventType string) string {
+	return tenantIndexEventRoot(epoch, tenantID) + ".type." + crypto.SHA256Hex([]byte(eventType))
 }
 
 func tenantIndexCursorSubject(epoch string) string {
@@ -162,7 +170,7 @@ func (l *Log) indexTenantEventsThrough(ctx context.Context, source jetstream.Str
 			if covered >= raw.Sequence {
 				return nil
 			}
-			if _, err := l.js.Publish(ctx, tenantIndexEventSubject(epoch, event.TenantID), payload,
+			if _, err := l.js.Publish(ctx, tenantIndexTypedEventSubject(epoch, event.TenantID, event.Type), payload,
 				jetstream.WithExpectStream(index.CachedInfo().Config.Name),
 				jetstream.WithExpectLastSequence(indexSequence)); err == nil {
 				indexSequence++
@@ -367,9 +375,21 @@ func (l *Log) deleteTenantIndexesExcept(ctx context.Context, sourceName, keepEpo
 	if sourceName == "" {
 		return errors.New("events: tenant projection cleanup requires a source stream")
 	}
-	lister := l.js.StreamNames(ctx, jetstream.WithStreamListSubject(tenantIndexSubject+".>"))
+	for _, retired := range []struct{ prefix, subject string }{
+		{tenantIndexPrefix, tenantIndexSubject},
+		{"TRSTCTL_TENANT_EVENTS_", "trstctl_tenant_events"},
+	} {
+		if err := l.deleteTenantIndexGeneration(ctx, sourceName, keepEpoch, retired.prefix, retired.subject); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (l *Log) deleteTenantIndexGeneration(ctx context.Context, sourceName, keepEpoch, prefix, subject string) error {
+	lister := l.js.StreamNames(ctx, jetstream.WithStreamListSubject(subject+".>"))
 	for name := range lister.Name() {
-		if !strings.HasPrefix(name, tenantIndexPrefix) || name == tenantIndexPrefix+keepEpoch {
+		if !strings.HasPrefix(name, prefix) || name == tenantIndexPrefix+keepEpoch {
 			continue
 		}
 		stream, err := l.js.Stream(ctx, name)
