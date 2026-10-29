@@ -28,7 +28,7 @@ func (a *agentService) ingestDiscoveryJobReport(ctx context.Context, info mtls.P
 			return errors.New("SSH collection receiver is unavailable")
 		}
 		return a.recordSSHCollection(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail, req.EvidenceDigest)
-	case relay.KindADCSInventory, relay.KindADCSNestedGroups:
+	case relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		if a.recordADCSInventory == nil {
 			return errors.New("AD CS inventory result receiver is not configured")
 		}

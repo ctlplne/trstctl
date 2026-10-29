@@ -37,7 +37,7 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 	if err := decodeStrictJSON(jobPayload, &intent); err != nil {
 		return fmt.Errorf("decode AD CS inventory command: %w", err)
 	}
-	if intent.NestedGroupsEnabled || intent.JobKind == adcs.NestedGroupsJobKind {
+	if intent.NestedGroupsEnabled || intent.JobKind == adcs.NestedGroupsJobKind || intent.JobKind == adcs.EndpointProbeJobKind || intent.EndpointProbe != nil {
 		var err error
 		intent, err = s.orch.BoundADCSNestedCommand(ctx, tenantID, idempotencyKey, jobPayload)
 		if err != nil {
@@ -99,6 +99,7 @@ func (s *Server) recordADCSInventory(ctx context.Context, tenantID, agentName, i
 		orchestrator.DiscoveryRelayEventID(tenantID, idempotencyKey, "adcs-inventory-observed"),
 		adcs.InventoryObserved{
 			RunID: intent.ID, SourceID: intent.SourceID, Domain: domain,
+			EndpointProbe: intent.EndpointProbe, PreviousProbePage: intent.PreviousProbePage, EndpointProbePage: report.Inventory.EndpointProbePage, EnrollmentEndpoints: intent.EnrollmentEndpoints,
 			NestedGroupsEnabled: intent.NestedGroupsEnabled, MembershipDomainDN: intent.MembershipDomainDN,
 			AgentID: agentID, AgentName: agentName, DirectoryVerified: report.DirectoryVerified,
 			Templates: report.Inventory.Templates, EnrollmentServices: report.Inventory.EnrollmentServices,
@@ -200,10 +201,11 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 		return nil, nil, nil, err
 	}
 	services := make([]api.ADCSEnrollmentService, 0, len(serviceRows))
+	sourceFacts := map[string]adcsEndpointObservation{}
 	for _, row := range serviceRows {
-		var observed adcs.EnrollmentService
-		if err := json.Unmarshal(row.ObservedService, &observed); err != nil {
-			return nil, nil, nil, fmt.Errorf("decode projected AD CS enrollment service %s: %w", row.Service, err)
+		observed, err := s.boundADCSEndpointEvidence(ctx, tenantID, row, sourceFacts)
+		if err != nil {
+			return nil, nil, nil, err
 		}
 		var findings []api.ADCSTemplateFinding
 		if err := json.Unmarshal(row.Findings, &findings); err != nil {
@@ -219,7 +221,7 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 				authentication = []string{}
 			}
 			endpoints = append(endpoints, api.ADCSEnrollmentEndpoint{
-				Kind: string(endpoint.Kind), URL: endpoint.URL, State: string(endpoint.State),
+				Kind: string(endpoint.Kind), URL: endpoint.URL, State: string(endpoint.State), Source: endpoint.Source, NotCheckedReason: endpoint.NotCheckedReason,
 				HTTPStatus: endpoint.HTTPStatus, Authentication: authentication,
 				TLSVerified: endpoint.TLSVerified, ExtendedProtection: string(endpoint.ExtendedProtection),
 			})
@@ -229,7 +231,7 @@ func (s *Server) adcsPostureView(ctx context.Context, tenantID string) ([]api.AD
 			webServices = []string{}
 		}
 		services = append(services, api.ADCSEnrollmentService{
-			Domain: row.Domain, Service: row.Service, DNSName: row.DNSName,
+			Domain: row.Domain, Service: row.Service, DNSName: row.DNSName, EndpointProbe: observed.EndpointProbe,
 			EnrollmentWebServices: webServices, Endpoints: endpoints,
 			AgentRestrictionState: row.AgentRestrictionState, AgentRestrictionSource: row.AgentRestrictionSource,
 			WorstSeverity: row.WorstSeverity, Findings: findings,

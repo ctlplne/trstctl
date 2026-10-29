@@ -1904,6 +1904,150 @@
         ],
         "type": "object"
       },
+      "ADCSEndpointProbeCoverage": {
+        "properties": {
+          "complete": {
+            "description": "True only when the whole directory plan fits in this page without hostname issues. Individual HTTP outcomes may still be unverified.",
+            "type": "boolean"
+          },
+          "next_offset": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "plan_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "invalid_directory_hostname",
+              "outside_configured_dns_suffixes"
+            ],
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "in_page",
+              "not_in_page",
+              "host_unassessed"
+            ],
+            "type": "string"
+          },
+          "targets_on_page": {
+            "type": "integer"
+          },
+          "total_targets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_digest",
+          "state",
+          "total_targets",
+          "offset",
+          "next_offset",
+          "targets_on_page",
+          "complete"
+        ],
+        "type": "object"
+      },
+      "ADCSEndpointProbePage": {
+        "properties": {
+          "complete": {
+            "type": "boolean"
+          },
+          "host_issues": {
+            "items": {
+              "properties": {
+                "enrollment_service": {
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": [
+                    "invalid_directory_hostname",
+                    "outside_configured_dns_suffixes"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "enrollment_service",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "maxItems": 512,
+            "type": "array"
+          },
+          "next_offset": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          },
+          "plan_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSEndpointProbeTarget"
+            },
+            "maxItems": 24,
+            "type": "array"
+          },
+          "total_targets": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_digest",
+          "total_targets",
+          "offset",
+          "next_offset",
+          "complete",
+          "targets",
+          "host_issues"
+        ],
+        "type": "object"
+      },
+      "ADCSEndpointProbeTarget": {
+        "properties": {
+          "enrollment_service": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "web_enrollment",
+              "ndes",
+              "ndes_admin"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "configured",
+              "ldap_dns",
+              "configured_and_ldap_dns"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrollment_service",
+          "kind",
+          "url",
+          "source"
+        ],
+        "type": "object"
+      },
       "ADCSEnrollmentACL": {
         "properties": {
           "allowed": {
@@ -1958,6 +2102,20 @@
             ],
             "type": "string"
           },
+          "not_checked_reason": {
+            "enum": [
+              "deadline_or_cancellation"
+            ],
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "configured",
+              "ldap_dns",
+              "configured_and_ldap_dns"
+            ],
+            "type": "string"
+          },
           "state": {
             "enum": [
               "anonymous_access",
@@ -1965,7 +2123,8 @@
               "redirected",
               "not_found",
               "unreachable",
-              "reachable_other"
+              "reachable_other",
+              "not_checked"
             ],
             "type": "string"
           },
@@ -2097,6 +2256,9 @@
           },
           "domain": {
             "type": "string"
+          },
+          "endpoint_probe": {
+            "$ref": "#/components/schemas/ADCSEndpointProbeCoverage"
           },
           "endpoints": {
             "items": {
@@ -2301,6 +2463,9 @@
       },
       "ADCSObservedInventory": {
         "properties": {
+          "endpoint_probe_page": {
+            "$ref": "#/components/schemas/ADCSEndpointProbePage"
+          },
           "enrollment_services": {
             "items": {
               "$ref": "#/components/schemas/ADCSObservedService"
@@ -2327,6 +2492,9 @@
           },
           "dns_name": {
             "type": "string"
+          },
+          "endpoint_probe": {
+            "$ref": "#/components/schemas/ADCSEndpointProbeCoverage"
           },
           "endpoints": {
             "items": {
@@ -2420,6 +2588,10 @@
         "properties": {
           "critical": {
             "type": "integer"
+          },
+          "enrollment_service_limit_reached": {
+            "description": "True when the bounded service view reaches 500 rows; additional services may exist.",
+            "type": "boolean"
           },
           "enrollment_services": {
             "items": {

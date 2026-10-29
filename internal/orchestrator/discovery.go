@@ -532,6 +532,7 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 	destination := discoveryRunDestination
 	eventType := projections.EventDiscoveryRunQueued
 	eventSchemaVersion := 1
+	eventID := ""
 	var command any = queued
 	switch source.Kind {
 	case "network", "ssh":
@@ -603,6 +604,13 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		resolved.ID, resolved.SourceID, resolved.ScheduleID = id, in.SourceID, in.ScheduleID
 		resolved.RetryOfRunID = in.RetryOfRunID
 		resolved.RequestedBy = requestedBy
+		if resolved.EndpointProbe != nil {
+			resolved.PreviousProbePage, err = o.previousADCSEndpointProbeCursor(ctx, tenantID, in.SourceID)
+			if err != nil {
+				return store.DiscoveryRun{}, err
+			}
+			eventID = DiscoveryRelayEventID(tenantID, id, "adcs-endpoint-probe-queued")
+		}
 		queued = projections.DiscoveryRunQueued{
 			ID: id, SourceID: in.SourceID, JobKind: resolved.JobKind, RetryOfRunID: in.RetryOfRunID,
 			ScheduleID: in.ScheduleID, RequestedBy: requestedBy,
@@ -613,6 +621,9 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 		destination = resolved.JobKind
 		if resolved.NestedGroupsEnabled {
 			eventSchemaVersion = projections.DiscoveryEnrollmentGroupsQueuedSchemaVersion
+		}
+		if resolved.EndpointProbe != nil {
+			eventSchemaVersion = projections.DiscoveryEndpointProbeQueuedSchemaVersion
 		}
 	}
 	commandPayload, err := json.Marshal(command)
@@ -661,9 +672,14 @@ func (o *Orchestrator) QueueDiscoveryRun(ctx context.Context, tenantID string, i
 			}
 		}
 		var err error
-		ev, err = o.log.Append(ctx, events.Event{Type: eventType, SchemaVersion: eventSchemaVersion, TenantID: tenantID, Data: commandPayload})
+		ev, err = o.log.Append(ctx, events.Event{ID: eventID, Type: eventType, SchemaVersion: eventSchemaVersion, TenantID: tenantID, Data: commandPayload})
 		if err != nil {
 			return err
+		}
+		if destination == adcsdiscovery.EndpointProbeJobKind {
+			if _, err := o.BoundADCSNestedCommand(ctx, tenantID, ev.ID, commandPayload); err != nil {
+				return err
+			}
 		}
 		if err := o.proj.ApplyTx(ctx, tx, ev); err != nil {
 			return err
@@ -750,8 +766,8 @@ func (o *Orchestrator) DiscoveryNetworkRelayReadinessForJob(ctx context.Context,
 				BlockedReason:    "Restore the selected network relay's authenticated heartbeat or re-enroll its expired certificate before starting this source.",
 			}, nil
 		}
-		if jobKind == adcsdiscovery.NestedGroupsJobKind && !nestedADCSReaderReady(agent, staleBefore, futureLimit) {
-			return DiscoveryRelayReadiness{ConnectionOrigin: "Selected relay has not advertised the enabled nested enrollment reader", BlockedReason: "Upgrade the selected network relay, enable --relay-claim and restore its authenticated executor census for adcs.inventory.enrollment_groups before starting this source."}, nil
+		if (jobKind == adcsdiscovery.NestedGroupsJobKind || jobKind == adcsdiscovery.EndpointProbeJobKind) && !nestedADCSReaderReady(agent, staleBefore, futureLimit, jobKind) {
+			return DiscoveryRelayReadiness{ConnectionOrigin: "Selected relay has not advertised the enabled AD CS reader", BlockedReason: "Upgrade the selected network relay, enable --relay-claim and restore its authenticated executor census for " + jobKind + " before starting this source."}, nil
 		}
 		return DiscoveryRelayReadiness{
 			Ready: true, ConnectionOrigin: "Network relay " + agent.ID,

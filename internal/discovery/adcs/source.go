@@ -29,9 +29,9 @@ const (
 	maxPrincipals       = 1_024
 	maxEndpointTargets  = 24
 	maxPrivateCIDRs     = 16
-	// InventoryEventSchemaVersion adds explicit ACL and nested link evidence.
-	// V1/template-only and V2/service evidence retain frozen payload shapes.
-	InventoryEventSchemaVersion = 3
+	// Endpoint probing has its own closed historical boundary.
+	InventoryEndpointProbeSchemaVersion = 4
+	InventoryEventSchemaVersion         = InventoryEndpointProbeSchemaVersion
 )
 
 // EnrollmentEndpointTarget is one operator-scoped IIS surface the in-domain
@@ -45,23 +45,26 @@ type EnrollmentEndpointTarget struct {
 
 // InventoryIntent is the reference-only relay command. The standard run fields
 // bind the command to its generic lifecycle; the AD CS fields tell the relay
-// what to read. Connection fields stay in the outbox command and are not copied
-// into the immutable discovery.run.queued event.
+// what to read. Scoped command versions retain these public connection fields
+// and credential references in discovery.run.queued so recovery can recreate
+// the exact outbox command. Credential values never enter either payload.
 type InventoryIntent struct {
-	NestedGroupsEnabled bool    `json:"nested_groups_enabled,omitempty"`
-	MembershipDomainDN  string  `json:"membership_domain_dn,omitempty"`
-	ID                  string  `json:"id"`
-	SourceID            string  `json:"source_id"`
-	JobKind             string  `json:"job_kind"`
-	ScheduleID          *string `json:"schedule_id,omitempty"`
-	RetryOfRunID        string  `json:"retry_of_run_id,omitempty"`
-	DryRun              bool    `json:"dry_run"`
-	RequestedBy         string  `json:"requested_by,omitempty"`
-	Execution           string  `json:"execution"`
-	URL                 string  `json:"url"`
-	ConfigurationDN     string  `json:"configuration_dn"`
-	BindDN              string  `json:"bind_dn"`
-	PasswordRef         string  `json:"password_ref"`
+	EndpointProbe       *EndpointProbeOptions `json:"endpoint_probe,omitempty"`
+	PreviousProbePage   *EndpointProbeCursor  `json:"previous_probe_page,omitempty"`
+	NestedGroupsEnabled bool                  `json:"nested_groups_enabled,omitempty"`
+	MembershipDomainDN  string                `json:"membership_domain_dn,omitempty"`
+	ID                  string                `json:"id"`
+	SourceID            string                `json:"source_id"`
+	JobKind             string                `json:"job_kind"`
+	ScheduleID          *string               `json:"schedule_id,omitempty"`
+	RetryOfRunID        string                `json:"retry_of_run_id,omitempty"`
+	DryRun              bool                  `json:"dry_run"`
+	RequestedBy         string                `json:"requested_by,omitempty"`
+	Execution           string                `json:"execution"`
+	URL                 string                `json:"url"`
+	ConfigurationDN     string                `json:"configuration_dn"`
+	BindDN              string                `json:"bind_dn"`
+	PasswordRef         string                `json:"password_ref"`
 	// InsecureSkipVerify is a lab-only escape hatch and remains visible in the
 	// command/report so unverified directory identity cannot masquerade as
 	// verified evidence.
@@ -74,6 +77,7 @@ type InventoryIntent struct {
 }
 
 type sourceConfig struct {
+	EndpointProbe        *EndpointProbeOptions      `json:"endpoint_probe,omitempty"`
 	NestedGroupsEnabled  bool                       `json:"nested_groups_enabled,omitempty"`
 	MembershipDomainDN   string                     `json:"membership_domain_dn,omitempty"`
 	URL                  string                     `json:"url"`
@@ -130,6 +134,10 @@ func ResolveInventoryIntent(raw json.RawMessage) (InventoryIntent, error) {
 			return InventoryIntent{}, errors.New("adcs: relay_agent_id must be a UUID")
 		}
 	}
+	probe, err := normalizeEndpointProbeOptions(cfg.EndpointProbe)
+	if err != nil {
+		return InventoryIntent{}, err
+	}
 	domainDN := strings.TrimSpace(cfg.MembershipDomainDN)
 	if cfg.NestedGroupsEnabled {
 		if _, err := membershipDomain(domainDN); err != nil {
@@ -145,16 +153,22 @@ func ResolveInventoryIntent(raw json.RawMessage) (InventoryIntent, error) {
 	if cfg.NestedGroupsEnabled {
 		jobKind = NestedGroupsJobKind
 	}
+	if probe != nil {
+		if relayAgentID == "" {
+			return InventoryIntent{}, errors.New("adcs: endpoint probing requires an exact upgraded relay_agent_id")
+		}
+		jobKind = EndpointProbeJobKind
+	}
 	endpoints, err := normalizeEnrollmentEndpointTargets(cfg.EnrollmentEndpoints)
 	if err != nil {
 		return InventoryIntent{}, err
 	}
-	privateCIDRs, err := normalizePrivateEgressCIDRs(cfg.AllowPrivateEndpoint, cfg.PrivateEgressCIDRs, len(endpoints) > 0)
+	privateCIDRs, err := normalizePrivateEgressCIDRs(cfg.AllowPrivateEndpoint, cfg.PrivateEgressCIDRs, len(endpoints) > 0 || probe != nil)
 	if err != nil {
 		return InventoryIntent{}, err
 	}
 	return InventoryIntent{
-		NestedGroupsEnabled: cfg.NestedGroupsEnabled, MembershipDomainDN: domainDN,
+		EndpointProbe: probe, NestedGroupsEnabled: cfg.NestedGroupsEnabled, MembershipDomainDN: domainDN,
 		JobKind: jobKind, Execution: ExecutionRelay, URL: directoryURL, ConfigurationDN: configurationDN,
 		BindDN: bindDN, PasswordRef: passwordRef, InsecureSkipVerify: cfg.InsecureSkipVerify,
 		RequiredAgentRole: RequiredRoleNetwork, RequiredAgentID: relayAgentID,
@@ -178,7 +192,7 @@ func normalizePrivateEgressCIDRs(allow bool, raw []string, hasEndpoints bool) ([
 		return nil, errors.New("adcs: private_egress_cidrs requires allow_private_endpoint")
 	}
 	if allow && (!hasEndpoints || len(raw) == 0) {
-		return nil, errors.New("adcs: private endpoint egress requires configured enrollment endpoints and private_egress_cidrs")
+		return nil, errors.New("adcs: private endpoint egress requires configured or opted-in enrollment probes and private_egress_cidrs")
 	}
 	out := make([]string, 0, len(raw))
 	seen := make(map[string]bool, len(raw))
@@ -214,7 +228,7 @@ func normalizePrivateEgressCIDRs(allow bool, raw []string, hasEndpoints bool) ([
 // allowance at the relay boundary. The outbox payload is signed, but treating
 // it as already normalized would make a future producer bug an SSRF bypass.
 func (i InventoryIntent) PrivateEgressPrefixes() ([]netip.Prefix, error) {
-	normalized, err := normalizePrivateEgressCIDRs(i.AllowPrivateEndpoint, i.PrivateEgressCIDRs, len(i.EnrollmentEndpoints) > 0)
+	normalized, err := normalizePrivateEgressCIDRs(i.AllowPrivateEndpoint, i.PrivateEgressCIDRs, len(i.EnrollmentEndpoints) > 0 || (i.EndpointProbe != nil && i.EndpointProbe.Enabled))
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +316,14 @@ func ValidateInventoryReport(intent InventoryIntent, report InventoryReport) err
 		intent.RequiredAgentRole != RequiredRoleNetwork {
 		return errors.New("adcs: command is not a relay-owned discovery run")
 	}
-	if intent.NestedGroupsEnabled != (intent.JobKind == NestedGroupsJobKind) {
+	expectedKind := JobKind
+	if intent.NestedGroupsEnabled {
+		expectedKind = NestedGroupsJobKind
+	}
+	if intent.EndpointProbe != nil {
+		expectedKind = EndpointProbeJobKind
+	}
+	if intent.JobKind != expectedKind {
 		return errors.New("adcs: nested command has the wrong capability kind")
 	}
 	if intent.NestedGroupsEnabled {
@@ -317,7 +338,7 @@ func ValidateInventoryReport(intent InventoryIntent, report InventoryReport) err
 		if !inventoryFailureCodes[report.ErrorCode] {
 			return errors.New("adcs: failed report has an unknown closed error code")
 		}
-		if len(report.Inventory.Templates) != 0 || len(report.Inventory.EnrollmentServices) != 0 || len(report.Findings) != 0 {
+		if len(report.Inventory.Templates) != 0 || len(report.Inventory.EnrollmentServices) != 0 || len(report.Findings) != 0 || report.Inventory.EndpointProbePage != nil {
 			return errors.New("adcs: failed report carries invented inventory")
 		}
 		return nil
@@ -363,6 +384,9 @@ func ValidateInventoryReport(intent InventoryIntent, report InventoryReport) err
 	if err := validateMembershipInventory(intent, report.Inventory); err != nil {
 		return err
 	}
+	if err := validateEndpointProbePage(intent, report.Inventory); err != nil {
+		return err
+	}
 	if err := validateEnrollmentServices(intent, report.Inventory.EnrollmentServices); err != nil {
 		return err
 	}
@@ -386,6 +410,18 @@ func validateEnrollmentServices(intent InventoryIntent, services []EnrollmentSer
 	if err != nil {
 		return err
 	}
+	probeTargets := map[string]EndpointProbeTarget{}
+	if intent.EndpointProbe != nil {
+		page, planErr := PlanEnrollmentEndpointProbes(intent, services)
+		if planErr != nil {
+			return planErr
+		}
+		targets = nil
+		for _, target := range page.Targets {
+			targets = append(targets, target.EnrollmentEndpointTarget)
+			probeTargets[probeTargetKey(target.EnrollmentEndpointTarget)] = target
+		}
+	}
 	wantTargets := make(map[string]EnrollmentEndpointTarget, len(targets))
 	for _, target := range targets {
 		wantTargets[target.EnrollmentService+"\x00"+string(target.Kind)+"\x00"+target.URL] = target
@@ -407,6 +443,9 @@ func validateEnrollmentServices(intent InventoryIntent, services []EnrollmentSer
 		if err := boundedReportText("agent-restriction source", service.AgentRestrictions.Source); err != nil {
 			return fmt.Errorf("adcs: enrollment service %d: %w", i, err)
 		}
+		if intent.EndpointProbe == nil && service.EndpointProbe != nil {
+			return errors.New("adcs: legacy inventory carries undeclared probe coverage")
+		}
 		previous := ""
 		for j, endpoint := range service.Endpoints {
 			key := service.Name + "\x00" + string(endpoint.Kind) + "\x00" + endpoint.URL
@@ -418,8 +457,15 @@ func validateEnrollmentServices(intent InventoryIntent, services []EnrollmentSer
 			}
 			seenTargets[key] = true
 			previous = key
+			if intent.EndpointProbe != nil {
+				if err := validateProbeEndpoint(endpoint, probeTargets[key]); err != nil {
+					return err
+				}
+			} else if endpoint.Source != "" || endpoint.NotCheckedReason != "" || endpoint.State == EndpointNotChecked {
+				return errors.New("adcs: legacy endpoint carries undeclared probe evidence")
+			}
 			switch endpoint.State {
-			case EndpointAnonymousAccess, EndpointAuthenticationNeeded, EndpointRedirected, EndpointNotFound, EndpointUnreachable, EndpointReachableOther:
+			case EndpointNotChecked, EndpointAnonymousAccess, EndpointAuthenticationNeeded, EndpointRedirected, EndpointNotFound, EndpointUnreachable, EndpointReachableOther:
 			default:
 				return fmt.Errorf("adcs: enrollment service %d endpoint %d has an unknown state", i, j)
 			}
@@ -462,21 +508,27 @@ func validateCanonicalSIDText(value string) error {
 // InventoryObserved is the immutable normalized posture event. It deliberately
 // has no bind credential and no raw descriptor field.
 type InventoryObserved struct {
-	MembershipDomainDN  string              `json:"membership_domain_dn,omitempty"`
-	NestedGroupsEnabled bool                `json:"nested_groups_enabled,omitempty"`
-	RunID               string              `json:"run_id"`
-	SourceID            string              `json:"source_id"`
-	Domain              string              `json:"domain"`
-	AgentID             string              `json:"agent_id"`
-	AgentName           string              `json:"agent_name"`
-	DirectoryVerified   bool                `json:"directory_verified"`
-	Templates           []Template          `json:"templates"`
-	EnrollmentServices  []EnrollmentService `json:"enrollment_services"`
-	Findings            []Finding           `json:"findings"`
+	EndpointProbe       *EndpointProbeOptions      `json:"endpoint_probe,omitempty"`
+	PreviousProbePage   *EndpointProbeCursor       `json:"previous_probe_page,omitempty"`
+	EndpointProbePage   *EndpointProbePage         `json:"endpoint_probe_page,omitempty"`
+	EnrollmentEndpoints []EnrollmentEndpointTarget `json:"enrollment_endpoints,omitempty"`
+	MembershipDomainDN  string                     `json:"membership_domain_dn,omitempty"`
+	NestedGroupsEnabled bool                       `json:"nested_groups_enabled,omitempty"`
+	RunID               string                     `json:"run_id"`
+	SourceID            string                     `json:"source_id"`
+	Domain              string                     `json:"domain"`
+	AgentID             string                     `json:"agent_id"`
+	AgentName           string                     `json:"agent_name"`
+	DirectoryVerified   bool                       `json:"directory_verified"`
+	Templates           []Template                 `json:"templates"`
+	EnrollmentServices  []EnrollmentService        `json:"enrollment_services"`
+	Findings            []Finding                  `json:"findings"`
 }
 
 // IsInventoryJobKind recognizes only shipped AD CS inventory capabilities.
-func IsInventoryJobKind(kind string) bool { return kind == JobKind || kind == NestedGroupsJobKind }
+func IsInventoryJobKind(kind string) bool {
+	return kind == JobKind || kind == NestedGroupsJobKind || kind == EndpointProbeJobKind
+}
 
 // Validate checks the complete normalized v2/v3 observation without inferring
 // a missing matching-rule scope. V1 callers retain their historical decoder.
@@ -494,5 +546,9 @@ func (o InventoryObserved) Validate() error {
 	if o.NestedGroupsEnabled {
 		kind = NestedGroupsJobKind
 	}
-	return ValidateInventoryReport(InventoryIntent{ID: o.RunID, SourceID: o.SourceID, JobKind: kind, Execution: ExecutionRelay, RequiredAgentRole: RequiredRoleNetwork, NestedGroupsEnabled: o.NestedGroupsEnabled, MembershipDomainDN: o.MembershipDomainDN, EnrollmentEndpoints: endpoints}, InventoryReport{Status: "succeeded", Inventory: Inventory{Templates: o.Templates, EnrollmentServices: o.EnrollmentServices}, Findings: o.Findings, DirectoryVerified: o.DirectoryVerified})
+	if o.EndpointProbe != nil {
+		kind = EndpointProbeJobKind
+		endpoints = o.EnrollmentEndpoints
+	}
+	return ValidateInventoryReport(InventoryIntent{EndpointProbe: o.EndpointProbe, PreviousProbePage: o.PreviousProbePage, ID: o.RunID, SourceID: o.SourceID, JobKind: kind, Execution: ExecutionRelay, RequiredAgentRole: RequiredRoleNetwork, NestedGroupsEnabled: o.NestedGroupsEnabled, MembershipDomainDN: o.MembershipDomainDN, EnrollmentEndpoints: endpoints}, InventoryReport{Status: "succeeded", Inventory: Inventory{EndpointProbePage: o.EndpointProbePage, Templates: o.Templates, EnrollmentServices: o.EnrollmentServices}, Findings: o.Findings, DirectoryVerified: o.DirectoryVerified})
 }

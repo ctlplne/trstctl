@@ -244,7 +244,7 @@ One line per domain below, for a reader who wants the answer without the prose.
 | Certificate Transparency monitoring | Served as a headline Discovery capability: exact source replacement, active versus retired watchlist history, immutable per-log success/failure with independent checkpoint progress, unexpected-issuance findings, and remediation hand-off. Covers only the domains and logs configured | [Served by the running binary today](#served-by-the-running-binary-today) |
 | Key custody per credential kind | CI-checked table; every enrollment protocol, and the identity API given a CSR, generate keys in your environment. Four paths still generate one in the control plane, each named with its successor and each governed by the tenant's control-plane key generation switch: the three deprecated paths (identity issuance without a CSR and its renewal, PKI-as-a-secret by common name and the Vault-compatible `pki/issue`, the compatibility Workload API socket) and the reissue step of a PQC migration run that predates host-csr migration. Kubernetes TLS auto-issuance never generates a key in the control plane: a `k8s_ingress_gateway` source bound to the host-role agent running in the cluster hands each TLS block to that agent, which generates the key inside the cluster, sends only a CSR and writes the TLS Secret with a signed receipt; a source without an agent records each resource and reports it not delivered, with the reason | [Key custody](custody.md) |
 | Key custody per credential | Served: custody is recorded on the certificate row at issuance from what the issuing path actually did, returned by the certificate API, and shown on the certificate in the console. Certificates issued before this shipped get the origin their own retained issuance event proves, marked as derived and naming the rule and the event ([Key custody](custody.md) lists the rules); the rest of them, and every certificate found by discovery, read as **not recorded** — which is a different statement from any custody claim, and is never rendered as reassurance. A certificate ordered through an external CA records requester custody (A121), and where a host agent's key inventory found a matching key file the detail lists where it was seen, as an observation rather than a custody claim (A121) | [Key custody](custody.md) |
-| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.recovery_check` (enabled with `endpoint.contain`), `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links), `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
+| Agent job ledger | Served: agents claim, lease, extend, report and lose work over the mTLS channel; aggregate waiting/claimed health is on Operations. The shipped agent census executes `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`, `connector.right_size` (for bindings that name a relay), `endpoint.contain`, `endpoint.recovery_check` (enabled with `endpoint.contain`), `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links), `adcs.inventory.endpoint_probe` (opt-in scoped LDAP hostname probes with retained pages), `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (enabled with `agent.upgrade`); each row's role and agent constraints select the eligible host agent or network relay. Nothing is claimable until an operator names that kind in `agent_channel.claimable_job_kinds` — including `connector.rollback`, which must be enabled separately from deploying | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Agent job receipts | Served: every terminal report is signed by the agent with the key behind its channel certificate, verified against the certificate that authenticated, stored with the event, and refused fail-closed with an audit event when it does not verify. A successful host-generated renewal uses the v2 statement, which also binds the installed certificate fingerprint plus origin, storage, exportability, and generator; the projected custody event is replayable. Verified and refused counts, and the reason for the most recent refusal, are on Operations. The signature is over the report's facts and a digest of its text — it attests what the agent SAID, not that the appliance changed | [The agent job ledger](#the-agent-job-ledger-served-executors-and-signed-receipts) |
 | Renewal windows, canaries and SLOs (D6) | Served: maintenance windows restrict when the scheduler may renew (`lifecycle.maintenance_windows`, e.g. `Mon,Tue,Wed,Thu,Fri 22:00-06:00 Europe/London`); a closed window **defers** with a recorded reason naming when it reopens, never drops. Fleet re-issuance is a durable outbox-backed batch state machine: start publishes only the canary, an accepted signed agent receipt is required to advance, pause/halt stores the cursor and reason, and resume/restart reuses deterministic ids. Any failed verification fails the gate and any unverified replacement keeps it `not_evaluated`; later batches remain unpublished after a canary failure. Renewal success SLO with error-budget burn on `GET /api/v1/operations/renewal-slo`, window and target both operator inputs | [Renewal windows, canaries and SLOs](#renewal-windows-canaries-and-slos) |
 | Endpoint verification (D2) | Served: after a deploy the host agent handshakes the changed listener — the only observation of whether the **reload took effect** — and a network relay probes the same endpoints as a client would, which is the only witness for an appliance. Divergence is classed (`fingerprint`, `sans`, `chain`, `expired`, `not_yet_valid`) because the remedies differ; `unreachable` is neither a pass nor a divergence. Results are signed: the probe transcript's digest travels inside the agent's receipt, so a verdict is checkable rather than asserted. **Verification is opt-in per target**: an endpoint with no configured listener address is never verified and never claims to be. `verified %` on the dashboard is a percentage of OBSERVED endpoints and the tile is hidden entirely until something has been observed. Sweeps re-probe hourly; divergence raises a `critical` alert (unreachable: `warning`) through the notification outbox; automatic rollback to the predecessor is available per target, opt-in and off by default | [Endpoint verification](#endpoint-verification) |
@@ -2034,13 +2034,41 @@ follows a redirect, and closes the body without reading or retaining it. Only
 the configured URL, closed reachability/authentication state, HTTP status,
 authentication scheme names, verified-HTTPS fact, and Extended Protection
 state cross the relay boundary. Cookies, redirect targets, authentication
-challenge bytes, and response bodies do not. An endpoint not named in source
-configuration is not scanned and cannot be reported by the signed result.
-Public addresses are accepted through the shared resolved-address SSRF guard.
+challenge bytes, and response bodies do not. This configured-only behavior
+remains the default. With `endpoint_probe.enabled: true` and 1..32 explicit
+`endpoint_probe.dns_suffixes`, a selected upgraded relay also derives fixed HTTP
+and HTTPS `/certsrv/` and `/certsrv/mscep/mscep.dll` candidates from each LDAP
+`dNSHostName`. It never generates `mscep_admin`, follows redirects, or treats a
+response as successful SCEP enrollment. CES metadata is a separate surface.
+
+The `adcs.inventory.endpoint_probe` capability requires the server allowlist and
+the exact relay's fresh enabled census; it also supports nested-group reads when
+both options are selected. The planner rejects address literals, URL/port syntax,
+wildcards and hosts outside the configured DNS suffixes. Explicit/generated
+duplicates are probed once, with both origins retained. Public addresses are
+accepted through the shared resolved-address SSRF guard.
 Private endpoints require the source's explicit `allow_private_endpoint` opt-in
 and a bounded `private_egress_cidrs` list limited to RFC1918 or IPv6 ULA
 sub-prefixes. The resolved address must fall inside that list; link-local/cloud
 metadata, loopback, multicast, unspecified, and CGNAT addresses remain blocked.
+The relay's own destination grant is an additional check; LDAP hostname data
+never grants egress or disables HTTPS verification.
+
+Each opted-in run represents at most 24 targets with four HTTP workers,
+five seconds per attempt and a 90-second overall budget; the legacy job keeps
+its 60-second budget. Larger plans carry a source/run-bound digest and next
+offset recovered from retained immutable evidence. The next scheduled or manual
+run advances that cursor; a failed read retries its page and a changed plan
+starts at zero. Every service identifies its place in the latest page, including
+invalid/out-of-scope hostnames and services outside that page. Cancellation before
+an attempt yields `not_checked`, with no fabricated status or TLS fact.
+Partial or unverified coverage produces `ADCS-ENDPOINT-PROBE-INCOMPLETE`.
+The API, CLI, console and compliance evidence preserve provenance, page coverage
+and timestamps. The latest page never implies simultaneous full-estate evidence.
+The bounded posture service view flags its 500-row ceiling; retained observations
+carry the full directory plan. See the [endpoint probe runbook](guides/adcs-endpoint-probing.md).
+Windows IIS authentication/EPA and live NDES enrollment still need a Windows lab;
+Samba and private HTTP/TLS stand-ins establish only the implementation boundary.
 
 **The combinations are named, not the flags.** Nobody spots an escalation path
 by scanning four boolean columns across ninety templates, so the analysis reports
@@ -2777,7 +2805,7 @@ rather than unfinished: handing out work nothing can perform fills a queue while
 control plane's own worker stops doing it. The kinds the allowlist recognizes
 — `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.recovery_check` (the read-only check a replacement reads after a
-containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links),
+containment, enabled with `endpoint.contain`), `endpoint.purge`, `connector.takedown`, `endpoint.verify`, `discovery.run`, `ssh.trust.collect` (explicit read-only agentless SSH sources), `revocation.probe`, `adcs.inventory`, `adcs.inventory.enrollment_groups` (opt-in bounded nested enrollment links), `adcs.inventory.endpoint_probe` (opt-in scoped LDAP hostname probes with retained pages),
 `trust.distribute`, `pqc.posture`, `pqc.posture.rollback`, `connector.right_size`, `cmdb.sync`,
 `mdm.sync`, `ticket.sync`, `agent.upgrade`, and `agent.self_check` (the
 post-upgrade functional check every polling agent answers, A71) —

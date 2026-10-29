@@ -235,3 +235,53 @@ describe("nested enrollment evidence", () => {
     expect(screen.getAllByText(/This read does not evaluate conditional ACEs/).length).toBeGreaterThan(0);
   });
 });
+
+describe("LDAP endpoint probe coverage", () => {
+  it("shows partial pages, provenance and unattempted targets honestly", async () => {
+    apiMock.adcsPosture.mockResolvedValue({
+      observed: true,
+      sources: [],
+      templates: [],
+      enrollment_service_limit_reached: true,
+      enrollment_services: [
+        {
+          domain: "CORP",
+          service: "CA",
+          dns_name: "ca.corp.example",
+          enrollment_web_services: [],
+          agent_restriction_state: "unobserved",
+          agent_restriction_source: "requires_windows_relay",
+          worst_severity: "medium",
+          findings: [],
+          observed_by: "relay",
+          observed_at: "2026-10-28T12:00:00Z",
+          endpoint_probe: { plan_digest: "a".repeat(64), state: "in_page", total_targets: 40, offset: 0, next_offset: 24, targets_on_page: 4, complete: false },
+          endpoints: [
+            {
+              kind: "ndes",
+              url: "https://ca.corp.example/certsrv/mscep/mscep.dll",
+              source: "ldap_dns",
+              state: "not_checked",
+              not_checked_reason: "deadline_or_cancellation",
+              authentication: [],
+              tls_verified: false,
+              extended_protection: "unobserved",
+            },
+          ],
+        },
+      ],
+    });
+    apiMock.adcsDrift.mockResolvedValue({ items: [] });
+    render(
+      <AppQueryProvider>
+        <ADCSTemplatePanel />
+      </AppQueryProvider>,
+    );
+    expect(await screen.findByText("Latest endpoint probe page")).toBeInTheDocument();
+    expect(screen.getByText("Partial directory plan; other pages remain unassessed at this timestamp.")).toBeInTheDocument();
+    expect(screen.getByText("LDAP hostname candidate")).toBeInTheDocument();
+    expect(screen.getByText("Not attempted: deadline or cancellation.")).toBeInTheDocument();
+    expect(screen.getByText(/The service view reached its 500-row limit/)).toBeInTheDocument();
+    expect(screen.queryByText("Full directory plan is represented in this page. Check each target’s result.")).not.toBeInTheDocument();
+  });
+});

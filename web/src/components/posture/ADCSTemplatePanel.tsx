@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ADCSEndpointProbeCoverage, ADCSEndpointProbeOrigin } from "./ADCSEndpointProbeEvidence";
 import { ADCSMembershipEvidence } from "./ADCSMembershipEvidence";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -139,6 +140,7 @@ export function ADCSTemplatePanel() {
         virtualization={false}
       />
 
+      {posture?.enrollment_service_limit_reached ? <p className="text-xs text-status-warning">{translateNow("source.adcs.probe.viewLimit")}</p> : null}
       {!query.loading && !query.error ? <ADCSEnrollmentServices services={services} /> : null}
 
       {templates[0]?.observed_at ? (
@@ -192,6 +194,7 @@ function ADCSEnrollmentServices({ services }: { services: ADCSEnrollmentService[
                 <dd className="break-all font-mono">{service.enrollment_web_services.join(", ") || translateNow("source.none.dc937b5989")}</dd>
               </div>
             </dl>
+            <ADCSEndpointProbeCoverage coverage={service.endpoint_probe} />
             <ul className="grid gap-1">
               {service.endpoints.map((endpoint) => (
                 <li key={`${endpoint.kind}/${endpoint.url}`} className="grid gap-1 border-l-2 border-status-info pl-2 text-xs">
@@ -204,6 +207,7 @@ function ADCSEnrollmentServices({ services }: { services: ADCSEnrollmentService[
                       </>
                     ) : null}
                   </span>
+                  <ADCSEndpointProbeOrigin endpoint={endpoint} />
                   <span className="break-all font-mono text-muted-foreground">{endpoint.url}</span>
                   <span className="text-muted-foreground">
                     {translateNow("source.adcs.tls.aud370008")}:{" "}

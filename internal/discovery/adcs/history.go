@@ -45,15 +45,15 @@ type InventoryObservedV1 struct {
 
 // InventoryObservedV2 adds service evidence while retaining the frozen templates.
 type InventoryObservedV2 struct {
-	RunID              string                     `json:"run_id"`
-	SourceID           string                     `json:"source_id"`
-	Domain             string                     `json:"domain"`
-	AgentID            string                     `json:"agent_id"`
-	AgentName          string                     `json:"agent_name"`
-	DirectoryVerified  bool                       `json:"directory_verified"`
-	Templates          []TemplateBeforeMembership `json:"templates"`
-	EnrollmentServices []EnrollmentService        `json:"enrollment_services"`
-	Findings           []Finding                  `json:"findings"`
+	RunID              string                         `json:"run_id"`
+	SourceID           string                         `json:"source_id"`
+	Domain             string                         `json:"domain"`
+	AgentID            string                         `json:"agent_id"`
+	AgentName          string                         `json:"agent_name"`
+	DirectoryVerified  bool                           `json:"directory_verified"`
+	Templates          []TemplateBeforeMembership     `json:"templates"`
+	EnrollmentServices []EnrollmentServiceBeforeProbe `json:"enrollment_services"`
+	Findings           []Finding                      `json:"findings"`
 }
 
 func UpconvertTemplates(legacy []TemplateBeforeMembership) []Template {
@@ -67,5 +67,5 @@ func (old InventoryObservedV1) Current() InventoryObserved {
 	return InventoryObserved{RunID: old.RunID, SourceID: old.SourceID, Domain: old.Domain, AgentID: old.AgentID, AgentName: old.AgentName, DirectoryVerified: old.DirectoryVerified, Templates: UpconvertTemplates(old.Templates), Findings: old.Findings}
 }
 func (old InventoryObservedV2) Current() InventoryObserved {
-	return InventoryObserved{RunID: old.RunID, SourceID: old.SourceID, Domain: old.Domain, AgentID: old.AgentID, AgentName: old.AgentName, DirectoryVerified: old.DirectoryVerified, Templates: UpconvertTemplates(old.Templates), EnrollmentServices: old.EnrollmentServices, Findings: old.Findings}
+	return InventoryObserved{RunID: old.RunID, SourceID: old.SourceID, Domain: old.Domain, AgentID: old.AgentID, AgentName: old.AgentName, DirectoryVerified: old.DirectoryVerified, Templates: UpconvertTemplates(old.Templates), EnrollmentServices: UpconvertEnrollmentServices(old.EnrollmentServices), Findings: old.Findings}
 }

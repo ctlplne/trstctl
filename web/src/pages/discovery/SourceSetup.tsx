@@ -16,6 +16,8 @@ import { apiProblemMessage } from "@/lib/apiProblem";
 import { useApiQuery } from "@/lib/query";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 
+import { ADCSFields, parseADCSProbeSuffixes } from "./SourceSetupADCSFields";
+
 import { SSHCollectionFields } from "./SSHCollectionFields";
 
 const primaryKinds = ["network", "ssh", "ssh_trust", "adcs", "cloud_certificate", "cloud_secret", "secret_store"] as const;
@@ -89,6 +91,8 @@ export const sourceWizardFieldPaths: Record<PrimaryKind, readonly string[]> = {
     "private_egress_cidrs",
     "nested_groups_enabled",
     "membership_domain_dn",
+    "endpoint_probe.enabled",
+    "endpoint_probe.dns_suffixes",
   ],
   cloud_certificate: cloudFieldPaths,
   cloud_secret: secretFieldPaths,
@@ -115,7 +119,6 @@ const examples = {
   agentID: "Agent UUID",
   scope: "production-edge",
   sourceName: "Production edge TLS",
-  adcsPasswordRef: "secret://adcs/domain-reader",
   awsAccessKeyRef: "env:TRSTCTL_DISCOVERY_AWS_ACCESS_KEY_ID",
   awsSecretKeyRef: "env:TRSTCTL_DISCOVERY_AWS_SECRET_ACCESS_KEY",
   awsSessionTokenRef: "env:TRSTCTL_DISCOVERY_AWS_SESSION_TOKEN",
@@ -167,6 +170,8 @@ const setupSchema = z
     bindDN: z.string().trim(),
     passwordRef: z.string().trim(),
     adcsEnrollmentEndpoints: z.string(),
+    adcsEndpointProbe: z.boolean(),
+    adcsProbeSuffixes: z.string(),
     adcsNestedGroups: z.boolean(),
     membershipDomainDN: z.string().trim(),
     tagKey: z.string().trim(),
@@ -224,6 +229,18 @@ const setupSchema = z
       if (value.adcsNestedGroups) {
         requireField(ctx, value.membershipDomainDN, "membershipDomainDN", translateNow("discovery.setup.adcsMembership.domainRequired"));
         requireField(ctx, value.relayAgentID, "relayAgentID", translateNow("discovery.setup.adcsMembership.relayRequired"));
+      }
+      if (value.adcsEndpointProbe) {
+        requireField(ctx, value.relayAgentID, "relayAgentID", translateNow("discovery.setup.adcsProbe.relayRequired"));
+        try {
+          parseADCSProbeSuffixes(value.adcsProbeSuffixes);
+        } catch (error) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["adcsProbeSuffixes"],
+            message: error instanceof Error ? error.message : translateNow("discovery.setup.adcsProbe.invalidSuffixes"),
+          });
+        }
       }
       try {
         parseADCSEndpoints(value.adcsEnrollmentEndpoints);
@@ -308,6 +325,8 @@ const defaults: SetupValues = {
   bindDN: "",
   passwordRef: "",
   adcsEnrollmentEndpoints: "",
+  adcsEndpointProbe: false,
+  adcsProbeSuffixes: "",
   adcsNestedGroups: false,
   membershipDomainDN: "",
   tagKey: "",
@@ -797,95 +816,6 @@ function NetworkFields({
   );
 }
 
-function ADCSFields({ form, agents }: { form: ReturnType<typeof useForm<SetupValues>>; agents: Agent[] }) {
-  const { t } = useTranslation();
-  return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Field label={t("discovery.setup.directoryUrl")} error={form.formState.errors.adcsURL?.message} required>
-        {(control) => <Input {...control} {...form.register("adcsURL")} className="font-mono text-xs" />}
-      </Field>
-      <Field label={t("discovery.setup.relay")} error={form.formState.errors.relayAgentID?.message}>
-        {(control) => (
-          <>
-            <Input {...control} {...form.register("relayAgentID")} list="adcs-network-relays" className="font-mono text-xs" placeholder={examples.agentID} />
-            <datalist id="adcs-network-relays">
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
-                </option>
-              ))}
-            </datalist>
-          </>
-        )}
-      </Field>
-      <Field label={t("discovery.setup.configurationDn")} error={form.formState.errors.configurationDN?.message} required>
-        {(control) => (
-          <Input {...control} {...form.register("configurationDN")} className="font-mono text-xs" placeholder="CN=Configuration,DC=corp,DC=example" />
-        )}
-      </Field>
-      <Field label={t("discovery.setup.bindIdentity")} error={form.formState.errors.bindDN?.message} required>
-        {(control) => (
-          <Input
-            {...control}
-            {...form.register("bindDN")}
-            className="font-mono text-xs"
-            placeholder="CN=trstctl-reader,OU=Service Accounts,DC=corp,DC=example"
-          />
-        )}
-      </Field>
-      <Field
-        label={t("discovery.setup.passwordRef")}
-        description={t("discovery.setup.passwordRefDescription")}
-        error={form.formState.errors.passwordRef?.message}
-        required
-      >
-        {(control) => <Input {...control} {...form.register("passwordRef")} className="font-mono text-xs" placeholder={examples.adcsPasswordRef} />}
-      </Field>
-      <label htmlFor="source-setup-adcs-membership" className="flex items-start gap-3 text-sm lg:col-span-2">
-        <Checkbox {...form.register("adcsNestedGroups")} id="source-setup-adcs-membership" className="mt-0.5" />
-        <span>
-          <strong>{t("discovery.setup.adcsMembership.enabled")}</strong>
-          <span className="mt-0.5 block text-muted-foreground">{t("discovery.setup.adcsMembership.help")}</span>
-        </span>
-      </label>
-      {form.watch("adcsNestedGroups") ? (
-        <Field
-          label={t("discovery.setup.adcsMembership.domain")}
-          description={t("discovery.setup.adcsMembership.domainHelp")}
-          error={form.formState.errors.membershipDomainDN?.message}
-          required
-        >
-          {(control) => <Input {...control} {...form.register("membershipDomainDN")} className="font-mono text-xs" placeholder="DC=corp,DC=example" />}
-        </Field>
-      ) : null}
-      <details className="rounded-panel border border-border p-4 lg:col-span-2">
-        <summary className="cursor-pointer font-medium">{t("discovery.setup.adcsAdvanced")}</summary>
-        <div className="mt-4 grid gap-4">
-          <Field
-            label={t("discovery.setup.adcsEndpoints")}
-            description={t("discovery.setup.adcsEndpointsDescription")}
-            error={form.formState.errors.adcsEnrollmentEndpoints?.message}
-          >
-            {(control) => <Textarea {...control} {...form.register("adcsEnrollmentEndpoints")} className="min-h-24 font-mono text-xs" />}
-          </Field>
-          <label htmlFor="source-setup-adcs-private" className="flex items-start gap-3 text-sm">
-            <Checkbox {...form.register("allowPrivateEndpoint")} id="source-setup-adcs-private" className="mt-0.5" />
-            <span>
-              <strong>{t("discovery.setup.allowPrivateEndpoint")}</strong>
-              <span className="mt-0.5 block text-muted-foreground">{t("discovery.setup.allowPrivateEndpointDescription")}</span>
-            </span>
-          </label>
-          {form.watch("allowPrivateEndpoint") ? (
-            <Field label={t("discovery.setup.privateCidrs")} error={form.formState.errors.privateEgressCIDRs?.message} required>
-              {(control) => <Textarea {...control} {...form.register("privateEgressCIDRs")} className="min-h-24 font-mono text-xs" />}
-            </Field>
-          ) : null}
-        </div>
-      </details>
-    </div>
-  );
-}
-
 function CloudFields({ form, providers }: { form: ReturnType<typeof useForm<SetupValues>>; providers: DiscoveryCapability["providers"] }) {
   const { t } = useTranslation();
   const provider = form.watch("provider");
@@ -1152,6 +1082,7 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
   if (values.kind === "adcs") {
     return compact({
       url: values.adcsURL,
+      ...(values.adcsEndpointProbe ? { endpoint_probe: { enabled: true, dns_suffixes: parseADCSProbeSuffixes(values.adcsProbeSuffixes) } } : {}),
       ...(values.adcsNestedGroups ? { nested_groups_enabled: true, membership_domain_dn: values.membershipDomainDN } : {}),
       configuration_dn: values.configurationDN,
       bind_dn: values.bindDN,

@@ -91,6 +91,7 @@ var agentJobKindAllowlist = map[string]bool{
 	// rather than something the brain does itself.
 	"adcs.inventory":                   true,
 	"adcs.inventory.enrollment_groups": true,
+	"adcs.inventory.endpoint_probe":    true,
 	"trust.distribute":                 true,
 	// B2: host-generated renewal. The agent makes the key, sends a CSR up, and
 	// the control plane never holds the private half. Separate from
@@ -267,7 +268,7 @@ func (a *agentService) ClaimJobs(ctx context.Context, req *transport.ClaimJobsRe
 				continue
 			}
 		}
-		if job.Destination == relay.KindADCSInventory || job.Destination == relay.KindADCSNestedGroups {
+		if job.Destination == relay.KindADCSInventory || job.Destination == relay.KindADCSNestedGroups || job.Destination == relay.KindADCSEndpointProbe {
 			if startErr := a.startClaimedADCSRun(ctx, info.TenantID, info.CommonName, job.IdempotencyKey, payload); startErr != nil {
 				// A run that cannot enter running is not handed out. Its lease
 				// expires and the same event ID converges on the next claim.
@@ -977,7 +978,7 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket result receiver is not configured")
 		}
 		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups:
+	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
 		if a.recordRevocationHealth == nil {
@@ -1787,7 +1788,7 @@ func (a *agentService) projectClaimedJobPayload(job store.AgentJob) ([]byte, err
 }
 
 func (a *agentService) projectClaimedJobPayloadContext(ctx context.Context, job store.AgentJob) ([]byte, error) {
-	if job.Destination == relay.KindADCSNestedGroups {
+	if job.Destination == relay.KindADCSNestedGroups || job.Destination == relay.KindADCSEndpointProbe {
 		if a.orch == nil {
 			return nil, errors.New("AD CS nested source verifier is unavailable")
 		}

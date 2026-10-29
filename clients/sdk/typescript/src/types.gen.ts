@@ -9220,6 +9220,40 @@ export interface components {
         ADCSDriftHistory: {
             items: components["schemas"]["ADCSTemplateDrift"][];
         };
+        ADCSEndpointProbeCoverage: {
+            /** @description True only when the whole directory plan fits in this page without hostname issues. Individual HTTP outcomes may still be unverified. */
+            complete: boolean;
+            next_offset: number;
+            offset: number;
+            plan_digest: string;
+            /** @enum {string} */
+            reason?: "invalid_directory_hostname" | "outside_configured_dns_suffixes";
+            /** @enum {string} */
+            state: "in_page" | "not_in_page" | "host_unassessed";
+            targets_on_page: number;
+            total_targets: number;
+        };
+        ADCSEndpointProbePage: {
+            complete: boolean;
+            host_issues: {
+                enrollment_service: string;
+                /** @enum {string} */
+                reason: "invalid_directory_hostname" | "outside_configured_dns_suffixes";
+            }[];
+            next_offset: number;
+            offset: number;
+            plan_digest: string;
+            targets: components["schemas"]["ADCSEndpointProbeTarget"][];
+            total_targets: number;
+        };
+        ADCSEndpointProbeTarget: {
+            enrollment_service: string;
+            /** @enum {string} */
+            kind: "web_enrollment" | "ndes" | "ndes_admin";
+            /** @enum {string} */
+            source: "configured" | "ldap_dns" | "configured_and_ldap_dns";
+            url: string;
+        };
         ADCSEnrollmentACL: {
             allowed: string[];
             denied: string[];
@@ -9233,7 +9267,11 @@ export interface components {
             /** @enum {string} */
             kind: "web_enrollment" | "ndes" | "ndes_admin";
             /** @enum {string} */
-            state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other";
+            not_checked_reason?: "deadline_or_cancellation";
+            /** @enum {string} */
+            source?: "configured" | "ldap_dns" | "configured_and_ldap_dns";
+            /** @enum {string} */
+            state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other" | "not_checked";
             tls_verified: boolean;
             url: string;
         };
@@ -9264,6 +9302,7 @@ export interface components {
             agent_restriction_state: "enabled" | "disabled" | "unobserved";
             dns_name?: string;
             domain: string;
+            endpoint_probe?: components["schemas"]["ADCSEndpointProbeCoverage"];
             endpoints: components["schemas"]["ADCSEnrollmentEndpoint"][];
             enrollment_web_services: string[];
             findings: components["schemas"]["ADCSTemplateFinding"][];
@@ -9314,12 +9353,14 @@ export interface components {
             sid: string;
         };
         ADCSObservedInventory: {
+            endpoint_probe_page?: components["schemas"]["ADCSEndpointProbePage"];
             enrollment_services: components["schemas"]["ADCSObservedService"][];
             templates: components["schemas"]["ADCSObservedTemplate"][];
         };
         ADCSObservedService: {
             agent_restrictions: components["schemas"]["ADCSAgentRestrictions"];
             dns_name?: string;
+            endpoint_probe?: components["schemas"]["ADCSEndpointProbeCoverage"];
             endpoints?: components["schemas"]["ADCSEnrollmentEndpoint"][];
             enrollment_web_services?: string[];
             name: string;
@@ -9342,6 +9383,8 @@ export interface components {
         };
         ADCSPosture: {
             critical: number;
+            /** @description True when the bounded service view reaches 500 rows; additional services may exist. */
+            enrollment_service_limit_reached?: boolean;
             enrollment_services: components["schemas"]["ADCSEnrollmentService"][];
             guidance: string;
             high: number;

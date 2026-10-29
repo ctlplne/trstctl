@@ -287,6 +287,18 @@ func broadEnrollmentSID(sid string) bool {
 
 func findingsForEnrollmentService(service EnrollmentService) []Finding {
 	var out []Finding
+	if coverage := service.EndpointProbe; coverage != nil {
+		unverified := 0
+		for _, endpoint := range service.Endpoints {
+			if endpoint.State == EndpointNotChecked || endpoint.State == EndpointUnreachable {
+				unverified++
+			}
+		}
+		if !coverage.Complete || coverage.State == "host_unassessed" || unverified > 0 {
+			out = append(out, Finding{ID: "ADCS-ENDPOINT-PROBE-INCOMPLETE", Severity: SeverityMedium, Summary: "Endpoint assessment is incomplete. This is the latest bounded page; an empty endpoint list does not prove that Web Enrollment or NDES is absent. Unreachable and unattempted candidates remain unverified.", Remediation: "Resolve any directory hostname or network-scope issue, then run the source again to advance its retained page cursor. Review each observation timestamp; earlier pages are historical evidence, not simultaneous estate coverage.", Published: true, Evidence: []EvidenceRef{evidenceRef("endpoint probe coverage", coverage.State+"; "+coverage.Reason), evidenceRef("plan targets", strconv.Itoa(coverage.TotalTargets)), evidenceRef("page offset", strconv.Itoa(coverage.Offset)), evidenceRef("next offset", strconv.Itoa(coverage.NextOffset)), evidenceRef("unverified targets on this service page", strconv.Itoa(unverified))}})
+		}
+	}
+
 	for _, raw := range service.EnrollmentWebServices {
 		if parsed, err := url.Parse(raw); err == nil && parsed.Scheme == "http" {
 			out = append(out, Finding{

@@ -318,6 +318,12 @@ func (a *API) discoveryPlanPreview(ctx context.Context, tenantID string, req dis
 		preview.ConnectionOrigin = readiness.ConnectionOrigin
 		preview.Concurrency = 1
 		preview.QueueDepth = 256
+		if intent.EndpointProbe != nil {
+			preview.Concurrency = 4
+			preview.QueueDepth = adcsdiscovery.MaxEndpointProbePageTargets
+			preview.EstimatedUpperSeconds = 90
+			preview.DataHandling += " Candidate hostnames and counts are resolved during the queued LDAP read; this preview does not contact the directory. Each run probes at most 24 fixed-path targets and records its next page."
+		}
 		if !readiness.Ready {
 			preview.BlockedReasons = append(preview.BlockedReasons, readiness.BlockedReason)
 		}

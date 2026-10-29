@@ -185,6 +185,43 @@ describe("typed discovery source setup", () => {
     expect(apiMock.createDiscoverySegment).not.toHaveBeenCalled();
   });
 
+  it("requires a relay and DNS grant before endpoint probes enter the preview", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+    await screen.findByText("What this source does");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "Directory endpoint assessment");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "adcs");
+    const toggle = screen.getByRole("checkbox", { name: /Probe enrollment paths from directory hostnames/ });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText("Select an upgraded network relay for endpoint probing.")).toBeInTheDocument();
+    expect(apiMock.previewDiscoveryPlan).not.toHaveBeenCalled();
+    for (const [name, value] of [
+      ["Directory URL", "dc.corp.example"],
+      ["Configuration naming context", "CN=Configuration,DC=corp,DC=example"],
+      ["Bind identity", "CN=reader,DC=corp,DC=example"],
+      ["Password reference", "secret://adcs/reader"],
+      ["Allowed endpoint DNS suffixes", "corp.example, CORP.EXAMPLE."],
+    ]) {
+      await user.type(screen.getByRole("textbox", { name }), value);
+    }
+    await user.type(screen.getByRole("combobox", { name: "Network relay" }), "a2270000-0000-4000-8000-000000000001");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await waitFor(() =>
+      expect(apiMock.previewDiscoveryPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "adcs",
+          config: expect.objectContaining({
+            endpoint_probe: { enabled: true, dns_suffixes: ["corp.example"] },
+            relay_agent_id: "a2270000-0000-4000-8000-000000000001",
+          }),
+        }),
+      ),
+    );
+    expect(JSON.stringify(apiMock.previewDiscoveryPlan.mock.calls)).not.toContain("previous_probe_page");
+  });
+
   it("normalizes a bounded host/CIDR/port plan and submits every configured field", async () => {
     const user = userEvent.setup();
     const onCreated = vi.fn();

@@ -1690,9 +1690,9 @@ func (o *Orchestrator) ReconcileOutbox(ctx context.Context, log *events.Log) (in
 			case "":
 				// Historical network/SSH/control-plane events predate the explicit
 				// job-kind discriminator and always used discovery.run.
-			case adcsdiscovery.JobKind, adcsdiscovery.NestedGroupsJobKind:
+			case adcsdiscovery.JobKind, adcsdiscovery.NestedGroupsJobKind, adcsdiscovery.EndpointProbeJobKind:
 				destination = pl.JobKind
-				if pl.JobKind == adcsdiscovery.NestedGroupsJobKind {
+				if pl.JobKind == adcsdiscovery.NestedGroupsJobKind || pl.JobKind == adcsdiscovery.EndpointProbeJobKind {
 					if _, err := o.BoundADCSNestedCommand(ctx, ev.TenantID, ev.ID, ev.Data); err != nil {
 						return err
 					}

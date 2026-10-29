@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-1998 annotated sites across 29 rules. Each row is
+2003 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (400 sites)
+### G101 — CWE-798 Use of hardcoded credentials (405 sites)
 
 | Location | Reason |
 |---|---|
@@ -266,6 +266,7 @@ not this file.
 | `internal/connector/paloalto/paloalto_test.go:29` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/custody/custody.go:98` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/decommission/reprotect/credential_test.go:16` | NewCredentialID is public fixture metadata, not credential material (CWE-798). |
+| `internal/discovery/adcs/endpoint_probe_test.go:15` | public logical reference fixture, never a credential value (CWE-798). |
 | `internal/discovery/adcs/source_test.go:86` | public secret:// reference fixture; contains no credential value (CWE-798). |
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
@@ -319,6 +320,10 @@ not this file.
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
 | `internal/server/acme_eab_rotation_served_test.go:40` | logical fixture name, not secret material (CWE-798) |
 | `internal/server/acme_eab_rotation_served_test.go:41` | a reference, not secret material (CWE-798) |
+| `internal/server/adcs_endpoint_probe_command_test.go:23` | public secret:// reference fixture; contains no credential value (CWE-798). |
+| `internal/server/adcs_endpoint_probe_command_test.go:78` | a public reference fixture, no credential value (CWE-798). |
+| `internal/server/adcs_endpoint_probe_command_test.go:122` | public secret:// reference fixture; contains no credential value (CWE-798). |
+| `internal/server/adcs_endpoint_probe_served_test.go:28` | public logical reference fixture, no credential value (CWE-798). |
 | `internal/server/adcs_inventory_served_test.go:42` | this is a logical fixture name, not secret material (CWE-798). |
 | `internal/server/adcs_inventory_served_test.go:43` | this is a non-secret reference, not secret material (CWE-798). |
 | `internal/server/adcs_nested_command_test.go:23` | public secret:// reference fixture; contains no credential value (CWE-798). |

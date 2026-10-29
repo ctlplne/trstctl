@@ -458,6 +458,34 @@ export interface ADCSDriftHistory {
   items: ADCSTemplateDrift[];
 }
 
+export interface ADCSEndpointProbeCoverage {
+  complete: boolean;
+  next_offset: number;
+  offset: number;
+  plan_digest: string;
+  reason?: "invalid_directory_hostname" | "outside_configured_dns_suffixes";
+  state: "in_page" | "not_in_page" | "host_unassessed";
+  targets_on_page: number;
+  total_targets: number;
+}
+
+export interface ADCSEndpointProbePage {
+  complete: boolean;
+  host_issues: ({ enrollment_service: string; reason: "invalid_directory_hostname" | "outside_configured_dns_suffixes" })[];
+  next_offset: number;
+  offset: number;
+  plan_digest: string;
+  targets: ADCSEndpointProbeTarget[];
+  total_targets: number;
+}
+
+export interface ADCSEndpointProbeTarget {
+  enrollment_service: string;
+  kind: "web_enrollment" | "ndes" | "ndes_admin";
+  source: "configured" | "ldap_dns" | "configured_and_ldap_dns";
+  url: string;
+}
+
 export interface ADCSEnrollmentACL {
   allowed: string[];
   denied: string[];
@@ -469,7 +497,9 @@ export interface ADCSEnrollmentEndpoint {
   extended_protection: "enabled" | "disabled" | "unobserved";
   http_status?: number;
   kind: "web_enrollment" | "ndes" | "ndes_admin";
-  state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other";
+  not_checked_reason?: "deadline_or_cancellation";
+  source?: "configured" | "ldap_dns" | "configured_and_ldap_dns";
+  state: "anonymous_access" | "authentication_required" | "redirected" | "not_found" | "unreachable" | "reachable_other" | "not_checked";
   tls_verified: boolean;
   url: string;
 }
@@ -498,6 +528,7 @@ export interface ADCSEnrollmentService {
   agent_restriction_state: "enabled" | "disabled" | "unobserved";
   dns_name?: string;
   domain: string;
+  endpoint_probe?: ADCSEndpointProbeCoverage;
   endpoints: ADCSEnrollmentEndpoint[];
   enrollment_web_services: string[];
   findings: ADCSTemplateFinding[];
@@ -543,6 +574,7 @@ export interface ADCSMembershipNode {
 }
 
 export interface ADCSObservedInventory {
+  endpoint_probe_page?: ADCSEndpointProbePage;
   enrollment_services: ADCSObservedService[];
   templates: ADCSObservedTemplate[];
 }
@@ -550,6 +582,7 @@ export interface ADCSObservedInventory {
 export interface ADCSObservedService {
   agent_restrictions: ADCSAgentRestrictions;
   dns_name?: string;
+  endpoint_probe?: ADCSEndpointProbeCoverage;
   endpoints?: ADCSEnrollmentEndpoint[];
   enrollment_web_services?: string[];
   name: string;
@@ -574,6 +607,7 @@ export interface ADCSObservedTemplate {
 
 export interface ADCSPosture {
   critical: number;
+  enrollment_service_limit_reached?: boolean;
   enrollment_services: ADCSEnrollmentService[];
   guidance: string;
   high: number;

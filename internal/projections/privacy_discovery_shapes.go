@@ -42,3 +42,19 @@ func adcsProjectionObservationID(template adcsdiscovery.Template, eventID string
 	}
 	return ""
 }
+
+// Endpoint probe commands use a new closed union; v1/v2 remain unchanged.
+const DiscoveryEndpointProbeQueuedSchemaVersion = 3
+
+type privacyDiscoveryEndpointProbeQueued struct {
+	privacyDiscoveryEnrollmentGroupsQueued
+	EndpointProbe     *adcsdiscovery.EndpointProbeOptions `json:"endpoint_probe,omitempty"`
+	PreviousProbePage *adcsdiscovery.EndpointProbeCursor  `json:"previous_probe_page,omitempty"`
+}
+
+func adcsServiceObservationID(version int, eventID string) string {
+	if version >= adcsdiscovery.InventoryEndpointProbeSchemaVersion {
+		return eventID
+	}
+	return ""
+}

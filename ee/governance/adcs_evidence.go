@@ -47,7 +47,7 @@ func buildADCSComplianceEvidence(tenantID string, records []audit.Record, window
 				Reference: auditReference(record), RunID: observed.RunID, SourceID: observed.SourceID,
 				Domain: observed.Domain, AgentID: observed.AgentID, AgentName: observed.AgentName,
 				DirectoryVerified: observed.DirectoryVerified,
-				Inventory:         adcsdiscovery.Inventory{Templates: observed.Templates, EnrollmentServices: observed.EnrollmentServices},
+				Inventory:         adcsdiscovery.Inventory{Templates: observed.Templates, EnrollmentServices: observed.EnrollmentServices, EndpointProbePage: observed.EndpointProbePage},
 				Findings:          observed.Findings,
 			}
 			previous, exists := latest[observed.Domain]

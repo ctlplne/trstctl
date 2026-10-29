@@ -142,7 +142,7 @@ silently queued.
 
 Readiness also checks the server's agent dispatch allowlist. A healthy relay is not
 enough when `discovery.run` (or the source’s exact `adcs.inventory` /
-`adcs.inventory.enrollment_groups` kind) is absent from
+`adcs.inventory.enrollment_groups` / `adcs.inventory.endpoint_probe` kind) is absent from
 `agent_channel.claimable_job_kinds`: preview and saved-source preflight name that
 exact configuration gap, and run admission returns a conflict before creating an
 event or outbox row. The console therefore cannot report “ready” for work the
@@ -897,3 +897,22 @@ forest proof boundary. The focused served journey exercises real Samba AD,
 vaulted single-attempt credentials, mTLS signed results, immutable projections,
 CLI readback, tenant isolation and replay. The final image/browser/restart
 qualification follows the release replay.
+
+
+### AD CS enrollment endpoint candidates
+
+The AD CS source wizard can opt into fixed-path probes derived from directory
+hostnames. Enable **Probe enrollment paths from directory hostnames**, select an
+upgraded network relay and enter explicit DNS suffixes. Preview checks the relay
+capability without contacting LDAP. Candidate counts become known during the
+queued directory read; private destinations need an additional approved CIDR grant.
+
+Posture shows configured, LDAP-derived and deduplicated combined origins, the
+latest page's total and offsets, per-service coverage and unattempted outcomes.
+The next run advances the retained cursor. Empty endpoints on a different page
+mean unassessed, and unreachable endpoints remain unverified. Findings and
+compliance evidence carry those limits; HTTP reachability does not prove IIS
+Extended Protection or successful SCEP enrollment. The service-view ceiling is
+visible when reached. The [endpoint probing runbook](../guides/adcs-endpoint-probing.md)
+explains exact configuration, bounds and recovery. Windows IIS/NDES qualification
+requires the Windows environment; a private Samba/HTTP/TLS fixture is separate proof.

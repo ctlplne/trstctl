@@ -628,6 +628,46 @@ ADCSDriftHistory = TypedDict(
     total=False,
 )
 
+ADCSEndpointProbeCoverage = TypedDict(
+    'ADCSEndpointProbeCoverage',
+    {
+        'complete': bool,
+        'next_offset': int,
+        'offset': int,
+        'plan_digest': str,
+        'reason': str,
+        'state': str,
+        'targets_on_page': int,
+        'total_targets': int,
+    },
+    total=False,
+)
+
+ADCSEndpointProbePage = TypedDict(
+    'ADCSEndpointProbePage',
+    {
+        'complete': bool,
+        'host_issues': list[dict[str, Any]],
+        'next_offset': int,
+        'offset': int,
+        'plan_digest': str,
+        'targets': list[dict[str, Any]],
+        'total_targets': int,
+    },
+    total=False,
+)
+
+ADCSEndpointProbeTarget = TypedDict(
+    'ADCSEndpointProbeTarget',
+    {
+        'enrollment_service': str,
+        'kind': str,
+        'source': str,
+        'url': str,
+    },
+    total=False,
+)
+
 ADCSEnrollmentACL = TypedDict(
     'ADCSEnrollmentACL',
     {
@@ -645,6 +685,8 @@ ADCSEnrollmentEndpoint = TypedDict(
         'extended_protection': str,
         'http_status': int,
         'kind': str,
+        'not_checked_reason': str,
+        'source': str,
         'state': str,
         'tls_verified': bool,
         'url': str,
@@ -686,6 +728,7 @@ ADCSEnrollmentService = TypedDict(
         'agent_restriction_state': str,
         'dns_name': str,
         'domain': str,
+        'endpoint_probe': dict[str, Any],
         'endpoints': list[dict[str, Any]],
         'enrollment_web_services': list[str],
         'findings': list[dict[str, Any]],
@@ -751,6 +794,7 @@ ADCSMembershipNode = TypedDict(
 ADCSObservedInventory = TypedDict(
     'ADCSObservedInventory',
     {
+        'endpoint_probe_page': dict[str, Any],
         'enrollment_services': list[dict[str, Any]],
         'templates': list[dict[str, Any]],
     },
@@ -762,6 +806,7 @@ ADCSObservedService = TypedDict(
     {
         'agent_restrictions': dict[str, Any],
         'dns_name': str,
+        'endpoint_probe': dict[str, Any],
         'endpoints': list[dict[str, Any]],
         'enrollment_web_services': list[str],
         'name': str,
@@ -794,6 +839,7 @@ ADCSPosture = TypedDict(
     'ADCSPosture',
     {
         'critical': int,
+        'enrollment_service_limit_reached': bool,
         'enrollment_services': list[dict[str, Any]],
         'guidance': str,
         'high': int,

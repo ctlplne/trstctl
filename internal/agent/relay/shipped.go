@@ -216,6 +216,11 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			Kind:  KindADCSEndpointProbe,
+			Flags: []string{"--relay-claim"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			Kind:  KindADCSNestedGroups,
 			Flags: []string{"--relay-claim"},
 			Roles: []string{mtls.AgentRoleNetwork},

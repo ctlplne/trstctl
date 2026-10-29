@@ -50,7 +50,7 @@ coverage ledger applies to assets, applied to weaknesses.
 | CWE | Waived sites | Register section |
 |---|---|---|
 | CWE-22 | 660 | [cwe-register.md](cwe-register.md) |
-| CWE-798 | 400 | [cwe-register.md](cwe-register.md) |
+| CWE-798 | 405 | [cwe-register.md](cwe-register.md) |
 | CWE-190 | 331 | [cwe-register.md](cwe-register.md) |
 | CWE-78 | 267 | [cwe-register.md](cwe-register.md) |
 | CWE-276 | 212 | [cwe-register.md](cwe-register.md) |

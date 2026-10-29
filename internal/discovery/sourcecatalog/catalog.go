@@ -99,13 +99,15 @@ var items = []Capability{
 	{
 		Kind: "adcs", Label: "Microsoft AD CS", Tool: "Discover", Route: "/discovery?tab=sources&kind=adcs", SetupSurface: SetupSourceWizard,
 		Purpose:      "Inventory AD CS authorities, templates, enrollment rights, and exposed enrollment endpoints through a domain-reachable relay.",
-		DataHandling: "Performs bounded read-only LDAP and configured endpoint checks. Passwords are represented only by credential references; response bodies and private keys are never stored.",
+		DataHandling: "Performs bounded read-only LDAP, configured endpoint checks and opt-in fixed-path probes from scoped directory hostnames. Passwords are represented only by credential references; response bodies and private keys are never stored.",
 		Permission:   "discovery:write", Edition: "core", Execution: "network-role relay",
 		Configuration: []Field{
 			field("url", "Directory URL", "url", true, false, false, "LDAPS or LDAP endpoint reachable from the selected relay."),
 			field("configuration_dn", "Configuration naming context", "string", true, false, false, "The AD Configuration partition to inspect."),
 			field("nested_groups_enabled", "Read nested enrollment groups", "boolean", false, false, true, "Opt-in bounded LDAP in-chain reads; needs an explicit upgraded network relay. Full Windows AccessCheck is unassessed."),
 			field("membership_domain_dn", "Membership domain naming context", "string", false, false, false, "Required with nested groups: an explicit domain partition, never an inferred forest scope."),
+			field("endpoint_probe.enabled", "Probe directory enrollment hostnames", "boolean", false, false, true, "Default-off fixed HTTP/HTTPS Web Enrollment and NDES client paths; needs an upgraded selected network relay."),
+			field("endpoint_probe.dns_suffixes", "Allowed endpoint DNS suffixes", "domain_list", false, false, true, "Required with probing: 1..32 explicit DNS suffixes. This grants no private network range."),
 			field("bind_dn", "Bind identity", "string", true, false, false, "A least-privilege directory reader."),
 			field("password_ref", "Password reference", "credential_ref", true, true, false, "Reference to the bind password; the value is never sent in this configuration."),
 			field("relay_agent_id", "Network relay", "agent_ref", false, false, false, "An enrolled network-role agent that can reach the directory."),

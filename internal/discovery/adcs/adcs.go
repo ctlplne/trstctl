@@ -166,9 +166,10 @@ func (t Template) AllowsClientAuthentication() bool {
 
 // EnrollmentService is one published CA.
 type EnrollmentService struct {
-	Name      string   `json:"name"`
-	DNSName   string   `json:"dns_name,omitempty"`
-	Templates []string `json:"templates,omitempty"`
+	EndpointProbe *EndpointProbeServiceCoverage `json:"endpoint_probe,omitempty"`
+	Name          string                        `json:"name"`
+	DNSName       string                        `json:"dns_name,omitempty"`
+	Templates     []string                      `json:"templates,omitempty"`
 	// EnrollmentWebServices are the CES URIs published in the directory's
 	// msPKI-Enrollment-Servers attribute. They are not legacy /certsrv or NDES
 	// endpoints; keeping the three concepts separate prevents a CES record from
@@ -203,6 +204,7 @@ const (
 	EndpointNotFound             EnrollmentEndpointState = "not_found"
 	EndpointUnreachable          EnrollmentEndpointState = "unreachable"
 	EndpointReachableOther       EnrollmentEndpointState = "reachable_other"
+	EndpointNotChecked           EnrollmentEndpointState = "not_checked"
 )
 
 // EvidenceState is used for controls that require host/CA-side inspection.
@@ -216,6 +218,8 @@ const (
 
 // EnrollmentEndpoint is one normalized live enrollment-service observation.
 type EnrollmentEndpoint struct {
+	Source             string                  `json:"source,omitempty"`
+	NotCheckedReason   string                  `json:"not_checked_reason,omitempty"`
 	Kind               EnrollmentEndpointKind  `json:"kind"`
 	URL                string                  `json:"url"`
 	State              EnrollmentEndpointState `json:"state"`
@@ -234,6 +238,7 @@ type EnrollmentAgentRestrictions struct {
 
 // Inventory is one domain's AD CS posture.
 type Inventory struct {
+	EndpointProbePage  *EndpointProbePage  `json:"endpoint_probe_page,omitempty"`
 	Templates          []Template          `json:"templates"`
 	EnrollmentServices []EnrollmentService `json:"enrollment_services"`
 }

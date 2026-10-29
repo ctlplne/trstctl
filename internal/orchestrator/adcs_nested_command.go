@@ -15,6 +15,7 @@ import (
 
 // BoundADCSNestedCommand binds every target, credential reference and scope to
 // the immutable queued command before claim, redemption, recovery or ingestion.
+// The endpoint-probe successor uses the same fence, including combined reads.
 func (o *Orchestrator) BoundADCSNestedCommand(ctx context.Context, tenantID, eventID string, payload []byte) (adcsdiscovery.InventoryIntent, error) {
 	var empty adcsdiscovery.InventoryIntent
 	if o.log == nil {
@@ -24,7 +25,7 @@ func (o *Orchestrator) BoundADCSNestedCommand(ctx context.Context, tenantID, eve
 	if err != nil {
 		return empty, err
 	}
-	if !found || event.TenantID != tenantID || event.Type != projections.EventDiscoveryRunQueued || event.SchemaVersion != projections.DiscoveryEnrollmentGroupsQueuedSchemaVersion {
+	if !found || event.TenantID != tenantID || event.Type != projections.EventDiscoveryRunQueued || (event.SchemaVersion != projections.DiscoveryEnrollmentGroupsQueuedSchemaVersion && event.SchemaVersion != projections.DiscoveryEndpointProbeQueuedSchemaVersion) {
 		return empty, errors.New("AD CS nested job has no immutable scoped command")
 	}
 	if err := projections.ValidateSchemaVersion(event); err != nil {
@@ -40,7 +41,11 @@ func (o *Orchestrator) BoundADCSNestedCommand(ctx context.Context, tenantID, eve
 		if err := d.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 			return empty, errors.New("AD CS nested command has trailing JSON")
 		}
-		if out.JobKind != adcsdiscovery.NestedGroupsJobKind || !out.NestedGroupsEnabled || out.RequiredAgentID == "" || out.RequiredAgentRole != adcsdiscovery.RequiredRoleNetwork || out.Execution != adcsdiscovery.ExecutionRelay || out.MembershipDomainDN == "" || out.ID == "" || out.SourceID == "" {
+		validMode := event.SchemaVersion == projections.DiscoveryEnrollmentGroupsQueuedSchemaVersion && out.JobKind == adcsdiscovery.NestedGroupsJobKind && out.NestedGroupsEnabled && out.MembershipDomainDN != "" && out.EndpointProbe == nil && out.PreviousProbePage == nil
+		if event.SchemaVersion == projections.DiscoveryEndpointProbeQueuedSchemaVersion {
+			validMode = out.JobKind == adcsdiscovery.EndpointProbeJobKind && out.EndpointProbe != nil && out.EndpointProbe.Enabled && len(out.EndpointProbe.DNSSuffixes) > 0 && (out.NestedGroupsEnabled == (out.MembershipDomainDN != ""))
+		}
+		if !validMode || out.RequiredAgentID == "" || out.RequiredAgentRole != adcsdiscovery.RequiredRoleNetwork || out.Execution != adcsdiscovery.ExecutionRelay || out.ID == "" || out.SourceID == "" {
 			return empty, errors.New("AD CS nested command lacks its capability and scope")
 		}
 		return out, nil
@@ -63,7 +68,7 @@ func (o *Orchestrator) BoundADCSNestedCommand(ctx context.Context, tenantID, eve
 
 // A new source capability cannot rely on a heartbeat alone: an older binary
 // silently ignores new JSON options and never claims the new kind.
-func nestedADCSReaderReady(agent store.Agent, staleBefore, futureLimit time.Time) bool {
+func nestedADCSReaderReady(agent store.Agent, staleBefore, futureLimit time.Time, jobKind string) bool {
 	if agent.ExecutorsReportedAt == nil || agent.ExecutorsReportedAt.Before(staleBefore) || agent.ExecutorsReportedAt.After(futureLimit) {
 		return false
 	}
@@ -72,7 +77,7 @@ func nestedADCSReaderReady(agent store.Agent, staleBefore, futureLimit time.Time
 		return false
 	}
 	for _, kind := range census.Kinds {
-		if kind.Kind == adcsdiscovery.NestedGroupsJobKind && len(kind.MissingFlags) == 0 {
+		if kind.Kind == jobKind && len(kind.MissingFlags) == 0 {
 			return true
 		}
 	}

@@ -34,11 +34,11 @@ func (s *Server) boundADCSMembership(ctx context.Context, tenantID string, row s
 	if err != nil {
 		return nil, err
 	}
-	if !found || event.TenantID != tenantID || event.Type != projections.EventADCSInventoryObserved || event.SchemaVersion != adcs.InventoryEventSchemaVersion {
+	if !found || event.TenantID != tenantID || event.Type != projections.EventADCSInventoryObserved || (event.SchemaVersion < adcs.InventoryMembershipSchemaVersion || event.SchemaVersion > adcs.InventoryEventSchemaVersion) {
 		return nil, errors.New("AD CS membership observation is unavailable")
 	}
-	var observed adcs.InventoryObserved
-	if err := decodeStrictJSON(event.Data, &observed); err != nil {
+	observed, err := adcs.DecodeInventoryObservation(event.SchemaVersion, event.Data)
+	if err != nil {
 		return nil, err
 	}
 	if !observed.NestedGroupsEnabled || observed.Domain != row.Domain || observed.AgentName != row.ObservedBy || !event.Time.Truncate(1000).Equal(row.ObservedAt.UTC().Truncate(1000)) {

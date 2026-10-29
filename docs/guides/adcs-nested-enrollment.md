@@ -89,7 +89,9 @@ attributes. Membership evidence has a 384 KiB aggregate serialization limit;
 affected templates explicitly report `budget_exceeded`, and exhaustion that
 cannot fit that outcome fails the run. Authentication is bounded to 20 seconds,
 LDAP requests to 20 seconds, nested collection to 45 seconds, and the complete
-relay attempt to 60 seconds. The stream rejects frames above 2 MiB and totals
+relay attempt to 60 seconds. When endpoint probing is also enabled, the combined
+`adcs.inventory.endpoint_probe` job has a 90-second overall budget; the LDAP
+and membership sub-budgets stay bounded as above. See [endpoint probing](adcs-endpoint-probing.md). The stream rejects frames above 2 MiB and totals
 above 16 MiB before the directory library allocates their declared bodies.
 
 ## Proof boundary

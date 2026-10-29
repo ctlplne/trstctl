@@ -4716,13 +4716,13 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoverySchedulePaused:                  {1: true, 2: true},
 	EventDiscoveryScheduleResumed:                 {1: true, 2: true},
 	EventDiscoveryScheduleRetired:                 {1: true, 2: true},
-	EventDiscoveryRunQueued:                       {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true},
+	EventDiscoveryRunQueued:                       {1: true, DiscoveryEnrollmentGroupsQueuedSchemaVersion: true, DiscoveryEndpointProbeQueuedSchemaVersion: true},
 	EventSSHTrustCollectionQueued:                 {1: true},
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
 	EventDiscoveryRunCompleted:                    {1: true, DiscoveryTargetResultsEventSchemaVersion: true},
-	EventADCSInventoryObserved:                    {1: true, 2: true, adcsdiscovery.InventoryEventSchemaVersion: true},
+	EventADCSInventoryObserved:                    {1: true, 2: true, adcsdiscovery.InventoryMembershipSchemaVersion: true, adcsdiscovery.InventoryEventSchemaVersion: true},
 	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventADCSTemplateDriftWorsened:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
 	EventRevocationProbeQueued:                    {1: true},
@@ -6633,20 +6633,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		// identity (AN-2, idempotent by event sequence).
 		return p.store.ApplyDiscoveryCoverageRunTx(ctx, tx, e.TenantID, pl.ID, pl.Status, completedAt, e.Sequence)
 	case EventADCSInventoryObserved:
-		var pl adcsdiscovery.InventoryObserved
-		if schemaVersionOf(e) == 1 {
-			var legacy adcsdiscovery.InventoryObservedV1
-			if err := decode(e, &legacy); err != nil {
-				return err
-			}
-			pl = legacy.Current()
-		} else if schemaVersionOf(e) == 2 {
-			var legacy adcsdiscovery.InventoryObservedV2
-			if err := decode(e, &legacy); err != nil {
-				return err
-			}
-			pl = legacy.Current()
-		} else if err := decode(e, &pl); err != nil {
+		pl, err := adcsdiscovery.DecodeInventoryObservation(schemaVersionOf(e), e.Data)
+		if err != nil {
 			return err
 		}
 		if pl.RunID == "" || pl.SourceID == "" || strings.TrimSpace(pl.Domain) == "" ||
@@ -6654,29 +6642,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return errors.New("projections: AD CS inventory observation is missing run/source/domain/agent authority")
 		}
 		if schemaVersionOf(e) >= 2 {
-			endpoints := make([]adcsdiscovery.EnrollmentEndpointTarget, 0)
-			for _, service := range pl.EnrollmentServices {
-				for _, endpoint := range service.Endpoints {
-					endpoints = append(endpoints, adcsdiscovery.EnrollmentEndpointTarget{
-						EnrollmentService: service.Name, Kind: endpoint.Kind, URL: endpoint.URL,
-					})
-				}
-			}
-			jobKind := adcsdiscovery.JobKind
-			if pl.NestedGroupsEnabled {
-				jobKind = adcsdiscovery.NestedGroupsJobKind
-			}
-			if err := adcsdiscovery.ValidateInventoryReport(adcsdiscovery.InventoryIntent{
-				ID: pl.RunID, SourceID: pl.SourceID, JobKind: jobKind,
-				NestedGroupsEnabled: pl.NestedGroupsEnabled, MembershipDomainDN: pl.MembershipDomainDN,
-				Execution: adcsdiscovery.ExecutionRelay, RequiredAgentRole: adcsdiscovery.RequiredRoleNetwork,
-				EnrollmentEndpoints: endpoints,
-			}, adcsdiscovery.InventoryReport{
-				Status: "succeeded", DirectoryVerified: pl.DirectoryVerified,
-				Inventory: adcsdiscovery.Inventory{Templates: pl.Templates, EnrollmentServices: pl.EnrollmentServices}, Findings: pl.Findings,
-			}); err != nil {
+			if err := pl.Validate(); err != nil {
 				return fmt.Errorf("projections: validate AD CS inventory observation: %w", err)
 			}
+
 		} else if len(pl.Templates) == 0 || len(pl.Templates) > adcsdiscovery.MaxTemplates {
 			return errors.New("projections: legacy AD CS inventory has an invalid template bound")
 		}
@@ -6724,7 +6693,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			if findings == nil {
 				encodedFindings = []byte("[]")
 			}
-			observedService, err := json.Marshal(service)
+			observedService, err := json.Marshal(struct {
+				adcsdiscovery.EnrollmentService
+				ObservationEventID string `json:"observation_event_id,omitempty"`
+			}{EnrollmentService: service, ObservationEventID: adcsServiceObservationID(schemaVersionOf(e), e.ID)})
 			if err != nil {
 				return err
 			}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
@@ -38,6 +39,7 @@ import (
 // KindADCSInventory is the job kind for a template sweep.
 const KindADCSInventory = adcs.JobKind
 const KindADCSNestedGroups = adcs.NestedGroupsJobKind
+const KindADCSEndpointProbe = adcs.EndpointProbeJobKind
 
 // ADCSInventoryIntent is the shared reference-only job payload.
 type ADCSInventoryIntent = adcs.InventoryIntent
@@ -158,9 +160,15 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	// Authenticate once through AN-3 without creating an immutable password
 	// string. Release the borrowed bytes before reading public directory data.
 	defer secret.Wipe(password)
-	bounded, cancel := context.WithTimeout(ctx, 60*time.Second)
+	budget := 60 * time.Second
+	if intent.EndpointProbe != nil {
+		budget = 90 * time.Second
+	}
+	bounded, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	wire, err := ldapbind.Dial(bounded, url, intent.BindDN, password, intent.InsecureSkipVerify, egressControl(nil))
+	directoryCtx, directoryCancel := context.WithTimeout(bounded, 60*time.Second)
+	defer directoryCancel()
+	wire, err := ldapbind.Dial(directoryCtx, url, intent.BindDN, password, intent.InsecureSkipVerify, egressControl(nil))
 	secret.Wipe(password)
 	if err != nil {
 		return ADCSReport{}, fmt.Errorf("relay: directory authentication failed: %w", err)
@@ -181,13 +189,17 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	defer func() { close(stop); <-done }()
 	var inventory adcs.Inventory
 	if intent.NestedGroupsEnabled {
-		inventory, err = adcs.CollectWithMembership(bounded, ldapSearcher{conn: conn}, intent.ConfigurationDN, intent.MembershipDomainDN)
+		inventory, err = adcs.CollectWithMembership(directoryCtx, ldapSearcher{conn: conn}, intent.ConfigurationDN, intent.MembershipDomainDN)
 	} else {
-		inventory, err = adcs.Collect(bounded, ldapSearcher{conn: conn}, intent.ConfigurationDN)
+		inventory, err = adcs.Collect(directoryCtx, ldapSearcher{conn: conn}, intent.ConfigurationDN)
 	}
 	if err != nil {
 		return ADCSReport{}, err
 	}
+	// Public directory facts are collected; no LDAP connection is needed
+	// while probing HTTP or reading CA-host policy.
+	directoryCancel()
+	_ = conn.Close()
 	if len(inventory.Templates) == 0 {
 		return ADCSReport{}, errors.New("relay: AD CS directory returned no templates")
 	}
@@ -195,6 +207,7 @@ func InventoryADCS(ctx context.Context, intent ADCSInventoryIntent, material Mat
 	if err != nil {
 		return ADCSReport{}, err
 	}
+	defer endpointClient.CloseIdleConnections()
 	if err := enrichADCSInventory(bounded, intent, &inventory, endpointClient, observeCAAgentRestrictions); err != nil {
 		return ADCSReport{}, err
 	}
@@ -224,6 +237,7 @@ func newADCSEndpointClient(intent ADCSInventoryIntent) (*http.Client, error) {
 	// crypto boundary. Redirects are evidence, not instructions: following one
 	// could leave the exact operator-scoped endpoint and erase its real status.
 	transport.TLSClientConfig = mtls.DirectoryClientTLSConfig(false)
+	transport.MaxResponseHeaderBytes = 64 * 1024
 	client.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 	// The agent's egress policy applies on top of the SSRF dial check. This
 	// transport uses no proxy, so the dial sees every destination.
@@ -243,20 +257,36 @@ func enrichADCSInventory(
 		return errors.New("relay: AD CS live-evidence collector is incomplete")
 	}
 	services := make(map[string]*adcs.EnrollmentService, len(inventory.EnrollmentServices))
-	for i := range inventory.EnrollmentServices {
-		service := &inventory.EnrollmentServices[i]
-		services[service.Name] = service
+	collectRestrictions := func(service *adcs.EnrollmentService) {
 		service.AgentRestrictions = restrictions(ctx, *service)
 		if service.AgentRestrictions.State == "" || strings.TrimSpace(service.AgentRestrictions.Source) == "" {
 			service.AgentRestrictions = adcs.EnrollmentAgentRestrictions{State: adcs.EvidenceUnobserved, Source: "ca_policy_collector_failed_closed"}
 		}
 	}
-	for _, target := range intent.EnrollmentEndpoints {
-		service := services[target.EnrollmentService]
-		if service == nil {
-			return fmt.Errorf("relay: configured enrollment endpoint names unknown service %q", target.EnrollmentService)
+	for i := range inventory.EnrollmentServices {
+		service := &inventory.EnrollmentServices[i]
+		services[service.Name] = service
+		if intent.EndpointProbe == nil {
+			collectRestrictions(service)
 		}
-		service.Endpoints = append(service.Endpoints, observeEnrollmentEndpoint(ctx, client, target))
+	}
+	if intent.EndpointProbe != nil {
+		if err := enrichADCSEndpointProbePage(ctx, intent, inventory, client, services); err != nil {
+			return err
+		}
+		// The opted-in page gets its bounded attempt before optional Windows
+		// policy queries can consume the remaining overall budget.
+		for i := range inventory.EnrollmentServices {
+			collectRestrictions(&inventory.EnrollmentServices[i])
+		}
+	} else {
+		for _, target := range intent.EnrollmentEndpoints {
+			service := services[target.EnrollmentService]
+			if service == nil {
+				return fmt.Errorf("relay: configured enrollment endpoint names unknown service %q", target.EnrollmentService)
+			}
+			service.Endpoints = append(service.Endpoints, observeEnrollmentEndpoint(ctx, client, target))
+		}
 	}
 	for i := range inventory.EnrollmentServices {
 		sort.Slice(inventory.EnrollmentServices[i].Endpoints, func(a, b int) bool {
@@ -359,4 +389,47 @@ func runADCSInventory(ctx context.Context, ch Channel, job Job, material Materia
 	}
 	report(ctx, ch, job, OutcomeExecuted, string(detail))
 	return true
+}
+
+// The queue and worker count are fixed independently of estate size. Results
+// occupy their planned slot so completion order cannot change report identity.
+func enrichADCSEndpointProbePage(ctx context.Context, intent ADCSInventoryIntent, inventory *adcs.Inventory, client adcsHTTPDoer, services map[string]*adcs.EnrollmentService) error {
+	page, err := adcs.PlanEnrollmentEndpointProbes(intent, inventory.EnrollmentServices)
+	if err != nil {
+		return err
+	}
+	inventory.EndpointProbePage = &page
+	for _, service := range services {
+		service.EndpointProbe = page.ServiceCoverage(service.Name)
+	}
+	results := make([]adcs.EnrollmentEndpoint, len(page.Targets))
+	queue := make(chan int, adcs.MaxEndpointProbePageTargets)
+	for index := range page.Targets {
+		queue <- index
+	}
+	close(queue)
+	var workers sync.WaitGroup
+	for range min(4, len(page.Targets)) {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range queue {
+				target := page.Targets[index]
+				if ctx.Err() != nil {
+					results[index] = adcs.EnrollmentEndpoint{Kind: target.Kind, URL: target.URL, Source: target.Source, State: adcs.EndpointNotChecked, NotCheckedReason: "deadline_or_cancellation", ExtendedProtection: adcs.EvidenceUnobserved}
+					continue
+				}
+				attempt, cancel := context.WithTimeout(ctx, 5*time.Second)
+				observed := observeEnrollmentEndpoint(attempt, client, target.EnrollmentEndpointTarget)
+				cancel()
+				observed.Source = target.Source
+				results[index] = observed
+			}
+		}()
+	}
+	workers.Wait()
+	for index, target := range page.Targets {
+		services[target.EnrollmentService].Endpoints = append(services[target.EnrollmentService].Endpoints, results[index])
+	}
+	return nil
 }

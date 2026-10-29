@@ -331,7 +331,7 @@
       "kind": "adcs",
       "label": "Microsoft AD CS",
       "purpose": "Inventory AD CS authorities, templates, enrollment rights, and exposed enrollment endpoints through a domain-reachable relay.",
-      "data_handling": "Performs bounded read-only LDAP and configured endpoint checks. Passwords are represented only by credential references; response bodies and private keys are never stored.",
+      "data_handling": "Performs bounded read-only LDAP, configured endpoint checks and opt-in fixed-path probes from scoped directory hostnames. Passwords are represented only by credential references; response bodies and private keys are never stored.",
       "tool": "Discover",
       "route": "/discovery?tab=sources\u0026kind=adcs",
       "setup_surface": "source_wizard",
@@ -367,6 +367,22 @@
           "type": "string",
           "required": false,
           "description": "Required with nested groups: an explicit domain partition, never an inferred forest scope."
+        },
+        {
+          "path": "endpoint_probe.enabled",
+          "label": "Probe directory enrollment hostnames",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Default-off fixed HTTP/HTTPS Web Enrollment and NDES client paths; needs an upgraded selected network relay."
+        },
+        {
+          "path": "endpoint_probe.dns_suffixes",
+          "label": "Allowed endpoint DNS suffixes",
+          "type": "domain_list",
+          "required": false,
+          "advanced": true,
+          "description": "Required with probing: 1..32 explicit DNS suffixes. This grants no private network range."
         },
         {
           "path": "bind_dn",

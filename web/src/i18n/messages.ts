@@ -10,6 +10,84 @@ export type Locale = (typeof supportedLocales)[number];
 export type MessageValues = Record<string, number | string>;
 
 export const messages = {
+  "discovery.setup.adcsRelayPlaceholder": { defaultMessage: "Select a known relay or enter its UUID", description: "AD CS relay identity example." },
+  "discovery.setup.adcsPasswordExample": {
+    defaultMessage: "secret://adcs/domain-reader",
+    description: "Public example of a credential reference; never a password value.",
+  },
+  "discovery.setup.adcsProbe.suffixPlaceholder": { defaultMessage: "corp.example", description: "AD CS endpoint DNS suffix example." },
+  "source.adcs.probe.planDigest": { defaultMessage: "Plan digest", description: "AD CS endpoint candidate plan identifier." },
+  "source.adcs.probe.notInPage": {
+    defaultMessage: "This service is outside the latest page; its endpoints are unassessed in this observation.",
+    description: "AD CS endpoint page evidence.",
+  },
+  "discovery.setup.adcsProbe.enabled": {
+    defaultMessage: "Probe enrollment paths from directory hostnames",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "discovery.setup.adcsProbe.help": {
+    defaultMessage:
+      "Generate HTTP and HTTPS Web Enrollment and NDES client candidates from LDAP hostnames. Each run checks a bounded page and records the next page. No credentials are sent to these endpoints.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "discovery.setup.adcsProbe.suffixes": { defaultMessage: "Allowed endpoint DNS suffixes", description: "AD CS endpoint probe workflow and evidence." },
+  "discovery.setup.adcsProbe.suffixHelp": {
+    defaultMessage:
+      "One suffix per line or separated by commas. Candidates must match a suffix exactly or be its subdomains. Private destinations also require approved CIDRs and the relay’s local egress grant.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "discovery.setup.adcsProbe.invalidSuffixes": {
+    defaultMessage: "Enter 1–32 ASCII DNS suffixes without URLs, addresses, wildcards or ports.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "discovery.setup.adcsProbe.relayRequired": {
+    defaultMessage: "Select an upgraded network relay for endpoint probing.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.heading": { defaultMessage: "Latest endpoint probe page", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.partial": {
+    defaultMessage: "Partial directory plan; other pages remain unassessed at this timestamp.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.complete": {
+    defaultMessage: "Full directory plan is represented in this page. Check each target’s result.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.planTargets": { defaultMessage: "Plan targets", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.offset": { defaultMessage: "Page offset", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.next": { defaultMessage: "Next offset", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.serviceTargets": { defaultMessage: "This service’s targets on the page", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.recover": {
+    defaultMessage:
+      "Run the source again to advance its retained cursor. A changed directory plan restarts at the first page. Earlier results retain their own timestamps.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.sourceLDAP": { defaultMessage: "LDAP hostname candidate", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.sourceBoth": {
+    defaultMessage: "Configured target and LDAP hostname candidate",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.sourceConfigured": { defaultMessage: "Configured target", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.notChecked": { defaultMessage: "Not attempted: deadline or cancellation.", description: "AD CS endpoint probe workflow and evidence." },
+  "source.adcs.probe.scopeIssue": {
+    defaultMessage: "Directory hostname is outside the configured DNS suffixes; review the source grant.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.invalidHost": {
+    defaultMessage: "Directory hostname is invalid; correct dNSHostName before probing.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.viewLimit": {
+    defaultMessage:
+      "The service view reached its 500-row limit; additional services may exist. Use retained inventory observations to inspect the full source plan.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+  "source.adcs.probe.limits": {
+    defaultMessage:
+      "HTTP reachability does not prove enrollment, IIS Extended Protection, or a separately hosted NDES role. The client never requests the NDES administration password page.",
+    description: "AD CS endpoint probe workflow and evidence.",
+  },
+
   "ticket.intake.named.name": { defaultMessage: "Schedule name", description: "Named ticket intake workflow." },
   "ticket.intake.named.nameHelp": {
     defaultMessage: "Use a distinct name for each table or project. Existing clients use default.",

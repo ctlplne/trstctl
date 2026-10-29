@@ -71,6 +71,8 @@ type ADCSTemplate struct {
 // IIS enrollment surface. The state vocabulary is closed; no response body,
 // redirect target, cookie, or authentication challenge crosses the boundary.
 type ADCSEnrollmentEndpoint struct {
+	Source             string   `json:"source,omitempty"`
+	NotCheckedReason   string   `json:"not_checked_reason,omitempty"`
 	Kind               string   `json:"kind"`
 	URL                string   `json:"url"`
 	State              string   `json:"state"`
@@ -83,17 +85,18 @@ type ADCSEnrollmentEndpoint struct {
 // ADCSEnrollmentService is one published CA plus live enrollment-surface and
 // CA-side restriction evidence observed by the same authenticated relay run.
 type ADCSEnrollmentService struct {
-	Domain                 string                   `json:"domain"`
-	Service                string                   `json:"service"`
-	DNSName                string                   `json:"dns_name,omitempty"`
-	EnrollmentWebServices  []string                 `json:"enrollment_web_services"`
-	Endpoints              []ADCSEnrollmentEndpoint `json:"endpoints"`
-	AgentRestrictionState  string                   `json:"agent_restriction_state"`
-	AgentRestrictionSource string                   `json:"agent_restriction_source"`
-	WorstSeverity          string                   `json:"worst_severity"`
-	Findings               []ADCSTemplateFinding    `json:"findings"`
-	ObservedBy             string                   `json:"observed_by"`
-	ObservedAt             time.Time                `json:"observed_at"`
+	EndpointProbe          *adcs.EndpointProbeServiceCoverage `json:"endpoint_probe,omitempty"`
+	Domain                 string                             `json:"domain"`
+	Service                string                             `json:"service"`
+	DNSName                string                             `json:"dns_name,omitempty"`
+	EnrollmentWebServices  []string                           `json:"enrollment_web_services"`
+	Endpoints              []ADCSEnrollmentEndpoint           `json:"endpoints"`
+	AgentRestrictionState  string                             `json:"agent_restriction_state"`
+	AgentRestrictionSource string                             `json:"agent_restriction_source"`
+	WorstSeverity          string                             `json:"worst_severity"`
+	Findings               []ADCSTemplateFinding              `json:"findings"`
+	ObservedBy             string                             `json:"observed_by"`
+	ObservedAt             time.Time                          `json:"observed_at"`
 }
 
 // ADCSInventorySource is the operator-visible lifecycle of one configured
@@ -114,6 +117,8 @@ type ADCSInventorySource struct {
 
 // ADCSPosture is the served template view.
 type ADCSPosture struct {
+	// True at the bounded service-view ceiling; more rows may exist.
+	EnrollmentServiceLimitReached bool `json:"enrollment_service_limit_reached"`
 	// Observed reports whether any relay has ever read a directory for this
 	// tenant. Without it an empty list is ambiguous between "no AD CS estate"
 	// and "nobody has looked", and those are opposite facts.
@@ -191,7 +196,7 @@ func WithADCSDrift(provider ADCSDriftProvider) Option {
 
 // adcsPostureGuidance is the honest caveat, carried on the response so it
 // travels with the data rather than living only in documentation.
-const adcsPostureGuidance = "Enrollment trustees are canonical SIDs from template DACLs. IIS endpoints are only probed when explicitly configured. CA Enrollment Agent Restrictions require a Windows relay with certutil access; inaccessible evidence stays unobserved. Opt-in nested reads show observed user/computer paths through security groups, their timestamp and completeness. Conditional ACEs, primary groups, SID history, cross-forest tokens and full Windows AccessCheck remain unassessed."
+const adcsPostureGuidance = "Enrollment trustees are canonical SIDs from template DACLs. IIS endpoints use configured targets by default. Opt-in LDAP hostname probing reports fixed Web Enrollment and NDES client paths, bounded page coverage and unattempted targets. Reachability is not successful enrollment; separately hosted NDES requires an explicit target. CA Enrollment Agent Restrictions require a Windows relay with certutil access; inaccessible evidence stays unobserved. Opt-in nested reads show observed user/computer paths through security groups, their timestamp and completeness. Conditional ACEs, primary groups, SID history, cross-forest tokens and full Windows AccessCheck remain unassessed."
 
 func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 	tenantID, ok := a.tenant(r)
@@ -210,6 +215,7 @@ func (a *API) getADCSPosture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out.Sources = sources
+	out.EnrollmentServiceLimitReached = len(services) >= 500
 	if len(templates) > 0 || len(services) > 0 {
 		out.Observed = true
 		out.Templates = templates

@@ -658,16 +658,18 @@ func componentSchemas() map[string]*Schema {
 		"observed_by":    str(), "observed_at": timestamp(),
 	}, "domain", "template", "published_by", "worst_severity", "findings", "observed_at")
 	adcsEnrollmentEndpoint := object(map[string]*Schema{
+		"source": adcsEndpointProbeSourceSchema(), "not_checked_reason": {Type: "string", Enum: []string{"deadline_or_cancellation"}},
 		"kind":                {Type: "string", Enum: []string{"web_enrollment", "ndes", "ndes_admin"}},
 		"url":                 str(),
-		"state":               {Type: "string", Enum: []string{"anonymous_access", "authentication_required", "redirected", "not_found", "unreachable", "reachable_other"}},
+		"state":               {Type: "string", Enum: []string{"anonymous_access", "authentication_required", "redirected", "not_found", "unreachable", "reachable_other", "not_checked"}},
 		"http_status":         {Type: "integer"},
 		"authentication":      {Type: "array", Items: str()},
 		"tls_verified":        {Type: "boolean"},
 		"extended_protection": {Type: "string", Enum: []string{"enabled", "disabled", "unobserved"}},
 	}, "kind", "url", "state", "authentication", "tls_verified", "extended_protection")
 	adcsEnrollmentService := object(map[string]*Schema{
-		"domain": str(), "service": str(), "dns_name": str(),
+		"endpoint_probe": ref("ADCSEndpointProbeCoverage"),
+		"domain":         str(), "service": str(), "dns_name": str(),
 		"enrollment_web_services":  {Type: "array", Items: str()},
 		"endpoints":                {Type: "array", Items: ref("ADCSEnrollmentEndpoint")},
 		"agent_restriction_state":  {Type: "string", Enum: []string{"enabled", "disabled", "unobserved"}},
@@ -688,7 +690,8 @@ func componentSchemas() map[string]*Schema {
 		"state": {Type: "string", Enum: []string{"enabled", "disabled", "unobserved"}}, "source": str(),
 	}, "state", "source")
 	adcsObservedService := object(map[string]*Schema{
-		"name": str(), "dns_name": str(), "templates": {Type: "array", Items: str()},
+		"endpoint_probe": ref("ADCSEndpointProbeCoverage"),
+		"name":           str(), "dns_name": str(), "templates": {Type: "array", Items: str()},
 		"enrollment_web_services": {Type: "array", Items: str()},
 		"endpoints":               {Type: "array", Items: ref("ADCSEnrollmentEndpoint")},
 		"agent_restrictions":      ref("ADCSAgentRestrictions"),
@@ -705,6 +708,7 @@ func componentSchemas() map[string]*Schema {
 		"digest": str(), "observed_at": timestamp(),
 	}, "event_id", "event_type", "sequence", "digest", "observed_at")
 	adcsObservedInventory := object(map[string]*Schema{
+		"endpoint_probe_page": ref("ADCSEndpointProbePage"),
 		"templates":           {Type: "array", Items: ref("ADCSObservedTemplate")},
 		"enrollment_services": {Type: "array", Items: ref("ADCSObservedService")},
 	}, "templates", "enrollment_services")
@@ -731,6 +735,7 @@ func componentSchemas() map[string]*Schema {
 		"last_run_error":  str(), "last_run_created_at": timestamp(), "last_run_completed_at": timestamp(),
 	}, "source_id", "name", "schedule_enabled", "last_run_status")
 	adcsPosture := object(map[string]*Schema{
+		"enrollment_service_limit_reached": {Type: "boolean", Description: "True when the bounded service view reaches 500 rows; additional services may exist."},
 		// observed distinguishes "no AD CS estate" from "nobody has looked",
 		// which are opposite facts an empty list cannot tell apart.
 		"observed":            {Type: "boolean"},
@@ -8414,6 +8419,7 @@ func componentSchemas() map[string]*Schema {
 		"ADCSInventorySource":                   adcsInventorySource,
 		"ADCSTemplate":                          adcsTemplate,
 		"ADCSEnrollmentACL":                     adcsEnrollmentACLSchema(), "ADCSMembershipNode": adcsMembershipNodeSchema(), "ADCSEnrollmentTrustee": adcsEnrollmentTrusteeSchema(), "ADCSEnrollmentMember": adcsEnrollmentMemberSchema(), "ADCSEnrollmentMembership": adcsEnrollmentMembershipSchema(),
+		"ADCSEndpointProbeCoverage": adcsEndpointProbeCoverageSchema(), "ADCSEndpointProbeTarget": adcsEndpointProbeTargetSchema(), "ADCSEndpointProbePage": adcsEndpointProbePageSchema(),
 		"ADCSEnrollmentEndpoint":      adcsEnrollmentEndpoint,
 		"ADCSEnrollmentService":       adcsEnrollmentService,
 		"ADCSObservedTemplate":        adcsObservedTemplate,
