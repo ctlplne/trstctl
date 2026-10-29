@@ -73,7 +73,7 @@ func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event e
 	case EventActivated:
 		return admission.activationDecision(ctx, event, lifetime)
 	case EventDestroyed:
-		return admission.completionDecision(ctx, event, lifetime)
+		return admission.completionDecision(ctx, event)
 	}
 	if lifetime.Offboard != nil {
 		if event.Type == eventRegistered {
@@ -110,13 +110,25 @@ func (admission SourceAdmission) activationDecision(ctx context.Context, event e
 	return events.EventProtectionDecision{Mode: events.EventProtectionPublicControl}, nil
 }
 
-func (admission SourceAdmission) completionDecision(ctx context.Context, event events.Event, lifetime Lifetime) (events.EventProtectionDecision, error) {
+func (admission SourceAdmission) completionDecision(ctx context.Context, event events.Event) (events.EventProtectionDecision, error) {
 	completion, err := ParseDestroyed(event)
 	if err != nil || admission.Custody == nil {
 		return events.EventProtectionDecision{}, ErrSource
 	}
 	claims, err := admission.Policy.verifyDestructionReceipt(completion.JWS)
-	if err != nil || !matchesLifetimeDestruction(lifetime, claims.Request) || event.Time.Before(claims.RemovedAt) {
+	if err != nil || event.Time.Before(claims.RemovedAt) {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	tenant, err := uuid.Parse(event.TenantID)
+	if err != nil || tenant.String() != claims.Request.Ref.TenantID {
+		return events.EventProtectionDecision{}, ErrSource
+	}
+	lifetime, found, err := admission.Policy.LifetimeForKey(ctx, claims.Request.Ref)
+	if err != nil {
+		return events.EventProtectionDecision{}, err
+	}
+	if !found || !matchesLifetimeDestruction(lifetime, claims.Request) ||
+		(lifetime.Completion != nil && (lifetime.Completion.Meta.ID != event.ID || lifetime.Completion.JWS != completion.JWS)) {
 		return events.EventProtectionDecision{}, ErrSource
 	}
 	receipt, erased, err := admission.Custody.DestructionReceipt(ctx, claims.Request.Ref)

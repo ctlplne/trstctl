@@ -47,3 +47,11 @@ through separately pinned public `VerificationKeys`; an embedded signer does not
 grant itself trust. Only the existing allowlist for the reserved historical
 Provider audit scope keeps its legacy behavior, under its mapped UUID fence.
 Unknown scope, event type or control schema still refuses.
+
+An old lifetime can finish destruction after the tenant UUID is registered and
+activated again. The finite source fold routes a pinned signed receipt to its
+exact historical key and publishes lifetime results only after the full cut is
+verified. Completion admission checks tenant scope before historical lookup and
+refuses a different second completion identity before append. An exact retry
+keeps its first sequence. The new lifetime keeps its own key and readable data;
+neither lifetime's stored ciphertext is rewritten.

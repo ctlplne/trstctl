@@ -73,7 +73,9 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 		if err != nil {
 			return err
 		}
-		var current Lifetime
+		var current *Lifetime
+		var lifetimes []*Lifetime
+		byKey := make(map[string]*Lifetime)
 		seen := make(map[string]events.EnvelopeMetadata)
 		err = policy.Log.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
 			if meta.SchemaVersion != 1 {
@@ -97,24 +99,20 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 			seen[meta.ID] = meta
 			switch meta.Type {
 			case eventRegistered:
-				if current.Registration.ID == "" || current.Offboard != nil {
-					if current.Registration.ID != "" {
-						if err := visit(current); err != nil {
-							return err
-						}
-					}
-					current = Lifetime{Registration: meta}
+				if current == nil || current.Offboard != nil {
+					current = &Lifetime{Registration: meta}
+					lifetimes = append(lifetimes, current)
 				}
 				return nil
 			case eventOffboarded:
-				if current.Registration.ID == "" || current.Offboard != nil {
+				if current == nil || current.Offboard != nil {
 					return ErrSource
 				}
 				copy := meta
 				current.Offboard = &copy
 				return nil
 			}
-			if current.Registration.ID == "" {
+			if current == nil {
 				return ErrSource
 			}
 			// Check public metadata BEFORE a logical read. An encrypted control
@@ -161,20 +159,31 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 					return ErrSource
 				}
 				current.Activation = &ActivationSource{Meta: meta, Body: activation}
+				if prior, exists := byKey[activation.KeyID]; exists && prior != current {
+					return ErrSource
+				}
+				byKey[activation.KeyID] = current
 			case EventDestroyed:
 				completion, err := ParseDestroyed(event)
-				if err != nil || current.Activation == nil || current.Offboard == nil {
+				if err != nil {
 					return ErrSource
 				}
 				claims, err := policy.verifyDestructionReceipt(completion.JWS)
-				if err != nil || !matchesLifetimeDestruction(current, claims.Request) || event.Time.Before(claims.RemovedAt) {
+				if err != nil {
 					return ErrSource
 				}
-				if current.Completion != nil && (current.Completion.Meta.ID != meta.ID || current.Completion.JWS != completion.JWS) {
+				// A retained old lifetime may finish after a newer registration.
+				// Route only pinned signed coordinates, never the current SQL row.
+				target := byKey[claims.Request.Ref.ID]
+				if target == nil || target.Activation == nil || target.Offboard == nil ||
+					!matchesLifetimeDestruction(*target, claims.Request) || event.Time.Before(claims.RemovedAt) {
 					return ErrSource
 				}
-				if current.Completion == nil {
-					current.Completion = &CompletionSource{Meta: meta, JWS: completion.JWS, Claims: claims}
+				if target.Completion != nil && (target.Completion.Meta.ID != meta.ID || target.Completion.JWS != completion.JWS) {
+					return ErrSource
+				}
+				if target.Completion == nil {
+					target.Completion = &CompletionSource{Meta: meta, JWS: completion.JWS, Claims: claims}
 				}
 			default:
 				return ErrSource
@@ -184,8 +193,12 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 		if err != nil {
 			return err
 		}
-		if current.Registration.ID != "" {
-			return visit(current)
+		// Publish complete lifetime results only after the finite source fold;
+		// a later terminal record can still belong to an earlier lifetime.
+		for _, lifetime := range lifetimes {
+			if err := visit(*lifetime); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
