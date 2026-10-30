@@ -211,6 +211,10 @@ func (s *Service) SearchWithSeed(ctx context.Context, q Query) ([]Record, string
 // retention checkpoint with an older result, producing a bundle that cannot
 // verify even though neither component is corrupt.
 func (s *Service) search(ctx context.Context, q Query) ([]Record, string, ArchivedPrefix, error) {
+	return s.searchWithCapturedViews(ctx, q, nil)
+}
+
+func (s *Service) searchWithCapturedViews(ctx context.Context, q Query, views map[uint64]ReadableEvent) ([]Record, string, ArchivedPrefix, error) {
 	// Fail closed on a missing tenant scope (TENANT-003): the audit log is
 	// cross-tenant, and matches() only filters when TenantID is set, so an empty
 	// TenantID would leak every tenant's records. Reject it — a missing scope is an
@@ -281,7 +285,10 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, Archiv
 				return nil
 			}
 			tenantOrdinal++
-			record, redacted := redactedRecord(e, redactor, tenantOrdinal)
+			record, redacted, err := redactedRecord(e, redactor, tenantOrdinal)
+			if err != nil {
+				return err
+			}
 			prior := tenantHead
 			if follow {
 				next, err := link(prior, record)
@@ -294,6 +301,9 @@ func (s *Service) search(ctx context.Context, q Query) ([]Record, string, Archiv
 				return nil
 			}
 			out = append(out, record)
+			if views != nil && e.Protection != nil {
+				views[record.Sequence] = ReadableEvent{Sequence: record.Sequence, ID: record.ID, Data: append(json.RawMessage(nil), redacted.Data...), Actor: redacted.Actor, SensitiveErased: e.SensitiveErased}
+			}
 			if follow {
 				before = append(before, prior)
 			}
@@ -374,16 +384,21 @@ func FullChain(q Query, records []Record) bool {
 }
 
 // redactedRecord is the audit view of one event at a tenant-local ordinal.
-func redactedRecord(e events.Event, redactor privacy.Redactor, ordinal uint64) (Record, events.Event) {
+func redactedRecord(e events.Event, redactor privacy.Redactor, ordinal uint64) (Record, events.Event, error) {
 	redacted := e
 	if !redactor.Empty() {
 		redacted.Actor = redactor.RedactActor(e.Actor)
 		redacted.Data = redactor.RedactJSON(e.Data)
 	}
+	if record, protected, err := protectedSourceRecord(e, ordinal); err != nil {
+		return Record{}, events.Event{}, err
+	} else if protected {
+		return record, redacted, nil
+	}
 	return Record{
 		Sequence: ordinal, StreamSequence: e.Sequence, ID: e.ID, Type: e.Type,
 		TenantID: e.TenantID, Time: e.Time, Actor: redacted.Actor, Data: json.RawMessage(redacted.Data),
-	}, redacted
+	}, redacted, nil
 }
 
 // ChainPosition is a point in a tenant's full audit chain: the head after the
@@ -408,7 +423,10 @@ func (s *Service) chainPosition(ctx context.Context, tenantID string, from, head
 		if through != 0 && position.Sequence >= through {
 			return errReached
 		}
-		record, _ := redactedRecord(e, redactor, position.Sequence+1)
+		record, _, err := redactedRecord(e, redactor, position.Sequence+1)
+		if err != nil {
+			return err
+		}
 		next, err := link(position.Head, record)
 		if err != nil {
 			return err
