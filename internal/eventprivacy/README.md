@@ -87,3 +87,13 @@ removal, signing/publication failure, SQL rollback, lease expiry and a later
 registration's preserved key and rows. They use real PostgreSQL/NATS/file custody
 and a local signing transport fixture. Production startup, the isolated signer
 journey, operator routes and authenticated backup/restore remain required.
+
+A restored event-history copy can retain the offboard while missing the later
+hold clearance and completion. When current independent custody already proves
+signed destruction, the receiver rechecks its exact committed claim, historical
+lifetime, signature and current absence under the same fences. It records the
+existing completion outside those callbacks. This recovery needs only public
+receipt trust from the custodian and performs no removal or signing. It leaves
+the old source bytes exact and creates no replacement hold-clearance fact.
+The raw-history recovery test does not qualify a full authenticated backup or
+SQL/snapshot restore; those integrations remain required before this is served.

@@ -46,6 +46,17 @@ func (receiver DestructionReceiver) Destroy(ctx context.Context, claim Destructi
 		return ErrSource
 	}
 	return receiver.Claims.WithEventKeyDestructionClaim(ctx, claim, func(service context.Context) error {
+		// A probe grants nothing by itself. Successful recovery below repeats
+		// exact source/claim/signature/current-absence checks under custody.
+		// Otherwise the normal path still needs source hold clearance and
+		// independently authorized destruction; missing custody never erases.
+		if receipt, erased, err := receiver.Custody.DestructionReceipt(service, claim.Command.Ref); err == nil && erased {
+			completion, err := receiver.verifiedCompletedReceipt(service, claim, receipt)
+			if err != nil {
+				return err
+			}
+			return receiver.recordControl(service, claim, completion)
+		}
 		// Capture/validate complete retained hold state before removal. The
 		// resulting closed fact survives the later loss of private hold bodies.
 		var clearance events.Event

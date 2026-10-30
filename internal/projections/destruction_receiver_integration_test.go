@@ -55,7 +55,7 @@ func (c expiringDestructionCustody) WithCustodyFence(ctx context.Context, ref ev
 // generic delivery finalization. The local signing transport fixture does not
 // qualify the isolated production signer, runtime assembly or operator routes.
 func TestDestructionReceiverRetainsClearanceAcrossRemovalAndSignatureInterruption(t *testing.T) {
-	for _, mode := range []string{"normal", "signature-interrupted", "completion-interrupted", "completion-sql-rollback", "claim-expired-before-removal", "new-registration-before-destruction"} {
+	for _, mode := range []string{"normal", "signature-interrupted", "completion-interrupted", "completion-sql-rollback", "claim-expired-before-removal", "new-registration-before-destruction", "older-source-cut-current-receipt"} {
 		t.Run(mode, func(t *testing.T) { runDestructionReceiverFixture(t, mode) })
 	}
 }
@@ -78,7 +78,7 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 		t.Fatal(err)
 	}
 	authority := eventprivacy.NewDestructionAuthority()
-	cfg := eventprotect.FileAuthorityConfig{Directory: filepath.Join(base, "independent-keys"), BackupRoots: []string{filepath.Join(base, "events")}, Locker: s, EvidenceKey: signer, DestructionAuthority: authority}
+	cfg := eventprotect.FileAuthorityConfig{Directory: filepath.Join(base, "independent-keys"), BackupRoots: []string{filepath.Join(base, "events"), filepath.Join(base, "restored-events")}, Locker: s, EvidenceKey: signer, DestructionAuthority: authority}
 	keys, err := eventprotect.NewFileAuthority(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -221,6 +221,21 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	if err != nil || !protected {
 		t.Fatal(err)
 	}
+	var oldCut uint64
+	var oldRecords []events.BackupHistoryRecord
+	if mode == "older-source-cut-current-receipt" {
+		oldCut, err = log.LastSequence(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := log.ExportBackupHistoryThrough(t.Context(), oldCut, func(record events.BackupHistoryRecord) error {
+			record.Stored = bytes.Clone(record.Stored)
+			oldRecords = append(oldRecords, record)
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
 	var newPrivate events.Event
 	var newCreation eventprotect.KeyCreationEvidence
 	if mode == "new-registration-before-destruction" {
@@ -314,7 +329,7 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	if worked, err := box.DispatchOneScoped(actor, handler, scope); err != nil || !worked {
 		t.Fatalf("first destruction: worked=%v err=%v", worked, err)
 	}
-	if mode != "normal" && mode != "new-registration-before-destruction" {
+	if mode != "normal" && mode != "new-registration-before-destruction" && mode != "older-source-cut-current-receipt" {
 		life, found, err := policy.LifetimeForKey(t.Context(), request.Ref)
 		if err != nil || !found || life.HoldClearance == nil {
 			t.Fatalf("interruption lost public clearance: %v", err)
@@ -350,6 +365,80 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 			t.Fatalf("recover across custody restart: worked=%v err=%v", worked, err)
 		}
 	}
+	if mode == "older-source-cut-current-receipt" {
+		// Raw source-cut restoration only, not whole authenticated full-backup
+		// qualification. SQL keeps the exact command while its delivery state
+		// is reset as a fixture. The current independent custodian is reopened
+		// read-only and its signing transport is disabled.
+		if err := log.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := keys.Close(); err != nil {
+			t.Fatal(err)
+		}
+		remote.fail.Store(true)
+		readOnly := cfg
+		readOnly.EvidenceKey = nil
+		readOnly.DestructionAuthority = nil
+		readOnly.VerificationKeys = signer.JWKS()
+		keys, err = eventprotect.NewFileAuthority(readOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		admission.Custody, reader.Custody, receiver.Custody, completionVerifier.Custody = keys, keys, keys, keys
+		restored, err := events.Open(t.Context(), config.NATS{Mode: config.NATSEmbedded, StoreDir: filepath.Join(base, "restored-events")}, func(next *events.Log) {
+			policy.Log = next
+			admission.Policy.Log = next
+			reader.Policy.Log = next
+			preparation.Policy.Log = next
+			activationVerifier.Policy.Log = next
+			completionVerifier.Policy.Log = next
+			receiver.Policy.Log = next
+			admission.Holds = eventprivacy.RetainedHoldPolicy{Policy: *policy}
+		}, events.WithEventProtection(events.EventProtection{Admission: admission, Keys: reader}), events.WithHistoryRewriteCoordinator(store.NewHistoryRewriteCoordinator(s)), events.WithRequiredPrivacyEventPolicies())
+		if err != nil {
+			t.Fatal(err)
+		}
+		log = restored
+		recorder = orchestrator.NewOrchestrator(log, s, nil, orchestrator.WithProjector(p), orchestrator.WithEventProtectionDestructionAuthority(authority))
+		var stored bytes.Buffer
+		for _, record := range oldRecords {
+			stored.Write(record.Stored)
+		}
+		if _, err := log.RestoreBackupHistory(t.Context(), oldCut, crypto.SHA256Hex(stored.Bytes()), func(yield func(events.BackupHistoryRecord) error) error {
+			for _, record := range oldRecords {
+				if err := yield(record); err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+		before, found, err := policy.LifetimeForKey(t.Context(), request.Ref)
+		if err != nil || !found || before.Completion != nil || before.HoldClearance != nil {
+			t.Fatalf("old cut already had later public authority: %v", err)
+		}
+		if err := s.WithTenant(t.Context(), tenantA, func(tx pgx.Tx) error {
+			_, err := tx.Exec(t.Context(), `UPDATE outbox SET status='pending',worker_id=NULL,lease_until=NULL,next_attempt_at=clock_timestamp() WHERE tenant_id=$1 AND idempotency_key=$2`, tenantA, store.EventKeyDestructionOutboxKey(request.OperationID))
+			return err
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if worked, err := box.DispatchOneScoped(actor, handler, scope); err != nil || !worked {
+			t.Fatalf("old-cut completion recovery: worked=%v err=%v", worked, err)
+		}
+		index := 0
+		if err := log.ExportBackupHistoryThrough(t.Context(), oldCut, func(record events.BackupHistoryRecord) error {
+			if index >= len(oldRecords) || !bytes.Equal(record.Stored, oldRecords[index].Stored) {
+				t.Fatal("old-cut recovery rewrote immutable source bytes")
+			}
+			index++
+			return nil
+		}); err != nil || index != len(oldRecords) {
+			t.Fatalf("old source prefix changed: %v", err)
+		}
+	}
 	life, found, err := policy.LifetimeForKey(t.Context(), request.Ref)
 	if err != nil || !found || life.Completion == nil {
 		t.Fatalf("completion missing: %v", err)
@@ -364,7 +453,15 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	if err := s.RequireTenantAgentWorkQuiescent(t.Context(), tenantA); err != nil {
 		t.Fatalf("verified terminal did not settle old tokens: %v", err)
 	}
-	for _, id := range []string{eventprivacy.HoldClearanceEventID(request), life.Completion.Meta.ID} {
+	publicIDs := []string{life.Completion.Meta.ID}
+	if mode == "older-source-cut-current-receipt" {
+		if _, found, err := log.EventByID(t.Context(), eventprivacy.HoldClearanceEventID(request)); err != nil || found {
+			t.Fatalf("read-only receipt recovery invented hold clearance: %v", err)
+		}
+	} else {
+		publicIDs = append(publicIDs, eventprivacy.HoldClearanceEventID(request))
+	}
+	for _, id := range publicIDs {
 		event, found, err := log.EventByID(t.Context(), id)
 		if err != nil || !found || event.Actor != nil || event.Protection != nil || bytes.Contains(event.Data, []byte("example.invalid")) {
 			t.Fatalf("public terminal copied private fields: %v", err)
@@ -398,7 +495,7 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 				}
 			})
 		}
-		missing, err := eventprotect.NewFileAuthority(eventprotect.FileAuthorityConfig{Directory: filepath.Join(base, "wrong-current-custody"), BackupRoots: []string{filepath.Join(base, "events")}, Locker: s, VerificationKeys: signer.JWKS()})
+		missing, err := eventprotect.NewFileAuthority(eventprotect.FileAuthorityConfig{Directory: filepath.Join(base, "wrong-current-custody"), BackupRoots: []string{filepath.Join(base, "events"), filepath.Join(base, "restored-events")}, Locker: s, VerificationKeys: signer.JWKS()})
 		if err != nil {
 			t.Fatal(err)
 		}
