@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/eventprivacy"
+	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -24,6 +25,14 @@ type TenantEventProtectionRequested = eventprivacy.Requested
 type TenantEventProtectionActivated = eventprivacy.Activated
 type TenantEventProtectionDestroyed = eventprivacy.Destroyed
 type TenantEventProtectionHoldsCleared = eventprivacy.HoldClearance
+
+type EventProtectionCompletionVerifier interface {
+	WithVerifiedCompletion(context.Context, events.Event, func(context.Context, eventprotect.DestructionRequest) error) error
+}
+
+func WithEventProtectionCompletionVerifier(v EventProtectionCompletionVerifier) Option {
+	return func(p *Projector) { p.eventProtectionCompletionVerifier = v }
+}
 
 type EventProtectionActivationVerifier interface {
 	WithVerifiedActivation(context.Context, events.Event, func(context.Context, store.EventKeyPreparationCommand) error) error
@@ -60,11 +69,13 @@ func (p *Projector) applyEventProtectionTx(ctx context.Context, tx pgx.Tx, event
 		_, err := eventprivacy.ParseHoldClearance(event)
 		return true, err
 	case EventTenantEventProtectionDestroyed:
-		// Syntax is not destruction authority. No SQL completion/effect is derived
-		// here: the current-custody reconciler must verify the exact pinned signed
-		// receipt before deleting a pending intent or skipping an erased lifetime.
 		_, err := eventprivacy.ParseDestroyed(event)
-		return true, err
+		if err != nil || p.eventProtectionCompletionVerifier == nil {
+			return true, err
+		}
+		return true, p.eventProtectionCompletionVerifier.WithVerifiedCompletion(ctx, event, func(verified context.Context, request eventprotect.DestructionRequest) error {
+			return p.store.SettleEventKeyDestructionTx(verified, tx, request)
+		})
 	}
 	return false, nil
 }

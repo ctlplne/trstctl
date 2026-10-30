@@ -66,9 +66,11 @@ func (receiver PreparationReceiver) Prepare(ctx context.Context, claim Preparati
 		err := receiver.Policy.Log.WithHistoryRead(serviceCtx, func(readCtx context.Context) error {
 			return receiver.Guard.WithTenantEventProtection(readCtx, claim.Command.Ref.TenantID, func(guardCtx context.Context) error {
 				return receiver.Custody.WithCustodyFence(guardCtx, claim.Command.Ref, func(fenced context.Context) error {
-					var err error
-					prepared, err = receiver.prepareUnderCustody(fenced, claim.Command)
-					return err
+					return receiver.Claims.WithEventKeyPreparationClaim(fenced, claim, func(current context.Context) error {
+						var err error
+						prepared, err = receiver.prepareUnderCustody(current, claim.Command)
+						return err
+					})
 				})
 			})
 		})

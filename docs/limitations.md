@@ -1720,6 +1720,11 @@ context, verifies zero residue, and returns a deletion attestation. The
 `tenant.offboarded` event is replayed by projections, so a read-model rebuild
 does not resurrect the tenant's PostgreSQL rows.
 
+Opt-in event-key destruction is still under development. Its source, custody
+and durable receiver components have local tests; production startup, operator
+controls, protected backup/archive artifacts and restore are not served yet.
+The current offboarding and retention boundaries below continue to apply.
+
 That is the limit of what tenant offboarding deletes — it is not a promise that
 the append-only event log or a signed audit archive disappears when a tenant is
 offboarded. Those records are governed by audit/privacy retention policy:

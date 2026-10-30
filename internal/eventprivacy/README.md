@@ -16,8 +16,8 @@ unexplained key loss and a signed completion contradicted by current custody fai
 Only independently verified destruction gives the erased logical view.
 
 These are integration components. Production startup does not yet attach the
-preparation or offboard paths. Backup rows, audit archives, the destructive
-worker and operator routes remain required. Component tests do not qualify
+preparation or offboard paths. Backup rows, audit archives, production worker
+assembly and operator routes remain required. Component tests do not qualify
 those production workflows.
 The software custodian does not prove removal of host snapshots or copied keys.
 
@@ -69,3 +69,21 @@ old cut. Initial admission independently verifies retained holds; an exact retry
 can reuse that fact after key removal makes private hold bodies unreadable. This
 fact alone grants no removal, elapsed-retention claim or completed erasure. The
 production worker, artifacts, restore and operator feature remain unserved.
+
+Preparation rechecks its committed lease after waiting for independent custody,
+before creating a key. The destruction receiver checks its exact committed
+invocation and historical source, retains hold clearance before removal, waits
+for the real retention deadline, then removes only that lifetime's key. Private
+grants expire with their callbacks and bind the complete request or public event.
+The assembled orchestrator recorder rechecks SQL authority for post-offboard
+controls; a matching event type alone cannot bypass ordinary service admission.
+
+Completion settlement requires the exact retained event identity, sequence,
+time and signed receipt, plus matching current independent absence. Tenant UUID
+aliases resolve to the same scope. Only the matching command's invocation holds
+clear; generic delivery state and leases still finalize normally. Cleanup removes
+only that exact delivered, settled row. Component tests cover interruption after
+removal, signing/publication failure, SQL rollback, lease expiry and a later
+registration's preserved key and rows. They use real PostgreSQL/NATS/file custody
+and a local signing transport fixture. Production startup, the isolated signer
+journey, operator routes and authenticated backup/restore remain required.

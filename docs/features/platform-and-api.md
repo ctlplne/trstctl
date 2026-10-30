@@ -92,6 +92,10 @@ the language SDKs, and the Terraform / cert-manager / SPIRE integrations. Naviga
 RBAC-gated and one row per route, and every label resolves through the typed i18n catalog.
 The full route-to-screen map is **[The web console](../web-console.md)**. **Served.**
 
+Opt-in cryptographic erasure of tenant event history, backups and archives is
+under development. The [tenant offboarding boundary](../limitations.md#tenant-offboarding-boundary)
+describes the current database deletion and retention behavior.
+
 ### OIDC, SAML, and LDAP / Active Directory sign-on (F13)
 
 OIDC stays in the Free core. Tenant SAML and LDAP require Enterprise SSO, which

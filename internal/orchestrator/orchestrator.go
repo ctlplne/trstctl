@@ -20,6 +20,7 @@ import (
 	"trstctl.com/trstctl/internal/connector"
 	"trstctl.com/trstctl/internal/crypto"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
+	"trstctl.com/trstctl/internal/eventprivacy"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/ownership"
 	"trstctl.com/trstctl/internal/projections"
@@ -85,10 +86,11 @@ type licensedCryptoMigrationHostCertificateRollbackRequested struct {
 // transaction. The read model is written only by the projector, so the state and
 // history are reconstructable purely from the event log.
 type Orchestrator struct {
-	log    *events.Log
-	store  *store.Store
-	outbox *Outbox
-	proj   *projections.Projector
+	log                                 *events.Log
+	store                               *store.Store
+	outbox                              *Outbox
+	proj                                *projections.Projector
+	eventProtectionDestructionAuthority *eventprivacy.DestructionAuthority
 	// pqcPilotReportSigner signs a finished pilot's readiness report inside
 	// the isolated signer (A28/A29); nil leaves finished pilots unsigned.
 	pqcPilotReportSigner PQCPilotReportSigner

@@ -3859,6 +3859,7 @@ type Projector struct {
 	ownershipAttestationCadence       time.Duration
 	restoreDrillVerificationKeys      *jose.JWKSet
 	eventProtectionActivationVerifier EventProtectionActivationVerifier
+	eventProtectionCompletionVerifier EventProtectionCompletionVerifier
 	eventProtectionOffboardPolicy     EventProtectionOffboardPolicy
 }
 
