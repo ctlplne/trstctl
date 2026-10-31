@@ -4,21 +4,13 @@ package audit
 
 import (
 	"context"
-	"encoding/json"
-
-	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/auditsink"
 )
 
 // ReadableEvent is an authorized presentation of protected fields, separate
 // from the ciphertext Record whose hash/signature remains stable after erasure.
 // It has no hash field and is never included in Bundle or managed archives.
-type ReadableEvent struct {
-	Sequence        uint64          `json:"sequence"`
-	ID              string          `json:"id"`
-	Data            json.RawMessage `json:"data,omitempty"`
-	Actor           *events.Actor   `json:"actor,omitempty"`
-	SensitiveErased bool            `json:"sensitive_erased,omitempty"`
-}
+type ReadableEvent = auditsink.ReadableEvent
 
 type ReadableView struct {
 	Records        []Record

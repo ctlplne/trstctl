@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/audit"
+	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/eventprotect"
@@ -134,6 +135,30 @@ func TestSignedProtectedAuditRetainsCiphertextAndVerifiesAfterRealKeyRemoval(t *
 			t.Fatal("signed record did not retain a stable protected source commitment")
 		}
 	}
+	assertProtectedCollectorDetails(t, service, tenantA, before.Records, false)
+	for _, alter := range []func(*audit.Record){
+		func(r *audit.Record) { r.ID = "altered" },
+		func(r *audit.Record) { r.Sequence++ },
+		func(r *audit.Record) { r.Type = "altered" },
+		func(r *audit.Record) { r.TenantID = tenantB },
+		func(r *audit.Record) { r.Time = r.Time.Add(time.Second) },
+		func(r *audit.Record) {
+			r.Data = append(json.RawMessage(nil), r.Data...)
+			r.Data = bytes.Replace(r.Data, []byte("ciphertext"), []byte("othertext"), 1)
+		},
+		func(r *audit.Record) { r.Actor = &events.Actor{Subject: "forged"} },
+	} {
+		changed := append([]audit.Record(nil), before.Records...)
+		alter(&changed[0])
+		if details, err := service.CollectorDetails(ctx, tenantA, changed); err == nil || len(details) != 0 {
+			t.Fatal("altered queued source gained readable collector fields")
+		}
+	}
+	archived := audit.NewService(log, signer, audit.WithCheckpoints(collectorArchivedFloor{checkpoint: audit.Checkpoint{TenantID: tenantA, BoundarySeq: before.Records[len(before.Records)-1].StreamSequence, BoundaryHash: before.ChainHead, RecordCount: len(before.Records)}}))
+	if rows, err := archived.Search(ctx, query); err != nil || len(rows) != 0 {
+		t.Fatal("archive fixture did not retire the online prefix")
+	}
+	assertProtectedCollectorDetails(t, archived, tenantA, before.Records, false)
 	neighborBefore, err := service.Search(ctx, audit.Query{TenantID: tenantB})
 	if err != nil {
 		t.Fatal(err)
@@ -155,6 +180,8 @@ func TestSignedProtectedAuditRetainsCiphertextAndVerifiesAfterRealKeyRemoval(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertProtectedCollectorDetails(t, service, tenantA, before.Records, true)
+	assertProtectedCollectorDetails(t, archived, tenantA, before.Records, true)
 	afterView, err := service.SearchReadableView(ctx, query)
 	if err != nil || len(afterView.Records) != 2 || len(afterView.ReadableEvents) != 2 {
 		t.Fatalf("erased readable view failed: %v", err)
@@ -187,5 +214,43 @@ func TestSignedProtectedAuditRetainsCiphertextAndVerifiesAfterRealKeyRemoval(t *
 	neighborAfter, err := service.Search(ctx, audit.Query{TenantID: tenantB})
 	if err != nil || len(neighborAfter) != 1 || len(neighborBefore) != 1 || neighborAfter[0].Hash != neighborBefore[0].Hash || !strings.Contains(string(neighborAfter[0].Data), "neighbor remains readable") {
 		t.Fatalf("neighbor audit was changed: %v", err)
+	}
+}
+
+// Existing immutable queued work can finish after online retirement; this
+// private receiver path must not become an operator archive download route.
+type collectorArchivedFloor struct{ checkpoint audit.Checkpoint }
+
+func (f collectorArchivedFloor) LatestAuditCheckpoint(context.Context, string) (audit.Checkpoint, bool, error) {
+	return f.checkpoint, true, nil
+}
+func assertProtectedCollectorDetails(t *testing.T, service *audit.Service, tenant string, records []audit.Record, erased bool) {
+	t.Helper()
+	details, err := service.CollectorDetails(t.Context(), tenant, records)
+	if err != nil || len(details) != len(records) {
+		t.Fatalf("resolve exact collector details: count=%d err=%v", len(details), err)
+	}
+	for _, detail := range details {
+		if detail.SensitiveErased != erased {
+			t.Fatal("collector erasure state disagrees with independent custody")
+		}
+		if erased && (len(detail.Data) != 0 || detail.Actor != nil) {
+			t.Fatal("collector retained erased fields")
+		}
+		if !erased && (!bytes.Contains(detail.Data, []byte("audit-private-person@example.invalid")) || detail.Actor == nil) {
+			t.Fatal("live collector lost authorized readable fields")
+		}
+	}
+	for _, provider := range []string{auditsink.ProviderSplunkHEC, auditsink.ProviderSentinel} {
+		var output bytes.Buffer
+		if err := auditsink.WriteCollectorBatchWithReadable(&output, auditsink.FeedBatch{Provider: provider, Records: records, BatchID: "retained-protected-batch"}, details); err != nil {
+			t.Fatal(err)
+		}
+		if erased && bytes.Contains(output.Bytes(), []byte("example.invalid")) {
+			t.Fatal("erased collector output retained private fields")
+		}
+		if !erased && !bytes.Contains(output.Bytes(), []byte("audit-private-person@example.invalid")) {
+			t.Fatal("live collector output omitted readable details")
+		}
 	}
 }

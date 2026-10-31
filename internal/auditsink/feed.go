@@ -50,15 +50,18 @@ func NormalizeProvider(raw string) (string, bool) {
 }
 
 type collectorRecord struct {
-	Sequence     uint64          `json:"sequence,omitempty"`
-	ID           string          `json:"id"`
-	Type         string          `json:"type"`
-	TenantID     string          `json:"tenant_id,omitempty"`
-	Time         string          `json:"time"`
-	ActorSubject string          `json:"actor_subject,omitempty"`
-	ActorRoles   []string        `json:"actor_roles,omitempty"`
-	ChainHash    string          `json:"chain_hash,omitempty"`
-	Data         json.RawMessage `json:"data,omitempty"`
+	Sequence        uint64             `json:"sequence,omitempty"`
+	ID              string             `json:"id"`
+	Type            string             `json:"type"`
+	TenantID        string             `json:"tenant_id,omitempty"`
+	Time            string             `json:"time"`
+	ActorSubject    string             `json:"actor_subject,omitempty"`
+	ActorRoles      []string           `json:"actor_roles,omitempty"`
+	ChainHash       string             `json:"chain_hash,omitempty"`
+	Data            json.RawMessage    `json:"data,omitempty"`
+	SignedRecord    *auditchain.Record `json:"signed_record,omitempty"`
+	HashScope       string             `json:"hash_scope,omitempty"`
+	SensitiveErased bool               `json:"sensitive_erased,omitempty"`
 }
 
 type splunkCollectorEvent struct {
@@ -70,16 +73,19 @@ type splunkCollectorEvent struct {
 }
 
 type sentinelCollectorRecord struct {
-	TimeGenerated string          `json:"TimeGenerated"`
-	BatchID       string          `json:"BatchId"`
-	Sequence      uint64          `json:"Sequence,omitempty"`
-	RecordID      string          `json:"RecordId"`
-	EventType     string          `json:"EventType"`
-	TenantID      string          `json:"TenantId,omitempty"`
-	ActorSubject  string          `json:"ActorSubject,omitempty"`
-	ActorRoles    string          `json:"ActorRoles,omitempty"`
-	ChainHash     string          `json:"ChainHash,omitempty"`
-	Data          json.RawMessage `json:"Data,omitempty"`
+	TimeGenerated   string             `json:"TimeGenerated"`
+	BatchID         string             `json:"BatchId"`
+	Sequence        uint64             `json:"Sequence,omitempty"`
+	RecordID        string             `json:"RecordId"`
+	EventType       string             `json:"EventType"`
+	TenantID        string             `json:"TenantId,omitempty"`
+	ActorSubject    string             `json:"ActorSubject,omitempty"`
+	ActorRoles      string             `json:"ActorRoles,omitempty"`
+	ChainHash       string             `json:"ChainHash,omitempty"`
+	Data            json.RawMessage    `json:"Data,omitempty"`
+	SignedRecord    *auditchain.Record `json:"SignedRecord,omitempty"`
+	HashScope       string             `json:"HashScope,omitempty"`
+	SensitiveErased bool               `json:"SensitiveErased,omitempty"`
 }
 
 type collectorProof struct {
@@ -107,6 +113,10 @@ func collectorRecordFromAudit(record auditchain.Record) collectorRecord {
 // general audit service imports auditsink for writes, so importing the export
 // package here would make the event spine circular.
 func WriteCollectorBatch(w io.Writer, batch FeedBatch) error {
+	return WriteCollectorBatchWithReadable(w, batch, nil)
+}
+
+func writeCollectorBatch(w io.Writer, batch FeedBatch, views map[collectorRecordKey]ReadableEvent) error {
 	provider, ok := NormalizeProvider(batch.Provider)
 	if !ok || provider != batch.Provider {
 		return fmt.Errorf("auditsink: unsupported audit-feed provider %q", batch.Provider)
@@ -134,7 +144,7 @@ func WriteCollectorBatch(w io.Writer, batch FeedBatch) error {
 			if err := enc.Encode(splunkCollectorEvent{
 				Time:   float64(record.Time.UTC().UnixNano()) / float64(time.Second),
 				Source: "trstctl", SourceType: "trstctl:audit", Fields: fields,
-				Event: collectorRecordFromAudit(record),
+				Event: collectorRecordWithReadable(record, views),
 			}); err != nil {
 				return err
 			}
@@ -146,14 +156,16 @@ func WriteCollectorBatch(w io.Writer, batch FeedBatch) error {
 	case ProviderSentinel:
 		rows := make([]sentinelCollectorRecord, 0, len(batch.Records)+1)
 		for _, record := range batch.Records {
-			subject, roles := "", ""
-			if record.Actor != nil {
-				subject, roles = record.Actor.Subject, strings.Join(record.Actor.Roles, " ")
+			mapped := collectorRecordWithReadable(record, views)
+			scope := ""
+			if mapped.SignedRecord != nil {
+				scope = "SignedRecord"
 			}
 			rows = append(rows, sentinelCollectorRecord{
 				TimeGenerated: record.Time.UTC().Format(time.RFC3339Nano), BatchID: batch.BatchID, Sequence: record.Sequence,
 				RecordID: record.ID, EventType: record.Type, TenantID: record.TenantID,
-				ActorSubject: subject, ActorRoles: roles, ChainHash: record.Hash, Data: record.Data,
+				ActorSubject: mapped.ActorSubject, ActorRoles: strings.Join(mapped.ActorRoles, " "), ChainHash: record.Hash, Data: mapped.Data,
+				SignedRecord: mapped.SignedRecord, HashScope: scope, SensitiveErased: mapped.SensitiveErased,
 			})
 		}
 		rows = append(rows, sentinelCollectorRecord{

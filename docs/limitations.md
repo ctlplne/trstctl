@@ -1723,7 +1723,9 @@ does not resurrect the tenant's PostgreSQL rows.
 Opt-in event-key destruction is still under development. Its source, custody
 and durable receiver components have local tests. Audit search exposes separate
 readable companions in the API, CLI and console, with explicit erased and
-unavailable states; signed records remain encrypted. Production startup, operator
+unavailable states; signed records remain encrypted. Collector commands also keep
+protected records encrypted and resolve current readable details at delivery,
+with a separate source commitment. Production startup, operator
 controls, protected backup/archive artifacts and restore are not served yet.
 The current offboarding and retention boundaries below continue to apply.
 

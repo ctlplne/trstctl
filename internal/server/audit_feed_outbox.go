@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode"
 
+	"trstctl.com/trstctl/internal/audit"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -32,6 +33,17 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 		batch.EndSequence != batch.Records[len(batch.Records)-1].Sequence || batch.ChainHead == "" {
 		return fmt.Errorf("server: audit feed batch authority is incomplete or mismatched")
 	}
+	if d.audit == nil {
+		return fmt.Errorf("server: collector source reader is unavailable")
+	}
+	head, err := audit.VerifyChainFrom(batch.PrevHash, batch.Records)
+	if err != nil || head != batch.ChainHead {
+		return fmt.Errorf("server: collector commitment changed")
+	}
+	readable, err := d.audit.CollectorDetails(ctx, message.TenantID, batch.Records)
+	if err != nil {
+		return fmt.Errorf("server: collector source unavailable: %w", err)
+	}
 	client, err := cloudHTTPClient(batch.EndpointURL, batch.AllowPrivateEndpoint, batch.PrivateEgressCIDRs)
 	if err != nil {
 		return fmt.Errorf("server: audit feed endpoint rejected: %w", err)
@@ -42,7 +54,7 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	}
 	defer secret.Wipe(tokenBytes)
 	var body bytes.Buffer
-	if err := auditsink.WriteCollectorBatch(&body, batch); err != nil {
+	if err := auditsink.WriteCollectorBatchWithReadable(&body, batch, readable); err != nil {
 		return fmt.Errorf("server: encode audit feed batch: %w", err)
 	}
 	payload := body.Bytes()
@@ -102,6 +114,8 @@ func auditFeedFailureCode(err error) string {
 	}
 	text := strings.ToLower(err.Error())
 	switch {
+	case strings.Contains(text, "collector source") || strings.Contains(text, "collector commitment"):
+		return "collector_source_unavailable"
 	case strings.Contains(text, "credential reference"):
 		return "credential_unavailable"
 	case strings.Contains(text, "endpoint rejected"):

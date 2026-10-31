@@ -16,7 +16,13 @@ The authorized events API returns immutable records as `events` and optional
 readable companions as `readable_events`; the CLI preserves both. The console
 matches each companion by sequence and ID, distinguishes erased from unavailable
 details, and keeps the encrypted source separate. Signed exports retain only the
-immutable records. Collector-readable attachment remains separate work.
+immutable records. A standing collector receiver resolves details against the
+exact queued source before network I/O. Its protected outbox records stay
+ciphertext-only; the readable request carries a separate immutable source and
+explicit hash scope. Unavailable or altered source fails without delivery.
+Already queued records can finish after online retirement because their retained
+source remains available; this creates no operator archive-download route.
+Readable collector copies already sent follow the collector's retention policy.
 
 Production event-key activation, ciphertext backup/snapshot/archive integration
 and full restore remain required before the opt-in erasure feature is served.

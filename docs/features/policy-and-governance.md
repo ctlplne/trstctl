@@ -439,6 +439,19 @@ source, not the readable companion. Legacy records retain their existing shape.
 This read contract does not enable event-key protection; its production setup
 and complete restore proof remain [under development](../limitations.md#tenant-offboarding-boundary).
 
+For a protected record, native collector requests keep searchable actor/data
+fields separate from the encrypted commitment. HEC uses `signed_record` and
+`hash_scope: "signed_record"`; Sentinel uses `SignedRecord` and
+`HashScope: "SignedRecord"`. The chain hash covers that source record. Verified
+key removal sets `sensitive_erased` (HEC) or `SensitiveErased` (Sentinel) and omits
+readable actor/data. Protected outbox commands retain only encrypted records;
+the worker checks their chain and exact retained source before resolving current
+details and sending them. A source or custody failure reports
+`collector_source_unavailable`; recover the independent custodian or investigate
+the changed source before retrying. Readable copies already accepted by a
+collector follow that collector's retention policy and cannot be recalled by
+tenant-key destruction. Legacy request fields keep their existing shape.
+
 The native audit feed's `trstctl:audit` events can enter the packaged
 [Splunk app](../guides/splunk-app.md). It supplies two disabled searches for
 renewal-failure and revocation bursts. Configure an exact index and tenant scope

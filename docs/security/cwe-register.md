@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2003 annotated sites across 29 rules. Each row is
+2004 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (405 sites)
+### G101 — CWE-798 Use of hardcoded credentials (406 sites)
 
 | Location | Reason |
 |---|---|
@@ -333,6 +333,7 @@ not this file.
 | `internal/server/adcs_nested_samba_test.go:66` | public reference, never a credential value (CWE-798). |
 | `internal/server/agent_jobs_served_test.go:23` | secret-store reference/pointer, never credential material (CWE-798) |
 | `internal/server/aisurface_served_test.go:111` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/audit_feed_protected_served_test.go:88` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:142` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |
 | `internal/server/audit_feed_served_test.go:160` | token_ref is a non-secret environment locator (CWE-798). |
