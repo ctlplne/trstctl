@@ -810,6 +810,14 @@ describe("exported API surface census", () => {
       // Additive SSH trust review reads local opt-in and source evidence only;
       // approval and execution use separate idempotent mutation routes.
       "/api/v1/ssh/trust-fleet/preview",
+      // A160: computes the profile an inventoried AD CS template becomes and the
+      // risky properties it drops. It writes no state and appends no event; the
+      // separate modernize command is the idempotent mutation.
+      "/api/v1/posture/adcs/templates/modernize/preview",
+      // A233: reviews opting the tenant in to event-field protection (the
+      // fields, the custody it needs and what changes) without writing state;
+      // the opt-in itself is the separate idempotent command.
+      "/api/v1/privacy/event-protection/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);

@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 17 served source kinds
+## Observability envelopes — 18 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -44,6 +44,7 @@ served set by construction.
 |---|---|---|---|
 | `api_key` | `api-key-token` | `connector-credential-configured` | 24h0m0s |
 | `cloud_certificate` | `cloud-certificate` | `cloud-credential-configured` | 24h0m0s |
+| `cloud_network_path` | `network-path` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_secret` | `stored-secret` | `cloud-credential-configured` | 24h0m0s |
 | `credential_compromise` | `compromised-credential` | `connector-credential-configured` | 24h0m0s |
 | `ct_log` | `ct-exposed-certificate` | `monitored-domains-configured` | 24h0m0s |
@@ -92,7 +93,7 @@ Estate: a `network` source that succeeded 2h ago, an `ssh` source whose last
 success was 72h ago (past its 24h0m0s window), a `ct_log` source whose last run
 failed, and a `cloud_certificate` source that has never completed a run.
 
-**2 observed · 16 observable-unobserved · 7 structurally unobservable** across 25 classes.
+**2 observed · 17 observable-unobserved · 7 structurally unobservable** across 26 classes.
 
 | Class | Bucket | Reason / attribution |
 |---|---|---|
@@ -103,6 +104,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `ct-exposed-certificate` | `OBSERVABLE-UNOBSERVED` | last run of "ct-watch" finished "failed", not "succeeded" — **fix and re-run discovery source "ct-watch"** |
 | `deployed-certificate` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind drift (needs: deployment-baseline-configured)** |
 | `kubernetes-tls-endpoint` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind k8s_ingress_gateway (needs: cluster-credential-configured)** |
+| `network-path` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_network_path (needs: cloud-credential-configured)** |
 | `nhi-behavior` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind nhi_behavior (needs: connector-credential-configured)** |
 | `nhi-identity` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind nhi_cross_surface (needs: connector-credential-configured)** |
 | `oauth-grant` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind oauth_grant (needs: connector-credential-configured)** |
