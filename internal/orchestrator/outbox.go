@@ -189,51 +189,6 @@ type Handler interface {
 	Deliver(ctx context.Context, m Message) error
 }
 
-// DestinationScope confines one dispatcher sweep to a disjoint destination
-// family. IncludePrefixes selects matching destinations; ExcludePrefixes removes
-// matches. Empty include/exclude slices mean all destinations, preserving the
-// legacy Dispatch behavior. Prefixes are compared literally, never as SQL LIKE
-// patterns.
-type DestinationScope struct {
-	IncludePrefixes []string
-	ExcludePrefixes []string
-}
-
-func (s DestinationScope) validate() error {
-	seen := make(map[string]string, len(s.IncludePrefixes)+len(s.ExcludePrefixes))
-	for kind, prefixes := range map[string][]string{"include": s.IncludePrefixes, "exclude": s.ExcludePrefixes} {
-		for _, prefix := range prefixes {
-			if prefix == "" {
-				return fmt.Errorf("orchestrator: outbox destination scope has an empty %s prefix", kind)
-			}
-			if prior, ok := seen[prefix]; ok {
-				return fmt.Errorf("orchestrator: outbox destination prefix %q appears in both/duplicate %s and %s sets", prefix, prior, kind)
-			}
-			seen[prefix] = kind
-		}
-	}
-	return nil
-}
-
-func (s DestinationScope) matches(destination string) bool {
-	included := len(s.IncludePrefixes) == 0
-	for _, prefix := range s.IncludePrefixes {
-		if strings.HasPrefix(destination, prefix) {
-			included = true
-			break
-		}
-	}
-	if !included {
-		return false
-	}
-	for _, prefix := range s.ExcludePrefixes {
-		if strings.HasPrefix(destination, prefix) {
-			return false
-		}
-	}
-	return true
-}
-
 // TerminalFailureHandler records a domain terminal-state fact before an outbox
 // row is dead-lettered. The event/projection write happens while the row still has
 // a recoverable processing lease; if it fails, Dispatch leaves the lease intact so
@@ -905,7 +860,8 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		  WHERE ((o.status = 'processing' AND o.lease_until <= $1)
 		         OR (o.status = 'pending' AND o.retry_attempt_limit > 0 AND o.attempts >= o.retry_attempt_limit))
 		    AND (
-		        COALESCE(cardinality($2::text[]), 0) = 0
+		        (COALESCE(cardinality($2::text[]), 0) = 0 AND COALESCE(cardinality($4::text[]), 0) = 0)
+		        OR o.destination = ANY($4::text[])
 		        OR EXISTS (
 		            SELECT 1 FROM unnest($2::text[]) AS included(prefix)
 		             WHERE left(o.destination, char_length(included.prefix)) = included.prefix
@@ -914,7 +870,11 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		    AND NOT EXISTS (
 		        SELECT 1 FROM unnest($3::text[]) AS excluded(prefix)
 		         WHERE left(o.destination, char_length(excluded.prefix)) = excluded.prefix
-		    )`, now, scope.IncludePrefixes, scope.ExcludePrefixes); err != nil {
+		    )
+		    AND NOT EXISTS (
+		        SELECT 1 FROM unnest($5::text[]) AS excluded(destination)
+		         WHERE o.destination = excluded.destination
+		    )`, now, scope.IncludePrefixes, scope.ExcludePrefixes, scope.IncludeDestinations, scope.ExcludeDestinations); err != nil {
 		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)
 		return claimedOutboxEntry{}, false, fmt.Errorf("orchestrator: recover expired outbox leases: %w", err)
 	}
@@ -945,7 +905,8 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($8::text[])
 		        AND (o.tenant_id::text || chr(31) || COALESCE(NULLIF(o.effect_lane, ''), o.destination)) <> ALL($9::text[])
 		        AND (
-		            COALESCE(cardinality($10::text[]), 0) = 0
+		            (COALESCE(cardinality($10::text[]), 0) = 0 AND COALESCE(cardinality($12::text[]), 0) = 0)
+		            OR o.destination = ANY($12::text[])
 		            OR EXISTS (
 		                SELECT 1 FROM unnest($10::text[]) AS included(prefix)
 		                 WHERE left(o.destination, char_length(included.prefix)) = included.prefix
@@ -954,6 +915,10 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		        AND NOT EXISTS (
 		            SELECT 1 FROM unnest($11::text[]) AS excluded(prefix)
 		             WHERE left(o.destination, char_length(excluded.prefix)) = excluded.prefix
+		        )
+		        AND NOT EXISTS (
+		            SELECT 1 FROM unnest($13::text[]) AS excluded(destination)
+		             WHERE o.destination = excluded.destination
 		        )
 		        -- Secret-sync ordering is a separate tenant+target causal fence.
 		        -- effect_lane stays target-scoped for bulkheads/circuits; target_order
@@ -1033,7 +998,8 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		               AND p.tenant_id = o.tenant_id
 		               AND p.lease_until > $2
 		               AND (
-		                   COALESCE(cardinality($10::text[]), 0) = 0
+		                   (COALESCE(cardinality($10::text[]), 0) = 0 AND COALESCE(cardinality($12::text[]), 0) = 0)
+		                   OR p.destination = ANY($12::text[])
 		                   OR EXISTS (
 		                       SELECT 1 FROM unnest($10::text[]) AS included(prefix)
 		                        WHERE left(p.destination, char_length(included.prefix)) = included.prefix
@@ -1042,6 +1008,10 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		               AND NOT EXISTS (
 		                   SELECT 1 FROM unnest($11::text[]) AS excluded(prefix)
 		                    WHERE left(p.destination, char_length(excluded.prefix)) = excluded.prefix
+		               )
+		               AND NOT EXISTS (
+		                   SELECT 1 FROM unnest($13::text[]) AS excluded(destination)
+		                    WHERE p.destination = excluded.destination
 		               )
 		        ) < $4
 		        AND (
@@ -1077,7 +1047,7 @@ func (o *Outbox) claimOne(ctx context.Context, cutoff time.Time, seenTenants, se
 		           COALESCE(o.required_agent_role, ''),o.retry_attempt_limit`,
 		cutoff, now, o.maxInFlightPerDestination, o.maxInFlightPerTenant,
 		o.workerID, leaseUntil, mapKeys(seenTenants), mapKeys(seenTenantLanes), blockedCircuitKeys,
-		scope.IncludePrefixes, scope.ExcludePrefixes).
+		scope.IncludePrefixes, scope.ExcludePrefixes, scope.IncludeDestinations, scope.ExcludeDestinations).
 		Scan(&claim.id, &claim.msg.TenantID, &claim.msg.Destination, &claim.msg.Payload, &claim.msg.IdempotencyKey, &claim.attempts, &claim.msg.EffectLane, &claim.msg.RequiredAgentRole, &claim.retryAttemptLimit)
 	if errors.Is(err, pgx.ErrNoRows) {
 		o.releaseUnclaimedHalfOpenProbes(reservedHalfOpen, circuitKey{}, now)

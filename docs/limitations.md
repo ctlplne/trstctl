@@ -1731,7 +1731,9 @@ startup/current-custody readiness detect live and activation-only warm key loss,
 without key regeneration or treating missing files as erasure. Closed
 preparing/offboarded authorization audits preserve only permission, decision and
 an omission reason, with explicit console copy; legacy audit behavior stays intact.
-Operator controls, background key workers, protected backup/archive artifacts and complete
+Exact delivery-routing components also have isolation tests; routing does not
+grant access to an offboarded tenant. Operator controls, background key workers,
+protected backup/archive artifacts and complete
 erasure-aware restore are not served yet.
 The current offboarding and retention boundaries below continue to apply.
 

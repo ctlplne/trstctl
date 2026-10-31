@@ -2083,7 +2083,7 @@ not this file.
 | `internal/crypto/x509_property_test.go:175` | deterministic property-test name, not security randomness (CWE-338) |
 | `internal/crypto/x509_property_test.go:196` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/discovery/adcs/membership_paths_test.go:48` | deterministic property-test permutations, never a cryptographic choice (CWE-330). |
-| `internal/orchestrator/outbox.go:527` | retry backoff jitter, not a security decision (CWE-338) |
+| `internal/orchestrator/outbox.go:482` | retry backoff jitter, not a security decision (CWE-338) |
 | `internal/protocols/acme/property_test.go:90` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/acme/property_test.go:144` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/protocols/ari/ari.go:94` | deterministic per-certificate renewal jitter (int64 seed reinterpreted for the PCG); scheduling spread, not a security decision (CWE-338, CWE-190) |

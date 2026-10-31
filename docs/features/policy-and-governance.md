@@ -446,7 +446,8 @@ destinations. Configuring it enables no tenant and supplies no missing historica
 key. Normal startup and `event_key_custody` readiness verify current independent
 material or signed destruction; an unexplained missing key fails readiness and
 never triggers key regeneration. Operator activation and the complete erasure-aware restore workflow remain
-required before the opt-in feature is available.
+required before the opt-in feature is available. Exact deletion-delivery routing
+has component isolation tests; background key delivery is not available yet.
 
 When an opted-in tenant key is preparing, new authorization audits keep only
 permission, allow/deny and an explicit `details_omitted: "key_preparing"` marker.
