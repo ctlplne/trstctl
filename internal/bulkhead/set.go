@@ -17,19 +17,21 @@ const (
 	// W1 external effects have independent bounded pools. A slow connector must
 	// not consume the workers that issue through an external CA, synchronize a
 	// secret, write transparency evidence, or page an operator (AN-7).
-	SubsystemOutboxExternalCA    = "outbox.external_ca"
-	SubsystemOutboxConnectors    = "outbox.connectors"
-	SubsystemOutboxSecrets       = "outbox.secrets" // dynamic-secret provider calls
-	SubsystemOutboxSecretSync    = "outbox.secret_sync"
-	SubsystemOutboxManagedKeys   = "outbox.managed_keys"
-	SubsystemOutboxTransparency  = "outbox.transparency"
-	SubsystemOutboxCodeSigning   = "outbox.code_signing"
-	SubsystemOutboxNotifications = "outbox.notifications"
-	SubsystemOutboxTenantSeal    = "outbox.tenant_seal"
-	SubsystemOutboxFleet         = "outbox.fleet_reissuance"
-	SubsystemOutboxAuditFeeds    = "outbox.audit_feeds"
-	SubsystemOutboxCMDBExports   = "outbox.cmdb_exports"
-	SubsystemSigning             = "signing"
+	SubsystemOutboxExternalCA          = "outbox.external_ca"
+	SubsystemOutboxConnectors          = "outbox.connectors"
+	SubsystemOutboxSecrets             = "outbox.secrets" // dynamic-secret provider calls
+	SubsystemOutboxSecretSync          = "outbox.secret_sync"
+	SubsystemOutboxManagedKeys         = "outbox.managed_keys"
+	SubsystemOutboxTransparency        = "outbox.transparency"
+	SubsystemOutboxCodeSigning         = "outbox.code_signing"
+	SubsystemOutboxNotifications       = "outbox.notifications"
+	SubsystemOutboxTenantSeal          = "outbox.tenant_seal"
+	SubsystemOutboxFleet               = "outbox.fleet_reissuance"
+	SubsystemOutboxAuditFeeds          = "outbox.audit_feeds"
+	SubsystemOutboxCMDBExports         = "outbox.cmdb_exports"
+	SubsystemOutboxEventKeyPreparation = "outbox.event_key_preparation"
+	SubsystemOutboxEventKeyDestruction = "outbox.event_key_destruction"
+	SubsystemSigning                   = "signing"
 	// SubsystemQuery is the bounded pool for heavy, per-request O(inventory) read
 	// families — the credential-graph and risk-scoring endpoints (SPINE-005). Routing
 	// them to their own pool keeps a burst of expensive graph/risk builds from
@@ -104,6 +106,8 @@ func DefaultConfigs() []Config {
 		{Name: SubsystemOutboxFleet, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxAuditFeeds, Workers: 4, Queue: 256},
 		{Name: SubsystemOutboxCMDBExports, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxEventKeyPreparation, Workers: 4, Queue: 256},
+		{Name: SubsystemOutboxEventKeyDestruction, Workers: 4, Queue: 256},
 		{Name: SubsystemSigning, Workers: 4, Queue: 64},
 		// The heavy read pool (SPINE-005) is sized smaller than the CRUD pool: it caps
 		// how many concurrent O(inventory) graph/risk builds run, so they shed fast

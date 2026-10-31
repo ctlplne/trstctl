@@ -2387,23 +2387,25 @@ type Bulkheads struct {
 	// destination lane. A nil family override inherits this value, so existing
 	// config files and TRSTCTL_BULKHEAD_OUTBOX_* settings retain their meaning
 	// while every family still receives a distinct Pool instance.
-	Outbox              BulkheadLimit  `json:"outbox"`
-	OutboxExternalCA    *BulkheadLimit `json:"outbox_external_ca,omitempty"`
-	OutboxConnectors    *BulkheadLimit `json:"outbox_connectors,omitempty"`
-	OutboxSecrets       *BulkheadLimit `json:"outbox_secrets,omitempty"`
-	OutboxSecretSync    *BulkheadLimit `json:"outbox_secret_sync,omitempty"`
-	OutboxManagedKeys   *BulkheadLimit `json:"outbox_managed_keys,omitempty"`
-	OutboxTransparency  *BulkheadLimit `json:"outbox_transparency,omitempty"`
-	OutboxCodeSigning   *BulkheadLimit `json:"outbox_code_signing,omitempty"`
-	OutboxNotifications *BulkheadLimit `json:"outbox_notifications,omitempty"`
-	OutboxTenantSeal    *BulkheadLimit `json:"outbox_tenant_seal,omitempty"`
-	OutboxFleet         *BulkheadLimit `json:"outbox_fleet_reissuance,omitempty"`
-	OutboxAuditFeeds    *BulkheadLimit `json:"outbox_audit_feeds,omitempty"`
-	OutboxCMDBExports   *BulkheadLimit `json:"outbox_cmdb_exports,omitempty"`
-	Signing             BulkheadLimit  `json:"signing"`
-	Query               BulkheadLimit  `json:"query"`
-	Policy              BulkheadLimit  `json:"policy"`
-	Protocols           BulkheadLimit  `json:"protocols"`
+	Outbox                    BulkheadLimit  `json:"outbox"`
+	OutboxExternalCA          *BulkheadLimit `json:"outbox_external_ca,omitempty"`
+	OutboxConnectors          *BulkheadLimit `json:"outbox_connectors,omitempty"`
+	OutboxSecrets             *BulkheadLimit `json:"outbox_secrets,omitempty"`
+	OutboxSecretSync          *BulkheadLimit `json:"outbox_secret_sync,omitempty"`
+	OutboxManagedKeys         *BulkheadLimit `json:"outbox_managed_keys,omitempty"`
+	OutboxTransparency        *BulkheadLimit `json:"outbox_transparency,omitempty"`
+	OutboxCodeSigning         *BulkheadLimit `json:"outbox_code_signing,omitempty"`
+	OutboxNotifications       *BulkheadLimit `json:"outbox_notifications,omitempty"`
+	OutboxTenantSeal          *BulkheadLimit `json:"outbox_tenant_seal,omitempty"`
+	OutboxFleet               *BulkheadLimit `json:"outbox_fleet_reissuance,omitempty"`
+	OutboxAuditFeeds          *BulkheadLimit `json:"outbox_audit_feeds,omitempty"`
+	OutboxCMDBExports         *BulkheadLimit `json:"outbox_cmdb_exports,omitempty"`
+	OutboxEventKeyPreparation *BulkheadLimit `json:"outbox_event_key_preparation,omitempty"`
+	OutboxEventKeyDestruction *BulkheadLimit `json:"outbox_event_key_destruction,omitempty"`
+	Signing                   BulkheadLimit  `json:"signing"`
+	Query                     BulkheadLimit  `json:"query"`
+	Policy                    BulkheadLimit  `json:"policy"`
+	Protocols                 BulkheadLimit  `json:"protocols"`
 	// KMIP is connection-scoped: a worker is held for a whole client
 	// connection, TLS handshake included, so it must never share the
 	// request-scoped protocols lane (AN-7). This field was missing after the
@@ -2473,6 +2475,8 @@ func (b Bulkheads) items() []bulkheadLimitItem {
 		{name: bulkhead.SubsystemOutboxFleet, limit: familyLimit(b.OutboxFleet)},
 		{name: bulkhead.SubsystemOutboxAuditFeeds, limit: familyLimit(b.OutboxAuditFeeds)},
 		{name: bulkhead.SubsystemOutboxCMDBExports, limit: familyLimit(b.OutboxCMDBExports)},
+		{name: bulkhead.SubsystemOutboxEventKeyPreparation, limit: familyLimit(b.OutboxEventKeyPreparation)},
+		{name: bulkhead.SubsystemOutboxEventKeyDestruction, limit: familyLimit(b.OutboxEventKeyDestruction)},
 		{name: bulkhead.SubsystemSigning, limit: b.Signing},
 		{name: bulkhead.SubsystemQuery, limit: b.Query},
 		{name: bulkhead.SubsystemPolicy, limit: b.Policy},
@@ -3760,6 +3764,8 @@ func applyBulkheadEnv(getenv func(string) string, b *Bulkheads) {
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL", b.Outbox, &b.OutboxTenantSeal)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE", b.Outbox, &b.OutboxFleet)
 	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_AUDIT_FEEDS", b.Outbox, &b.OutboxAuditFeeds)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_EVENT_KEY_PREPARATION", b.Outbox, &b.OutboxEventKeyPreparation)
+	applyOptionalBulkheadEnv(getenv, "TRSTCTL_BULKHEAD_OUTBOX_EVENT_KEY_DESTRUCTION", b.Outbox, &b.OutboxEventKeyDestruction)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_WORKERS", &b.Signing.Workers)
 	setInt(getenv, "TRSTCTL_BULKHEAD_SIGNING_QUEUE", &b.Signing.Queue)
 	setInt(getenv, "TRSTCTL_BULKHEAD_QUERY_WORKERS", &b.Query.Workers)

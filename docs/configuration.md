@@ -1039,6 +1039,17 @@ The directory must
 remain available until the source and its workers have stopped; changing custody
 requires a restart.
 
+The assembled preparation and destruction receivers have local dispatcher and
+shutdown-drain lifecycle tests. They use separate bounded pools and exact
+queues; the ordinary outbox excludes both destinations even for an ad hoc drain.
+Preparation keeps live-tenant service admission. Destruction requires its own
+committed invocation plus retained offboard, retention and hold authority.
+`bulkheads.outbox_event_key_preparation` and
+`bulkheads.outbox_event_key_destruction` accept `workers` and `queue`, inheriting
+`bulkheads.outbox` when omitted. A custom embedded pool set using custody must
+supply both independent pools. Public enable controls, complete interruption
+recovery, protected artifacts and full erasure-aware restore remain unavailable.
+
 ## Provider workforce identity and customer access
 
 The Provider plane is a different privilege domain from tenant login. OIDC or
@@ -3078,6 +3089,8 @@ that is actually saturating.
 | `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_CODE_SIGNING_QUEUE` | inherits outbox | Override code-signing commands (`codesign.*`) without sharing transparency workers. |
 | `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_NOTIFICATIONS_QUEUE` | inherits outbox | Override operator notifications (`notification.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_AUDIT_FEEDS_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_AUDIT_FEEDS_QUEUE` | inherits outbox | Override scheduled native audit delivery (`audit.feed.*`). A stopped SIEM cannot consume connector, notification, issuance, or API capacity. |
+| `TRSTCTL_BULKHEAD_OUTBOX_EVENT_KEY_PREPARATION_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_EVENT_KEY_PREPARATION_QUEUE` | inherits outbox | Independent event-key preparation delivery. Configuring custody enables no tenant. |
+| `TRSTCTL_BULKHEAD_OUTBOX_EVENT_KEY_DESTRUCTION_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_EVENT_KEY_DESTRUCTION_QUEUE` | inherits outbox | Independent exact-destination key destruction after SQL offboarding; ordinary tenant admission remains unchanged. |
 | `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_FLEET_REISSUANCE_QUEUE` | inherits outbox | Override the bounded H2 incident action lane, including exact predecessor revocation (`incident.fleet_reissuance.*`). |
 | `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_WORKERS` / `TRSTCTL_BULKHEAD_OUTBOX_TENANT_SEAL_QUEUE` | inherits outbox | Override the zero-egress tenant seal commit worker (`tenantseal.seal`). It proves the accepted result is durable before acquiring the cross-replica seal fence. |
 | `TRSTCTL_BULKHEAD_SIGNING_WORKERS` / `TRSTCTL_BULKHEAD_SIGNING_QUEUE` | `4` / `64` | Control-plane work waiting on signer RPC. Do not set this above signer capacity. |
@@ -3106,7 +3119,8 @@ through an upstream CA, synchronize a secret, publish code-signing evidence, or 
 an operator. JSON config may override a family with `outbox_external_ca`,
 `outbox_connectors`, `outbox_secrets`, `outbox_secret_sync`,
 `outbox_managed_keys`, `outbox_transparency`, `outbox_code_signing`, or
-`outbox_notifications`, `outbox_audit_feeds`, `outbox_tenant_seal`, or
+`outbox_notifications`, `outbox_audit_feeds`, `outbox_event_key_preparation`,
+`outbox_event_key_destruction`, `outbox_tenant_seal`, or
 `outbox_fleet_reissuance` inside `bulkheads`.
 
 ## Config file

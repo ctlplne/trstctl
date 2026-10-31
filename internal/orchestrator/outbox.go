@@ -292,6 +292,7 @@ func IsDefiniteNoEffect(err error) bool {
 // outside this repository package because it is a deliberate cross-tenant system
 // operation, like the idempotency-key GC.
 type Outbox struct {
+	excludedDestinations      []string
 	tenantServiceCheck        tenancy.ServiceCheck
 	store                     *store.Store
 	backoff                   func(attempts int) time.Duration
@@ -314,6 +315,13 @@ type Outbox struct {
 
 // Option configures an Outbox.
 type Option func(*Outbox)
+
+// WithExcludedDestinations confines every claim and lease-recovery call made
+// through this box. Per-call scopes cannot re-enable an excluded destination.
+// It does not prevent another independently admitted box from owning that work.
+func WithExcludedDestinations(destinations ...string) Option {
+	return func(o *Outbox) { o.excludedDestinations = append([]string(nil), destinations...) }
+}
 
 // WithTenantServiceCheck refuses new deliveries for a paused tenant without
 // spending its retry budget. Resume makes the same pending intent eligible.
@@ -692,7 +700,8 @@ func (o *Outbox) Dispatch(ctx context.Context, h Handler) (int, error) {
 // per-tenant in-flight count, and half-open circuit reservation is scoped to the
 // same family, so a saturated connector lane cannot suppress another lane.
 func (o *Outbox) DispatchScoped(ctx context.Context, h Handler, scope DestinationScope) (int, error) {
-	if err := scope.validate(); err != nil {
+	var err error
+	if scope, err = o.constrainScope(scope); err != nil {
 		return 0, err
 	}
 	cutoff := o.clockNow()
@@ -728,7 +737,8 @@ func (o *Outbox) DispatchScoped(ctx context.Context, h Handler, scope Destinatio
 // command receipt: unlike DispatchScoped, it does not perform a second empty-queue
 // sweep merely to prove that unrelated work is absent.
 func (o *Outbox) DispatchOneScoped(ctx context.Context, h Handler, scope DestinationScope) (bool, error) {
-	if err := scope.validate(); err != nil {
+	var err error
+	if scope, err = o.constrainScope(scope); err != nil {
 		return false, err
 	}
 	claim, claimed, err := o.claimOne(ctx, o.clockNow(), map[string]bool{}, map[string]bool{}, scope)

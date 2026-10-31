@@ -53,6 +53,8 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxFleet, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxAuditFeeds, Workers: 1, Queue: 4},
 		bulkhead.Config{Name: bulkhead.SubsystemOutboxCMDBExports, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxEventKeyPreparation, Workers: 1, Queue: 4},
+		bulkhead.Config{Name: bulkhead.SubsystemOutboxEventKeyDestruction, Workers: 1, Queue: 4},
 	)
 
 	connectorStarted := make(chan string, 2)
@@ -325,6 +327,10 @@ func TestOutboxDispatchFamiliesAreDisjointAndComplete(t *testing.T) {
 		"audit.feed.splunk":               bulkhead.SubsystemOutboxAuditFeeds,
 		"audit.feed.sentinel":             bulkhead.SubsystemOutboxAuditFeeds,
 		"cmdb.certificate_export":         bulkhead.SubsystemOutboxCMDBExports,
+		"eventprivacy.prepare":            bulkhead.SubsystemOutboxEventKeyPreparation,
+		"eventprivacy.destroy":            bulkhead.SubsystemOutboxEventKeyDestruction,
+		"eventprivacy.prepare.extra":      bulkhead.SubsystemOutbox,
+		"eventprivacy.destroy.extra":      bulkhead.SubsystemOutbox,
 		"revocation.publish":              bulkhead.SubsystemOutbox,
 		"remediation.rotate.verify":       bulkhead.SubsystemOutbox,
 		"agent.audit.retry":               bulkhead.SubsystemOutbox,
@@ -614,12 +620,20 @@ func TestDispatchIssuanceOnceDeliversOneInternalCARow(t *testing.T) {
 }
 
 func (f outboxDispatchFamily) scopeMatches(destination string) bool {
-	included := len(f.scope.IncludePrefixes) == 0
+	included := len(f.scope.IncludePrefixes) == 0 && len(f.scope.IncludeDestinations) == 0
 	for _, prefix := range f.scope.IncludePrefixes {
 		included = included || strings.HasPrefix(destination, prefix)
 	}
+	for _, exact := range f.scope.IncludeDestinations {
+		included = included || destination == exact
+	}
 	if !included {
 		return false
+	}
+	for _, exact := range f.scope.ExcludeDestinations {
+		if destination == exact {
+			return false
+		}
 	}
 	for _, prefix := range f.scope.ExcludePrefixes {
 		if strings.HasPrefix(destination, prefix) {

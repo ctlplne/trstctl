@@ -74,3 +74,28 @@ func (s DestinationScope) matches(destination string) bool {
 	}
 	return true
 }
+
+func (o *Outbox) constrainScope(scope DestinationScope) (DestinationScope, error) {
+	if err := scope.validate(); err != nil {
+		return DestinationScope{}, err
+	}
+	if len(o.excludedDestinations) == 0 {
+		return scope, nil
+	}
+	// Copy the caller's slice: parallel family sweeps may share that definition.
+	scope.ExcludeDestinations = append([]string(nil), scope.ExcludeDestinations...)
+	seen := make(map[string]bool, len(scope.ExcludeDestinations)+len(o.excludedDestinations))
+	for _, destination := range scope.ExcludeDestinations {
+		seen[destination] = true
+	}
+	for _, destination := range o.excludedDestinations {
+		if destination == "" {
+			return DestinationScope{}, fmt.Errorf("orchestrator: empty construction-level outbox exclusion")
+		}
+		if !seen[destination] {
+			scope.ExcludeDestinations = append(scope.ExcludeDestinations, destination)
+			seen[destination] = true
+		}
+	}
+	return scope, nil
+}

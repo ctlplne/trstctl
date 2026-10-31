@@ -850,7 +850,8 @@ type Server struct {
 	ephemeralIssuer *ephemeralIssuerService
 	// pam is the served just-in-time privileged-access broker (PAM-01/F33). Nil
 	// makes the API delegate fail closed with 503.
-	pam *pamService
+	pam              *pamService
+	eventKeyDelivery *eventKeyDelivery
 	// protoRACertDER / protoRAKeyPKCS8 are the RSA transport key+cert SCEP/CMP use
 	// for CMS transport (AN-4: NOT the CA key, which stays in the signer). They are
 	// loaded from a sealed, shared RA identity and memoized so SCEP and CMP share one
@@ -1432,6 +1433,7 @@ func (s *Server) configureMutationSpine(
 		[]string{"destination", "from", "to"},
 	)
 	s.outbox = orchestrator.NewOutbox(d.Store,
+		orchestrator.WithExcludedDestinations(store.EventKeyPreparationDestination, store.EventKeyDestructionDestination),
 		orchestrator.WithTenantServiceCheck(d.TenantServiceCheck),
 		orchestrator.WithDeliveryTimeout(d.OutboxDeliveryTimeout),
 		orchestrator.WithDeliveryTimeoutObserver(func(m orchestrator.Message) {
@@ -1453,7 +1455,7 @@ func (s *Server) configureMutationSpine(
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
 	if d.eventProtection != nil {
-		orchOptions = append(orchOptions, orchestrator.WithEventProtectionSourcePolicy(&d.eventProtection.policy))
+		orchOptions = append(orchOptions, orchestrator.WithEventProtectionSourcePolicy(&d.eventProtection.policy), orchestrator.WithEventProtectionDestructionAuthority(d.eventProtection.authority))
 	}
 	orchOptions = append(orchOptions, orchestrator.WithProjector(proj))
 	orchOptions = append(orchOptions, orchestrator.WithTenantCommandService(d.Store.BeginTenantService, d.TenantServiceCheck))
@@ -2191,6 +2193,9 @@ func (s *Server) configureRevocationSurface(ctx context.Context, d Deps) (func(c
 }
 
 func (s *Server) configureOutboxHandler(d Deps, orch *orchestrator.Orchestrator, idem *orchestrator.Idempotency, ensureCRL, publishCRL func(context.Context, string) error) error {
+	if err := s.configureEventKeyDelivery(d, orch); err != nil {
+		return err
+	}
 	if len(d.NotificationChannels) > 0 || d.Store != nil {
 		s.notifications = notify.NewDispatcher(d.NotificationChannels...)
 		if d.Store != nil {
@@ -3134,8 +3139,9 @@ const dispatchInterval = time.Second
 // worker pool. The last entry is the compatibility/"other" lane: it excludes
 // every named prefix, so one row can never be claimed by two family sweeps.
 type outboxDispatchFamily struct {
-	pool  string
-	scope orchestrator.DestinationScope
+	pool         string
+	scope        orchestrator.DestinationScope
+	eventKeyKind uint8
 }
 
 var outboxDispatchFamilies = func() []outboxDispatchFamily {
@@ -3152,14 +3158,18 @@ var outboxDispatchFamilies = func() []outboxDispatchFamily {
 		{pool: bulkhead.SubsystemOutboxFleet, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"incident.fleet_reissuance."}}},
 		{pool: bulkhead.SubsystemOutboxCMDBExports, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"cmdb.certificate_export"}}},
 		{pool: bulkhead.SubsystemOutboxAuditFeeds, scope: orchestrator.DestinationScope{IncludePrefixes: []string{"audit.feed."}}},
+		{pool: bulkhead.SubsystemOutboxEventKeyPreparation, scope: orchestrator.DestinationScope{IncludeDestinations: []string{store.EventKeyPreparationDestination}}, eventKeyKind: 1},
+		{pool: bulkhead.SubsystemOutboxEventKeyDestruction, scope: orchestrator.DestinationScope{IncludeDestinations: []string{store.EventKeyDestructionDestination}}, eventKeyKind: 2},
 	}
 	excluded := make([]string, 0, 8)
+	exactExcluded := make([]string, 0, 2)
 	for _, family := range named {
 		excluded = append(excluded, family.scope.IncludePrefixes...)
+		exactExcluded = append(exactExcluded, family.scope.IncludeDestinations...)
 	}
 	return append(named, outboxDispatchFamily{
 		pool:  bulkhead.SubsystemOutbox,
-		scope: orchestrator.DestinationScope{ExcludePrefixes: excluded},
+		scope: orchestrator.DestinationScope{ExcludePrefixes: excluded, ExcludeDestinations: exactExcluded},
 	})
 }()
 
@@ -3207,7 +3217,7 @@ func (s *Server) wakeOutbox() {
 // SubsystemOutbox pool. In that case retain the old one-task/unscoped behavior;
 // production Configs always installs every family pool.
 func (s *Server) dispatchOnce(ctx context.Context) {
-	if !s.hasOutboxFamilyPool() {
+	if !s.hasOutboxFamilyPool() && s.eventKeyDelivery == nil {
 		run := func() { _, _ = s.outbox.Dispatch(ctx, s.obHandler) }
 		if s.bulk == nil || s.bulk.Pool(bulkhead.SubsystemOutbox) == nil {
 			run()
@@ -3220,7 +3230,7 @@ func (s *Server) dispatchOnce(ctx context.Context) {
 	for _, family := range outboxDispatchFamilies {
 		family := family
 		for range s.outboxFamilyConcurrency(family) {
-			run := func() { _, _ = s.outbox.DispatchScoped(ctx, s.obHandler, family.scope) }
+			run := func() { _, _ = s.dispatchOutboxFamily(ctx, family) }
 			pool := family.pool
 			if s.bulk.Pool(pool) == nil {
 				pool = bulkhead.SubsystemOutbox
@@ -4466,7 +4476,7 @@ func (s *Server) DispatchIssuanceOnce(ctx context.Context) (bool, error) {
 // tenant/destination fairness, leases, delivery timeouts, and terminal callbacks.
 // A legacy composition with no family pools keeps its historical serial drain.
 func (s *Server) Drain(ctx context.Context) error {
-	if !s.hasOutboxFamilyPool() {
+	if !s.hasOutboxFamilyPool() && s.eventKeyDelivery == nil {
 		for {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -4526,7 +4536,7 @@ func (s *Server) Drain(ctx context.Context) error {
 					startedGeneration := activityGeneration
 					states[workerIndex].busy = true
 					stateMu.Unlock()
-					n, err := s.outbox.DispatchScoped(drainCtx, s.obHandler, family.scope)
+					n, err := s.dispatchOutboxFamily(drainCtx, family)
 					stateMu.Lock()
 					if n > 0 {
 						activityGeneration++

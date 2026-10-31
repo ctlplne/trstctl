@@ -209,9 +209,17 @@ func (l *durableDynamicSecretLifecycle) issue(ctx context.Context, providerID, r
 	return l.waitForIssued(ctx, leaseID)
 }
 
-func (l *durableDynamicSecretLifecycle) waitForIssued(ctx context.Context, leaseID string) (dynsecret.Lease, []byte, error) {
+func (l *durableDynamicSecretLifecycle) waitForIssued(ctx context.Context, leaseID string) (result dynsecret.Lease, material []byte, resultErr error) {
 	waitCtx, cancel := context.WithTimeout(ctx, dynamicSecretIssueWaitLimit)
 	defer cancel()
+	// A canceled database operation can return its socket error before pgx wraps
+	// the context cause. Preserve both, before our deferred cancel runs; unrelated
+	// database failures must not acquire an invented cancellation.
+	defer func() {
+		if resultErr != nil && waitCtx.Err() != nil {
+			resultErr = errors.Join(resultErr, waitCtx.Err())
+		}
+	}()
 	ticker := time.NewTicker(dynamicSecretIssuePollInterval)
 	defer ticker.Stop()
 

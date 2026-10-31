@@ -209,6 +209,8 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"{Name: SubsystemOutboxCodeSigning",
 		"{Name: SubsystemOutboxNotifications",
 		"{Name: SubsystemOutboxTenantSeal",
+		"{Name: SubsystemOutboxEventKeyPreparation",
+		"{Name: SubsystemOutboxEventKeyDestruction",
 		"{Name: SubsystemSigning",
 		"{Name: SubsystemQuery",
 		"{Name: SubsystemPolicy",
@@ -222,7 +224,7 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 
 	server := read(t, "../internal/server/server.go")
 	for _, want := range []string{
-		"s.outbox.DispatchScoped(ctx, s.obHandler, family.scope)",
+		"s.dispatchOutboxFamily(ctx, family)",
 		"pool: bulkhead.SubsystemOutboxExternalCA",
 		"pool: bulkhead.SubsystemOutboxConnectors",
 		"pool: bulkhead.SubsystemOutboxSecrets",
@@ -232,11 +234,28 @@ func TestOutboxAndBulkheadRegressionGuardsStayRequired(t *testing.T) {
 		"pool: bulkhead.SubsystemOutboxCodeSigning",
 		"pool: bulkhead.SubsystemOutboxNotifications",
 		"pool: bulkhead.SubsystemOutboxTenantSeal",
+		"pool: bulkhead.SubsystemOutboxEventKeyPreparation",
+		"pool: bulkhead.SubsystemOutboxEventKeyDestruction",
 		"s.bulk.Close()",
 		"drain outbox",
 	} {
 		if !strings.Contains(server, want) {
 			t.Errorf("ARCH-007: served server no longer contains %q; outbox dispatch/drain may not be bulkheaded", want)
+		}
+	}
+	// Live ticks and the causal shutdown drain must share the same selector.
+	// Pin every scoped box at that workflow seam, including the normal box.
+	if got := strings.Count(server, "s.dispatchOutboxFamily("); got != 2 {
+		t.Errorf("ARCH-007: live/drain selector calls = %d, want both bounded paths", got)
+	}
+	delivery := read(t, "../internal/server/event_protection_delivery.go")
+	for _, want := range []string{
+		"s.outbox.DispatchScoped(ctx, s.obHandler, family.scope)",
+		"s.eventKeyDelivery.preparationOutbox.DispatchScoped(ctx, s.eventKeyDelivery.preparation, family.scope)",
+		"s.eventKeyDelivery.destructionOutbox.DispatchScoped(ctx, s.eventKeyDelivery.destruction, family.scope)",
+	} {
+		if !strings.Contains(delivery, want) {
+			t.Errorf("ARCH-007: family selector no longer contains %q; scoped authority may have regressed", want)
 		}
 	}
 

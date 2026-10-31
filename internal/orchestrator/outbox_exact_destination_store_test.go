@@ -150,3 +150,35 @@ func TestOutboxExactDestinationSQLTreatsPatternCharactersLiterally(t *testing.T)
 		t.Fatalf("literal exact SQL scope selected the wrong rows: n%d err%v", n, err)
 	}
 }
+
+func TestOutboxConstructionScopeCannotBeOverriddenByUnscopedDrain(t *testing.T) {
+	st := newStore(t)
+	mustRegisterTenant(t, st, tenantA)
+	outbox := orchestrator.NewOutbox(st, orchestrator.WithExcludedDestinations("eventprivacy.prepare", "eventprivacy.destroy"))
+	special := map[string]int64{}
+	for _, destination := range []string{"eventprivacy.prepare", "eventprivacy.destroy", "eventprivacy.destroy.extra"} {
+		special[destination] = enqueue(t, st, outbox, orchestrator.Entry{TenantID: tenantA, Destination: destination, IdempotencyKey: destination, Payload: []byte(`{}`)})
+	}
+	n, err := outbox.Dispatch(t.Context(), orchestrator.HandlerFunc(func(_ context.Context, message orchestrator.Message) error {
+		if message.Destination != "eventprivacy.destroy.extra" {
+			t.Fatal("ordinary unscoped drain claimed a special key row")
+		}
+		return nil
+	}))
+	if err != nil || n != 1 {
+		t.Fatalf("construction exclusions did not survive ordinary Dispatch: n%d err%v", n, err)
+	}
+	for _, destination := range []string{"eventprivacy.prepare", "eventprivacy.destroy"} {
+		row, err := outbox.Get(t.Context(), tenantA, special[destination])
+		if err != nil || row.Status != "pending" || row.Attempts != 0 {
+			t.Fatalf("ordinary box modified excluded %s: %+v %v", destination, row, err)
+		}
+	}
+	claimed, err := outbox.DispatchOneScoped(t.Context(), orchestrator.HandlerFunc(func(context.Context, orchestrator.Message) error {
+		t.Fatal("caller overrode construction exclusion")
+		return nil
+	}), orchestrator.DestinationScope{IncludePrefixes: []string{"eventprivacy.destroy"}})
+	if err != nil || claimed {
+		t.Fatalf("exact construction exclusion blocked prefix semantics or was overridden: claimed%v err%v", claimed, err)
+	}
+}
