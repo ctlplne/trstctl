@@ -102,6 +102,18 @@ result and the Risk page's exposure panel has a **Probe from a relay** button an
 **Live reachability** column. The control plane never dials the endpoints itself, and a
 probe no network relay can claim is refused with `409` rather than left queued.
 
+The cloud's own answer is the second check (A167). `POST
+/api/v1/nhi/posture/exposure/attack-paths` (`trstctl-cli nhi posture exposure
+attack-paths`, discovery:write) takes a `source_id` naming a
+[cloud network paths](discovery-and-inventory.md#cloud-network-paths) source and asks
+that AWS account whether its route tables, network ACLs and security groups admit the
+internet to each exposed record's public addresses. The posture then carries an
+`attack_path` per record — open through a named security group, blocked by a named
+route table, network ACL or security group, not in the account, or unknown with the
+reason — and the exposure panel has a **Validate paths in the cloud** button and a
+**Cloud path** column. A probe says something answered; the attack path says which
+resource lets it, or which one to change to stop it.
+
 A stale NHI can be handed to a new accountable owner with
 `POST /api/v1/nhi/posture/stale/handoff` (`trstctl-cli nhi posture stale handoff`):
 the ownership assignment, which the inventory honors for every source, so the row is no

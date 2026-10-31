@@ -2890,12 +2890,14 @@ func componentSchemas() map[string]*Schema {
 		"wildcard_reachability":  {Type: "integer"},
 		"probed":                 {Type: "integer"},
 		"live_reachable":         {Type: "integer"},
+		"path_validated":         {Type: "integer"},
+		"path_open":              {Type: "integer"},
 		"critical":               {Type: "integer"},
 		"high":                   {Type: "integer"},
 		"medium":                 {Type: "integer"},
 		"low":                    {Type: "integer"},
 		"recommendations":        {Type: "integer"},
-	}, "total_analyzed", "findings", "internet_exposed", "insecure_transport", "weak_authentication", "public_callbacks", "missing_network_policy", "wildcard_reachability", "probed", "live_reachable", "critical", "high", "medium", "low", "recommendations")
+	}, "total_analyzed", "findings", "internet_exposed", "insecure_transport", "weak_authentication", "public_callbacks", "missing_network_policy", "wildcard_reachability", "probed", "live_reachable", "path_validated", "path_open", "critical", "high", "medium", "low", "recommendations")
 	nhiExposureFinding := object(map[string]*Schema{
 		"inventory_id":       str(),
 		"ref":                str(),
@@ -2918,6 +2920,7 @@ func componentSchemas() map[string]*Schema {
 		"recommendation":     str(),
 		"evidence_refs":      {Type: "array", Items: str()},
 		"reachability":       ref("NHIExposureReachability"),
+		"attack_path":        ref("NHIExposureAttackPath"),
 	}, "inventory_id", "kind", "source", "display_name", "owner_status", "status", "severity", "risk_score", "finding_types", "exposure_level", "network_surface", "public_endpoints", "callback_urls", "transport_security", "auth_mode", "recommendation", "evidence_refs")
 	nhiExposureReachabilityProbe := object(map[string]*Schema{
 		"address": str(), "server_name": str(),
@@ -2939,6 +2942,25 @@ func componentSchemas() map[string]*Schema {
 		"endpoints": {Type: "array", Items: ref("NHIExposureProbeEndpoint")}, "omitted": {Type: "integer"},
 		"requested_at": timestamp(),
 	}, "run_id", "vantage", "endpoints", "omitted", "requested_at")
+	attackPathStatus := []string{"open", "blocked", "not_in_account", "unknown"}
+	nhiExposureAttackPathAddress := object(map[string]*Schema{
+		"address": str(), "status": {Type: "string", Enum: attackPathStatus},
+		"blocked_by": {Type: "string", Enum: []string{"route", "network_acl", "network_acl_return", "security_group"}},
+		"resource":   str(), "rule": str(), "path": {Type: "array", Items: str()}, "reason": str(), "checked_at": timestamp(),
+	}, "address", "status", "checked_at")
+	nhiExposureAttackPath := object(map[string]*Schema{
+		"status":     {Type: "string", Enum: attackPathStatus},
+		"checked_at": timestamp(), "endpoints": {Type: "array", Items: ref("NHIExposureAttackPathAddress")},
+	}, "status", "checked_at", "endpoints")
+	nhiAttackPathRequest := object(map[string]*Schema{
+		"source_id":     uuid(),
+		"inventory_ids": {Type: "array", Items: str(), MaxItems: orchestrator.MaxAttackPathEndpoints},
+	}, "source_id")
+	nhiAttackPathResult := object(map[string]*Schema{
+		"run_id": uuid(), "source_id": uuid(),
+		"endpoints": {Type: "array", Items: ref("NHIExposureProbeEndpoint")}, "omitted": {Type: "integer"},
+		"requested_at": timestamp(),
+	}, "run_id", "source_id", "endpoints", "omitted", "requested_at")
 	nhiExposurePosture := object(map[string]*Schema{
 		"capability":   str(),
 		"generated_at": timestamp(),
@@ -8009,6 +8031,10 @@ func componentSchemas() map[string]*Schema {
 		"NHIExposureProbeRequest":                  nhiExposureProbeRequest,
 		"NHIExposureProbeEndpoint":                 nhiExposureProbeEndpoint,
 		"NHIExposureProbeResult":                   nhiExposureProbeResult,
+		"NHIExposureAttackPath":                    nhiExposureAttackPath,
+		"NHIExposureAttackPathAddress":             nhiExposureAttackPathAddress,
+		"NHIAttackPathRequest":                     nhiAttackPathRequest,
+		"NHIAttackPathResult":                      nhiAttackPathResult,
 		"NHIStaleHandoffRequest":                   nhiStaleHandoffRequest,
 		"NHIStaleHandoffItem":                      nhiStaleHandoffItem,
 		"NHIStaleHandoffResult":                    nhiStaleHandoffResult,

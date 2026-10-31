@@ -16052,6 +16052,7 @@
               "agent",
               "api_key",
               "cloud_certificate",
+              "cloud_network_path",
               "cloud_secret",
               "credential_compromise",
               "ct_log",
@@ -16556,6 +16557,7 @@
               "agent",
               "api_key",
               "cloud_certificate",
+              "cloud_network_path",
               "cloud_secret",
               "credential_compromise",
               "ct_log",
@@ -16726,6 +16728,7 @@
               "agent",
               "api_key",
               "cloud_certificate",
+              "cloud_network_path",
               "cloud_secret",
               "credential_compromise",
               "ct_log",
@@ -17229,6 +17232,7 @@
               "agent",
               "api_key",
               "cloud_certificate",
+              "cloud_network_path",
               "cloud_secret",
               "credential_compromise",
               "ct_log",
@@ -17297,6 +17301,7 @@
               "agent",
               "api_key",
               "cloud_certificate",
+              "cloud_network_path",
               "cloud_secret",
               "credential_compromise",
               "ct_log",
@@ -27499,6 +27504,58 @@
         ],
         "type": "object"
       },
+      "NHIAttackPathRequest": {
+        "properties": {
+          "inventory_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_id"
+        ],
+        "type": "object"
+      },
+      "NHIAttackPathResult": {
+        "properties": {
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/NHIExposureProbeEndpoint"
+            },
+            "type": "array"
+          },
+          "omitted": {
+            "type": "integer"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "source_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "source_id",
+          "endpoints",
+          "omitted",
+          "requested_at"
+        ],
+        "type": "object"
+      },
       "NHIComplianceControl": {
         "properties": {
           "control_id": {
@@ -27904,8 +27961,90 @@
         ],
         "type": "object"
       },
+      "NHIExposureAttackPath": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/NHIExposureAttackPathAddress"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "blocked",
+              "not_in_account",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checked_at",
+          "endpoints"
+        ],
+        "type": "object"
+      },
+      "NHIExposureAttackPathAddress": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "blocked_by": {
+            "enum": [
+              "route",
+              "network_acl",
+              "network_acl_return",
+              "security_group"
+            ],
+            "type": "string"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "blocked",
+              "not_in_account",
+              "unknown"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "status",
+          "checked_at"
+        ],
+        "type": "object"
+      },
       "NHIExposureFinding": {
         "properties": {
+          "attack_path": {
+            "$ref": "#/components/schemas/NHIExposureAttackPath"
+          },
           "auth_mode": {
             "type": "string"
           },
@@ -28218,6 +28357,12 @@
           "missing_network_policy": {
             "type": "integer"
           },
+          "path_open": {
+            "type": "integer"
+          },
+          "path_validated": {
+            "type": "integer"
+          },
           "probed": {
             "type": "integer"
           },
@@ -28248,6 +28393,8 @@
           "wildcard_reachability",
           "probed",
           "live_reachable",
+          "path_validated",
+          "path_open",
           "critical",
           "high",
           "medium",
@@ -67476,6 +67623,74 @@
         ],
         "summary": "List internet-exposed and insecure-deployment NHI posture findings",
         "x-trstctl-permission": "nhi:read"
+      }
+    },
+    "/api/v1/nhi/posture/exposure/attack-paths": {
+      "post": {
+        "operationId": "validateNHIAttackPaths",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIAttackPathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIAttackPathResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Validate exposed NHI endpoints against the cloud's own routes, network ACLs and security groups",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/nhi/posture/exposure/probe": {

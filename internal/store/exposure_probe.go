@@ -13,19 +13,30 @@ import (
 // nhi-exposure-probe finding seen last. The read runs inside the tenant's RLS
 // scope (AN-1).
 func (s *Store) LatestExposureProbes(ctx context.Context, tenantID string, limit int) ([]DiscoveryFinding, error) {
+	return s.latestFindingsByRef(ctx, tenantID, "nhi-exposure-probe", limit)
+}
+
+// LatestAttackPathFindings returns the latest provider-native attack-path
+// verdict of each validated NHI endpoint (A167): per finding ref, the
+// nhi-attack-path finding seen last.
+func (s *Store) LatestAttackPathFindings(ctx context.Context, tenantID string, limit int) ([]DiscoveryFinding, error) {
+	return s.latestFindingsByRef(ctx, tenantID, "nhi-attack-path", limit)
+}
+
+func (s *Store) latestFindingsByRef(ctx context.Context, tenantID, kind string, limit int) ([]DiscoveryFinding, error) {
 	var out []DiscoveryFinding
 	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT ON (ref) id::text, ref, provenance, fingerprint, metadata, last_seen_at
 		    FROM discovery_findings
-		   WHERE tenant_id = $1 AND kind = 'nhi-exposure-probe'
+		   WHERE tenant_id = $1 AND kind = $2
 		   ORDER BY ref, last_seen_at DESC, id DESC
-		   LIMIT $2`, tenantID, limit)
+		   LIMIT $3`, tenantID, kind, limit)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
-			f := DiscoveryFinding{TenantID: tenantID, Kind: "nhi-exposure-probe"}
+			f := DiscoveryFinding{TenantID: tenantID, Kind: kind}
 			if err := rows.Scan(&f.ID, &f.Ref, &f.Provenance, &f.Fingerprint, &f.Metadata, &f.LastSeenAt); err != nil {
 				return err
 			}

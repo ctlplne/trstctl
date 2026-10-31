@@ -550,6 +550,23 @@ URI additionally emits an `oauth_grant_abuse` finding tagged `capability=CAP-ITD
 Ordinary high-risk-but-owned grant inventory stays `oauth_grant` only, so trstctl does
 not count inventory as detection.
 
+### Cloud network paths
+
+A `cloud_network_path` source (A167) holds one AWS account's read-only network
+credentials, as references: `providers[]` with `provider: aws-ec2`, `region`,
+`access_key_id_ref`, `secret_access_key_ref` and an optional `session_token_ref`. It
+needs `ec2:DescribeNetworkInterfaces`, `ec2:DescribeSecurityGroups`,
+`ec2:DescribeRouteTables` and `ec2:DescribeNetworkAcls` and nothing else. It does not
+sweep the account: it answers for the endpoints the NHI exposure posture names, when an
+operator validates them from Risk → exposure (**Validate paths in the cloud**) or with
+`POST /api/v1/nhi/posture/exposure/attack-paths`. For each public address the control
+plane finds the network interface that holds it, then follows the path a packet from the
+internet would take: the subnet's route table must send `0.0.0.0/0` (or `::/0`) to an
+internet gateway, the network ACL's first internet-wide rule for the port must allow it
+in and the reply out, and a security group on the interface must admit the port from the
+internet. The verdict names the resource that decided it. An ordinary run of the source
+checks only that its providers can be built.
+
 ### Unified NHI inventory — every credential kind, one denominator
 
 `GET /api/v1/nhi/inventory` (`nhi:read`) is a read-side projection, not a new state

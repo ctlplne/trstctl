@@ -13647,6 +13647,10 @@ export const messages = {
     defaultMessage: "Choose a host agent",
     description: "Empty migration agent option.",
   },
+  "discovery.sourceKind.cloudNetworkPath": {
+    defaultMessage: "Cloud network paths",
+    description: "Discovery source kind label: read-only cloud network configuration used to validate exposed endpoints.",
+  },
   "migration.form.controlPlaneExecutor": {
     defaultMessage: "Control plane (cloud certificate store, no agent)",
     description: "Migration executor option for a cloud certificate store the control plane carries itself.",
@@ -16537,6 +16541,65 @@ export const messages = {
     defaultMessage: "Not probed yet",
     description: "Live reachability value for an exposed NHI no relay has probed.",
   },
+  "risk.nhiExposure.pathSummary": {
+    defaultMessage: "Cloud paths validated for {validated} records; {open} open to the internet.",
+    description: "Exposure summary line: how many records were validated against their cloud account's network configuration and how many are open.",
+  },
+  "risk.nhiExposure.pathSource": {
+    defaultMessage: "Cloud account to validate against",
+    description: "Label of the cloud_network_path source picker on the exposure panel.",
+  },
+  "risk.nhiExposure.validatePaths": {
+    defaultMessage: "Validate paths in the cloud",
+    description: "Button that asks the cloud account whether its routes, network ACLs and security groups admit the internet to the exposed endpoints.",
+  },
+  "risk.nhiExposure.validating": {
+    defaultMessage: "Validating…",
+    description: "Button label while a cloud path validation is being queued.",
+  },
+  "risk.nhiExposure.pathQueued": {
+    defaultMessage: "Cloud path validation queued for {endpoints} endpoints (run {run}). Verdicts appear here once the control plane has read the account.",
+    description: "Confirmation after a cloud path validation is queued; names the discovery run.",
+  },
+  "risk.nhiExposure.pathFailed": {
+    defaultMessage: "Could not validate cloud paths: {error}",
+    description: "Error shown when queuing a cloud path validation fails.",
+  },
+  "risk.nhiExposure.pathNoSource": {
+    defaultMessage: "To validate cloud paths, add a Cloud network paths source under Discover → Sources.",
+    description: "Hint on the exposure panel when no cloud_network_path source is configured.",
+  },
+  "risk.nhiExposure.cloudPath": {
+    defaultMessage: "Cloud path",
+    description: "Exposed NHI table column: the cloud account's verdict on the path from the internet.",
+  },
+  "risk.nhiExposure.pathNotValidated": {
+    defaultMessage: "Not validated",
+    description: "Cloud path value for a record no validation has judged.",
+  },
+  "risk.nhiExposure.path.open": {
+    defaultMessage: "Open through {resource}",
+    description: "Cloud path value: the internet reaches the endpoint; names the security group that admits it.",
+  },
+  "risk.nhiExposure.path.blocked": {
+    defaultMessage: "Blocked by {stage} {resource}",
+    description: "Cloud path value: names the kind of resource and the resource that stops the internet.",
+  },
+  "risk.nhiExposure.path.notInAccount": {
+    defaultMessage: "Not in a configured account",
+    description: "Cloud path value: no configured cloud account holds the endpoint's address.",
+  },
+  "risk.nhiExposure.path.unknown": {
+    defaultMessage: "Unknown: {reason}",
+    description: "Cloud path value: the account could not be read for this endpoint; gives the reason.",
+  },
+  "risk.nhiExposure.pathStage.route": { defaultMessage: "route table", description: "Cloud path stage name: a route table." },
+  "risk.nhiExposure.pathStage.network_acl": { defaultMessage: "network ACL", description: "Cloud path stage name: a network ACL's inbound rules." },
+  "risk.nhiExposure.pathStage.network_acl_return": {
+    defaultMessage: "network ACL (return traffic)",
+    description: "Cloud path stage name: a network ACL's outbound rules for reply traffic.",
+  },
+  "risk.nhiExposure.pathStage.security_group": { defaultMessage: "security group", description: "Cloud path stage name: security groups." },
   "risk.nhiExposure.probe": {
     defaultMessage: "Probe from a relay",
     description: "Button that queues a live reachability probe of the exposed NHIs' public endpoints on a network relay.",

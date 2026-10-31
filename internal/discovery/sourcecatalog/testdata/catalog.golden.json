@@ -617,6 +617,120 @@
       "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-certificate-services"
     },
     {
+      "kind": "cloud_network_path",
+      "label": "Cloud network paths",
+      "purpose": "Validate, from the cloud account's own routes, network ACLs and security groups, whether the internet can reach the public endpoints the exposure posture names.",
+      "data_handling": "Uses read-only provider calls and credential references. It stores each verdict with the identifiers of the resources that decided it, never credentials, traffic or other account contents.",
+      "tool": "Discover",
+      "route": "/discovery?tab=sources\u0026kind=cloud_network_path",
+      "setup_surface": "source_wizard",
+      "permission": "discovery:write",
+      "edition": "core",
+      "execution": "control plane",
+      "configuration": [
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "provider",
+          "required": true,
+          "description": "The exact read-only provider adapter."
+        },
+        {
+          "path": "providers[].region",
+          "label": "Region",
+          "type": "string",
+          "required": true,
+          "description": "The account region whose network configuration is read."
+        },
+        {
+          "path": "providers[].endpoint",
+          "label": "API endpoint",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "Optional compatible endpoint; public provider defaults are safer."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this provider; metadata and loopback remain blocked."
+        },
+        {
+          "path": "providers[].access_key_id_ref",
+          "label": "Access key ID reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; use a short-lived least-privilege credential."
+        },
+        {
+          "path": "providers[].secret_access_key_ref",
+          "label": "Secret access key reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].session_token_ref",
+          "label": "Session token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Optional short-lived session-token reference."
+        }
+      ],
+      "providers": [
+        {
+          "id": "aws-ec2",
+          "label": "Amazon EC2 network configuration",
+          "least_privilege": "ec2:DescribeNetworkInterfaces, ec2:DescribeSecurityGroups, ec2:DescribeRouteTables and ec2:DescribeNetworkAcls on the authorized account/region",
+          "preferred_credential": "env: credential references",
+          "fields": [
+            "region",
+            "endpoint",
+            "access_key_id_ref",
+            "secret_access_key_ref",
+            "session_token_ref"
+          ]
+        }
+      ],
+      "lifecycle": [
+        "not_configured",
+        "available",
+        "queued",
+        "planning",
+        "running",
+        "succeeded",
+        "succeeded_with_warnings",
+        "failed",
+        "blocked"
+      ],
+      "console_stages": [
+        "configure",
+        "preview",
+        "execute",
+        "observe",
+        "recover",
+        "prove"
+      ],
+      "documentation_ref": "docs/features/discovery-and-inventory.md#cloud-network-paths"
+    },
+    {
       "kind": "cloud_secret",
       "label": "Cloud secret managers",
       "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates through a separate explicit choice.",

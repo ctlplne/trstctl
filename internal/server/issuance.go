@@ -314,8 +314,8 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleRotateVerification(ctx, m)
 	case orchestrator.DestinationIncidentMigrationRevoke:
 		return d.handleIncidentMigrationRevoke(ctx, m)
-	case orchestrator.DestinationMigrationApplianceIssue:
-		return d.handleMigrationApplianceIssue(ctx, m)
+	case orchestrator.DestinationMigrationApplianceIssue, orchestrator.DestinationAttackPathValidate:
+		return d.deliverControlPlaneEffect(ctx, m)
 	case orchestrator.DestinationSCIMWriteback, orchestrator.DestinationLDAPWriteback:
 		return d.deliverDirectoryWriteback(ctx, m)
 	case orchestrator.DestinationConnectorRollback:

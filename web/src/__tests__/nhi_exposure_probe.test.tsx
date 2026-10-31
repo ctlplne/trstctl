@@ -19,6 +19,8 @@ const { apiMock } = vi.hoisted(() => ({
     nhiExposurePosture: vi.fn(),
     nhiPostureAutomation: vi.fn(),
     probeNHIExposure: vi.fn(),
+    validateNHIAttackPaths: vi.fn(),
+    discoverySources: vi.fn(),
     identities: vi.fn(),
     issuanceRequests: vi.fn(),
     owners: vi.fn(),
@@ -94,6 +96,7 @@ describe("NHI exposure live reachability", () => {
     apiMock.identities.mockResolvedValue([]);
     apiMock.owners.mockResolvedValue([]);
     apiMock.profiles.mockResolvedValue([]);
+    apiMock.discoverySources.mockResolvedValue({ items: [] });
     apiMock.nhiExposurePosture.mockResolvedValue({
       capability: "CAP-POST-04",
       generated_at: "2026-10-24T00:00:00Z",
@@ -159,6 +162,72 @@ describe("NHI exposure live reachability", () => {
     expect(
       await screen.findByText("Probe queued for 2 endpoints (run 33333333-3333-3333-3333-333333333333). Results appear here after a network relay reports."),
     ).toBeInTheDocument();
+  });
+
+  // A167: the row shows the cloud account's verdict and the resource that
+  // decided it, and an operator with a cloud_network_path source can ask for a
+  // validation; without one the panel says where to add it.
+  it("shows the cloud path verdict and validates against a cloud network path source", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
+    const posture = await apiMock.nhiExposurePosture();
+    posture.summary.path_validated = 1;
+    posture.summary.path_open = 0;
+    posture.findings[1].attack_path = {
+      status: "blocked",
+      checked_at: "2026-10-24T03:00:00Z",
+      endpoints: [
+        {
+          address: "203.0.113.11:443",
+          status: "blocked",
+          blocked_by: "security_group",
+          resource: "sg-admin",
+          reason: "no security group admits tcp/443",
+          checked_at: "2026-10-24T03:00:00Z",
+        },
+      ],
+    };
+    apiMock.nhiExposurePosture.mockResolvedValue(posture);
+    apiMock.discoverySources.mockResolvedValue({
+      items: [
+        { id: "src-ec2", kind: "cloud_network_path", name: "aws-ec2-east" },
+        { id: "src-lan", kind: "network", name: "lan" },
+      ],
+    });
+    apiMock.validateNHIAttackPaths.mockResolvedValue({
+      run_id: "44444444-4444-4444-4444-444444444444",
+      source_id: "src-ec2",
+      endpoints: [{ inventory_id: "finding/unprobed-1", endpoint: "https://billing.example.com", address: "billing.example.com:443" }],
+      omitted: 0,
+      requested_at: "2026-10-24T03:00:00Z",
+    });
+    const user = userEvent.setup();
+    renderRisk();
+
+    expect(await screen.findByText("Cloud paths validated for 1 records; 0 open to the internet.")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Exposed NHI deployment recommendations" });
+    expect(within(table).getByRole("columnheader", { name: "Cloud path" })).toBeInTheDocument();
+    const blocked = within(table).getByText("billing-export-key").closest("tr") as HTMLElement;
+    expect(within(blocked).getByText("Blocked by security group sg-admin")).toBeInTheDocument();
+    const unvalidated = within(table).getByText("partner-webhook-token").closest("tr") as HTMLElement;
+    expect(within(unvalidated).getByText("Not validated")).toBeInTheDocument();
+
+    const picker = await screen.findByRole("combobox", { name: "Cloud account to validate against" });
+    expect(
+      within(picker)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["aws-ec2-east"]);
+    await user.click(screen.getByRole("button", { name: "Validate paths in the cloud" }));
+    await waitFor(() => expect(apiMock.validateNHIAttackPaths).toHaveBeenCalledWith({ source_id: "src-ec2", inventory_ids: [] }));
+    expect(await screen.findByText(/^Cloud path validation queued for 1 endpoints \(run 44444444-4444-4444-4444-444444444444\)/)).toBeInTheDocument();
+  });
+
+  it("says where to add a cloud network path source when none exists", async () => {
+    apiMock.me.mockResolvedValue({ permissions: ["*"], subject: "ops-1", tenant_id: "t1", email: "ops@example.test" });
+    renderRisk();
+
+    expect(await screen.findByText("To validate cloud paths, add a Cloud network paths source under Discover → Sources.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Validate paths in the cloud" })).not.toBeInTheDocument();
   });
 
   it("offers no probe to an operator who cannot run discovery", async () => {

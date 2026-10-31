@@ -89,6 +89,7 @@ const sourceKindLabels: Record<SourceKind, string> = {
   ssh_trust: translateNow("discovery.setup.sshCollection.label"),
   adcs: translateNow("source.adcs.heading.f1adcs0001"),
   cloud_certificate: "Cloud certificates",
+  cloud_network_path: translateNow("discovery.sourceKind.cloudNetworkPath"),
   cloud_secret: "Cloud secrets",
   ct_log: "Certificate Transparency",
   drift: "Drift",

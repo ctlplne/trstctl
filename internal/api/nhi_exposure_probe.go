@@ -79,25 +79,9 @@ func (a *API) probeNHIExposure(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return 0, nil, err
 		}
-		findings := posture.Findings
-		if len(req.InventoryIDs) > 0 {
-			byID := make(map[string]nhiExposurePostureFinding, len(findings))
-			for _, finding := range findings {
-				byID[finding.InventoryID] = finding
-			}
-			findings = findings[:0:0]
-			seen := map[string]bool{}
-			for _, id := range req.InventoryIDs {
-				id = strings.TrimSpace(id)
-				finding, ok := byID[id]
-				if !ok {
-					return 0, nil, errStatus(http.StatusUnprocessableEntity, "inventory_ids contains a record that is not in the exposure posture: "+id)
-				}
-				if !seen[id] {
-					seen[id] = true
-					findings = append(findings, finding)
-				}
-			}
+		findings, err := nhiExposureSelectedFindings(posture.Findings, req.InventoryIDs)
+		if err != nil {
+			return 0, nil, err
 		}
 		endpoints, omitted := nhiExposureProbeEndpoints(findings, orchestrator.MaxExposureProbeEndpoints)
 		if len(endpoints) == 0 {

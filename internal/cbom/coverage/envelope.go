@@ -29,6 +29,7 @@ const (
 	AssetRepositorySecret     AssetClass = "repository-secret"
 	AssetThirdPartySecret     AssetClass = "third-party-secret"
 	AssetOperatorDeclared     AssetClass = "operator-declared"
+	AssetNetworkPath          AssetClass = "network-path"
 )
 
 // Precondition names what must be true of the deployment before a source of a
@@ -86,6 +87,9 @@ func Envelopes() map[string]Envelope {
 		env("ssh", []AssetClass{AssetSSHHostKey, AssetSSHPrivateKey}, PrecondTargetsConfigured),
 		// Agentless cloud certificate managers: ACM, Key Vault, GCP CM (F49).
 		env("cloud_certificate", []AssetClass{AssetCloudCertificate}, PrecondCloudCredential),
+		// Read-only cloud network configuration on the path to an exposed
+		// endpoint: routes, network ACLs, security groups (A167).
+		env("cloud_network_path", []AssetClass{AssetNetworkPath}, PrecondCloudCredential),
 		// Secret-manager metadata, never values (F35/F36). secret_store is a
 		// served alias routed through the same connectors.
 		env("cloud_secret", []AssetClass{AssetStoredSecret}, PrecondCloudCredential),

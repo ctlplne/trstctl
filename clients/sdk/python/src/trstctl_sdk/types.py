@@ -8964,6 +8964,27 @@ MigrationUnknown = TypedDict(
     total=False,
 )
 
+NHIAttackPathRequest = TypedDict(
+    'NHIAttackPathRequest',
+    {
+        'inventory_ids': list[str],
+        'source_id': str,
+    },
+    total=False,
+)
+
+NHIAttackPathResult = TypedDict(
+    'NHIAttackPathResult',
+    {
+        'endpoints': list[dict[str, Any]],
+        'omitted': int,
+        'requested_at': str,
+        'run_id': str,
+        'source_id': str,
+    },
+    total=False,
+)
+
 NHIComplianceControl = TypedDict(
     'NHIComplianceControl',
     {
@@ -9092,9 +9113,35 @@ NHIDecommissionSummary = TypedDict(
     total=False,
 )
 
+NHIExposureAttackPath = TypedDict(
+    'NHIExposureAttackPath',
+    {
+        'checked_at': str,
+        'endpoints': list[dict[str, Any]],
+        'status': str,
+    },
+    total=False,
+)
+
+NHIExposureAttackPathAddress = TypedDict(
+    'NHIExposureAttackPathAddress',
+    {
+        'address': str,
+        'blocked_by': str,
+        'checked_at': str,
+        'path': list[str],
+        'reason': str,
+        'resource': str,
+        'rule': str,
+        'status': str,
+    },
+    total=False,
+)
+
 NHIExposureFinding = TypedDict(
     'NHIExposureFinding',
     {
+        'attack_path': dict[str, Any],
         'auth_mode': str,
         'callback_urls': list[str],
         'display_name': str,
@@ -9200,6 +9247,8 @@ NHIExposureSummary = TypedDict(
         'low': int,
         'medium': int,
         'missing_network_policy': int,
+        'path_open': int,
+        'path_validated': int,
         'probed': int,
         'public_callbacks': int,
         'recommendations': int,

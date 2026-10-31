@@ -344,8 +344,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A226 adds preview, approval request, start, list and exact read for SSH fleet jobs.
 	// A162 adds the relay certutil read of a CA database.
 	// A163 adds revoking a rogue certificate at its issuer.
-	if len(out) != 600 {
-		t.Fatalf("OpenAPI operationIds = %d, want 600", len(out))
+	// A167 adds validating exposed endpoints against the cloud's network paths.
+	if len(out) != 601 {
+		t.Fatalf("OpenAPI operationIds = %d, want 601", len(out))
 	}
 	return out
 }

@@ -3739,7 +3739,7 @@ export interface DiscoveryCapability {
   documentation_ref: string;
   edition: string;
   execution: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   label: string;
   lifecycle: string[];
   permission: string;
@@ -3864,7 +3864,7 @@ export interface DiscoveryMonitoringSource {
   failed_run_count: number;
   finding_count: number;
   findings_path: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   last_discovery_at?: string;
   last_run_completed_at?: string;
   last_run_error: string;
@@ -3903,7 +3903,7 @@ export interface DiscoveryPlanPreview {
   estimated_upper_seconds: number;
   excluded_target_count: number;
   execution: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   normalized_target_count: number;
   normalized_targets?: string[];
   permission: string;
@@ -4020,7 +4020,7 @@ export interface DiscoverySource {
   config: Record<string, unknown>;
   created_at: string;
   id: string;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   name: string;
   tenant_id: string;
   updated_at: string;
@@ -4033,7 +4033,7 @@ export interface DiscoverySourceList {
 
 export interface DiscoverySourceRequest {
   config?: Record<string, unknown>;
-  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+  kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
   name: string;
 }
 
@@ -6474,6 +6474,19 @@ export interface MigrationUnknown {
   member: string;
 }
 
+export interface NHIAttackPathRequest {
+  inventory_ids?: string[];
+  source_id: string;
+}
+
+export interface NHIAttackPathResult {
+  endpoints: NHIExposureProbeEndpoint[];
+  omitted: number;
+  requested_at: string;
+  run_id: string;
+  source_id: string;
+}
+
 export interface NHIComplianceControl {
   control_id: string;
   evidence_refs: string[];
@@ -6566,7 +6579,25 @@ export interface NHIDecommissionSummary {
   total_matched: number;
 }
 
+export interface NHIExposureAttackPath {
+  checked_at: string;
+  endpoints: NHIExposureAttackPathAddress[];
+  status: "open" | "blocked" | "not_in_account" | "unknown";
+}
+
+export interface NHIExposureAttackPathAddress {
+  address: string;
+  blocked_by?: "route" | "network_acl" | "network_acl_return" | "security_group";
+  checked_at: string;
+  path?: string[];
+  reason?: string;
+  resource?: string;
+  rule?: string;
+  status: "open" | "blocked" | "not_in_account" | "unknown";
+}
+
 export interface NHIExposureFinding {
+  attack_path?: NHIExposureAttackPath;
   auth_mode: string;
   callback_urls: string[];
   display_name: string;
@@ -6644,6 +6675,8 @@ export interface NHIExposureSummary {
   low: number;
   medium: number;
   missing_network_policy: number;
+  path_open: number;
+  path_validated: number;
   probed: number;
   public_callbacks: number;
   recommendations: number;

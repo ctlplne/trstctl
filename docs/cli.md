@@ -706,6 +706,10 @@ trstctl-cli nhi posture exposure
 # exposed record, most severe first, up to 50 endpoints.
 trstctl-cli nhi posture exposure probe -f nhi-exposure-probe.json --force
 
+# Ask a cloud account (a cloud_network_path source) whether its routes, network
+# ACLs and security groups admit the internet to the exposed endpoints.
+trstctl-cli nhi posture exposure attack-paths -f nhi-attack-paths.json --force
+
 # Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each.
 trstctl-cli nhi posture automation
 

@@ -2956,7 +2956,8 @@
                 "listNHIExposurePosture",
                 "listNHIPostureAutomation",
                 "handOffStaleNHIs",
-                "probeNHIExposure"
+                "probeNHIExposure",
+                "validateNHIAttackPaths"
             ],
             "api_na": "",
             "cli_surface": [
@@ -2968,7 +2969,8 @@
                 "nhi posture exposure",
                 "nhi posture automation",
                 "nhi posture stale handoff",
-                "nhi posture exposure probe"
+                "nhi posture exposure probe",
+                "nhi posture exposure attack-paths"
             ],
             "cli_na": "",
             "facet_evidence": {

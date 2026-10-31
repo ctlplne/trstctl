@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2061 annotated sites across 29 rules. Each row is
+2064 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (422 sites)
+### G101 — CWE-798 Use of hardcoded credentials (425 sites)
 
 | Location | Reason |
 |---|---|
@@ -186,9 +186,9 @@ not this file.
 | `internal/ca/ejbca/ejbcafake/ejbcafake.go:28` | test-support package compiled only into test binaries (CWE-798) |
 | `internal/ca/letsencrypt/acmefake/acmefake.go:30` | fabricated fixture challenge token in a test double; no value is real (CWE-798) |
 | `internal/ca/venafi/venafifake/venafifake.go:25` | test-support package compiled only into test binaries (CWE-798) |
-| `internal/cbom/coverage/envelope.go:42` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cbom/coverage/envelope.go:45` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:43` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:46` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:47` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
 | `internal/cloudauth/azure.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -280,6 +280,7 @@ not this file.
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
+| `internal/discovery/netpath/awsnetpath/awsnetpath_test.go:17` | fabricated fixture credential (CWE-798) |
 | `internal/dns/akamai/akamai_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/cloudflare/cloudflare_test.go:24` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/googledns/googledns_test.go:267` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -345,6 +346,8 @@ not this file.
 | `internal/server/adcs_nested_samba_test.go:66` | public reference, never a credential value (CWE-798). |
 | `internal/server/agent_jobs_served_test.go:23` | secret-store reference/pointer, never credential material (CWE-798) |
 | `internal/server/aisurface_served_test.go:111` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/attack_path_served_test.go:45` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/attack_path_served_test.go:103` | credential references only; no credential value enters the config (CWE-798) |
 | `internal/server/audit_feed_protected_served_test.go:88` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:142` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |

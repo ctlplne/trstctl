@@ -7,6 +7,8 @@ import {
   type ContextualRiskPriorities,
   type ContextualRiskPriority,
   type CredentialRisk,
+  type NHIAttackPathResult,
+  type NHIExposureAttackPath,
   type NHIExposurePosture,
   type NHIExposureProbeResult,
   type NHIPostureAutomation,
@@ -20,6 +22,7 @@ import { CryptoReadinessPanel } from "@/components/CryptoReadinessPanel";
 import { DataGrid, type DataGridColumn, type DataGridSort } from "@/components/DataGrid";
 import { DataGridToolbar } from "@/components/DataGridToolbar";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/StatusBadge";
 import { UnavailableState } from "@/components/StatePrimitives";
 import { PageHeader } from "@/components/PageHeader";
@@ -28,6 +31,7 @@ import { Meter, type ChartTone, type MeterSegment } from "@/components/charts";
 import { Num } from "@/components/typography";
 import { riskBand } from "@/lib/statusVocab";
 import { hasPermission } from "@/lib/access";
+import { useApiQuery } from "@/lib/query";
 import { formatDate as formatDatePolicy } from "@/i18n/format";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 
@@ -830,6 +834,37 @@ const nhiReachabilityKeys = {
   not_public: "risk.nhiExposure.reachability.notPublic",
 } as const;
 
+const nhiAttackPathStageKeys = {
+  route: "risk.nhiExposure.pathStage.route",
+  network_acl: "risk.nhiExposure.pathStage.network_acl",
+  network_acl_return: "risk.nhiExposure.pathStage.network_acl_return",
+  security_group: "risk.nhiExposure.pathStage.security_group",
+} as const;
+
+// A167: the cloud account's verdict on the path from the internet, naming the
+// resource that decided it, from the record's first judged address.
+function NHIAttackPathValue({ path }: { path: NHIExposureAttackPath }) {
+  const { t } = useTranslation();
+  const decided = path.endpoints.find((endpoint) => endpoint.status === path.status) ?? path.endpoints[0];
+  switch (path.status) {
+    case "open":
+      return <>{t("risk.nhiExposure.path.open", { resource: decided?.resource ?? "" })}</>;
+    case "blocked":
+      return (
+        <>
+          {t("risk.nhiExposure.path.blocked", {
+            stage: decided?.blocked_by ? t(nhiAttackPathStageKeys[decided.blocked_by]) : "",
+            resource: decided?.resource ?? "",
+          })}
+        </>
+      );
+    case "not_in_account":
+      return <>{t("risk.nhiExposure.path.notInAccount")}</>;
+    default:
+      return <>{t("risk.nhiExposure.path.unknown", { reason: decided?.reason ?? "" })}</>;
+  }
+}
+
 function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePosture | null; loading: boolean; error: string | null }) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -841,6 +876,28 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
   const [probeError, setProbeError] = useState<string | null>(null);
   const topFindings = posture?.findings?.slice(0, 5) ?? [];
   const probeable = (posture?.findings ?? []).some((finding) => finding.public_endpoints.length + finding.callback_urls.length > 0);
+  // A167: validation reads a cloud account through a cloud_network_path
+  // source, so it is offered only where one is configured.
+  const sourcesQuery = useApiQuery(["risk", "attack-path-sources"], () => api.discoverySources({ limit: 100 }), { retry: false, enabled: canProbe });
+  const pathSources = (sourcesQuery.data?.items ?? []).filter((source) => source.kind === "cloud_network_path");
+  const [pathSourceID, setPathSourceID] = useState("");
+  const [validating, setValidating] = useState(false);
+  const [pathResult, setPathResult] = useState<NHIAttackPathResult | null>(null);
+  const [pathError, setPathError] = useState<string | null>(null);
+  const selectedPathSource = pathSourceID || pathSources[0]?.id || "";
+
+  async function startValidation() {
+    setValidating(true);
+    setPathError(null);
+    try {
+      setPathResult(await api.validateNHIAttackPaths({ source_id: selectedPathSource, inventory_ids: [] }));
+    } catch (err) {
+      setPathResult(null);
+      setPathError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setValidating(false);
+    }
+  }
 
   async function startProbe() {
     setProbing(true);
@@ -881,12 +938,39 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
               })}
             </p>
           )}
+          {posture && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t("risk.nhiExposure.pathSummary", {
+                validated: posture.summary.path_validated ?? 0,
+                open: posture.summary.path_open ?? 0,
+              })}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canProbe && probeable && (
             <Button type="button" size="sm" variant="outline" disabled={probing} onClick={() => void startProbe()}>
               {probing ? t("risk.nhiExposure.probing") : t("risk.nhiExposure.probe")}
             </Button>
+          )}
+          {canProbe && probeable && pathSources.length > 0 && (
+            <>
+              <Select
+                aria-label={t("risk.nhiExposure.pathSource")}
+                className="w-56"
+                value={selectedPathSource}
+                onChange={(event) => setPathSourceID(event.target.value)}
+              >
+                {pathSources.map((source) => (
+                  <option key={source.id} value={source.id}>
+                    {source.name}
+                  </option>
+                ))}
+              </Select>
+              <Button type="button" size="sm" variant="outline" disabled={validating || !selectedPathSource} onClick={() => void startValidation()}>
+                {validating ? t("risk.nhiExposure.validating") : t("risk.nhiExposure.validatePaths")}
+              </Button>
+            </>
           )}
           {posture && (
             <StatusBadge
@@ -908,6 +992,19 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
           {t("risk.nhiExposure.probeFailed", { error: probeError })}
         </p>
       )}
+      {canProbe && probeable && sourcesQuery.data && pathSources.length === 0 && (
+        <p className="mt-2 text-sm text-muted-foreground">{t("risk.nhiExposure.pathNoSource")}</p>
+      )}
+      {pathResult && (
+        <p role="status" className="mt-2 text-sm text-muted-foreground">
+          {t("risk.nhiExposure.pathQueued", { endpoints: pathResult.endpoints.length, run: pathResult.run_id })}
+        </p>
+      )}
+      {pathError && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {t("risk.nhiExposure.pathFailed", { error: pathError })}
+        </p>
+      )}
 
       {loading && <p className="mt-3 text-sm text-muted-foreground">{t("risk.nhiExposure.loading")}</p>}
       {error && (
@@ -926,6 +1023,7 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
                 <th scope="col">{t("risk.nhiExposure.finding")}</th>
                 <th scope="col">{t("risk.nhiExposure.exposure")}</th>
                 <th scope="col">{t("risk.nhiExposure.reachability")}</th>
+                <th scope="col">{t("risk.nhiExposure.cloudPath")}</th>
                 <th scope="col">{t("risk.nhiExposure.recommendation")}</th>
               </tr>
             </thead>
@@ -959,6 +1057,7 @@ function NHIExposurePanel({ posture, loading, error }: { posture: NHIExposurePos
                         })
                       : t("risk.nhiExposure.notProbed")}
                   </td>
+                  <td>{finding.attack_path ? <NHIAttackPathValue path={finding.attack_path} /> : t("risk.nhiExposure.pathNotValidated")}</td>
                   <td>{finding.recommendation}</td>
                 </tr>
               ))}

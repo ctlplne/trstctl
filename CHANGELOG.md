@@ -2,6 +2,9 @@
 
 ### Added
 
+- Attack-path validation for exposed NHIs: a cloud network paths source with an AWS account's
+  read-only credentials answers, per public endpoint, whether the account's route tables, network
+  ACLs and security groups admit the internet, and names the resource that decides it.
 - Cloud certificate stores in CA migration runs: a GCP Certificate Manager target that names a
   certificate map entry joins a run with no agent; the control plane installs the successor, reads
   the entry back as the live gate and re-binds the predecessor on rollback. AWS Certificate Manager

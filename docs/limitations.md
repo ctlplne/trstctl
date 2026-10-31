@@ -1437,8 +1437,27 @@ never live in the API process. What you can do end to end against the running bi
     network relay can claim (none with a fresh heartbeat, or `endpoint.verify`
     missing from `agent_channel.claimable_job_kinds`) is refused with `409`
     naming what to fix, rather than left queued. Provider-native attack-path
-    validation (whether a cloud's routes and security groups allow the path) is
-    what comes next.
+    validation is served for AWS (A167): `POST
+    /api/v1/nhi/posture/exposure/attack-paths` (`trstctl-cli nhi posture
+    exposure attack-paths`, discovery:write, idempotent) names a
+    `cloud_network_path` discovery source holding an account's read-only EC2
+    credentials as references, and the control plane asks that account — signed
+    `DescribeNetworkInterfaces`, `DescribeSecurityGroups`, `DescribeRouteTables`
+    and `DescribeNetworkAcls`, nothing else — whether its own configuration
+    admits the internet to each exposed endpoint's public addresses, up to 50
+    endpoints per validation. Each address becomes a finding (`nhi-attack-path`)
+    with its verdict: open (the security group that admits it and the path
+    through the network ACL, route table and internet gateway), blocked by a
+    named route table, network ACL (inbound or the return traffic) or security
+    group, not in the account, or unknown with the reason. A rule that admits a
+    partner range does not make an endpoint internet-reachable; only the
+    internet-wide range decides. The exposure posture shows the latest verdict
+    per record (`attack_path`) and counts validated and open records. Nothing is
+    sent to the endpoints and nothing in the account changes. Proven against an
+    in-repository EC2 stand-in that verifies each request's signature; a live
+    account is Track B. GCP firewall rules and routes, Azure network security
+    groups, and paths through load balancers, NAT or transit gateways are what
+    comes next.
 - Rogue and non-compliant certificate posture:
   `GET /api/v1/revocation/rogue-certificates` and
   `trstctl-cli revocation rogue-certificates` combine unexpected CT findings with

@@ -5401,6 +5401,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/nhi/posture/exposure/attack-paths": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate exposed NHI endpoints against the cloud's own routes, network ACLs and security groups */
+        post: operations["validateNHIAttackPaths"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/nhi/posture/exposure/probe": {
         parameters: {
             query?: never;
@@ -13250,7 +13267,7 @@ export interface components {
             edition: string;
             execution: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             label: string;
             lifecycle: string[];
             permission: string;
@@ -13384,7 +13401,7 @@ export interface components {
             finding_count: number;
             findings_path: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             /** Format: date-time */
             last_discovery_at?: string;
             /** Format: date-time */
@@ -13426,7 +13443,7 @@ export interface components {
             excluded_target_count: number;
             execution: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             normalized_target_count: number;
             normalized_targets?: string[];
             permission: string;
@@ -13568,7 +13585,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             name: string;
             /** Format: uuid */
             tenant_id: string;
@@ -13582,7 +13599,7 @@ export interface components {
         DiscoverySourceRequest: {
             config?: Record<string, never>;
             /** @enum {string} */
-            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
+            kind: "adcs" | "agent" | "api_key" | "cloud_certificate" | "cloud_network_path" | "cloud_secret" | "credential_compromise" | "ct_log" | "drift" | "k8s_ingress_gateway" | "manual" | "network" | "nhi_behavior" | "nhi_cross_surface" | "oauth_grant" | "secret_store" | "service_account" | "ssh" | "ssh_trust";
             name: string;
         };
         DiscoveryUnknown: {
@@ -16314,6 +16331,21 @@ export interface components {
             kind: "no_trust_store_observed" | "no_verification_address" | "no_deployment_target";
             member: string;
         };
+        NHIAttackPathRequest: {
+            inventory_ids?: string[];
+            /** Format: uuid */
+            source_id: string;
+        };
+        NHIAttackPathResult: {
+            endpoints: components["schemas"]["NHIExposureProbeEndpoint"][];
+            omitted: number;
+            /** Format: date-time */
+            requested_at: string;
+            /** Format: uuid */
+            run_id: string;
+            /** Format: uuid */
+            source_id: string;
+        };
         NHIComplianceControl: {
             control_id: string;
             evidence_refs: string[];
@@ -16410,7 +16442,28 @@ export interface components {
             skipped: number;
             total_matched: number;
         };
+        NHIExposureAttackPath: {
+            /** Format: date-time */
+            checked_at: string;
+            endpoints: components["schemas"]["NHIExposureAttackPathAddress"][];
+            /** @enum {string} */
+            status: "open" | "blocked" | "not_in_account" | "unknown";
+        };
+        NHIExposureAttackPathAddress: {
+            address: string;
+            /** @enum {string} */
+            blocked_by?: "route" | "network_acl" | "network_acl_return" | "security_group";
+            /** Format: date-time */
+            checked_at: string;
+            path?: string[];
+            reason?: string;
+            resource?: string;
+            rule?: string;
+            /** @enum {string} */
+            status: "open" | "blocked" | "not_in_account" | "unknown";
+        };
         NHIExposureFinding: {
+            attack_path?: components["schemas"]["NHIExposureAttackPath"];
             auth_mode: string;
             callback_urls: string[];
             display_name: string;
@@ -16492,6 +16545,8 @@ export interface components {
             low: number;
             medium: number;
             missing_network_policy: number;
+            path_open: number;
+            path_validated: number;
             probed: number;
             public_callbacks: number;
             recommendations: number;
@@ -36326,6 +36381,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIExposurePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    validateNHIAttackPaths: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIAttackPathRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIAttackPathResult"];
                 };
             };
             /** @description client error */

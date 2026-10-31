@@ -196,6 +196,9 @@ var discoveryRunExecutors = map[string]discoveryRunExecutor{
 	"network":           (*issuanceDispatcher).executeRelayOwnedDiscoveryRun,
 	"ssh":               (*issuanceDispatcher).executeRelayOwnedDiscoveryRun,
 	"cloud_certificate": (*issuanceDispatcher).executeCloudCertificateDiscoveryRun,
+	// cloud_network_path validates the endpoints the exposure posture names
+	// (A167); its own run only checks the source can be read.
+	orchestrator.AttackPathSourceKind: (*issuanceDispatcher).executeCloudNetworkPathDiscoveryRun,
 	// secret_store routes through the same served secret-manager
 	// connectors as cloud_secret (aws-secrets-manager, gcp-secret-manager,
 	// azure-key-vault, hashicorp-vault): the kinds share the providers
