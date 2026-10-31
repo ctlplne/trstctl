@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5"
+	"trstctl.com/trstctl/internal/store"
 )
 
 func TestSnapshotRestoreRejectsMissingOrForeignTenantRegistration(t *testing.T) {
@@ -49,5 +50,20 @@ func TestSnapshotRestoreRejectsMissingOrForeignTenantRegistration(t *testing.T) 
 				t.Errorf("failed restore lost neighbor: %v", err)
 			}
 		})
+	}
+}
+
+// An ordinary caller's erased flag cannot select a generation for disposal.
+func TestBareSnapshotErasureMarkerCannotDiscardACacheGeneration(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	if count, err := s.WriteReadModelSnapshots(t.Context()); err != nil || count != 2 {
+		t.Fatalf("capture: %d %v", count, err)
+	}
+	if err := s.DiscardErasedSnapshotGeneration(t.Context(), store.ErrSnapshotErased); err == nil {
+		t.Fatal("a bare erased marker selected cache rows")
+	}
+	if count, err := s.SnapshotCount(t.Context()); err != nil || count != 2 {
+		t.Fatalf("rejected marker changed cache: %d %v", count, err)
 	}
 }

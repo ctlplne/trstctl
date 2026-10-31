@@ -323,8 +323,19 @@ even when its retired registration is suppressed on import.
 
 The local protected restore tests use explicit opt-in/manifest fixtures and the
 shipped CA/audit signer child in Mac evaluation mode. Public opt-in controls,
-protected snapshots/managed archives and a complete operator/image replay remain
+managed archives and a complete operator/image replay remain
 under development; see the [offboarding boundary](limitations.md#tenant-offboarding-boundary).
+
+Read-model snapshot format 67 uses 8 MiB ciphertext chunks for opted-in tenants,
+with the exact source cut and complete generation bound into every chunk. Snapshot
+capture catches up first; retained activation without custody and unknown/future
+registrations refuse. Restore validates every payload and owner before SQL
+replacement. A currently erased cache requires full source reconstruction; after
+that succeeds, only that unusable cache generation is discarded. Startup's format
+floor rejects older caches, including v66, and rebuilds from source. The original
+external plaintext or ciphertext artifact is unchanged. Local active/erased cache
+tests are additional recovery evidence, not a public activation or final-image
+operator proof.
 
 Restore a full artifact into a **fresh, empty** event store and a migrated empty
 PostgreSQL instance:

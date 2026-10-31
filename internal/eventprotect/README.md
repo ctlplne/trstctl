@@ -2,8 +2,8 @@
 
 This package supplies protected source bytes and independent tenant-key custody.
 The configured runtime attaches source admission/readers before opening history
-and uses bounded preparation/destruction workers. Public activation, protected
-snapshot/archive integration and the complete operator workflow remain unserved;
+and uses bounded preparation/destruction workers. Public activation, managed-archive
+integration and the complete operator workflow remain unserved;
 component tests do not establish the full opt-in workflow.
 
 The optional `internal/events.WithEventProtection` seam now preserves ciphertext
@@ -154,5 +154,21 @@ SQL paths share this check under the existing custody fence. It proves a current
 erasure floor, not original offboard retention or authenticated source lineage.
 Native isolated full restore continues through catch-up, rebuild and live tail;
 current-custody readiness and neighboring SQL remain intact. Missing/pending or
-changed current identity/receipt/trust still refuses. Public controls, snapshot/
-archive integration and the complete operator workflow remain pending.
+changed current identity/receipt/trust still refuses. Public controls, managed-archive
+integration and the complete operator workflow remain pending.
+
+Configured snapshot format 67 encrypts complete tenant payloads in 8 MiB chunks,
+retaining the 32 MiB event-codec limit and no new total snapshot cutoff. Every chunk
+binds capture/time/cut/tenant/generation/count/order/length. The source adapter
+requires a retained registration and exact at-cut creation; a missing adapter
+cannot disable retained activation. Capture catches up first, and a SQL
+registration beyond the covered cut fails before key access. Restore validates
+all opened arrays and owners before TRUNCATE, wipes buffers, and falls back to
+current-source reconstruction on verified erasure. Only a successful rebuild may
+discard the exact rejected cache UUID through a private generation identity;
+a bare caller-erased marker grants nothing. Older disposable formats, including 66,
+are rejected by the existing startup floor; saved legacy plaintext stays readable.
+Native active and actually erased old-cache recovery preserves the neighbor,
+original signed receipt/creation and saved bytes. Chunk transplant/tamper tests,
+>32 MiB payloads and the native fuzz target cover framing, not public workflow or
+managed WORM/archive qualification. Public controls/operator/image proof remain.

@@ -543,6 +543,15 @@ func TestSnapshotRestoreRejectsASetMissingThePrivacyTarget(t *testing.T) {
 // boundary. Legacy rows have no exact capture-set proof, so even a positive
 // covered_seq is ignored and the zero checkpoint drives a full history replay.
 func TestLegacySnapshotsNeverAdvanceAnUnprovenColdRestore(t *testing.T) {
+	legacySnapshotNeverAdvancesColdRestore(t, 21)
+}
+
+func TestPreProtectionSnapshotsNeverAdvanceAnUnprovenColdRestore(t *testing.T) {
+	legacySnapshotNeverAdvancesColdRestore(t, 66)
+}
+
+func legacySnapshotNeverAdvancesColdRestore(t *testing.T, legacyVersion int) {
+	t.Helper()
 	s := newStore(t)
 	log := openLog(t)
 	ctx := context.Background()
@@ -571,9 +580,9 @@ func TestLegacySnapshotsNeverAdvanceAnUnprovenColdRestore(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := s.SystemPool().Exec(ctx, `UPDATE read_model_snapshots
-		SET format_version = 21,
+		SET format_version = $2,
 		    payload = jsonb_set(payload, '{owners,0,name}', to_jsonb('stale-legacy'::text), false)
-		WHERE tenant_id = $1`, tenantA); err != nil {
+		WHERE tenant_id = $1`, tenantA, legacyVersion); err != nil {
 		t.Fatal(err)
 	}
 

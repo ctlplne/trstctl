@@ -1755,7 +1755,7 @@ unapplied neighbor. A missing original intent cannot authorize signing; an actua
 incomplete backup binding refuses before the recovery callback. Unknown key loss
 and material present despite recorded absence remain errors. This is a local
 lifecycle simulation, not an operating-system process-kill proof. Public operator
-controls, protected snapshot/archive integration and the complete opt-in operator
+controls, managed-archive integration and the complete opt-in operator
 workflow are not served yet.
 
 Local tests cover pre-activation source cuts with CURRENT original custody too:
@@ -1767,7 +1767,7 @@ created. Wrong public trust/creation/reference and incomplete current removal
 refuse. Never-enabled legacy references remain unchanged. These tests require
 the original independent custodian; old plaintext history alone cannot prove a
 later erasure. Its pre-feature data remains readable; the separate full-artifact
-recovery tests below do not prove snapshot or managed-archive integration.
+recovery tests below do not qualify public activation or managed-archive integration.
 
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
@@ -1786,7 +1786,7 @@ plaintext bytes remain unchanged. Active tenants and neighbors round-trip, and
 retired signer-handle denial digests survive without their former ownership.
 These tests use explicit requests and a local manifest-key fixture, with the
 shipped CA/audit signer child in Mac evaluation mode. They do not qualify public
-activation, snapshots, managed WORM archives, production authorization/Linux
+activation, managed WORM archives, production authorization/Linux
 hardening or the final-image operator journey.
 
 Local continuation tests now grow a restored pre-offboard cut beyond its original
@@ -1796,6 +1796,18 @@ Crossing that old numeric position requires independent current lookup matching
 the exact original creation and signed removal; a receipt alone, pending state,
 changed creation, changed receipt or unavailable lookup refuses. This is a current
 erasure floor, not a claim that missing historical controls were reconstructed.
+
+Snapshot format 67 now has local configured-capture and recovery tests. Sensitive
+tenant payloads use bounded ciphertext chunks; never-enabled neighbors keep their
+legacy format. Capture first catches up source, and unknown/future registrations
+or a missing adapter for retained activation refuse. All opened payloads and owners
+are checked before replacement. Active direct cache import and cold-checkpoint boot
+pass. After actual source offboarding and independent key removal, an old cache
+requires source reconstruction; only then is its exact unusable generation removed.
+The neighbor, saved snapshot bytes and original destruction evidence remain intact.
+Formats 21 and 66 cannot advance a cold restore. Pre-feature external plaintext
+copies remain readable. Chunk tampering and authenticated-opening fuzz tests do not
+establish public activation, managed WORM archives or final-image qualification.
 
 That is the limit of what tenant offboarding deletes — it is not a promise that
 the append-only event log or a signed audit archive disappears when a tenant is

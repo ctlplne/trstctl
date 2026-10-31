@@ -1085,7 +1085,7 @@ force. An orphan journal cannot request a signature without its original intent.
 Unexplained missing material still refuses immediately. Recovery does not advance
 the global projection checkpoint: ordinary catch-up must process neighboring events
 before readiness. These are local component tests. Public enable controls,
-snapshot/archive integration and the complete opt-in operator workflow remain
+managed-archive integration and the complete opt-in operator workflow remain
 unavailable.
 
 Local tests also cover a source cut taken before activation. With the original
@@ -1134,6 +1134,25 @@ current material absence for that erased registration when this happens. A
 receipt-only adapter without current identity lookup retains the finite-cut rule.
 This floor grants no signing, key creation, removal or invented source control,
 and does not claim that the old source contains the original offboard event.
+
+Configured snapshot capture now catches the projection up before choosing its
+recorded cut. Snapshot format 67 encrypts an opted-in tenant's complete payload in
+8 MiB chunks, each bound to capture identity/time, source cut, tenant, generation,
+chunk order/count and total length. This framing does not lower the existing
+crypto frame limit or introduce a new total snapshot-size cutoff. Never-enabled
+tenants retain plaintext snapshots; a retained activation with no custody adapter
+refuses. Unknown or newer SQL registrations cannot choose a plaintext fallback.
+
+Restore checks the complete generation and every opened payload's owner before
+replacing rows. Current verified destruction selects source reconstruction; only
+a successful reconstruction allows disposal of that exact unusable cache
+capture. Saved artifact bytes stay unchanged. The startup format floor discards
+older disposable caches and replays source, including format 66; external legacy
+plaintext copies remain readable. Local tests cover active direct cache import,
+cold-checkpoint recovery, real removal, an old cache generation, neighbor readback
+and unchanged original receipt/creation. These use explicit opt-in fixtures and
+the shipped signer child in Mac evaluation mode. Public controls, managed archives
+and the complete operator/image workflow remain under development.
 
 ## Provider workforce identity and customer access
 

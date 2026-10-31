@@ -467,7 +467,7 @@ records. It preserves the recorded removal time, source prefix and checkpoint,
 then ordinary catch-up observes an unapplied neighboring event. Missing original
 intent, unexplained key loss and incomplete backup bindings still refuse; a
 pending-journal read grants no removal or signing authority. Public controls,
-protected snapshot/archive integration and the complete operator journey remain;
+managed-archive integration and the complete operator journey remain;
 this is not a served opt-in workflow.
 
 An older source cut from before activation also has local current-custody tests.
@@ -477,7 +477,7 @@ across rebuild, catch-up and tail. No activation, offboard or key is invented.
 Wrong trust, creation or reference and pending removal refuse. Independent neighbor
 history and later real registrations remain separate. Pre-feature plaintext is
 still readable in the raw old source; this is not retroactive cryptographic erasure
-or snapshot/archive restoration. Current independent custody must remain configured
+or managed-archive restoration. Current independent custody must remain configured
 for this proof.
 
 Signed full-backup tests now preserve protected source bytes and encrypt opted-in
@@ -488,7 +488,7 @@ isolated PostgreSQL restores cover active data, completed erasure, old legacy SQ
 cuts and an unchanged neighbor. A global signer-handle denial remains retired
 without its former owner's private preparation. These use explicit source requests,
 a local manifest-key fixture and the shipped CA/audit signer child in Mac evaluation
-mode; public activation, snapshot/managed-archive integration and the full operator
+mode; public activation, managed-archive integration and the full operator
 workflow remain pending.
 
 A restored pre-offboard cut also has continuation tests through catch-up, rebuild,
@@ -496,6 +496,15 @@ live tail and current-custody readiness after neighbor events cross the original
 offboard ordinal. Exact current creation, signed removal and absence corroborate
 the erased registration; receipt-only evidence still retains the finite-cut rule.
 No historical control, key or removal authority is invented by this read floor.
+
+Configured snapshots now encrypt an opted-in tenant's whole cached read model in
+bounded chunks. Capture identity, source cut, tenant, time and chunk layout are
+bound together. Local real-PostgreSQL tests cover active recovery and old-cache
+recovery after actual independent key removal. Restore checks owners before SQL;
+a verified-erased cache falls back to current source, then only its exact generation
+is discarded. Neighbor data, saved artifact bytes and the original removal receipt
+remain intact. Legacy external plaintext copies stay readable; public activation,
+managed archives and the complete operator workflow are still pending.
 
 An explicit public JWKS file can retain destruction-evidence verification after
 signer rotation. It is loaded independently of data restore, with the same trust

@@ -9830,7 +9830,18 @@ func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.L
 // the tenant's RLS context, so a tenant's snapshot can only ever hold that tenant's
 // rows. It returns the number of tenants snapshotted.
 func (p *Projector) Snapshot(ctx context.Context) (int, error) {
-	return p.store.WriteReadModelSnapshots(ctx)
+	protection, err := p.snapshotProtection(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if protection != nil {
+		// Inline effects can be newer than the global tail checkpoint. Capture
+		// only after normal source catch-up establishes the key's recorded cut.
+		if err := p.ProjectCatchUp(ctx, p.eventProtectionErasurePlanner.Policy.Log); err != nil {
+			return 0, err
+		}
+	}
+	return p.store.WriteReadModelSnapshots(ctx, protection)
 }
 
 // RestoreFromSnapshot rehydrates the read model from the latest snapshots and then
@@ -9915,12 +9926,16 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 					from, replayHead,
 				)
 			}
+			protection, err := p.snapshotProtection(readCtx)
+			if err != nil {
+				return err
+			}
 			if err := p.store.RestoreReadModelTx(readCtx, func(tx pgx.Tx) error {
 				crlReplay, err := newCRLPublicationReplay(readCtx, tx)
 				if err != nil {
 					return err
 				}
-				if _, rerr := p.store.RestoreSnapshotsTx(readCtx, tx); rerr != nil {
+				if _, rerr := p.store.RestoreSnapshotsTx(readCtx, tx, protection); rerr != nil {
 					return rerr
 				}
 				if serr := p.store.SetProjectionCheckpointTx(readCtx, tx, from); serr != nil {
@@ -9959,7 +9974,13 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 			// truth, so fall back to a full rebuild from sequence 0 rather than serving a
 			// partially-restored read model. Rebuild is itself atomic and resets the
 			// checkpoint; we keep handled == true so the caller does not double-catch-up.
-			return p.rebuildWithPrivacyBarrier(ctx, log)
+			if !errors.Is(txErr, store.ErrSnapshotErased) {
+				return p.rebuildWithPrivacyBarrier(ctx, log)
+			}
+			if err := p.rebuildWithPrivacyBarrier(ctx, log); err != nil {
+				return err
+			}
+			return p.store.DiscardErasedSnapshotGeneration(ctx, txErr)
 		}
 		return nil
 	})
