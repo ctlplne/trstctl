@@ -51,6 +51,8 @@ public final class OpenApiSchemas {
       "ADCSComplianceDrift",
       "ADCSComplianceEvidence",
       "ADCSComplianceObservation",
+      "ADCSDatabaseCollectRequest",
+      "ADCSDatabaseCollection",
       "ADCSDatabaseIngest",
       "ADCSDatabaseList",
       "ADCSDatabaseSummary",

@@ -95,3 +95,74 @@ func (s *Store) ListADCSDatabaseSummaries(ctx context.Context, tenantID string) 
 	})
 	return out, err
 }
+
+// ADCSDatabaseCollection is one relay read of a CA database (A162), read from
+// the queued command itself.
+type ADCSDatabaseCollection struct {
+	CollectionID string
+	CAConfig     string
+	AgentID      string
+	// Status is queued, running, collected or failed.
+	Status      string
+	Attempts    int
+	LastError   string
+	RequestedAt time.Time
+	CompletedAt *time.Time
+}
+
+// LockPendingADCSDatabaseCollectionTx serializes reads of one CA and reports
+// whether one is already waiting or running.
+func (s *Store) LockPendingADCSDatabaseCollectionTx(ctx context.Context, tx pgx.Tx, tenantID, caConfig string) (bool, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "adcs-ca-database\x1f"+tenantID+"\x1f"+caConfig); err != nil {
+		return false, err
+	}
+	var pending bool
+	err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+		    SELECT 1 FROM outbox
+		     WHERE tenant_id = $1
+		       AND destination = 'adcs.ca_database'
+		       AND status IN ('pending', 'processing')
+		       AND claim_completed_at IS NULL
+		       AND convert_from(payload, 'UTF8')::jsonb ->> 'ca_config' = $2
+		)`, tenantID, caConfig).Scan(&pending)
+	return pending, err
+}
+
+// ListADCSDatabaseCollections returns the tenant's newest relay reads, newest
+// first, with the status their queued command reached.
+func (s *Store) ListADCSDatabaseCollections(ctx context.Context, tenantID string, limit int) ([]ADCSDatabaseCollection, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	var out []ADCSDatabaseCollection
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'id', ''),
+			        COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'ca_config', ''),
+			        COALESCE(convert_from(payload, 'UTF8')::jsonb ->> 'required_agent_id', ''),
+			        CASE WHEN status = 'delivered' THEN 'collected'
+			             WHEN status = 'failed' THEN 'failed'
+			             WHEN claimed_by_agent_id IS NOT NULL AND claim_completed_at IS NULL THEN 'running'
+			             ELSE 'queued' END,
+			        attempts, COALESCE(last_error, ''), created_at, COALESCE(delivered_at, claim_completed_at)
+			   FROM outbox
+			  WHERE tenant_id = $1 AND destination = 'adcs.ca_database'
+			  ORDER BY id DESC
+			  LIMIT $2`, tenantID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c ADCSDatabaseCollection
+			if err := rows.Scan(&c.CollectionID, &c.CAConfig, &c.AgentID, &c.Status, &c.Attempts,
+				&c.LastError, &c.RequestedAt, &c.CompletedAt); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

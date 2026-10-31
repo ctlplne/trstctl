@@ -425,6 +425,22 @@ export interface ADCSComplianceObservation {
   source_id: string;
 }
 
+export interface ADCSDatabaseCollectRequest {
+  ca_config: string;
+  relay_agent_id: string;
+}
+
+export interface ADCSDatabaseCollection {
+  attempts: number;
+  ca_config: string;
+  collection_id: string;
+  completed_at?: string;
+  last_error?: string;
+  relay_agent_id: string;
+  requested_at?: string;
+  status: "queued" | "running" | "collected" | "failed";
+}
+
 export interface ADCSDatabaseIngest {
   ca_config: string;
   last_error?: string;
@@ -433,6 +449,7 @@ export interface ADCSDatabaseIngest {
 }
 
 export interface ADCSDatabaseList {
+  collections: ADCSDatabaseCollection[];
   guidance: string;
   items: ADCSDatabaseSummary[];
 }

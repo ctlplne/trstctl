@@ -121,6 +121,8 @@ const (
 	EventEdgeIssuanceReconciled = "edge.issuance.reconciled"
 	// F4: one sweep of an AD CS certificate database, summarized by disposition.
 	EventADCSDatabaseIngested = "adcs.ca_database.ingested"
+	// A162: an operator asked one exact relay to read one CA's database.
+	EventADCSDatabaseCollectionRequested = "adcs.ca_database.collection_requested"
 )
 
 // edgeIssuanceCertNamespace derives stable inventory row ids for reconciled
@@ -786,6 +788,16 @@ type ADCSDatabaseIngested struct {
 	RowsRejected int    `json:"rows_rejected"`
 	Source       string `json:"source,omitempty"`
 	LastError    string `json:"last_error,omitempty"`
+}
+
+// ADCSDatabaseCollectionRequested is the payload of
+// adcs.ca_database.collection_requested (A162): the read queued for one exact
+// domain-joined relay. The queued command itself is the outbox row written in
+// the same transaction; the counts arrive later as adcs.ca_database.ingested.
+type ADCSDatabaseCollectionRequested struct {
+	CollectionID string `json:"collection_id"`
+	CAConfig     string `json:"ca_config"`
+	AgentID      string `json:"agent_id"`
 }
 
 // ADCSTemplateDriftObserved is one source/run-bound semantic difference between
@@ -4667,6 +4679,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventEdgeDelegationRevoked:                    {1: true},
 	EventEdgeIssuanceReconciled:                   {1: true},
 	EventADCSDatabaseIngested:                     {1: true},
+	EventADCSDatabaseCollectionRequested:          {1: true},
 	EventOwnershipConflictResolved:                {1: true},
 	EventProviderAccessPolicySet:                  {1: true},
 	EventProviderAccessConsented:                  {1: true},
@@ -5340,6 +5353,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyEnrollmentDiagnosticVerificationQueuedTx(ctx, tx, e.TenantID,
 			pl.DiagnosticID, pl.VerificationEndpointID, pl.ExpectedFingerprint, e.Time, e.Sequence)
+	case EventADCSDatabaseCollectionRequested:
+		// A162: audit evidence of the request; its status is the outbox row
+		// written in the same transaction.
+		return nil
 	case EventADCSDatabaseIngested:
 		var pl ADCSDatabaseIngested
 		if err := decode(e, &pl); err != nil {

@@ -342,8 +342,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A224 adds the certificate export binding/queue/receipt routes.
 	// A225 adds list and removal for named ticket-intake schedules.
 	// A226 adds preview, approval request, start, list and exact read for SSH fleet jobs.
-	if len(out) != 598 {
-		t.Fatalf("OpenAPI operationIds = %d, want 598", len(out))
+	// A162 adds the relay certutil read of a CA database.
+	if len(out) != 599 {
+		t.Fatalf("OpenAPI operationIds = %d, want 599", len(out))
 	}
 	return out
 }

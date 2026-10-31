@@ -86,8 +86,18 @@ func TestServedADCSDatabaseIngestionAndVisibility(t *testing.T) {
 	if err := json.Unmarshal(body, &list); err != nil {
 		t.Fatalf("decode list: %v", err)
 	}
-	if len(list.Items) != 1 || list.Items[0].CAConfig != "DC01\\Corp Issuing CA" ||
-		list.Items[0].Pending != 1 || list.Items[0].Source != "relay-dc01" {
+	// The served tenant is shared with other tests, so read this CA's row; it
+	// must be the only one for this CA.
+	thisCA := func() []int {
+		var at []int
+		for i, item := range list.Items {
+			if item.CAConfig == "DC01\\Corp Issuing CA" {
+				at = append(at, i)
+			}
+		}
+		return at
+	}
+	if at := thisCA(); len(at) != 1 || list.Items[at[0]].Pending != 1 || list.Items[at[0]].Source != "relay-dc01" {
 		t.Fatalf("served visibility = %+v, want the one CA with its pending count and source", list.Items)
 	}
 
@@ -108,7 +118,7 @@ func TestServedADCSDatabaseIngestionAndVisibility(t *testing.T) {
 	if err := json.Unmarshal(body, &list); err != nil {
 		t.Fatal(err)
 	}
-	if len(list.Items) != 1 || list.Items[0].Issued != 1 || list.Items[0].Pending != 0 {
+	if at := thisCA(); len(at) != 1 || list.Items[at[0]].Issued != 1 || list.Items[at[0]].Pending != 0 {
 		t.Fatalf("after re-sweep = %+v, want the latest breakdown (1 issued, 0 pending), not an accumulation", list.Items)
 	}
 }

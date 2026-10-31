@@ -103,6 +103,9 @@ func ClaimableKinds() []string {
 		// I5: the MDM read, for the on-prem Jamf the control plane cannot
 		// reach. Same vantage rules as the CMDB read.
 		KindMDMSync,
+		// A162: the CA database read through certutil on a domain-joined
+		// Windows relay; counts return, rows stay on the relay.
+		KindADCSDatabase,
 		KindTicketSync,
 		KindTrustDistribute,
 		// A71: the post-upgrade functional check; every polling agent answers
@@ -343,6 +346,11 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// in the intent, so it manages its own redemption.
 	if job.Kind == KindMDMSync {
 		return runMDMSync(ctx, ch, client, job)
+	}
+	// A162: certutil runs as the relay's own domain identity; nothing is
+	// redeemed, so the read routes before the credential step.
+	if job.Kind == KindADCSDatabase {
+		return runADCSDatabase(ctx, ch, job)
 	}
 	// I3: ServiceNow ticket intake is the same read-only, JIT-token custody
 	// shape as CMDB sync. The relay observes typed ticket fields; the control

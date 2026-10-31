@@ -228,6 +228,7 @@ export const canonicalCapabilities = [
             "OpenAPI operationId: getDiscoveryRun",
             "OpenAPI operationId: ingestADCSDatabase",
             "OpenAPI operationId: listADCSDatabases",
+            "OpenAPI operationId: collectADCSDatabase",
             "OpenAPI operationId: listCertificates",
             "OpenAPI operationId: listDiscoveryFindings",
             "OpenAPI operationId: listDiscoveryCapabilities",
@@ -257,7 +258,8 @@ export const canonicalCapabilities = [
             "CLI command: discovery findings claim",
             "CLI command: discovery findings dismiss",
             "CLI command: adcs ca-database ingest",
-            "CLI command: adcs ca-database list"
+            "CLI command: adcs ca-database list",
+            "CLI command: adcs ca-database collect"
           ]
         }
       },

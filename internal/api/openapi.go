@@ -6071,9 +6071,24 @@ func componentSchemas() map[string]*Schema {
 		"source":    str(), "last_error": str(),
 	}, "ca_config", "rows")
 	adcsDatabaseListSchema := object(map[string]*Schema{
-		"items":    {Type: "array", Items: ref("ADCSDatabaseSummary")},
-		"guidance": str(),
-	}, "items", "guidance")
+		"items":       {Type: "array", Items: ref("ADCSDatabaseSummary")},
+		"collections": {Type: "array", Items: ref("ADCSDatabaseCollection")},
+		"guidance":    str(),
+	}, "items", "collections", "guidance")
+	adcsDatabaseCollectRequestSchema := object(map[string]*Schema{
+		"ca_config":      {Type: "string", Description: "certsrv's own HOST\\CA-Name identifier for the CA to read"},
+		"relay_agent_id": {Type: "string", Format: "uuid", Description: "The domain-joined network relay that runs certutil"},
+	}, "ca_config", "relay_agent_id")
+	adcsDatabaseCollectionSchema := object(map[string]*Schema{
+		"collection_id":  uuid(),
+		"ca_config":      str(),
+		"relay_agent_id": uuid(),
+		"status":         {Type: "string", Enum: []string{"queued", "running", "collected", "failed"}},
+		"attempts":       {Type: "integer"},
+		"last_error":     str(),
+		"requested_at":   timestamp(),
+		"completed_at":   timestamp(),
+	}, "collection_id", "ca_config", "relay_agent_id", "status", "attempts")
 	ticketIntakeSchema := object(map[string]*Schema{
 		"configured":   {Type: "boolean"},
 		"system":       {Type: "string", Enum: []string{"servicenow", "jira"}},
@@ -8397,6 +8412,8 @@ func componentSchemas() map[string]*Schema {
 		"ADCSDatabaseSummary":                   adcsDatabaseSummarySchema,
 		"ADCSDatabaseIngest":                    adcsDatabaseIngestSchema,
 		"ADCSDatabaseList":                      adcsDatabaseListSchema,
+		"ADCSDatabaseCollectRequest":            adcsDatabaseCollectRequestSchema,
+		"ADCSDatabaseCollection":                adcsDatabaseCollectionSchema,
 		"TicketIntakeSchedule":                  ticketIntakeSchema,
 		"TicketIntakeScheduleList":              object(map[string]*Schema{"items": {Type: "array", Items: ref("TicketIntakeSchedule")}}, "items"),
 		"TicketIntakeInput":                     ticketIntakeInput,

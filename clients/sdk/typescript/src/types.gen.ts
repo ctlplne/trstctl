@@ -711,6 +711,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/adcs/ca-database/collect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask one domain-joined network relay to read a CA database with certutil; only per-disposition counts return */
+        post: operations["collectADCSDatabase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/adcs/ca-database/ingest": {
         parameters: {
             query?: never;
@@ -9309,6 +9326,30 @@ export interface components {
             run_id: string;
             source_id: string;
         };
+        ADCSDatabaseCollectRequest: {
+            /** @description certsrv's own HOST\CA-Name identifier for the CA to read */
+            ca_config: string;
+            /**
+             * Format: uuid
+             * @description The domain-joined network relay that runs certutil
+             */
+            relay_agent_id: string;
+        };
+        ADCSDatabaseCollection: {
+            attempts: number;
+            ca_config: string;
+            /** Format: uuid */
+            collection_id: string;
+            /** Format: date-time */
+            completed_at?: string;
+            last_error?: string;
+            /** Format: uuid */
+            relay_agent_id: string;
+            /** Format: date-time */
+            requested_at?: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "collected" | "failed";
+        };
         ADCSDatabaseIngest: {
             ca_config: string;
             last_error?: string;
@@ -9318,6 +9359,7 @@ export interface components {
             source?: string;
         };
         ADCSDatabaseList: {
+            collections: components["schemas"]["ADCSDatabaseCollection"][];
             guidance: string;
             items: components["schemas"]["ADCSDatabaseSummary"][];
         };
@@ -23010,6 +23052,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ADCSDatabaseList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    collectADCSDatabase: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ADCSDatabaseCollectRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSDatabaseCollection"];
                 };
             };
             /** @description client error */

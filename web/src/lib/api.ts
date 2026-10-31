@@ -106,6 +106,8 @@ import type {
   ADCSModernizeResult as GenADCSModernizeResult,
   ADCSDriftHistory as GenADCSDriftHistory,
   ADCSDatabaseList as GenADCSDatabaseList,
+  ADCSDatabaseCollectRequest as GenADCSDatabaseCollectRequest,
+  ADCSDatabaseCollection as GenADCSDatabaseCollection,
   ADCSTemplate as GenADCSTemplate,
   Agent as GenAgent,
   AgentList as GenAgentList,
@@ -830,6 +832,8 @@ export type ADCSDriftHistory = GenADCSDriftHistory;
 export type ADCSInventorySource = GenADCSInventorySource;
 export type ADCSEnrollmentService = GenADCSEnrollmentService;
 export type ADCSDatabaseList = GenADCSDatabaseList;
+export type ADCSDatabaseCollectRequest = GenADCSDatabaseCollectRequest;
+export type ADCSDatabaseCollection = GenADCSDatabaseCollection;
 export type ADCSTemplate = GenADCSTemplate;
 export type Agent = GenAgent;
 export type AgentList = GenAgentList;
@@ -2147,6 +2151,7 @@ export interface Api {
   modernizeADCSTemplate(input: ADCSModernizeRequest): Promise<ADCSModernizeResult>;
   /** F4: per-CA certificate-database lifecycle visibility. */
   adcsDatabases(): Promise<ADCSDatabaseList>;
+  collectADCSDatabase(input: ADCSDatabaseCollectRequest): Promise<ADCSDatabaseCollection>;
   discoveryCoverage(options?: { class?: string; sourceKind?: string }): Promise<DiscoveryCoverage>;
   driftRemediation(options?: DiscoveryDashboardPageOptions): Promise<DriftRemediation>;
   decideDriftRemediation(id: string, input: DriftRemediationDecisionRequest): Promise<DriftRemediationDecision>;
@@ -2938,6 +2943,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewADCSModernize: (input) => postRead<ADCSModernizePlan>("/api/v1/posture/adcs/templates/modernize/preview", input),
   modernizeADCSTemplate: (input) => mutate<ADCSModernizeResult>("POST", "/api/v1/posture/adcs/templates/modernize", input),
   adcsDatabases: () => req<ADCSDatabaseList>("/api/v1/adcs/ca-database"),
+  collectADCSDatabase: (input) => mutate<ADCSDatabaseCollection>("POST", "/api/v1/adcs/ca-database/collect", input),
   discoveryCoverage: (options) => {
     const qs = new URLSearchParams();
     if (options?.class) qs.set("class", options.class);

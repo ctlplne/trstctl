@@ -880,6 +880,23 @@ glossary: [certificate](../glossary.md), [fingerprint](../glossary.md),
 **Covers:** F1, F2, F3, F42, F49, F35, F36
 
 
+### Read an AD CS CA database
+
+The Posture page's AD CS certificate database panel shows each CA's
+certificates by disposition: issued, pending a CA manager's approval, revoked,
+denied and failed. **Read with certutil** asks one domain-joined network relay
+to read a CA by certsrv's `HOST\CA-Name` identifier. The relay runs certutil as
+its own domain identity and returns only the counts; no subject, requester or
+certificate leaves it. The panel lists recent reads with their status (queued,
+running, collected, failed) and a failed read's reason; a failed read keeps the
+previous counts. Run the relay on a domain-joined Windows host with
+`--relay-claim` (certutil is `certutil.exe` unless `--adcs-certutil` names
+another path) and enable `adcs.ca_database` in
+`agent_channel.claimable_job_kinds`. Automation uses `POST
+/api/v1/adcs/ca-database/collect` with `ca_config` and `relay_agent_id`
+(`discovery:write`) or `trstctl adcs ca-database collect -f read.json`, and
+`GET /api/v1/adcs/ca-database` for the counts and reads.
+
 ### Modernize an AD CS template
 
 Each row of the AD CS template grid has a **Modernize** action. Its effect-free

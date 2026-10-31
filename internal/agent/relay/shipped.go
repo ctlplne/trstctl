@@ -248,6 +248,14 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// A162: the CA database read. certutil runs on a domain-joined
+			// Windows relay as the relay's own identity; only per-disposition
+			// counts return.
+			Kind:  KindADCSDatabase,
+			Flags: []string{"--relay-claim", "--adcs-certutil"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			// I3: ServiceNow ticket intake. Only mapped request fields return;
 			// the bearer token is redeemed for this one attempt.
 			Kind:  KindTicketSync,

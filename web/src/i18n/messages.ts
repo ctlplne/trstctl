@@ -15633,6 +15633,75 @@ export const messages = {
     defaultMessage: "Secret",
     description: "Global search result kind label.",
   },
+  "adcs.database.collect.ca": {
+    defaultMessage: "CA (HOST\\CA-Name)",
+    description: "A162: the certsrv CA identifier certutil reads.",
+  },
+  "adcs.database.collect.relay": {
+    defaultMessage: "Domain-joined relay",
+    description: "A162: the network relay that runs certutil.",
+  },
+  "adcs.database.collect.relayChoose": {
+    defaultMessage: "Choose a network relay",
+    description: "A162: empty relay choice.",
+  },
+  "adcs.database.collect.submit": {
+    defaultMessage: "Read with certutil",
+    description: "A162: queues the read on the chosen relay.",
+  },
+  "adcs.database.collect.help": {
+    defaultMessage:
+      "The relay runs certutil as its own domain identity and returns only counts by disposition; no subject, requester or certificate leaves it. Run the relay with --relay-claim on a domain-joined Windows host.",
+    description: "A162: what the read does and needs.",
+  },
+  "adcs.database.collect.failed": {
+    defaultMessage: "The read could not be queued",
+    description: "A162: collect error fallback.",
+  },
+  "adcs.database.collect.queued": {
+    defaultMessage: "A read of {ca} is queued for the relay.",
+    description: "A162: collect success.",
+  },
+  "adcs.database.collect.reads": {
+    defaultMessage: "Relay reads",
+    description: "A162: heading of the recent reads list.",
+  },
+  "adcs.database.collect.colCA": {
+    defaultMessage: "CA",
+    description: "A162: reads column.",
+  },
+  "adcs.database.collect.colRelay": {
+    defaultMessage: "Relay",
+    description: "A162: reads column.",
+  },
+  "adcs.database.collect.colStatus": {
+    defaultMessage: "Status",
+    description: "A162: reads column.",
+  },
+  "adcs.database.collect.colRequested": {
+    defaultMessage: "Requested",
+    description: "A162: reads column.",
+  },
+  "adcs.database.collect.colDetail": {
+    defaultMessage: "Detail",
+    description: "A162: reads column (the relay's reason for a failed read).",
+  },
+  "adcs.database.collect.statusQueued": {
+    defaultMessage: "Queued",
+    description: "A162: read status.",
+  },
+  "adcs.database.collect.statusRunning": {
+    defaultMessage: "Running",
+    description: "A162: read status.",
+  },
+  "adcs.database.collect.statusCollected": {
+    defaultMessage: "Collected",
+    description: "A162: read status.",
+  },
+  "adcs.database.collect.statusFailed": {
+    defaultMessage: "Failed",
+    description: "A162: read status.",
+  },
   "adcs.issuerHealth.heading": {
     defaultMessage: "AD CS issuers",
     description: "A161: heading of the AD CS issuer health panel.",

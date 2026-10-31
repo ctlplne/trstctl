@@ -117,6 +117,9 @@ var agentJobKindAllowlist = map[string]bool{
 	// I3: relay-executed ServiceNow ticket observation. Request creation stays
 	// in the control plane; the bearer token and network call do not.
 	agentJobKindTicketSync: true,
+	// A162: relay-executed AD CS CA database read. Counts return; rows stay
+	// on the domain-joined relay.
+	relay.KindADCSDatabase: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -978,6 +981,11 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket result receiver is not configured")
 		}
 		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindADCSDatabase:
+		if a.recordADCSDatabase == nil {
+			return errors.New("CA database result receiver is not configured")
+		}
+		return a.recordADCSDatabase(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
@@ -1271,6 +1279,11 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	}
 	if claim.Destination == relay.KindConnectorRightSize {
 		permanent, terminalReason = true, "right_size_failed"
+	}
+	// A162: a failed CA database read is answered with the relay's reason, not
+	// retried; the operator fixes the relay or the CA and reads again.
+	if claim.Destination == relay.KindADCSDatabase {
+		permanent = true
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on
 	// any later attempt; requeueing it would claim the same job forever.

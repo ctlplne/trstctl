@@ -579,6 +579,30 @@ ADCSComplianceObservation = TypedDict(
     total=False,
 )
 
+ADCSDatabaseCollectRequest = TypedDict(
+    'ADCSDatabaseCollectRequest',
+    {
+        'ca_config': str,
+        'relay_agent_id': str,
+    },
+    total=False,
+)
+
+ADCSDatabaseCollection = TypedDict(
+    'ADCSDatabaseCollection',
+    {
+        'attempts': int,
+        'ca_config': str,
+        'collection_id': str,
+        'completed_at': str,
+        'last_error': str,
+        'relay_agent_id': str,
+        'requested_at': str,
+        'status': str,
+    },
+    total=False,
+)
+
 ADCSDatabaseIngest = TypedDict(
     'ADCSDatabaseIngest',
     {
@@ -593,6 +617,7 @@ ADCSDatabaseIngest = TypedDict(
 ADCSDatabaseList = TypedDict(
     'ADCSDatabaseList',
     {
+        'collections': list[dict[str, Any]],
         'guidance': str,
         'items': list[dict[str, Any]],
     },

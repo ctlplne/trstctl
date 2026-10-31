@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/aimodel"
 	"trstctl.com/trstctl/internal/discovery"
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
@@ -765,6 +766,9 @@ func (o *Orchestrator) DiscoveryNetworkRelayReadinessForJob(ctx context.Context,
 				ConnectionOrigin: "Selected network relay has no fresh authenticated heartbeat",
 				BlockedReason:    "Restore the selected network relay's authenticated heartbeat or re-enroll its expired certificate before starting this source.",
 			}, nil
+		}
+		if jobKind == relay.KindADCSDatabase && !nestedADCSReaderReady(agent, staleBefore, futureLimit, jobKind) {
+			return DiscoveryRelayReadiness{ConnectionOrigin: "Selected relay has not advertised the CA database reader", BlockedReason: "Run the selected relay on a domain-joined Windows host with --relay-claim and certutil (--adcs-certutil), and restore its authenticated executor census, before reading a CA database."}, nil
 		}
 		if (jobKind == adcsdiscovery.NestedGroupsJobKind || jobKind == adcsdiscovery.EndpointProbeJobKind) && !nestedADCSReaderReady(agent, staleBefore, futureLimit, jobKind) {
 			return DiscoveryRelayReadiness{ConnectionOrigin: "Selected relay has not advertised the enabled AD CS reader", BlockedReason: "Upgrade the selected network relay, enable --relay-claim and restore its authenticated executor census for " + jobKind + " before starting this source."}, nil

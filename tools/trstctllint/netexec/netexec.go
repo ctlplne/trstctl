@@ -171,6 +171,16 @@ var reviewedExecUses = map[string]map[string]bool{
 	"cmd/trstctl-agent/sshtrust.go": {
 		"runCommandLine": true,
 	},
+	// A162's AD CS work on a domain-joined Windows relay runs certutil. The
+	// binary is the relay operator's --adcs-certutil (certutil.exe by default)
+	// and never comes from a job; every argv entry is a fixed action flag or a
+	// value validated as one non-option argument (the certsrv CA identifier);
+	// no shell is involved, output is bounded, and only counts leave the relay.
+	// Pinned by TestReviewedExecAllowlistPinsADCSCertutil; the relay tests pin
+	// the exact argv.
+	"internal/agent/relay/adcsdatabase.go": {
+		"readCertutilView": true,
+	},
 	"internal/ca/shellca/shellca.go": {
 		"run": true,
 	},

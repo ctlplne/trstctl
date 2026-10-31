@@ -2,6 +2,10 @@
 
 ### Added
 
+- AD CS CA database reads through a relay: a domain-joined network relay runs certutil against one
+  CA as its own domain identity and returns only per-disposition counts (issued, pending, revoked,
+  denied, failed), queued from the Posture panel, the API or the CLI; a failed read shows the relay's
+  reason and keeps the previous counts.
 - AD CS issuer health: `GET /api/v1/adcs/issuers/health` (CLI `trstctl adcs issuers health`, console
   Posture → AD CS issuers) reports healthy, degraded, failing or idle for each AD CS issuer from its
   recorded issuances and diagnosed refusals, with the latest cause and remediation. AD CS template

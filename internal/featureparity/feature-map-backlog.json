@@ -382,6 +382,7 @@
                 "getDiscoveryRun",
                 "ingestADCSDatabase",
                 "listADCSDatabases",
+                "collectADCSDatabase",
                 "listCertificates",
                 "listDiscoveryFindings",
                 "listDiscoveryCapabilities",
@@ -427,6 +428,7 @@
                 "discovery findings remove-distrusted-root",
                 "adcs ca-database ingest",
                 "adcs ca-database list",
+                "adcs ca-database collect",
                 "posture adcs modernize-preview",
                 "posture adcs modernize"
             ],
@@ -676,6 +678,7 @@
                             "OpenAPI operationId: getDiscoveryRun",
                             "OpenAPI operationId: ingestADCSDatabase",
                             "OpenAPI operationId: listADCSDatabases",
+                            "OpenAPI operationId: collectADCSDatabase",
                             "OpenAPI operationId: listCertificates",
                             "OpenAPI operationId: listDiscoveryFindings",
                             "OpenAPI operationId: listDiscoveryCapabilities",
@@ -705,7 +708,8 @@
                             "CLI command: discovery findings claim",
                             "CLI command: discovery findings dismiss",
                             "CLI command: adcs ca-database ingest",
-                            "CLI command: adcs ca-database list"
+                            "CLI command: adcs ca-database list",
+                            "CLI command: adcs ca-database collect"
                         ]
                     }
                 },

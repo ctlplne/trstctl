@@ -87,6 +87,7 @@ func main() {
 	inventoryBrowserTrustRoots := flag.String("inventory-browser-trust-roots", "", "comma-separated browser profile export files/directories whose public CA certificates the agent inventories")
 	inventoryPrivateKeyRoots := flag.String("inventory-private-key-roots", "", "comma-separated directories whose private-key material the agent locates and classifies without sending key bytes")
 	relayClaim := flag.Bool("relay-claim", false, "claim certificate lifecycle jobs allowed by this agent's enrolled roles: host agents execute destinations assigned to their agent ID using --host-exec-profile; network agents execute appliance work in their segment. Off by default; enable deliberately because jobs may redeem credentials")
+	adcsCertutil := flag.String("adcs-certutil", relay.CertutilPath, "path of certutil.exe for AD CS CA database reads on a domain-joined Windows relay (A162): the relay runs it as its own domain identity and returns per-disposition counts only. Defaults to certutil.exe on Windows; empty disables the reads")
 	upgradePublisherKeyFile := flag.String("upgrade-publisher-key", "", "path to the upgrade publisher's Ed25519 public key (PEM) this agent pins (A68): with it set, a campaign artifact must carry that publisher's signature over its sha256 or the agent refuses to stage it; empty keeps the pinned sha256 as the only integrity control")
 	selfUpgrade := flag.Bool("self-upgrade", false, "claim this agent's own agent.upgrade jobs from staged rollout campaigns (epic A5): download the campaign's artifact for this platform, verify its sha256, swap the binary, and restart. Off by default because it replaces this executable — the control-plane operator starts the campaign, but replacing the binary on THIS machine is this machine's operator's decision. The previous binary is kept beside it as .old")
 	hostExecProfile := flag.String("host-exec-profile", "", "path to this host's connector exec profile: the operator-owned allowlist of directories a deploy may write and commands it may run (epic D1). A file rather than flags, because it is the boundary that stops a compromised control plane running arbitrary commands here — and because it describes THIS machine's paths and binaries. Without it the agent claims no file/reload deploys")
@@ -456,6 +457,7 @@ func main() {
 		inventoryWindowsStores:            splitList(*inventoryWindowsStores),
 		inventoryWindowsLocation:          strings.TrimSpace(*inventoryWindowsLocation),
 		relayClaim:                        *relayClaim,
+		adcsCertutil:                      strings.TrimSpace(*adcsCertutil),
 		selfUpgrade:                       *selfUpgrade,
 		upgradePublisherKeyFile:           strings.TrimSpace(*upgradePublisherKeyFile),
 		workloadAPISocket:                 *workloadAPISocket,
@@ -596,6 +598,9 @@ type agentOptions struct {
 	// wipe. Off by default because it moves live credential material onto this
 	// host, which is an operator's decision to make explicitly.
 	relayClaim bool
+	// adcsCertutil is the certutil a domain-joined Windows relay runs for AD
+	// CS CA database reads (A162); empty refuses them.
+	adcsCertutil string
 	// selfUpgrade lets this agent claim its own agent.upgrade jobs (A5). Off
 	// by default for the same reason relayClaim is: replacing this binary is
 	// this machine's operator's decision, made here, not implied by a
@@ -718,6 +723,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 	if o.deployFailureLog != "" && !o.relayClaim {
 		return errors.New("--deploy-failure-log requires --relay-claim")
 	}
+	relay.CertutilPath = o.adcsCertutil
 	var relayClient *http.Client
 	var relayCAStatus func() *transport.RelayCABundleReport
 	if o.relayClaim {
@@ -1652,6 +1658,7 @@ const hostProfileErrorLimit = 512
 func executorCensus(o agentOptions, relayCAStatus func() *transport.RelayCABundleReport) *transport.ExecutorReport {
 	set := map[string]bool{
 		"--relay-claim":     o.relayClaim,
+		"--adcs-certutil":   o.adcsCertutil != "",
 		"--ssh-trust-fleet": o.sshTrust.fleet, "--ssh-trust-confirm": o.sshTrust.confirm, "--ssh-trust-ca-key": o.sshTrust.caKeyPath != "", "--ssh-trust-reload-cmd": o.sshTrust.reloadCmd != "", "--ssh-trust-health-cmd": o.sshTrust.healthCmd != "",
 		"--host-exec-profile": o.hostExecProfile != "",
 		"--host-rollback-dir": o.hostRollbackDir != "",

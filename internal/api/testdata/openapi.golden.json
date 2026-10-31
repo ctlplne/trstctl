@@ -1785,6 +1785,70 @@
         ],
         "type": "object"
       },
+      "ADCSDatabaseCollectRequest": {
+        "properties": {
+          "ca_config": {
+            "description": "certsrv's own HOST\\CA-Name identifier for the CA to read",
+            "type": "string"
+          },
+          "relay_agent_id": {
+            "description": "The domain-joined network relay that runs certutil",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ca_config",
+          "relay_agent_id"
+        ],
+        "type": "object"
+      },
+      "ADCSDatabaseCollection": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "ca_config": {
+            "type": "string"
+          },
+          "collection_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "completed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "relay_agent_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "collected",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "collection_id",
+          "ca_config",
+          "relay_agent_id",
+          "status",
+          "attempts"
+        ],
+        "type": "object"
+      },
       "ADCSDatabaseIngest": {
         "properties": {
           "ca_config": {
@@ -1814,6 +1878,12 @@
       },
       "ADCSDatabaseList": {
         "properties": {
+          "collections": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSDatabaseCollection"
+            },
+            "type": "array"
+          },
           "guidance": {
             "type": "string"
           },
@@ -1826,6 +1896,7 @@
         },
         "required": [
           "items",
+          "collections",
           "guidance"
         ],
         "type": "object"
@@ -47716,6 +47787,74 @@
         ],
         "summary": "Per-CA certificate-database lifecycle visibility: issued, pending approval, revoked, denied, failed",
         "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/adcs/ca-database/collect": {
+      "post": {
+        "operationId": "collectADCSDatabase",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADCSDatabaseCollectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSDatabaseCollection"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Ask one domain-joined network relay to read a CA database with certutil; only per-disposition counts return",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/adcs/ca-database/ingest": {

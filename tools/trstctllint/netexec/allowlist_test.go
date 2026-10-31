@@ -222,3 +222,10 @@ func TestReviewedExecAllowlistPinsNTLMHelper(t *testing.T) {
 		t.Fatalf("ee/enterpriseauth/ntlm.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}
 }
+
+func TestReviewedExecAllowlistPinsADCSCertutil(t *testing.T) {
+	want := map[string]bool{"readCertutilView": true}
+	if got := reviewedExecUses["internal/agent/relay/adcsdatabase.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal/agent/relay/adcsdatabase.go reviewed exec allowlist = %#v, want %#v", got, want)
+	}
+}

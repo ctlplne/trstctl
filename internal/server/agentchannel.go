@@ -323,6 +323,9 @@ type agentService struct {
 	// recordMDMSync turns a relay's MDM observation into device correlation
 	// (I5). The control plane has no MDM poll path.
 	recordMDMSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
+	// recordADCSDatabase records a relay's CA database counts (A162). The
+	// control plane never reads a CA database itself.
+	recordADCSDatabase func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
 	// recordTicketSync turns mapped ServiceNow/Jira fields into issuance requests;
 	// it runs before the job is closed so a projection failure remains retryable.
 	recordTicketSync func(ctx context.Context, tenantID, agent, idempotencyKey string, payload []byte, report string) error
