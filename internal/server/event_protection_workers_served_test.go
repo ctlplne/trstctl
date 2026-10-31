@@ -169,7 +169,7 @@ func TestEventProtectionRuntimeExecutesPreparationAndDestructionOnBoundedWorkers
 	if _, err := os.Stat(keyFile); err != nil {
 		t.Fatalf("key removed before original retention deadline: %v", err)
 	}
-	wait("signed key destruction", func() bool {
+	wait("signed key destruction and intent cleanup", func() bool {
 		life, err := custody.policy.LatestLifetime(t.Context(), tenant)
 		if err != nil {
 			t.Fatal(err)
@@ -184,7 +184,7 @@ func TestEventProtectionRuntimeExecutesPreparationAndDestructionOnBoundedWorkers
 		if err != nil || !erased || receipt != life.Completion.JWS {
 			t.Fatalf("source completion lacks independent signed absence: %v", err)
 		}
-		return eventKeyDeliverySettled(t, st, tenant, store.EventKeyDestructionOutboxKey(destruction.OperationID), true)
+		return eventKeyDestructionIntentAbsent(t, st, tenant, store.EventKeyDestructionOutboxKey(destruction.OperationID))
 	})
 	receipt, erased, err := custody.custody.DestructionReceipt(t.Context(), ref)
 	if err != nil || !erased || receipt == "" {
@@ -208,6 +208,7 @@ func TestEventProtectionRuntimeExecutesPreparationAndDestructionOnBoundedWorkers
 	if _, err := st.GetTenant(t.Context(), tenant); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatal("completion recreated the removed tenant")
 	}
+	eventKeyAssertNoTenantSQLResidue(t, st, tenant)
 }
 
 // The same selected boxes also execute through the bounded shutdown drain;
@@ -267,6 +268,10 @@ func TestEventProtectionRuntimePreparesAndDestroysThroughDrain(t *testing.T) {
 	if err != nil || !erased || receipt != life.Completion.JWS {
 		t.Fatalf("drain completion lacks independent signed absence: %v", err)
 	}
+	if !eventKeyDestructionIntentAbsent(t, st, tenant, store.EventKeyDestructionOutboxKey(life.Completion.Claims.Request.OperationID)) {
+		t.Fatal("causal drain left completed destruction intent")
+	}
+	eventKeyAssertNoTenantSQLResidue(t, st, tenant)
 }
 
 // Observe operational settlement as well as immutable source publication. A
@@ -287,4 +292,39 @@ func eventKeyDeliverySettled(t *testing.T, st *store.Store, tenant, idempotency 
 		t.Fatal(err)
 	}
 	return settled
+}
+
+// Read-only independent SQL observations, without invoking deletion as a probe.
+func eventKeyDestructionIntentAbsent(t *testing.T, st *store.Store, tenant, idempotency string) bool {
+	t.Helper()
+	var exists bool
+	err := st.WithTenant(t.Context(), tenant, func(tx pgx.Tx) error {
+		return tx.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM outbox WHERE tenant_id=$1 AND idempotency_key=$2)`, tenant, idempotency).Scan(&exists)
+	})
+	if store.IsBusy(err) {
+		return false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return !exists
+}
+
+func eventKeyAssertNoTenantSQLResidue(t *testing.T, st *store.Store, tenant string) {
+	t.Helper()
+	if err := st.WithTenant(t.Context(), tenant, func(tx pgx.Tx) error {
+		for _, table := range store.TenantScopedTables {
+			var count int
+			query := `SELECT count(*) FROM ` + pgx.Identifier{table}.Sanitize() + ` WHERE tenant_id=$1`
+			if err := tx.QueryRow(t.Context(), query, tenant).Scan(&count); err != nil {
+				return err
+			}
+			if count != 0 {
+				t.Errorf("completed protected offboard retained %d rows in %s", count, table)
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 }

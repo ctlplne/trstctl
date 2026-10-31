@@ -73,7 +73,9 @@ The authority writes a durable removal intent before deleting the key. It
 syncs the tenant directory, reads back absence, records the removal time, then
 signs that complete evidence under its own artifact domain. A retry after
 signer failure resumes the journal. Completed retries return the first signed
-receipt. `ErrDestroyed` requires a verified receipt and observed key absence;
+receipt. The delivery cleanup sweep separately verifies that retained completion
+and current absence before deleting a finalized operational intent. It grants no
+new removal or signing authority and leaves immutable source records intact. `ErrDestroyed` requires a verified receipt and observed key absence;
 unexplained loss or unsigned removal returns a custody error instead.
 
 This backend proves logical removal from its configured software custody. It

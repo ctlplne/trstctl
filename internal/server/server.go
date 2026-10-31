@@ -4590,6 +4590,11 @@ func (s *Server) Drain(ctx context.Context) error {
 					allQuiet = false
 				}
 			}
+			// A pooled cleanup may predate these drain worker states. Its own
+			// non-queued sweep must finish before this barrier can report quiet.
+			if s.eventKeyDelivery != nil && s.eventKeyDelivery.cleanup.Active() {
+				allQuiet = false
+			}
 			stateMu.Unlock()
 			if dispatchErr != nil {
 				cancel()

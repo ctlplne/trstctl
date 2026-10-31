@@ -1734,8 +1734,9 @@ an omission reason, with explicit console copy; legacy audit behavior stays inta
 Preparation and exact post-delete destruction now have local tests through the
 assembled bounded dispatcher and shutdown drain, with independent key readback,
 signed removal and a preserved neighbor. Ordinary outbox drains exclude their
-queues. Public operator controls, settled-intent cleanup, interrupted-journal
-restart recovery, protected backup/archive
+queues. Finalized intents now have bounded source/current-custody-verified cleanup,
+with actual all-catalog SQL-zero, prior pooled-worker drain and invalid-page checks.
+Public operator controls, interrupted-journal restart recovery, protected backup/archive
 artifacts and complete erasure-aware restore are not served yet.
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;

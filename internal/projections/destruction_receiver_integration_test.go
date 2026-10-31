@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -26,11 +27,13 @@ import (
 )
 
 type destructionReceiverSignerFixture struct {
-	key  *jose.SigningKey
-	fail atomic.Bool
+	key   *jose.SigningKey
+	fail  atomic.Bool
+	calls atomic.Int64
 }
 
 func (s *destructionReceiverSignerFixture) SignArtifact(kind string, data []byte) (string, error) {
+	s.calls.Add(1)
 	if s.fail.Load() {
 		return "", errors.New("fixture signer interrupted after removal")
 	}
@@ -55,7 +58,7 @@ func (c expiringDestructionCustody) WithCustodyFence(ctx context.Context, ref ev
 // generic delivery finalization. The local signing transport fixture does not
 // qualify the isolated production signer, runtime assembly or operator routes.
 func TestDestructionReceiverRetainsClearanceAcrossRemovalAndSignatureInterruption(t *testing.T) {
-	for _, mode := range []string{"normal", "signature-interrupted", "completion-interrupted", "completion-sql-rollback", "claim-expired-before-removal", "new-registration-before-destruction", "older-source-cut-current-receipt"} {
+	for _, mode := range []string{"normal", "signature-interrupted", "completion-interrupted", "completion-sql-rollback", "claim-expired-before-removal", "new-registration-before-destruction", "older-source-cut-current-receipt", "cleanup-page-after-unverified"} {
 		t.Run(mode, func(t *testing.T) { runDestructionReceiverFixture(t, mode) })
 	}
 }
@@ -163,6 +166,22 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	}
 	if _, err := record(actor, events.Event{TenantID: tenantB, Type: projections.EventTenantRegistered, Data: tenantRegistered("B")}); err != nil {
 		t.Fatal(err)
+	}
+	var unverifiedCleanupIDs []int64
+	if mode == "cleanup-page-after-unverified" {
+		if err := s.WithTenant(t.Context(), tenantB, func(tx pgx.Tx) error {
+			for i := 0; i < 16; i++ {
+				var id int64
+				if err := tx.QueryRow(t.Context(), `INSERT INTO outbox(tenant_id,destination,effect_lane,payload,idempotency_key,required_agent_role,status,delivered_at)
+      VALUES($1,$2,$2,$3,$4,'control_plane','delivered',clock_timestamp()) RETURNING id`, tenantB, store.EventKeyDestructionDestination, []byte(`{}`), fmt.Sprintf("unverified-cleanup-fixture-%d", i)).Scan(&id); err != nil {
+					return err
+				}
+				unverifiedCleanupIDs = append(unverifiedCleanupIDs, id)
+			}
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
 	}
 	requested, err := eventprivacy.NewRequested(tenantA, registration.ID, 3*time.Second)
 	if err != nil {
@@ -329,7 +348,7 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 	if worked, err := box.DispatchOneScoped(actor, handler, scope); err != nil || !worked {
 		t.Fatalf("first destruction: worked=%v err=%v", worked, err)
 	}
-	if mode != "normal" && mode != "new-registration-before-destruction" && mode != "older-source-cut-current-receipt" {
+	if mode != "normal" && mode != "new-registration-before-destruction" && mode != "older-source-cut-current-receipt" && mode != "cleanup-page-after-unverified" {
 		life, found, err := policy.LifetimeForKey(t.Context(), request.Ref)
 		if err != nil || !found || life.HoldClearance == nil {
 			t.Fatalf("interruption lost public clearance: %v", err)
@@ -507,16 +526,36 @@ func runDestructionReceiverFixture(t *testing.T, mode string) {
 			t.Fatal("valid signed source without current independent receipt granted settlement")
 		}
 	}
-	if err := s.WithTenant(t.Context(), tenantA, func(tx pgx.Tx) error {
-		return completionVerifier.WithVerifiedCompletion(t.Context(), completion, func(verified context.Context, command eventprotect.DestructionRequest) error {
-			removed, err := s.RemoveSettledEventKeyDestructionTx(verified, tx, command)
-			if err == nil && !removed {
-				t.Fatal("generic delivery did not finalize before cleanup")
-			}
-			return err
-		})
-	}); err != nil {
+	headBeforeCleanup, err := log.LastSequence(t.Context())
+	if err != nil {
 		t.Fatal(err)
+	}
+	signaturesBeforeCleanup := remote.calls.Load()
+	cleanup := &eventprivacy.DestructionCleanup{Store: s, Policy: *policy, Custody: keys}
+	if mode == "cleanup-page-after-unverified" {
+		removed, err := cleanup.Run(t.Context())
+		if err == nil || removed != 0 {
+			t.Fatal("unverified delivered rows were treated as destruction evidence")
+		}
+	}
+	removed, err := cleanup.Run(t.Context())
+	if err != nil || removed != 1 {
+		t.Fatalf("exact finalized intent not cleaned independently: removed=%d err=%v", removed, err)
+	}
+	headAfterCleanup, err := log.LastSequence(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if headAfterCleanup != headBeforeCleanup || remote.calls.Load() != signaturesBeforeCleanup {
+		t.Fatal("operational cleanup appended source or requested a new signature")
+	}
+	if mode == "cleanup-page-after-unverified" {
+		var count int
+		if err := s.WithTenant(t.Context(), tenantB, func(tx pgx.Tx) error {
+			return tx.QueryRow(t.Context(), `SELECT count(*) FROM outbox WHERE tenant_id=$1 AND id=ANY($2::bigint[])`, tenantB, unverifiedCleanupIDs).Scan(&count)
+		}); err != nil || count != 16 {
+			t.Fatalf("cleanup altered unverified neighbor intents: count=%d err=%v", count, err)
+		}
 	}
 	if newPrivate.ID != "" {
 		next, err := policy.LatestLifetime(t.Context(), tenantA)

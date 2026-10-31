@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/eventprivacy"
@@ -15,6 +16,7 @@ import (
 // The normal and post-delete boxes never share a service-admission callback.
 // Family selection is shared by live ticks and the causal shutdown drain.
 type eventKeyDelivery struct {
+	cleanup           *eventprivacy.DestructionCleanup
 	preparationOutbox *orchestrator.Outbox
 	preparation       orchestrator.Handler
 	destruction       orchestrator.Handler
@@ -35,6 +37,7 @@ func (s *Server) configureEventKeyDelivery(d Deps, orch *orchestrator.Orchestrat
 	box := s.newEventKeyOutbox(d, d.Store.RequireEventKeyDestructionService)
 
 	s.eventKeyDelivery = &eventKeyDelivery{
+		cleanup:           &eventprivacy.DestructionCleanup{Store: d.Store, Policy: runtime.policy, Custody: runtime.custody},
 		preparationOutbox: prepBox,
 		preparation: orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
 			claim, err := parseEventKeyPreparationMessage(message)
@@ -68,7 +71,12 @@ func (s *Server) dispatchOutboxFamily(ctx context.Context, family outboxDispatch
 		if s.eventKeyDelivery == nil {
 			return 0, nil
 		}
-		return s.eventKeyDelivery.destructionOutbox.DispatchScoped(ctx, s.eventKeyDelivery.destruction, family.scope)
+		delivered, deliveryErr := s.eventKeyDelivery.destructionOutbox.DispatchScoped(ctx, s.eventKeyDelivery.destruction, family.scope)
+		removed, cleanupErr := s.eventKeyDelivery.cleanup.Run(ctx)
+		if cleanupErr != nil && !errors.Is(cleanupErr, context.Canceled) {
+			slog.Warn("event-key cleanup remains pending", "class", "event_key_cleanup_unverified")
+		}
+		return delivered + removed, errors.Join(deliveryErr, cleanupErr)
 	default:
 		return 0, errors.New("server: unknown event-key delivery family")
 	}

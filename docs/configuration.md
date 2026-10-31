@@ -1058,8 +1058,11 @@ committed invocation plus retained offboard, retention and hold authority.
 `bulkheads.outbox_event_key_preparation` and
 `bulkheads.outbox_event_key_destruction` accept `workers` and `queue`, inheriting
 `bulkheads.outbox` when omitted. A custom embedded pool set using custody must
-supply both independent pools. Public enable controls, complete interruption
-recovery, protected artifacts and full erasure-aware restore remain unavailable.
+supply both independent pools. A bounded sweep removes finalized minimal intents
+only after rechecking retained signed completion and current independent absence.
+It uses the same worker family and shutdown barrier; a delivered row alone grants
+no cleanup. Public enable controls, interrupted-journal startup recovery, protected
+artifacts and full erasure-aware restore remain unavailable.
 
 ## Provider workforce identity and customer access
 

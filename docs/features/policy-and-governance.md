@@ -449,8 +449,11 @@ never triggers key regeneration. Operator activation and the complete erasure-aw
 required before the opt-in feature is available. The assembled workers have local
 live-dispatch and shutdown-drain tests: preparation independently reads its key;
 post-delete delivery verifies retained authority, deadline and signed removal.
-Ordinary drains cannot claim either queue. Public controls, settled-intent and
-interruption recovery and the full backup/restore journey are
+Ordinary drains cannot claim either queue. Finalized intent cleanup rechecks the
+signed source and current custody before removing one exact operational row.
+Local tests cover zero tenant SQL residue, blocked prior-worker shutdown, invalid
+candidate paging and preservation of a later registration. Public controls,
+interrupted-journal startup recovery and the full backup/restore journey are
 still required; this is not a served opt-in workflow.
 An explicit public JWKS file can retain destruction-evidence verification after
 signer rotation. It is loaded independently of data restore, with the same trust
