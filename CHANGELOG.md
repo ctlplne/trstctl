@@ -2,6 +2,10 @@
 
 ### Added
 
+- Revoke a rogue certificate at its issuer: a certificate found in Certificate Transparency (for
+  example one issued in your own vendor account outside trstctl) is revoked by serial at the
+  external CA you name, and the finding shows revoked once the CA confirms; inventory findings
+  revoke through the exact revocation.
 - Upstream revocation for DigiCert, Sectigo, Venafi, AWS Private CA, Google CAS and step-ca: a revoke
   through trstctl reaches the vendor's API with the reason, the certificate shows revoked in
   inventory, and a retry changes nothing; the issuer capability matrix now shows revoke for each.

@@ -385,8 +385,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A225 adds list and removal for named ticket-intake schedules.
 	// A226 adds five SSH trust-fleet commands.
 	// A162 adds `adcs ca-database collect`.
-	if len(out) != 661 {
-		t.Fatalf("CLI commands = %d, want 661", len(out))
+	// A163 adds `revocation rogue-certificates revoke`.
+	if len(out) != 662 {
+		t.Fatalf("CLI commands = %d, want 662", len(out))
 	}
 	return out
 }

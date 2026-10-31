@@ -15,6 +15,7 @@ const { apiMock } = vi.hoisted(() => ({
     rogueCertificates: vi.fn(),
     revocationHealth: vi.fn(),
     submitCertificateTransparency: vi.fn(),
+    externalCAs: vi.fn(),
   },
 }));
 
@@ -46,6 +47,7 @@ describe("inventory search", () => {
     apiMock.rogueCertificates.mockReset();
     apiMock.revocationHealth.mockReset();
     apiMock.submitCertificateTransparency.mockReset();
+    apiMock.externalCAs.mockReset().mockResolvedValue([]);
   });
 
   it("filters the certificate inventory as you type", async () => {

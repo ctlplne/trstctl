@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { formatNumber as formatNumberPolicy } from "@/i18n/format";
 import type { MessageKey } from "@/i18n/messages";
-import { api, type RogueCertificatePosture } from "@/lib/api";
+import { api, type ExternalCA, type RogueCertificatePosture } from "@/lib/api";
 import { newIdempotencyKey } from "@/lib/apiTransport";
+import { ROGUE_REVOCATION_REASONS, RogueIssuerRevocationCell, type RogueRevocationReason } from "./RogueIssuerRevocation";
 
 // The rogue-certificate panel of the Certificates page (A43 takedown lives
 // here). Split out of Certificates.tsx by workflow so the served-file budget
@@ -94,6 +96,15 @@ export function RogueCertificatePanel({ posture }: { posture: RogueCertificatePo
   const [takedownReason, setTakedownReason] = useState("");
   const [takedownBusy, setTakedownBusy] = useState<string | null>(null);
   const [takedownResult, setTakedownResult] = useState<string | null>(null);
+  // A163: revoke at the issuer, with an RFC 5280 reason.
+  const [revocationReason, setRevocationReason] = useState<RogueRevocationReason | "">("");
+  const [authorities, setAuthorities] = useState<ExternalCA[]>([]);
+  useEffect(() => {
+    api
+      .externalCAs()
+      .then(setAuthorities)
+      .catch(() => setAuthorities([]));
+  }, []);
   const takedown = async (fingerprint: string, targetId: string, targetName: string) => {
     if (!fingerprint || !takedownReason.trim() || takedownBusy) return;
     setTakedownBusy(targetId);
@@ -138,6 +149,19 @@ export function RogueCertificatePanel({ posture }: { posture: RogueCertificatePo
           />
         </label>
       )}
+      {findings.length > 0 && (
+        <label className="mt-3 grid gap-1 text-sm">
+          <span className="text-muted-foreground">{t("certificates.rogue.revokeReason")}</span>
+          <Select value={revocationReason} onChange={(event) => setRevocationReason(event.target.value as RogueRevocationReason | "")}>
+            <option value="">{t("certificates.rogue.revokeReasonChoose")}</option>
+            {ROGUE_REVOCATION_REASONS.map((reason) => (
+              <option key={reason} value={reason}>
+                {t(`certificates.rogue.reason.${reason}`)}
+              </option>
+            ))}
+          </Select>
+        </label>
+      )}
       {takedownResult && <output className="mt-2 block font-mono text-xs text-muted-foreground">{takedownResult}</output>}
       {findings.length === 0 ? (
         <p className="mt-4 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">{t("certificates.rogue.empty")}</p>
@@ -164,6 +188,9 @@ export function RogueCertificatePanel({ posture }: { posture: RogueCertificatePo
                 </th>
                 <th scope="col" className="pl-4 pb-2 font-medium">
                   {t("certificates.rogue.columnInstalledOn")}
+                </th>
+                <th scope="col" className="pl-4 pb-2 font-medium">
+                  {t("certificates.rogue.columnIssuer")}
                 </th>
               </tr>
             </thead>
@@ -232,6 +259,9 @@ export function RogueCertificatePanel({ posture }: { posture: RogueCertificatePo
                     ) : (
                       <span className="text-xs text-muted-foreground">{t("certificates.rogue.installedNone")}</span>
                     )}
+                  </td>
+                  <td className="pl-4 py-2 align-top">
+                    <RogueIssuerRevocationCell finding={finding} reason={revocationReason} authorities={authorities} onDone={setTakedownResult} />
                   </td>
                 </tr>
               ))}

@@ -1718,6 +1718,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventEdgeIssuanceReconciled, 1}:                                             privacyPayloadShape[EdgeIssuanceReconciled](),
 		{EventADCSDatabaseIngested, 1}:                                               privacyPayloadShape[ADCSDatabaseIngested](),
 		{EventADCSDatabaseCollectionRequested, 1}:                                    privacyPayloadShape[ADCSDatabaseCollectionRequested](),
+		{EventRogueCertificateRevocationRequested, 1}:                                privacyPayloadShape[RogueCertificateRevocationRequested](),
+		{EventRogueCertificateRevokedAtIssuer, 1}:                                    privacyPayloadShape[RogueCertificateRevokedAtIssuer](),
 		{EventADCSInventoryObserved, 1}:                                              privacyPayloadShape[adcsdiscovery.InventoryObservedV1](),
 		{EventADCSInventoryObserved, 2}:                                              privacyPayloadShape[adcsdiscovery.InventoryObservedV2](),
 		{EventADCSInventoryObserved, adcsdiscovery.InventoryMembershipSchemaVersion}: privacyPayloadShape[adcsdiscovery.InventoryObservedV3](),

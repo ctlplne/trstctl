@@ -157,7 +157,7 @@ current-custody readiness and neighboring SQL remain intact. Missing/pending or
 changed current identity/receipt/trust still refuses. Public controls, managed-archive
 integration and the complete operator workflow remain pending.
 
-Configured snapshot format 67 encrypts complete tenant payloads in 8 MiB chunks,
+Configured snapshot formats 67 and later encrypt complete tenant payloads in 8 MiB chunks,
 retaining the 32 MiB event-codec limit and no new total snapshot cutoff. Every chunk
 binds capture/time/cut/tenant/generation/count/order/length. The source adapter
 requires a retained registration and exact at-cut creation; a missing adapter

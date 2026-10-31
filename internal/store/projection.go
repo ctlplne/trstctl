@@ -827,6 +827,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"edge_segment_policies", "edge_delegations", "edge_issuances",
 	// F4: projected from adcs.ca_database.ingested.
 	"adcs_ca_databases",
+	// A163: projected from rogue.certificate.revocation_requested /
+	// rogue.certificate.revoked_at_issuer.
+	"rogue_certificate_revocations",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",

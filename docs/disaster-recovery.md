@@ -332,7 +332,7 @@ shipped CA/audit signer child in Mac evaluation mode. Public opt-in controls,
 managed archives and a complete operator/image replay remain
 under development; see the [offboarding boundary](limitations.md#tenant-offboarding-boundary).
 
-Read-model snapshot format 67 uses 8 MiB ciphertext chunks for opted-in tenants,
+Read-model snapshot formats 67 and later use 8 MiB ciphertext chunks for opted-in tenants,
 with the exact source cut and complete generation bound into every chunk. Snapshot
 capture catches up first; retained activation without custody and unknown/future
 registrations refuse. Restore validates every payload and owner before SQL

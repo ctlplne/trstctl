@@ -7124,6 +7124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/revocation/rogue-certificates/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke a rogue certificate found in Certificate Transparency at the external CA that issued it, by serial */
+        post: operations["revokeRogueCertificateAtIssuer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/revocation/rogue-certificates/takedown": {
         parameters: {
             query?: never;
@@ -18713,6 +18730,7 @@ export interface components {
             id: string;
             installed_on?: components["schemas"]["RogueInstalledTarget"][];
             issuer?: string;
+            issuer_revocation?: components["schemas"]["RogueIssuerRevocation"];
             /** @enum {string} */
             kind: "rogue_certificate" | "non_compliant_certificate";
             lifetime_days?: number;
@@ -18765,6 +18783,14 @@ export interface components {
             recommended_actions: string[];
             summary: components["schemas"]["RogueCertificateSummary"];
         };
+        RogueCertificateRevokeRequest: {
+            /** @description The external CA that issued the certificate; it must revoke by serial */
+            authority_id: string;
+            /** Format: uuid */
+            discovery_id: string;
+            /** @description An RFC 5280 revocation reason, for example keyCompromise or superseded */
+            reason: string;
+        };
         RogueCertificateSummary: {
             critical: number;
             ct_unexpected: number;
@@ -18798,6 +18824,21 @@ export interface components {
             /** Format: uuid */
             target_id: string;
             target_name: string;
+        };
+        RogueIssuerRevocation: {
+            attempts: number;
+            authority_id: string;
+            /** Format: uuid */
+            discovery_id: string;
+            last_error?: string;
+            reason: string;
+            /** Format: date-time */
+            requested_at?: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            serial: string;
+            /** @enum {string} */
+            status: "queued" | "revoked" | "failed";
         };
         Role: {
             /** @description true for a role the tenant defined */
@@ -41496,6 +41537,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RogueCertificatePosture"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeRogueCertificateAtIssuer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RogueCertificateRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RogueIssuerRevocation"];
                 };
             };
             /** @description client error */

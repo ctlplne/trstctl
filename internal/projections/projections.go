@@ -123,6 +123,9 @@ const (
 	EventADCSDatabaseIngested = "adcs.ca_database.ingested"
 	// A162: an operator asked one exact relay to read one CA's database.
 	EventADCSDatabaseCollectionRequested = "adcs.ca_database.collection_requested"
+	// A163: a rogue certificate found in CT, revoked at the CA that issued it.
+	EventRogueCertificateRevocationRequested = "rogue.certificate.revocation_requested"
+	EventRogueCertificateRevokedAtIssuer     = "rogue.certificate.revoked_at_issuer"
 )
 
 // edgeIssuanceCertNamespace derives stable inventory row ids for reconciled
@@ -798,6 +801,29 @@ type ADCSDatabaseCollectionRequested struct {
 	CollectionID string `json:"collection_id"`
 	CAConfig     string `json:"ca_config"`
 	AgentID      string `json:"agent_id"`
+}
+
+// RogueCertificateRevocationRequested is the payload of
+// rogue.certificate.revocation_requested (A163): one CT finding's certificate,
+// by serial, to be revoked at one external authority. The revocation.publish
+// outbox row written in the same transaction carries it to the authority.
+type RogueCertificateRevocationRequested struct {
+	DiscoveryID string `json:"discovery_id"`
+	AuthorityID string `json:"authority_id"`
+	Serial      string `json:"serial"`
+	Reason      string `json:"reason"`
+	ReasonCode  int    `json:"reason_code"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+}
+
+// RogueCertificateRevokedAtIssuer is the payload of
+// rogue.certificate.revoked_at_issuer: the authority confirmed the revocation
+// the named request asked for.
+type RogueCertificateRevokedAtIssuer struct {
+	DiscoveryID    string `json:"discovery_id"`
+	AuthorityID    string `json:"authority_id"`
+	RequestEventID string `json:"request_event_id"`
+	Serial         string `json:"serial"`
 }
 
 // ADCSTemplateDriftObserved is one source/run-bound semantic difference between
@@ -4680,6 +4706,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventEdgeIssuanceReconciled:                   {1: true},
 	EventADCSDatabaseIngested:                     {1: true},
 	EventADCSDatabaseCollectionRequested:          {1: true},
+	EventRogueCertificateRevocationRequested:      {1: true},
+	EventRogueCertificateRevokedAtIssuer:          {1: true},
 	EventOwnershipConflictResolved:                {1: true},
 	EventProviderAccessPolicySet:                  {1: true},
 	EventProviderAccessConsented:                  {1: true},
@@ -5357,6 +5385,22 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		// A162: audit evidence of the request; its status is the outbox row
 		// written in the same transaction.
 		return nil
+	case EventRogueCertificateRevocationRequested:
+		var pl RogueCertificateRevocationRequested
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyRogueCertificateRevocationRequestedTx(ctx, tx, store.RogueCertificateRevocation{
+			TenantID: e.TenantID, DiscoveryID: pl.DiscoveryID, AuthorityID: pl.AuthorityID, RequestEventID: e.ID,
+			Serial: pl.Serial, Reason: pl.Reason, RequestedAt: e.Time,
+		}, e.Sequence)
+	case EventRogueCertificateRevokedAtIssuer:
+		var pl RogueCertificateRevokedAtIssuer
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyRogueCertificateRevokedAtIssuerTx(ctx, tx, e.TenantID, pl.DiscoveryID, pl.AuthorityID,
+			pl.RequestEventID, e.Time, e.Sequence)
 	case EventADCSDatabaseIngested:
 		var pl ADCSDatabaseIngested
 		if err := decode(e, &pl); err != nil {

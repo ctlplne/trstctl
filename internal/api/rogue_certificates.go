@@ -126,10 +126,13 @@ type rogueCertificateFinding struct {
 	// or restored it on by rollback (an adopted predecessor, A45),
 	// and the remediation each can execute (A43): host_purge through the
 	// enrolled agent, appliance_takedown through a network relay, or none.
-	InstalledOn  []rogueInstalledTarget `json:"installed_on,omitempty"`
-	DiscoveredAt *time.Time             `json:"discovered_at,omitempty"`
-	NotBefore    *time.Time             `json:"not_before,omitempty"`
-	NotAfter     *time.Time             `json:"not_after,omitempty"`
+	InstalledOn []rogueInstalledTarget `json:"installed_on,omitempty"`
+	// IssuerRevocation is a CT finding's newest revocation at the CA that
+	// issued it (A163).
+	IssuerRevocation *rogueIssuerRevocationResponse `json:"issuer_revocation,omitempty"`
+	DiscoveredAt     *time.Time                     `json:"discovered_at,omitempty"`
+	NotBefore        *time.Time                     `json:"not_before,omitempty"`
+	NotAfter         *time.Time                     `json:"not_after,omitempty"`
 }
 
 func (a *API) listRogueCertificates(w http.ResponseWriter, r *http.Request) {
@@ -234,6 +237,9 @@ func (a *API) rogueCertificatePosture(ctx context.Context, tenantID string) (rog
 	}
 
 	if err := a.attachRogueInstalledTargets(ctx, tenantID, out.Findings); err != nil {
+		return rogueCertificatePostureResponse{}, err
+	}
+	if err := a.attachRogueIssuerRevocations(ctx, tenantID, out.Findings); err != nil {
 		return rogueCertificatePostureResponse{}, err
 	}
 

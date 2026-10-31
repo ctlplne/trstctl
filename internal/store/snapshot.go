@@ -205,7 +205,10 @@ import (
 // Version 66 carries approved SSH fleet rollouts and each host receipt.
 // Version 67 binds optional tenant ciphertext chunks to complete capture metadata.
 // Older readers must replay source rather than interpret absent private arrays.
-const SnapshotFormatVersion = 67
+// Version 68 carries A163's rogue certificate revocations at their issuers; an
+// older snapshot has none, and restoring it would truncate them while its
+// covered offset skipped the events that recorded them.
+const SnapshotFormatVersion = 68
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -264,6 +267,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"edge_segment_policies", "edge_delegations", "edge_issuances",
 	// Format 17: the F4 AD CS certificate-database summary, same pairing.
 	"adcs_ca_databases",
+	// Format 68: A163's rogue certificate revocations at their issuers.
+	"rogue_certificate_revocations",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -583,6 +588,7 @@ SELECT jsonb_build_object(
   'ca_rollover_drafts', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM ca_rollover_drafts t),
   'agent_role_grants', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_role_grants t),
   'kmip_clients', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM kmip_clients t),
+  'rogue_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM rogue_certificate_revocations t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

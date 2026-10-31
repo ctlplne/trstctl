@@ -343,8 +343,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A225 adds list and removal for named ticket-intake schedules.
 	// A226 adds preview, approval request, start, list and exact read for SSH fleet jobs.
 	// A162 adds the relay certutil read of a CA database.
-	if len(out) != 599 {
-		t.Fatalf("OpenAPI operationIds = %d, want 599", len(out))
+	// A163 adds revoking a rogue certificate at its issuer.
+	if len(out) != 600 {
+		t.Fatalf("OpenAPI operationIds = %d, want 600", len(out))
 	}
 	return out
 }

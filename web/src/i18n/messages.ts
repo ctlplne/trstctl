@@ -9010,6 +9010,78 @@ export const messages = {
     defaultMessage: "queue Certificate Transparency submission",
     description: "Action phrase used in CT submission error messages.",
   },
+  "certificates.rogue.columnIssuer": {
+    defaultMessage: "At the issuer",
+    description: "A163: column holding the revoke-at-issuer action and its state.",
+  },
+  "certificates.rogue.revokeReason": {
+    defaultMessage: "Revocation reason",
+    description: "A163: reason picker for revoking a rogue certificate at its issuer.",
+  },
+  "certificates.rogue.revokeReasonChoose": {
+    defaultMessage: "Choose a reason",
+    description: "A163: empty reason choice.",
+  },
+  "certificates.rogue.reason.keyCompromise": {
+    defaultMessage: "Key compromise",
+    description: "A163: RFC 5280 reason.",
+  },
+  "certificates.rogue.reason.superseded": {
+    defaultMessage: "Superseded",
+    description: "A163: RFC 5280 reason.",
+  },
+  "certificates.rogue.reason.cessationOfOperation": {
+    defaultMessage: "Cessation of operation",
+    description: "A163: RFC 5280 reason.",
+  },
+  "certificates.rogue.reason.affiliationChanged": {
+    defaultMessage: "Affiliation changed",
+    description: "A163: RFC 5280 reason.",
+  },
+  "certificates.rogue.reason.privilegeWithdrawn": {
+    defaultMessage: "Privilege withdrawn",
+    description: "A163: RFC 5280 reason.",
+  },
+  "certificates.rogue.reason.unspecified": {
+    defaultMessage: "Unspecified",
+    description: "A163: RFC 5280 reason.",
+  },
+  "certificates.rogue.revokeAtIssuer": {
+    defaultMessage: "Revoke at issuer",
+    description: "A163: revokes the certificate at the CA that issued it.",
+  },
+  "certificates.rogue.issuerAuthority": {
+    defaultMessage: "Issuing CA",
+    description: "A163: the external CA a CT finding is revoked at.",
+  },
+  "certificates.rogue.issuerChoose": {
+    defaultMessage: "Choose the CA that issued it",
+    description: "A163: empty authority choice.",
+  },
+  "certificates.rogue.issuerNone": {
+    defaultMessage: "Not revocable here",
+    description: "A163: a finding with neither a certificate nor a CT serial.",
+  },
+  "certificates.rogue.issuerQueued": {
+    defaultMessage: "Revocation queued at {authority}",
+    description: "A163: the revocation is waiting for the CA.",
+  },
+  "certificates.rogue.issuerRevoked": {
+    defaultMessage: "Revoked at {authority}",
+    description: "A163: the CA confirmed the revocation.",
+  },
+  "certificates.rogue.issuerFailed": {
+    defaultMessage: "Revocation at {authority} failed",
+    description: "A163: the delivery stopped retrying.",
+  },
+  "certificates.rogue.issuerQueuedResult": {
+    defaultMessage: "Revocation queued at {authority}.",
+    description: "A163: result line after queuing a CT finding's revocation.",
+  },
+  "certificates.rogue.issuerInventoryResult": {
+    defaultMessage: "Revocation: {queued} queued, {revoked} revoked, {failed} failed.",
+    description: "A163: result line after revoking an inventory certificate.",
+  },
   "certificates.rogue.typeCustomerPolicy": {
     defaultMessage: "Tenant policy: {rule}",
     description: "Finding type label for a certificate_posture rule from the tenant's active policy module.",

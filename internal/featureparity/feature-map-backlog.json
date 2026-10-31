@@ -4949,6 +4949,7 @@
                 "submitCertificateTransparency",
                 "listRogueCertificates",
                 "takedownRogueCertificate",
+                "revokeRogueCertificateAtIssuer",
                 "listRevocationHealth",
                 "probeRevocationHealth",
                 "listRevocationCaches"
@@ -4966,6 +4967,7 @@
                 "revocation ct-submit",
                 "revocation rogue-certificates",
                 "revocation rogue-certificates takedown",
+                "revocation rogue-certificates revoke",
                 "identities compromise-preview",
                 "identities compromise",
                 "identities compromise-status",

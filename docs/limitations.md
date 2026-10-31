@@ -1471,9 +1471,23 @@ never live in the API process. What you can do end to end against the running bi
   rogue-certificates takedown`) queues that removal with a reason; an appliance
   object the target still serves is reported `takedown_bound` and left in place
   until it is re-bound, and only `taken_down` or `purged` claims removal.
-  Provider-native revocation remains separate; targets trstctl never delivered
-  to, CT-only findings and cloud or FortiGate/PAN-OS targets have no executable
-  takedown.
+  **Provider-native revocation of rogue certificates is served** (A163): a
+  Certificate Transparency finding — for example a certificate issued in the
+  tenant's own vendor account outside trstctl — can be revoked at the external
+  CA the operator names, by serial (`POST
+  /api/v1/revocation/rogue-certificates/revoke`, `trstctl-cli revocation
+  rogue-certificates revoke`, or **Revoke at issuer** on the Certificates
+  page). Only authorities whose revocation addresses a serial take it
+  (digicert, sectigo, awspca, gcpcas, smallstep, ejbca, vaultpki); Venafi needs
+  the certificate's thumbprint, ACME its bytes (part 3's N10) and AD CS its
+  relay, so those are refused. The request is an event plus a
+  `revocation.publish` delivery; the finding reads revoked at the issuer only
+  after the authority confirms, a redelivery calls it no second time, and a
+  serial the authority never issued stays unconfirmed with its reason. A rogue
+  certificate already in inventory is revoked through the exact revocation,
+  which reaches its recorded issuer. Proven against the DigiCert protocol
+  stand-in; live vendor accounts are Track B. Targets trstctl never delivered
+  to and cloud or FortiGate/PAN-OS targets still have no executable takedown.
 - Compliance and inventory reporting: `GET /api/v1/compliance/inventory-report`
   and `trstctl-cli compliance inventory-report` return the CAP-OBS-02 reporting
   view (frameworks, report types, routes, evidence refs, inventory counts, tenant

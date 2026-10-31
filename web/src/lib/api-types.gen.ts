@@ -8711,6 +8711,7 @@ export interface RogueCertificateFinding {
   id: string;
   installed_on?: RogueInstalledTarget[];
   issuer?: string;
+  issuer_revocation?: RogueIssuerRevocation;
   kind: "rogue_certificate" | "non_compliant_certificate";
   lifetime_days?: number;
   log_index?: number;
@@ -8748,6 +8749,12 @@ export interface RogueCertificatePosture {
   summary: RogueCertificateSummary;
 }
 
+export interface RogueCertificateRevokeRequest {
+  authority_id: string;
+  discovery_id: string;
+  reason: string;
+}
+
 export interface RogueCertificateSummary {
   critical: number;
   ct_unexpected: number;
@@ -8780,6 +8787,18 @@ export interface RogueInstalledTarget {
   note?: string;
   target_id: string;
   target_name: string;
+}
+
+export interface RogueIssuerRevocation {
+  attempts: number;
+  authority_id: string;
+  discovery_id: string;
+  last_error?: string;
+  reason: string;
+  requested_at?: string;
+  revoked_at?: string;
+  serial: string;
+  status: "queued" | "revoked" | "failed";
 }
 
 export interface Role {

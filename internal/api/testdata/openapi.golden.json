@@ -36507,6 +36507,9 @@
           "issuer": {
             "type": "string"
           },
+          "issuer_revocation": {
+            "$ref": "#/components/schemas/RogueIssuerRevocation"
+          },
           "kind": {
             "enum": [
               "rogue_certificate",
@@ -36700,6 +36703,28 @@
         ],
         "type": "object"
       },
+      "RogueCertificateRevokeRequest": {
+        "properties": {
+          "authority_id": {
+            "description": "The external CA that issued the certificate; it must revoke by serial",
+            "type": "string"
+          },
+          "discovery_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reason": {
+            "description": "An RFC 5280 revocation reason, for example keyCompromise or superseded",
+            "type": "string"
+          }
+        },
+        "required": [
+          "discovery_id",
+          "authority_id",
+          "reason"
+        ],
+        "type": "object"
+      },
       "RogueCertificateSummary": {
         "properties": {
           "critical": {
@@ -36822,6 +36847,54 @@
           "target_name",
           "connector",
           "model"
+        ],
+        "type": "object"
+      },
+      "RogueIssuerRevocation": {
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "authority_id": {
+            "type": "string"
+          },
+          "discovery_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "revoked",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "discovery_id",
+          "authority_id",
+          "serial",
+          "reason",
+          "status",
+          "attempts"
         ],
         "type": "object"
       },
@@ -74872,6 +74945,74 @@
         ],
         "summary": "List rogue and non-compliant certificate detection findings",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/revocation/rogue-certificates/revoke": {
+      "post": {
+        "operationId": "revokeRogueCertificateAtIssuer",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RogueCertificateRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RogueIssuerRevocation"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke a rogue certificate found in Certificate Transparency at the external CA that issued it, by serial",
+        "x-trstctl-permission": "identities:write"
       }
     },
     "/api/v1/revocation/rogue-certificates/takedown": {

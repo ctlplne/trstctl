@@ -247,6 +247,9 @@ var TenantScopedTables = []string{
 	"edge_segment_policies",
 	// F4: the AD CS certificate-database summary, a per-CA projection.
 	"adcs_ca_databases",
+	// A163: rogue certificates revoked at their issuers, per finding and
+	// authority; no foreign keys.
+	"rogue_certificate_revocations",
 	// Asset overrides reference owners through a composite tenant FK.
 	"ownership_assignments",
 	"owners",

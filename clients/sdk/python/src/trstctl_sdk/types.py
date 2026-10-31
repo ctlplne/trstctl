@@ -12039,6 +12039,7 @@ RogueCertificateFinding = TypedDict(
         'id': str,
         'installed_on': list[dict[str, Any]],
         'issuer': str,
+        'issuer_revocation': dict[str, Any],
         'kind': str,
         'lifetime_days': int,
         'log_index': int,
@@ -12078,6 +12079,16 @@ RogueCertificatePosture = TypedDict(
         'read_limited': bool,
         'recommended_actions': list[str],
         'summary': dict[str, Any],
+    },
+    total=False,
+)
+
+RogueCertificateRevokeRequest = TypedDict(
+    'RogueCertificateRevokeRequest',
+    {
+        'authority_id': str,
+        'discovery_id': str,
+        'reason': str,
     },
     total=False,
 )
@@ -12124,6 +12135,22 @@ RogueInstalledTarget = TypedDict(
         'note': str,
         'target_id': str,
         'target_name': str,
+    },
+    total=False,
+)
+
+RogueIssuerRevocation = TypedDict(
+    'RogueIssuerRevocation',
+    {
+        'attempts': int,
+        'authority_id': str,
+        'discovery_id': str,
+        'last_error': str,
+        'reason': str,
+        'requested_at': str,
+        'revoked_at': str,
+        'serial': str,
+        'status': str,
     },
     total=False,
 )

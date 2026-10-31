@@ -873,6 +873,19 @@ certificates, over-long public-TLS lifetimes, and missing owners/issuer metadata
 metadata and projection references only, never certificate PEM or private-key
 material.
 
+**Revoke a rogue certificate at its issuer.** On the Certificates page, choose a
+revocation reason and use **Revoke at issuer** on a finding. A certificate in
+inventory goes through the exact revocation, which reaches its recorded issuer.
+A Certificate Transparency finding — a certificate trstctl never asked for, such
+as one issued in your own vendor account outside trstctl — is revoked by serial
+at the external CA you name; only CAs whose revocation takes a serial are
+offered (DigiCert, Sectigo, AWS Private CA, Google CAS, step-ca, EJBCA, Vault
+PKI). The finding then shows the revocation queued, and revoked once the CA
+confirms; a CA that has no certificate with that serial leaves it unconfirmed
+with the reason. Automation uses `POST /api/v1/revocation/rogue-certificates/revoke`
+with `discovery_id`, `authority_id` and `reason` (`identities:write` plus
+`certs:issue`), or `trstctl-cli revocation rogue-certificates revoke -f req.json`.
+
 ### Where the private key lives: HSM/KMS (F26)
 
 A CA's private key is the system's single most valuable secret — anyone who has it can

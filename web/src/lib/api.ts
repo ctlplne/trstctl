@@ -514,8 +514,11 @@ import type {
   RemediationPlaybookRunRequest,
   ResponseIntegrationDispatch,
   ResponseIntegrationDispatchRequest,
+  RogueCertificateFinding,
   RogueCertificatePosture,
+  RogueCertificateRevokeRequest,
   RogueCertificateTakedownRequest,
+  RogueIssuerRevocation,
   Role,
   RoleList,
   TenantCustomRoleRequest,
@@ -1402,7 +1405,10 @@ export type {
   RemediationPlaybookRunRequest,
   ResponseIntegrationDispatch,
   ResponseIntegrationDispatchRequest,
+  RogueCertificateFinding,
   RogueCertificatePosture,
+  RogueCertificateRevokeRequest,
+  RogueIssuerRevocation,
   Role,
   RoleList,
   TenantCustomRoleRequest,
@@ -1964,6 +1970,7 @@ export interface Api {
   probeRevocationHealth(idempotencyKey?: string): Promise<RevocationProbeNow>;
   rogueCertificates(): Promise<RogueCertificatePosture>;
   takedownRogueCertificate(input: RogueCertificateTakedownRequest, idempotencyKey?: string): Promise<ConnectorDelivery>;
+  revokeRogueCertificateAtIssuer(input: RogueCertificateRevokeRequest, idempotencyKey?: string): Promise<RogueIssuerRevocation>;
   submitCertificateTransparency(input: CTSubmissionRequest): Promise<CTSubmission>;
   ctMonitoring(options?: DiscoveryDashboardPageOptions): Promise<CTMonitoring>;
   /** C4: whether the configured authorities agree. Licensed; 402/403 when not entitled. */
@@ -2765,6 +2772,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   probeRevocationHealth: (idempotencyKey) => mutate<RevocationProbeNow>("POST", "/api/v1/revocation/health/probe", {}, idempotencyKey),
   rogueCertificates: () => req<RogueCertificatePosture>("/api/v1/revocation/rogue-certificates"),
   takedownRogueCertificate: (input, key) => mutate<ConnectorDelivery>("POST", "/api/v1/revocation/rogue-certificates/takedown", input, key),
+  revokeRogueCertificateAtIssuer: (input, key) => mutate<RogueIssuerRevocation>("POST", "/api/v1/revocation/rogue-certificates/revoke", input, key),
   submitCertificateTransparency: (input) => mutate<CTSubmission>("POST", "/api/v1/revocation/ct-submissions", input),
   ctMonitoring: (options) => req<CTMonitoring>(`/api/v1/discovery/ct-monitoring${discoveryDashboardQuery(options)}`),
   updateCTMonitoring: (input) => mutate<CTMonitoring>("PUT", "/api/v1/discovery/ct-monitoring", input),
