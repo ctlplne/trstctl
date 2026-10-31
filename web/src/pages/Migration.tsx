@@ -350,7 +350,13 @@ function MigrationMemberEvidence({ member }: { member: MigrationRun["waves"][num
         <dt className="text-muted-foreground">{t("migration.design.currentFingerprint")}</dt>
         <dd className="break-all font-mono text-xs">{binding.predecessor_fingerprint || t("migration.design.notReturned")}</dd>
         <dt className="text-muted-foreground">{t("migration.design.executesOn")}</dt>
-        <dd>{binding.execution_model === "appliance" ? t("migration.design.executesOnAppliance") : t("migration.design.executesOnHost")}</dd>
+        <dd>
+          {binding.execution_model === "appliance"
+            ? t("migration.design.executesOnAppliance")
+            : binding.execution_model === "cloud_store"
+              ? t("migration.design.executesOnControlPlane")
+              : t("migration.design.executesOnHost")}
+        </dd>
         <dt className="text-muted-foreground">{t("migration.design.predecessorIssuer")}</dt>
         <dd className="break-all">
           {binding.predecessor_external_ca_id

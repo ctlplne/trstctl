@@ -292,7 +292,10 @@ func (c *Connector) Rollback(ctx context.Context, sb connector.Sandbox, rb conne
 
 // Readback reports the certificate the configured map entry points at (A58).
 // It asks Certificate Manager, not the deploy: an entry re-pointed by hand is
-// reported as diverged, not as clean.
+// reported as diverged, not as clean. The fingerprint is the SHA-256 of the
+// bound Certificate's own pemCertificate when the provider returns it (A166),
+// so a resource whose name and content disagree reads as what it serves; only
+// a resource without content falls back to the fingerprint in its name.
 func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, _ string) (connector.Installed, error) {
 	if !c.mapEntry.configured() {
 		return connector.Installed{}, connector.ErrReadbackNotConfigured
@@ -328,7 +331,41 @@ func (c *Connector) Readback(ctx context.Context, sb connector.Sandbox, _ string
 	}
 	resource := body.Certificates[0]
 	name := resource[strings.LastIndex(resource, "/")+1:]
-	return connector.Installed{Fingerprint: connector.FingerprintFromObjectName(name), ObjectName: name, Bound: true}, nil
+	fingerprint, err := c.servedFingerprint(ctx, sb, token, name)
+	if err != nil {
+		return connector.Installed{}, fmt.Errorf("gcpcm: read back certificate %q: %w", name, err)
+	}
+	return connector.Installed{Fingerprint: fingerprint, ObjectName: name, Bound: true}, nil
+}
+
+// servedFingerprint reads the bound Certificate and fingerprints its
+// pemCertificate through the crypto boundary; a resource the provider returns
+// without content keeps the fingerprint its name carries.
+func (c *Connector) servedFingerprint(ctx context.Context, sb connector.Sandbox, token []byte, name string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.certificateURL(name), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+	resp, err := sb.Request(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode/100 != 2 {
+		_ = secret.DrainBounded(resp.Body, 4<<10)
+		return "", fmt.Errorf("status %d (response body redacted)", resp.StatusCode)
+	}
+	var cert struct {
+		PEMCertificate string `json:"pemCertificate"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&cert); err != nil {
+		return "", fmt.Errorf("decode certificate: %w", err)
+	}
+	if strings.TrimSpace(cert.PEMCertificate) == "" {
+		return connector.FingerprintFromObjectName(name), nil
+	}
+	return connector.CertificateFingerprint([]byte(cert.PEMCertificate)), nil
 }
 
 // deployedCertificateID derives the fingerprint-named certificate id and

@@ -89,6 +89,36 @@ describe("migration operator plan", () => {
     expect(screen.queryByRole("button", { name: "Start migration" })).not.toBeInTheDocument();
   });
 
+  it("maps a cloud certificate store to the control plane and starts it with no agent or trust path", async () => {
+    const user = userEvent.setup();
+    apiMock.assessMigration.mockResolvedValue({
+      plan_id: "cloud-cutover",
+      members: 1,
+      migratable: 1,
+      guidance: "Any unknown blocks the start of a migration.",
+      unknowns: [],
+      waves: [{ id: "canary", ordinal: 1, members: [identityID] }],
+    });
+    apiMock.startMigrationRun.mockResolvedValue({ id: "run-cloud", plan_id: "cloud-cutover", status: "running", waves: [] });
+    renderRoute();
+    await user.click(await screen.findByRole("button", { name: "Start migration plan" }));
+    await user.type(screen.getByLabelText("Plan ID"), "cloud-cutover");
+    await user.selectOptions(await screen.findByLabelText("New CA authority"), authorityID);
+    await user.click(screen.getByRole("button", { name: "Map waves" }));
+    await user.selectOptions(screen.getByLabelText("Identity"), identityID);
+    await user.selectOptions(screen.getByLabelText("Host agent"), "control-plane");
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(screen.getByText(/Control plane \(cloud certificate store, no agent\)/)).toBeInTheDocument();
+    expect(screen.queryByText("/etc/trstctl/next-root.pem")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check cutover readiness" }));
+    await user.click(await screen.findByRole("button", { name: "Start migration" }));
+    expect(apiMock.startMigrationRun).toHaveBeenCalledWith({
+      plan_id: "cloud-cutover",
+      new_authority_id: authorityID,
+      waves: [{ id: "canary", ordinal: 1, members: [{ identity_id: identityID }] }],
+    });
+  });
+
   it("keeps JSON as an explicit advanced path and rejects incomplete input before the API", async () => {
     const user = userEvent.setup();
     renderRoute();

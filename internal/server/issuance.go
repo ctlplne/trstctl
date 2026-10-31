@@ -1324,7 +1324,7 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 			"missing_connector", "identity has no connector target configured",
 			orchestrator.DefiniteNoEffect(errors.New("server: connector.deploy has no configured connector")))
 	}
-	if err := d.deferDeployToEnrolledRelay(ctx, m.TenantID, p.Connector); err != nil {
+	if err := d.deferDeployUnlessBound(ctx, m, &p); err != nil {
 		return err
 	}
 	if d.connectorRegistry != nil && d.connectorRegistry.Has(p.Connector) {
@@ -1355,7 +1355,7 @@ func (d *issuanceDispatcher) handleDeploy(ctx context.Context, m orchestrator.Me
 			}
 			return []byte("deployed:" + p.Connector), nil
 		}
-		return d.runConnectorEffect(ctx, m, receipt, d.connectorRegistry.ReplaySafetyFor(p.Connector), effect)
+		return d.closeCloudStoreGate(ctx, m, &p, d.runConnectorEffect(ctx, m, receipt, d.connectorRegistry.ReplaySafetyFor(p.Connector), effect))
 	}
 	// A63: a plugin-backed row stamped for a relay belongs to the relay that
 	// reported carrying the plugin. While one is enrolled the control plane

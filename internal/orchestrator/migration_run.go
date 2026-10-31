@@ -31,7 +31,10 @@ const DestinationIncidentMigrationRevoke = "incident.fleet_reissuance.revoke"
 // DestinationMigrationApplianceIssue is the control-plane half of an appliance
 // member's successor (A33): the control plane issues the leaf under the run's
 // authority and queues its sealed deploy for the exact network relay the member
-// binds. The relay's signed verified receipt then closes the live gate.
+// binds. The relay's signed verified receipt then closes the live gate. A
+// cloud-store member's successor (A166) is issued by the same row; its deploy is
+// queued for the control plane's own client, whose readback of the store closes
+// the gate.
 const DestinationMigrationApplianceIssue = "migration.appliance_issue"
 
 // MigrationApplianceIssueIntent names the member whose successor the control
@@ -338,8 +341,8 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 	)
 	switch action.Kind {
 	case migration.ActionDistributeTrust, migration.ActionRemoveTrust:
-		if b.OnAppliance() {
-			return Entry{}, errors.New("orchestrator: an appliance member has no trust anchor to distribute or remove")
+		if !b.HasTrustStage() {
+			return Entry{}, errors.New("orchestrator: an appliance or cloud-store member has no trust anchor to distribute or remove")
 		}
 		operation := relay.TrustInstall
 		anchor := append([]byte(nil), b.TrustAnchorPEM...)
@@ -353,7 +356,7 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 			AnchorFingerprint: b.TrustAnchorFingerprint, RequiredAgentID: b.RequiredAgentID,
 		})
 	case migration.ActionIssueSuccessor:
-		if b.OnAppliance() {
+		if b.OnAppliance() || b.OnControlPlane() {
 			destination = DestinationMigrationApplianceIssue
 			payload, err = json.Marshal(MigrationApplianceIssueIntent{
 				RunID: run.ID, WaveID: action.WaveID, IdentityID: action.IdentityID,
@@ -415,7 +418,7 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		RequiredAgentRole: mtls.AgentRoleHost, RequiredAgentID: b.RequiredAgentID,
 	}
 	if action.Kind == migration.ActionRevokePredecessor ||
-		(action.Kind == migration.ActionIssueSuccessor && b.OnAppliance()) {
+		(action.Kind == migration.ActionIssueSuccessor && (b.OnAppliance() || b.OnControlPlane())) {
 		entry.RequiredAgentRole = "control_plane"
 		entry.RequiredAgentID = ""
 	}
@@ -424,6 +427,12 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 		// predecessor object it kept on the appliance (A46), under the same
 		// exact-agent binding.
 		entry.RequiredAgentRole = mtls.AgentRoleNetwork
+	}
+	if action.Kind == migration.ActionRollbackSuccessor && b.OnControlPlane() {
+		// The control plane's own client re-binds the predecessor object the
+		// store kept (A58); no agent can claim the row (A166).
+		entry.RequiredAgentRole = "control_plane"
+		entry.RequiredAgentID = ""
 	}
 	return entry, nil
 }

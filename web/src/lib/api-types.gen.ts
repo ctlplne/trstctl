@@ -6376,14 +6376,14 @@ export interface MigrationAssessment {
 
 export interface MigrationMemberBinding {
   connector: string;
-  execution_model?: "host" | "appliance";
+  execution_model?: "host" | "appliance" | "cloud_store";
   issuing_authority_id: string;
   issuing_authority_source?: "platform" | "private" | "external";
   predecessor_certificate_id: string;
   predecessor_external_ca_id?: string;
   predecessor_fingerprint: string;
   predecessor_source?: string;
-  required_agent_id: string;
+  required_agent_id?: string;
   subject_common_name: string;
   subject_dns_names: string[];
   subject_email_addresses?: string[];
@@ -6433,7 +6433,7 @@ export interface MigrationRunMember {
 }
 
 export interface MigrationRunStartMember {
-  agent_id: string;
+  agent_id?: string;
   identity_id: string;
   trust_anchor_path?: string;
 }

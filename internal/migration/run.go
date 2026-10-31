@@ -37,10 +37,10 @@ const (
 	VerdictVerified Verdict = "verified"
 	VerdictFailed   Verdict = "failed"
 	// VerdictNotApplicable is set by the engine, never by a receipt, on a stage
-	// a member has no work in: an appliance member (A33) distributes no trust
-	// anchor, because a network relay cannot write a trust store on an
-	// appliance and the appliance has none this control plane manages. The
-	// stage is honestly named rather than silently counted as verified.
+	// a member has no work in: an appliance member (A33) or a cloud-store
+	// member (A166) distributes no trust anchor, because neither holds a trust
+	// store this control plane manages. The stage is honestly named rather
+	// than silently counted as verified.
 	VerdictNotApplicable Verdict = "not_applicable"
 )
 
@@ -53,6 +53,12 @@ const (
 	// issued successor on a network appliance and re-binds the predecessor on
 	// rollback. The appliance has no trust stage of its own.
 	ExecutionAppliance = "appliance"
+	// ExecutionCloudStore: the control plane's own client installs a
+	// control-plane issued successor in a cloud certificate store, reads the
+	// store back as the live gate and re-binds the predecessor on rollback
+	// (A166). No agent is bound and, like an appliance, the store has no trust
+	// stage of its own.
+	ExecutionCloudStore = "cloud_store"
 )
 
 // ObservationStage identifies which safety gate a receipt licenses.
@@ -154,22 +160,24 @@ func RecordSuccessorIssued(in Run, waveID, identityID, fingerprint string) (Run,
 // AnchorPEM and certificate metadata are public; private-key material has no
 // field in this contract.
 type MemberBinding struct {
-	IssuingAuthorityID     string           `json:"issuing_authority_id"`
-	Issuance               *IssuanceBinding `json:"issuance,omitempty"`
-	TargetID               string           `json:"target_id"`
-	TargetRevision         string           `json:"target_revision"`
-	Connector              string           `json:"connector"`
-	Target                 string           `json:"target"`
-	TargetConfig           json.RawMessage  `json:"target_config"`
-	RequiredAgentID        string           `json:"required_agent_id"`
-	TrustAnchorPath        string           `json:"trust_anchor_path"`
-	TrustAnchorPEM         []byte           `json:"trust_anchor_pem"`
-	TrustAnchorFingerprint string           `json:"trust_anchor_fingerprint"`
-	VerifyAddress          string           `json:"verify_address"`
-	VerifyServerName       string           `json:"verify_server_name,omitempty"`
-	SubjectCommonName      string           `json:"subject_common_name"`
-	SubjectDNSNames        []string         `json:"subject_dns_names"`
-	SubjectIPAddresses     []string         `json:"subject_ip_addresses,omitempty"`
+	IssuingAuthorityID string           `json:"issuing_authority_id"`
+	Issuance           *IssuanceBinding `json:"issuance,omitempty"`
+	TargetID           string           `json:"target_id"`
+	TargetRevision     string           `json:"target_revision"`
+	Connector          string           `json:"connector"`
+	Target             string           `json:"target"`
+	TargetConfig       json.RawMessage  `json:"target_config"`
+	// RequiredAgentID is empty only for a cloud-store member (A166), which no
+	// agent executes.
+	RequiredAgentID        string   `json:"required_agent_id,omitempty"`
+	TrustAnchorPath        string   `json:"trust_anchor_path"`
+	TrustAnchorPEM         []byte   `json:"trust_anchor_pem"`
+	TrustAnchorFingerprint string   `json:"trust_anchor_fingerprint"`
+	VerifyAddress          string   `json:"verify_address"`
+	VerifyServerName       string   `json:"verify_server_name,omitempty"`
+	SubjectCommonName      string   `json:"subject_common_name"`
+	SubjectDNSNames        []string `json:"subject_dns_names"`
+	SubjectIPAddresses     []string `json:"subject_ip_addresses,omitempty"`
 	// SubjectEmailAddresses and SubjectURIs are the rfc822Name and URI halves of
 	// the binding (A35 extension), frozen from the predecessor exactly: a
 	// successor asserts every identifier the predecessor carried and no other.
@@ -184,9 +192,10 @@ type MemberBinding struct {
 	// authority issued it; these fields keep that provenance in the run.
 	PredecessorSource       string `json:"predecessor_source,omitempty"`
 	PredecessorExternalCAID string `json:"predecessor_external_ca_id,omitempty"`
-	// ExecutionModel is ExecutionHost (the default when empty) or
-	// ExecutionAppliance (A33). It decides which stages the member has work in
-	// and which agent role the outbox rows demand.
+	// ExecutionModel is ExecutionHost (the default when empty),
+	// ExecutionAppliance (A33) or ExecutionCloudStore (A166). It decides which
+	// stages the member has work in and which agent role, if any, the outbox
+	// rows demand.
 	ExecutionModel string `json:"execution_model,omitempty"`
 	// PredecessorCAID is the exact responder/revocation authority. Incident
 	// response requires it; a generic migration may leave it empty.
@@ -200,6 +209,17 @@ type MemberBinding struct {
 // OnAppliance reports whether the member's leaf work executes on a network
 // relay against an appliance (A33), which has no trust stage of its own.
 func (b MemberBinding) OnAppliance() bool { return b.ExecutionModel == ExecutionAppliance }
+
+// OnControlPlane reports whether the member's leaf work executes on the
+// control plane's own client against a cloud certificate store (A166). No
+// agent is bound to it.
+func (b MemberBinding) OnControlPlane() bool { return b.ExecutionModel == ExecutionCloudStore }
+
+// HasTrustStage reports whether the member distributes a trust anchor. Only a
+// host member does: an appliance or a cloud store holds no trust store this
+// control plane manages, so the hosts that must trust the new anchor are
+// members of their own.
+func (b MemberBinding) HasTrustStage() bool { return !b.OnAppliance() && !b.OnControlPlane() }
 
 // IssuanceBinding freezes the certificate profile and lifetime reviewed when
 // the run starts. It has the same wire shape as the store's issuance binding,
@@ -295,16 +315,16 @@ func StartRun(in Run) (Run, []Action, error) {
 	return out, openWave(&out, 0), nil
 }
 
-// openWave starts a cohort at its trust gate. Appliance members have no trust
-// work (A33): their trust stage is marked not applicable, and a cohort whose
-// every member is an appliance has nothing to wait for, so it moves straight to
-// the leaf gate and licenses its successor issuance.
+// openWave starts a cohort at its trust gate. Appliance and cloud-store members
+// have no trust work (A33, A166): their trust stage is marked not applicable,
+// and a cohort with no host member has nothing to wait for, so it moves
+// straight to the leaf gate and licenses its successor issuance.
 func openWave(out *Run, index int) []Action {
 	wave := &out.Waves[index]
 	wave.Phase = PhaseVerifyingTrust
 	wave.Started = true
 	for i := range wave.Members {
-		if wave.Members[i].Binding.OnAppliance() && wave.Members[i].TrustVerdict == "" {
+		if !wave.Members[i].Binding.HasTrustStage() && wave.Members[i].TrustVerdict == "" {
 			wave.Members[i].TrustVerdict = VerdictNotApplicable
 		}
 	}
@@ -315,14 +335,14 @@ func openWave(out *Run, index int) []Action {
 	return actionsFor(*wave, ActionDistributeTrust)
 }
 
-// openRollbackTrust enters the trust-removal stage of a rollback. Appliance
-// members have no anchor to remove (A33); a cohort of only appliances finishes
-// the stage at once.
+// openRollbackTrust enters the trust-removal stage of a rollback. Appliance and
+// cloud-store members have no anchor to remove (A33, A166); a cohort with no
+// host member finishes the stage at once.
 func openRollbackTrust(out *Run, waveIndex int) []Action {
 	out.RollbackStage = StageRollbackTrust
 	wave := &out.Waves[waveIndex]
 	for i := range wave.Members {
-		if wave.Members[i].Binding.OnAppliance() && wave.Members[i].RollbackTrustVerdict == "" {
+		if !wave.Members[i].Binding.HasTrustStage() && wave.Members[i].RollbackTrustVerdict == "" {
 			wave.Members[i].RollbackTrustVerdict = VerdictNotApplicable
 		}
 	}
@@ -692,33 +712,8 @@ func ValidateExecutableRun(run Run) error {
 					return fmt.Errorf("migration: member %s has an incomplete immutable issuance profile", member.IdentityID)
 				}
 			}
-			if strings.TrimSpace(b.IssuingAuthorityID) == "" || strings.TrimSpace(b.TargetID) == "" || strings.TrimSpace(b.TargetRevision) == "" ||
-				strings.TrimSpace(b.Connector) == "" || strings.TrimSpace(b.Target) == "" ||
-				strings.TrimSpace(b.RequiredAgentID) == "" || (!b.OnAppliance() && strings.TrimSpace(b.TrustAnchorPath) == "") ||
-				(b.ExecutionModel != "" && b.ExecutionModel != ExecutionHost && b.ExecutionModel != ExecutionAppliance) ||
-				len(b.TrustAnchorPEM) == 0 || strings.TrimSpace(b.TrustAnchorFingerprint) == "" ||
-				strings.TrimSpace(b.VerifyAddress) == "" || strings.TrimSpace(b.SubjectCommonName) == "" ||
-				(len(b.SubjectDNSNames) == 0 && len(b.SubjectIPAddresses) == 0 && len(b.SubjectEmailAddresses) == 0 && len(b.SubjectURIs) == 0) || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
-				strings.TrimSpace(b.PredecessorFingerprint) == "" || len(b.TargetConfig) == 0 {
-				return fmt.Errorf("migration: member %s has incomplete immutable execution authority", member.IdentityID)
-			}
-			if len(b.TrustAnchorPEM) > maxExecutableAnchorBytes || len(b.TargetConfig) > maxExecutableConfigBytes {
-				return fmt.Errorf("migration: member %s exceeds a bounded public anchor or target configuration", member.IdentityID)
-			}
-			var targetAssignment struct {
-				Executor        string `json:"executor"`
-				RequiredAgentID string `json:"required_agent_id"`
-			}
-			if err := json.Unmarshal(b.TargetConfig, &targetAssignment); err != nil ||
-				!strings.EqualFold(strings.TrimSpace(targetAssignment.Executor), "agent") {
-				return fmt.Errorf("migration: member %s target does not bind an enrolled agent executor", member.IdentityID)
-			}
-			// Every target names its exact agent in its configuration: the host
-			// agent for a host target, the network relay for an appliance (A33).
-			// Credential redemption grants material only to the agent the
-			// target names, so an unnamed relay could claim but never deploy.
-			if strings.TrimSpace(targetAssignment.RequiredAgentID) != b.RequiredAgentID {
-				return fmt.Errorf("migration: member %s target does not bind its exact agent", member.IdentityID)
+			if err := validateMemberExecution(b, member.IdentityID); err != nil {
+				return err
 			}
 			if authorityID == "" {
 				authorityID, anchorFingerprint = b.IssuingAuthorityID, b.TrustAnchorFingerprint
@@ -742,7 +737,7 @@ func ValidateExecutableRun(run Run) error {
 				return fmt.Errorf("migration: deployment target %s appears more than once", b.TargetID)
 			}
 			targets[b.TargetID] = true
-			if b.OnAppliance() {
+			if !b.HasTrustStage() {
 				continue
 			}
 			trust := trustTarget{agentID: b.RequiredAgentID, path: b.TrustAnchorPath}
@@ -765,6 +760,51 @@ func ValidateExecutableRun(run Run) error {
 	}
 	if len(encoded) > maxExecutableRunBytes {
 		return fmt.Errorf("migration: executable run exceeds the %d-byte event bound", maxExecutableRunBytes)
+	}
+	return nil
+}
+
+// validateMemberExecution checks the execution authority one member binds:
+// who runs its leaf work, where its trust anchor goes and what its live gate
+// observes. A host or appliance member names its exact agent, and its target
+// names the same agent: credential redemption grants material only to the
+// agent the target names, so an unnamed relay could claim but never deploy. A
+// cloud-store member (A166) names no agent at all, because the control plane's
+// own client carries its store; a target assigned to a relay is that relay's
+// appliance-model member instead. Its live gate reads the store back rather
+// than handshaking a listener, so it may omit verify_address.
+func validateMemberExecution(b MemberBinding, identityID string) error {
+	cloud := b.OnControlPlane()
+	if strings.TrimSpace(b.IssuingAuthorityID) == "" || strings.TrimSpace(b.TargetID) == "" || strings.TrimSpace(b.TargetRevision) == "" ||
+		strings.TrimSpace(b.Connector) == "" || strings.TrimSpace(b.Target) == "" ||
+		(b.ExecutionModel != "" && b.ExecutionModel != ExecutionHost && b.ExecutionModel != ExecutionAppliance && !cloud) ||
+		cloud != (strings.TrimSpace(b.RequiredAgentID) == "") ||
+		(b.HasTrustStage() && strings.TrimSpace(b.TrustAnchorPath) == "") || (cloud && strings.TrimSpace(b.TrustAnchorPath) != "") ||
+		len(b.TrustAnchorPEM) == 0 || strings.TrimSpace(b.TrustAnchorFingerprint) == "" ||
+		(!cloud && strings.TrimSpace(b.VerifyAddress) == "") || strings.TrimSpace(b.SubjectCommonName) == "" ||
+		(len(b.SubjectDNSNames) == 0 && len(b.SubjectIPAddresses) == 0 && len(b.SubjectEmailAddresses) == 0 && len(b.SubjectURIs) == 0) || strings.TrimSpace(b.PredecessorCertificateID) == "" ||
+		strings.TrimSpace(b.PredecessorFingerprint) == "" || len(b.TargetConfig) == 0 {
+		return fmt.Errorf("migration: member %s has incomplete immutable execution authority", identityID)
+	}
+	if len(b.TrustAnchorPEM) > maxExecutableAnchorBytes || len(b.TargetConfig) > maxExecutableConfigBytes {
+		return fmt.Errorf("migration: member %s exceeds a bounded public anchor or target configuration", identityID)
+	}
+	var targetAssignment struct {
+		Executor        string `json:"executor"`
+		RequiredAgentID string `json:"required_agent_id"`
+	}
+	err := json.Unmarshal(b.TargetConfig, &targetAssignment)
+	if cloud {
+		if err != nil || strings.EqualFold(strings.TrimSpace(targetAssignment.Executor), "agent") || strings.TrimSpace(targetAssignment.RequiredAgentID) != "" {
+			return fmt.Errorf("migration: cloud-store member %s target is assigned to an agent", identityID)
+		}
+		return nil
+	}
+	if err != nil || !strings.EqualFold(strings.TrimSpace(targetAssignment.Executor), "agent") {
+		return fmt.Errorf("migration: member %s target does not bind an enrolled agent executor", identityID)
+	}
+	if strings.TrimSpace(targetAssignment.RequiredAgentID) != b.RequiredAgentID {
+		return fmt.Errorf("migration: member %s target does not bind its exact agent", identityID)
 	}
 	return nil
 }
@@ -898,7 +938,7 @@ func allVerified(wave RunWave, stage ObservationStage) bool {
 		if verdict == nil {
 			return false
 		}
-		if *verdict == VerdictNotApplicable && trustStage(stage) && wave.Members[i].Binding.OnAppliance() {
+		if *verdict == VerdictNotApplicable && trustStage(stage) && !wave.Members[i].Binding.HasTrustStage() {
 			continue
 		}
 		if *verdict != VerdictVerified {
@@ -931,7 +971,7 @@ func hasVerified(wave RunWave, stage ObservationStage) bool {
 func actionsFor(wave RunWave, kind ActionKind) []Action {
 	out := make([]Action, 0, len(wave.Members))
 	for _, member := range wave.Members {
-		if trustAction(kind) && member.Binding.OnAppliance() {
+		if trustAction(kind) && !member.Binding.HasTrustStage() {
 			continue
 		}
 		out = append(out, Action{Kind: kind, WaveID: wave.ID, IdentityID: member.IdentityID})
@@ -943,7 +983,7 @@ func missingActions(wave RunWave, stage ObservationStage, kind ActionKind) []Act
 	out := make([]Action, 0, len(wave.Members))
 	for i := range wave.Members {
 		verdict := verdictForStage(&wave.Members[i], stage)
-		if trustAction(kind) && wave.Members[i].Binding.OnAppliance() {
+		if trustAction(kind) && !wave.Members[i].Binding.HasTrustStage() {
 			continue
 		}
 		if verdict != nil && *verdict == "" {

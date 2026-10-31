@@ -2,6 +2,10 @@
 
 ### Added
 
+- Cloud certificate stores in CA migration runs: a GCP Certificate Manager target that names a
+  certificate map entry joins a run with no agent; the control plane installs the successor, reads
+  the entry back as the live gate and re-binds the predecessor on rollback. AWS Certificate Manager
+  and Azure Key Vault are refused at start with the reason they cannot restore a predecessor.
 - Unattended domain validation for DigiCert and Sectigo: with `upstream_dns01`, trstctl completes
   CertCentral's DNS TXT validation and Sectigo SCM's TXT domain control validation through the
   tenant's DNS-01 provider configs (`allow_upstream_dv`), under the same CAA check and retraction as

@@ -13647,6 +13647,10 @@ export const messages = {
     defaultMessage: "Choose a host agent",
     description: "Empty migration agent option.",
   },
+  "migration.form.controlPlaneExecutor": {
+    defaultMessage: "Control plane (cloud certificate store, no agent)",
+    description: "Migration executor option for a cloud certificate store the control plane carries itself.",
+  },
   "migration.form.addWave": {
     defaultMessage: "Add wave",
     description: "Add an ordered migration wave.",
@@ -33347,6 +33351,11 @@ export const messages = {
   "migration.design.executesOnHost": {
     defaultMessage: "Host agent: installs the trust anchor, generates the successor key on the host, reloads the listener.",
     description: "Member binding row value for a host-executed member.",
+  },
+  "migration.design.executesOnControlPlane": {
+    defaultMessage:
+      "Control plane: installs the successor in the cloud certificate store and reads the store back as the live gate. No agent and no trust stage.",
+    description: "Member binding row value for a cloud-store member the control plane executes.",
   },
   "migration.design.executesOnAppliance": {
     defaultMessage:

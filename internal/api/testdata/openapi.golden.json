@@ -27126,7 +27126,8 @@
           "execution_model": {
             "enum": [
               "host",
-              "appliance"
+              "appliance",
+              "cloud_store"
             ],
             "type": "string"
           },
@@ -27225,7 +27226,6 @@
           "connector",
           "target",
           "target_config",
-          "required_agent_id",
           "trust_anchor_path",
           "trust_anchor_pem",
           "trust_anchor_fingerprint",
@@ -27358,8 +27358,7 @@
           }
         },
         "required": [
-          "identity_id",
-          "agent_id"
+          "identity_id"
         ],
         "type": "object"
       },

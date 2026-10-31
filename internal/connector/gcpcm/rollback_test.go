@@ -68,8 +68,11 @@ func TestDeployWithMapEntryIsFingerprintNamedAndRollbackRepointsTheEntry(t *test
 	if err != nil {
 		t.Fatalf("readback: %v", err)
 	}
-	if !installed.Bound || installed.ObjectName != secondName || installed.Fingerprint != connector.FingerprintFromObjectName(secondName) {
-		t.Fatalf("readback = %+v, want the bound second certificate", installed)
+	// A166: the readback fingerprints the bound resource's own content, not
+	// the prefix its name carries.
+	if !installed.Bound || installed.ObjectName != secondName || installed.Fingerprint != second.Fingerprint ||
+		connector.ClassifyReadback(installed, second.Fingerprint) != connector.ReadbackServing {
+		t.Fatalf("readback = %+v, want the bound second certificate's full fingerprint", installed)
 	}
 
 	stats, result, err := connector.RunRollbackWithResult(context.Background(), c, ops, connector.Rollback{

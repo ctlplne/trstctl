@@ -5729,7 +5729,7 @@ func componentSchemas() map[string]*Schema {
 	}, "plan_id", "waves", "unknowns", "members", "migratable", "guidance")
 	migrationRunStartMember := object(map[string]*Schema{
 		"identity_id": uuid(), "agent_id": uuid(), "trust_anchor_path": str(),
-	}, "identity_id", "agent_id")
+	}, "identity_id")
 	migrationRunStartWave := object(map[string]*Schema{
 		"id": str(), "ordinal": {Type: "integer"},
 		"members": {Type: "array", Items: ref("MigrationRunStartMember")},
@@ -5750,9 +5750,9 @@ func componentSchemas() map[string]*Schema {
 		"subject_uris":               {Type: "array", Items: str()},
 		"predecessor_certificate_id": uuid(), "predecessor_fingerprint": str(),
 		"predecessor_source": str(), "predecessor_external_ca_id": str(),
-		"execution_model":       {Type: "string", Enum: []string{"host", "appliance"}},
+		"execution_model":       {Type: "string", Enum: []string{"host", "appliance", "cloud_store"}},
 		"successor_fingerprint": str(),
-	}, "issuing_authority_id", "target_id", "target_revision", "connector", "target", "target_config", "required_agent_id",
+	}, "issuing_authority_id", "target_id", "target_revision", "connector", "target", "target_config",
 		"trust_anchor_path", "trust_anchor_pem", "trust_anchor_fingerprint", "verify_address",
 		"subject_common_name", "subject_dns_names", "predecessor_certificate_id", "predecessor_fingerprint")
 	migrationRunMember := object(map[string]*Schema{

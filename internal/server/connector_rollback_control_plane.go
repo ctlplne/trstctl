@@ -35,7 +35,11 @@ import (
 // and leaves every agent-owned row pending for the agent that must run it.
 func (d *issuanceDispatcher) routeConnectorRollback(ctx context.Context, m orchestrator.Message) error {
 	if m.RequiredAgentRole == string(connector.VantageControlPlane) {
-		return d.handleControlPlaneConnectorRollback(ctx, m)
+		if err := d.handleControlPlaneConnectorRollback(ctx, m); err != nil {
+			return err
+		}
+		// A cloud-store member's re-bind closes its rollback gate (A166).
+		return d.closeCloudStoreRollbackGate(ctx, m)
 	}
 	// A59: a cloud store's row stamped for a relay still runs here while the
 	// tenant has no relay enrolled; an appliance row never does.

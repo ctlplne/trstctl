@@ -432,6 +432,28 @@ tenant is not interchangeable: Start rejects the mismatch before queuing trust
 or successor work. Keep the target assignment and manifest aligned when moving
 a workload to a new host, then submit a fresh reviewed run.
 
+A cloud certificate store joins a run with no agent (A166). Where the tenant has
+no network relay enrolled, the control plane's own client carries the cloud
+stores, so a member whose target is one omits both `agent_id` and
+`trust_anchor_path`:
+
+```json
+{ "identity_id": "44444444-4444-4444-8444-444444444444" }
+```
+
+The control plane issues the successor under the new authority with the
+predecessor's exact identifiers, creates its fingerprint-named certificate and
+points the target's certificate map entry at it, then reads the entry back: the
+live gate passes only when the certificate the entry serves is the successor.
+Rollback re-points the entry at the predecessor and reads it back the same way.
+A GCP Certificate Manager target qualifies when it names `certificate_map_entry`
+and trstctl delivered the current certificate to it. AWS Certificate Manager
+re-imports in place and Azure Key Vault serves its newest version, so neither can
+restore a predecessor; Start refuses both with that reason. Once a relay is
+enrolled, cloud-store work runs on the relay: assign the target to it and name
+the relay as the member's `agent_id`. In the console, choose **Control plane
+(cloud certificate store, no agent)** as the member's executor.
+
 The read-only assessment counts trust stores reported by that exact assigned
 agent. A deployment target's display name does not identify a machine. If a
 trust-store finding predates the receiver-stamped agent ID or its authenticated
@@ -465,14 +487,14 @@ trstctl migrations rollback RUN_ID
 
 The REST equivalents are `POST /api/v1/migrations/runs`, `GET
 /api/v1/migrations/runs`, `GET /api/v1/migrations/runs/{id}`, and the three action
-routes below that run. The current executable boundary is internally issued X.509
-identities carrying DNS names, IP addresses or both, deployed by enabled host-agent
-connectors with a configured verification listener; the successor the host requests
-asserts exactly the predecessor's names and addresses. The new authority may be a
+routes below that run. The executable boundary is X.509 identities deployed by an
+enabled host-agent connector with a configured verification listener, by a network
+appliance through its relay, or into a cloud certificate store through the control
+plane; the successor asserts exactly the predecessor's names and addresses. The new authority may be a
 signer-backed CA or an imported offline root; for an offline root the successors
 are issued by its one active signer-backed intermediate and the root certificate is
-the anchor distributed to hosts. Identities carrying an email or URI SAN, and every
-other unsupported membership, are rejected before any trust job is published.
+the anchor distributed to hosts. Every unsupported membership is rejected, with
+its reason, before any trust job is published.
 The run pins each identity's active certificate-profile revision and effective
 validity into the immutable member and successor job. A member whose profile requires a
 distinct issuance approval makes the start itself the approved operation: the

@@ -30,6 +30,10 @@ import (
 // relay the member binds. The relay's signed verified receipt — the same D2
 // handshake every appliance deploy ends with — closes the run's live gate.
 //
+// A cloud-store member (A166) is issued the same way; its sealed deploy is
+// queued for the control plane's own client instead of a relay, and the
+// control plane's readback of the store closes the gate.
+//
 // The row is idempotent on its outbox key: a retry after a crash reopens the
 // retained subject key, reaches the same issuance, and re-queues nothing.
 func (d *issuanceDispatcher) handleMigrationApplianceIssue(ctx context.Context, m orchestrator.Message) error {
@@ -49,7 +53,7 @@ func (d *issuanceDispatcher) handleMigrationApplianceIssue(ctx context.Context, 
 	}
 	run := record.Run
 	member, found := migration.Member(run, intent.WaveID, intent.IdentityID)
-	if !found || !member.Binding.OnAppliance() || member.Binding.TargetID != intent.TargetID ||
+	if !found || (!member.Binding.OnAppliance() && !member.Binding.OnControlPlane()) || member.Binding.TargetID != intent.TargetID ||
 		member.Binding.RequiredAgentID != intent.RequiredAgentID ||
 		member.Binding.PredecessorCertificateID != intent.PredecessorCertificateID {
 		return orchestrator.DefiniteNoEffect(errors.New("server: appliance migration intent drifted from the immutable member binding"))
@@ -131,6 +135,13 @@ func (d *issuanceDispatcher) issueApplianceSuccessor(
 	}
 	defer secret.Wipe(payload)
 	idemKey := "migration:" + run.ID + ":" + waveID + ":" + member.IdentityID + ":appliance_deploy"
+	role := mtls.AgentRoleNetwork
+	if b.OnControlPlane() {
+		// No agent can claim the row: the control plane's own client installs
+		// the successor in the store and reads it back (A166).
+		idemKey = "migration:" + run.ID + ":" + waveID + ":" + member.IdentityID + ":cloud_store_deploy"
+		role = string(connector.VantageControlPlane)
+	}
 	sealed, err := d.sealConnectorDeployBytes(ctx, m.TenantID, "connector.deploy", idemKey, payload)
 	if err != nil {
 		return nil, err
@@ -139,7 +150,7 @@ func (d *issuanceDispatcher) issueApplianceSuccessor(
 		_, err := d.outbox.EnqueueIfAbsent(ctx, tx, orchestrator.Entry{
 			TenantID: m.TenantID, Destination: "connector.deploy", IdempotencyKey: idemKey, Payload: sealed,
 			EffectLane:        "migration:identity:" + member.IdentityID,
-			RequiredAgentRole: mtls.AgentRoleNetwork, RequiredAgentID: b.RequiredAgentID,
+			RequiredAgentRole: role, RequiredAgentID: b.RequiredAgentID,
 		})
 		return err
 	}); err != nil {

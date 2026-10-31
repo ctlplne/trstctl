@@ -16213,7 +16213,7 @@ export interface components {
         MigrationMemberBinding: {
             connector: string;
             /** @enum {string} */
-            execution_model?: "host" | "appliance";
+            execution_model?: "host" | "appliance" | "cloud_store";
             issuing_authority_id: string;
             /** @enum {string} */
             issuing_authority_source?: "platform" | "private" | "external";
@@ -16223,7 +16223,7 @@ export interface components {
             predecessor_fingerprint: string;
             predecessor_source?: string;
             /** Format: uuid */
-            required_agent_id: string;
+            required_agent_id?: string;
             subject_common_name: string;
             subject_dns_names: string[];
             subject_email_addresses?: string[];
@@ -16274,7 +16274,7 @@ export interface components {
         };
         MigrationRunStartMember: {
             /** Format: uuid */
-            agent_id: string;
+            agent_id?: string;
             /** Format: uuid */
             identity_id: string;
             trust_anchor_path?: string;

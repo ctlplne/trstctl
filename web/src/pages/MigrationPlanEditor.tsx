@@ -18,6 +18,11 @@ import { useApiQuery } from "@/lib/query";
 // trust_anchor_path is always a string in the form; an empty value means an
 // appliance member (A33), which the request omits the path for.
 type Member = { identity_id: string; agent_id: string; trust_anchor_path: string };
+
+// A cloud certificate store the control plane carries joins a run with no
+// agent (A166): the form records the choice explicitly, and the request names
+// neither an agent nor a trust path for it.
+const CONTROL_PLANE_EXECUTOR = "control-plane";
 type PlanForm = {
   plan_id: string;
   new_authority_id: string;
@@ -33,8 +38,8 @@ const initialPlan: PlanForm = {
 
 const advancedMemberSchema = z.strictObject({
   identity_id: z.string().trim().min(1),
-  agent_id: z.string().trim().min(1),
-  trust_anchor_path: z.string().trim(),
+  agent_id: z.string().trim().min(1).optional(),
+  trust_anchor_path: z.string().trim().optional(),
 });
 const advancedSchema = z.strictObject({
   plan_id: z.string().trim().min(1),
@@ -63,9 +68,10 @@ function requestFromForm(form: PlanForm): MigrationRunStartRequest {
     waves: form.waves.map((wave, index) => ({
       ...wave,
       ordinal: index + 1,
-      members: wave.members.map(({ identity_id, agent_id, trust_anchor_path }) =>
-        trust_anchor_path.trim() ? { identity_id, agent_id, trust_anchor_path: trust_anchor_path.trim() } : { identity_id, agent_id },
-      ),
+      members: wave.members.map(({ identity_id, agent_id, trust_anchor_path }) => {
+        if (agent_id === CONTROL_PLANE_EXECUTOR) return { identity_id };
+        return trust_anchor_path.trim() ? { identity_id, agent_id, trust_anchor_path: trust_anchor_path.trim() } : { identity_id, agent_id };
+      }),
     })),
   };
 }
@@ -368,6 +374,7 @@ export function MigrationPlanEditor({
                                 {(field) => (
                                   <Select {...field} {...register(`waves.${waveIndex}.members.${memberIndex}.agent_id`)}>
                                     <option value="">{t("migration.form.chooseAgent")}</option>
+                                    <option value={CONTROL_PLANE_EXECUTOR}>{t("migration.form.controlPlaneExecutor")}</option>
                                     {agents.map((agent) => (
                                       <option key={agent.id} value={agent.id}>
                                         {agent.name} — {agent.presence.state}
@@ -445,9 +452,11 @@ export function MigrationPlanEditor({
                             <li key={`${member.identity_id}-${memberIndex}`} className="grid gap-1">
                               <span>
                                 {identities.find((identity) => identity.id === member.identity_id)?.name ?? member.identity_id} →{" "}
-                                {agents.find((agent) => agent.id === member.agent_id)?.name ?? member.agent_id}
+                                {member.agent_id === CONTROL_PLANE_EXECUTOR
+                                  ? t("migration.form.controlPlaneExecutor")
+                                  : (agents.find((agent) => agent.id === member.agent_id)?.name ?? member.agent_id)}
                               </span>
-                              <code className="break-all text-caption">{member.trust_anchor_path}</code>
+                              {member.agent_id === CONTROL_PLANE_EXECUTOR ? null : <code className="break-all text-caption">{member.trust_anchor_path}</code>}
                             </li>
                           ))}
                         </ul>

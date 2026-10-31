@@ -396,8 +396,8 @@ func (a *API) buildMigrationMember(
 	anchorFingerprint, identityID, agentID, anchorPath string,
 ) (migration.RunMember, *migrationGatedMember, error) {
 	identityID, agentID, anchorPath = strings.TrimSpace(identityID), strings.TrimSpace(agentID), strings.TrimSpace(anchorPath)
-	if identityID == "" || guuid.Validate(agentID) != nil {
-		return migration.RunMember{}, nil, errors.New("each migration member requires identity_id and an enrolled agent_id")
+	if identityID == "" || (agentID != "" && guuid.Validate(agentID) != nil) {
+		return migration.RunMember{}, nil, errors.New("each migration member requires identity_id, and agent_id must name an enrolled agent when given")
 	}
 	ident, err := a.store.GetIdentity(ctx, tenantID, identityID)
 	if err != nil {
@@ -435,8 +435,8 @@ func (a *API) buildMigrationMember(
 		return migration.RunMember{}, nil, errors.New("migration member has no deployment target binding")
 	}
 	target, err := a.store.GetDeploymentTarget(ctx, tenantID, targetID)
-	if err != nil || !target.Enabled || !custody.TargetExecutorIsAgent(target.Config) {
-		return migration.RunMember{}, nil, errors.New("migration member target must be an enabled connector target executed by an enrolled agent")
+	if err != nil || !target.Enabled {
+		return migration.RunMember{}, nil, errors.New("migration member target must be an enabled connector target")
 	}
 	executionModel, err := a.migrationMemberExecutor(ctx, tenantID, target, agentID, anchorPath)
 	if err != nil {
@@ -455,7 +455,7 @@ func (a *API) buildMigrationMember(
 		return migration.RunMember{}, nil, err
 	}
 	verifyAddress, verifyServerName := migrationVerifyTarget(target.Config)
-	if verifyAddress == "" {
+	if verifyAddress == "" && executionModel != migration.ExecutionCloudStore {
 		return migration.RunMember{}, nil, errors.New("migration member target must configure verify_address")
 	}
 	connectorName, routed := migrationRoutingAttrs(ident.Attributes)
@@ -464,6 +464,11 @@ func (a *API) buildMigrationMember(
 	}
 	if routed == "" {
 		routed = target.Name
+	}
+	if executionModel == migration.ExecutionCloudStore {
+		if err := a.cloudStorePredecessorInstalled(ctx, tenantID, routed, predecessor.Fingerprint); err != nil {
+			return migration.RunMember{}, nil, err
+		}
 	}
 	return migration.RunMember{IdentityID: identityID, Binding: migration.MemberBinding{
 		IssuingAuthorityID: authorityID,
@@ -495,8 +500,14 @@ func (a *API) buildMigrationMember(
 // predecessor on rollback — and takes no trust_anchor_path, because a relay
 // cannot write a trust store on an appliance and the appliance has none this
 // control plane manages: the hosts that must trust the new anchor are members
-// of their own. Cloud stores are not migrated by a run.
+// of their own. A member named with no agent is a cloud-store member (A166).
 func (a *API) migrationMemberExecutor(ctx context.Context, tenantID string, target store.DeploymentTarget, agentID, anchorPath string) (string, error) {
+	if agentID == "" {
+		return a.cloudStoreMemberExecutor(ctx, tenantID, target, anchorPath)
+	}
+	if !custody.TargetExecutorIsAgent(target.Config) {
+		return "", errors.New("migration member target must be an enabled connector target executed by an enrolled agent")
+	}
 	vantage, _ := connector.EffectiveTargetVantage(target.Type, target.Config)
 	switch {
 	case vantage == connector.VantageHostAgent && relay.ExecutesOnHost(target.Type):
@@ -516,8 +527,8 @@ func (a *API) migrationMemberExecutor(ctx context.Context, tenantID string, targ
 		if anchorPath != "" {
 			return "", errors.New("an appliance member takes no trust_anchor_path: a network relay cannot write a trust store on an appliance; name the hosts that must trust the new anchor as members of their own")
 		}
-		if !connector.CanExecuteRollback(target.Type) {
-			return "", fmt.Errorf("appliance family %s has no executable rollback, so a run could not restore its predecessor; migrate it with a reviewed connector target deploy once its clients trust the new anchor", target.Type)
+		if err := migrationRollbackRefusal(target); err != nil {
+			return "", err
 		}
 		// Credential redemption hands material only to the agent the target
 		// names, so the appliance must already be assigned to this relay.
@@ -533,8 +544,73 @@ func (a *API) migrationMemberExecutor(ctx context.Context, tenantID string, targ
 		}
 		return migration.ExecutionAppliance, nil
 	default:
-		return "", errors.New("migration member target must be a host-agent or network-appliance connector; cloud-store targets are not migrated by a run")
+		return "", errors.New("migration member target must be a host-agent, network-appliance or cloud certificate store connector")
 	}
+}
+
+// cloudStoreMemberExecutor admits a cloud certificate store as a member with no
+// agent (A166). Where a tenant has no network relay enrolled, the control
+// plane's own client carries the cloud stores (A59): it installs the
+// control-plane issued successor, reads the store back as the live gate and
+// re-binds the predecessor on rollback. Once a relay is enrolled the stores'
+// work executes there, so the member is that relay's, named as its agent_id.
+// A store whose API cannot restore a predecessor is refused with the reason,
+// as an appliance family without a re-bind is.
+func (a *API) cloudStoreMemberExecutor(ctx context.Context, tenantID string, target store.DeploymentTarget, anchorPath string) (string, error) {
+	if !connector.ControlPlaneCarriesNatively(target.Type) {
+		return "", errors.New("migration member requires an enrolled agent_id unless its target is a cloud certificate store the control plane carries")
+	}
+	if anchorPath != "" {
+		return "", errors.New("a cloud-store member takes no trust_anchor_path: the store holds no trust store this control plane manages; name the hosts that must trust the new anchor as members of their own")
+	}
+	if custody.TargetExecutorIsAgent(target.Config) {
+		return "", errors.New("this cloud-store target is assigned to an agent executor; name that relay as the member's agent_id")
+	}
+	if err := migrationRollbackRefusal(target); err != nil {
+		return "", err
+	}
+	hasRelay, err := a.store.TenantHasNetworkRelay(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	if hasRelay {
+		return "", errors.New("this tenant has a network relay enrolled, so cloud-store work executes there: assign the target to that relay (executor agent, required_agent_id) and name the relay as the member's agent_id")
+	}
+	return migration.ExecutionCloudStore, nil
+}
+
+// migrationRollbackRefusal refuses a relay- or control-plane-executed target a
+// run could not put back: a family with no re-bind, with the provider's
+// reason, or a re-bind family whose target lacks the binding that makes its
+// deploys fingerprint-named (the same rule the target's rollback readiness
+// reports).
+func migrationRollbackRefusal(target store.DeploymentTarget) error {
+	if !connector.CanExecuteRollback(target.Type) {
+		reason := ""
+		if why := connector.RollbackUnsupportedReason(target.Type); why != "" {
+			reason = ": " + why
+		}
+		return fmt.Errorf("%s has no executable rollback, so a run could not restore its predecessor%s; migrate it with a reviewed connector target deploy once its clients trust the new anchor", target.Type, reason)
+	}
+	if why := rebindBindingMissing(target.Type, target.Config); why != "" {
+		return fmt.Errorf("a run could not restore this target's predecessor: %s", why)
+	}
+	return nil
+}
+
+// cloudStorePredecessorInstalled requires the predecessor to be in the store
+// under its fingerprint-named object: a cloud-store rollback re-binds that
+// object, which exists only if trstctl delivered the predecessor to this target
+// (A58).
+func (a *API) cloudStorePredecessorInstalled(ctx context.Context, tenantID, route, fingerprint string) error {
+	delivered, err := a.store.DeployDeliveredToTarget(ctx, tenantID, route, fingerprint)
+	if err != nil {
+		return err
+	}
+	if !delivered {
+		return errors.New("a cloud-store member's predecessor was never delivered to this target through trstctl, so the store holds no fingerprint-named certificate a rollback could re-bind; deploy the identity to this target once more first")
+	}
+	return nil
 }
 
 // migrationPredecessorCertificate resolves the leaf a member serves today

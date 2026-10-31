@@ -184,13 +184,15 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.Lock()
-		_, exists := s.certs[id]
+		cert, exists := s.certs[id]
 		s.mu.Unlock()
 		if !exists {
 			s.fail(w, http.StatusNotFound, "NOT_FOUND", "certificate not found")
 			return
 		}
-		s.writeJSON(w, map[string]any{"name": strings.TrimPrefix(path, "v1/")})
+		// Like Certificate Manager, the resource reports its certificate
+		// chain (output only) and never the private key.
+		s.writeJSON(w, map[string]any{"name": strings.TrimPrefix(path, "v1/"), "pemCertificate": string(cert.PEMCertificate)})
 
 	case r.Method == http.MethodPatch && strings.Contains(path, "/certificates/"):
 		if !strings.Contains(r.URL.Query().Get("updateMask"), "self_managed") {

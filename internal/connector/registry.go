@@ -595,38 +595,75 @@ func (r *Registry) Rollback(ctx context.Context, p DeployPayload, rb Rollback) (
 	if len(p.CertPEM) != 0 || len(p.KeyPEM) != 0 {
 		return RollbackResult{}, fmt.Errorf("connector: rollback payload must not contain certificate or private-key material")
 	}
+	c, ops, cleanup, err := r.resolveForTarget(ctx, p, "rollback")
+	if err != nil {
+		return RollbackResult{}, err
+	}
+	defer cleanup()
+	_, result, err := RunRollbackWithResult(ctx, c, ops, rb)
+	return result, err
+}
+
+// Readback asks the connector a target uses what the target serves now,
+// through the same factory and grant a deploy to it would use. The payload
+// carries no certificate or key. It is the control plane's live gate for a
+// cloud-store migration member (A166).
+func (r *Registry) Readback(ctx context.Context, p DeployPayload) (Installed, error) {
+	if r == nil {
+		return Installed{}, fmt.Errorf("connector: registry is not configured")
+	}
+	if p.TenantID == "" || p.Connector == "" || p.Target == "" {
+		return Installed{}, fmt.Errorf("connector: readback requires tenant, connector, and target name")
+	}
+	if len(p.CertPEM) != 0 || len(p.KeyPEM) != 0 {
+		return Installed{}, fmt.Errorf("connector: readback payload must not contain certificate or private-key material")
+	}
+	c, ops, cleanup, err := r.resolveForTarget(ctx, p, "readback")
+	if err != nil {
+		return Installed{}, err
+	}
+	defer cleanup()
+	return RunReadback(ctx, c, ops, p.Target)
+}
+
+// resolveForTarget builds the connector and ops a target's payload selects:
+// the registered factory for the target's configuration, or the static
+// connector with the registry's ops. The returned cleanup is never nil.
+func (r *Registry) resolveForTarget(ctx context.Context, p DeployPayload, verb string) (Connector, Ops, func(), error) {
+	noop := func() {}
 	r.mu.RLock()
 	c := r.connectors[p.Connector]
 	factory := r.factories[p.Connector]
 	opsFor := r.opsFor
 	r.mu.RUnlock()
 	if c == nil && factory == nil {
-		return RollbackResult{}, fmt.Errorf("connector: no connector registered as %q", p.Connector)
+		return nil, nil, noop, fmt.Errorf("connector: no connector registered as %q", p.Connector)
 	}
 	var (
 		ops     Ops
-		cleanup func()
-		err     error
+		cleanup = noop
 	)
 	if factory != nil {
-		c, ops, cleanup, err = factory(ctx, p)
+		built, builtOps, builtCleanup, err := factory(ctx, p)
 		if err != nil {
-			return RollbackResult{}, fmt.Errorf("connector: build rollback target %q: %w", p.Connector, err)
+			return nil, nil, noop, fmt.Errorf("connector: build %s target %q: %w", verb, p.Connector, err)
 		}
-		if cleanup != nil {
-			defer cleanup()
+		c, ops = built, builtOps
+		if builtCleanup != nil {
+			cleanup = builtCleanup
 		}
 	} else if opsFor != nil {
 		ops = opsFor(p.Connector)
 	}
 	if c == nil {
-		return RollbackResult{}, fmt.Errorf("connector: factory returned no connector for %q", p.Connector)
+		cleanup()
+		return nil, nil, noop, fmt.Errorf("connector: factory returned no connector for %q", p.Connector)
 	}
 	if ops == nil {
-		return RollbackResult{}, fmt.Errorf("connector: no ops configured for %q", p.Connector)
+		cleanup()
+		return nil, nil, noop, fmt.Errorf("connector: no ops configured for %q", p.Connector)
 	}
-	_, result, err := RunRollbackWithResult(ctx, c, ops, rb)
-	return result, err
+	return c, ops, cleanup, nil
 }
 
 // Handle decodes a deploy payload and runs the named connector. It is the body
