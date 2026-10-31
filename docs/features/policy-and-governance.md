@@ -469,6 +469,17 @@ intent, unexplained key loss and incomplete backup bindings still refuse; a
 pending-journal read grants no removal or signing authority. Public controls,
 protected artifacts and the full backup/restore journey are still required;
 this is not a served opt-in workflow.
+
+An older source cut from before activation also has local current-custody tests.
+The original first-registration identity selects the independent key reference;
+verified signed absence stops retired SQL reconstruction and new private writes
+across rebuild, catch-up and tail. No activation, offboard or key is invented.
+Wrong trust, creation or reference and pending removal refuse. Independent neighbor
+history and later real registrations remain separate. Pre-feature plaintext is
+still readable in the raw old source; this is not retroactive cryptographic erasure
+or complete authenticated backup/SQL/snapshot restoration. Current independent
+custody must remain configured for this proof.
+
 An explicit public JWKS file can retain destruction-evidence verification after
 signer rotation. It is loaded independently of data restore, with the same trust
 attached to custody, source readers and admission. Verification uses the original

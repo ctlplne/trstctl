@@ -1757,6 +1757,18 @@ and material present despite recorded absence remain errors. This is a local
 lifecycle simulation, not an operating-system process-kill proof. Public operator
 controls, protected backup/archive artifacts and complete erasure-aware restore
 are not served yet.
+
+Local tests cover pre-activation source cuts with CURRENT original custody too:
+rebuild, catch-up and tail preserve the raw legacy prefix and neighbor history,
+omit the retired first registration from SQL, and refuse new private plaintext,
+name refreshes and re-enable controls. Signed current identity, not a caller flag
+or numeric sequence alone, selects the floor; no historical control or key is
+created. Wrong public trust/creation/reference and incomplete current removal
+refuse. Never-enabled legacy references remain unchanged. These tests require
+the original independent custodian; old plaintext history alone cannot prove a
+later erasure. Its pre-feature data remains readable, and full authenticated
+backup/SQL/snapshot/archive restoration is still unproven.
+
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
 that component proof does not establish complete authenticated backup restore.

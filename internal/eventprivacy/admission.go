@@ -63,6 +63,22 @@ func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event e
 	if err != nil {
 		return events.EventProtectionDecision{}, err
 	}
+	if lifetime.Activation == nil {
+		if err := admission.Policy.withRegistrationFloor(ctx, lifetime, admission.Custody, func(_ context.Context, floor registrationFloor) error {
+			if floor.erased {
+				if event.Type == eventRegistered && lifetime.Offboard != nil {
+					return nil
+				}
+				return ErrOffboarded
+			}
+			if floor.found && lifetime.Request == nil && lifetime.Offboard == nil {
+				return ErrSource
+			}
+			return nil
+		}); err != nil {
+			return events.EventProtectionDecision{}, err
+		}
+	}
 	switch event.Type {
 	case EventRequested:
 		request, err := ParseRequested(tenant.String(), event.Data)

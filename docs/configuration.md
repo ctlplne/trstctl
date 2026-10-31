@@ -1087,6 +1087,18 @@ the global projection checkpoint: ordinary catch-up must process neighboring eve
 before readiness. These are local component tests. Public enable controls,
 protected artifacts and the complete opt-in restore workflow remain unavailable.
 
+Local tests also cover a source cut taken before activation. With the original
+current custodian still configured, the first registration selects its deterministic
+key reference and independently verified signed absence. Rebuild, catch-up and tail
+omit that retired registration from SQL and refuse new private writes, name refreshes
+and re-enable controls. Neighboring history can grow beyond the old activation's
+sequence without losing this identity check. A never-enabled reference remains
+legacy; missing material or an incomplete current journal is not erasure.
+
+Pre-feature plaintext remains readable in that old source or artifact. Suppressing
+SQL reconstruction does not erase those bytes. A plaintext-only artifact cannot
+establish a later erasure without the original current independent custody.
+
 ## Provider workforce identity and customer access
 
 The Provider plane is a different privilege domain from tenant login. OIDC or

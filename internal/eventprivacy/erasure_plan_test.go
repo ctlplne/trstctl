@@ -47,7 +47,7 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	authorizer := &sourceReadDestructionAuthority{}
 	custody, err := eventprotect.NewFileAuthority(eventprotect.FileAuthorityConfig{
 		Directory:   filepath.Join(base, "independent-keys"),
-		BackupRoots: []string{filepath.Join(base, "events"), filepath.Join(base, "restored-events")},
+		BackupRoots: []string{filepath.Join(base, "events"), filepath.Join(base, "restored-events"), filepath.Join(base, "before-activation-events")},
 		Locker:      &sourceFixtureLocker{}, EvidenceKey: key, DestructionAuthority: authorizer,
 	})
 	if err != nil {
@@ -77,6 +77,16 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	registration := appendSource(t, source, "erasure-plan-registration", "tenant.registered", time.Now().UTC(), struct {
 		Name string `json:"name"`
 	}{"old fixture"})
+	var earliest []events.BackupHistoryRecord
+	var earliestRaw bytes.Buffer
+	if err := source.ExportBackupHistoryThrough(t.Context(), registration.Sequence, func(record events.BackupHistoryRecord) error {
+		record.Stored = bytes.Clone(record.Stored)
+		earliest = append(earliest, record)
+		earliestRaw.Write(record.Stored)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	request, err := eventprivacy.NewRequested(sourceTenant, registration.ID, time.Nanosecond)
 	if err != nil {
 		t.Fatal(err)
@@ -335,6 +345,63 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	if receipt, erased, err := custody.DestructionReceipt(t.Context(), ref); err != nil || !erased || receipt == "" {
 		t.Fatalf("current receipt disappeared: %v", err)
 	}
+	if err := restored.Close(); err != nil {
+		t.Fatal(err)
+	}
+	beforeActivation := open(filepath.Join(base, "before-activation-events"))
+	if _, err := beforeActivation.RestoreBackupHistory(t.Context(), registration.Sequence, crypto.SHA256Hex(earliestRaw.Bytes()), func(yield func(events.BackupHistoryRecord) error) error {
+		for _, record := range earliest {
+			if err := yield(record); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	planner.Policy = policy
+	if err := planner.WithPlan(t.Context(), func(_ context.Context, plan *eventprivacy.ErasurePlan) error {
+		if !planSkips(t, plan, registration) {
+			t.Fatal("current signed first-registration floor omitted no old lifetime")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	badTrust, err := jose.GenerateRSASigningKey("unrelated-registration-floor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongTrust := planner
+	wrongTrust.Policy.Trust = badTrust.JWKS()
+	called = false
+	if err := wrongTrust.WithPlan(t.Context(), func(context.Context, *eventprivacy.ErasurePlan) error { called = true; return nil }); err == nil || called {
+		t.Fatal("wrong public trust selected old registration erasure")
+	}
+	for name, change := range map[string]func(*eventprotect.CurrentKeyState){
+		"creation": func(state *eventprotect.CurrentKeyState) {
+			state.Creation.Probe = bytes.Clone(state.Creation.Probe)
+			state.Creation.Probe[0] ^= 1
+		},
+		"pending": func(state *eventprotect.CurrentKeyState) {
+			state.Phase = eventprotect.CustodyKeyPending
+			state.Receipt = ""
+		},
+		"ref": func(state *eventprotect.CurrentKeyState) { state.Creation.Ref.TenantID = neighbor },
+	} {
+		t.Run("registration-floor-"+name, func(t *testing.T) {
+			invalid := planner
+			invalid.Custody = &floorLookupOverride{FileAuthority: custody, change: change}
+			called := false
+			if err := invalid.WithPlan(t.Context(), func(context.Context, *eventprivacy.ErasurePlan) error { called = true; return nil }); err == nil || called {
+				t.Fatal("unverified registration state exposed erasure plan")
+			}
+		})
+	}
+	var preserved bytes.Buffer
+	if err := beforeActivation.ExportBackupHistoryThrough(t.Context(), registration.Sequence, func(record events.BackupHistoryRecord) error { preserved.Write(record.Stored); return nil }); err != nil || !bytes.Equal(preserved.Bytes(), earliestRaw.Bytes()) {
+		t.Fatalf("registration floor changed raw legacy source: %v", err)
+	}
 }
 
 func planSkips(t *testing.T, plan *eventprivacy.ErasurePlan, event events.Event) bool {
@@ -367,4 +434,30 @@ func (c *changingPlanCustody) DestructionReceipt(ctx context.Context, ref eventp
 		return "", false, eventprotect.ErrKey
 	}
 	return c.ErasurePlanCustody.DestructionReceipt(ctx, ref)
+}
+
+func (c *changingPlanCustody) LookupKeyState(ctx context.Context, ref eventprotect.KeyRef) (eventprotect.CurrentKeyState, bool, error) {
+	if c.reject.Load() {
+		return eventprotect.CurrentKeyState{}, false, eventprotect.ErrKey
+	}
+	reader, ok := c.ErasurePlanCustody.(interface {
+		LookupKeyState(context.Context, eventprotect.KeyRef) (eventprotect.CurrentKeyState, bool, error)
+	})
+	if !ok {
+		return eventprotect.CurrentKeyState{}, false, eventprivacy.ErrSource
+	}
+	return reader.LookupKeyState(ctx, ref)
+}
+
+type floorLookupOverride struct {
+	*eventprotect.FileAuthority
+	change func(*eventprotect.CurrentKeyState)
+}
+
+func (c *floorLookupOverride) LookupKeyState(ctx context.Context, ref eventprotect.KeyRef) (eventprotect.CurrentKeyState, bool, error) {
+	state, found, err := c.FileAuthority.LookupKeyState(ctx, ref)
+	if err == nil && found {
+		c.change(&state)
+	}
+	return state, found, err
 }

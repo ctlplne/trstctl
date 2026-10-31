@@ -35,25 +35,11 @@ func (a *FileAuthority) PendingDestruction(ctx context.Context, creation KeyCrea
 			}
 			return nil
 		case "destroying":
-			if record.Destruction == nil || validateDestructionRequest(record.Destruction.Request) != nil || record.Destruction.Request.Ref != ref || record.Destruction.Request.CreationDigest != creation.Digest() || record.CreatedAt.After(record.Destruction.Request.OffboardedAt) || record.Destruction.Receipt != "" {
-				return ErrKey
+			request, err := a.pendingDestructionRecord(ref, record)
+			if err != nil {
+				return err
 			}
-			if !record.Destruction.RemovedAt.IsZero() && record.Destruction.RemovedAt.Before(record.Destruction.Request.NotBefore) {
-				return ErrKey
-			}
-			if _, err := a.root.Lstat(keyName(ref)); err == nil {
-				if !record.Destruction.RemovedAt.IsZero() {
-					return ErrKey
-				}
-				key, err := a.loadKey(ref, record)
-				if err != nil {
-					return err
-				}
-				key.Destroy()
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return ErrKey
-			}
-			result, pending = record.Destruction.Request, true
+			result, pending = request, true
 			return nil
 		default:
 			return ErrKey
@@ -63,4 +49,26 @@ func (a *FileAuthority) PendingDestruction(ctx context.Context, creation KeyCrea
 		return DestructionRequest{}, false, err
 	}
 	return result, pending, nil
+}
+
+func (a *FileAuthority) pendingDestructionRecord(ref KeyRef, record fileKeyRecord) (DestructionRequest, error) {
+	if record.Destruction == nil || validateDestructionRequest(record.Destruction.Request) != nil || record.Destruction.Request.Ref != ref || record.Destruction.Request.CreationDigest != creationEvidenceFor(record).Digest() || record.CreatedAt.After(record.Destruction.Request.OffboardedAt) || record.Destruction.Receipt != "" {
+		return DestructionRequest{}, ErrKey
+	}
+	if !record.Destruction.RemovedAt.IsZero() && record.Destruction.RemovedAt.Before(record.Destruction.Request.NotBefore) {
+		return DestructionRequest{}, ErrKey
+	}
+	if _, err := a.root.Lstat(keyName(ref)); err == nil {
+		if !record.Destruction.RemovedAt.IsZero() {
+			return DestructionRequest{}, ErrKey
+		}
+		key, err := a.loadKey(ref, record)
+		if err != nil {
+			return DestructionRequest{}, err
+		}
+		key.Destroy()
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return DestructionRequest{}, ErrKey
+	}
+	return record.Destruction.Request, nil
 }

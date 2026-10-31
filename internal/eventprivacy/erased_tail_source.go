@@ -60,7 +60,7 @@ func (planner ErasurePlanner) WithRetainedSource(ctx context.Context, event even
 				continue
 			}
 			if life.Activation == nil {
-				return visit(read, false)
+				return planner.Policy.withRegistrationFloor(read, life, planner.Custody, func(fenced context.Context, floor registrationFloor) error { return visit(fenced, floor.erased) })
 			}
 			if planner.Custody == nil {
 				return ErrSource

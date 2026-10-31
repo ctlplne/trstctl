@@ -25,7 +25,7 @@ func (reader SourceKeys) VerifyCurrentCustody(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		return reader.Policy.Log.ReplayTypesThrough(read, 1, head, []string{EventActivated}, func(event events.Event) error {
+		if err := reader.Policy.Log.ReplayTypesThrough(read, 1, head, []string{EventActivated}, func(event events.Event) error {
 			activation, err := ParseActivated(event)
 			if err != nil {
 				return err
@@ -37,6 +37,31 @@ func (reader SourceKeys) VerifyCurrentCustody(ctx context.Context) error {
 				return nil
 			}
 			return err
-		})
+		}); err != nil {
+			return err
+		}
+		if reader.Custody == nil {
+			return nil
+		}
+		tenants := map[string]bool{}
+		if err := reader.Policy.Log.ReplayTypesThrough(read, 1, head, []string{eventRegistered}, func(event events.Event) error { tenants[event.TenantID] = true; return nil }); err != nil {
+			return err
+		}
+		for tenant := range tenants {
+			if err := reader.Policy.replayLifetimesThrough(read, tenant, head, func(life Lifetime) error {
+				if life.Activation != nil {
+					return nil
+				}
+				return reader.Policy.withRegistrationFloor(read, life, reader.Custody, func(_ context.Context, floor registrationFloor) error {
+					if floor.found && !floor.erased && life.Request == nil && life.Offboard == nil {
+						return ErrSource
+					}
+					return nil
+				})
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

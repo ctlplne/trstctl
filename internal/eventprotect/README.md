@@ -121,3 +121,14 @@ receiver. Exact backup bindings are checked before recovery, sanitation follows
 it, and current-custody proof still gates readiness. The source checkpoint stays
 unchanged until ordinary ordered catch-up. Raw restore construction never runs
 this recovery hook before its authenticated source is resumed.
+
+`LookupKeyState` is a bounded read of one exact reference. No record and no
+material means never enabled; orphaned material or unexplained loss is an error.
+Active, preparing and interrupted states cannot assert erasure. Completed state
+returns original signed absence and public creation identity without signing or
+removal authority. The source layer binds them to the deterministic FIRST source
+registration for a cut predating activation. Admission and reconstruction share
+that floor; growing another tenant's restored branch does not change the identity.
+No legacy plaintext bytes become cryptographically erased, and no historical
+activation/offboard or key is invented. Current independent custody remains a
+required external-to-backup input.

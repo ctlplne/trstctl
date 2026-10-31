@@ -100,7 +100,11 @@ func (planner ErasurePlanner) WithPlan(ctx context.Context, visit func(context.C
 		// Activation controls are public, closed and independently parsed by
 		// the complete lifetime fold below. Never open private registration,
 		// offboard or credential bodies merely to discover protected tenants.
-		if err := planner.Policy.Log.ReplayTypesThrough(read, 1, head, []string{EventActivated}, func(event events.Event) error {
+		types := []string{EventActivated}
+		if planner.Custody != nil {
+			types = append(types, eventRegistered)
+		}
+		if err := planner.Policy.Log.ReplayTypesThrough(read, 1, head, types, func(event events.Event) error {
 			tenant, err := uuid.Parse(event.TenantID)
 			if err != nil || tenant == uuid.Nil {
 				return ErrSource
@@ -121,6 +125,18 @@ func (planner ErasurePlanner) WithPlan(ctx context.Context, visit func(context.C
 			}
 			for index, life := range lifetimes {
 				if life.Activation == nil {
+					if err := planner.Policy.withRegistrationFloor(read, life, planner.Custody, func(_ context.Context, floor registrationFloor) error {
+						if floor.erased {
+							last := head
+							if index+1 < len(lifetimes) {
+								last = lifetimes[index+1].Registration.Sequence - 1
+							}
+							plan.ranges = append(plan.ranges, erasedLifetimeRange{tenant: tenant, first: life.Registration.Sequence, last: last, ref: floor.ref, receipt: floor.receipt})
+						}
+						return nil
+					}); err != nil {
+						return err
+					}
 					continue
 				}
 				var erased bool
