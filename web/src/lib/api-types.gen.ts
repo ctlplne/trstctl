@@ -1521,6 +1521,30 @@ export interface AuditAnchoringStatus {
   verification: string;
 }
 
+export interface AuditArchiveDownload {
+  bundle: string;
+  chain_head: string;
+  first_record: number;
+  format: "jws";
+  last_record: number;
+  prev_hash: string;
+  segment_id: string;
+  sha256: string;
+}
+
+export interface AuditArchiveSegment {
+  archived_at: string;
+  boundary_sequence: number;
+  chain_head: string;
+  first_record: number;
+  id: string;
+  last_record: number;
+}
+
+export interface AuditArchiveSegmentList {
+  items: AuditArchiveSegment[];
+}
+
 export interface AuditArchivedPrefix {
   chain_head: string;
   record_count: number;

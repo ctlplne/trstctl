@@ -1864,11 +1864,26 @@ inspect it with `GET /api/v1/privacy/archive-erasure-attestations`, or use
 redacted evidence refs rather than the raw subject.
 
 An empty Change history search reports the tenant's sealed archived-prefix
-count when one exists. The API returns only its count and chain head, never
+count when one exists. The search returns only its count and chain head, never
 the archive file, host path or object locator; retention does not silently
-turn an online audit read into an archive retrieval. An archive custodian must
-supply the signed JWS files (from the directory, or downloaded from the object
-store with any S3 client) and pinned verification keys for offline checking.
+turn an online audit read into an archive retrieval. A tenant downloads its own
+archived segments instead through a separately permissioned route:
+`GET /api/v1/audit/archives` lists them and `GET /api/v1/audit/archives/{id}`
+returns one (`?format=jws` for the raw segment), with `audit:archive.read`,
+which of the built-in roles only admin and auditor hold (a custom role or a
+scoped token can grant it). The CLI is `trstctl audit archives
+list|get`, and the console's Audit evidence view has an **Archived segments**
+panel. A segment is addressed only by its opaque ID; the server rebuilds its
+location from the configured archive, the tenant and the record count, verifies
+the bytes as that tenant's signed retention segment, and records an
+`audit.archive.downloaded` audit event before releasing them. Downloads are
+limited to six a minute per tenant. A downloaded segment verifies offline with
+`trstctl audit verify --format retention-jws --audit-jwks ... --expected-tenant
+...`. Segments the retention worker writes hold one tenant's records; a segment
+that does not verify as the requesting tenant's own, a legacy segment and the
+deployment-wide archives stay custodian-only, and an archive custodian supplies
+those signed JWS files (from the directory, or downloaded from the object store
+with any S3 client) with pinned verification keys.
 
 Retention elects one archiver per audit scope across control-plane replicas.
 It pins the source generation until the signed segment, `audit.archived` event,

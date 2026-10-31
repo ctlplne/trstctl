@@ -125,6 +125,9 @@ import type {
   AttestedSVIDPreview as GenAttestedSVIDPreview,
   AttestedSVIDRequest,
   AuditAnchoringStatus,
+  AuditArchiveDownload,
+  AuditArchiveSegment,
+  AuditArchiveSegmentList,
   AuditBundle,
   TSACertificate,
   TSACertificateList,
@@ -1077,6 +1080,9 @@ export type {
   APITokenCreateResponse,
   APITokenList,
   AuditAnchoringStatus,
+  AuditArchiveDownload,
+  AuditArchiveSegment,
+  AuditArchiveSegmentList,
   AuditBundle,
   TSACertificate,
   TSACertificateList,
@@ -2267,6 +2273,8 @@ export interface Api {
   auditEvents(options?: AuditQuery, signal?: AbortSignal): Promise<AuditEvent[]>;
   auditWindow(options?: AuditQuery, signal?: AbortSignal): Promise<AuditWindow>;
   exportAudit(options?: AuditQuery, signal?: AbortSignal): Promise<AuditBundle>;
+  auditArchives(): Promise<AuditArchiveSegmentList>;
+  downloadAuditArchive(id: string): Promise<AuditArchiveDownload>;
   auditFeeds(): Promise<AuditFeedList>;
   auditAnchors(): Promise<AuditAnchoringStatus>;
   tsaCertificates(): Promise<TSACertificateList>;
@@ -3087,6 +3095,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   auditEvents: (options, signal) =>
     req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }).then((r) => r.events ?? []),
   auditWindow: (options, signal) => req<AuditWindow>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
+  auditArchives: () => req<AuditArchiveSegmentList>("/api/v1/audit/archives"),
+  downloadAuditArchive: (id) => req<AuditArchiveDownload>(`/api/v1/audit/archives/${encodeURIComponent(id)}`),
   exportAudit: (options, signal) => req<AuditBundle>(`/api/v1/audit/export${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),
   auditFeeds: () => req<AuditFeedList>("/api/v1/audit/feeds"),
   auditAnchors: () => req<AuditAnchoringStatus>("/api/v1/audit/anchors"),

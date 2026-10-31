@@ -2115,6 +2115,42 @@ AuditAnchoringStatus = TypedDict(
     total=False,
 )
 
+AuditArchiveDownload = TypedDict(
+    'AuditArchiveDownload',
+    {
+        'bundle': str,
+        'chain_head': str,
+        'first_record': int,
+        'format': str,
+        'last_record': int,
+        'prev_hash': str,
+        'segment_id': str,
+        'sha256': str,
+    },
+    total=False,
+)
+
+AuditArchiveSegment = TypedDict(
+    'AuditArchiveSegment',
+    {
+        'archived_at': str,
+        'boundary_sequence': int,
+        'chain_head': str,
+        'first_record': int,
+        'id': str,
+        'last_record': int,
+    },
+    total=False,
+)
+
+AuditArchiveSegmentList = TypedDict(
+    'AuditArchiveSegmentList',
+    {
+        'items': list[dict[str, Any]],
+    },
+    total=False,
+)
+
 AuditArchivedPrefix = TypedDict(
     'AuditArchivedPrefix',
     {

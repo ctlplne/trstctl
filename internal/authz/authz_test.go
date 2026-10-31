@@ -402,3 +402,26 @@ func TestCustomRoleVocabularyLeavesOutWildcardAndMachinePermissions(t *testing.T
 		}
 	}
 }
+
+// A234: archive download is a separate permission: admin and auditor hold it,
+// the everyday and machine roles do not, and a custom role may grant it.
+func TestAuditArchiveReadIsSeparatelyGranted(t *testing.T) {
+	roles := authz.BuiltinRoles()
+	for _, name := range []string{"admin", "auditor"} {
+		if !roles[name].Allows(authz.AuditArchiveRead) {
+			t.Errorf("built-in role %q lacks %s", name, authz.AuditArchiveRead)
+		}
+	}
+	for _, name := range []string{"operator", "viewer", "cli", "mcp", "agent", "ra-officer"} {
+		if roles[name].Allows(authz.AuditArchiveRead) {
+			t.Errorf("built-in role %q holds %s", name, authz.AuditArchiveRead)
+		}
+	}
+	granted := false
+	for _, p := range authz.CustomRoleVocabulary() {
+		granted = granted || p == authz.AuditArchiveRead
+	}
+	if !granted {
+		t.Errorf("a custom role cannot grant %s", authz.AuditArchiveRead)
+	}
+}

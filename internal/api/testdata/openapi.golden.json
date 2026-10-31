@@ -6332,6 +6332,94 @@
         ],
         "type": "object"
       },
+      "AuditArchiveDownload": {
+        "properties": {
+          "bundle": {
+            "type": "string"
+          },
+          "chain_head": {
+            "type": "string"
+          },
+          "first_record": {
+            "type": "integer"
+          },
+          "format": {
+            "enum": [
+              "jws"
+            ],
+            "type": "string"
+          },
+          "last_record": {
+            "type": "integer"
+          },
+          "prev_hash": {
+            "type": "string"
+          },
+          "segment_id": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "segment_id",
+          "format",
+          "bundle",
+          "sha256",
+          "first_record",
+          "last_record",
+          "prev_hash",
+          "chain_head"
+        ],
+        "type": "object"
+      },
+      "AuditArchiveSegment": {
+        "properties": {
+          "archived_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "boundary_sequence": {
+            "type": "integer"
+          },
+          "chain_head": {
+            "type": "string"
+          },
+          "first_record": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_record": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "first_record",
+          "last_record",
+          "boundary_sequence",
+          "chain_head",
+          "archived_at"
+        ],
+        "type": "object"
+      },
+      "AuditArchiveSegmentList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditArchiveSegment"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "AuditArchivedPrefix": {
         "properties": {
           "chain_head": {
@@ -48864,6 +48952,119 @@
         ],
         "summary": "Show continuous audit anchoring and the tenant's recent anchors",
         "x-trstctl-permission": "audit:read"
+      }
+    },
+    "/api/v1/audit/archives": {
+      "get": {
+        "operationId": "listAuditArchives",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditArchiveSegmentList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List the tenant's archived signed audit segments",
+        "x-trstctl-permission": "audit:archive.read"
+      }
+    },
+    "/api/v1/audit/archives/{id}": {
+      "get": {
+        "operationId": "downloadAuditArchive",
+        "parameters": [
+          {
+            "description": "archived segment id (audit-archive- and 64 lowercase hex)",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "jws returns the raw signed segment instead of the JSON envelope",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditArchiveDownload"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Download one of the tenant's signed audit segments for offline verification; every download is audited",
+        "x-trstctl-permission": "audit:archive.read"
       }
     },
     "/api/v1/audit/events": {

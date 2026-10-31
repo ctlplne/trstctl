@@ -547,6 +547,25 @@ ordered steps:
    `trstctl_audit_source_records_retained_total`, and
    `trstctl_audit_retention_runs_total` on `/metrics`.
 
+A tenant downloads its own archived segments without a custodian, and without
+a license: archive download is a core audit right. With `audit:archive.read`
+(held by the built-in admin and auditor roles; a custom role or a scoped token
+can grant it), `GET /api/v1/audit/archives` lists the
+segments by opaque ID, record range, chain head and archive time, and `GET
+/api/v1/audit/archives/{id}` returns one segment's exact signed bytes
+(`?format=jws` for the raw JWS; `trstctl audit archives list|get`). A
+segment that directly follows a legacy segment lists `first_record` 0 because
+the log does not carry its start; the downloaded bundle names it. The server
+finds a segment only through the tenant's own `audit.archived` event, rebuilds
+its location from the configured archive, the tenant and the record count, and
+verifies the bytes as that tenant's signed retention segment; anything else is
+refused (404 for another tenant's or an unknown ID, 409 when the stored bytes
+are missing, moved or do not verify). An `audit.archive.downloaded` event with
+the segment ID, digest and record range is appended before the bytes leave, and
+downloads are limited to six a minute per tenant. Verify a download offline
+with `trstctl audit verify --artifact segment.jws --format retention-jws
+--audit-jwks audit.jwks.json --expected-tenant <tenant-id>`.
+
 The worker splits a large overdue prefix into bounded, contiguous signed
 segments below the isolated signer's message limit and drains the backlog in
 the same sweep. It does not increase the signing service's transport limit.

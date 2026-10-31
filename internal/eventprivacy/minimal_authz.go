@@ -39,6 +39,7 @@ var minimalAuthzPermissions = map[string]bool{
 	"agents:relay.grant":   true,
 	"agents:write":         true,
 	"approvals:review":     true,
+	"audit:archive.read":   true,
 	"audit:read":           true,
 	"audit:write":          true,
 	"capabilities:read":    true,

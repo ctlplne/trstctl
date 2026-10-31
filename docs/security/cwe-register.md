@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2015 annotated sites across 29 rules. Each row is
+2024 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -523,7 +523,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (332 sites)
+### G115 — CWE-190 Integer overflow or wraparound (335 sites)
 
 | Location | Reason |
 |---|---|
@@ -541,6 +541,8 @@ not this file.
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
 | `internal/api/vault_compat_complete.go:814` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:172` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
+| `internal/auditarchive/reader.go:104` | positive count checked first (CWE-190) |
+| `internal/auditarchive/reader.go:110` | bounded by the int count above (CWE-190) |
 | `internal/backup/backup.go:175` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
 | `internal/backup/backup.go:722` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
 | `internal/backup/backup.go:1005` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
@@ -638,10 +640,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6505` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6522` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6535` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6569` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6509` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6526` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6539` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6573` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -663,6 +665,7 @@ not this file.
 | `internal/reconcile/stepcasource_test.go:50` | a TCP port from the kernel (CWE-190) |
 | `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
+| `internal/server/audit_archive_download_served_test.go:55` | a test fixture count (CWE-190) |
 | `internal/server/backup.go:222` | record counts bounded by the event log (CWE-190) |
 | `internal/server/backup.go:389` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
@@ -1341,7 +1344,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (563 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (566 sites)
 
 | Location | Reason |
 |---|---|
@@ -1471,6 +1474,7 @@ not this file.
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention.go:56` | the archive path built above under the operator's archive dir (CWE-22) |
+| `ee/auditcompliance/retention_download_test.go:82` | the test's own archive (CWE-22) |
 | `ee/auditcompliance/retention_test.go:357` | glob is restricted to this test's private temporary archive directory. |
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
 | `ee/managedkeys/signerwiring/tenantkek.go:37` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
@@ -1548,6 +1552,7 @@ not this file.
 | `internal/api/rogue_certificates_weak_key_test.go:18` | a fixed test fixture directory, named by the test itself (CWE-22) |
 | `internal/api/sdk_spec_pinned_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/api/vault_compat_contract_test.go:255` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/auditarchive/reader.go:181` | rebuilt from the configured archive dir, tenant and boundary (CWE-22) |
 | `internal/auditsink/discard_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/backup/encrypted_artifact.go:62` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/backup/encrypted_artifact.go:194` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -1708,6 +1713,7 @@ not this file.
 | `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agentchannel.go:128` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
+| `internal/server/audit_archive_download_served_test.go:167` | the test's own archive (CWE-22) |
 | `internal/server/backup.go:146` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:209` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:380` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -2143,7 +2149,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (108 sites)
+### G703 — CWE-22 Path traversal (taint) (111 sites)
 
 | Location | Reason |
 |---|---|
@@ -2158,6 +2164,7 @@ not this file.
 | `cmd/trstctl/ssh.go:196` | operator-selected local proof file is matched to the checked private regular inode before reading |
 | `deploy/helm/airgap_bundle_test.go:222` | receiver is a private test directory and name ranges over two fixed archive basenames. |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
+| `ee/auditcompliance/retention_download_test.go:87` | the test's own archive under its t.TempDir (CWE-22) |
 | `internal/agent/relay/host_renew_pending.go:163` | both paths are agent-owned fixed state paths |
 | `internal/agent/relay/host_renew_pending.go:223` | derived agent-owned state path |
 | `internal/agent/relay/host_renew_pending.go:254` | derived agent-owned state path |
@@ -2199,6 +2206,8 @@ not this file.
 | `internal/secretscan/thirdparty_signature_test.go:49` | test-owned temp path |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
+| `internal/server/audit_archive_download_served_test.go:173` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/server/audit_archive_download_served_test.go:179` | the test's own archive under its t.TempDir (CWE-22) |
 | `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
 | `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:229` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |

@@ -20044,7 +20044,9 @@
                 "getAuditAnchoring",
                 "previewAuditFeed",
                 "putAuditFeed",
-                "listAuditFeeds"
+                "listAuditFeeds",
+                "listAuditArchives",
+                "downloadAuditArchive"
             ],
             "api_na": "",
             "cli_surface": [
@@ -20055,7 +20057,9 @@
                 "audit verify",
                 "audit feeds preview",
                 "audit feeds set",
-                "audit feeds list"
+                "audit feeds list",
+                "audit archives list",
+                "audit archives get"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -1665,6 +1665,8 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 			privacyPayloadShape[privacyHierarchyRoutedLeafIssuedV2](),
 		),
 		{audit.EventTypeArchived, audit.ArchivedEventSchemaVersion}: privacyPayloadShape[audit.ArchivedEvent](),
+		// A234: a released segment's opaque ID, digest and record range only.
+		{audit.EventTypeArchiveDownloaded, audit.ArchiveDownloadedSchemaVersion}: privacyPayloadShape[audit.ArchiveDownloaded](),
 		// A timestamp over a chain head: public certificates and hashes only.
 		{auditanchor.EventTypeAnchored, auditanchor.AnchoredEventSchemaVersion}: privacyPayloadShape[auditanchor.AnchoredEvent](),
 		// The TSA's own certificate and its revocation: public PKI material.

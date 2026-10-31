@@ -119,6 +119,7 @@ type API struct {
 	caHierarchy              CAHierarchyService
 	edgeDelegations          EdgeDelegationService
 	eventProtection          EventProtectionService
+	auditArchives            AuditArchiveService
 	externalCAs              ExternalCAService
 	certRevocationAuthority  CertificateRevocationAuthorityResolver
 	attestedIssuer           AttestedIssuerService
@@ -279,6 +280,7 @@ type config struct {
 	caHierarchy                 CAHierarchyService
 	edgeDelegations             EdgeDelegationService
 	eventProtection             EventProtectionService
+	auditArchives               AuditArchiveService
 	externalCAs                 ExternalCAService
 	certRevocationAuthority     CertificateRevocationAuthorityResolver
 	attestedIssuer              AttestedIssuerService
@@ -603,6 +605,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		caHierarchy:                 cfg.caHierarchy,
 		edgeDelegations:             cfg.edgeDelegations,
 		eventProtection:             cfg.eventProtection,
+		auditArchives:               cfg.auditArchives,
 		externalCAs:                 cfg.externalCAs,
 		certRevocationAuthority:     cfg.certRevocationAuthority,
 		attestedIssuer:              cfg.attestedIssuer,
@@ -1441,6 +1444,8 @@ func (a *API) routes() []route {
 
 		{method: "GET", path: "/api/v1/audit/events", opID: "searchAudit", summary: "Query the audit log", handler: a.searchAudit, query: auditQuery, resSchema: "AuditEventList", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/export", opID: "exportAudit", summary: "Export a signed audit evidence bundle", handler: a.exportAudit, query: auditQuery, resSchema: "AuditBundle", successCode: "200", perm: authz.AuditRead},
+		{method: "GET", path: "/api/v1/audit/archives", opID: "listAuditArchives", summary: "List the tenant's archived signed audit segments", handler: a.listAuditArchives, resSchema: "AuditArchiveSegmentList", successCode: "200", perm: authz.AuditArchiveRead},
+		{method: "GET", path: "/api/v1/audit/archives/{id}", opID: "downloadAuditArchive", summary: "Download one of the tenant's signed audit segments for offline verification; every download is audited", handler: a.downloadAuditArchive, pathParams: []param{pathString("id", "archived segment id (audit-archive- and 64 lowercase hex)")}, query: []param{{name: "format", typ: "string", desc: "jws returns the raw signed segment instead of the JSON envelope"}}, resSchema: "AuditArchiveDownload", successCode: "200", perm: authz.AuditArchiveRead},
 		{method: "GET", path: "/api/v1/audit/anchors", opID: "getAuditAnchoring", summary: "Show continuous audit anchoring and the tenant's recent anchors", handler: a.getAuditAnchoring, query: auditAnchorParams(), resSchema: "AuditAnchoringStatus", successCode: "200", perm: authz.AuditRead},
 		{method: "GET", path: "/api/v1/audit/verification-keys", opID: "getAuditVerificationKeys", summary: "Download public keys for offline audit evidence verification", handler: a.auditVerificationKeys, resSchema: "AuditVerificationKeySet", successCode: "200", perm: authz.AuditRead},
 		{method: "POST", path: "/api/v1/audit/feeds/{id}/preview", opID: "previewAuditFeed", summary: "Validate and explain an exact audit collector feed without writing state or contacting the collector", handler: a.previewAuditFeed, pathParams: idPath, reqSchema: "AuditFeedRequest", resSchema: "AuditFeedPreview", successCode: "200", perm: authz.AuditWrite},

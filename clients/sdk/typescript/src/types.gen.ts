@@ -1070,6 +1070,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit/archives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the tenant's archived signed audit segments */
+        get: operations["listAuditArchives"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit/archives/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download one of the tenant's signed audit segments for offline verification; every download is audited */
+        get: operations["downloadAuditArchive"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/events": {
         parameters: {
             query?: never;
@@ -10446,6 +10480,29 @@ export interface components {
             /** @enum {string} */
             state: "anchoring" | "failing" | "off" | "unlicensed";
             verification: string;
+        };
+        AuditArchiveDownload: {
+            bundle: string;
+            chain_head: string;
+            first_record: number;
+            /** @enum {string} */
+            format: "jws";
+            last_record: number;
+            prev_hash: string;
+            segment_id: string;
+            sha256: string;
+        };
+        AuditArchiveSegment: {
+            /** Format: date-time */
+            archived_at: string;
+            boundary_sequence: number;
+            chain_head: string;
+            first_record: number;
+            id: string;
+            last_record: number;
+        };
+        AuditArchiveSegmentList: {
+            items: components["schemas"]["AuditArchiveSegment"][];
         };
         AuditArchivedPrefix: {
             chain_head: string;
@@ -23830,6 +23887,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditAnchoringStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listAuditArchives: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditArchiveSegmentList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    downloadAuditArchive: {
+        parameters: {
+            query?: {
+                /** @description jws returns the raw signed segment instead of the JSON envelope */
+                format?: string;
+            };
+            header?: never;
+            path: {
+                /** @description archived segment id (audit-archive- and 64 lowercase hex) */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditArchiveDownload"];
                 };
             };
             /** @description client error */

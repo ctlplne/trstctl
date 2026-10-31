@@ -24246,6 +24246,56 @@ export const messages = {
     defaultMessage: "Record archive removal evidence",
     description: "Plain-language archive attestation dialog title.",
   },
+  "audit.archives.heading": {
+    defaultMessage: "Archived segments",
+    description: "A234: heading of the tenant's archived audit segments panel.",
+  },
+  "audit.archives.description": {
+    defaultMessage:
+      "Retention moved these older records out of the live view. Each download is the exact signed segment; verify it offline with the published audit keys. Every download is recorded in this audit log.",
+    description: "A234: what archived segments are and how downloads are recorded.",
+  },
+  "audit.archives.unavailable": {
+    defaultMessage: "Archived segments are unavailable",
+    description: "A234: the list could not load (for example, the role lacks audit:archive.read).",
+  },
+  "audit.archives.downloadFailed": {
+    defaultMessage: "Segment download failed",
+    description: "A234: a download was refused or failed.",
+  },
+  "audit.archives.empty": {
+    defaultMessage: "No segments have been archived for this tenant.",
+    description: "A234: empty list.",
+  },
+  "audit.archives.records": {
+    defaultMessage: "Records",
+    description: "A234: record range column.",
+  },
+  "audit.archives.range": {
+    defaultMessage: "{first}\u2013{last}",
+    description: "A234: an archived segment's record range.",
+  },
+  "audit.archives.rangeThrough": {
+    defaultMessage: "through {last}",
+    description: "A234: a segment after a legacy segment, whose first record the log does not carry; the download names it.",
+  },
+  "audit.archives.archivedAt": {
+    defaultMessage: "Archived",
+    description: "A234: archive time column.",
+  },
+  "audit.archives.chainHead": {
+    defaultMessage: "Chain head",
+    description: "A234: the segment's signed chain head column.",
+  },
+  "audit.archives.download": {
+    defaultMessage: "Download",
+    description: "A234: downloads one signed segment.",
+  },
+  "audit.archives.verifyHint": {
+    defaultMessage:
+      "Verify a downloaded segment offline: trstctl audit verify --artifact <file> --format retention-jws --audit-jwks <keys> --expected-tenant <tenant>.",
+    description: "A234: offline verification instruction.",
+  },
   "privacy.loading": {
     defaultMessage: "Loading privacy posture...",
     description: "Privacy route loading state.",

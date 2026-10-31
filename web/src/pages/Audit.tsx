@@ -20,6 +20,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { AuditAnchoringPanel } from "@/pages/audit/AuditAnchoringPanel";
+import { AuditArchivePanel } from "@/pages/audit/AuditArchivePanel";
 import { AuditFeedPanel } from "@/pages/audit/AuditFeedPanel";
 import { auditPresentation, type AuditPresentation } from "@/pages/audit/presentation";
 
@@ -462,6 +463,7 @@ function AuditWorkspace() {
           {bundle && <EvidenceBundle bundle={bundle} />}
           {events && <HashChainPanel events={events} />}
           <AuditAnchoringPanel />
+          <AuditArchivePanel />
         </div>
       </AuditDisclosure>
 

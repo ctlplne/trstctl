@@ -479,6 +479,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"audit", "events"}, Method: "GET", Path: "/api/v1/audit/events", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window"}, Summary: "Query the audit log"},
 	{Name: []string{"audit", "export"}, Method: "GET", Path: "/api/v1/audit/export", Query: []string{"tool", "feature_id", "action", "type", "since", "until", "as_of", "q", "limit", "window", "format", "anchor_log_from"}, Summary: "Export a signed audit bundle or record stream"},
 	{Name: []string{"audit", "verification-keys"}, Method: "GET", Path: "/api/v1/audit/verification-keys", Summary: "Download and pin public keys for offline audit verification"},
+	{Name: []string{"audit", "archives", "list"}, Method: "GET", Path: "/api/v1/audit/archives", Summary: "List the tenant's archived signed audit segments"},
+	{Name: []string{"audit", "archives", "get"}, Method: "GET", Path: "/api/v1/audit/archives/{id}", Query: []string{"format"}, RawResponse: true, Summary: "Download one archived audit segment for offline verification (format=jws for the raw segment)"},
 	{Name: []string{"audit", "anchors"}, Method: "GET", Path: "/api/v1/audit/anchors", Query: []string{"limit"}, Summary: "Show continuous audit anchoring and the tenant's recent anchors"},
 	{Name: []string{"audit", "feeds", "set"}, Method: "PUT", Path: "/api/v1/audit/feeds/{id}", Body: bodyFile, Summary: "Configure a durable native Splunk HEC or Sentinel audit feed"},
 	{Name: []string{"audit", "feeds", "preview"}, Method: "POST", Path: "/api/v1/audit/feeds/{id}/preview", Body: bodyFile, ReadOnly: true, Summary: "Validate and explain an exact audit feed without writing state or contacting the collector"},

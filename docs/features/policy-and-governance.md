@@ -422,6 +422,20 @@ old segments are archived.
 
 **Status:** served — `GET /api/v1/audit/events` and `GET /api/v1/audit/export`.
 
+**Archived segments are downloadable by their tenant (served).** Once retention has
+archived older records, a tenant fetches its own signed segments without an archive
+custodian: `GET /api/v1/audit/archives` lists them by opaque ID, record range, chain
+head and archive time, and `GET /api/v1/audit/archives/{id}` returns one segment's
+exact signed bytes (`?format=jws` for the raw JWS; `trstctl audit archives list|get`;
+console Audit → **Archived segments**). It needs the separate `audit:archive.read`
+permission, which of the built-in roles only admin and auditor hold. The server
+verifies the bytes as the tenant's own signed retention segment, appends an
+`audit.archive.downloaded` audit event before releasing them, never returns a host
+path or object locator, and limits downloads to six a minute per tenant. A download
+verifies offline with `trstctl audit verify --format retention-jws --audit-jwks ...
+--expected-tenant ...`. Legacy segments and the deployment-wide archives stay
+custodian-only. See [Compliance](../compliance.md).
+
 Both endpoints accept `tool` in addition to `feature_id`, `action`, event type,
 text and time filters. The tool predicate is server-owned and applied before the
 result limit. For example, `tool=workloads_machines` includes attestation and

@@ -4587,6 +4587,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	"cmdb.certificate_export.requested":           {1: true},
 	"cmdb.certificate_export.verified":            {1: true},
 	audit.EventTypeArchived:                       {audit.ArchivedEventSchemaVersion: true},
+	audit.EventTypeArchiveDownloaded:              {audit.ArchiveDownloadedSchemaVersion: true},
 	auditanchor.EventTypeAnchored:                 {auditanchor.AnchoredEventSchemaVersion: true},
 	EventTSACertificateRegistered:                 {1: true},
 	EventObserverRegistered:                       {1: true},
@@ -5047,6 +5048,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	switch e.Type {
+	case audit.EventTypeArchiveDownloaded:
+		// A234: audit-only evidence that a tenant segment was released.
+		return nil
 	case audit.EventTypeArchived:
 		var pl audit.ArchivedEvent
 		if err := decode(e, &pl); err != nil {

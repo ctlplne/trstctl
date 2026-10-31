@@ -4889,6 +4889,27 @@ func componentSchemas() map[string]*Schema {
 		"evidence_refs": {Type: "array", Items: str()},
 		"residuals":     {Type: "array", Items: str()},
 	}, "format", "capability", "generated_at", "audit_ready", "summary", "frameworks", "controls", "report_types", "routes", "evidence_refs", "residuals")
+	auditArchiveSegment := object(map[string]*Schema{
+		"id":                str(),
+		"first_record":      {Type: "integer"},
+		"last_record":       {Type: "integer"},
+		"boundary_sequence": {Type: "integer"},
+		"chain_head":        str(),
+		"archived_at":       timestamp(),
+	}, "id", "first_record", "last_record", "boundary_sequence", "chain_head", "archived_at")
+	auditArchiveSegmentList := object(map[string]*Schema{
+		"items": {Type: "array", Items: ref("AuditArchiveSegment")},
+	}, "items")
+	auditArchiveDownload := object(map[string]*Schema{
+		"segment_id":   str(),
+		"format":       {Type: "string", Enum: []string{"jws"}},
+		"bundle":       str(),
+		"sha256":       str(),
+		"first_record": {Type: "integer"},
+		"last_record":  {Type: "integer"},
+		"prev_hash":    str(),
+		"chain_head":   str(),
+	}, "segment_id", "format", "bundle", "sha256", "first_record", "last_record", "prev_hash", "chain_head")
 	eventProtectionReq := object(map[string]*Schema{
 		"registration_identity": str(),
 		"retention":             str(),
@@ -8190,6 +8211,9 @@ func componentSchemas() map[string]*Schema {
 		"EventProtectionStatus":                    eventProtectionStatus,
 		"EventProtectionPlan":                      eventProtectionPlan,
 		"EventProtectionAccepted":                  eventProtectionAccepted,
+		"AuditArchiveSegment":                      auditArchiveSegment,
+		"AuditArchiveSegmentList":                  auditArchiveSegmentList,
+		"AuditArchiveDownload":                     auditArchiveDownload,
 		"PrivacySubjectErasurePreview":             privacySubjectErasurePreview,
 		"PrivacyErasureSelectors":                  privacyErasureSelectors,
 		"PrivacySubjectErasure":                    privacySubjectErasure,

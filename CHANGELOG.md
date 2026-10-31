@@ -2,6 +2,13 @@
 
 ### Added
 
+- Tenant download of its own signed audit archives: with the separate `audit:archive.read`
+  permission, `GET /api/v1/audit/archives` lists the tenant's archived segments and
+  `GET /api/v1/audit/archives/{id}` returns one (`?format=jws` for the raw segment; CLI
+  `trstctl audit archives list|get`; console Audit → Archived segments). Segments are addressed by
+  opaque ID only, verified as the tenant's own signed retention segment before release, rate
+  limited per tenant, and every download is recorded as an `audit.archive.downloaded` audit event
+  first. A downloaded segment verifies offline with `trstctl audit verify --format retention-jws`.
 - Event-field protection (crypto-shred) opt-in: a tenant can read its protection state, preview
   and enable per-tenant encryption of its sensitive event fields through
   `/api/v1/privacy/event-protection` (CLI `trstctl privacy event-protection`, console Privacy

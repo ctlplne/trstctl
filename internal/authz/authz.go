@@ -18,16 +18,20 @@ type Permission string
 
 // Well-known permissions for the v1 resources.
 const (
-	OwnersRead         Permission = "owners:read"
-	OwnersWrite        Permission = "owners:write"
-	IssuersRead        Permission = "issuers:read"
-	IssuersWrite       Permission = "issuers:write"
-	IdentitiesRead     Permission = "identities:read"
-	IdentitiesWrite    Permission = "identities:write"
-	CertsRead          Permission = "certs:read"
-	CertsWrite         Permission = "certs:write"
-	AuditRead          Permission = "audit:read"
-	AuditWrite         Permission = "audit:write"
+	OwnersRead      Permission = "owners:read"
+	OwnersWrite     Permission = "owners:write"
+	IssuersRead     Permission = "issuers:read"
+	IssuersWrite    Permission = "issuers:write"
+	IdentitiesRead  Permission = "identities:read"
+	IdentitiesWrite Permission = "identities:write"
+	CertsRead       Permission = "certs:read"
+	CertsWrite      Permission = "certs:write"
+	AuditRead       Permission = "audit:read"
+	AuditWrite      Permission = "audit:write"
+	// AuditArchiveRead downloads the tenant's own archived audit segments
+	// (A234). It is separate from audit:read: of the built-in roles only admin
+	// and auditor hold it; a custom role or a scoped token can grant it.
+	AuditArchiveRead   Permission = "audit:archive.read"
 	PrivacyRead        Permission = "privacy:read"
 	PrivacyWrite       Permission = "privacy:write"
 	GraphRead          Permission = "graph:read"
@@ -147,7 +151,7 @@ func allResourcePermissions() []Permission {
 // permissions.
 func CustomRoleVocabulary() []Permission {
 	return withPermissions(withoutPermissions(allResourcePermissions(),
-		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport), AuditRead)
+		AgentsHeartbeat, AgentsJobPoll, AgentsJobComplete, AgentsJobReport), AuditRead, AuditArchiveRead)
 }
 
 // Role is a named set of permissions.
@@ -186,7 +190,7 @@ func BuiltinRoles() map[string]Role {
 		"admin":    {Name: "admin", Permissions: []Permission{Wildcard}},
 		"operator": {Name: "operator", Permissions: allResourcePermissions()},
 		"viewer":   {Name: "viewer", Permissions: readOnly},
-		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead, CapabilitiesRead}},
+		"auditor":  {Name: "auditor", Permissions: []Permission{AuditRead, AuditArchiveRead, CapabilitiesRead}},
 		"agent":    {Name: "agent", Permissions: agent},
 		"mcp":      {Name: "mcp", Permissions: mcp},
 		"cli":      {Name: "cli", Permissions: cli},
