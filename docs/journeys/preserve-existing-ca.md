@@ -53,7 +53,9 @@ below. The control-plane operator must:
    another receiver accepted the message.
    `notification_receiver_not_configured` means delivery has no receiver. Configure
    the channel and route; the pending outbox retry keeps the original alert key.
-5. For an ACME authority that validates names with DNS-01 (`upstream_dns01`), make
+5. For an authority that validates names through DNS (`upstream_dns01`: an ACME
+   authority's DNS-01, or DigiCert's and Sectigo's own DNS TXT validation, each
+   with its own `caa_issuer_domain`), make
    sure the tenant has a **DNS-01 provider config** that covers the zone of every
    name you will issue, with `dns-01` in `allowed_methods` and
    `allow_upstream_dv` enabled. Without it, issuance cannot publish the challenge

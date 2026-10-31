@@ -405,11 +405,6 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 				"%s.eab_key_id and eab_hmac_key_ref must be set together: external account binding needs both the key id and the MAC key reference", where))
 		}
 		credential(c.EABHMACKeyRef, "eab_hmac_key_ref", true)
-		if c.UpstreamDNS01 && strings.TrimSpace(c.CAAIssuerDomain) == "" {
-			errs = append(errs, fmt.Errorf(
-				"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
-					"must name the authority that will issue, and an empty issuer authorizes every CA", where))
-		}
 		for i, keyID := range c.ARIIssuerKeyIDs {
 			if _, err := NormalizeARIIssuerKeyID(keyID); err != nil {
 				errs = append(errs, fmt.Errorf("%s.ari_issuer_key_ids[%d]: %w", where, i, err))
@@ -443,11 +438,23 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 		credential(c.AccessTokenRef, "access_token_ref", false)
 		require(c.PolicyDN, "policy_dn")
 	}
-	// Upstream DV is ACME-only, and setting it elsewhere is rejected rather
-	// than ignored. An operator who writes upstream_dns01 on their DigiCert
-	// entry has stated an intent the platform cannot carry out; accepting the
-	// file and dropping the field would leave them believing validation is
-	// automated right up until the reuse window closes.
+	return append(errs, validateExternalCAFieldScope(where, c)...)
+}
+
+// validateExternalCAFieldScope checks the fields that only some authority
+// types can use. Upstream DV is served for ACME and, since A165, DigiCert and
+// Sectigo (their DNS TXT domain validation); setting it elsewhere is rejected
+// rather than ignored. An operator who writes upstream_dns01 on an authority
+// that cannot use it has stated an intent the platform cannot carry out;
+// accepting the file and dropping the field would leave them believing
+// validation is automated right up until the reuse window closes.
+func validateExternalCAFieldScope(where string, c ExternalCAConfig) []error {
+	var errs []error
+	if UpstreamDNS01Capable(c.Type) && c.UpstreamDNS01 && strings.TrimSpace(c.CAAIssuerDomain) == "" {
+		errs = append(errs, fmt.Errorf(
+			"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
+				"must name the authority that will issue, and an empty issuer authorizes every CA", where))
+	}
 	if c.Type != "letsencrypt" && strings.TrimSpace(c.ACMEProfile) != "" {
 		errs = append(errs, fmt.Errorf("%s.acme_profile applies only to ACME (letsencrypt) authorities, not %q", where, c.Type))
 	}
@@ -457,9 +464,9 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 	if c.Type != "letsencrypt" && (strings.TrimSpace(c.EABKeyID) != "" || strings.TrimSpace(c.EABHMACKeyRef) != "") {
 		errs = append(errs, fmt.Errorf("%s.eab_key_id/eab_hmac_key_ref apply only to ACME (letsencrypt) authorities, not %q", where, c.Type))
 	}
-	if c.Type != "letsencrypt" && (c.UpstreamDNS01 || strings.TrimSpace(c.CAAIssuerDomain) != "") {
+	if !UpstreamDNS01Capable(c.Type) && (c.UpstreamDNS01 || strings.TrimSpace(c.CAAIssuerDomain) != "") {
 		errs = append(errs, fmt.Errorf(
-			"%s.upstream_dns01/caa_issuer_domain apply only to ACME (letsencrypt) authorities, not %q",
+			"%s.upstream_dns01/caa_issuer_domain apply only to ACME (letsencrypt), digicert and sectigo authorities, not %q",
 			where, c.Type))
 	}
 	if c.Type != "adcs" && c.RevocationRelay != "" {
@@ -559,4 +566,17 @@ func NormalizeARIIssuerKeyID(raw string) (string, error) {
 		}
 	}
 	return cleaned, nil
+}
+
+// UpstreamDNS01Capable reports whether trstctl can complete an authority
+// kind's domain validation through the tenant's DNS-01 provider configs:
+// ACME's dns-01 challenge, and DigiCert's and Sectigo's DNS TXT validation
+// (A165).
+func UpstreamDNS01Capable(kind string) bool {
+	switch kind {
+	case "letsencrypt", "digicert", "sectigo":
+		return true
+	default:
+		return false
+	}
 }

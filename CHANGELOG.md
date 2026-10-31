@@ -2,6 +2,10 @@
 
 ### Added
 
+- Unattended domain validation for DigiCert and Sectigo: with `upstream_dns01`, trstctl completes
+  CertCentral's DNS TXT validation and Sectigo SCM's TXT domain control validation through the
+  tenant's DNS-01 provider configs (`allow_upstream_dv`), under the same CAA check and retraction as
+  ACME upstream validation.
 - Revoke a rogue certificate at its issuer: a certificate found in Certificate Transparency (for
   example one issued in your own vendor account outside trstctl) is revoked by serial at the
   external CA you name, and the finding shows revoked once the CA confirms; inventory findings

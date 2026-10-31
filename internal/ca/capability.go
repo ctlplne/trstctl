@@ -196,16 +196,20 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 	{
 		Issuer: "digicert", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		IssueProven:      true,
-		Evidence:         externalCAUniversalEvidence,
-		UnattendedDVNote: "Public DV/OV issuance through DigiCert's API requires validation steps trstctl does not drive. Complete DCV in the DigiCert console; trstctl cannot keep this authority validated unattended.",
+		// A165: CertCentral's dns-txt-token DCV, published through the tenant's
+		// DNS-01 provider configs when the authority sets upstream_dns01.
+		UnattendedDV: true,
+		IssueProven:  true,
+		Evidence:     externalCAUniversalEvidence,
 	},
 	{
 		Issuer: "sectigo", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		IssueProven:      true,
-		Evidence:         externalCAUniversalEvidence,
-		UnattendedDVNote: "Sectigo SCM validation is completed in Sectigo's own console; trstctl drives no DCV method for it.",
+		// A165: SCM's TXT domain control validation, published through the
+		// tenant's DNS-01 provider configs when the authority sets upstream_dns01.
+		UnattendedDV: true,
+		IssueProven:  true,
+		Evidence:     externalCAUniversalEvidence,
 	},
 	{
 		Issuer: "venafi", Discover: false, Issue: true, Renew: true, Revoke: true,

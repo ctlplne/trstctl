@@ -65,6 +65,9 @@ type backend struct {
 	poll         time.Duration
 	customClient bool
 	privateCIDRs []netip.Prefix
+	// dcv completes SCM's DNS TXT validation unattended (A165); nil leaves
+	// validation to Sectigo's console.
+	dcv ca.TXTPublisher
 }
 
 // Option configures the plugin.
@@ -129,6 +132,11 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	}
 	if len(req.DNSNames) == 0 {
 		return nil, fmt.Errorf("sectigo: at least one DNS name is required")
+	}
+	if b.dcv != nil {
+		if err := b.validateDomains(ctx, req.TenantID, req.DNSNames); err != nil {
+			return nil, err
+		}
 	}
 	sslID, err := b.enroll(ctx, req)
 	if err != nil {

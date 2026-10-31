@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/projections"
@@ -106,6 +107,28 @@ func (s *upstreamACMEDNS01Solver) Solve(ctx context.Context, req acmekey.Challen
 		return nil, err
 	}
 	return retract, nil
+}
+
+// publishTXT publishes a vendor's own domain validation record (A165) under
+// the rules an upstream dns-01 answer follows: a DNS-01 provider config that
+// consented to upstream validation for the identifier, and CAA that authorizes
+// this authority. The vendor names the record and its value.
+func (s *upstreamACMEDNS01Solver) publishTXT(ctx context.Context, tenantID, identifier, recordName, value string) (func(context.Context) error, error) {
+	if s == nil || s.automation == nil {
+		return nil, errors.New("server: upstream domain validation is not configured")
+	}
+	tenantID, identifier, recordName = strings.TrimSpace(tenantID), strings.TrimSpace(identifier), strings.TrimSpace(recordName)
+	if tenantID == "" || identifier == "" || recordName == "" || value == "" || strings.HasPrefix(identifier, "*.") {
+		return nil, errors.New("server: a domain validation record needs a tenant, a non-wildcard name, a record and a value")
+	}
+	cfg, err := s.automation.selectProviderConfigForUpstream(ctx, tenantID, identifier)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.enforceUpstreamCAA(ctx, identifier); err != nil {
+		return nil, err
+	}
+	return s.automation.presentRecord(ctx, tenantID, cfg, identifier, recordName, value)
 }
 
 // enforceUpstreamCAA checks the domain's CAA authorizes the EXTERNAL issuer.
@@ -229,6 +252,7 @@ type upstreamDVBinding struct {
 var (
 	_ acmekey.ChallengeSolver = (*upstreamDVBinding)(nil)
 	_ acmekey.DVObserver      = (*upstreamDVBinding)(nil)
+	_ ca.TXTPublisher         = (*upstreamDVBinding)(nil)
 )
 
 func (b *upstreamDVBinding) solver() *upstreamACMEDNS01Solver {
@@ -259,6 +283,16 @@ func (b *upstreamDVBinding) Solve(ctx context.Context, req acmekey.ChallengeRequ
 		return nil, acmekey.ErrSolverNotConfigured
 	}
 	return s.Solve(ctx, req)
+}
+
+// PublishTXT publishes a vendor's DNS TXT validation record (A165) through
+// this authority's binding.
+func (b *upstreamDVBinding) PublishTXT(ctx context.Context, tenantID, identifier, recordName, value string) (func(context.Context) error, error) {
+	s := b.solver()
+	if s == nil {
+		return nil, acmekey.ErrSolverNotConfigured
+	}
+	return s.publishTXT(ctx, tenantID, identifier, recordName, value)
 }
 
 func (b *upstreamDVBinding) ObserveAuthorization(ctx context.Context, tenantID string, out acmekey.DVOutcome) {

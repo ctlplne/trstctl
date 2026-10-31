@@ -92,7 +92,7 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 		if item.Type == "letsencrypt" {
 			ariFetch = externalARIFetchFromConfig(item, guard)
 		}
-		upstream := ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, ARIFetch: ariFetch, ARIIssuerKeyIDs: append([]string(nil), item.ARIIssuerKeyIDs...), UpstreamDNS01: item.Type == "letsencrypt" && item.UpstreamDNS01}
+		upstream := ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, ARIFetch: ariFetch, ARIIssuerKeyIDs: append([]string(nil), item.ARIIssuerKeyIDs...), UpstreamDNS01: config.UpstreamDNS01Capable(item.Type) && item.UpstreamDNS01}
 		if item.Type == "adcs" && item.RevocationRelay != "" {
 			upstream.ADCSRevocation = ADCSRevocationRelay{CAConfig: item.CAConfig, Relay: item.RevocationRelay}
 		}
@@ -204,7 +204,7 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 			}
 			implementation = built
 		case "digicert", "ejbca", "entrust", "globalsign", "sectigo", "smallstep", "vaultpki", "venafi":
-			implementation, err = buildCommercialExternalCA(item, poll, defaultTTL, client, secrets)
+			implementation, err = buildCommercialExternalCA(item, poll, defaultTTL, client, secrets, upstreamDV)
 			if err != nil {
 				return fail(err)
 			}
@@ -267,7 +267,14 @@ func buildACMEExternalCA(item config.ExternalCAConfig, client *http.Client, acme
 // buildCommercialExternalCA keeps credential-bearing vendor construction in a
 // bounded stage. The caller owns the secret set and destroys it together with
 // the returned implementation after the one outbox delivery.
-func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL time.Duration, client *http.Client, secrets *externalCASecretSet) (ca.CA, error) {
+func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL time.Duration, client *http.Client, secrets *externalCASecretSet, upstreamDV *upstreamDVHolder) (ca.CA, error) {
+	// A165: DigiCert and Sectigo complete their DNS TXT validation through the
+	// tenant's DNS-01 provider configs when the authority opted in, bound to
+	// THIS authority's CAA identifier exactly as an ACME authority is.
+	var dcv ca.TXTPublisher
+	if item.UpstreamDNS01 && upstreamDV != nil {
+		dcv = upstreamDV.bind(item.CAAIssuerDomain, item.ID)
+	}
 	switch item.Type {
 	case "digicert":
 		apiKey, err := secrets.Load(item.APIKeyRef)
@@ -277,6 +284,9 @@ func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL ti
 		opts := []digicert.Option{digicert.WithHTTPClient(client)}
 		if item.Product != "" {
 			opts = append(opts, digicert.WithProduct(item.Product))
+		}
+		if dcv != nil {
+			opts = append(opts, digicert.WithDCVPublisher(dcv))
 		}
 		return digicert.New(item.Name, item.Endpoint, apiKey, opts...), nil
 	case "ejbca":
@@ -325,6 +335,9 @@ func buildCommercialExternalCA(item config.ExternalCAConfig, poll, defaultTTL ti
 		opts := []sectigo.Option{sectigo.WithHTTPClient(client)}
 		if poll > 0 {
 			opts = append(opts, sectigo.WithPollInterval(poll))
+		}
+		if dcv != nil {
+			opts = append(opts, sectigo.WithDCVPublisher(dcv))
 		}
 		return sectigo.New(sectigo.Config{
 			Name: item.Name, BaseURL: item.Endpoint, Login: item.Login, Password: password,

@@ -41,7 +41,10 @@ type Server struct {
 	certs        map[int][]byte // sslId -> chain PEM
 	collectCount map[int]int    // sslId -> times collect has been called
 	revoked      map[int]int    // sslId -> revocation reason code
-	pendingPolls int            // initial collects per cert that report "being processed"
+	// A165: DNS TXT domain control validation (RequireDCV).
+	resolve      func(name string) []string
+	dcv          map[string]*dcvState
+	pendingPolls int // initial collects per cert that report "being processed"
 	seq          int
 }
 
@@ -52,13 +55,16 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{authority: authority, certs: map[int][]byte{}, collectCount: map[int]int{}, revoked: map[int]int{}}
+	s := &Server{authority: authority, certs: map[int][]byte{}, collectCount: map[int]int{}, revoked: map[int]int{}, dcv: map[string]*dcvState{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/ssl/v1/enroll", s.handleEnroll)
 	mux.HandleFunc("GET /api/ssl/v1/collect/{sslID}/{format}", s.handleCollect)
 	mux.HandleFunc("POST /api/ssl/v1/revoke/serial/{serial}", s.handleRevokeBySerial)
 	mux.HandleFunc("GET /api/ssl/v1", s.handleList)
 	mux.HandleFunc("GET /api/ssl/v1/{sslID}", s.handleDetail)
+	mux.HandleFunc("POST /api/dcv/v1/validation/start/domain/txt", s.handleDCVStart)
+	mux.HandleFunc("POST /api/dcv/v1/validation/submit/domain/txt", s.handleDCVSubmit)
+	mux.HandleFunc("POST /api/dcv/v1/validation/status", s.handleDCVStatus)
 	s.ts = httptest.NewServer(s.auth(mux))
 	return s, nil
 }
@@ -96,10 +102,11 @@ func (s *Server) auth(next http.Handler) http.Handler {
 
 func (s *Server) handleEnroll(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		OrgID    int    `json:"orgId"`
-		CSR      string `json:"csr"`
-		CertType int    `json:"certType"`
-		Term     int    `json:"term"`
+		OrgID        int    `json:"orgId"`
+		CSR          string `json:"csr"`
+		CertType     int    `json:"certType"`
+		Term         int    `json:"term"`
+		SubjAltNames string `json:"subjAltNames"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, http.StatusBadRequest, -1, "invalid request body")
@@ -113,6 +120,13 @@ func (s *Server) handleEnroll(w http.ResponseWriter, r *http.Request) {
 	ttl := time.Duration(body.Term) * 24 * time.Hour
 	if ttl <= 0 {
 		ttl = 365 * 24 * time.Hour
+	}
+	s.mu.Lock()
+	missing := s.unvalidated(body.SubjAltNames)
+	s.mu.Unlock()
+	if missing != "" {
+		writeErr(w, http.StatusBadRequest, -1, "domain "+missing+" is not validated")
+		return
 	}
 	issued, err := s.authority.IssueFromCSR(block.Bytes, ttl)
 	if err != nil {

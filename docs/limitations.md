@@ -106,7 +106,7 @@ receipt cannot certify it.
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
 | Discovery coverage & provenance | Served: coverage is measured against **operator-declared segments** rather than against what discovery happened to find, with a per-segment staleness SLO, declared exclusions carrying their reason, and a named blind-spot register. Every certificate carries provenance — which source last observed it, of what kind, and when — distinct from when trstctl first recorded it. Headlined on the Discovery console. **Nothing is rollable into coverage until an operator declares a segment**: an inventory built from findings can describe what it found and nothing else, so an estate with no declarations reports no coverage rather than 100% | [Coverage, provenance and blind spots](#coverage-provenance-and-blind-spots) |
 | Revocation through external issuers | Served for **letsencrypt (ACME), vaultpki, ejbca, digicert, sectigo, venafi, awspca, gcpcas and smallstep** — each proven end to end against that authority's protocol (the vendor rows against protocol stand-ins in the repository; live vendor accounts are Track B), asserting the AUTHORITY was contacted rather than that the call returned nil — and for `adcs` through a `revocation_relay`. The remaining issuer kinds report `revoke: false` on the served capability matrix with a note naming where to revoke instead. A documented vendor endpoint trstctl does not drive is **not** counted as a capability. Revocation that cannot reach the authority **fails visibly**; there is no silent no-op | [Per-issuer capabilities](#per-issuer-capabilities) |
-| Upstream domain validation (DNS-01 as an ACME client) | Served: obtaining a certificate FROM a public CA now negotiates the challenge type the authority offers and solves DNS-01 unattended, reusing the provider configs already persisted for the server direction. **Wildcard issuance from a public CA works for the first time** — DNS-01 is the only challenge that can authorize one. Two independent opt-ins, both default off: `upstream_dns01` on the ACME authority (which also requires that authority's own `caa_issuer_domain`) and `allow_upstream_dv` on each DNS-01 provider config. The console shows a domain-validation column beside every configured issuer — unattended or manual, with the reason — and an upstream authorization freshness panel reporting when each identifier last actually proved control, as against when it last rode a reuse. DNS-01 only: http-01 upstream would need an inbound listener this architecture does not have | [Upstream domain validation](#upstream-domain-validation) |
+| Upstream domain validation (DNS-01 as an ACME client; DNS TXT for DigiCert and Sectigo) | Served: obtaining a certificate FROM a public CA now negotiates the challenge type the authority offers and solves DNS-01 unattended, reusing the provider configs already persisted for the server direction. **Wildcard issuance from a public CA works for the first time** — DNS-01 is the only challenge that can authorize one. Two independent opt-ins, both default off: `upstream_dns01` on the ACME authority (which also requires that authority's own `caa_issuer_domain`) and `allow_upstream_dv` on each DNS-01 provider config. The console shows a domain-validation column beside every configured issuer — unattended or manual, with the reason — and an upstream authorization freshness panel reporting when each identifier last actually proved control, as against when it last rode a reuse. DNS-01 only: http-01 upstream would need an inbound listener this architecture does not have DigiCert and Sectigo complete their own DNS TXT domain validation through the same provider configs and consent (A165). | [Upstream domain validation](#upstream-domain-validation) |
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
 | F52 | CBOM and cryptographic observability | docs/features/observability-and-risk.md |
@@ -6665,6 +6665,18 @@ is bound per authority: two configured ACME CAs do not share one, because a CAA
 check that authorizes the *wrong* CA passes while being wrong, which is harder
 to notice than one that authorizes everyone.
 
+**DigiCert and Sectigo validate the same way** (A165). With `upstream_dns01` and
+their own `caa_issuer_domain`, a DigiCert authority orders with CertCentral's
+`dns-txt-token` method and publishes the order's value at `_dnsauth.<name>` for
+every requested name, then asks CertCentral to check; a Sectigo authority starts
+SCM's TXT domain control validation for each name, publishes the record SCM
+names, submits it and waits for SCM to report it validated before enrolling. Both
+go through the same DNS-01 provider configs (`allow_upstream_dv`), the same CAA
+check against the authority's own identifier and the same retraction on every
+exit path. Proven against each vendor's protocol stand-in (the DigiCert path end
+to end through the served issue route and a webhook DNS provider); live vendor
+accounts are Track B.
+
 **Reused authorizations are recorded, and served.** An authority that already
 considers an identifier authorized issues without a challenge. That is normal
 and it is also the thing worth watching: automating validation removes the
@@ -7115,8 +7127,9 @@ and what the authority validates before issuing. The console shows revocation
 and domain validation beside each configured issuer.
 
 **Unattended DV is checked against the source, in both directions.** It is true
-only where the issuer's package wires a challenge solver into the ACME driver —
-one authority kind today — and an authority that reads false must say why, because
+only where the issuer's package wires a challenge solver into the ACME driver
+(`letsencrypt`) or takes a DNS TXT publisher for the vendor's own validation
+record (`digicert`, `sectigo`; A165) — and an authority that reads false must say why, because
 "there is no challenge to solve" (an internal CA) and "a human completes DCV in
 the vendor's console" (public OV/EV) are opposite operational situations. It is a
 property of the build; whether a given authority is actually configured for it is

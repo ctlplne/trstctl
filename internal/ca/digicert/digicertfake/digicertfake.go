@@ -44,6 +44,9 @@ type Server struct {
 	// revoked maps certificate_id to the CertCentral reason it was revoked with.
 	revoked             map[int]string
 	revokeNeedsApproval bool
+	// A165: DNS TXT domain validation (RequireDCV).
+	resolve func(name string) []string
+	dcv     map[int]*pendingDCV
 }
 
 // NewServer starts a fake CertCentral API backed by a fresh software CA.
@@ -52,12 +55,13 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{authority: authority, orders: map[int]*order{}, certs: map[int][]byte{}, revoked: map[int]string{}}
+	s := &Server{authority: authority, orders: map[int]*order{}, certs: map[int][]byte{}, revoked: map[int]string{}, dcv: map[int]*pendingDCV{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /services/v2/order/certificate/{product}", s.handleOrder)
 	mux.HandleFunc("GET /services/v2/order/certificate/{orderID}", s.handleOrderInfo)
 	mux.HandleFunc("GET /services/v2/order/certificate", s.handleOrderList)
 	mux.HandleFunc("PUT /services/v2/certificate/{certID}/revoke", s.handleRevoke)
+	mux.HandleFunc("PUT /services/v2/order/certificate/{orderID}/check-dcv", s.handleCheckDCV)
 	mux.HandleFunc("GET /services/v2/certificate/{certID}/download/format/{format}", s.handleDownload)
 	s.ts = httptest.NewServer(s.auth(mux))
 	return s, nil
@@ -91,6 +95,7 @@ func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
 			DNSNames   []string `json:"dns_names"`
 			CSR        string   `json:"csr"`
 		} `json:"certificate"`
+		DCVMethod     string `json:"dcv_method"`
 		OrderValidity struct {
 			Days  int `json:"days"`
 			Years int `json:"years"`
@@ -112,6 +117,23 @@ func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
 	if ttl <= 0 {
 		ttl = 90 * 24 * time.Hour
 	}
+	s.mu.Lock()
+	if s.resolve != nil {
+		// A165: a validating account issues only after check-dcv sees the
+		// order's random value at every name.
+		s.seq++
+		orderID := s.seq
+		random := ""
+		if body.DCVMethod == "dns-txt-token" {
+			random = dcvRandomValue()
+		}
+		s.orders[orderID] = &order{id: orderID, status: "pending"}
+		s.dcv[orderID] = &pendingDCV{csr: block.Bytes, ttl: ttl, names: body.Certificate.DNSNames, random: random}
+		s.mu.Unlock()
+		writeJSON(w, http.StatusCreated, map[string]any{"id": orderID, "dcv_random_value": random})
+		return
+	}
+	s.mu.Unlock()
 	issued, err := s.authority.IssueFromCSR(block.Bytes, ttl)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, "csr_invalid_cannot_parse", err.Error())

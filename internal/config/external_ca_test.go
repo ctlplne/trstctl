@@ -138,18 +138,19 @@ func TestUpstreamDNS01RequiresTheAuthoritysCAAIssuer(t *testing.T) {
 	}
 }
 
-// Upstream DV on a non-ACME authority is refused rather than ignored.
+// Upstream DV on an authority that cannot use it is refused rather than
+// ignored.
 //
-// An operator who writes upstream_dns01 on their DigiCert entry has stated an
-// intent this platform cannot carry out. Accepting the file and dropping the
+// An operator who writes upstream_dns01 on, say, their Venafi entry has stated
+// an intent this platform cannot carry out. Accepting the file and dropping the
 // field would leave them believing validation is automated right up until the
 // reuse window closes — which is the failure the whole epic exists to remove,
-// reintroduced through configuration.
+// reintroduced through configuration. DigiCert and Sectigo can since A165.
 func TestUpstreamDNS01IsRefusedOnAuthoritiesThatCannotDoIt(t *testing.T) {
 	err := ValidateExternalCAs([]ExternalCAConfig{{
-		ID: "dc", Type: "digicert", Name: "DigiCert",
-		Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef,
-		UpstreamDNS01: true, CAAIssuerDomain: "digicert.com",
+		ID: "vn", Type: "venafi", Name: "Venafi",
+		Endpoint: "https://example.test", AccessTokenRef: upstreamDVFixtureSecretRef, PolicyDN: `\VED\Policy\trstctl`,
+		UpstreamDNS01: true, CAAIssuerDomain: "venafi.com",
 	}})
 	if err == nil {
 		t.Fatal("upstream DV was silently accepted on an authority with no solver; the operator " +
@@ -157,5 +158,26 @@ func TestUpstreamDNS01IsRefusedOnAuthoritiesThatCannotDoIt(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "upstream_dns01") {
 		t.Errorf("error = %v, want the ignored-field reason naming the flag", err)
+	}
+}
+
+// A165: DigiCert and Sectigo complete their DNS TXT domain validation through
+// the same upstream DV consent, and like an ACME authority they need their own
+// CAA identifier.
+func TestUpstreamDNS01IsAcceptedForVendorsWithDNSValidation(t *testing.T) {
+	vendors := map[string]ExternalCAConfig{
+		"digicert": {ID: "dc", Type: "digicert", Name: "DigiCert", Endpoint: "https://example.test", APIKeyRef: upstreamDVFixtureSecretRef},
+		"sectigo": {ID: "sc", Type: "sectigo", Name: "Sectigo", Endpoint: "https://example.test", Login: "scm", PasswordRef: upstreamDVFixtureSecretRef,
+			CustomerURI: "corp", OrgID: 1, CertType: 2},
+	}
+	for kind, item := range vendors {
+		item.UpstreamDNS01, item.CAAIssuerDomain = true, kind+".com"
+		if err := ValidateExternalCAs([]ExternalCAConfig{item}); err != nil {
+			t.Errorf("%s with upstream_dns01 and its CAA identifier: %v", kind, err)
+		}
+		item.CAAIssuerDomain = ""
+		if err := ValidateExternalCAs([]ExternalCAConfig{item}); err == nil || !strings.Contains(err.Error(), "caa_issuer_domain") {
+			t.Errorf("%s with upstream_dns01 and no CAA identifier = %v; want caa_issuer_domain required", kind, err)
+		}
 	}
 }

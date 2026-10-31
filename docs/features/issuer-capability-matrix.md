@@ -24,13 +24,13 @@ Before production, run the same scoped issuance with your configured account.
 | `adcs` | yes | yes | yes | no | no | requester_csr |
 | `awspca` | yes | yes | yes | yes | no | requester_csr |
 | `azurekv` | yes | yes | yes | no | no | authority_generated |
-| `digicert` | yes | yes | yes | yes | no | requester_csr |
+| `digicert` | yes | yes | yes | yes | yes | requester_csr |
 | `ejbca` | yes | yes | yes | yes | no | requester_csr |
 | `entrust` | yes | yes | yes | no | no | requester_csr |
 | `gcpcas` | yes | yes | yes | yes | no | requester_csr |
 | `globalsign` | yes | yes | yes | no | no | requester_csr |
 | `letsencrypt` | yes | yes | yes | yes | yes | requester_csr |
-| `sectigo` | yes | yes | yes | yes | no | requester_csr |
+| `sectigo` | yes | yes | yes | yes | yes | requester_csr |
 | `smallstep` | yes | yes | yes | yes | no | requester_csr |
 | `vaultpki` | yes | yes | yes | yes | no | requester_csr |
 | `venafi` | yes | yes | yes | yes | no | requester_csr |
@@ -68,8 +68,6 @@ Before production, run the same scoped issuance with your configured account.
 **Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
-
-**Unattended domain validation:** Public DV/OV issuance through DigiCert's API requires validation steps trstctl does not drive. Complete DCV in the DigiCert console; trstctl cannot keep this authority validated unattended.
 
 ## ejbca
 
@@ -118,8 +116,6 @@ Before production, run the same scoped issuance with your configured account.
 **Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
-
-**Unattended domain validation:** Sectigo SCM validation is completed in Sectigo's own console; trstctl drives no DCV method for it.
 
 ## smallstep
 

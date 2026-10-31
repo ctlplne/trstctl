@@ -161,7 +161,8 @@ func issuersDeclaringRevoke(t *testing.T) map[string]bool {
 //
 // The check is deliberately structural rather than a hand-maintained list: an
 // issuer can satisfy a challenge unattended only if its package wires a
-// challenge solver into the ACME driver, so that is what is looked for.
+// challenge solver into the ACME driver, or (A165) takes a ca.TXTPublisher for a
+// vendor's own DNS validation record, so that is what is looked for.
 func TestUnattendedDVMatrixMatchesTheImplementations(t *testing.T) {
 	t.Parallel()
 
@@ -203,7 +204,8 @@ func TestAbsentUnattendedDVExplainsItself(t *testing.T) {
 }
 
 // issuersWiringAChallengeSolver parses each issuer package and reports which
-// pass a challenge solver to the crypto boundary's ACME driver.
+// pass a challenge solver to the crypto boundary's ACME driver or take a
+// ca.TXTPublisher for a vendor's own validation record (A165).
 func issuersWiringAChallengeSolver(t *testing.T) map[string]bool {
 	t.Helper()
 	out := map[string]bool{}
@@ -232,10 +234,12 @@ func issuersWiringAChallengeSolver(t *testing.T) map[string]bool {
 				// constructor, so a package that names acmekey.ChallengeSolver
 				// in production code is a package that can solve a challenge.
 				sel, ok := n.(*ast.SelectorExpr)
-				if !ok || sel.Sel.Name != "ChallengeSolver" {
+				if !ok {
 					return true
 				}
-				if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "acmekey" {
+				ident, ok := sel.X.(*ast.Ident)
+				if ok && (ident.Name == "acmekey" && sel.Sel.Name == "ChallengeSolver" ||
+					ident.Name == "ca" && sel.Sel.Name == "TXTPublisher") {
 					out[entry.Name()] = true
 				}
 				return true

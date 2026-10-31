@@ -51,6 +51,9 @@ type backend struct {
 	client       *http.Client
 	customClient bool
 	privateCIDRs []netip.Prefix
+	// dcv completes CertCentral DNS TXT validation unattended (A165); nil
+	// leaves validation to the DigiCert console.
+	dcv ca.TXTPublisher
 }
 
 // Option configures the plugin.
@@ -118,9 +121,14 @@ func (b *backend) Issue(ctx context.Context, req ca.IssueRequest) ([]byte, error
 	if len(req.DNSNames) == 0 {
 		return nil, fmt.Errorf("digicert: at least one DNS name is required")
 	}
-	orderID, certID, err := b.submitOrder(ctx, req)
+	orderID, certID, dcvRandom, err := b.submitOrder(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	if b.dcv != nil {
+		if err := b.validateDomains(ctx, req.TenantID, orderID, req.DNSNames, dcvRandom); err != nil {
+			return nil, err
+		}
 	}
 	certID, err = b.awaitIssued(ctx, orderID, certID)
 	if err != nil {
@@ -138,7 +146,7 @@ func (b *backend) validateEndpoint() error {
 
 // submitOrder POSTs the order with the CSR (PEM) and returns the order and (if
 // the order is issued without approval) certificate ids.
-func (b *backend) submitOrder(ctx context.Context, req ca.IssueRequest) (orderID, certID int, err error) {
+func (b *backend) submitOrder(ctx context.Context, req ca.IssueRequest) (orderID, certID int, dcvRandom string, err error) {
 	ttl := req.TTL
 	if ttl <= 0 {
 		ttl = defaultTTL
@@ -160,17 +168,21 @@ func (b *backend) submitOrder(ctx context.Context, req ca.IssueRequest) (orderID
 		"skip_approval":  true,
 		"payment_method": "balance",
 	}
+	if b.dcv != nil {
+		payload["dcv_method"] = "dns-txt-token"
+	}
 	var out struct {
-		ID            int `json:"id"`
-		CertificateID int `json:"certificate_id"`
+		ID             int    `json:"id"`
+		CertificateID  int    `json:"certificate_id"`
+		DCVRandomValue string `json:"dcv_random_value"`
 	}
 	if err := b.do(ctx, http.MethodPost, b.orderURL(b.product), payload, &out); err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
 	if out.ID == 0 {
-		return 0, 0, fmt.Errorf("digicert: order response carried no order id")
+		return 0, 0, "", fmt.Errorf("digicert: order response carried no order id")
 	}
-	return out.ID, out.CertificateID, nil
+	return out.ID, out.CertificateID, out.DCVRandomValue, nil
 }
 
 // awaitIssued polls the order until it reaches the issued status, returning the
