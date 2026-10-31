@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery, type AuditWindow } from "@/lib/api";
+import { api, ApiError, type AuditBundle, type AuditEvent, type AuditQuery, type AuditWindow, type AuditReadableEvent } from "@/lib/api";
 // This page renders errors in the fallback-prefixed shape ("Could not export
 // evidence: <detail>"), pinned by __tests__/operations_surface.test.tsx.
 import { apiProblemContext as apiProblemMessage } from "@/lib/apiProblem";
@@ -21,9 +21,11 @@ import { useTranslation, translateNow } from "@/i18n/I18nProvider";
 import type { MessageKey } from "@/i18n/messages";
 import { AuditAnchoringPanel } from "@/pages/audit/AuditAnchoringPanel";
 import { AuditFeedPanel } from "@/pages/audit/AuditFeedPanel";
+import { auditPresentation, type AuditPresentation } from "@/pages/audit/presentation";
 
 type Notice = { kind: "permission" | "error"; message: string };
 type Disclosure = "search" | "evidence" | "collectors";
+const noReadableEvents: readonly AuditReadableEvent[] = [];
 
 interface FilterState {
   featureID: string;
@@ -80,6 +82,7 @@ function AuditWorkspace() {
   const result = useApiQuery<AuditWindow>(queryKey, ({ signal }) => api.auditWindow(applied, signal), { retry: false });
   const events = result.error ? null : (result.data?.events ?? null);
   const archivedPrefix = result.data?.archived_prefix;
+  const readableEvents = result.data?.readable_events ?? noReadableEvents;
   const loading = result.loading || result.fetching;
   const error = result.errorValue ? noticeFor(result.errorValue, "Could not load audit events") : null;
 
@@ -161,6 +164,10 @@ function AuditWorkspace() {
   }
 
   const lastShown = lastAuditEventShown(events);
+  const lastShownFields = lastShown ? auditPresentation(lastShown, readableEvents) : undefined;
+  const selectedCurrent = selected
+    ? (events?.find((event) => event.id === selected.id && event.sequence === selected.sequence && event.hash === selected.hash) ?? null)
+    : null;
   const summaryTitle = loading
     ? t("audit.design.summaryCheckingTitle")
     : error
@@ -198,7 +205,7 @@ function AuditWorkspace() {
       {
         id: "actor",
         header: "Actor",
-        cell: (event) => actorLabel(event.actor),
+        cell: (event) => presentationActorLabel(auditPresentation(event, readableEvents), t),
       },
       {
         id: "tenant",
@@ -209,7 +216,7 @@ function AuditWorkspace() {
       {
         id: "resource",
         header: "Resource",
-        cell: (event) => resourceLabel(event),
+        cell: (event) => resourceLabel(auditPresentation(event, readableEvents).data),
       },
       {
         id: "time",
@@ -224,7 +231,7 @@ function AuditWorkspace() {
         cell: (event) => shortHash(event.hash),
       },
     ],
-    [],
+    [readableEvents, t],
   );
 
   return (
@@ -268,9 +275,12 @@ function AuditWorkspace() {
         {!loading && !error && lastShown ? (
           <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryFact label={t("audit.design.lastChangeShown")} value={readableEventType(lastShown.type)} />
-            <SummaryFact label={t("audit.design.changedBy")} value={actorLabel(lastShown.actor)} />
+            <SummaryFact label={t("audit.design.changedBy")} value={presentationActorLabel(lastShownFields!, t)} />
             <SummaryFact label={t("audit.design.when")} value={formatDateTime(lastShown.time)} />
-            <SummaryFact label={t("audit.design.result")} value={revocationBatchResult(lastShown, t) ?? t(eventResultKey(lastShown))} />
+            <SummaryFact
+              label={t("audit.design.result")}
+              value={revocationBatchResult(lastShown, t, lastShownFields?.data) ?? t(eventResultKey(lastShown, lastShownFields))}
+            />
           </dl>
         ) : null}
       </Card>
@@ -411,7 +421,7 @@ function AuditWorkspace() {
               rowActionLabel={(event) => `View event ${event.sequence}`}
             />
           </form>
-          <EventDetail event={selected} />
+          <EventDetail event={selectedCurrent} presentation={selectedCurrent ? auditPresentation(selectedCurrent, readableEvents) : undefined} />
         </div>
       </AuditDisclosure>
 
@@ -610,8 +620,11 @@ function readableEventType(type: string): string {
   return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "—";
 }
 
-function eventResultKey(event: AuditEvent): MessageKey {
-  const data = event.data ?? {};
+function eventResultKey(event: AuditEvent, fields?: AuditPresentation): MessageKey {
+  const presentation = fields ?? auditPresentation(event, []);
+  if (presentation.state === "erased") return "audit.protection.detailsErased";
+  if (presentation.state === "unavailable") return "audit.protection.detailsUnavailable";
+  const data = presentation.data ?? {};
   if (event.type === "endpoint.verification.observed") {
     if (data.superseded_expectation === true) return "audit.design.result.superseded";
     if (data.reached === false) return "audit.design.result.unreachable";
@@ -630,12 +643,12 @@ function eventResultKey(event: AuditEvent): MessageKey {
   return "audit.design.result.recorded";
 }
 
-function revocationBatchResult(event: AuditEvent, t: ReturnType<typeof useTranslation>["t"]): string | null {
-  if (event.type !== "certificate.revocation.batch.applied" || !Array.isArray(event.data?.items) || event.data.items.length === 0) {
+function revocationBatchResult(event: AuditEvent, t: ReturnType<typeof useTranslation>["t"], data: AuditEvent["data"]): string | null {
+  if (event.type !== "certificate.revocation.batch.applied" || !Array.isArray(data?.items) || data.items.length === 0) {
     return null;
   }
   const counts = { revoked: 0, queued: 0, skipped: 0, failed: 0 };
-  for (const item of event.data.items) {
+  for (const item of data.items) {
     if (!item || typeof item !== "object" || Array.isArray(item) || !("status" in item)) return null;
     const status = item.status;
     if (typeof status !== "string" || (status !== "revoked" && status !== "queued" && status !== "skipped" && status !== "failed")) return null;
@@ -664,18 +677,20 @@ function HashChainPanel({ events }: { events: AuditEvent[] }) {
   );
 }
 
-function EventDetail({ event }: { event: AuditEvent | null }) {
+function EventDetail({ event, presentation }: { event: AuditEvent | null; presentation?: AuditPresentation }) {
   const { t } = useTranslation();
   if (!event) {
     return (
-      <div role="note" className="ui-panel p-comfortable text-sm text-muted-foreground">
+      <Card role="note" className="p-comfortable text-sm text-muted-foreground">
         {translateNow("source.select.an.audit.event.to.inspect.its.immut.b522affee1")}
-      </div>
+      </Card>
     );
   }
-  const resources = affectedResourceLinks(event);
+  const fields = presentation ?? auditPresentation(event, []);
+  const protectedSource = fields.state !== "legacy";
+  const resources = affectedResourceLinks(event, fields.data);
   return (
-    <section aria-labelledby="audit-event-detail-heading" className="ui-panel p-comfortable text-sm">
+    <Card role="region" aria-labelledby="audit-event-detail-heading" className="p-comfortable text-sm">
       <h2 id="audit-event-detail-heading" className="text-title font-semibold">
         {translateNow("source.event.detail.097e77abc2")}
       </h2>
@@ -709,16 +724,36 @@ function EventDetail({ event }: { event: AuditEvent | null }) {
           </div>
         </div>
       ) : null}
-      <h3 className="mt-4 font-semibold">{translateNow("source.actor.449995c4fe")}</h3>
-      <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.actor ?? {})}</pre>
-      <h3 className="mt-4 font-semibold">{translateNow("source.data.cec3a9b89b")}</h3>
-      <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.data ?? {})}</pre>
-    </section>
+      {protectedSource ? (
+        <>
+          <h3 className="mt-4 font-semibold">{t("audit.protection.readableDetails")}</h3>
+          <p className="mt-2 text-muted-foreground">{t("audit.protection.sourceBinding")}</p>
+        </>
+      ) : null}
+      {fields.state === "erased" ? (
+        <p className="mt-3 text-muted-foreground">{t("audit.protection.erasedBody")}</p>
+      ) : fields.state === "unavailable" ? (
+        <p className="mt-3 text-muted-foreground">{t("audit.protection.detailsUnavailable")}</p>
+      ) : (
+        <>
+          <h3 className="mt-4 font-semibold">{translateNow("source.actor.449995c4fe")}</h3>
+          <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(fields.actor ?? {})}</pre>
+          <h3 className="mt-4 font-semibold">{translateNow("source.data.cec3a9b89b")}</h3>
+          <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(fields.data ?? {})}</pre>
+        </>
+      )}
+      {protectedSource ? (
+        <details className="mt-4">
+          <summary className="cursor-pointer font-semibold">{t("audit.protection.signedSource")}</summary>
+          <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{formatJSON(event.data)}</pre>
+        </details>
+      ) : null}
+    </Card>
   );
 }
 
-function affectedResourceLinks(event: AuditEvent): Array<{ label: MessageKey; to: string }> {
-  const data = event.data ?? {};
+function affectedResourceLinks(event: AuditEvent, readable: AuditEvent["data"]): Array<{ label: MessageKey; to: string }> {
+  const data = readable ?? {};
   const links: Array<{ label: MessageKey; to: string }> = [];
   const seen = new Set<string>();
   const add = (label: MessageKey, to: string) => {
@@ -765,6 +800,12 @@ function eventKey(event: AuditEvent): string {
   return event.id ?? `${event.sequence}:${event.type}:${event.time}`;
 }
 
+function presentationActorLabel(fields: AuditPresentation, t: ReturnType<typeof useTranslation>["t"]): string {
+  if (fields.state === "erased") return t("audit.protection.detailsErased");
+  if (fields.state === "unavailable") return t("audit.protection.detailsUnavailable");
+  return actorLabel(fields.actor);
+}
+
 function actorLabel(actor: AuditEvent["actor"]): string {
   if (!actor) return "-";
   for (const key of ["email", "subject", "sub", "id", "name"]) {
@@ -774,8 +815,8 @@ function actorLabel(actor: AuditEvent["actor"]): string {
   return displayValue(actor);
 }
 
-function resourceLabel(event: AuditEvent): string {
-  const data = event.data ?? {};
+function resourceLabel(readable: AuditEvent["data"]): string {
+  const data = readable ?? {};
   for (const key of ["resource", "resource_id", "credential_id", "identity_id", "certificate_id", "owner_id", "name"]) {
     const value = data[key];
     if (typeof value === "string" && value) return value;

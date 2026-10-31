@@ -842,6 +842,24 @@ func TestCreateSendsBodyFromStdin(t *testing.T) {
 	}
 }
 
+func TestAuditEventsPreservesSeparateReadableDetails(t *testing.T) {
+	for _, details := range []string{
+		`{"id":"source-7","sequence":7,"actor":{"subject":"fixture-reader"},"data":{"decision":"deny"}}`,
+		`{"id":"source-7","sequence":7,"sensitive_erased":true}`,
+	} {
+		body := `{"events":[{"id":"source-7","sequence":7,"hash":"original-hash","data":{"format":"trstctl.protected-audit-source/v1","protection":{"ciphertext":"fixture-ciphertext"}}}],"count":1,"readable_events":[` + details + `]}`
+		var captured capture
+		srv := mockServer(t, http.StatusOK, body, &captured)
+		code, stdout, stderr := run(t, []string{"audit", "events", "--limit", "1", "--window", "latest"}, cli.Env{Server: srv.URL, Tenant: "tenant-a", HTTPClient: srv.Client()}, "")
+		if code != 0 || stderr != "" || !sameJSON([]byte(stdout), []byte(body)) {
+			t.Fatalf("audit events lost source or readable companion: exit=%d stderr=%q output=%s", code, stderr, stdout)
+		}
+		if captured.Method != http.MethodGet || captured.Path != "/api/v1/audit/events" || captured.Query != "limit=1&window=latest" || captured.Header.Get("X-Tenant-ID") != "tenant-a" {
+			t.Fatalf("audit request lost scoped window: %s %s?%s", captured.Method, captured.Path, captured.Query)
+		}
+	}
+}
+
 func TestAuditFeedCommandsExposeHeadlessCollectorWorkflowAUD52(t *testing.T) {
 	var previewed capture
 	previewServer := mockServer(t, http.StatusOK, `{"capability":"audit_feed_configuration","effect_free":true}`, &previewed)

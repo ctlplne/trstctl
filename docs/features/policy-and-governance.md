@@ -429,6 +429,16 @@ workload issuance, not just events containing the word “ssh.” Unknown tools 
 with HTTP 400. Every export encoding preserves the same scope and retained-prefix
 chain. See [the CLI filter examples](../cli.md#verify-audit-exports-offline).
 
+Audit search keeps immutable records in `events`. For protected source records,
+authorized readable actor and payload fields are returned separately in
+`readable_events`, matched by event ID and tenant-local sequence. A verified key
+removal returns `sensitive_erased: true` without those fields. Change history
+labels them **Details erased**; missing or ambiguous companions show **Protected
+details unavailable**. The record hash and signed exports cover the encrypted
+source, not the readable companion. Legacy records retain their existing shape.
+This read contract does not enable event-key protection; its production setup
+and complete restore proof remain [under development](../limitations.md#tenant-offboarding-boundary).
+
 The native audit feed's `trstctl:audit` events can enter the packaged
 [Splunk app](../guides/splunk-app.md). It supplies two disabled searches for
 renewal-failure and revocation bursts. Configure an exact index and tenant scope

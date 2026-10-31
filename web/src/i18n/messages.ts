@@ -1997,6 +1997,21 @@ export const messages = {
       "Hash presence is not independent verification. Export the signed evidence bundle and verify it with the published key or the audit verify CLI command.",
     description: "Security boundary between displaying audit hashes and cryptographic verification.",
   },
+  "audit.protection.detailsErased": { defaultMessage: "Details erased", description: "Protected audit details are independently verified erased." },
+  "audit.protection.detailsUnavailable": {
+    defaultMessage: "Protected details unavailable",
+    description: "A protected audit event has no exact readable companion.",
+  },
+  "audit.protection.readableDetails": { defaultMessage: "Readable details", description: "Authorized audit fields kept separate from the signed source." },
+  "audit.protection.sourceBinding": {
+    defaultMessage: "The hash covers the encrypted source. Readable details are supplied separately.",
+    description: "Explains which audit bytes the displayed hash commits to.",
+  },
+  "audit.protection.erasedBody": {
+    defaultMessage: "Sensitive details were erased. The encrypted source and its proof remain.",
+    description: "Explains retained audit proof after independently verified key destruction.",
+  },
+  "audit.protection.signedSource": { defaultMessage: "Signed source", description: "Disclosure of the immutable ciphertext audit commitment." },
   "audit.event.affectedResources": {
     defaultMessage: "Affected resources",
     description: "Heading for conservative links derived from recognized audit-event resource identifiers.",

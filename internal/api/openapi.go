@@ -4586,12 +4586,18 @@ func componentSchemas() map[string]*Schema {
 		"sequence": {Type: "integer"}, "id": str(), "type": str(),
 		"tenant_id": uuid(), "time": timestamp(), "actor": {Type: "object"}, "data": {Type: "object"}, "hash": str(),
 	}, "sequence", "type", "tenant_id", "time")
+	auditReadableEvent := object(map[string]*Schema{
+		"sequence": {Type: "integer", Description: "Tenant-local sequence of the exact immutable event."},
+		"id":       str(), "actor": {Type: "object"}, "data": {Type: "object"},
+		"sensitive_erased": {Type: "boolean", Description: "Current independent custody verifies erasure; no readable actor or data is returned."},
+	}, "sequence", "id")
 	auditArchivedPrefix := object(map[string]*Schema{
 		"record_count": {Type: "integer", Description: "Tenant-local records retired from the served audit view into signed offline archives."},
 		"chain_head":   str(),
 	}, "record_count", "chain_head")
 	auditEventList := object(map[string]*Schema{
 		"events":          {Type: "array", Items: ref("AuditEvent")},
+		"readable_events": {Type: "array", Items: ref("AuditReadableEvent"), Description: "Authorized readable details matched by event sequence and ID. They are separate from the immutable signed records."},
 		"count":           {Type: "integer"},
 		"archived_prefix": ref("AuditArchivedPrefix"),
 		"prev_hash":       {Type: "string", Description: "The chain head the events' hashes continue from: the tenant's full-chain head before the first event for an unbroken run selected without a content filter, else the archived prefix's head."},
@@ -8099,6 +8105,7 @@ func componentSchemas() map[string]*Schema {
 		"AWSHoneyUse":                              awsHoneyUse,
 		"AWSHoneyTokenDetail":                      awsHoneyTokenDetail,
 		"AuditEvent":                               auditEvent,
+		"AuditReadableEvent":                       auditReadableEvent,
 		"AuditArchivedPrefix":                      auditArchivedPrefix,
 		"AuditEventList":                           auditEventList,
 		"AuditTimestampInfo":                       auditTimestampInfo,

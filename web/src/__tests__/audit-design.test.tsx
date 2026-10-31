@@ -173,4 +173,85 @@ describe("Route 035 change-history hierarchy", () => {
     expect(await screen.findByText("Recorded; no success result in this event")).toBeInTheDocument();
     expect(screen.queryByText(/revoked · .* failed/)).not.toBeInTheDocument();
   });
+
+  it("shows authorized protected details separately from the unchanged signed source", async () => {
+    const user = userEvent.setup();
+    const source = { format: "trstctl.protected-audit-source/v1", schema_version: 1, protection: { ciphertext: "ciphertext-proof", key_id: "opaque-key" } };
+    const event = {
+      id: "protected-7",
+      sequence: 7,
+      tenant_id: "tenant-1",
+      type: "authz.decision",
+      time: "2026-10-30T00:00:00Z",
+      hash: "sha256:protected-source",
+      data: source,
+    };
+    apiMock.auditWindow.mockResolvedValue({
+      events: [event],
+      readable_events: [
+        { id: event.id, sequence: 7, actor: { subject: "readable-operator@example.invalid" }, data: { decision: "deny", reason: "readable-private-detail" } },
+      ],
+    });
+    renderAudit();
+    expect(await screen.findByRole("heading", { level: 2, name: "1 change is ready to search" })).toBeInTheDocument();
+    expect(await screen.findByText("readable-operator@example.invalid", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Denied", { exact: true })).toBeInTheDocument();
+    await user.click(within(screen.getByTestId("page-depth-operate")).getByRole("button", { name: "Search activity" }));
+    await user.click(await screen.findByRole("button", { name: "View event 7" }));
+    expect(await screen.findByRole("heading", { name: "Readable details" })).toBeInTheDocument();
+    expect(screen.getByText(/readable-private-detail/)).toBeInTheDocument();
+    expect(screen.getByText("The hash covers the encrypted source. Readable details are supplied separately.", { exact: true })).toBeInTheDocument();
+    expect(event.data).toEqual(source);
+    expect(event.hash).toBe("sha256:protected-source");
+  });
+
+  it("identifies erased protected details without inferring an operation outcome", async () => {
+    const user = userEvent.setup();
+    const event = {
+      id: "erased-8",
+      sequence: 8,
+      tenant_id: "tenant-1",
+      type: "owner.created",
+      time: "2026-10-30T00:00:00Z",
+      hash: "sha256:erased-source",
+      data: { format: "trstctl.protected-audit-source/v1", schema_version: 1, protection: { ciphertext: "retained-proof" } },
+    };
+    apiMock.auditWindow.mockResolvedValue({ events: [event], readable_events: [{ id: event.id, sequence: 8, sensitive_erased: true }] });
+    renderAudit();
+    expect(await screen.findByRole("heading", { level: 2, name: "1 change is ready to search" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Details erased", { exact: true })).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Succeeded", { exact: true })).not.toBeInTheDocument();
+    await user.click(within(screen.getByTestId("page-depth-operate")).getByRole("button", { name: "Search activity" }));
+    await user.click(await screen.findByRole("button", { name: "View event 8" }));
+    expect(await screen.findByText("Sensitive details were erased. The encrypted source and its proof remain.", { exact: true })).toBeInTheDocument();
+    expect(event.data.protection.ciphertext).toBe("retained-proof");
+  });
+
+  it.each([
+    [{ id: "different-source", sequence: 9 }],
+    [{ id: "bound-source", sequence: 10 }],
+    [
+      { id: "bound-source", sequence: 9 },
+      { id: "bound-source", sequence: 9 },
+    ],
+  ])("refuses mismatched or ambiguous readable companions (%j)", async (...identities) => {
+    const event = {
+      id: "bound-source",
+      sequence: 9,
+      tenant_id: "tenant-1",
+      type: "authz.decision",
+      time: "2026-10-30T00:00:00Z",
+      hash: "sha256:bound-source",
+      data: { format: "trstctl.protected-audit-source/v1", protection: { ciphertext: "proof" } },
+    };
+    apiMock.auditWindow.mockResolvedValue({
+      events: [event],
+      readable_events: identities.map((identity) => ({ ...identity, actor: { subject: "unrelated-private@example.invalid" }, data: { decision: "allow" } })),
+    });
+    renderAudit();
+    expect(await screen.findByRole("heading", { level: 2, name: "1 change is ready to search" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Protected details unavailable", { exact: true })).length).toBeGreaterThan(0);
+    expect(screen.queryByText("unrelated-private@example.invalid")).not.toBeInTheDocument();
+    expect(screen.queryByText("Allowed", { exact: true })).not.toBeInTheDocument();
+  });
 });

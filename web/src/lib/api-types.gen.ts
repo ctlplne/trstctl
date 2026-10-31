@@ -1560,6 +1560,7 @@ export interface AuditEventList {
   count?: number;
   events: AuditEvent[];
   prev_hash?: string;
+  readable_events?: AuditReadableEvent[];
 }
 
 export interface AuditFeed {
@@ -1628,6 +1629,14 @@ export interface AuditFeedRequest {
   private_egress_cidrs?: string[];
   provider: "splunk-hec" | "sentinel";
   token_ref: string;
+}
+
+export interface AuditReadableEvent {
+  actor?: Record<string, unknown>;
+  data?: Record<string, unknown>;
+  id: string;
+  sensitive_erased?: boolean;
+  sequence: number;
 }
 
 export interface AuditTSAStatus {

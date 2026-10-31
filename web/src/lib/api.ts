@@ -1010,6 +1010,7 @@ export type SecretApprovalRequest = GenSecretApprovalRequest;
 export type SecretApprovalAction = GenSecretApprovalRequest["action"];
 export type AuditEvent = GenAuditEvent;
 export type AuditWindow = AuditEventList;
+export type AuditReadableEvent = NonNullable<AuditWindow["readable_events"]>[number];
 export type Profile = GenProfile;
 export type { ProfileEditApprovalList, ProfileEditApprovalRecord };
 export type ProfileMutationResult = Profile | ProfileApprovalResponse;

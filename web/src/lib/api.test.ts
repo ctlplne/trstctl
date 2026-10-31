@@ -2668,6 +2668,20 @@ describe("profile contract", () => {
 });
 
 describe("audit contract", () => {
+  it("keeps readable companions outside the immutable audit records", async () => {
+    const event = {
+      id: "protected-7",
+      sequence: 7,
+      hash: "original-hash",
+      data: { format: "trstctl.protected-audit-source/v1", protection: { ciphertext: "proof" } },
+    };
+    const readable = { id: event.id, sequence: 7, sensitive_erased: true };
+    mockFetch(200, JSON.stringify({ events: [event], count: 1, readable_events: [readable] }));
+    const window = await api.auditWindow({ limit: 1, window: "latest" });
+    expect(window.events).toEqual([event]);
+    expect(window.readable_events).toEqual([readable]);
+  });
+
   it("keeps the served archived-prefix evidence with an empty live window", async () => {
     mockFetch(200, JSON.stringify({ events: [], count: 0, archived_prefix: { record_count: 543, chain_head: "sealed-head" } }));
 

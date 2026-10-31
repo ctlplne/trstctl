@@ -10457,6 +10457,8 @@ export interface components {
             events: components["schemas"]["AuditEvent"][];
             /** @description The chain head the events' hashes continue from: the tenant's full-chain head before the first event for an unbroken run selected without a content filter, else the archived prefix's head. */
             prev_hash?: string;
+            /** @description Authorized readable details matched by event sequence and ID. They are separate from the immutable signed records. */
+            readable_events?: components["schemas"]["AuditReadableEvent"][];
         };
         AuditFeed: {
             allow_private_endpoint: boolean;
@@ -10534,6 +10536,15 @@ export interface components {
             /** @enum {string} */
             provider: "splunk-hec" | "sentinel";
             token_ref: string;
+        };
+        AuditReadableEvent: {
+            actor?: Record<string, never>;
+            data?: Record<string, never>;
+            id: string;
+            /** @description Current independent custody verifies erasure; no readable actor or data is returned. */
+            sensitive_erased?: boolean;
+            /** @description Tenant-local sequence of the exact immutable event. */
+            sequence: number;
         };
         AuditTSAStatus: {
             /**

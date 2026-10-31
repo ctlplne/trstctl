@@ -131,12 +131,16 @@ func (a *API) searchAudit(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
-	records, seed, prefix, err := a.audit.SearchView(r.Context(), q)
+	view, err := a.audit.SearchReadableView(r.Context(), q)
 	if err != nil {
 		a.writeError(w, err)
 		return
 	}
+	records, seed, prefix := view.Records, view.PrevHash, view.ArchivedPrefix
 	response := map[string]any{"events": records, "count": len(records)}
+	if len(view.ReadableEvents) > 0 {
+		response["readable_events"] = view.ReadableEvents
+	}
 	if prefix.RecordCount > 0 {
 		response["archived_prefix"] = prefix
 	}

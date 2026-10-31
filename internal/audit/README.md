@@ -12,9 +12,15 @@ source ID. After independently verified key destruction, the readable view marks
 the fields erased and returns no actor or payload. It never enters Bundle.
 Legacy plaintext records retain their existing representation and redaction.
 
-These service components do not yet expose protected readable details through
-the operator API, CLI or console. Production event-key activation, ciphertext
-backup/snapshot/archive integration and full restore remain required before the
-opt-in erasure feature is served. The audit tests use real NATS/file custody and
-a local signing/authority fixture; they do not qualify production authorization,
-PostgreSQL recovery or an isolated signing process.
+The authorized events API returns immutable records as `events` and optional
+readable companions as `readable_events`; the CLI preserves both. The console
+matches each companion by sequence and ID, distinguishes erased from unavailable
+details, and keeps the encrypted source separate. Signed exports retain only the
+immutable records. Collector-readable attachment remains separate work.
+
+Production event-key activation, ciphertext backup/snapshot/archive integration
+and full restore remain required before the opt-in erasure feature is served.
+The audit and HTTP tests use real NATS/file custody and local signing/authority
+fixtures; they do not qualify production activation, PostgreSQL recovery or an
+isolated signing process. Frontend and CLI checks exercise presentation and
+transport contracts, not the complete offboarding journey.

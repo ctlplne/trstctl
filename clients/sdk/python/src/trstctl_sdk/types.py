@@ -2172,6 +2172,7 @@ AuditEventList = TypedDict(
         'count': int,
         'events': list[dict[str, Any]],
         'prev_hash': str,
+        'readable_events': list[dict[str, Any]],
     },
     total=False,
 )
@@ -2256,6 +2257,18 @@ AuditFeedRequest = TypedDict(
         'private_egress_cidrs': list[str],
         'provider': str,
         'token_ref': str,
+    },
+    total=False,
+)
+
+AuditReadableEvent = TypedDict(
+    'AuditReadableEvent',
+    {
+        'actor': dict[str, Any],
+        'data': dict[str, Any],
+        'id': str,
+        'sensitive_erased': bool,
+        'sequence': int,
     },
     total=False,
 )
