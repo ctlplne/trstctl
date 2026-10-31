@@ -1074,8 +1074,18 @@ finite view before its preflights and optional projections. The tail checks each
 message against retained source metadata and current custody; its existing served
 driver owns bounded retries. Active-key replay and protected publication have
 separate controls. These tests do not establish complete authenticated backup or
-snapshot restoration. Public enable controls, interrupted-journal startup recovery
-and protected artifacts still need the complete opt-in workflow.
+snapshot restoration.
+
+Normal configured startup can resume an interrupted removal journal before
+sanitation opens protected payloads. It first rejects incomplete backup bindings,
+then reuses the committed destruction receiver with its original source, claim,
+retention and hold checks. The startup scheduling window is at most 45 seconds
+or the caller's earlier deadline; existing delivery timeouts and leases stay in
+force. An orphan journal cannot request a signature without its original intent.
+Unexplained missing material still refuses immediately. Recovery does not advance
+the global projection checkpoint: ordinary catch-up must process neighboring events
+before readiness. These are local component tests. Public enable controls,
+protected artifacts and the complete opt-in restore workflow remain unavailable.
 
 ## Provider workforce identity and customer access
 

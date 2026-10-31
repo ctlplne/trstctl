@@ -1747,9 +1747,16 @@ or snapshot restore. Warm catch-up and ordered tail also have local tests after
 removal, with exact source metadata/current-custody checks and truthful checkpoints.
 Separate active-key tests cover catch-up, a direct idle tail and protected publication
 through the existing bounded served retry loop. These use local request/signing
-fixtures, not an isolated-process or final-image proof. Public operator controls,
-interrupted-journal restart recovery, protected backup/archive artifacts and
-complete erasure-aware restore are not served yet.
+fixtures, not an isolated-process or final-image proof. Interrupted-journal
+startup recovery has local tests after actual pooled unlink and signature failure:
+it resumes only through the original receiver before sanitation, preserves the
+original removal time/source/checkpoint, and lets ordered catch-up process an
+unapplied neighbor. A missing original intent cannot authorize signing; an actual
+incomplete backup binding refuses before the recovery callback. Unknown key loss
+and material present despite recorded absence remain errors. This is a local
+lifecycle simulation, not an operating-system process-kill proof. Public operator
+controls, protected backup/archive artifacts and complete erasure-aware restore
+are not served yet.
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
 that component proof does not establish complete authenticated backup restore.

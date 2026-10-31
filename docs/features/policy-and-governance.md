@@ -461,9 +461,14 @@ reconstruction proof, not full authenticated backup or snapshot restore. Warm
 catch-up and tail now have local erasure and active-key controls. The tail makes
 fresh source/current-custody checks per message, preserves the ordered checkpoint
 and uses its existing bounded service retry loop during protected publication.
-Public controls,
-interrupted-journal startup recovery and the full backup/restore journey are
-still required; this is not a served opt-in workflow.
+Interrupted-journal startup recovery now has local tests using the original
+committed intent and the shared receiver, before sanitation opens protected
+records. It preserves the recorded removal time, source prefix and checkpoint,
+then ordinary catch-up observes an unapplied neighboring event. Missing original
+intent, unexplained key loss and incomplete backup bindings still refuse; a
+pending-journal read grants no removal or signing authority. Public controls,
+protected artifacts and the full backup/restore journey are still required;
+this is not a served opt-in workflow.
 An explicit public JWKS file can retain destruction-evidence verification after
 signer rotation. It is loaded independently of data restore, with the same trust
 attached to custody, source readers and admission. Verification uses the original

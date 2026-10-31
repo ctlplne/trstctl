@@ -111,3 +111,13 @@ Ordinary Apply and checkpoint SQL run after the additional decision callback
 releases its locks. The served driver's existing bounded pool and retry loop remain
 unchanged. Local controls cover active and erased keys; full backup/snapshot and
 isolated process restoration still need their own proof.
+
+`PendingDestruction` is a read-only journal probe against exact retained creation.
+It works without a signer or removal authority, changes no files and never reports
+pending removal as verified erasure. Active missing material, foreign creation or
+material present after recorded removal refuses. Normal configured startup uses
+this identity only to select recovery through the original committed outbox
+receiver. Exact backup bindings are checked before recovery, sanitation follows
+it, and current-custody proof still gates readiness. The source checkpoint stays
+unchanged until ordinary ordered catch-up. Raw restore construction never runs
+this recovery hook before its authenticated source is resumed.

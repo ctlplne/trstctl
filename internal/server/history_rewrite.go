@@ -52,6 +52,15 @@ func openSanitizedHistoryAwareEventLog(
 	fleetReady bool,
 	extraOptions ...events.OpenOption,
 ) (*events.Log, error) {
+	return openSanitizedHistoryAwareEventLogWithRecovery(ctx, cfg, st, auditKey, fleetReady, nil, extraOptions...)
+}
+
+// Recovery is optional and runs only after exact-restore binding checks, before
+// sanitation can open protected payloads. Raw restore never calls this wrapper.
+func openSanitizedHistoryAwareEventLogWithRecovery(
+	ctx context.Context, cfg config.NATS, st *store.Store, auditKey *jose.SigningKey,
+	fleetReady bool, recoverSource func(context.Context, *events.Log) error, extraOptions ...events.OpenOption,
+) (*events.Log, error) {
 	log, err := openHistoryAwareEventLog(ctx, cfg, st, auditKey, extraOptions...)
 	if err != nil {
 		return nil, err
@@ -59,6 +68,12 @@ func openSanitizedHistoryAwareEventLog(
 	if err := log.RequireNoPendingBackupRestore(ctx); err != nil {
 		_ = log.Close()
 		return nil, err
+	}
+	if recoverSource != nil {
+		if err := recoverSource(ctx, log); err != nil {
+			_ = log.Close()
+			return nil, err
+		}
 	}
 	if err := ensureLegacySchedulerHistorySanitized(ctx, log, st, auditKey, fleetReady); err != nil {
 		_ = log.Close()

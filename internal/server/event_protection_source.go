@@ -24,7 +24,9 @@ func openConfiguredEventSource(ctx context.Context, cfg *config.Config, st *stor
 	options := append(protection.openOptions(), extra...)
 	var log *events.Log
 	if sanitized {
-		log, err = openSanitizedHistoryAwareEventLog(ctx, cfg.NATS, st, key, cfg.Secrets.SecretRotationHistoryFleetReady, options...)
+		log, err = openSanitizedHistoryAwareEventLogWithRecovery(ctx, cfg.NATS, st, key, cfg.Secrets.SecretRotationHistoryFleetReady, func(recovery context.Context, source *events.Log) error {
+			return protection.recoverPendingDestruction(recovery, st, source)
+		}, options...)
 		if err == nil {
 			if verifyErr := protection.reader.VerifyCurrentCustody(ctx); verifyErr != nil {
 				_ = log.Close()

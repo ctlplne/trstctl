@@ -9,7 +9,9 @@ import (
 
 	"trstctl.com/trstctl/internal/bulkhead"
 	"trstctl.com/trstctl/internal/eventprivacy"
+	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/orchestrator"
+	"trstctl.com/trstctl/internal/store"
 	"trstctl.com/trstctl/internal/tenancy"
 )
 
@@ -32,7 +34,10 @@ func (s *Server) configureEventKeyDelivery(d Deps, orch *orchestrator.Orchestrat
 		return errors.New("server: configured event keys require independent preparation and destruction worker pools")
 	}
 	prepare := eventprivacy.PreparationReceiver{Policy: runtime.policy, Claims: d.Store, Guard: d.Store, Custody: runtime.custody, Record: orch.RecordEventProtectionControl}
-	destroy := eventprivacy.DestructionReceiver{Policy: runtime.policy, Claims: d.Store, Guard: d.Store, Custody: runtime.custody, Authority: runtime.authority, Record: orch.RecordEventProtectionControl}
+	destroyHandler, err := newEventKeyDestructionHandler(runtime, d.Store, orch.RecordEventProtectionControl)
+	if err != nil {
+		return err
+	}
 	prepBox := s.newEventKeyOutbox(d, d.TenantServiceCheck)
 	box := s.newEventKeyOutbox(d, d.Store.RequireEventKeyDestructionService)
 
@@ -46,13 +51,7 @@ func (s *Server) configureEventKeyDelivery(d Deps, orch *orchestrator.Orchestrat
 			}
 			return prepare.Prepare(ctx, claim)
 		}),
-		destruction: orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
-			claim, err := parseEventKeyDestructionMessage(message)
-			if err != nil {
-				return orchestrator.DefiniteNoEffect(err)
-			}
-			return destroy.Destroy(ctx, claim)
-		}),
+		destruction:       destroyHandler,
 		destructionOutbox: box,
 	}
 	return nil
@@ -104,4 +103,20 @@ func (s *Server) newEventKeyOutbox(d Deps, check tenancy.ServiceCheck) *orchestr
 			s.mOutboxCircuitTransitions.WithLabelValues(transition.Destination, string(transition.From), string(transition.To)).Inc()
 		}),
 	)
+}
+
+// Boot and live delivery share the same parser, committed-claim/source checks
+// and private authority. Neither a journal read nor this constructor is a grant.
+func newEventKeyDestructionHandler(runtime *eventProtectionRuntime, st *store.Store, record func(context.Context, events.Event) (events.Event, error)) (orchestrator.Handler, error) {
+	if runtime == nil || runtime.custody == nil || runtime.authority == nil || st == nil || record == nil {
+		return nil, errors.New("server: event key destruction receiver is incomplete")
+	}
+	destroy := eventprivacy.DestructionReceiver{Policy: runtime.policy, Claims: st, Guard: st, Custody: runtime.custody, Authority: runtime.authority, Record: record}
+	return orchestrator.HandlerFunc(func(ctx context.Context, message orchestrator.Message) error {
+		claim, err := parseEventKeyDestructionMessage(message)
+		if err != nil {
+			return orchestrator.DefiniteNoEffect(err)
+		}
+		return destroy.Destroy(ctx, claim)
+	}), nil
 }

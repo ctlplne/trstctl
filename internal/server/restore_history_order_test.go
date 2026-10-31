@@ -45,10 +45,10 @@ func TestRestoreResumesExactHistoryBeforeSchedulerSanitation(t *testing.T) {
 	constructor := string(wrapper)
 	options := strings.Index(constructor, "options := append(protection.openOptions(), extra...)")
 	branch := strings.Index(constructor, "if sanitized {")
-	normal := strings.Index(constructor, "openSanitizedHistoryAwareEventLog(")
+	normal := strings.Index(constructor, "openSanitizedHistoryAwareEventLogWithRecovery(")
 	raw := strings.Index(constructor, "} else {\n\t\tlog, err = openHistoryAwareEventLog(")
 	if options < 0 || branch <= options || normal <= branch || raw <= normal ||
-		strings.Count(constructor, "openSanitizedHistoryAwareEventLog(") != 1 ||
+		strings.Count(constructor, "openSanitizedHistoryAwareEventLogWithRecovery(") != 1 ||
 		strings.Count(constructor, "openHistoryAwareEventLog(") != 1 {
 		t.Fatal("configured source must attach protection before opening, and false must select only unsanitized history")
 	}
@@ -73,7 +73,8 @@ func TestNormalHistoryConstructorRejectsPendingRestoreBeforeSanitation(t *testin
 	body = body[start : start+end]
 	pending := strings.Index(body, "RequireNoPendingBackupRestore(")
 	sanitize := strings.Index(body, "ensureLegacySchedulerHistorySanitized(")
-	if pending < 0 || sanitize < 0 || pending >= sanitize {
-		t.Fatalf("normal constructor order = pending:%d sanitation:%d", pending, sanitize)
+	recovery := strings.Index(body, "recoverSource(ctx, log)")
+	if pending < 0 || recovery < 0 || sanitize < 0 || pending >= recovery || recovery >= sanitize {
+		t.Fatalf("normal constructor order = pending:%d recovery:%d sanitation:%d", pending, recovery, sanitize)
 	}
 }
