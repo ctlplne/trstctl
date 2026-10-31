@@ -394,7 +394,9 @@
                 "retireDiscoverySchedule",
                 "listDiscoverySources",
                 "retryDiscoveryRun",
-                "startDiscoveryRun"
+                "startDiscoveryRun",
+                "previewADCSTemplateModernize",
+                "modernizeADCSTemplate"
             ],
             "api_na": "",
             "cli_surface": [
@@ -424,7 +426,9 @@
                 "discovery findings resolve",
                 "discovery findings remove-distrusted-root",
                 "adcs ca-database ingest",
-                "adcs ca-database list"
+                "adcs ca-database list",
+                "posture adcs modernize-preview",
+                "posture adcs modernize"
             ],
             "cli_na": "",
             "facet_evidence": {

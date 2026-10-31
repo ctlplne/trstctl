@@ -1,7 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ADCSEndpointProbeCoverage, ADCSEndpointProbeOrigin } from "./ADCSEndpointProbeEvidence";
+import { ADCSModernizeDialog } from "./ADCSModernizeDialog";
 import { ADCSMembershipEvidence } from "./ADCSMembershipEvidence";
 import { DataGrid, type DataGridColumn, type DataGridState } from "@/components/DataGrid";
+import { useCan } from "@/components/rbac";
+import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api, type ADCSEnrollmentService, type ADCSInventorySource, type ADCSTemplate } from "@/lib/api";
 import { formatDateTime } from "@/i18n/format";
@@ -24,6 +27,8 @@ export function ADCSTemplatePanel() {
   const templates = posture?.templates ?? [];
   const sources = posture?.sources ?? [];
   const services = posture?.enrollment_services ?? [];
+  const canModernize = useCan("profiles:write");
+  const [modernizing, setModernizing] = useState<ADCSTemplate | null>(null);
 
   const columns = useMemo<Array<DataGridColumn<ADCSTemplate>>>(
     () => [
@@ -92,8 +97,21 @@ export function ADCSTemplatePanel() {
             </ul>
           ),
       },
+      ...(canModernize
+        ? [
+            {
+              id: "modernize",
+              header: translateNow("adcs.modernize.column"),
+              cell: (template: ADCSTemplate) => (
+                <Button type="button" size="sm" variant="outline" onClick={() => setModernizing(template)}>
+                  {translateNow("adcs.modernize.action")}
+                </Button>
+              ),
+            },
+          ]
+        : []),
     ],
-    [],
+    [canModernize],
   );
 
   let gridState: DataGridState = "ready";
@@ -158,6 +176,7 @@ export function ADCSTemplatePanel() {
       <ADCSDriftHistory items={driftQuery.data?.items ?? []} loading={driftQuery.loading} error={driftQuery.error} />
 
       {posture?.guidance ? <p className="text-xs text-status-warning">{posture.guidance}</p> : null}
+      {modernizing ? <ADCSModernizeDialog template={modernizing} onClose={() => setModernizing(null)} /> : null}
     </div>
   );
 }

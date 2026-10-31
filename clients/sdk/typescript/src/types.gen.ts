@@ -6230,6 +6230,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/posture/adcs/templates/modernize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the trstctl profile an inventoried AD CS template becomes: names confined to its domain, domain-logon and enrollment-agent usages removed */
+        post: operations["modernizeADCSTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/posture/adcs/templates/modernize/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review the trstctl profile an inventoried AD CS template becomes, with its risky properties removed, without writing state */
+        post: operations["previewADCSTemplateModernize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pqc/campaigns": {
         parameters: {
             query?: never;
@@ -9420,6 +9454,38 @@ export interface components {
             parents?: string[];
             security_group?: boolean;
             sid: string;
+        };
+        ADCSModernizeChange: {
+            code: string;
+            detail: string;
+        };
+        ADCSModernizePlan: {
+            blockers: string[];
+            capability: string;
+            changes: components["schemas"]["ADCSModernizeChange"][];
+            dns_suffix: string;
+            domain: string;
+            effect_free: boolean;
+            profile_name: string;
+            ready: boolean;
+            spec: components["schemas"]["CertificateProfileSpec"];
+            template: string;
+        };
+        ADCSModernizeRequest: {
+            /** @description DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain */
+            dns_suffix?: string;
+            domain: string;
+            /** @description defaults to adcs-<template>-modern */
+            profile_name?: string;
+            template: string;
+        };
+        ADCSModernizeResult: {
+            /** Format: uuid */
+            approval_id?: string;
+            changes: components["schemas"]["ADCSModernizeChange"][];
+            profile?: components["schemas"]["Profile"];
+            /** @enum {string} */
+            state: "created" | "awaiting_approval";
         };
         ADCSObservedInventory: {
             endpoint_probe_page?: components["schemas"]["ADCSEndpointProbePage"];
@@ -38711,6 +38777,93 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ADCSDriftHistory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    modernizeADCSTemplate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ADCSModernizeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSModernizeResult"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewADCSTemplateModernize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ADCSModernizeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSModernizePlan"];
                 };
             };
             /** @description client error */

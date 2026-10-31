@@ -2461,6 +2461,126 @@
         ],
         "type": "object"
       },
+      "ADCSModernizeChange": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ADCSModernizePlan": {
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "capability": {
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSModernizeChange"
+            },
+            "type": "array"
+          },
+          "dns_suffix": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "effect_free": {
+            "type": "boolean"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CertificateProfileSpec"
+          },
+          "template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "capability",
+          "effect_free",
+          "ready",
+          "domain",
+          "template",
+          "dns_suffix",
+          "profile_name",
+          "spec",
+          "changes",
+          "blockers"
+        ],
+        "type": "object"
+      },
+      "ADCSModernizeRequest": {
+        "properties": {
+          "dns_suffix": {
+            "description": "DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain",
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "profile_name": {
+            "description": "defaults to adcs-\u003ctemplate\u003e-modern",
+            "type": "string"
+          },
+          "template": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain",
+          "template"
+        ],
+        "type": "object"
+      },
+      "ADCSModernizeResult": {
+        "properties": {
+          "approval_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSModernizeChange"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          },
+          "state": {
+            "enum": [
+              "created",
+              "awaiting_approval"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "changes"
+        ],
+        "type": "object"
+      },
       "ADCSObservedInventory": {
         "properties": {
           "endpoint_probe_page": {
@@ -70820,6 +70940,131 @@
         ],
         "summary": "List immutable semantic AD CS template drift history",
         "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/posture/adcs/templates/modernize": {
+      "post": {
+        "operationId": "modernizeADCSTemplate",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADCSModernizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSModernizeResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Create the trstctl profile an inventoried AD CS template becomes: names confined to its domain, domain-logon and enrollment-agent usages removed",
+        "x-trstctl-permission": "profiles:write"
+      }
+    },
+    "/api/v1/posture/adcs/templates/modernize/preview": {
+      "post": {
+        "operationId": "previewADCSTemplateModernize",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADCSModernizeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSModernizePlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Review the trstctl profile an inventoried AD CS template becomes, with its risky properties removed, without writing state",
+        "x-trstctl-permission": "profiles:write"
       }
     },
     "/api/v1/pqc/campaigns": {

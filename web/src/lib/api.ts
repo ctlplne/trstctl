@@ -99,6 +99,9 @@ import type {
   ADCSInventorySource as GenADCSInventorySource,
   ADCSEnrollmentService as GenADCSEnrollmentService,
   ADCSPosture as GenADCSPosture,
+  ADCSModernizePlan as GenADCSModernizePlan,
+  ADCSModernizeRequest as GenADCSModernizeRequest,
+  ADCSModernizeResult as GenADCSModernizeResult,
   ADCSDriftHistory as GenADCSDriftHistory,
   ADCSDatabaseList as GenADCSDatabaseList,
   ADCSTemplate as GenADCSTemplate,
@@ -816,6 +819,9 @@ export interface IdentityStatusCounts {
   by_status: Record<string, number>;
 }
 export type ADCSPosture = GenADCSPosture;
+export type ADCSModernizePlan = GenADCSModernizePlan;
+export type ADCSModernizeRequest = GenADCSModernizeRequest;
+export type ADCSModernizeResult = GenADCSModernizeResult;
 export type ADCSDriftHistory = GenADCSDriftHistory;
 export type ADCSInventorySource = GenADCSInventorySource;
 export type ADCSEnrollmentService = GenADCSEnrollmentService;
@@ -2132,6 +2138,8 @@ export interface Api {
   /** F1: AD CS certificate template posture observed by an in-domain relay. */
   adcsPosture(): Promise<ADCSPosture>;
   adcsDrift(): Promise<ADCSDriftHistory>;
+  previewADCSModernize(input: ADCSModernizeRequest): Promise<ADCSModernizePlan>;
+  modernizeADCSTemplate(input: ADCSModernizeRequest): Promise<ADCSModernizeResult>;
   /** F4: per-CA certificate-database lifecycle visibility. */
   adcsDatabases(): Promise<ADCSDatabaseList>;
   discoveryCoverage(options?: { class?: string; sourceKind?: string }): Promise<DiscoveryCoverage>;
@@ -2921,6 +2929,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
   adcsDrift: () => req<ADCSDriftHistory>("/api/v1/posture/adcs/drift"),
+  previewADCSModernize: (input) => postRead<ADCSModernizePlan>("/api/v1/posture/adcs/templates/modernize/preview", input),
+  modernizeADCSTemplate: (input) => mutate<ADCSModernizeResult>("POST", "/api/v1/posture/adcs/templates/modernize", input),
   adcsDatabases: () => req<ADCSDatabaseList>("/api/v1/adcs/ca-database"),
   discoveryCoverage: (options) => {
     const qs = new URLSearchParams();

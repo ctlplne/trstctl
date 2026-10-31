@@ -6643,6 +6643,25 @@ func componentSchemas() map[string]*Schema {
 		"allowed_algorithms":    {Type: "array", Items: &Schema{Type: "integer"}},
 		"max_age":               str(),
 	})
+	adcsModernizeRequestSchema := object(map[string]*Schema{
+		"domain": str(), "template": str(),
+		"dns_suffix":   {Type: "string", Description: "DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain"},
+		"profile_name": {Type: "string", Description: "defaults to adcs-<template>-modern"},
+	}, "domain", "template")
+	adcsModernizeChangeSchema := object(map[string]*Schema{"code": str(), "detail": str()}, "code", "detail")
+	adcsModernizePlanSchema := object(map[string]*Schema{
+		"capability": str(), "effect_free": {Type: "boolean"}, "ready": {Type: "boolean"},
+		"domain": str(), "template": str(), "dns_suffix": str(), "profile_name": str(),
+		"spec":     ref("CertificateProfileSpec"),
+		"changes":  {Type: "array", Items: ref("ADCSModernizeChange")},
+		"blockers": {Type: "array", Items: str()},
+	}, "capability", "effect_free", "ready", "domain", "template", "dns_suffix", "profile_name", "spec", "changes", "blockers")
+	adcsModernizeResultSchema := object(map[string]*Schema{
+		"profile":     ref("Profile"),
+		"approval_id": uuid(),
+		"state":       {Type: "string", Enum: []string{"created", "awaiting_approval"}},
+		"changes":     {Type: "array", Items: ref("ADCSModernizeChange")},
+	}, "state", "changes")
 	certificateProfileSpec := object(map[string]*Schema{
 		"name":                    str(),
 		"version":                 {Type: "integer"},
@@ -8506,6 +8525,10 @@ func componentSchemas() map[string]*Schema {
 		"AgentJobRedemptions":                   agentJobRedemptions,
 		"AgentJobReceipts":                      agentJobReceipts,
 		"ADCSPosture":                           adcsPosture,
+		"ADCSModernizeRequest":                  adcsModernizeRequestSchema,
+		"ADCSModernizeChange":                   adcsModernizeChangeSchema,
+		"ADCSModernizePlan":                     adcsModernizePlanSchema,
+		"ADCSModernizeResult":                   adcsModernizeResultSchema,
 		"ADCSInventorySource":                   adcsInventorySource,
 		"ADCSTemplate":                          adcsTemplate,
 		"ADCSEnrollmentACL":                     adcsEnrollmentACLSchema(), "ADCSMembershipNode": adcsMembershipNodeSchema(), "ADCSEnrollmentTrustee": adcsEnrollmentTrusteeSchema(), "ADCSEnrollmentMember": adcsEnrollmentMemberSchema(), "ADCSEnrollmentMembership": adcsEnrollmentMembershipSchema(),

@@ -3891,8 +3891,16 @@ than sending an operator looking for a credential that was never there.
   stated exactly: this is the transport and parsing layer only. NOTHING YET
   CALLS THE DATABASE INGESTION — there is no scheduled or served ingest that
   pulls a CA database into inventory, so issued/pending/revoked state is not
-  reconciled by C4/XREC; and there is no "modernize this template" console
-  action or AD CS issuer health view. **ACME and EST in front of AD CS
+  reconciled by C4/XREC; and there is no AD CS issuer health view.
+  **"Modernize this template" is served** (A160): from the AD CS posture grid
+  (or `POST /api/v1/posture/adcs/templates/modernize[/preview]`, `trstctl
+  posture adcs modernize[-preview]`) an inventoried template becomes a trstctl
+  profile with its risky properties removed — names confined to the template's
+  DNS domain (the requester no longer supplies the subject; email, URI and IP
+  names are refused), Any Purpose, Smart Card Logon, PKINIT and Certificate
+  Request Agent usages dropped, manager approval kept as dual control, 90-day
+  validity. The preview is effect-free and names every change; the domain is
+  derived from the publishing CA's DNS name unless `dns_suffix` names it. **ACME and EST in front of AD CS
   templates are served** (A159): a certificate profile's
   `upstream_external_ca` names an `adcs` external CA (one template per
   entry), and ACME, EST, SCEP and CMP enrollments under that profile pass the

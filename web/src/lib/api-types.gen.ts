@@ -573,6 +573,38 @@ export interface ADCSMembershipNode {
   sid: string;
 }
 
+export interface ADCSModernizeChange {
+  code: string;
+  detail: string;
+}
+
+export interface ADCSModernizePlan {
+  blockers: string[];
+  capability: string;
+  changes: ADCSModernizeChange[];
+  dns_suffix: string;
+  domain: string;
+  effect_free: boolean;
+  profile_name: string;
+  ready: boolean;
+  spec: CertificateProfileSpec;
+  template: string;
+}
+
+export interface ADCSModernizeRequest {
+  dns_suffix?: string;
+  domain: string;
+  profile_name?: string;
+  template: string;
+}
+
+export interface ADCSModernizeResult {
+  approval_id?: string;
+  changes: ADCSModernizeChange[];
+  profile?: Profile;
+  state: "created" | "awaiting_approval";
+}
+
 export interface ADCSObservedInventory {
   endpoint_probe_page?: ADCSEndpointProbePage;
   enrollment_services: ADCSObservedService[];

@@ -1,9 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ADCSTemplatePanel } from "@/components/posture/ADCSTemplatePanel";
 import { AppQueryProvider } from "@/lib/query";
 
-const { apiMock } = vi.hoisted(() => ({ apiMock: { adcsPosture: vi.fn(), adcsDrift: vi.fn() } }));
+const { apiMock } = vi.hoisted(() => ({
+  apiMock: { adcsPosture: vi.fn(), adcsDrift: vi.fn(), previewADCSModernize: vi.fn(), modernizeADCSTemplate: vi.fn() },
+}));
 
 vi.mock("@/lib/api", async (orig) => {
   const actual = await orig<typeof import("@/lib/api")>();
@@ -111,6 +114,47 @@ describe("AD CS inventory posture", () => {
         },
       ],
     });
+  });
+
+  it("A160 previews and creates the profile an inventoried template becomes", async () => {
+    apiMock.previewADCSModernize.mockReset().mockResolvedValue({
+      capability: "P11",
+      effect_free: true,
+      ready: true,
+      domain: "CORP-CA",
+      template: "UserAuth",
+      dns_suffix: "corp.example",
+      profile_name: "adcs-userauth-modern",
+      spec: { allowed_dns_suffixes: ["corp.example"], allowed_ekus: ["clientAuth"] },
+      changes: [
+        { code: "requester_supplied_subject_removed", detail: "The requester no longer supplies the subject." },
+        { code: "eku_removed", detail: "Removed Smart Card Logon." },
+      ],
+      blockers: [],
+    });
+    apiMock.modernizeADCSTemplate.mockReset().mockResolvedValue({ state: "created", changes: [] });
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <ADCSTemplatePanel />
+      </AppQueryProvider>,
+    );
+    await user.click(await screen.findByRole("button", { name: "Modernize" }));
+    const dialog = await screen.findByRole("dialog", { name: "Modernize template UserAuth" });
+    expect(await within(dialog).findByText("The requester no longer supplies the subject.")).toBeInTheDocument();
+    expect(within(dialog).getByText("adcs-userauth-modern")).toBeInTheDocument();
+    expect(apiMock.previewADCSModernize).toHaveBeenCalledWith({ domain: "CORP-CA", template: "UserAuth" });
+    expect(apiMock.modernizeADCSTemplate).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "Create profile" }));
+    await waitFor(() =>
+      expect(apiMock.modernizeADCSTemplate).toHaveBeenCalledWith({
+        domain: "CORP-CA",
+        template: "UserAuth",
+        dns_suffix: "corp.example",
+        profile_name: "adcs-userauth-modern",
+      }),
+    );
+    expect(await within(dialog).findByText("Profile adcs-userauth-modern created.")).toBeInTheDocument();
   });
 
   it("shows live IIS exposure and honest CA restriction evidence", async () => {

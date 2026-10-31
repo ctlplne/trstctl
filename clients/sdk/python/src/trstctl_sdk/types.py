@@ -791,6 +791,54 @@ ADCSMembershipNode = TypedDict(
     total=False,
 )
 
+ADCSModernizeChange = TypedDict(
+    'ADCSModernizeChange',
+    {
+        'code': str,
+        'detail': str,
+    },
+    total=False,
+)
+
+ADCSModernizePlan = TypedDict(
+    'ADCSModernizePlan',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'changes': list[dict[str, Any]],
+        'dns_suffix': str,
+        'domain': str,
+        'effect_free': bool,
+        'profile_name': str,
+        'ready': bool,
+        'spec': dict[str, Any],
+        'template': str,
+    },
+    total=False,
+)
+
+ADCSModernizeRequest = TypedDict(
+    'ADCSModernizeRequest',
+    {
+        'dns_suffix': str,
+        'domain': str,
+        'profile_name': str,
+        'template': str,
+    },
+    total=False,
+)
+
+ADCSModernizeResult = TypedDict(
+    'ADCSModernizeResult',
+    {
+        'approval_id': str,
+        'changes': list[dict[str, Any]],
+        'profile': dict[str, Any],
+        'state': str,
+    },
+    total=False,
+)
+
 ADCSObservedInventory = TypedDict(
     'ADCSObservedInventory',
     {

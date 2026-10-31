@@ -880,6 +880,23 @@ glossary: [certificate](../glossary.md), [fingerprint](../glossary.md),
 **Covers:** F1, F2, F3, F42, F49, F35, F36
 
 
+### Modernize an AD CS template
+
+Each row of the AD CS template grid has a **Modernize** action. Its effect-free
+preview shows the trstctl profile the template becomes and every property it
+leaves behind: names are confined to the template's DNS domain, so the requester
+no longer supplies the subject (an ESC1-prone template stops being an
+impersonation primitive), Any Purpose, Smart Card Logon, PKINIT and Certificate
+Request Agent usages are removed, manager approval becomes the profile's dual
+control, and certificates are valid for 90 days. **Create profile** makes it
+through the normal profile path; a profile that already has the name is refused.
+The domain comes from the publishing CA's observed DNS name unless you name a
+`dns_suffix`. Automation uses `POST /api/v1/posture/adcs/templates/modernize/preview`
+and `POST /api/v1/posture/adcs/templates/modernize` (`profiles:write`), or
+`trstctl posture adcs modernize-preview -f req.json` and `... modernize -f req.json`.
+To keep issuing at AD CS behind the new profile's checks, set the profile's
+`upstream_external_ca` to an `adcs` external CA.
+
 ### Nested AD CS enrollment links
 
 Discovery’s AD CS source wizard can opt into read-only nested group reads. Select

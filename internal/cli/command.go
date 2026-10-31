@@ -612,6 +612,8 @@ var coreCommandTable = []Command{
 	// triaging a dangerous template wants it in the same place they already run
 	// discovery from, not only in a browser.
 	{Name: []string{"posture", "adcs"}, Method: "GET", Path: "/api/v1/posture/adcs", Summary: "Show AD CS certificate template posture observed by an in-domain relay"},
+	{Name: []string{"posture", "adcs", "modernize-preview"}, Method: "POST", Path: "/api/v1/posture/adcs/templates/modernize/preview", Body: bodyFile, ReadOnly: true, Summary: "Review the trstctl profile an inventoried AD CS template becomes, with its risky properties removed"},
+	{Name: []string{"posture", "adcs", "modernize"}, Method: "POST", Path: "/api/v1/posture/adcs/templates/modernize", Body: bodyFile, Summary: "Create the trstctl profile an inventoried AD CS template becomes"},
 	{Name: []string{"posture", "adcs", "drift"}, Method: "GET", Path: "/api/v1/posture/adcs/drift", Summary: "List immutable semantic AD CS template drift history"},
 
 	{Name: []string{"acme", "eab", "list"}, Method: "GET", Path: "/api/v1/acme/eab-credentials", Summary: "List ACME external account binding credentials and their authorization scope"},

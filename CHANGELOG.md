@@ -2,6 +2,11 @@
 
 ### Added
 
+- "Modernize this template": an inventoried AD CS template becomes a trstctl profile with its
+  risky properties removed (names confined to its DNS domain so the requester no longer supplies
+  the subject; Any Purpose, Smart Card Logon, PKINIT and Certificate Request Agent usages dropped;
+  manager approval kept as dual control; 90-day validity), from the AD CS posture grid, the API
+  (effect-free preview first) or the CLI.
 - ACME and EST in front of AD CS templates: a certificate profile's `upstream_external_ca` routes
   protocol enrollments under it (ACME, EST, SCEP, CMP) to a configured external CA such as an
   `adcs` entry, after the profile's checks pass; the client receives the upstream leaf and chain.

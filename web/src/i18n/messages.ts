@@ -15633,6 +15633,79 @@ export const messages = {
     defaultMessage: "Secret",
     description: "Global search result kind label.",
   },
+  "adcs.modernize.column": {
+    defaultMessage: "Modernize",
+    description: "A160: column of the template grid holding the Modernize action.",
+  },
+  "adcs.modernize.action": {
+    defaultMessage: "Modernize",
+    description: "A160: opens the modernize preview for one template.",
+  },
+  "adcs.modernize.title": {
+    defaultMessage: "Modernize template {template}",
+    description: "A160: dialog title.",
+  },
+  "adcs.modernize.description": {
+    defaultMessage:
+      "A trstctl profile replaces this template: names are confined to the domain and validated by the enrollment protocol, domain-logon and enrollment-agent usages are removed, and certificates are short-lived. Nothing changes until you create the profile.",
+    description: "A160: what modernizing does.",
+  },
+  "adcs.modernize.previewing": {
+    defaultMessage: "Building the profile preview\u2026",
+    description: "A160: loading state.",
+  },
+  "adcs.modernize.previewFailed": {
+    defaultMessage: "The preview could not be built",
+    description: "A160: preview error title.",
+  },
+  "adcs.modernize.failed": {
+    defaultMessage: "The profile could not be created",
+    description: "A160: create error title.",
+  },
+  "adcs.modernize.profileName": {
+    defaultMessage: "Profile",
+    description: "A160: proposed profile name label.",
+  },
+  "adcs.modernize.dnsSuffix": {
+    defaultMessage: "Names allowed under",
+    description: "A160: DNS suffix label.",
+  },
+  "adcs.modernize.none": {
+    defaultMessage: "None observed",
+    description: "A160: no DNS suffix was observed.",
+  },
+  "adcs.modernize.changes": {
+    defaultMessage: "What changes",
+    description: "A160: list of removed or changed template properties.",
+  },
+  "adcs.modernize.blocked": {
+    defaultMessage: "The profile cannot be created yet",
+    description: "A160: blockers title.",
+  },
+  "adcs.modernize.dnsSuffixOverride": {
+    defaultMessage: "DNS suffix (optional; overrides the publishing CA's domain)",
+    description: "A160: DNS suffix override field.",
+  },
+  "adcs.modernize.refresh": {
+    defaultMessage: "Preview again",
+    description: "A160: rebuilds the preview with the override.",
+  },
+  "adcs.modernize.create": {
+    defaultMessage: "Create profile",
+    description: "A160: creates the profile.",
+  },
+  "adcs.modernize.close": {
+    defaultMessage: "Close",
+    description: "A160: closes the dialog.",
+  },
+  "adcs.modernize.created": {
+    defaultMessage: "Profile {name} created.",
+    description: "A160: success.",
+  },
+  "adcs.modernize.awaitingApproval": {
+    defaultMessage: "Profile {name} is waiting for a second approver.",
+    description: "A160: dual control pending.",
+  },
   "agents.executors.reportedHeading": {
     defaultMessage: "Executors reported by the enrolled binary",
     description: "A62: heading for the agent's self-reported executor census on the Agents detail pane.",
