@@ -302,6 +302,30 @@ corrupt trailer still rejects before the target event store is mutated.
 
 ## Restoring
 
+With independently configured tenant-event custody, full capture writes
+PostgreSQL-state v2. Opted-in rows are tenant ciphertext; never-enabled rows keep
+their legacy data. Protected event streams use event-backup v3, preserving the
+exact stored envelopes. Current readers accept the older formats too. Configure
+`TRSTCTL_BACKUP_MANIFEST_SIGNING_KEY_FILE` at capture and independently pin its
+public key with `TRSTCTL_BACKUP_TRUSTED_MANIFEST_KEY_FILES` for protected SQL full
+restore. The key carried in an artifact is not a trust anchor.
+
+Keep the ORIGINAL current event custodian outside the backup and restore roots.
+Do not restore an older tenant key. Complete SQL-artifact authentication, frame
+validation and ownership preflight finish before its current-custody factory or
+SQL import. A verified removed lifetime is omitted; an active lifetime opens
+under its exact source-selected key. Source counts and authenticated `records`/
+`tables` stay intact. The restore summary reports `applied_records`,
+`applied_tables`, `omitted_records` and `redacted_records` separately. A scrubbed
+signer-handle denial row still counts as applied; erasure cannot make its old
+handle reclaimable. Legacy plaintext remains readable in the original artifact,
+even when its retired registration is suppressed on import.
+
+The local protected restore tests use explicit opt-in/manifest fixtures and the
+shipped CA/audit signer child in Mac evaluation mode. Public opt-in controls,
+protected snapshots/managed archives and a complete operator/image replay remain
+under development; see the [offboarding boundary](limitations.md#tenant-offboarding-boundary).
+
 Restore a full artifact into a **fresh, empty** event store and a migrated empty
 PostgreSQL instance:
 
@@ -319,7 +343,7 @@ trstctl \
 `--full-restore-dir` verifies the manifest hashes for captured keys/certs and the
 signer key-store tree, decrypts encrypted sensitive artifacts with the backup
 encryption key, restores the event log, rebuilds the read model from that log,
-verifies `postgres-state.jsonl`, imports every independent PostgreSQL row, and then
+verifies `postgres-state.jsonl`, imports the admitted independent PostgreSQL rows, and then
 performs one final projection rebuild. The ordering matters: the first rebuild lets
 independent rows that reference rebuilt state resolve normally. The final rebuild
 runs only after the PostgreSQL artifact has finished replacing independent state, so

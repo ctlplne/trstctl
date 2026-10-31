@@ -1085,7 +1085,8 @@ force. An orphan journal cannot request a signature without its original intent.
 Unexplained missing material still refuses immediately. Recovery does not advance
 the global projection checkpoint: ordinary catch-up must process neighboring events
 before readiness. These are local component tests. Public enable controls,
-protected artifacts and the complete opt-in restore workflow remain unavailable.
+snapshot/archive integration and the complete opt-in operator workflow remain
+unavailable.
 
 Local tests also cover a source cut taken before activation. With the original
 current custodian still configured, the first registration selects its deterministic
@@ -1098,6 +1099,33 @@ legacy; missing material or an incomplete current journal is not erasure.
 Pre-feature plaintext remains readable in that old source or artifact. Suppressing
 SQL reconstruction does not erase those bytes. A plaintext-only artifact cannot
 establish a later erasure without the original current independent custody.
+
+Configured custody now selects PostgreSQL-state format 2 for full backups.
+Each opted-in tenant row binds its artifact ID/time, paired source cut, global row
+ordinal, table, logical owner and SQL storage partition to tenant ciphertext.
+Protected event history uses format 3 and keeps the original stored bytes, source
+schema and ciphertext; plaintext-only event history retains format 2. Readers
+continue to accept the earlier formats. Verification needs no tenant key.
+
+SQL restore authenticates the complete artifact and checks its frames and counts
+before constructing current custody or beginning SQL. The operator full-restore
+path needs a separately pinned backup manifest verification key; configure
+`backup.manifest_signing_key_file` for capture and
+`backup.trusted_manifest_key_files` for restore. A checksum or public key carried
+inside the artifact supplies no trust. Current signed absence omits only rows from
+the exact retired registration. Legacy plaintext remains readable in its original
+artifact but cannot re-enter that retired SQL lifetime. Original `records`/`tables`
+stay unchanged; `applied_records`, `applied_tables`, `omitted_records` and
+`redacted_records` describe the actual import. A retired signer-handle digest stays
+as a scrubbed denial row. Fixed deployment/Provider authority keeps its own
+ownership; another tenant's erasure cannot discard it.
+
+Local tests cover signed full capture, active and erased restoration into fresh
+PostgreSQL databases, an older pre-activation legacy artifact, neighbor readback
+and the original receipt/key absence. Requests and the local manifest signer are
+fixtures; CA/audit signing uses the shipped child in Mac evaluation mode. This
+proves those recovery paths, not public activation, snapshot/WORM integration,
+Linux hardening or a complete final-image operator workflow.
 
 ## Provider workforce identity and customer access
 

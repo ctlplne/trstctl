@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -29,7 +30,10 @@ const (
 	postgresStateVersion    = 1
 )
 
+const protectedPostgresStateVersion = 2
+
 type postgresStateHeader struct {
+	ArtifactID       string    `json:"artifact_id,omitempty"`
 	Format           string    `json:"format"`
 	Version          int       `json:"version"`
 	CreatedAt        time.Time `json:"created_at"`
@@ -104,6 +108,11 @@ func writeSignedField(b *bytes.Buffer, name string, value []byte) {
 // PostgresStateSummary reports the row counts written or restored for the
 // independent PostgreSQL state artifact.
 type PostgresStateSummary struct {
+	AppliedTables    map[string]int `json:"applied_tables,omitempty"`
+	AppliedRecords   int            `json:"applied_records,omitempty"`
+	OmittedRecords   int            `json:"omitted_records,omitempty"`
+	RedactedRecords  int            `json:"redacted_records,omitempty"`
+	artifact         *protectedPostgresArtifact
 	Tables           map[string]int            `json:"tables"`
 	Records          int                       `json:"records"`
 	EventCutSequence uint64                    `json:"event_cut_sequence,omitempty"`
@@ -230,6 +239,10 @@ func WritePostgresStateTx(ctx context.Context, snapshot *PostgresStateSnapshot, 
 // call silently INHERITED a previously installed signer. A zero identity signs
 // nothing and requires nothing, the pre-existing behavior.
 type PostgresStateIdentity struct {
+	// Protection is explicit per operation. Verification never invokes it.
+	Protection PostgresStateProtection
+	// ProtectionFactory is restore-only and never called by verification/export.
+	ProtectionFactory PostgresStateProtectionFactory
 	// Signer, when set, signs each artifact's trailer so a restorer sharing
 	// no secret with this deployment can still establish where it came from.
 	Signer crypto.Signer
@@ -257,6 +270,9 @@ func (id PostgresStateIdentity) Close() {
 }
 
 func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSnapshot, w io.Writer, eventCut uint64, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
+	if id.ProtectionFactory != nil {
+		return PostgresStateSummary{}, errors.New("backup: custody factory is restore-only")
+	}
 	// WritePostgresStateTx is exported for the full-backup coordinator, so defend
 	// it with an attested snapshot that external callers cannot construct around
 	// a transaction pinned before the fence. Reassert the transaction-scoped
@@ -280,10 +296,15 @@ func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSna
 	dig := newDigest(key)
 	mw := io.MultiWriter(bw, dig)
 	enc := json.NewEncoder(mw)
-	if err := enc.Encode(postgresStateHeader{
-		Format: postgresStateFormatTag, Version: postgresStateVersion,
-		CreatedAt: time.Now().UTC(), Tables: tables, EventCutSequence: eventCut,
-	}); err != nil {
+	header := postgresStateHeader{Format: postgresStateFormatTag, Version: postgresStateVersion, CreatedAt: time.Now().UTC(), Tables: tables, EventCutSequence: eventCut}
+	if id.Protection != nil {
+		if len(key) == 0 && id.Signer == nil {
+			return PostgresStateSummary{}, errors.New("backup: protected postgres state requires an integrity key or manifest signer")
+		}
+		header.Version = protectedPostgresStateVersion
+		header.ArtifactID = uuid.NewString()
+	}
+	if err := enc.Encode(header); err != nil {
 		return PostgresStateSummary{}, err
 	}
 
@@ -307,7 +328,7 @@ func WritePostgresStateTxWithKey(ctx context.Context, snapshot *PostgresStateSna
 				rows.Close()
 				return summary, fmt.Errorf("backup: scan %s: %w", table, err)
 			}
-			if err := enc.Encode(postgresStateRecord{Table: table, Row: row}); err != nil {
+			if err := encodePostgresStateRow(ctx, enc, header, table, uint64(summary.Records)+1, row, id.Protection); err != nil { // #nosec G115 -- records starts at zero and advances only for exported rows; it cannot be negative (CWE-190)
 				rows.Close()
 				return summary, err
 			}
@@ -369,8 +390,8 @@ func readVerifiedPostgresState(r io.Reader, key []byte, id PostgresStateIdentity
 	if h.Format != postgresStateFormatTag {
 		return nil, PostgresStateSummary{}, fmt.Errorf("backup: not a trstctl postgres-state backup (format %q)", h.Format)
 	}
-	if h.Version != postgresStateVersion {
-		return nil, PostgresStateSummary{}, fmt.Errorf("backup: unsupported postgres-state backup version %d (want %d)", h.Version, postgresStateVersion)
+	if h.Version != postgresStateVersion && h.Version != protectedPostgresStateVersion {
+		return nil, PostgresStateSummary{}, fmt.Errorf("backup: unsupported postgres-state backup version %d (want %d or %d)", h.Version, postgresStateVersion, protectedPostgresStateVersion)
 	}
 	if h.EventCutSequence != tr.EventCutSequence {
 		return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state integrity: header event cut %d but trailer event cut %d", h.EventCutSequence, tr.EventCutSequence)
@@ -403,6 +424,19 @@ func readVerifiedPostgresState(r io.Reader, key []byte, id PostgresStateIdentity
 		if summary.Tables[table] != count {
 			return nil, PostgresStateSummary{}, fmt.Errorf("backup: postgres-state trailer count for %s = %d but stream has %d", table, count, summary.Tables[table])
 		}
+	}
+	if h.Version == protectedPostgresStateVersion {
+		artifact := protectedPostgresArtifact{ID: h.ArtifactID, CreatedAt: h.CreatedAt, EventCutSequence: h.EventCutSequence}
+		if err := validateFramedPostgresState(artifact, rowsByTable); err != nil {
+			return nil, PostgresStateSummary{}, err
+		}
+		summary.artifact = &artifact
+		checkpoints, err := framedAuditCheckpointBoundaries(rowsByTable["audit_checkpoints"])
+		if err != nil {
+			return nil, PostgresStateSummary{}, err
+		}
+		summary.AuditCheckpoints = checkpoints
+		return rowsByTable, summary, nil
 	}
 	checkpoints, err := latestAuditCheckpointBoundaries(rowsByTable["audit_checkpoints"])
 	if err != nil {
@@ -469,10 +503,11 @@ func RestorePostgresState(ctx context.Context, st *store.Store, r io.Reader) (Po
 // verifies under key. This is the check standing between an operator-supplied
 // file and attacker-chosen api_tokens rows in the restored database.
 func RestorePostgresStateWithKey(ctx context.Context, st *store.Store, r io.Reader, key []byte, id PostgresStateIdentity) (PostgresStateSummary, error) {
-	rowsByTable, summary, err := readVerifiedPostgresState(r, key, id)
+	rowsByTable, summary, err := readPostgresStateForRestore(ctx, r, key, id)
 	if err != nil {
 		return PostgresStateSummary{}, err
 	}
+	defer wipePostgresRows(rowsByTable)
 
 	tx, err := st.SystemPool().Begin(ctx)
 	if err != nil {
@@ -1102,11 +1137,22 @@ func readAndVerifyPostgresState(r io.Reader, key []byte, id PostgresStateIdentit
 			}
 			haveTr = true
 		default:
-			var rec postgresStateRecord
-			if err := json.Unmarshal(line, &rec); err != nil {
-				return h, nil, tr, fmt.Errorf("backup: decode postgres-state record %d: %w", records+1, err)
+			if h.Version == protectedPostgresStateVersion {
+				var rec protectedPostgresRecord
+				if err := decodeClosedPostgresMetadata(line, &rec); err != nil {
+					return h, nil, tr, fmt.Errorf("backup: decode protected postgres-state record %d: %w", records+1, err)
+				}
+				if rec.Ordinal != uint64(records)+1 {
+					return h, nil, tr, errors.New("backup: protected postgres row ordinal is not contiguous")
+				}
+				rowsByTable[rec.Table] = append(rowsByTable[rec.Table], append(json.RawMessage(nil), line...))
+			} else {
+				var rec postgresStateRecord
+				if err := json.Unmarshal(line, &rec); err != nil {
+					return h, nil, tr, fmt.Errorf("backup: decode postgres-state record %d: %w", records+1, err)
+				}
+				rowsByTable[rec.Table] = append(rowsByTable[rec.Table], append(json.RawMessage(nil), rec.Row...))
 			}
-			rowsByTable[rec.Table] = append(rowsByTable[rec.Table], append(json.RawMessage(nil), rec.Row...))
 			records++
 			feed(dig, line)
 		}

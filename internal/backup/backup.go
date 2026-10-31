@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/eventprotect"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/schedulerhistory"
 )
@@ -45,8 +46,9 @@ const (
 )
 
 const (
-	exactHistoryVersion = 2
-	exactHistoryLayout  = "exact-sequence-v1"
+	exactHistoryVersion     = 2
+	protectedHistoryVersion = 3
+	exactHistoryLayout      = "exact-sequence-v1"
 )
 
 // ErrRestoreTargetNotEmpty means a restore was pointed at a log that already
@@ -81,19 +83,20 @@ type header struct {
 // record carries sequence..gap_through and no event fields; older readers reject
 // it because type and tenant_id are absent instead of silently renumbering it.
 type record struct {
-	Kind          string          `json:"kind,omitempty"`
-	Sequence      uint64          `json:"sequence,omitempty"`
-	GapThrough    uint64          `json:"gap_through,omitempty"`
-	Subject       string          `json:"subject,omitempty"`
-	MessageID     string          `json:"message_id,omitempty"`
-	Stored        []byte          `json:"stored,omitempty"`
-	ID            string          `json:"id"`
-	Type          string          `json:"type"`
-	TenantID      string          `json:"tenant_id"`
-	SchemaVersion int             `json:"v,omitempty"`
-	Time          time.Time       `json:"time"`
-	Data          json.RawMessage `json:"data,omitempty"`
-	Actor         *events.Actor   `json:"actor,omitempty"`
+	Kind          string                 `json:"kind,omitempty"`
+	Sequence      uint64                 `json:"sequence,omitempty"`
+	GapThrough    uint64                 `json:"gap_through,omitempty"`
+	Subject       string                 `json:"subject,omitempty"`
+	MessageID     string                 `json:"message_id,omitempty"`
+	Stored        []byte                 `json:"stored,omitempty"`
+	ID            string                 `json:"id"`
+	Type          string                 `json:"type"`
+	TenantID      string                 `json:"tenant_id"`
+	SchemaVersion int                    `json:"v,omitempty"`
+	Time          time.Time              `json:"time"`
+	Data          json.RawMessage        `json:"data,omitempty"`
+	Actor         *events.Actor          `json:"actor,omitempty"`
+	Protection    *eventprotect.Envelope `json:"protection,omitempty"`
 }
 
 // trailer is the final line of a backup stream — the integrity check over every
@@ -250,6 +253,7 @@ func WriteLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, k
 		return 0, errors.New("backup: event log is required")
 	}
 	var records int
+	wireVersion := exactHistoryVersion
 	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
 		// Inspect the complete pinned cut before emitting even the header. A writer
 		// cannot retract bytes, so detecting the unsafe record while streaming would
@@ -257,6 +261,9 @@ func WriteLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, k
 		if err := log.ExportBackupHistoryThrough(readCtx, cut, func(history events.BackupHistoryRecord) error {
 			if history.IsGap() {
 				return nil
+			}
+			if history.Event.Protection != nil {
+				wireVersion = protectedHistoryVersion
 			}
 			version := history.Event.SchemaVersion
 			if version == 0 {
@@ -273,13 +280,17 @@ func WriteLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, k
 			return err
 		}
 		var err error
-		records, err = writeSanitizedLogWithKeyThrough(readCtx, log, w, key, cut)
+		records, err = writeSanitizedLogVersionThrough(readCtx, log, w, key, cut, wireVersion)
 		return err
 	})
 	return records, err
 }
 
 func writeSanitizedLogWithKeyThrough(ctx context.Context, log *events.Log, w io.Writer, key []byte, cut uint64) (int, error) {
+	return writeSanitizedLogVersionThrough(ctx, log, w, key, cut, exactHistoryVersion)
+}
+
+func writeSanitizedLogVersionThrough(ctx context.Context, log *events.Log, w io.Writer, key []byte, cut uint64, wireVersion int) (int, error) {
 	bw := bufio.NewWriter(w)
 	// Tee every byte we write into a digest so the trailer covers the exact stream.
 	dig := newDigest(key)
@@ -287,7 +298,7 @@ func writeSanitizedLogWithKeyThrough(ctx context.Context, log *events.Log, w io.
 	enc := json.NewEncoder(mw)
 
 	if err := enc.Encode(header{
-		Format: formatTag, Version: exactHistoryVersion, CreatedAt: time.Now().UTC(),
+		Format: formatTag, Version: wireVersion, CreatedAt: time.Now().UTC(),
 		EventCutSequence: cut, HistoryLayout: exactHistoryLayout,
 	}); err != nil {
 		return 0, err
@@ -313,6 +324,11 @@ func writeSanitizedLogWithKeyThrough(ctx context.Context, log *events.Log, w io.
 			rec.Time = history.Event.Time
 			rec.Data = json.RawMessage(history.Event.Data)
 			rec.Actor = history.Event.Actor
+			rec.Protection = history.Event.Protection
+			if rec.Protection != nil {
+				rec.Data = nil
+				rec.Actor = nil
+			}
 			records++
 		}
 		if err := writeRecordLine(mw, rec); err != nil {
@@ -345,6 +361,9 @@ func writeSanitizedLogWithKeyThrough(ctx context.Context, log *events.Log, w io.
 // Marshaler, which would make the redundant legacy-compatible fields disagree
 // with the authoritative stored envelope for JSON containing whitespace.
 func writeRecordLine(w io.Writer, rec record) error {
+	if rec.Protection != nil && (len(rec.Data) != 0 || rec.Actor != nil) {
+		return errors.New("backup: protected event carries readable mirror fields")
+	}
 	data := append(json.RawMessage(nil), rec.Data...)
 	rec.Data = nil
 	line, err := json.Marshal(rec)
@@ -835,26 +854,24 @@ func backupHistoryRecordForProof(rec record, data []byte) (events.BackupHistoryR
 	if rec.Kind == "gap" {
 		return events.BackupHistoryRecord{Sequence: rec.Sequence, GapThrough: rec.GapThrough}, nil
 	}
-	version := rec.SchemaVersion
-	if version == 0 {
-		version = events.DefaultSchemaVersion
-	}
 	stored := rec.Stored
 	if !bytes.Equal(data, rec.Data) {
+		if rec.Protection != nil {
+			return events.BackupHistoryRecord{}, errors.New("backup: cannot rewrite a protected source payload")
+		}
 		var err error
 		stored, err = events.RewriteStoredEnvelopeDataExact(rec.Stored, rec.Data, data)
 		if err != nil {
 			return events.BackupHistoryRecord{}, fmt.Errorf("backup: rewrite scheduler sanitation proof envelope: %w", err)
 		}
 	}
-	return events.BackupHistoryRecord{
-		Sequence: rec.Sequence, Subject: rec.Subject, MessageID: rec.MessageID,
-		Stored: append([]byte(nil), stored...),
-		Event: events.Event{
-			Sequence: rec.Sequence, ID: rec.ID, Type: rec.Type, TenantID: rec.TenantID,
-			SchemaVersion: version, Time: rec.Time, Data: append([]byte(nil), data...), Actor: rec.Actor,
-		},
-	}, nil
+	history := events.BackupHistoryRecord{Sequence: rec.Sequence, Subject: rec.Subject, MessageID: rec.MessageID, Stored: append([]byte(nil), stored...)}
+	event, err := events.DecodeBackupHistoryEvent(history)
+	if err != nil {
+		return events.BackupHistoryRecord{}, err
+	}
+	history.Event = event
+	return history, nil
 }
 
 func cloneBackupHistoryRecord(record events.BackupHistoryRecord) events.BackupHistoryRecord {
@@ -943,10 +960,10 @@ func validateVerifiedStream(h header, tr trailer, records, entries int) error {
 	if h.Format != formatTag {
 		return fmt.Errorf("backup: not a trstctl event-log backup (format %q)", h.Format)
 	}
-	if h.Version != version && h.Version != exactHistoryVersion {
+	if h.Version != version && h.Version != exactHistoryVersion && h.Version != protectedHistoryVersion {
 		return fmt.Errorf(
-			"backup: unsupported backup version %d (want %d or legacy %d)",
-			h.Version, exactHistoryVersion, version,
+			"backup: unsupported backup version %d (want %d, %d or legacy %d)",
+			h.Version, protectedHistoryVersion, exactHistoryVersion, version,
 		)
 	}
 	if h.EventCutSequence != tr.EventCutSequence {
@@ -963,7 +980,7 @@ func validateVerifiedStream(h header, tr trailer, records, entries int) error {
 	}
 	switch h.HistoryLayout {
 	case exactHistoryLayout:
-		if h.Version != exactHistoryVersion {
+		if h.Version != exactHistoryVersion && h.Version != protectedHistoryVersion {
 			return fmt.Errorf(
 				"backup: legacy version %d cannot declare exact history layout %q",
 				h.Version, h.HistoryLayout,
@@ -1022,6 +1039,9 @@ func rawJSONEqual(a, b []byte) bool {
 }
 
 func validateDecodedRecord(h header, rec record, covered *uint64) (bool, error) {
+	if rec.Protection != nil && (h.Version != protectedHistoryVersion || h.HistoryLayout != exactHistoryLayout) {
+		return false, errors.New("backup: protected source requires version 3 exact history")
+	}
 	if h.HistoryLayout == "" {
 		if rec.Type == "" {
 			return false, errors.New("event type is required")
@@ -1056,7 +1076,7 @@ func validateDecodedRecord(h header, rec record, covered *uint64) (bool, error) 
 		if rec.Subject != "" || rec.MessageID != "" || len(rec.Stored) != 0 ||
 			rec.ID != "" || rec.Type != "" || rec.TenantID != "" ||
 			rec.SchemaVersion != 0 || !rec.Time.IsZero() || len(rec.Data) != 0 ||
-			rec.Actor != nil {
+			rec.Actor != nil || rec.Protection != nil {
 			return false, fmt.Errorf(
 				"malformed exact history gap %d..%d carries live-event fields",
 				rec.Sequence, rec.GapThrough,
@@ -1096,42 +1116,27 @@ func validateDecodedRecord(h header, rec record, covered *uint64) (bool, error) 
 }
 
 func validateStoredRecordIdentity(rec record) error {
-	var stored struct {
-		ID            string        `json:"id"`
-		Type          string        `json:"type"`
-		TenantID      string        `json:"tenant_id"`
-		Time          time.Time     `json:"time"`
-		SchemaVersion int           `json:"v,omitempty"`
-		Data          []byte        `json:"data,omitempty"`
-		Actor         *events.Actor `json:"actor,omitempty"`
-	}
-	if err := json.Unmarshal(rec.Stored, &stored); err != nil {
+	stored, err := events.DecodeBackupHistoryEvent(events.BackupHistoryRecord{Sequence: rec.Sequence, Subject: rec.Subject, MessageID: rec.MessageID, Stored: rec.Stored})
+	if err != nil {
 		return fmt.Errorf("exact history event %d has invalid stored envelope: %w", rec.Sequence, err)
 	}
-	if stored.ID == "" || stored.Type == "" || stored.TenantID == "" {
-		return fmt.Errorf("exact history event %d has an incomplete stored envelope", rec.Sequence)
+	if rec.ID != stored.ID || rec.MessageID != stored.ID {
+		return fmt.Errorf("exact history event %d canonical message_id/id does not match stored event id", rec.Sequence)
 	}
-	if rec.MessageID != stored.ID || rec.ID != stored.ID {
-		return fmt.Errorf(
-			"exact history event %d canonical message_id/id does not match stored event id",
-			rec.Sequence,
-		)
+	if rec.Type != stored.Type || rec.TenantID != stored.TenantID || rec.SchemaVersion != stored.SchemaVersion || !rec.Time.Equal(stored.Time) || !reflect.DeepEqual(rec.Protection, stored.Protection) {
+		return fmt.Errorf("exact history event %d decoded fields do not match its stored envelope", rec.Sequence)
 	}
-	schemaVersion := stored.SchemaVersion
-	if schemaVersion == 0 {
-		schemaVersion = events.DefaultSchemaVersion
+	if stored.Protection != nil {
+		if len(rec.Data) != 0 || rec.Actor != nil {
+			return fmt.Errorf("exact history event %d protected source carries readable mirror fields", rec.Sequence)
+		}
+		if stored.Type == schedulerhistory.EventType && stored.SchemaVersion <= schedulerhistory.LegacySchemaVersion {
+			return schedulerhistory.ErrSanitationRequired
+		}
+	} else if !bytes.Equal(rec.Data, stored.Data) || !reflect.DeepEqual(rec.Actor, stored.Actor) {
+		return fmt.Errorf("exact history event %d decoded fields do not match its stored envelope", rec.Sequence)
 	}
-	if rec.Type != stored.Type ||
-		rec.TenantID != stored.TenantID ||
-		rec.SchemaVersion != schemaVersion ||
-		!rec.Time.Equal(stored.Time) ||
-		!bytes.Equal(rec.Data, stored.Data) ||
-		!reflect.DeepEqual(rec.Actor, stored.Actor) {
-		return fmt.Errorf(
-			"exact history event %d decoded fields do not match its stored envelope",
-			rec.Sequence,
-		)
-	}
+
 	if rec.Subject != "events."+stored.Type &&
 		!strings.HasSuffix(rec.Subject, "."+stored.Type) {
 		return fmt.Errorf(

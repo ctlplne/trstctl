@@ -74,6 +74,19 @@ func (r BackupHistoryRecord) IsGap() bool {
 	return r.GapThrough != 0
 }
 
+// DecodeBackupHistoryEvent checks one exact stored envelope without opening its
+// protected payload. Its returned Data remains the source wire marker. Artifact
+// readers still authenticate their complete stream before any restore effect.
+func DecodeBackupHistoryEvent(record BackupHistoryRecord) (Event, error) {
+	if record.Sequence == 0 || record.IsGap() {
+		return Event{}, errors.New("events: backup event requires a live source position")
+	}
+	if err := validateBackupLiveRecord(record); err != nil {
+		return Event{}, fmt.Errorf("events: validate backup message_id and stored envelope: %w", err)
+	}
+	return decodeStored(record.Stored, record.Sequence)
+}
+
 // BackupHistorySource streams already verified records to an exact-history
 // restore. The source must cover every position from one through the declared cut
 // exactly once, representing deleted positions with gap records.

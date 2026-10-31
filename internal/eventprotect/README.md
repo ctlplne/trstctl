@@ -2,8 +2,8 @@
 
 This package supplies protected source bytes and independent tenant-key custody.
 The configured runtime attaches source admission/readers before opening history
-and uses bounded preparation/destruction workers. Public activation, interrupted
-startup recovery and complete erasure-aware artifact restore remain unserved;
+and uses bounded preparation/destruction workers. Public activation, protected
+snapshot/archive integration and the complete operator workflow remain unserved;
 component tests do not establish the full opt-in workflow.
 
 The optional `internal/events.WithEventProtection` seam now preserves ciphertext
@@ -132,3 +132,16 @@ that floor; growing another tenant's restored branch does not change the identit
 No legacy plaintext bytes become cryptographically erased, and no historical
 activation/offboard or key is invented. Current independent custody remains a
 required external-to-backup input.
+
+Full backups now retain protected event history in format 3, preserving original
+Stored bytes/schema/ciphertext with no readable mirror. Plaintext-only history
+keeps format 2, and readers retain v1/v2 compatibility. Configured SQL export uses
+format 2 and ScopePostgresRow; it authenticates artifact/cut/ordinal/table/logical
+owner/storage owner and closed recovery metadata. Whole-artifact verification and
+ownership checks precede the restore-only custody factory and every SQL effect.
+Original counts survive; actual applied/omitted/redacted rows are separate.
+Current original custody governs an old cut, including legacy pre-activation SQL.
+A signer claim keeps only its retired denial digest after verified erasure.
+Native tests use fresh PostgreSQL databases, real source/worker removal and the
+shipped CA/audit signer child in Mac evaluation mode. Manifest keys and opt-in
+requests are explicit fixtures, not a complete public/operator or Linux proof.

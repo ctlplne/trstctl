@@ -1755,8 +1755,8 @@ unapplied neighbor. A missing original intent cannot authorize signing; an actua
 incomplete backup binding refuses before the recovery callback. Unknown key loss
 and material present despite recorded absence remain errors. This is a local
 lifecycle simulation, not an operating-system process-kill proof. Public operator
-controls, protected backup/archive artifacts and complete erasure-aware restore
-are not served yet.
+controls, protected snapshot/archive integration and the complete opt-in operator
+workflow are not served yet.
 
 Local tests cover pre-activation source cuts with CURRENT original custody too:
 rebuild, catch-up and tail preserve the raw legacy prefix and neighbor history,
@@ -1766,13 +1766,28 @@ or numeric sequence alone, selects the floor; no historical control or key is
 created. Wrong public trust/creation/reference and incomplete current removal
 refuse. Never-enabled legacy references remain unchanged. These tests require
 the original independent custodian; old plaintext history alone cannot prove a
-later erasure. Its pre-feature data remains readable, and full authenticated
-backup/SQL/snapshot/archive restoration is still unproven.
+later erasure. Its pre-feature data remains readable; the separate full-artifact
+recovery tests below do not prove snapshot or managed-archive integration.
 
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
 that component proof does not establish complete authenticated backup restore.
 The current offboarding and retention boundaries below continue to apply.
+
+Signed full-backup and isolated PostgreSQL restore tests now cover protected event
+history and independent SQL rows. Exact stored event bytes survive export and
+restore without tenant-key access. SQL frames bind artifact/time/cut, row order,
+table and both logical and storage tenant identities. Complete origin, structure
+and count verification finishes before the SQL custody factory runs; unavailable
+material is never plaintext fallback. Original source/row counts remain separate
+from applied, omitted and redacted rows. Current signed absence suppresses the
+retired lifetime even in a pre-activation legacy SQL artifact, whose original
+plaintext bytes remain unchanged. Active tenants and neighbors round-trip, and
+retired signer-handle denial digests survive without their former ownership.
+These tests use explicit requests and a local manifest-key fixture, with the
+shipped CA/audit signer child in Mac evaluation mode. They do not qualify public
+activation, snapshots, managed WORM archives, production authorization/Linux
+hardening or the final-image operator journey.
 
 That is the limit of what tenant offboarding deletes — it is not a promise that
 the append-only event log or a signed audit archive disappears when a tenant is

@@ -22,6 +22,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/jose"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
+	"trstctl.com/trstctl/internal/eventprivacy"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/historycontinuity"
 	"trstctl.com/trstctl/internal/license"
@@ -409,7 +410,7 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	artifacts := []backup.Artifact{eventArtifact}
-	a, err := captureFullBackupPostgresState(ctx, tx, eventCut, key, manifestIdentity, dir)
+	a, err := captureFullBackupPostgresState(ctx, tx, eventCut, key, manifestIdentity, protection, dir)
 	if err != nil {
 		return backup.FullManifest{}, err
 	}
@@ -444,8 +445,11 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 // defer for every error path before this stage commits.
 func captureFullBackupPostgresState(
 	ctx context.Context, tx *backup.PostgresStateSnapshot, eventCut uint64,
-	key []byte, identity backup.PostgresStateIdentity, dir string,
+	key []byte, identity backup.PostgresStateIdentity, protection *eventProtectionRuntime, dir string,
 ) (backup.Artifact, error) {
+	if protection.custody != nil {
+		identity.Protection = eventprivacy.SourcePostgresProtection{Policy: protection.policy, Custody: protection.custody, Cut: eventCut}
+	}
 	pgPath := filepath.Join(dir, "postgres-state.jsonl")
 	pgFile, err := os.OpenFile(pgPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- operator-invoked backup/restore over its own configured directory (CWE-22)
 	if err != nil {
@@ -795,6 +799,21 @@ func runFullRestore(
 		return result, fmt.Errorf("open postgres state backup: %w", err)
 	}
 	defer func() { _ = f.Close() }()
+	if cfg.Privacy.EventProtection.KeyDirectory != "" {
+		manifestIdentity.ProtectionFactory = func(openCtx context.Context, summary backup.PostgresStateSummary) (backup.PostgresStateProtection, func(), error) {
+			signer, key, err := openAuditSigningRuntime(openCtx, cfg)
+			if err != nil {
+				return nil, nil, err
+			}
+			source, current, err := openConfiguredEventSource(openCtx, cfg, st, key, true, []string{dir})
+			if err != nil {
+				signer.Close()
+				return nil, nil, err
+			}
+			closeCurrent := func() { _ = source.Close(); _ = current.Close(); signer.Close() }
+			return eventprivacy.SourcePostgresProtection{Policy: current.policy, Custody: current.custody, Cut: summary.EventCutSequence}, closeCurrent, nil
+		}
+	}
 	summary, err := backup.RestorePostgresStateWithKey(ctx, st, f, nil, manifestIdentity)
 	if err != nil {
 		result.Postgres = summary
@@ -936,13 +955,17 @@ func proveFullRestoreRuntime(
 	if err != nil {
 		return fmt.Errorf("re-export recovered independent PostgreSQL state: %w", err)
 	}
+	expectedTables, expectedRecords := result.Postgres.Tables, result.Postgres.Records
+	if result.Postgres.AppliedTables != nil {
+		expectedTables, expectedRecords = result.Postgres.AppliedTables, result.Postgres.AppliedRecords
+	}
 	for _, table := range backup.RecoveredFromPostgresBackup {
-		if observed.Tables[table] != result.Postgres.Tables[table] {
-			return fmt.Errorf("recovered PostgreSQL table %s rows = %d, backup restored %d", table, observed.Tables[table], result.Postgres.Tables[table])
+		if observed.Tables[table] != expectedTables[table] {
+			return fmt.Errorf("recovered PostgreSQL table %s rows = %d, backup restored %d", table, observed.Tables[table], expectedTables[table])
 		}
 	}
-	if observed.Records != result.Postgres.Records {
-		return fmt.Errorf("recovered PostgreSQL record count = %d, backup restored %d", observed.Records, result.Postgres.Records)
+	if observed.Records != expectedRecords {
+		return fmt.Errorf("recovered PostgreSQL record count = %d, backup restored %d", observed.Records, expectedRecords)
 	}
 	result.StoreHealthy = true
 	if err := log.Ping(ctx); err != nil {

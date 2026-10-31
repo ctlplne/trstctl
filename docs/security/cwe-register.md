@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2005 annotated sites across 29 rules. Each row is
+2007 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -522,7 +522,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (331 sites)
+### G115 — CWE-190 Integer overflow or wraparound (332 sites)
 
 | Location | Reason |
 |---|---|
@@ -540,9 +540,10 @@ not this file.
 | `internal/api/secretjson.go:173` | rune already range-checked below 0x20 before hex packing (CWE-190) |
 | `internal/api/vault_compat_complete.go:814` | DER length of a public key, far under the uint32 bound (CWE-190) |
 | `internal/audit/audit.go:172` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
-| `internal/backup/backup.go:172` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
-| `internal/backup/backup.go:703` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
-| `internal/backup/backup.go:988` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
+| `internal/backup/backup.go:175` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
+| `internal/backup/backup.go:722` | receiptIndex starts at zero and is bounded by len(affectedOrder) above (CWE-190). |
+| `internal/backup/backup.go:1005` | record counts bounded by the event log; fits both int and uint64 (CWE-190) |
+| `internal/backup/postgres_state.go:331` | records starts at zero and advances only for exported rows; it cannot be negative (CWE-190) |
 | `internal/ca/hierarchy/hierarchy_test.go:39` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/cli/doctor/doctor_test.go:41` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/clusterfuzz/internal_discovery_adcs_adcs/fuzz_test.go:26` | test SID inputs have at most 255 sub-authorities (CWE-190). |
@@ -661,8 +662,8 @@ not this file.
 | `internal/reconcile/stepcasource_test.go:50` | a TCP port from the kernel (CWE-190) |
 | `internal/server/agentchannel_served_test.go:837` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/aud65_test.go:37` | fixture sequences are single-digit seconds (CWE-190). |
-| `internal/server/backup.go:221` | record counts bounded by the event log (CWE-190) |
-| `internal/server/backup.go:388` | record counts bounded by the event log (CWE-190) |
+| `internal/server/backup.go:222` | record counts bounded by the event log (CWE-190) |
+| `internal/server/backup.go:389` | record counts bounded by the event log (CWE-190) |
 | `internal/server/bundled_pg.go:95` | cfg.Port is checked above and the zero default is 5432 (CWE-190) |
 | `internal/server/crypto_risk_report_served_test.go:58` | fixture sequences are single-digit seconds (CWE-190). |
 | `internal/server/ct_inclusion.go:162` | a log timestamp after 1970 (CWE-190) |
@@ -1336,7 +1337,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (558 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (559 sites)
 
 | Location | Reason |
 |---|---|
@@ -1703,14 +1704,14 @@ not this file.
 | `internal/server/agent_roles_served_test.go:513` | path is a t.TempDir fixture (CWE-22). |
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agentchannel.go:128` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
-| `internal/server/backup.go:145` | operator-configured public trust anchor path (CWE-22) |
-| `internal/server/backup.go:208` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:379` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:450` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:542` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:793` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:894` | operator-invoked backup/restore over its own configured directory (CWE-22) |
-| `internal/server/backup.go:898` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:146` | operator-configured public trust anchor path (CWE-22) |
+| `internal/server/backup.go:209` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:380` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:454` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:546` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:797` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:913` | operator-invoked backup/restore over its own configured directory (CWE-22) |
+| `internal/server/backup.go:917` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup_reports.go:165` | the restore's own staging tree (CWE-22) |
 | `internal/server/backup_reports.go:181` | the restore's own staging tree; names validated above (CWE-22) |
 | `internal/server/backup_test.go:388` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1734,6 +1735,7 @@ not this file.
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
 | `internal/server/est_mtls_reenroll_served_test.go:150` | test reads its own tempdir path (CWE-22) |
+| `internal/server/event_protection_postgres_backup_served_test.go:35` | exact artifact in this test's owned backup directory (CWE-22) |
 | `internal/server/external_poller_boundary_test.go:16` | name comes only from the closed literal source-file list above (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:153` | parent-created test fixture path (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:210` | parent-created public fixture (CWE-22) |
