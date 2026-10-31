@@ -4889,6 +4889,48 @@ func componentSchemas() map[string]*Schema {
 		"evidence_refs": {Type: "array", Items: str()},
 		"residuals":     {Type: "array", Items: str()},
 	}, "format", "capability", "generated_at", "audit_ready", "summary", "frameworks", "controls", "report_types", "routes", "evidence_refs", "residuals")
+	eventProtectionReq := object(map[string]*Schema{
+		"registration_identity": str(),
+		"retention":             str(),
+	}, "registration_identity", "retention")
+	eventProtectionStatus := object(map[string]*Schema{
+		"state":                  {Type: "string", Enum: []string{"not_enabled", "preparing", "active"}},
+		"registration_identity":  str(),
+		"custody_configured":     {Type: "boolean"},
+		"operation_id":           str(),
+		"retention":              str(),
+		"requested_at":           timestamp(),
+		"activated_at":           timestamp(),
+		"legacy_events_readable": {Type: "boolean"},
+		"next_step":              str(),
+	}, "state", "registration_identity", "custody_configured", "legacy_events_readable", "next_step")
+	eventProtectionPlan := object(map[string]*Schema{
+		"capability":               str(),
+		"operation":                str(),
+		"ready":                    {Type: "boolean"},
+		"effect_free":              {Type: "boolean"},
+		"request_fingerprint":      str(),
+		"required_permission":      str(),
+		"normalized_request":       ref("EventProtectionRequest"),
+		"operation_id":             str(),
+		"custody_configured":       {Type: "boolean"},
+		"blockers":                 {Type: "array", Items: str()},
+		"warnings":                 {Type: "array", Items: str()},
+		"preview_writes":           {Type: "array", Items: str()},
+		"preview_external_effects": {Type: "array", Items: str()},
+		"execute_writes":           {Type: "array", Items: str()},
+		"execute_external_effects": {Type: "array", Items: str()},
+		"recovery_steps":           {Type: "array", Items: str()},
+		"verification_steps":       {Type: "array", Items: str()},
+	}, "capability", "operation", "ready", "effect_free", "request_fingerprint", "required_permission", "normalized_request",
+		"operation_id", "custody_configured", "blockers", "warnings", "preview_writes", "preview_external_effects", "execute_writes",
+		"execute_external_effects", "recovery_steps", "verification_steps")
+	eventProtectionAccepted := object(map[string]*Schema{
+		"operation_id":          str(),
+		"registration_identity": str(),
+		"retention":             str(),
+		"state":                 str(),
+	}, "operation_id", "registration_identity", "retention", "state")
 	privacyErasureReq := object(map[string]*Schema{
 		"subject": str(),
 		"reason":  str(),
@@ -8144,6 +8186,10 @@ func componentSchemas() map[string]*Schema {
 		"NHIComplianceControl":                     nhiComplianceControl,
 		"NHIComplianceReport":                      nhiComplianceReport,
 		"PrivacySubjectErasureRequest":             privacyErasureReq,
+		"EventProtectionRequest":                   eventProtectionReq,
+		"EventProtectionStatus":                    eventProtectionStatus,
+		"EventProtectionPlan":                      eventProtectionPlan,
+		"EventProtectionAccepted":                  eventProtectionAccepted,
 		"PrivacySubjectErasurePreview":             privacySubjectErasurePreview,
 		"PrivacyErasureSelectors":                  privacyErasureSelectors,
 		"PrivacySubjectErasure":                    privacySubjectErasure,

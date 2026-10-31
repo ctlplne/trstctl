@@ -6370,6 +6370,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/privacy/event-protection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the tenant's event-field protection state from its retained source and current key custody */
+        get: operations["getEventProtection"];
+        put?: never;
+        /** Opt the tenant in to event-field protection; a bounded worker prepares its key */
+        post: operations["requestEventProtection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/privacy/event-protection/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review opting in to event-field protection without writing state */
+        post: operations["previewEventProtection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/retention-runs": {
         parameters: {
             query?: never;
@@ -14221,6 +14256,49 @@ export interface components {
             public_key_pem: string;
             request_id: string;
             ttl_seconds?: number;
+        };
+        EventProtectionAccepted: {
+            operation_id: string;
+            registration_identity: string;
+            retention: string;
+            state: string;
+        };
+        EventProtectionPlan: {
+            blockers: string[];
+            capability: string;
+            custody_configured: boolean;
+            effect_free: boolean;
+            execute_external_effects: string[];
+            execute_writes: string[];
+            normalized_request: components["schemas"]["EventProtectionRequest"];
+            operation: string;
+            operation_id: string;
+            preview_external_effects: string[];
+            preview_writes: string[];
+            ready: boolean;
+            recovery_steps: string[];
+            request_fingerprint: string;
+            required_permission: string;
+            verification_steps: string[];
+            warnings: string[];
+        };
+        EventProtectionRequest: {
+            registration_identity: string;
+            retention: string;
+        };
+        EventProtectionStatus: {
+            /** Format: date-time */
+            activated_at?: string;
+            custody_configured: boolean;
+            legacy_events_readable: boolean;
+            next_step: string;
+            operation_id?: string;
+            registration_identity: string;
+            /** Format: date-time */
+            requested_at?: string;
+            retention?: string;
+            /** @enum {string} */
+            state: "not_enabled" | "preparing" | "active";
         };
         ExternalCA: {
             id: string;
@@ -39089,6 +39167,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrivacyCatalog"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEventProtection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventProtectionStatus"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestEventProtection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventProtectionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventProtectionAccepted"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewEventProtection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventProtectionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventProtectionPlan"];
                 };
             };
             /** @description client error */

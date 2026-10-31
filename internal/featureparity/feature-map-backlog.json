@@ -23788,7 +23788,10 @@
                 "attestPrivacyArchiveErasure",
                 "listPrivacyArchiveErasureAttestations",
                 "exportPrivacySubject",
-                "getPrivacyCatalog"
+                "getPrivacyCatalog",
+                "getEventProtection",
+                "previewEventProtection",
+                "requestEventProtection"
             ],
             "api_na": "",
             "cli_surface": [
@@ -23801,7 +23804,10 @@
                 "privacy archives attest",
                 "privacy archives list",
                 "privacy export",
-                "privacy catalog"
+                "privacy catalog",
+                "privacy event-protection status",
+                "privacy event-protection preview",
+                "privacy event-protection enable"
             ],
             "cli_na": "",
             "facet_evidence": {

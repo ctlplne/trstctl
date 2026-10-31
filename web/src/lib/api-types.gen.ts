@@ -4733,6 +4733,50 @@ export interface EphemeralCredentialRequest {
   ttl_seconds?: number;
 }
 
+export interface EventProtectionAccepted {
+  operation_id: string;
+  registration_identity: string;
+  retention: string;
+  state: string;
+}
+
+export interface EventProtectionPlan {
+  blockers: string[];
+  capability: string;
+  custody_configured: boolean;
+  effect_free: boolean;
+  execute_external_effects: string[];
+  execute_writes: string[];
+  normalized_request: EventProtectionRequest;
+  operation: string;
+  operation_id: string;
+  preview_external_effects: string[];
+  preview_writes: string[];
+  ready: boolean;
+  recovery_steps: string[];
+  request_fingerprint: string;
+  required_permission: string;
+  verification_steps: string[];
+  warnings: string[];
+}
+
+export interface EventProtectionRequest {
+  registration_identity: string;
+  retention: string;
+}
+
+export interface EventProtectionStatus {
+  activated_at?: string;
+  custody_configured: boolean;
+  legacy_events_readable: boolean;
+  next_step: string;
+  operation_id?: string;
+  registration_identity: string;
+  requested_at?: string;
+  retention?: string;
+  state: "not_enabled" | "preparing" | "active";
+}
+
 export interface ExternalCA {
   id: string;
   name: string;

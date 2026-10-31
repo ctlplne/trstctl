@@ -14,6 +14,7 @@ import {
 
 type PrivacyCatalogEntry = PrivacyCatalog["items"][number];
 import { PageHeader } from "@/components/PageHeader";
+import { EventProtectionPanel } from "@/components/EventProtectionPanel";
 import { SectionCard } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { DataGrid, type DataGridColumn } from "@/components/DataGrid";
@@ -388,6 +389,8 @@ export function Privacy() {
       </section>
 
       {error ? <ErrorState title={t("privacy.error.actionFailed")}>{error}</ErrorState> : null}
+
+      <EventProtectionPanel />
 
       <PrivacyDisclosurePanel
         detailsRef={policyDisclosureRef}

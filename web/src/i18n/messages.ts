@@ -24254,6 +24254,87 @@ export const messages = {
     defaultMessage: "Privacy action failed",
     description: "Privacy route action error title.",
   },
+  "privacy.eventProtection.title": {
+    defaultMessage: "Event-field protection (crypto-shred)",
+    description: "A233: disclosure title for the tenant's opt-in to per-tenant encryption of sensitive event fields.",
+  },
+  "privacy.eventProtection.description": {
+    defaultMessage:
+      "When enabled, new sensitive event fields are sealed under a key that belongs to this tenant. Offboarding destroys that key after your retention window, so those fields become unreadable in the event log, backups and archives at once; envelopes, hashes and signatures stay, and audit verification keeps working.",
+    description: "A233: what event-field protection does and what it leaves in place.",
+  },
+  "privacy.eventProtection.stateLabel": {
+    defaultMessage: "State",
+    description: "A233: label for the protection state.",
+  },
+  "privacy.eventProtection.state.notEnabled": {
+    defaultMessage: "Not enabled",
+    description: "A233: protection has not been requested for this registration.",
+  },
+  "privacy.eventProtection.state.preparing": {
+    defaultMessage: "Preparing the tenant key",
+    description: "A233: the request is retained and a worker is creating the tenant key.",
+  },
+  "privacy.eventProtection.state.active": {
+    defaultMessage: "Active",
+    description: "A233: the tenant key read back and new sensitive fields are sealed.",
+  },
+  "privacy.eventProtection.registrationLabel": {
+    defaultMessage: "Registration identity",
+    description: "A233: the tenant registration the key lifetime belongs to.",
+  },
+  "privacy.eventProtection.custodyLabel": {
+    defaultMessage: "Key custody",
+    description: "A233: whether the deployment has a key directory configured.",
+  },
+  "privacy.eventProtection.custodyConfigured": {
+    defaultMessage: "Configured",
+    description: "A233: the deployment has an event-protection key directory.",
+  },
+  "privacy.eventProtection.custodyMissing": {
+    defaultMessage: "Not configured by the operator",
+    description: "A233: no key directory is configured, so the tenant cannot enable protection.",
+  },
+  "privacy.eventProtection.retentionLabel": {
+    defaultMessage: "Retention window",
+    description: "A233: how long after offboarding the tenant key is kept before destruction.",
+  },
+  "privacy.eventProtection.retentionPlaceholder": {
+    defaultMessage: "720h",
+    description: "A233: example retention duration shown in the empty retention input (a Go duration, not translated text).",
+  },
+  "privacy.eventProtection.retentionHint": {
+    defaultMessage: "A Go duration such as 720h. Your retention policy decides it; trstctl never picks one.",
+    description: "A233: guidance for the retention input.",
+  },
+  "privacy.eventProtection.activatedLabel": {
+    defaultMessage: "Activated",
+    description: "A233: when the tenant key was activated.",
+  },
+  "privacy.eventProtection.legacyNote": {
+    defaultMessage: "Events recorded before the key is active stay readable; enabling protection never rewrites them.",
+    description: "A233: honest limit on data recorded before activation.",
+  },
+  "privacy.eventProtection.preview": {
+    defaultMessage: "Preview",
+    description: "A233: review enabling without writing anything.",
+  },
+  "privacy.eventProtection.planTitle": {
+    defaultMessage: "What enabling will do",
+    description: "A233: heading of the effect-free preview.",
+  },
+  "privacy.eventProtection.enable": {
+    defaultMessage: "Enable protection",
+    description: "A233: applies the previewed opt-in.",
+  },
+  "privacy.eventProtection.enabledToast": {
+    defaultMessage: "Protection requested; the tenant key is being prepared",
+    description: "A233: toast after an accepted enable.",
+  },
+  "privacy.eventProtection.refresh": {
+    defaultMessage: "Refresh status",
+    description: "A233: reloads the protection status.",
+  },
   "privacy.erasure.title": {
     defaultMessage: "Subject erasure",
     description: "Subject erasure section title.",

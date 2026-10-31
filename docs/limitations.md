@@ -1720,8 +1720,37 @@ context, verifies zero residue, and returns a deletion attestation. The
 `tenant.offboarded` event is replayed by projections, so a read-model rebuild
 does not resurrect the tenant's PostgreSQL rows.
 
-Opt-in event-key destruction is still under development. Its source, custody
-and durable receiver components have local tests. Audit search exposes separate
+**Opt-in event-field protection (crypto-shred) is served.** A tenant reads
+`GET /api/v1/privacy/event-protection` (`privacy:read`): its state, current
+registration identity and whether the operator configured key custody. It
+reviews `POST /api/v1/privacy/event-protection/preview` (effect-free blockers,
+writes and warnings) and enables with `POST /api/v1/privacy/event-protection`
+(`privacy:write`, `Idempotency-Key`, answers 202), naming that registration and
+a retention window its own policy chooses; trstctl never picks one. The CLI is
+`trstctl privacy event-protection status|preview|enable`, and the console has
+**Privacy → Event-field protection**. The operator first sets
+`privacy.event_protection.key_directory`; that setting enables no tenant. A
+bounded worker creates the tenant key and records its activation. Status reads
+`active` only after that key reads back; a missing key answers 503 with a fixed
+message and is never treated as erasure or regenerated. A stale registration or
+a different retention for the same registration is refused before any write.
+From activation on, the tenant's sensitive event fields (the privacy catalog's
+classes) are sealed under its key in the event log, SQL backups, read-model
+snapshots and audit archives. Offboarding the tenant (the Provider plane's
+offboard) queues destruction; after the retention window a bounded worker
+removes the key and records a signed destruction record. Envelopes, hashes and
+signatures stay. A served end-to-end test proves the result: after the
+destruction, an operator rebuild and a restore of a backup taken before it both
+show the tenant's sensitive fields as erased and its SQL rows absent, a signed
+audit export taken before still verifies offline, and a neighbor protected under
+its own key and a never-enabled neighbor keep their data and verifiable audit.
+Events recorded before activation are unchanged and stay readable, and so do
+copies of them outside trstctl. That test runs the shipped signer child in Mac
+evaluation mode; the isolated-process, final-image and cold-restart proof is part
+of the release replay.
+
+The protection's source, custody and durable receiver components also have their
+own local tests. Audit search exposes separate
 readable companions in the API, CLI and console, with explicit erased and
 unavailable states; signed records remain encrypted. Collector commands also keep
 protected records encrypted and resolve current readable details at delivery,
@@ -1754,9 +1783,7 @@ original removal time/source/checkpoint, and lets ordered catch-up process an
 unapplied neighbor. A missing original intent cannot authorize signing; an actual
 incomplete backup binding refuses before the recovery callback. Unknown key loss
 and material present despite recorded absence remain errors. This is a local
-lifecycle simulation, not an operating-system process-kill proof. Public operator
-controls, managed-archive integration and the complete opt-in operator
-workflow are not served yet.
+lifecycle simulation, not an operating-system process-kill proof.
 
 Local tests cover pre-activation source cuts with CURRENT original custody too:
 rebuild, catch-up and tail preserve the raw legacy prefix and neighbor history,
@@ -1766,8 +1793,7 @@ or numeric sequence alone, selects the floor; no historical control or key is
 created. Wrong public trust/creation/reference and incomplete current removal
 refuse. Never-enabled legacy references remain unchanged. These tests require
 the original independent custodian; old plaintext history alone cannot prove a
-later erasure. Its pre-feature data remains readable; the separate full-artifact
-recovery tests below do not qualify public activation or managed-archive integration.
+later erasure. Its pre-feature data remains readable.
 
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
@@ -1785,8 +1811,7 @@ retired lifetime even in a pre-activation legacy SQL artifact, whose original
 plaintext bytes remain unchanged. Active tenants and neighbors round-trip, and
 retired signer-handle denial digests survive without their former ownership.
 These tests use explicit requests and a local manifest-key fixture, with the
-shipped CA/audit signer child in Mac evaluation mode. They do not qualify public
-activation, managed WORM archives, production authorization/Linux
+shipped CA/audit signer child in Mac evaluation mode. They do not qualify Linux
 hardening or the final-image operator journey.
 
 Local continuation tests now grow a restored pre-offboard cut beyond its original
@@ -1807,7 +1832,7 @@ requires source reconstruction; only then is its exact unusable generation remov
 The neighbor, saved snapshot bytes and original destruction evidence remain intact.
 Formats 21 and 66 cannot advance a cold restore. Pre-feature external plaintext
 copies remain readable. Chunk tampering and authenticated-opening fuzz tests do not
-establish public activation or final-image qualification.
+establish final-image qualification.
 
 The existing licensed audit-retention worker now has a separate real Object Lock
 component test. It writes protected records to MinIO, fetches the exact version
@@ -1823,9 +1848,9 @@ activation refuses with a source-authority error and no complete manifest, while
 the original encrypted SQL artifact remains unchanged. No additional production
 guard was needed for that case.
 
-That is the limit of what tenant offboarding deletes — it is not a promise that
-the append-only event log or a signed audit archive disappears when a tenant is
-offboarded. Those records are governed by audit/privacy retention policy:
+Without event-field protection, that is the limit of what tenant offboarding
+deletes — it is not a promise that the append-only event log or a signed audit
+archive disappears when a tenant is offboarded. Those records are governed by audit/privacy retention policy:
 configure `TRSTCTL_AUDIT_RETENTION` plus an archive target
 (`TRSTCTL_AUDIT_ARCHIVE_DIR`, or `TRSTCTL_AUDIT_ARCHIVE_OBJECT_STORE` with an
 object store) for archive-backed retirement from the served audit view, and use **Privacy Retention**

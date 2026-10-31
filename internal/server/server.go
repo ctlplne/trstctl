@@ -1692,7 +1692,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// probing the intentionally dark /provider/v1 namespace.
 	defaults = append(defaults, api.WithProviderPlaneAvailable(d.ProviderHandler != nil))
 	defaults = append(defaults, api.WithComplianceReportArchive(d.AuditArchiveDir), api.WithComplianceReportObjectStore(d.ArchiveObjectStore))
-	defaults = append(defaults, api.WithFirstIssuanceRetry(s))
+	defaults = append(defaults, api.WithFirstIssuanceRetry(s), eventProtectionAPIOption(d, orch))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	s.tenantServices.api.Store(a)

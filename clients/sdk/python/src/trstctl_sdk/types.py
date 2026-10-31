@@ -6531,6 +6531,66 @@ EphemeralCredentialRequest = TypedDict(
     total=False,
 )
 
+EventProtectionAccepted = TypedDict(
+    'EventProtectionAccepted',
+    {
+        'operation_id': str,
+        'registration_identity': str,
+        'retention': str,
+        'state': str,
+    },
+    total=False,
+)
+
+EventProtectionPlan = TypedDict(
+    'EventProtectionPlan',
+    {
+        'blockers': list[str],
+        'capability': str,
+        'custody_configured': bool,
+        'effect_free': bool,
+        'execute_external_effects': list[str],
+        'execute_writes': list[str],
+        'normalized_request': dict[str, Any],
+        'operation': str,
+        'operation_id': str,
+        'preview_external_effects': list[str],
+        'preview_writes': list[str],
+        'ready': bool,
+        'recovery_steps': list[str],
+        'request_fingerprint': str,
+        'required_permission': str,
+        'verification_steps': list[str],
+        'warnings': list[str],
+    },
+    total=False,
+)
+
+EventProtectionRequest = TypedDict(
+    'EventProtectionRequest',
+    {
+        'registration_identity': str,
+        'retention': str,
+    },
+    total=False,
+)
+
+EventProtectionStatus = TypedDict(
+    'EventProtectionStatus',
+    {
+        'activated_at': str,
+        'custody_configured': bool,
+        'legacy_events_readable': bool,
+        'next_step': str,
+        'operation_id': str,
+        'registration_identity': str,
+        'requested_at': str,
+        'retention': str,
+        'state': str,
+    },
+    total=False,
+)
+
 ExternalCA = TypedDict(
     'ExternalCA',
     {

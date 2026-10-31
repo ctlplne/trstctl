@@ -791,6 +791,38 @@ catalog`; the web console's `/privacy` screen covers erasure, retention enforcem
 retention evidence, and the catalog. See [Privacy data catalog](../privacy-data-catalog.md)
 for the row-level map and erasure/retention behavior.
 
+### Event-field protection (crypto-shred)
+
+A tenant can opt in to having its sensitive event fields sealed under a key of its
+own, so offboarding can make them unreadable everywhere at once by destroying that
+key. Nothing is purged: envelopes, hashes and signatures stay, so the append-only log
+and audit verification keep working.
+
+`GET /api/v1/privacy/event-protection` (`privacy:read`) reports the state
+(`not_enabled`, `preparing`, `active`), the tenant's current registration identity
+and whether the operator configured key custody
+(`privacy.event_protection.key_directory`). `POST
+/api/v1/privacy/event-protection/preview` (`privacy:write`) is effect-free: it
+returns the blockers, the writes enabling would make and its warnings. `POST
+/api/v1/privacy/event-protection` (`privacy:write`, `Idempotency-Key`) takes
+`registration_identity` and `retention` (a positive duration of at most ten years,
+such as `720h`; your policy decides it) and answers 202. A bounded worker creates
+the tenant key and records its activation; the state turns `active` only after that
+key reads back, and a key that does not read back answers 503 with a fixed message.
+The same request replays its original answer; a stale registration or a different
+retention for the same registration is refused with 409 before anything is written.
+
+From activation on, sensitive fields in new events, SQL backups, read-model snapshots
+and audit archives are sealed under the tenant key. Offboarding the tenant queues
+destruction; after the retention window a bounded worker removes the key and records
+a signed destruction record. A rebuild or a restore of an older backup then shows the
+fields as erased, and audit exports taken earlier still verify offline. Events
+recorded before activation stay readable. The CLI exposes `privacy event-protection
+status`, `preview` and `enable`, and the console's `/privacy` screen has an
+**Event-field protection** panel. See the
+[tenant offboarding boundary](../limitations.md#tenant-offboarding-boundary) for the
+exact proof and its limits.
+
 ### In the console
 
 The `/policy` screen is named **Rules and approvals**. Its opening answer says whether

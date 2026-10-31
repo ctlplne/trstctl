@@ -511,6 +511,9 @@ var coreCommandTable = []Command{
 	{Name: []string{"privacy", "archives", "list"}, Method: "GET", Path: "/api/v1/privacy/archive-erasure-attestations", Query: []string{"limit", "cursor", "subject_ref"}, Summary: "List backup/archive erasure evidence"},
 	{Name: []string{"privacy", "export"}, Method: "POST", Path: "/api/v1/privacy/subject-exports", Body: bodyFile, Summary: "Export all records tied to a data subject"},
 	{Name: []string{"privacy", "catalog"}, Method: "GET", Path: "/api/v1/privacy/catalog", Summary: "Get the personal-data catalog"},
+	{Name: []string{"privacy", "event-protection", "status"}, Method: "GET", Path: "/api/v1/privacy/event-protection", Summary: "Read event-field protection state"},
+	{Name: []string{"privacy", "event-protection", "preview"}, Method: "POST", Path: "/api/v1/privacy/event-protection/preview", Body: bodyFile, Summary: "Review opting in to event-field protection without writes"},
+	{Name: []string{"privacy", "event-protection", "enable"}, Method: "POST", Path: "/api/v1/privacy/event-protection", Body: bodyFile, Summary: "Opt the tenant in to event-field protection"},
 
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
 	{Name: []string{"graph", "reachable"}, Method: "GET", Path: "/api/v1/graph/reachable/{id}", Summary: "Nodes reachable from a node"},

@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2014 annotated sites across 29 rules. Each row is
+2015 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1341,7 +1341,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (562 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (563 sites)
 
 | Location | Reason |
 |---|---|
@@ -1742,6 +1742,7 @@ not this file.
 | `internal/server/event_protection_backup_missing_custody_test.go:23` | exact artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:33` | exact artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:49` | exact original artifact in this test's owned fixture (CWE-22) |
+| `internal/server/event_protection_done_when_test.go:117` | the test's own backup artifact (CWE-22) |
 | `internal/server/event_protection_postgres_backup_served_test.go:35` | exact artifact in this test's owned backup directory (CWE-22) |
 | `internal/server/external_poller_boundary_test.go:16` | name comes only from the closed literal source-file list above (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:153` | parent-created test fixture path (CWE-22) |

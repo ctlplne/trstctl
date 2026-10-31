@@ -118,6 +118,7 @@ type API struct {
 	breakglassAdmin          *breakglass.AdminService
 	caHierarchy              CAHierarchyService
 	edgeDelegations          EdgeDelegationService
+	eventProtection          EventProtectionService
 	externalCAs              ExternalCAService
 	certRevocationAuthority  CertificateRevocationAuthorityResolver
 	attestedIssuer           AttestedIssuerService
@@ -277,6 +278,7 @@ type config struct {
 	breakglassAdmin             *breakglass.AdminService
 	caHierarchy                 CAHierarchyService
 	edgeDelegations             EdgeDelegationService
+	eventProtection             EventProtectionService
 	externalCAs                 ExternalCAService
 	certRevocationAuthority     CertificateRevocationAuthorityResolver
 	attestedIssuer              AttestedIssuerService
@@ -600,6 +602,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		breakglassAdmin:             cfg.breakglassAdmin,
 		caHierarchy:                 cfg.caHierarchy,
 		edgeDelegations:             cfg.edgeDelegations,
+		eventProtection:             cfg.eventProtection,
 		externalCAs:                 cfg.externalCAs,
 		certRevocationAuthority:     cfg.certRevocationAuthority,
 		attestedIssuer:              cfg.attestedIssuer,
@@ -1456,6 +1459,9 @@ func (a *API) routes() []route {
 		{method: "POST", path: "/api/v1/privacy/archive-erasure-attestations", opID: "attestPrivacyArchiveErasure", summary: "Record pre-erasure backup/archive erasure evidence", handler: a.attestPrivacyArchiveErasure, reqSchema: "PrivacyArchiveErasureAttestationRequest", resSchema: "PrivacyArchiveErasureAttestation", successCode: "201", mutation: true, perm: authz.PrivacyWrite},
 		{method: "GET", path: "/api/v1/privacy/archive-erasure-attestations", opID: "listPrivacyArchiveErasureAttestations", summary: "List backup/archive erasure evidence", handler: a.listPrivacyArchiveErasureAttestations, query: privacyArchiveErasureQuery, resSchema: "PrivacyArchiveErasureAttestationList", successCode: "200", perm: authz.PrivacyRead},
 		{method: "POST", path: "/api/v1/privacy/subject-exports", opID: "exportPrivacySubject", summary: "Export all records tied to a data subject (access/portability, read-only)", handler: a.exportPrivacySubject, reqSchema: "PrivacySubjectExportRequest", resSchema: "PrivacySubjectExport", successCode: "200", perm: authz.PrivacyRead},
+		{method: "GET", path: "/api/v1/privacy/event-protection", opID: "getEventProtection", summary: "Read the tenant's event-field protection state from its retained source and current key custody", handler: a.getEventProtection, resSchema: "EventProtectionStatus", successCode: "200", perm: authz.PrivacyRead},
+		{method: "POST", path: "/api/v1/privacy/event-protection/preview", opID: "previewEventProtection", summary: "Review opting in to event-field protection without writing state", handler: a.previewEventProtection, reqSchema: "EventProtectionRequest", resSchema: "EventProtectionPlan", successCode: "200", perm: authz.PrivacyWrite},
+		{method: "POST", path: "/api/v1/privacy/event-protection", opID: "requestEventProtection", summary: "Opt the tenant in to event-field protection; a bounded worker prepares its key", handler: a.requestEventProtection, reqSchema: "EventProtectionRequest", resSchema: "EventProtectionAccepted", successCode: "202", mutation: true, perm: authz.PrivacyWrite},
 		{method: "GET", path: "/api/v1/privacy/catalog", opID: "getPrivacyCatalog", summary: "Get the maintained personal-data catalog", handler: a.getPrivacyCatalog, resSchema: "PrivacyCatalog", successCode: "200", perm: authz.PrivacyRead},
 
 		{method: "GET", path: "/api/v1/graph", opID: "getGraph", summary: "Get the credential graph", handler: a.getGraph, resSchema: "GraphResponse", successCode: "200", perm: authz.GraphRead},

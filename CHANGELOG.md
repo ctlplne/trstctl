@@ -2,6 +2,14 @@
 
 ### Added
 
+- Event-field protection (crypto-shred) opt-in: a tenant can read its protection state, preview
+  and enable per-tenant encryption of its sensitive event fields through
+  `/api/v1/privacy/event-protection` (CLI `trstctl privacy event-protection`, console Privacy
+  panel), naming its current registration and a retention window its policy chooses. A bounded
+  worker prepares the key; status reads `active` only after the key reads back. After
+  offboarding and the retention window, the key is destroyed with a signed record, and a rebuild
+  or a restore of an earlier backup shows the tenant's sensitive fields as erased while audit
+  verification and other tenants are unaffected. Events recorded before activation stay readable.
 - Named ServiceNow and Jira ticket-intake schedules with independent relay jobs
   and cursors, explicit mailbox-to-owner mapping, and an Approvals setup wizard.
   Legacy sources remain `default`; removal preserves history and blocks active

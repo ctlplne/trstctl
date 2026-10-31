@@ -315,6 +315,10 @@ import type {
   EphemeralCredential,
   EphemeralCredentialPreview,
   EphemeralCredentialRequest,
+  EventProtectionAccepted,
+  EventProtectionPlan,
+  EventProtectionRequest,
+  EventProtectionStatus,
   ExternalCA as GenExternalCA,
   ExternalCAIssuedCertificate,
   ExternalCAIssueRequest,
@@ -1228,6 +1232,10 @@ export type {
   EphemeralCredential,
   EphemeralCredentialPreview,
   EphemeralCredentialRequest,
+  EventProtectionAccepted,
+  EventProtectionPlan,
+  EventProtectionRequest,
+  EventProtectionStatus,
   ExternalCAIssuedCertificate,
   ExternalCAIssueRequest,
   FleetReissuanceActionRequest,
@@ -2253,6 +2261,9 @@ export interface Api {
   previewPrivacyRetention(): Promise<PrivacyRetentionPreview>;
   privacyRetentionRuns(options?: { limit?: number; cursor?: string }): Promise<PrivacyRetentionRunList>;
   privacyCatalog(): Promise<PrivacyCatalog>;
+  eventProtectionStatus(): Promise<EventProtectionStatus>;
+  previewEventProtection(input: EventProtectionRequest): Promise<EventProtectionPlan>;
+  enableEventProtection(input: EventProtectionRequest): Promise<EventProtectionAccepted>;
   auditEvents(options?: AuditQuery, signal?: AbortSignal): Promise<AuditEvent[]>;
   auditWindow(options?: AuditQuery, signal?: AbortSignal): Promise<AuditWindow>;
   exportAudit(options?: AuditQuery, signal?: AbortSignal): Promise<AuditBundle>;
@@ -3070,6 +3081,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   previewPrivacyRetention: () => postRead<PrivacyRetentionPreview>("/api/v1/privacy/retention-runs/preview"),
   privacyRetentionRuns: (options) => req<PrivacyRetentionRunList>(`/api/v1/privacy/retention-runs${pageQueryString(options)}`),
   privacyCatalog: () => req<PrivacyCatalog>("/api/v1/privacy/catalog"),
+  eventProtectionStatus: () => req<EventProtectionStatus>("/api/v1/privacy/event-protection"),
+  previewEventProtection: (input) => postRead<EventProtectionPlan>("/api/v1/privacy/event-protection/preview", input),
+  enableEventProtection: (input) => mutate<EventProtectionAccepted>("POST", "/api/v1/privacy/event-protection", input),
   auditEvents: (options, signal) =>
     req<{ events: AuditEvent[] }>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }).then((r) => r.events ?? []),
   auditWindow: (options, signal) => req<AuditWindow>(`/api/v1/audit/events${auditQueryString(options)}`, { signal: auditReadSignal(signal) }),

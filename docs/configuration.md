@@ -1022,8 +1022,8 @@ the matching `trstctl privacy retention run/list` CLI commands.
 `TRSTCTL_PRIVACY_EVENT_PROTECTION_KEY_DIRECTORY`, supplies an independent software
 custody directory. It defaults to empty and requires an absolute path without
 surrounding whitespace. Setting it does not enable protection for any tenant;
-the complete opt-in offboarding workflow remains
-[under development](limitations.md#tenant-offboarding-boundary).
+each tenant opts in with `POST /api/v1/privacy/event-protection` (see the
+[tenant offboarding boundary](limitations.md#tenant-offboarding-boundary)).
 
 Keep this directory outside the event log, PostgreSQL data, signer keys and
 authorization secret, audit signing key and archives, CA certificate, secrets KEK,
