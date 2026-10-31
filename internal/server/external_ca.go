@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/ca"
 	"trstctl.com/trstctl/internal/config"
@@ -60,6 +61,8 @@ type ExternalCA struct {
 	// the endpoint-lifecycle preview to fail closed when no provider config can
 	// publish a challenge for the requested name.
 	UpstreamDNS01 bool
+	// ADCSRevocation routes an adcs issuer's revocations to its relay (A162).
+	ADCSRevocation ADCSRevocationRelay
 }
 
 type factoryExternalCA struct {
@@ -148,6 +151,8 @@ type externalCAEntry struct {
 	ariFetch     ExternalARIFetch
 	// ariIssuerKeyIDs is the normalized ARIIssuerKeyIDs set (A51).
 	ariIssuerKeyIDs map[string]struct{}
+	// adcsRevocation is set when an adcs issuer revokes through its relay (A162).
+	adcsRevocation ADCSRevocationRelay
 }
 
 // matchesARIIssuer reports whether a leaf's Authority Key Identifier names one
@@ -165,6 +170,9 @@ func (e externalCAEntry) matchesARIIssuer(authorityKeyID string) bool {
 // client during a read-only preview. Direct plugins can report their own backend
 // capability, including catemplate's optional RevokingBackend.
 func (e externalCAEntry) canRevoke() bool {
+	if e.adcsRevocation.Relay != "" {
+		return true
+	}
 	if e.revocationCA == nil {
 		return false
 	}
@@ -245,9 +253,13 @@ func (s *Server) buildExternalCAService(d Deps, idem *orchestrator.Idempotency) 
 				issuerKeyIDs[normalized] = struct{}{}
 			}
 		}
+		if cfg.ADCSRevocation.Relay != "" && (!strings.EqualFold(typ, "adcs") || strings.TrimSpace(cfg.TenantID) == "" ||
+			!relay.ValidCAConfig(cfg.ADCSRevocation.CAConfig)) {
+			return nil, fmt.Errorf("server: external CA %q revocation relay needs an adcs issuer, its tenant and its certsrv CA", id)
+		}
 		reg.byID[id] = externalCAEntry{
 			meta: meta, tenantID: strings.TrimSpace(cfg.TenantID), revocationCA: implementation,
-			ariFetch: cfg.ARIFetch, ariIssuerKeyIDs: issuerKeyIDs,
+			ariFetch: cfg.ARIFetch, ariIssuerKeyIDs: issuerKeyIDs, adcsRevocation: cfg.ADCSRevocation,
 			svc: ca.NewIssuanceService(implementation, idem, s.outbox, d.Store, ca.WithAuditLog(d.Log), ca.WithLifetimeWarning(d.Logger, d.LifecycleAlertBefore),
 				ca.WithOutboxIssueWorker(id, s.wakeOutbox), ca.WithExternalIssueReplaySafety(replaySafety)),
 		}

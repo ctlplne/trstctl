@@ -95,16 +95,7 @@ func MapDisposition(code int) DBDisposition {
 // -restrict the operator used, and a parser that demanded an exact shape would
 // work on the developer's lab and nowhere else.
 func ParseDBRow(fields map[string]string) (DBRow, error) {
-	// Keys are certutil's schema names first, then the display headers its CSV
-	// view prints (A162). certutil writes EMPTY for an empty column.
-	get := func(keys ...string) string {
-		for _, k := range keys {
-			if v, ok := fields[k]; ok && strings.TrimSpace(v) != "" && strings.TrimSpace(v) != "EMPTY" {
-				return strings.TrimSpace(v)
-			}
-		}
-		return ""
-	}
+	get := func(keys ...string) string { return field(fields, keys...) }
 	idRaw := get("RequestID", "Request ID", "RequestId", "Issued Request ID")
 	if idRaw == "" {
 		// Without a request id a row cannot be reconciled against anything, and
@@ -117,24 +108,43 @@ func ParseDBRow(fields map[string]string) (DBRow, error) {
 	}
 	row := DBRow{
 		RequestID: id,
-		Serial:    strings.ToLower(strings.ReplaceAll(get("SerialNumber", "Serial Number"), " ", "")),
+		Serial:    SerialOf(fields),
 		Subject:   get("CommonName", "Common Name", "Issued Common Name", "Subject"),
 		Template:  get("CertificateTemplate", "Certificate Template", "Template"),
 		Requester: get("Request.RequesterName", "RequesterName", "Requester", "Requester Name"),
 	}
-	// certutil's CSV view prints the code with its label ("20 -- Issued").
-	dispRaw := leadingDigits(get("Request.Disposition", "Disposition", "Request Disposition"))
-	if code, err := strconv.Atoi(dispRaw); err == nil {
-		row.Disposition = MapDisposition(code)
-	} else {
-		row.Disposition = DispositionUnknown
-	}
+	row.Disposition = DispositionOf(fields)
 	row.NotBefore = parseDBTime(get("NotBefore", "Certificate Effective Date"))
 	row.NotAfter = parseDBTime(get("NotAfter", "Certificate Expiration Date"))
 	if t := parseDBTime(get("Request.RevokedWhen", "RevokedWhen", "Revocation Date")); !t.IsZero() {
 		row.RevokedAt = &t
 	}
 	return row, nil
+}
+
+// field returns a row's value under certutil's schema name or the display
+// header its CSV view prints (A162). certutil writes EMPTY for an empty column.
+func field(fields map[string]string, keys ...string) string {
+	for _, k := range keys {
+		if v, ok := fields[k]; ok && strings.TrimSpace(v) != "" && strings.TrimSpace(v) != "EMPTY" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// SerialOf returns a row's serial in lower-case hex without separators.
+func SerialOf(fields map[string]string) string {
+	return strings.ToLower(strings.ReplaceAll(field(fields, "SerialNumber", "Serial Number"), " ", ""))
+}
+
+// DispositionOf returns a row's disposition. certutil's CSV view prints the
+// code with its label ("21 -- Revoked").
+func DispositionOf(fields map[string]string) DBDisposition {
+	if code, err := strconv.Atoi(leadingDigits(field(fields, "Request.Disposition", "Disposition", "Request Disposition"))); err == nil {
+		return MapDisposition(code)
+	}
+	return DispositionUnknown
 }
 
 func leadingDigits(v string) string {

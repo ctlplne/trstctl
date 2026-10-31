@@ -92,7 +92,11 @@ func externalCAsFromConfig(ctx context.Context, items []config.ExternalCAConfig,
 		if item.Type == "letsencrypt" {
 			ariFetch = externalARIFetchFromConfig(item, guard)
 		}
-		out = append(out, ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, ARIFetch: ariFetch, ARIIssuerKeyIDs: append([]string(nil), item.ARIIssuerKeyIDs...), UpstreamDNS01: item.Type == "letsencrypt" && item.UpstreamDNS01})
+		upstream := ExternalCA{ID: item.ID, Type: item.Type, Name: item.Name, TenantID: item.TenantID, Endpoint: item.Endpoint, Factory: factory, ARIFetch: ariFetch, ARIIssuerKeyIDs: append([]string(nil), item.ARIIssuerKeyIDs...), UpstreamDNS01: item.Type == "letsencrypt" && item.UpstreamDNS01}
+		if item.Type == "adcs" && item.RevocationRelay != "" {
+			upstream.ADCSRevocation = ADCSRevocationRelay{CAConfig: item.CAConfig, Relay: item.RevocationRelay}
+		}
+		out = append(out, upstream)
 	}
 	return out, nil
 }

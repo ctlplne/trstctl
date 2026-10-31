@@ -166,3 +166,52 @@ func (s *Store) ListADCSDatabaseCollections(ctx context.Context, tenantID string
 	})
 	return out, err
 }
+
+// ADCSRelayRevocation is where one AD CS revocation stands with its relay
+// (A162), read from the queued attempts themselves.
+type ADCSRelayRevocation struct {
+	// Delivered: an attempt's report was checked and closed the job.
+	Delivered bool
+	// Pending: the newest attempt is waiting for, or held by, the relay.
+	Pending bool
+	// Failed counts attempts the relay answered with a failure.
+	Failed int
+	// LastError is the newest failed attempt's reason.
+	LastError string
+}
+
+// ADCSRelayRevocationState reads the relay attempts of one revocation.
+func (s *Store) ADCSRelayRevocationState(ctx context.Context, tenantID, revocationID string) (ADCSRelayRevocation, error) {
+	var out ADCSRelayRevocation
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT status, COALESCE(last_error, ''), claim_completed_at IS NULL
+			   FROM outbox
+			  WHERE tenant_id = $1 AND destination = 'adcs.revoke'
+			    AND convert_from(payload, 'UTF8')::jsonb ->> 'id' = $2
+			  ORDER BY id`, tenantID, revocationID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var status, lastError string
+			var open bool
+			if err := rows.Scan(&status, &lastError, &open); err != nil {
+				return err
+			}
+			out.Pending = false
+			switch {
+			case status == "delivered":
+				out.Delivered = true
+			case status == "failed":
+				out.Failed++
+				out.LastError = lastError
+			case open:
+				out.Pending = true
+			}
+		}
+		return rows.Err()
+	})
+	return out, err
+}

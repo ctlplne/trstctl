@@ -120,6 +120,8 @@ var agentJobKindAllowlist = map[string]bool{
 	// A162: relay-executed AD CS CA database read. Counts return; rows stay
 	// on the domain-joined relay.
 	relay.KindADCSDatabase: true,
+	// A162: AD CS revocation through certutil on the issuer's relay.
+	relay.KindADCSRevoke: true,
 }
 
 // agentJobKindUpgrade is the self-upgrade kind (epic A5).
@@ -981,11 +983,8 @@ func (a *agentService) ingestExecutedReport(
 			return errors.New("ticket result receiver is not configured")
 		}
 		return a.recordTicketSync(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
-	case relay.KindADCSDatabase:
-		if a.recordADCSDatabase == nil {
-			return errors.New("CA database result receiver is not configured")
-		}
-		return a.recordADCSDatabase(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
+	case relay.KindADCSDatabase, relay.KindADCSRevoke:
+		return a.ingestADCSReport(ctx, info, claim, req)
 	case relay.KindDiscoveryRun, sshcollection.Destination, relay.KindADCSInventory, relay.KindADCSNestedGroups, relay.KindADCSEndpointProbe:
 		return a.ingestDiscoveryJobReport(ctx, info, claim, req)
 	case relay.KindRevocationProbe:
@@ -996,6 +995,23 @@ func (a *agentService) ingestExecutedReport(
 	default:
 		return nil
 	}
+}
+
+// ingestADCSReport is the AD CS relay stage of ingestExecutedReport (A162): a
+// CA database read's counts are recorded, and a revocation's report is checked
+// against its job before the job closes (the revocation's own delivery records
+// it).
+func (a *agentService) ingestADCSReport(ctx context.Context, info mtls.PeerCertInfo, claim store.AgentJobResultClaim, req *transport.ReportJobResultRequest) error {
+	if claim.Destination == relay.KindADCSRevoke {
+		if req.Outcome != transport.JobOutcomeExecuted {
+			return errors.New("AD CS revocation result needs a terminal executed report")
+		}
+		return validateADCSRevokeResult(info.TenantID, info.CommonName, claim.Payload, req.Detail)
+	}
+	if a.recordADCSDatabase == nil {
+		return errors.New("CA database result receiver is not configured")
+	}
+	return a.recordADCSDatabase(ctx, info.TenantID, info.CommonName, claim.IdempotencyKey, claim.Payload, req.Detail)
 }
 
 // ingestRightSizeReport is the connector.right_size stage of ingestExecutedReport
@@ -1283,6 +1299,11 @@ func (a *agentService) failedJobDisposition(ctx context.Context, info mtls.PeerC
 	// A162: a failed CA database read is answered with the relay's reason, not
 	// retried; the operator fixes the relay or the CA and reads again.
 	if claim.Destination == relay.KindADCSDatabase {
+		permanent = true
+	}
+	// A162: a failed AD CS revocation attempt is answered, not reclaimed; the
+	// revocation's own outbox delivery queues the next attempt on its backoff.
+	if claim.Destination == relay.KindADCSRevoke {
 		permanent = true
 	}
 	// A reclaimed host issuance whose retained key is gone cannot succeed on

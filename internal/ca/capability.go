@@ -259,8 +259,9 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
 		IssueProven: true,
 		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "AD CS revocation runs through the CA's own management interface, which " +
-			"trstctl does not drive. Revoke with certutil or the Certification Authority console.",
+		RevokeNote: "Web Enrollment cannot revoke. Name a revocation_relay on the issuer and trstctl " +
+			"revokes through that domain-joined relay with certutil, publishes a new CRL and reads the " +
+			"revocation back; without one, revoke with certutil or the Certification Authority console.",
 		UnattendedDVNote: "AD CS issues from template policy against a domain identity; there is no DCV challenge to solve.",
 	},
 	{

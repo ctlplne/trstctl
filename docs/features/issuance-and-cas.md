@@ -509,7 +509,20 @@ one `adcs` external CA entry per template. The client receives the upstream's
 leaf and chain, and the certificate is recorded in inventory like any other.
 Saving a profile that names an external CA the tenant does not have is refused
 (422). An ACME revoke of an upstream-issued certificate is refused, because
-trstctl's CRL covers only its own CA; revoke it at the upstream CA.
+trstctl's CRL covers only its own CA; revoke it through trstctl's revocation
+(the Revocation center or `POST /api/v1/certificates/bulk-revoke`), which goes
+to the upstream CA.
+
+**Revoking at AD CS.** Web Enrollment has no revoke call, so an `adcs` issuer
+revokes through a domain-joined network relay named in its `revocation_relay`.
+A revocation of a certificate that issuer issued is handed to that relay, which
+runs `certutil -revoke` with the reason, publishes a new CRL with `certutil -CRL`
+and reads the CA database row back; trstctl marks the certificate revoked only
+when the relay reports the row revoked and the CRL published. A relay that has
+not answered yet leaves the revocation waiting (it does not count against its
+retries); a failed attempt is retried on the revocation's own backoff. AD CS
+takes the reasons unspecified, keyCompromise, cACompromise, affiliationChanged,
+superseded and cessationOfOperation.
 
 The **registration-authority (RA) model** is a role split that prevents the classic
 PKI abuse of one person approving and fulfilling their own request. The built-in

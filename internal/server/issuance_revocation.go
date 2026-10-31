@@ -95,7 +95,8 @@ func (d *issuanceDispatcher) handleRevoke(ctx context.Context, m orchestrator.Me
 				}
 			}
 			if origin.ExternalID != "" {
-				if err := d.revokeExternalCertificate(ctx, m.TenantID, origin.ExternalID, cert, reason); err != nil {
+				if err := d.revokeExternalCertificate(ctx, m.TenantID, origin.ExternalID, cert, reason,
+					externalRevocationID(m.TenantID, m.IdempotencyKey, cert.Fingerprint)); err != nil {
 					// A refused predecessor must not prevent the live successor
 					// from reaching its own issuer. Keep the failure retryable;
 					// only confirmed members receive revocation events.
@@ -274,13 +275,16 @@ func (d *issuanceDispatcher) certificateRevocationOrigins(ctx context.Context, t
 	return origins, nil
 }
 
-func (d *issuanceDispatcher) revokeExternalCertificate(ctx context.Context, tenantID, authorityID string, cert store.Certificate, reason string) error {
+func (d *issuanceDispatcher) revokeExternalCertificate(ctx context.Context, tenantID, authorityID string, cert store.Certificate, reason, revocationID string) error {
 	if d.externalCAs == nil {
 		return errors.New("server: recorded external revocation authority is unavailable; no CA was substituted")
 	}
 	entry, ok := d.externalCAs.byID[authorityID]
 	if !ok || entry.tenantID != "" && entry.tenantID != tenantID || entry.revocationCA == nil {
 		return errors.New("server: recorded external revocation authority is unavailable for this tenant; no CA was substituted")
+	}
+	if entry.adcsRevocation.Relay != "" {
+		return d.revokeThroughADCSRelay(ctx, tenantID, entry.adcsRevocation, cert, reason, revocationID)
 	}
 	err := ca.RevokeThrough(ctx, entry.revocationCA, ca.RevokeRequest{TenantID: tenantID, Serial: cert.Serial, CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.CertificateDER}), ReasonCode: crypto.CRLReasonCode(crypto.RevocationReason(reason))})
 	if errors.Is(err, ca.ErrRevocationUnsupported) {

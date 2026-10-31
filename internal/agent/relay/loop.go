@@ -106,6 +106,8 @@ func ClaimableKinds() []string {
 		// A162: the CA database read through certutil on a domain-joined
 		// Windows relay; counts return, rows stay on the relay.
 		KindADCSDatabase,
+		// A162: AD CS revocation through certutil on the issuer's relay.
+		KindADCSRevoke,
 		KindTicketSync,
 		KindTrustDistribute,
 		// A71: the post-upgrade functional check; every polling agent answers
@@ -351,6 +353,9 @@ func runJob(ctx context.Context, ch Channel, client *http.Client, hostProfile co
 	// redeemed, so the read routes before the credential step.
 	if job.Kind == KindADCSDatabase {
 		return runADCSDatabase(ctx, ch, job)
+	}
+	if job.Kind == KindADCSRevoke {
+		return runADCSRevoke(ctx, ch, job)
 	}
 	// I3: ServiceNow ticket intake is the same read-only, JIT-token custody
 	// shape as CMDB sync. The relay observes typed ticket fields; the control

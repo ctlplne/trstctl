@@ -256,6 +256,13 @@ func ShippedJobKinds() []ShippedJobKind {
 			Roles: []string{mtls.AgentRoleNetwork},
 		},
 		{
+			// A162: AD CS revocation. certutil revokes at the CA, publishes a
+			// new CRL and reads the row back, as the relay's own identity.
+			Kind:  KindADCSRevoke,
+			Flags: []string{"--relay-claim", "--adcs-certutil"},
+			Roles: []string{mtls.AgentRoleNetwork},
+		},
+		{
 			// I3: ServiceNow ticket intake. Only mapped request fields return;
 			// the bearer token is redeemed for this one attempt.
 			Kind:  KindTicketSync,

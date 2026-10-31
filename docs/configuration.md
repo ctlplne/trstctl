@@ -382,7 +382,13 @@ For `adcs`, Web Enrollment authenticates with Basic over HTTPS (`username`,
 (domain controllers as `host:port`; DNS discovery is off) and
 `kerberos_keytab_ref` (`file:/absolute/path` to the account's keytab, exported
 with `ktpass` or `ktutil`); `kerberos_spn` overrides the default `HTTP/<endpoint
-host>`. Kerberos and `password_ref` are mutually exclusive.
+host>`. Kerberos and `password_ref` are mutually exclusive. To revoke this
+issuer's certificates through trstctl, set `revocation_relay` to the enrolled
+common name of a domain-joined network relay (with `tenant_id`, because the relay
+is one tenant's agent): trstctl hands each revocation to that relay, which runs
+`certutil -config <ca_config> -revoke`, publishes a new CRL with `certutil -CRL`
+and reads the row back. The relay's account needs the CA's Issue and Manage
+Certificates and Manage CA rights, and `adcs.revoke` must be claimable.
 
 Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
 `entrust`, `gcpcas`, `globalsign`, `letsencrypt`, `sectigo`, `shellca`,
@@ -2906,8 +2912,8 @@ lists the estate-touching job kinds enrolled agents may lease and execute:
 `connector.deploy`, `connector.test`, `connector.rollback`, `endpoint.renew`,
 `endpoint.contain`, `endpoint.purge`, `connector.takedown`,
 `endpoint.verify`, `discovery.run`, `revocation.probe`, `adcs.inventory`,
-`adcs.ca_database`, `trust.distribute`, `cmdb.sync`, `mdm.sync`, `ticket.sync`,
-and `agent.upgrade`.
+`adcs.ca_database`, `adcs.revoke`, `trust.distribute`, `cmdb.sync`, `mdm.sync`,
+`ticket.sync`, and `agent.upgrade`.
 Enabling `endpoint.contain` also enables `endpoint.recovery_check`, the
 read-only check of whether a stopped listener can come back that a replacement
 reads after a containment.

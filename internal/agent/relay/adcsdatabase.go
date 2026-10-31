@@ -133,13 +133,26 @@ func runADCSDatabase(ctx context.Context, ch Channel, job Job) bool {
 	return true
 }
 
-// readCertutilView runs certutil -config <ca> -view -out <columns> csv with a
-// fixed argument vector and reads its CSV output, bounded in bytes, rows and
-// time.
+// readCertutilView runs certutil -config <ca> -view -out <columns> csv,
+// bounded in time as well as bytes and rows.
 func readCertutilView(ctx context.Context, certutil, caConfig string) ([]map[string]string, error) {
 	ctx, cancel := context.WithTimeout(ctx, certutilTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, certutil, "-config", caConfig, "-view", "-out", certutilViewColumns, "csv") // #nosec G204 -- reviewed SEC-005 argv: fixed flags; the binary is operator-configured and the CA identifier is validated as one non-option argument (CWE-78)
+	return readCertutilCSV(ctx, certutil, "-config", caConfig, "-view", "-out", certutilViewColumns, "csv")
+}
+
+// runCertutil runs one certutil action. Its output is not read: what reaches
+// the control plane is the CA database read back afterwards.
+func runCertutil(ctx context.Context, certutil string, args ...string) error {
+	return exec.CommandContext(ctx, certutil, args...).Run() // #nosec G204 -- reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78)
+}
+
+// readCertutilCSV runs certutil with a fixed argument vector and reads its CSV
+// output, bounded in bytes and rows; the caller bounds the time.
+func readCertutilCSV(ctx context.Context, certutil string, args ...string) ([]map[string]string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, certutil, args...) // #nosec G204 -- reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

@@ -65,7 +65,7 @@ func (d *issuanceDispatcher) handleExternalCertificateRevocation(ctx context.Con
 		if prior, found, err := d.log.EventByID(ctx, resultID); err != nil {
 			return nil, err
 		} else if !found {
-			if err := d.revokeExternalCertificate(ctx, message.TenantID, command.ExternalCAID, certificate, command.Reason); err != nil {
+			if err := d.revokeExternalCertificate(ctx, message.TenantID, command.ExternalCAID, certificate, command.Reason, resultID); err != nil {
 				return nil, err
 			}
 		} else if prior.TenantID != message.TenantID || prior.Type != projections.EventCertificateRevoked {

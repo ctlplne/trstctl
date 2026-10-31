@@ -224,7 +224,7 @@ func TestReviewedExecAllowlistPinsNTLMHelper(t *testing.T) {
 }
 
 func TestReviewedExecAllowlistPinsADCSCertutil(t *testing.T) {
-	want := map[string]bool{"readCertutilView": true}
+	want := map[string]bool{"readCertutilCSV": true, "runCertutil": true}
 	if got := reviewedExecUses["internal/agent/relay/adcsdatabase.go"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("internal/agent/relay/adcsdatabase.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}

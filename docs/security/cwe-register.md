@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2051 annotated sites across 29 rules. Each row is
+2057 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (419 sites)
+### G101 — CWE-798 Use of hardcoded credentials (420 sites)
 
 | Location | Reason |
 |---|---|
@@ -219,14 +219,15 @@ not this file.
 | `internal/config/external_ca_test.go:52` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:53` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
 | `internal/config/external_ca_test.go:54` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:56` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:57` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:58` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:59` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:60` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:64` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:81` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:105` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:61` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:62` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:63` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:67` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:84` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:108` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/kerberos_test.go:8` | fabricated fixture paths and identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/managed_keys_providers_test.go:78` | fabricated fixture values; nothing here is real (CWE-798) |
@@ -497,7 +498,7 @@ not this file.
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
 
-### G107 — CWE-88 Argument injection (variable URL request) (12 sites)
+### G107 — CWE-88 Argument injection (variable URL request) (13 sites)
 
 | Location | Reason |
 |---|---|
@@ -507,6 +508,7 @@ not this file.
 | `internal/crypto/ctlog/sct_test.go:45` | loopback test log (CWE-918) |
 | `internal/objectstore/minio_lock_test.go:56` | loopback URL of the container this test started (CWE-88) |
 | `internal/protocols/scep/profile_routes_test.go:106` | test drives its own local server URL (CWE-88) |
+| `internal/server/adcs_revoke_relay_served_test.go:268` | the test's own CA stand-in (CWE-918). |
 | `internal/server/archive_minio_served_test.go:58` | loopback URL of the container this test started (CWE-88) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:53` | the served test harness URL |
 | `internal/server/ca_hierarchy_pqc_served_test.go:55` | the served test harness URL |
@@ -991,7 +993,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (256 sites)
+### G204 — CWE-78 OS command injection (257 sites)
 
 | Location | Reason |
 |---|---|
@@ -1062,7 +1064,8 @@ not this file.
 | `ee/provider/oidc_login_keycloak_test.go:103` | this test's container logs (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_container_test.go:178` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
-| `internal/agent/relay/adcsdatabase.go:142` | reviewed SEC-005 argv: fixed flags; the binary is operator-configured and the CA identifier is validated as one non-option argument (CWE-78) |
+| `internal/agent/relay/adcsdatabase.go:147` | reviewed SEC-005 argv: fixed action flags built here; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
+| `internal/agent/relay/adcsdatabase.go:155` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
 | `internal/agent/sshkrl/revocations_test.go:84` | fixed ssh-keygen argv over test-owned temp paths |
@@ -1364,7 +1367,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (569 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (570 sites)
 
 | Location | Reason |
 |---|---|
@@ -1516,6 +1519,7 @@ not this file.
 | `internal/agent/drift/drift_test.go:209` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/drift/drift_test.go:244` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/relay/adcsdatabase_test.go:83` | test-owned temp file (CWE-22). |
+| `internal/agent/relay/adcsrevoke_test.go:67` | test-owned temp file (CWE-22). |
 | `internal/agent/relay/deploy_failure_log.go:84` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log.go:148` | the operator's own flag (CWE-22) |
 | `internal/agent/relay/deploy_failure_log_keep_test.go:72` | the test's own temp file (CWE-22) |
@@ -1938,7 +1942,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (114 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (116 sites)
 
 | Location | Reason |
 |---|---|
@@ -1975,6 +1979,7 @@ not this file.
 | `internal/agent/drift/drift_test.go:226` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:81` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) (world-readable) |
 | `internal/agent/relay/adcsdatabase_test.go:50` | a test-owned executable stand-in (CWE-276). |
+| `internal/agent/relay/adcsrevoke_test.go:46` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/recovery_check_test.go:25` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:29` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2016,6 +2021,7 @@ not this file.
 | `internal/secretscan/gitleaks_options_test.go:72` | executable is an isolated test fixture |
 | `internal/secretscan/gitleaks_options_test.go:178` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/adcs_database_collect_served_test.go:42` | a test-owned executable stand-in (CWE-276). |
+| `internal/server/adcs_revoke_relay_served_test.go:120` | a test-owned executable stand-in (CWE-276). |
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |

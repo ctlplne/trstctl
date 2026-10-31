@@ -50,6 +50,10 @@ type ExternalCAConfig struct {
 	// ADCS / Microsoft Certificate Enrollment Web Service.
 	CAConfig string `json:"ca_config,omitempty"`
 	Template string `json:"template,omitempty"`
+	// RevocationRelay is the enrolled common name of the domain-joined network
+	// relay that revokes this issuer's certificates with certutil (A162). It
+	// needs tenant_id: the relay is one tenant's agent.
+	RevocationRelay string `json:"revocation_relay,omitempty"`
 
 	// AWS Private CA.
 	Region                  string `json:"region,omitempty"`
@@ -344,6 +348,7 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 		require(c.Template, "template")
 		credential(c.PasswordRef, "password_ref", true)
 		errs = append(errs, validateADCSKerberos(c, where)...)
+		errs = append(errs, validateADCSRevocationRelay(c, where)...)
 		if strings.TrimSpace(c.PasswordRef) != "" {
 			endpoint, _ := url.Parse(strings.TrimSpace(c.Endpoint))
 			if endpoint == nil || !strings.EqualFold(endpoint.Scheme, "https") {
@@ -457,6 +462,9 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 			"%s.upstream_dns01/caa_issuer_domain apply only to ACME (letsencrypt) authorities, not %q",
 			where, c.Type))
 	}
+	if c.Type != "adcs" && c.RevocationRelay != "" {
+		errs = append(errs, fmt.Errorf("%s.revocation_relay applies only to adcs authorities, not %q", where, c.Type))
+	}
 	return errs
 }
 
@@ -465,6 +473,25 @@ func externalCAEndpoint(c ExternalCAConfig) string {
 		return strings.TrimSpace(c.DirectoryURL)
 	}
 	return strings.TrimSpace(c.Endpoint)
+}
+
+// validateADCSRevocationRelay checks an AD CS relay revocation (A162).
+func validateADCSRevocationRelay(c ExternalCAConfig, where string) []error {
+	name := c.RevocationRelay
+	if name == "" {
+		return nil
+	}
+	var errs []error
+	if _, err := uuid.Parse(strings.TrimSpace(c.TenantID)); err != nil {
+		errs = append(errs, fmt.Errorf("%s.revocation_relay requires tenant_id: the relay is one tenant's enrolled agent", where))
+	}
+	if strings.TrimSpace(name) != name || len(name) > 128 || strings.ContainsAny(name, "/\\%?#") || strings.IndexFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		errs = append(errs, fmt.Errorf("%s.revocation_relay must be the relay agent's enrolled common name", where))
+	}
+	if strings.ContainsAny(c.CAConfig, `"`) || !strings.Contains(c.CAConfig, `\`) {
+		errs = append(errs, fmt.Errorf("%s.revocation_relay needs ca_config as certsrv's HOST\\CA-Name identifier", where))
+	}
+	return errs
 }
 
 // validateADCSKerberos checks an AD CS Kerberos configuration (A158).

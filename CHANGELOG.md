@@ -2,6 +2,9 @@
 
 ### Added
 
+- AD CS revocation through trstctl: an `adcs` issuer that names a `revocation_relay` hands each
+  revocation to that domain-joined relay, which revokes with certutil, publishes a new CRL and reads
+  the row back before trstctl records the certificate revoked.
 - AD CS CA database reads through a relay: a domain-joined network relay runs certutil against one
   CA as its own domain identity and returns only per-disposition counts (issued, pending, revoked,
   denied, failed), queued from the Posture panel, the API or the CLI; a failed read shows the relay's
