@@ -372,12 +372,30 @@ var algorithmAliases = map[string]string{
 	"1.2.840.113549.1.1.1-2048":     "rsa-2048",
 	"oid-1.2.840.113549.1.1.1-2048": "rsa-2048",
 
+	"rsa-3072": "rsa-3072",
+	"rsa3072":  "rsa-3072",
+	"rsa-4096": "rsa-4096",
+	"rsa4096":  "rsa-4096",
+
 	"ecc-nist-p256": "ecdsa-p256",
 	"ec-p256":       "ecdsa-p256",
 	"ecdsa-p256":    "ecdsa-p256",
 	"secp256r1":     "ecdsa-p256",
 	"prime256v1":    "ecdsa-p256",
 	"nist-p256":     "ecdsa-p256",
+
+	// A168: the cloud KMS and managed-key authorities spell the larger
+	// curves differently (ECC_NIST_P384 against ECDSA-P384).
+	"ecc-nist-p384": "ecdsa-p384",
+	"ec-p384":       "ecdsa-p384",
+	"ecdsa-p384":    "ecdsa-p384",
+	"secp384r1":     "ecdsa-p384",
+	"nist-p384":     "ecdsa-p384",
+	"ecc-nist-p521": "ecdsa-p521",
+	"ec-p521":       "ecdsa-p521",
+	"ecdsa-p521":    "ecdsa-p521",
+	"secp521r1":     "ecdsa-p521",
+	"nist-p521":     "ecdsa-p521",
 
 	"ed25519":         "ed25519",
 	"eddsa":           "ed25519",

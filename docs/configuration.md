@@ -586,6 +586,44 @@ both kinds, `allow_insecure_loopback` permits a loopback address, and
 `private_endpoint_cidrs` widens the SSRF-safe dialer as it does for Vault. The
 store-backed ids `trstctl-self` and `trstctl-ca` take no source block.
 
+An AWS KMS account joins a round with an `awskms` source, paired with a
+`managed_keys` authority: the tenant's managed keys at that provider, from
+trstctl's own record (A168):
+
+```json
+{"tenant_id": "YOUR_TENANT_ID", "cadence": "1h", "authorities": [
+  {"authority_id": "managed-keys-aws", "source": {"kind": "managed_keys", "provider": "aws-kms"}},
+  {"authority_id": "aws-kms-prod", "source": {
+    "kind": "awskms",
+    "region": "us-east-1",
+    "access_key_id_file": "/run/secrets/aws/observer-access-key-id",
+    "secret_access_key_file": "/run/secrets/aws/observer-secret-access-key",
+    "max_objects": 10000
+  }}
+]}
+```
+
+The `awskms` source calls `kms:ListKeys`, `kms:DescribeKey`, `kms:ListResourceTags`
+and `kms:GetKeyRotationStatus` and nothing else; give the credentials a policy with
+exactly those. The files are read at each observation and wiped once the request
+is signed; `session_token_file` adds a session token. By default the source
+asserts only the keys trstctl tagged as its own when it created them
+(`trstctl-managed-key-operation`); `"all_customer_keys": true` asserts every
+customer-managed key, and AWS-managed keys are never asserted. Each key is
+asserted by its KeyId with its key spec, its state (enabled, disabled, or
+scheduled for deletion) and, for symmetric keys, its rotation standing. The
+`managed_keys` authority asserts what trstctl's record says the provider should
+show: active and superseded keys enabled, revoked keys disabled, keys whose
+deletion trstctl scheduled as scheduled for deletion until the provider's
+longest waiting period has passed. A round then witnesses a key only the
+account holds, a key only trstctl's record holds, and a key whose state differs.
+Creation dates are not compared, because trstctl records when its operation
+completed, seconds after the provider created the key. `address` overrides the
+regional endpoint (a VPC endpoint); `allow_insecure_loopback` and
+`private_endpoint_cidrs` behave as they do for Vault. One account should hold
+one tenant's managed keys: a round is scoped to a tenant, so another tenant's
+keys in the same account read as keys only the account holds.
+
 ## Workload-held PCAS co-signers
 
 An identity whose predecessor key lives in a workload agent (not in the isolated

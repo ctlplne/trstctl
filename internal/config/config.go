@@ -1960,37 +1960,118 @@ type ReconcileAuthoritySource struct {
 	// Vault on an operator-owned private range.
 	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
 	PrivateEndpointCIDRs  []string `json:"private_endpoint_cidrs,omitempty"`
+	// Region, the credential files and AllCustomerKeys belong to an awskms
+	// source (A168): the account's region, files holding its read-only access
+	// key id, secret access key and optional session token, and whether to
+	// assert every customer key rather than only the keys trstctl tagged as
+	// its own. Address optionally overrides the regional endpoint.
+	Region              string `json:"region,omitempty"`
+	AccessKeyIDFile     string `json:"access_key_id_file,omitempty"`
+	SecretAccessKeyFile string `json:"secret_access_key_file,omitempty"`
+	SessionTokenFile    string `json:"session_token_file,omitempty"`
+	AllCustomerKeys     bool   `json:"all_customer_keys,omitempty"`
+	// Provider names the managed-key provider a managed_keys authority
+	// asserts (A168): aws-kms.
+	Provider string `json:"provider,omitempty"`
 }
 
-// The external authority source kinds served today; a cloud-kms authority still
-// fails observation closed.
+// The external authority source kinds served today. An awskms source observes
+// an AWS KMS account and a managed_keys authority asserts what trstctl holds
+// there (A168).
 const (
 	ReconcileSourceKindVault     = "vault"
 	ReconcileSourceKindKMIP      = "kmip"
 	ReconcileSourceKindEJBCA     = "ejbca"
 	ReconcileSourceKindStepCA    = "stepca"
 	ReconcileSourceKindInventory = "inventory"
+	ReconcileSourceKindAWSKMS    = "awskms"
+	// ReconcileSourceKindManagedKeys is the managed-key inventory authority.
+	ReconcileSourceKindManagedKeys = "managed_keys"
 )
 
 func validateReconcileAuthoritySource(label string, src *ReconcileAuthoritySource) []error {
 	if src == nil {
 		return nil
 	}
+	errs := refuseCloudKMSFields(label, src)
 	switch strings.TrimSpace(src.Kind) {
+	case ReconcileSourceKindAWSKMS:
+		return append(errs, validateReconcileAWSKMSSource(label, src)...)
+	case ReconcileSourceKindManagedKeys:
+		return append(errs, validateReconcileManagedKeysSource(label, src)...)
 	case ReconcileSourceKindVault:
-		return append(validateReconcileVaultSource(label, src), refuseCALedgerFields(label, "vault", src)...)
+		return append(errs, append(validateReconcileVaultSource(label, src), refuseCALedgerFields(label, "vault", src)...)...)
 	case ReconcileSourceKindKMIP:
-		return append(validateReconcileKMIPSource(label, src), refuseCALedgerFields(label, "kmip", src)...)
+		return append(errs, append(validateReconcileKMIPSource(label, src), refuseCALedgerFields(label, "kmip", src)...)...)
 	case ReconcileSourceKindEJBCA:
-		return validateReconcileEJBCASource(label, src)
+		return append(errs, validateReconcileEJBCASource(label, src)...)
 	case ReconcileSourceKindStepCA:
-		return validateReconcileStepCASource(label, src)
+		return append(errs, validateReconcileStepCASource(label, src)...)
 	case ReconcileSourceKindInventory:
-		return validateReconcileInventorySource(label, src)
+		return append(errs, validateReconcileInventorySource(label, src)...)
 	default:
-		return []error{fmt.Errorf("%s.kind %q is not served; use %q, %q, %q, %q or %q", label, src.Kind,
-			ReconcileSourceKindVault, ReconcileSourceKindKMIP, ReconcileSourceKindEJBCA, ReconcileSourceKindStepCA, ReconcileSourceKindInventory)}
+		return []error{fmt.Errorf("%s.kind %q is not served; use %q, %q, %q, %q, %q, %q or %q", label, src.Kind,
+			ReconcileSourceKindVault, ReconcileSourceKindKMIP, ReconcileSourceKindEJBCA, ReconcileSourceKindStepCA, ReconcileSourceKindInventory,
+			ReconcileSourceKindAWSKMS, ReconcileSourceKindManagedKeys)}
 	}
+}
+
+// refuseCloudKMSFields rejects the awskms and managed_keys fields on any other
+// kind of source, where nothing would read them.
+func refuseCloudKMSFields(label string, src *ReconcileAuthoritySource) []error {
+	kind := strings.TrimSpace(src.Kind)
+	var errs []error
+	if kind != ReconcileSourceKindAWSKMS && (strings.TrimSpace(src.Region+src.AccessKeyIDFile+src.SecretAccessKeyFile+src.SessionTokenFile) != "" || src.AllCustomerKeys) {
+		errs = append(errs, fmt.Errorf("%s: region, the access key files and all_customer_keys belong to an awskms source, not a %s one", label, kind))
+	}
+	if kind != ReconcileSourceKindManagedKeys && strings.TrimSpace(src.Provider) != "" {
+		errs = append(errs, fmt.Errorf("%s.provider belongs to a managed_keys authority, not a %s one", label, kind))
+	}
+	return errs
+}
+
+// validateReconcileAWSKMSSource checks a kind "awskms" source (A168).
+func validateReconcileAWSKMSSource(label string, src *ReconcileAuthoritySource) []error {
+	var errs []error
+	if strings.TrimSpace(src.Region) == "" {
+		errs = append(errs, fmt.Errorf("%s.region is required for an awskms source", label))
+	}
+	for field, value := range map[string]string{"access_key_id_file": src.AccessKeyIDFile, "secret_access_key_file": src.SecretAccessKeyFile} {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s.%s is required for an awskms source", label, field))
+		}
+	}
+	if address := strings.TrimSpace(src.Address); address != "" {
+		u, err := url.Parse(address)
+		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !src.AllowInsecureLoopback)) {
+			errs = append(errs, fmt.Errorf("%s.address must be an https URL (plain http needs allow_insecure_loopback)", label))
+		}
+	}
+	if src.MaxObjects < 0 {
+		errs = append(errs, fmt.Errorf("%s.max_objects cannot be negative", label))
+	}
+	if strings.TrimSpace(src.TokenFile+src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile+src.DSNFile+src.IssuerCertificatesFile) != "" ||
+		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames) > 0 || src.PageSize != 0 || src.AllowTLS12 {
+		errs = append(errs, fmt.Errorf("%s: an awskms source takes region, address, the access key files, all_customer_keys, max_objects and the endpoint egress fields only", label))
+	}
+	errs = append(errs, validateManagedKeyPrivateCIDRs(label+".private_endpoint_cidrs", src.PrivateEndpointCIDRs)...)
+	return errs
+}
+
+// validateReconcileManagedKeysSource checks a kind "managed_keys" authority
+// (A168): the managed-key inventory at one provider.
+func validateReconcileManagedKeysSource(label string, src *ReconcileAuthoritySource) []error {
+	switch strings.ToLower(strings.TrimSpace(src.Provider)) {
+	case "aws-kms", "aws":
+	default:
+		return []error{fmt.Errorf("%s.provider must be aws-kms for a managed_keys authority", label)}
+	}
+	if strings.TrimSpace(src.Address+src.TokenFile+src.Namespace+src.ServerName+src.CAFile+src.ClientCertFile+src.ClientKeyFile+src.DSNFile+src.IssuerCertificatesFile) != "" ||
+		len(src.KVMounts)+len(src.PKIMounts)+len(src.TransitMounts)+len(src.CANames)+len(src.PrivateEndpointCIDRs) > 0 ||
+		src.PageSize != 0 || src.MaxObjects != 0 || src.AllowTLS12 || src.AllowInsecureLoopback {
+		return []error{fmt.Errorf("%s: a managed_keys authority reads the managed-key inventory; only provider belongs to it", label)}
+	}
+	return nil
 }
 
 // refuseCALedgerFields rejects the external-CA ledger fields on a vault or

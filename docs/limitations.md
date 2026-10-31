@@ -4329,9 +4329,18 @@ than sending an operator looking for a credential that was never there.
   held that the CA never recorded. EJBCA issued that one while its certificate
   storage was off; for step-ca it was signed offline with the intermediate key.
   AD CS ledgers need the Windows image and an x86 machine, and commercial CAs
-  need accounts; those come next. The cloud-kms reducer still has a
-  nil source — scheduling it fails observation closed and logs, it does not
-  fabricate an authority — and
+  need accounts; those come next. An AWS KMS account is observed through an
+  `awskms` source (A168) — ListKeys, DescribeKey, ListResourceTags and
+  GetKeyRotationStatus, read-only and signed, by default only the keys trstctl
+  tagged as its own — and pairs with a `managed_keys` authority asserting the
+  tenant's managed keys there from trstctl's own record, so a round witnesses a
+  key only the account holds, one only trstctl's record holds, and a state that
+  drifted (disabled by hand, or still enabled after trstctl revoked it); proven
+  against an in-repository KMS stand-in that verifies each signature (a live
+  account is Track B). An account shared by several tenants' managed keys reads
+  the other tenants' keys as drift. GCP Cloud KMS and Azure Key Vault keys
+  are what comes next; a `cloud-kms` id with no source block still fails
+  observation closed rather than fabricate an authority, and
   inventory rows with no captured DER cannot participate in the comparison
   (no issuer bytes to derive the shared identity from) until their bytes are
   recovered. `POST /api/v1/certificates/{id}/der-recovery` (CLI `certificates

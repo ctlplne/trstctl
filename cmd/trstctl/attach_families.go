@@ -216,6 +216,10 @@ func attachReconcile(cfg *config.Config, log *slog.Logger, deps *server.Deps) er
 		EJBCASources:         reconcileEJBCASourcesFromConfig(reconcileConfigOf(cfg)),
 		StepCASources:        reconcileStepCASourcesFromConfig(reconcileConfigOf(cfg)),
 		InventoryAuthorities: reconcileInventoryAuthoritiesFromConfig(reconcileConfigOf(cfg)),
+		// A168: AWS KMS accounts and the managed-key inventory they are
+		// compared with.
+		CloudKMSSources:       reconcileAWSKMSSourcesFromConfig(reconcileConfigOf(cfg)),
+		ManagedKeyAuthorities: reconcileManagedKeyAuthoritiesFromConfig(reconcileConfigOf(cfg)),
 	})
 	if err != nil {
 		return err
@@ -375,6 +379,31 @@ func reconcileInventoryAuthoritiesFromConfig(c config.Reconcile) []reconcile.Inv
 	var out []reconcile.InventoryAuthorityConfig
 	reconcileSourcesOfKind(c, config.ReconcileSourceKindInventory, func(id string, src *config.ReconcileAuthoritySource) {
 		out = append(out, reconcile.InventoryAuthorityConfig{AuthorityID: id, IssuerCertificatesFile: strings.TrimSpace(src.IssuerCertificatesFile)})
+	})
+	return out
+}
+
+// reconcileAWSKMSSourcesFromConfig collects the awskms source blocks (A168).
+func reconcileAWSKMSSourcesFromConfig(c config.Reconcile) []reconcile.AWSKMSSourceConfig {
+	var out []reconcile.AWSKMSSourceConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindAWSKMS, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.AWSKMSSourceConfig{
+			AuthorityID: id, Region: strings.TrimSpace(src.Region), Address: strings.TrimSpace(src.Address),
+			AccessKeyIDFile: strings.TrimSpace(src.AccessKeyIDFile), SecretAccessKeyFile: strings.TrimSpace(src.SecretAccessKeyFile),
+			SessionTokenFile: strings.TrimSpace(src.SessionTokenFile), AllCustomerKeys: src.AllCustomerKeys,
+			MaxObjects: src.MaxObjects, AllowInsecureLoopback: src.AllowInsecureLoopback,
+			PrivateEndpointCIDRs: reconcilePrivateCIDRs(src.PrivateEndpointCIDRs),
+		})
+	})
+	return out
+}
+
+// reconcileManagedKeyAuthoritiesFromConfig collects the managed_keys
+// authority blocks (A168).
+func reconcileManagedKeyAuthoritiesFromConfig(c config.Reconcile) []reconcile.ManagedKeyAuthorityConfig {
+	var out []reconcile.ManagedKeyAuthorityConfig
+	reconcileSourcesOfKind(c, config.ReconcileSourceKindManagedKeys, func(id string, src *config.ReconcileAuthoritySource) {
+		out = append(out, reconcile.ManagedKeyAuthorityConfig{AuthorityID: id, Provider: strings.TrimSpace(src.Provider)})
 	})
 	return out
 }

@@ -2,6 +2,9 @@
 
 ### Added
 
+- Cross-reconciliation of an AWS KMS account against trstctl's managed-key record: an `awskms`
+  authority source and a `managed_keys` authority, so a reconciliation round witnesses keys only
+  one side holds and keys whose state drifted.
 - Attack-path validation for exposed NHIs: a cloud network paths source with an AWS account's
   read-only credentials answers, per public endpoint, whether the account's route tables, network
   ACLs and security groups admit the internet, and names the resource that decides it.

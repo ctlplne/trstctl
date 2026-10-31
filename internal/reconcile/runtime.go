@@ -63,13 +63,19 @@ type RuntimeConfig struct {
 	EJBCASources         []EJBCASourceConfig
 	StepCASources        []StepCASourceConfig
 	InventoryAuthorities []InventoryAuthorityConfig
+	// CloudKMSSources are the AWS KMS accounts operator config names (A168),
+	// each registered as a cloud-kms reducer with a real source under its
+	// authority id; a configured "cloud-kms" replaces the fail-closed
+	// placeholder. ManagedKeyAuthorities assert the tenant's managed keys at a
+	// provider, the authority a KMS account is compared with.
+	CloudKMSSources       []AWSKMSSourceConfig
+	ManagedKeyAuthorities []ManagedKeyAuthorityConfig
 }
 
 // Runtime is the XREC object graph mounted by cmd/trstctl/ee_attach.go. The
 // "trstctl-self" and "trstctl-ca" authorities are store-backed (epic C4); the
-// vault and kmip reducers keep nil sources — fail-closed — until operator
-// config supplies external credentials and endpoints, and cloud-kms has no
-// source yet.
+// vault, kmip and cloud-kms reducers keep nil sources — fail-closed — until
+// operator config supplies external credentials and endpoints.
 type Runtime struct {
 	Reducers                 *reducers.Registry
 	ObservationSandbox       *reducers.ObservationSandbox
@@ -206,6 +212,34 @@ func NewRuntime(cfg RuntimeConfig) (*Runtime, error) {
 			return nil, err
 		}
 		if err := registerSelf(src.cfg.AuthorityID, src); err != nil {
+			return nil, err
+		}
+	}
+	// A168: AWS KMS accounts, and the managed-key inventory they are
+	// compared with.
+	for _, cs := range cfg.CloudKMSSources {
+		src, err := newAWSKMSSource(cs)
+		if err != nil {
+			return nil, err
+		}
+		if err := reducerRegistry.Register(src.cfg.AuthorityID, reducers.NewCloudKMSReducer(reducerConfig(src.cfg.AuthorityID, reducers.ModePoll), src)); err != nil {
+			return nil, err
+		}
+	}
+	for _, ma := range cfg.ManagedKeyAuthorities {
+		id := strings.TrimSpace(ma.AuthorityID)
+		if id == "" || id == defaultSelfAuthority || id == defaultCAAuthority {
+			return nil, fmt.Errorf("xrec runtime: managed-key authority id %q is empty or reserved", id)
+		}
+		var src reducers.CloudKMSInventorySource
+		if cfg.Store != nil {
+			managed, err := newStoreManagedKeySource(cfg.Store, ma)
+			if err != nil {
+				return nil, err
+			}
+			src = managed
+		}
+		if err := reducerRegistry.Register(id, reducers.NewCloudKMSReducer(reducerConfig(id, reducers.ModePoll), src)); err != nil {
 			return nil, err
 		}
 	}
