@@ -2364,7 +2364,7 @@ func (s *Server) protocolLeafIssuer(d Deps, orch *orchestrator.Orchestrator, ide
 			orch: orch, idem: idem, store: d.Store, log: d.Log, caID: IssuingCAID(),
 			defaultProfile: d.DefaultProfile, leafProfile: s.leafProfile,
 			ensureCRL: ensureCRL, publishCRL: publishCRL,
-			tenantCrypto: d.TenantCrypto,
+			tenantCrypto: d.TenantCrypto, upstream: s.protocolUpstream,
 		}
 		return issuer.issueProtocolLeafWithOrigin(ctx, tenantID, protocol, idempotencyKey, csrDER, protocolLeafTTL, origin)
 	}

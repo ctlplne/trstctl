@@ -12029,6 +12029,10 @@
           "requires_approval": {
             "type": "boolean"
           },
+          "upstream_external_ca": {
+            "description": "Registry ID of a configured external CA (for example an AD CS template) that signs ACME, EST, SCEP and CMP enrollments under this profile after its checks pass; empty signs with trstctl's own CA",
+            "type": "string"
+          },
           "version": {
             "type": "integer"
           }

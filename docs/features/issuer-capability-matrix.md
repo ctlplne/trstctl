@@ -45,6 +45,8 @@ Before production, run the same scoped issuance with your configured account.
 
 **Unattended domain validation:** AD CS issues from template policy against a domain identity; there is no DCV challenge to solve.
 
+**Standard protocols in front of templates:** a certificate profile with `upstream_external_ca` naming an `adcs` entry routes ACME, EST, SCEP and CMP enrollments under that profile to AD CS (one template per entry); proven with stock certbot against a Web Enrollment stand-in.
+
 **Authentication:** Basic over HTTPS (`username`, `password_ref`), or Kerberos Negotiate from a keytab (`kerberos_realm`, `kerberos_principal`, `kerberos_kdcs`, `kerberos_keytab_ref`, optional `kerberos_spn`), which never holds or sends a password. The two are mutually exclusive, and a Kerberos failure never falls back to Basic. NTLM is not offered.
 
 ## awspca

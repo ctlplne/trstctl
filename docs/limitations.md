@@ -3891,10 +3891,17 @@ than sending an operator looking for a credential that was never there.
   stated exactly: this is the transport and parsing layer only. NOTHING YET
   CALLS THE DATABASE INGESTION — there is no scheduled or served ingest that
   pulls a CA database into inventory, so issued/pending/revoked state is not
-  reconciled by C4/XREC; the ACME/EST
-  front-end that would issue a leaf through an AD CS template under a trstctl
-  policy gate is not built; and there is no "modernize this template" console
-  action or AD CS issuer health view.
+  reconciled by C4/XREC; and there is no "modernize this template" console
+  action or AD CS issuer health view. **ACME and EST in front of AD CS
+  templates are served** (A159): a certificate profile's
+  `upstream_external_ca` names an `adcs` external CA (one template per
+  entry), and ACME, EST, SCEP and CMP enrollments under that profile pass the
+  profile's checks in trstctl and are then signed by AD CS through Web
+  Enrollment; the client receives the AD CS leaf and chain and the certificate
+  is recorded in inventory. Proven with stock certbot against an AD CS
+  Web Enrollment stand-in that signs under its own CA; a live forest is not yet
+  proven. An ACME revoke of an AD CS-issued certificate is refused (trstctl's
+  CRL covers only its own CA); revoke at the CA until certutil revocation ships.
 - Staged agent upgrades with an automatic canary halt (A5): `GET/POST
   /api/v1/agents/upgrade-campaign`, `/pause`, `/resume`, and
   `POST /api/v1/agents/upgrade-ring` (`trstctl agents upgrade-campaign
@@ -4079,9 +4086,9 @@ than sending an operator looking for a credential that was never there.
   is not — the CA database is read by `certutil` on the domain-joined Windows
   relay, which this repository does not yet drive, so the rows arrive over the
   ingest endpoint but nothing yet runs certutil to produce them. In-domain
-  Kerberos authentication is served (`kerberos_*`, A158; NTLM is not offered).
-  The rest of F4 — fronting AD CS templates with trstctl ACME/EST — remains
-  unbuilt.
+  Kerberos authentication is served (`kerberos_*`, A158; NTLM is not offered),
+  and so is fronting AD CS templates with trstctl ACME/EST (A159, a profile's
+  `upstream_external_ca`).
 - PQC readiness reports are signed and offline-verifiable (M1, PARTIAL): a
   cohort's handshake evidence — every targeted client's outcome WITH its
   handshake size and latency — is turned into a verdict by `Assess` and

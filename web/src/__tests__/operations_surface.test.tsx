@@ -300,6 +300,23 @@ describe("operational console surface", () => {
     );
   });
 
+  it("A159 routes a rule's protocol issuance to a named external CA", async () => {
+    apiMock.profiles.mockResolvedValue([]);
+    apiMock.createProfile.mockResolvedValue({ id: "adcs", name: "adcs-web", version: 1, active: true });
+    const user = userEvent.setup();
+    renderAt("/profiles");
+    await user.click(await screen.findByRole("button", { name: /Create rule/i }));
+    await user.type(screen.getByLabelText(/Rule name/i), "adcs-web");
+    await user.type(screen.getByLabelText("Issue through an external CA (optional)"), "corp-adcs-web");
+    await user.click(screen.getByRole("button", { name: /Create rule/i }));
+    await waitFor(() =>
+      expect(apiMock.createProfile).toHaveBeenCalledWith({
+        name: "adcs-web",
+        spec: expect.objectContaining({ upstream_external_ca: "corp-adcs-web" }),
+      }),
+    );
+  });
+
   it("surfaces served profile validation problems from the JSON fallback", async () => {
     apiMock.profiles.mockResolvedValue([]);
     apiMock.createProfile.mockRejectedValue(new ApiError(422, JSON.stringify({ detail: "max_validity exceeds the tenant profile ceiling" })));

@@ -63,6 +63,10 @@ type ExternalCAIssueRequest struct {
 	// the caller's CSR); a control-plane caller records its own custody and
 	// leaves it empty. It is never decoded from a client (A121).
 	KeyOrigin string
+	// Protocol is the enrollment protocol a served path brokers for (A159:
+	// ACME or EST through a profile's upstream_external_ca). Empty means the
+	// external CA issue route. It is never decoded from a client.
+	Protocol string
 }
 
 type externalCAIssueJSON struct {

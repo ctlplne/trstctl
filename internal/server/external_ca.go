@@ -315,7 +315,7 @@ func (r *externalCARegistry) IssueExternalCA(ctx context.Context, tenantID, id, 
 		DNSNames:       req.DNSNames,
 		TTL:            ttl,
 		ProfileName:    req.ProfileName,
-		Protocol:       "api",
+		Protocol:       firstNonEmpty(req.Protocol, "api"),
 		RequestedEKUs:  req.RequestedEKUs,
 		RequestBinding: requestBinding,
 		// The caller states the CSR key's origin (the served route: requester);

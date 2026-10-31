@@ -397,3 +397,18 @@ func TestPublicTLSProfileMustAllowServerAuth(t *testing.T) {
 		t.Fatalf("decoded = %+v, %v", decoded, err)
 	}
 }
+
+// A159: a profile may route protocol issuance to an external CA by its registry
+// ID; anything that is not an ID shape is refused at authoring time.
+func TestUpstreamExternalCAMustBeARegistryID(t *testing.T) {
+	for _, id := range []string{"corp-adcs-web", "adcs.WebServer_2"} {
+		if err := (profile.CertificateProfile{Name: "p", Version: 1, UpstreamExternalCA: id}).ValidateDefinition(); err != nil {
+			t.Errorf("upstream %q refused: %v", id, err)
+		}
+	}
+	for _, id := range []string{" corp-adcs", "corp adcs", "../etc", "-leading", strings.Repeat("a", 129)} {
+		if err := (profile.CertificateProfile{Name: "p", Version: 1, UpstreamExternalCA: id}).ValidateDefinition(); err == nil {
+			t.Errorf("upstream %q accepted", id)
+		}
+	}
+}

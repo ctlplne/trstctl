@@ -2,6 +2,10 @@
 
 ### Added
 
+- ACME and EST in front of AD CS templates: a certificate profile's `upstream_external_ca` routes
+  protocol enrollments under it (ACME, EST, SCEP, CMP) to a configured external CA such as an
+  `adcs` entry, after the profile's checks pass; the client receives the upstream leaf and chain.
+  Console rule builder, API (unknown upstreams refused at save) and OpenAPI carry the field.
 - Kerberos authentication for AD CS Web Enrollment: an `adcs` external CA can name a realm,
   principal, KDCs and a keytab (`kerberos_*`); trstctl answers the Negotiate challenge with a
   fresh service ticket per request and never holds or sends a password. Kerberos and Basic are

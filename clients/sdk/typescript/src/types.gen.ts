@@ -12074,6 +12074,8 @@ export interface components {
             /** @description The profile issues publicly trusted TLS server certificates; requires serverAuth, and the validity-readiness report flags a max_validity over the CA/Browser Forum's dated maximum */
             public_tls?: boolean;
             requires_approval?: boolean;
+            /** @description Registry ID of a configured external CA (for example an AD CS template) that signs ACME, EST, SCEP and CMP enrollments under this profile after its checks pass; empty signs with trstctl's own CA */
+            upstream_external_ca?: string;
             version?: number;
         };
         CertificateSourceHealth: {

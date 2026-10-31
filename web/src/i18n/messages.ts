@@ -31396,6 +31396,19 @@ export const messages = {
     defaultMessage: "47-day target",
     description: "Target endpoint of the certificate lifetime-readiness planning scale.",
   },
+  "profiles.upstreamExternalCA.label": {
+    defaultMessage: "Issue through an external CA (optional)",
+    description: "A159: the external CA registry ID protocol issuance under this profile routes to.",
+  },
+  "profiles.upstreamExternalCA.placeholder": {
+    defaultMessage: "corp-adcs-web",
+    description: "A159: example external CA registry ID.",
+  },
+  "profiles.upstreamExternalCA.hint": {
+    defaultMessage:
+      "ACME, EST, SCEP and CMP enrollments under this profile are signed by this configured external CA (for example an AD CS template) after the profile's checks pass. Leave empty to sign with trstctl's own CA.",
+    description: "A159: what routing a profile to an external CA does.",
+  },
   "profiles.publicTLS.label": {
     defaultMessage: "Issues publicly trusted TLS server certificates",
     description:

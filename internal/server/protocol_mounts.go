@@ -224,6 +224,15 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 	return sp, nil
 }
 
+// protocolUpstream is the external CA registry profiles route protocol issuance
+// to (A159), read at issuance time; a nil registry routes nothing.
+func (s *Server) protocolUpstream() externalCAIssuer {
+	if s.externalCAs == nil {
+		return nil
+	}
+	return s.externalCAs
+}
+
 func (s *Server) newProtocolIssuer() *protocolIssuer {
 	return &protocolIssuer{
 		tenantServiceCheck: s.tenantServiceCheck,
@@ -238,6 +247,7 @@ func (s *Server) newProtocolIssuer() *protocolIssuer {
 		caID:               IssuingCAID(),
 		defaultProfile:     s.defaultProfile,
 		leafProfile:        s.leafProfile,
+		upstream:           s.protocolUpstream,
 		ensureCRL: func(ctx context.Context, tenantID string) error {
 			if s.revoc == nil {
 				return nil

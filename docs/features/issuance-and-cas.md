@@ -495,6 +495,16 @@ The signing worker still checks the actual CSR, including key strength and reque
 usages, before signing. A ready lifecycle preview therefore cannot turn an
 ACME-only profile into a queued API issuance.
 
+A profile can also choose **who signs**. With `upstream_external_ca` set to a
+configured external CA's registry ID, ACME, EST, SCEP and CMP enrollments under
+that profile pass the profile's checks in trstctl and are then signed by that
+CA instead of trstctl's own: for example ACME in front of an AD CS template, with
+one `adcs` external CA entry per template. The client receives the upstream's
+leaf and chain, and the certificate is recorded in inventory like any other.
+Saving a profile that names an external CA the tenant does not have is refused
+(422). An ACME revoke of an upstream-issued certificate is refused, because
+trstctl's CRL covers only its own CA; revoke it at the upstream CA.
+
 The **registration-authority (RA) model** is a role split that prevents the classic
 PKI abuse of one person approving and fulfilling their own request. The built-in
 `ra-officer` role can read/write profiles and *request* certificates but doesn't hold

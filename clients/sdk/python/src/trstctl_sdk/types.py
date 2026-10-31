@@ -4064,6 +4064,7 @@ CertificateProfileSpec = TypedDict(
         'name': str,
         'public_tls': bool,
         'requires_approval': bool,
+        'upstream_external_ca': str,
         'version': int,
     },
     total=False,

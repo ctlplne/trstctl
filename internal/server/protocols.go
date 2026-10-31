@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/auditsink"
 	"trstctl.com/trstctl/internal/auth"
 	"trstctl.com/trstctl/internal/authz"
@@ -88,11 +89,19 @@ type protocolIssuer struct {
 	// nil in production; tests use it to inject a crash-equivalent error after
 	// signer/event side effects but before the idempotency result is completed.
 	afterIssueSideEffects func(context.Context) error
+	// upstream is the external CA registry a profile's upstream_external_ca
+	// routes protocol issuance to (A159); nil or returning nil means none.
+	upstream func() externalCAIssuer
 }
 
 // attestDeviceCustody records the device-bound custody claim an attested
 // protocol issuance proved. The generator named is the TPM attestation key,
 // by its certificate's digest, since that key's certificate identifies the TPM.
+// externalCAIssuer is the external CA registry's issue seam (A159).
+type externalCAIssuer interface {
+	IssueExternalCA(ctx context.Context, tenantID, id, idempotencyKey, requestBinding string, req api.ExternalCAIssueRequest) (api.ExternalCAIssuedCertificate, error)
+}
+
 func (p *protocolIssuer) attestDeviceCustody(ctx context.Context, tenantID, fingerprint string, evidence *ca.DeviceAttestation) error {
 	if p.orch == nil {
 		return errProtocolIssuanceUnavailable
@@ -132,27 +141,34 @@ func (p *protocolIssuer) issueProtocolLeafWithOrigin(ctx context.Context, tenant
 }
 
 func (p *protocolIssuer) issueProtocolLeafWithOriginProfile(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile string) ([]byte, error) {
+	leaf, _, err := p.issueProtocolLeafChainWithOriginProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
+	return leaf, err
+}
+
+// issueProtocolLeafChainWithOriginProfile also returns the issuing chain PEM when
+// an upstream CA issued the leaf (A159); nil means trstctl's served CA did.
+func (p *protocolIssuer) issueProtocolLeafChainWithOriginProfile(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile string) ([]byte, []byte, error) {
 	var work tenancy.ServiceWork
 	if p.store != nil {
 		work = p.store.BeginTenantService
 	}
 	ctx, release, err := work.Begin(ctx, tenantID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer release()
 	if err := p.tenantServiceCheck.Check(ctx, tenantID); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if p.tenantCrypto == nil {
-		return p.issueProtocolLeafForProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
+		return p.issueProtocolLeafChainForProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
 	}
-	var leaf []byte
+	var leaf, chain []byte
 	err = withTenantCipher(ctx, p.tenantCrypto, nil, tenantID, func(scoped context.Context, _ tenantseal.Cipher) (err error) {
-		leaf, err = p.issueProtocolLeafForProfile(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
+		leaf, chain, err = p.issueProtocolLeafChainForProfile(scoped, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
 		return err
 	})
-	return leaf, err
+	return leaf, chain, err
 }
 
 func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin) ([]byte, error) {
@@ -160,16 +176,21 @@ func (p *protocolIssuer) issueProtocolLeaf(ctx context.Context, tenantID, protoc
 }
 
 func (p *protocolIssuer) issueProtocolLeafForProfile(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile string) ([]byte, error) {
+	leaf, _, err := p.issueProtocolLeafChainForProfile(ctx, tenantID, protocolName, idempotencyKey, csrDER, ttl, origin, selectedProfile)
+	return leaf, err
+}
+
+func (p *protocolIssuer) issueProtocolLeafChainForProfile(ctx context.Context, tenantID, protocolName, idempotencyKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile string) ([]byte, []byte, error) {
 	if err := requireACMERequestRegistration(ctx, p.store, p.log, tenantID); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if p.issue == nil {
-		return nil, errProtocolIssuanceUnavailable
+		return nil, nil, errProtocolIssuanceUnavailable
 	}
 	if tenantID == "" {
 		// AN-1: a protocol mount that did not resolve a tenant must not mint into a
 		// shared/blank tenant. Fail closed.
-		return nil, errors.New("server: protocol issuance requires a tenant (AN-1)")
+		return nil, nil, errors.New("server: protocol issuance requires a tenant (AN-1)")
 	}
 	if ttl <= 0 || ttl > protocolLeafTTL {
 		ttl = protocolLeafTTL
@@ -180,6 +201,13 @@ func (p *protocolIssuer) issueProtocolLeafForProfile(ctx context.Context, tenant
 		idempotencyKey = protocolName + ":" + fingerprintOf(csrDER)
 	}
 	idemKey := "protocol-issue:" + idempotencyKey
+	upstream, err := p.profileUpstream(ctx, tenantID, selectedProfile)
+	if err != nil {
+		return nil, nil, err
+	}
+	if upstream != "" {
+		return p.issueUpstream(ctx, tenantID, protocolName, idemKey, csrDER, ttl, origin, selectedProfile, upstream)
+	}
 	// Idempotent on (tenant, key): the first enrollment mints + records; a replay
 	// returns the recorded leaf without minting again (AN-5).
 	raw, err := p.idem.Do(ctx, tenantID, idemKey, func(ctx context.Context) ([]byte, error) {
@@ -273,12 +301,88 @@ func (p *protocolIssuer) issueProtocolLeafForProfile(ctx context.Context, tenant
 		return blk.Bytes, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := p.ensureTenantCRL(ctx, tenantID); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return raw, nil
+	return raw, nil, nil
+}
+
+// profileUpstream returns the external CA a selected profile routes protocol
+// issuance to, or "" for trstctl's own signer (A159). An unknown profile is
+// left to enforceProfile, which refuses it on the signer path.
+func (p *protocolIssuer) profileUpstream(ctx context.Context, tenantID, selectedProfile string) (string, error) {
+	if selectedProfile == "" || p.store == nil {
+		return "", nil
+	}
+	rec, err := p.store.GetActiveProfile(ctx, tenantID, selectedProfile)
+	if err != nil {
+		if store.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	var prof profile.CertificateProfile
+	if err := json.Unmarshal(rec.Spec, &prof); err != nil {
+		return "", fmt.Errorf("server: decode profile %q: %w", selectedProfile, err)
+	}
+	return strings.TrimSpace(prof.UpstreamExternalCA), nil
+}
+
+// issueUpstream brokers protocol issuance to the external CA a profile names
+// (A159): the protocol-side profile checks run here; the registry's issuance
+// service checks the profile again under the same protocol, signs through the
+// upstream (AD CS behind its template), records the certificate, and dedupes on
+// this enrollment's idempotency key. It returns the leaf and the upstream's
+// chain.
+func (p *protocolIssuer) issueUpstream(ctx context.Context, tenantID, protocolName, idemKey string, csrDER []byte, ttl time.Duration, origin custody.KeyOrigin, selectedProfile, upstream string) ([]byte, []byte, error) {
+	var registry externalCAIssuer
+	if p.upstream != nil {
+		registry = p.upstream()
+	}
+	if registry == nil {
+		return nil, nil, fmt.Errorf("server: profile %q routes to external CA %q, which is not configured (fail closed)", selectedProfile, upstream)
+	}
+	csrInfo, _, err := p.inspectCSR(csrDER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("server: protocol CSR does not parse: %w", err)
+	}
+	dnsNames := csrInfo.DNSNames
+	if len(dnsNames) == 0 && csrInfo.CommonName != "" {
+		dnsNames = []string{csrInfo.CommonName}
+	}
+	_, ttl, err = p.enforceProfile(ctx, tenantID, protocolName, selectedProfile, csrInfo, dnsNames, ttl)
+	if err != nil {
+		return nil, nil, err
+	}
+	binding, err := json.Marshal(struct {
+		Operation string   `json:"operation"`
+		TenantID  string   `json:"tenant_id"`
+		Protocol  string   `json:"protocol"`
+		Upstream  string   `json:"upstream"`
+		IssueKey  string   `json:"issue_key"`
+		CSRDER    []byte   `json:"csr_der"`
+		DNSNames  []string `json:"dns_names"`
+		TTLNanos  int64    `json:"ttl_nanos"`
+	}{"protocol.issue.upstream", tenantID, protocolName, upstream, idemKey, csrDER, dnsNames, int64(ttl)})
+	if err != nil {
+		return nil, nil, err
+	}
+	defer secret.Wipe(binding)
+	issued, err := registry.IssueExternalCA(ctx, tenantID, upstream, idemKey, crypto.SHA256Hex(binding), api.ExternalCAIssueRequest{
+		CSRDER: append([]byte(nil), csrDER...), DNSNames: append([]string(nil), dnsNames...), TTLSeconds: int64(ttl / time.Second),
+		ProfileName: selectedProfile, KeyOrigin: string(origin), Protocol: protocolName,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	leaf, rest := pem.Decode([]byte(issued.CertificatePEM))
+	if leaf == nil || leaf.Type != "CERTIFICATE" {
+		return nil, nil, fmt.Errorf("server: external CA %q returned no leaf certificate", upstream)
+	}
+	p.auditIssued(ctx, tenantID, protocolName, issued.Serial)
+	return leaf.Bytes, bytes.TrimSpace(rest), nil
 }
 
 // inspectCSR is the one served parser decision for every enrollment protocol.
@@ -464,15 +568,13 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 	if req.ProviderIdempotencyKey != "" {
 		issuanceKey = "acme-order:" + req.ProviderIdempotencyKey
 	}
-	var leafDER []byte
-	var err error
+	// A55/A56: an order that selected a profile (credential-pinned or
+	// client-requested) signs under that profile, not the mount default.
+	selectedProfile := a.issuer.defaultProfile
 	if strings.TrimSpace(req.ProfileName) != "" {
-		// A55/A56: the order selected a profile (credential-pinned or
-		// client-requested); sign under that profile, not the mount default.
-		leafDER, err = a.issuer.issueProtocolLeafWithOriginProfile(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester, strings.TrimSpace(req.ProfileName))
-	} else {
-		leafDER, err = a.issuer.issueProtocolLeafWithOrigin(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester)
+		selectedProfile = strings.TrimSpace(req.ProfileName)
 	}
+	leafDER, upstreamChain, err := a.issuer.issueProtocolLeafChainWithOriginProfile(ctx, tenant, "acme", issuanceKey, req.CSR, req.TTL, custody.OriginRequester, selectedProfile)
 	if err != nil {
 		return ca.Certificate{}, err
 	}
@@ -487,6 +589,21 @@ func (a protocolCAAdapter) Issue(ctx context.Context, req ca.IssueRequest) (ca.C
 		if err := a.issuer.attestDeviceCustody(ctx, tenant, info.SHA256Fingerprint, req.DeviceAttestation); err != nil {
 			return ca.Certificate{}, err
 		}
+	}
+	if upstreamChain != nil {
+		// A159: the profile's upstream CA issued the leaf; the order's chain is
+		// that CA's, not trstctl's served issuer.
+		issuerBlock, _ := pem.Decode(upstreamChain)
+		if issuerBlock == nil || issuerBlock.Type != "CERTIFICATE" {
+			return ca.Certificate{}, errors.New("server: the upstream CA returned no issuing certificate for the ACME chain")
+		}
+		if err := crypto.VerifyLeafSignedByCA(leafDER, issuerBlock.Bytes); err != nil {
+			return ca.Certificate{}, fmt.Errorf("server: ACME leaf does not chain to the upstream issuer: %w", err)
+		}
+		chainPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+		chainPEM = append(chainPEM, upstreamChain...)
+		chainPEM = append(chainPEM, '\n')
+		return ca.Certificate{CertificatePEM: chainPEM, Serial: info.SerialNumber, NotAfter: info.NotAfter, Issuer: info.Issuer}, nil
 	}
 	if len(a.caCertDER) == 0 {
 		return ca.Certificate{}, errors.New("server: ACME certificate chain has no served issuer")

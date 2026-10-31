@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2044 annotated sites across 29 rules. Each row is
+2047 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (418 sites)
+### G101 — CWE-798 Use of hardcoded credentials (419 sites)
 
 | Location | Reason |
 |---|---|
@@ -326,6 +326,7 @@ not this file.
 | `internal/risk/contextual_test.go:214` | fabricated identifier, not credential material (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/schedulerhistory/history_test.go:81` | deliberately toxic fixture proves closed parsing without echo (CWE-798). |
+| `internal/server/acme_adcs_upstream_served_test.go:125` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
 | `internal/server/acme_eab_rotation_served_test.go:40` | logical fixture name, not secret material (CWE-798) |
@@ -690,8 +691,8 @@ not this file.
 | `internal/server/ct_submission.go:449` | positive checked above (CWE-190) |
 | `internal/server/managedkeys_pkcs11_served_test.go:47` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/server/pam_served_test.go:720` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/server/protocol_mounts.go:1007` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
-| `internal/server/protocol_mounts.go:1009` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1017` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
+| `internal/server/protocol_mounts.go:1019` | DER lengths of certificates/keys are orders of magnitude under the uint32 bound (CWE-190) |
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:446` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:253` | bounded small ints from config (CWE-190) |
@@ -1250,7 +1251,7 @@ not this file.
 | `tools/trstctllint/repo_selftest_test.go:111` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/trstctllint/repo_selftest_test.go:177` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 
-### G301 — CWE-276 Incorrect default permissions (directory) (53 sites)
+### G301 — CWE-276 Incorrect default permissions (directory) (55 sites)
 
 | Location | Reason |
 |---|---|
@@ -1283,6 +1284,8 @@ not this file.
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/cmp/openssl_client_test.go:168` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
+| `internal/server/acme_adcs_upstream_served_test.go:119` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/acme_adcs_upstream_served_test.go:150` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/agentchannel_served_test.go:1553` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |
@@ -1782,10 +1785,10 @@ not this file.
 | `internal/server/plugins.go:199` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/plugins.go:203` | operator-configured plugin dir; WASM and signature are verified after the read (CWE-22) |
 | `internal/server/protect_correct102_guard_test.go:122` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `internal/server/protocol_mounts.go:727` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:842` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:959` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/protocol_mounts.go:1322` | operator-configured trust bundle path (CWE-22) |
+| `internal/server/protocol_mounts.go:737` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:852` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:969` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/protocol_mounts.go:1332` | operator-configured trust bundle path (CWE-22) |
 | `internal/server/protocols_served_spiffe_ssh_test.go:602` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:228` | test reads its own tempdir fixture (CWE-22) |
 | `internal/server/protocols_served_stock_clients_test.go:232` | test reads its own tempdir fixture (CWE-22) |

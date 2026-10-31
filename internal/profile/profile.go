@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/netip"
+	"regexp"
 	"strings"
 	"time"
 
@@ -58,6 +59,13 @@ type CertificateProfile struct {
 	// statement about the CA behind the profile; the validity-readiness report
 	// flags such a profile whose max_validity exceeds a step's maximum.
 	PublicTLS bool `json:"public_tls,omitempty"`
+
+	// UpstreamExternalCA routes protocol issuance under this profile (ACME,
+	// EST, SCEP, CMP) to a configured external CA, by its registry ID, instead
+	// of trstctl's own signer (A159): a standard protocol in front of an AD CS
+	// template, one template per external CA entry. The profile's checks still
+	// run first, and the upstream signs the client's CSR.
+	UpstreamExternalCA string `json:"upstream_external_ca,omitempty"`
 }
 
 // AllowsServerAuth reports whether the profile permits the serverAuth extended
@@ -133,6 +141,9 @@ func NormalizeACMEAuthMode(mode ACMEAuthMode) (ACMEAuthMode, error) {
 	}
 }
 
+// upstreamExternalCAPattern is the shape of an external CA registry ID.
+var upstreamExternalCAPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
 // ValidateSpec checks a serialized certificate profile before it is committed to
 // the event log. Served profile selection must reject unknown algorithm labels
 // here, before an unsupported policy can be listed or selected later.
@@ -159,6 +170,9 @@ func (p CertificateProfile) ValidateDefinition() error {
 	}
 	if p.PublicTLS && !p.AllowsServerAuth() {
 		return fmt.Errorf("%s: public_tls requires serverAuth in allowed_ekus", id)
+	}
+	if p.UpstreamExternalCA != "" && !upstreamExternalCAPattern.MatchString(p.UpstreamExternalCA) {
+		return fmt.Errorf("%s: upstream_external_ca must be an external CA registry ID", id)
 	}
 	for _, label := range p.AllowedKeyAlgorithms {
 		classification, err := crypto.ClassifyAlgorithmLabel(label)

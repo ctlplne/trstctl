@@ -62,6 +62,9 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 		if err := profile.ValidateSpec(req.Spec); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
 		}
+		if err := a.checkProfileUpstream(ctx, tenantID, req.Spec); err != nil {
+			return 0, nil, err
+		}
 		rec, err := a.orch.CreateProfile(ctx, tenantID, req.Name, req.Spec)
 		if err != nil {
 			var pending *orchestrator.ProfileEditPendingError
@@ -76,6 +79,29 @@ func (a *API) createProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		return http.StatusCreated, toProfileResponse(rec), nil
 	})
+}
+
+// checkProfileUpstream refuses a profile whose upstream_external_ca (A159) is
+// not an external CA configured for this tenant, so a typo cannot save a profile
+// whose protocol issuance would then fail closed.
+func (a *API) checkProfileUpstream(ctx context.Context, tenantID string, spec json.RawMessage) error {
+	var p profile.CertificateProfile
+	if err := json.Unmarshal(spec, &p); err != nil || strings.TrimSpace(p.UpstreamExternalCA) == "" {
+		return nil
+	}
+	if a.externalCAs == nil {
+		return errStatus(http.StatusUnprocessableEntity, "upstream_external_ca names an external CA, but this deployment configures none")
+	}
+	items, err := a.externalCAs.ListExternalCAs(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if item.ID == p.UpstreamExternalCA {
+			return nil
+		}
+	}
+	return errStatus(http.StatusUnprocessableEntity, "upstream_external_ca "+p.UpstreamExternalCA+" is not an external CA configured for this tenant")
 }
 
 func (a *API) listProfiles(w http.ResponseWriter, r *http.Request) {

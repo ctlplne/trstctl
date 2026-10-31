@@ -2908,6 +2908,7 @@ export interface CertificateProfileSpec {
   name?: string;
   public_tls?: boolean;
   requires_approval?: boolean;
+  upstream_external_ca?: string;
   version?: number;
 }
 

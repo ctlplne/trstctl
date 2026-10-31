@@ -27,6 +27,7 @@ interface BuilderFields {
   allowedEkus: string[];
   maxValidity: string;
   publicTLS: boolean;
+  upstreamExternalCA: string;
   allowedProtocols: string[];
   trustEABAccounts: boolean;
   allowedDnsSuffixes: string;
@@ -48,6 +49,7 @@ const defaultBuilder: BuilderFields = {
   allowedEkus: ["serverAuth"],
   maxValidity: "2160h",
   publicTLS: false,
+  upstreamExternalCA: "",
   allowedProtocols: ["api", "acme"],
   trustEABAccounts: false,
   allowedDnsSuffixes: "example.com",
@@ -360,6 +362,18 @@ function GuidedFields({ fields, onChange }: { fields: BuilderFields; onChange: (
           {translateNow("profiles.publicTLS.label")}
         </label>
         <p className="text-xs text-muted-foreground">{translateNow("profiles.publicTLS.hint")}</p>
+      </div>
+      <div className="space-y-1 text-sm">
+        <label className="space-y-1 font-medium">
+          <span>{translateNow("profiles.upstreamExternalCA.label")}</span>
+          <input
+            value={fields.upstreamExternalCA}
+            onChange={(e) => onChange({ ...fields, upstreamExternalCA: e.target.value })}
+            placeholder={translateNow("profiles.upstreamExternalCA.placeholder")}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          />
+        </label>
+        <p className="text-xs text-muted-foreground">{translateNow("profiles.upstreamExternalCA.hint")}</p>
       </div>
       <label className="space-y-1 text-sm font-medium">
         <span>{translateNow("source.allowed.dns.suffixes.c2747c3707")}</span>
@@ -826,6 +840,7 @@ function buildProfileSpec(fields: BuilderFields): ProfileSpec {
   if (fields.allowedEkus.length > 0) spec.allowed_ekus = fields.allowedEkus;
   if (fields.maxValidity.trim()) spec.max_validity = fields.maxValidity.trim();
   if (fields.publicTLS) spec.public_tls = true;
+  if (fields.upstreamExternalCA.trim()) spec.upstream_external_ca = fields.upstreamExternalCA.trim();
   if (fields.allowedProtocols.length > 0) spec.allowed_protocols = fields.allowedProtocols;
   if (fields.allowedProtocols.includes("acme") && fields.trustEABAccounts) {
     spec.acme_auth_mode = "trust_authenticated";

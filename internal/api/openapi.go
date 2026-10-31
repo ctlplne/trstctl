@@ -6660,6 +6660,7 @@ func componentSchemas() map[string]*Schema {
 		"allowed_uri_prefixes":    {Type: "array", Items: str()},
 		"acme_device_attestation": ref("ACMEDeviceAttestationPolicy"),
 		"public_tls":              {Type: "boolean", Description: "The profile issues publicly trusted TLS server certificates; requires serverAuth, and the validity-readiness report flags a max_validity over the CA/Browser Forum's dated maximum"},
+		"upstream_external_ca":    {Type: "string", Description: "Registry ID of a configured external CA (for example an AD CS template) that signs ACME, EST, SCEP and CMP enrollments under this profile after its checks pass; empty signs with trstctl's own CA"},
 	})
 	profile := object(map[string]*Schema{
 		"id": uuid(), "name": str(), "version": {Type: "integer"},
