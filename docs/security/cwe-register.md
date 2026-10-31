@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2007 annotated sites across 29 rules. Each row is
+2014 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -484,11 +484,12 @@ not this file.
 | `internal/agent/workloadapi/attest_darwin.go:65` | getsockopt fills a fixed-size audit token (CWE-242) |
 | `internal/agent/workloadapi/attest_darwin.go:121` | proc_info fills the caller's buffer (CWE-242) |
 
-### G107 — CWE-88 Argument injection (variable URL request) (11 sites)
+### G107 — CWE-88 Argument injection (variable URL request) (12 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/bootstrap_token_test.go:586` | loopback-only assembled test listener (CWE-918) |
+| `ee/auditcompliance/protected_archive_minio_fixture_test.go:55` | loopback URL of the container this test started (CWE-88) |
 | `internal/crypto/ctlog/sct_test.go:27` | loopback test log (CWE-918) |
 | `internal/crypto/ctlog/sct_test.go:45` | loopback test log (CWE-918) |
 | `internal/objectstore/minio_lock_test.go:56` | loopback URL of the container this test started (CWE-88) |
@@ -972,7 +973,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (250 sites)
+### G204 — CWE-78 OS command injection (253 sites)
 
 | Location | Reason |
 |---|---|
@@ -1024,6 +1025,9 @@ not this file.
 | `docs/lint_gate_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `docs/lint_supervision_test.go:19` | fixed supervision regression with owned scanner and child fixtures (CWE-78) |
 | `docs/vuln_gate_test.go:44` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
+| `ee/auditcompliance/protected_archive_minio_fixture_test.go:47` | test removes the container it started (CWE-78) |
+| `ee/auditcompliance/protected_archive_minio_fixture_test.go:48` | test inspects the container it started (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:142` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:147` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `ee/enterpriseauth/auth_ldap_served_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1337,7 +1341,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (559 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (562 sites)
 
 | Location | Reason |
 |---|---|
@@ -1735,6 +1739,9 @@ not this file.
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
 | `internal/server/est_mtls_reenroll_served_test.go:150` | test reads its own tempdir path (CWE-22) |
+| `internal/server/event_protection_backup_missing_custody_test.go:23` | exact artifact in this test's owned fixture (CWE-22) |
+| `internal/server/event_protection_backup_missing_custody_test.go:33` | exact artifact in this test's owned fixture (CWE-22) |
+| `internal/server/event_protection_backup_missing_custody_test.go:49` | exact original artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_postgres_backup_served_test.go:35` | exact artifact in this test's owned backup directory (CWE-22) |
 | `internal/server/external_poller_boundary_test.go:16` | name comes only from the closed literal source-file list above (CWE-22) |
 | `internal/server/host_agent_remote_served_test.go:153` | parent-created test fixture path (CWE-22) |
@@ -2117,11 +2124,12 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (12 sites)
+### G702 — CWE-78 OS command injection (taint) (13 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/selfrestart_unix.go:23` | re-exec of this process's OWN executable path with its own args; the binary at that path was just digest-verified against the campaign's pinned sha256 (CWE-78) |
+| `ee/auditcompliance/protected_archive_minio_fixture_test.go:42` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/agent/discovery/pkcs11_softhsm_real_test.go:41` | fixed test-harness invocation of the OpenSC tool; the module path, token label and PIN come from the container harness environment, not from a request (CWE-78) |
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |

@@ -503,8 +503,20 @@ bound together. Local real-PostgreSQL tests cover active recovery and old-cache
 recovery after actual independent key removal. Restore checks owners before SQL;
 a verified-erased cache falls back to current source, then only its exact generation
 is discarded. Neighbor data, saved artifact bytes and the original removal receipt
-remain intact. Legacy external plaintext copies stay readable; public activation,
-managed archives and the complete operator workflow are still pending.
+remain intact. Legacy external plaintext copies stay readable; public activation
+and the complete operator workflow are still pending.
+
+The existing licensed retention worker also has a real Object Lock component
+test with PostgreSQL, NATS and independent file custody. A fetched archive's
+protected fields open before removal. After signed removal and signerless custody
+reopening, its original version, bytes, signature, chain and retention deadline
+stay intact, while those fields cannot open. A separately keyed neighbor remains
+readable and a later archive continues the same chain. This uses explicit local
+admission, destruction and artifact-signing fixtures; production authorization,
+the complete operator workflow and final-image qualification remain pending.
+The actual full-backup entry point separately refuses retained activated history
+when custody configuration is missing, before completing an independent SQL
+artifact. That test preserves the original encrypted backup unchanged.
 
 An explicit public JWKS file can retain destruction-evidence verification after
 signer rotation. It is loaded independently of data restore, with the same trust

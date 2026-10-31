@@ -321,6 +321,12 @@ signer-handle denial row still counts as applied; erasure cannot make its old
 handle reclaimable. Legacy plaintext remains readable in the original artifact,
 even when its retired registration is suppressed on import.
 
+Full capture of retained activated history requires its configured current
+custodian. A native full-backup test removes that configuration only for a new
+capture: source-authority verification refuses, no complete manifest is written,
+and the original protected SQL artifact is unchanged. Keyless copying and
+structural verification of protected event bytes remain separate operations.
+
 The local protected restore tests use explicit opt-in/manifest fixtures and the
 shipped CA/audit signer child in Mac evaluation mode. Public opt-in controls,
 managed archives and a complete operator/image replay remain
@@ -336,6 +342,14 @@ floor rejects older caches, including v66, and rebuilds from source. The origina
 external plaintext or ciphertext artifact is unchanged. Local active/erased cache
 tests are additional recovery evidence, not a public activation or final-image
 operator proof.
+
+The existing licensed audit-retention worker has additional real MinIO Object
+Lock evidence. After independent signed key removal and signerless custody
+reopening, original archive bytes, version, public verification and retention
+deadline remain intact; the protected fields cannot open and a separately keyed
+neighbor still opens. A later archive continues the original chain. This is a
+component composition with local admission/destruction/signing fixtures, not a
+complete production offboard or operator/image restore proof.
 
 Restore a full artifact into a **fresh, empty** event store and a migrated empty
 PostgreSQL instance:

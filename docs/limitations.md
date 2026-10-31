@@ -1807,7 +1807,21 @@ requires source reconstruction; only then is its exact unusable generation remov
 The neighbor, saved snapshot bytes and original destruction evidence remain intact.
 Formats 21 and 66 cannot advance a cold restore. Pre-feature external plaintext
 copies remain readable. Chunk tampering and authenticated-opening fuzz tests do not
-establish public activation, managed WORM archives or final-image qualification.
+establish public activation or final-image qualification.
+
+The existing licensed audit-retention worker now has a separate real Object Lock
+component test. It writes protected records to MinIO, fetches the exact version
+independently, verifies its signature and chain, and opens the original ciphertext
+before removal. Signed removal and signerless custody reopening leave the original
+bytes, version and retention deadline unchanged, with deletion still refused.
+Protected fields cannot open afterward; a separately keyed neighbor remains
+readable and a later archive continues the original chain. Admission, destruction
+and artifact signing are explicit local fixtures. This does not qualify production
+offboard authorization/outbox, isolated signing or the final operator/image journey.
+The actual full-backup entry point also has a missing-custody regression: retained
+activation refuses with a source-authority error and no complete manifest, while
+the original encrypted SQL artifact remains unchanged. No additional production
+guard was needed for that case.
 
 That is the limit of what tenant offboarding deletes — it is not a promise that
 the append-only event log or a signed audit archive disappears when a tenant is
