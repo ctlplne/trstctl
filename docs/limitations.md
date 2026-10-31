@@ -1743,9 +1743,13 @@ independent key absence select only the retired lifetime for omission from core
 and optional projections. The original source bytes, record count, checkpoint,
 receipt and neighboring tenant remain intact. Private secret lifecycle preflights
 use the same reconstruction view. This does not prove a full authenticated backup
-or snapshot restore. Public operator controls, warm catch-up, interrupted-journal
-restart recovery, protected backup/archive artifacts and complete erasure-aware
-restore are not served yet.
+or snapshot restore. Warm catch-up and ordered tail also have local tests after
+removal, with exact source metadata/current-custody checks and truthful checkpoints.
+Separate active-key tests cover catch-up, a direct idle tail and protected publication
+through the existing bounded served retry loop. These use local request/signing
+fixtures, not an isolated-process or final-image proof. Public operator controls,
+interrupted-journal restart recovery, protected backup/archive artifacts and
+complete erasure-aware restore are not served yet.
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
 that component proof does not establish complete authenticated backup restore.

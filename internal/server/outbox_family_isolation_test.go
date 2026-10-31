@@ -213,7 +213,24 @@ func TestOutboxConnectorSaturationDoesNotStarveOtherFamilies(t *testing.T) {
 // quiescent. We retry only PostgreSQL lock_not_available within the caller's strict
 // deadline. The connector handlers remain blocked throughout, so a transaction held
 // across their external I/O can never clear and still fails this probe.
-func acquireOutboxExclusiveProbeLock(ctx context.Context, st *store.Store) (pgx.Tx, error) {
+func acquireOutboxExclusiveProbeLock(ctx context.Context, st *store.Store) (resultTx pgx.Tx, resultErr error) {
+	// The driver can reach its socket deadline before the context timer callback
+	// runs. Preserve both the transport error and the caller's exhausted budget;
+	// do not retry unrelated errors or extend this probe's strict deadline.
+	defer func() {
+		if resultErr == nil {
+			return
+		}
+		cause := ctx.Err()
+		if cause == nil {
+			if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
+				cause = context.DeadlineExceeded
+			}
+		}
+		if cause != nil && !errors.Is(resultErr, cause) {
+			resultErr = errors.Join(resultErr, cause)
+		}
+	}()
 	for {
 		tx, err := st.SystemPool().Begin(ctx)
 		if err != nil {

@@ -102,3 +102,28 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 		return p.validateSecretSyncRetainedHistory(read, log, true, false)
 	})
 }
+
+// retainedSourceErased makes only the omission decision under a short-lived
+// history/custody check. Normal Apply and checkpoint SQL run after it returns,
+// preserving their existing projection lock order. No decision survives a message.
+func (p *Projector) retainedSourceErased(ctx context.Context, log *events.Log, event events.Event) (bool, error) {
+	planner := p.eventProtectionErasurePlanner
+	if planner == nil || planner.Custody == nil {
+		return false, nil
+	}
+	if planner.Policy.Log != log {
+		return false, eventprivacy.ErrSource
+	}
+	var erased bool
+	err := planner.WithRetainedSource(ctx, event, func(_ context.Context, omit bool) error {
+		if !omit {
+			return nil
+		}
+		if err := ValidateSchemaVersion(event); err != nil {
+			return err
+		}
+		erased = true
+		return nil
+	})
+	return erased, err
+}

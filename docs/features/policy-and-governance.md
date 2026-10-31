@@ -458,7 +458,10 @@ and a later registration. Reconstruction omits only the retired lifetime after
 checking its original signed receipt and current key absence; encrypted source
 bytes, raw counts, checkpoints and neighbor state remain intact. This is source
 reconstruction proof, not full authenticated backup or snapshot restore. Warm
-catch-up still needs that same protection before the workflow is available. Public controls,
+catch-up and tail now have local erasure and active-key controls. The tail makes
+fresh source/current-custody checks per message, preserves the ordered checkpoint
+and uses its existing bounded service retry loop during protected publication.
+Public controls,
 interrupted-journal startup recovery and the full backup/restore journey are
 still required; this is not a served opt-in workflow.
 An explicit public JWKS file can retain destruction-evidence verification after

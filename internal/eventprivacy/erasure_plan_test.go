@@ -54,6 +54,7 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = custody.Close() })
+	checkedCustody := &changingPlanCustody{ErasurePlanCustody: custody}
 	policy := eventprivacy.SourcePolicy{Trust: key.JWKS()}
 	admission := &eventprivacy.SourceAdmission{Policy: policy, Guard: planFixtureTenantGuard{}, Custody: custody}
 	reader := &eventprivacy.SourceKeys{Policy: policy, Custody: custody}
@@ -120,6 +121,17 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	if bytes.Contains(raw.Bytes(), []byte("old-private@example.invalid")) {
 		t.Fatal("fixture source did not encrypt private data")
 	}
+	livePlanner := eventprivacy.ErasurePlanner{Policy: policy, Custody: checkedCustody}
+	activeFlag := private
+	activeFlag.SensitiveErased = true
+	if err := livePlanner.WithRetainedSource(t.Context(), activeFlag, func(_ context.Context, omit bool) error {
+		if omit || checkedCustody.depth.Load() != 0 {
+			t.Fatal("active source was omitted or callback held extra custody lock")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	appendSource(t, source, "erasure-plan-offboard", "tenant.offboarded", time.Now().UTC(), struct {
 		RowsDeleted int `json:"rows_deleted"`
 	}{0})
@@ -137,7 +149,6 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 	newest := appendSource(t, source, "erasure-plan-new-lifetime", "tenant.registered", time.Now().UTC(), struct {
 		Name string `json:"name"`
 	}{"current fixture"})
-	checkedCustody := &changingPlanCustody{ErasurePlanCustody: custody}
 	planner := eventprivacy.ErasurePlanner{Policy: policy, Custody: checkedCustody}
 	if err := planner.WithPlan(t.Context(), func(_ context.Context, plan *eventprivacy.ErasurePlan) error {
 		if !planSkips(t, plan, private) || !planSkips(t, plan, registration) || planSkips(t, plan, newest) || planSkips(t, plan, other) {
@@ -151,6 +162,83 @@ func TestErasurePlanUsesCurrentReceiptForOlderSourceCutAndPreservesNewLifetime(t
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		name  string
+		event events.Event
+		want  bool
+	}{
+		{"private", private, true}, {"plaintext-registration", registration, true}, {"new-lifetime", newest, false}, {"neighbor", other, false},
+	} {
+		t.Run("retained-"+check.name, func(t *testing.T) {
+			called := false
+			if err := planner.WithRetainedSource(t.Context(), check.event, func(_ context.Context, omit bool) error {
+				called = true
+				if omit != check.want {
+					t.Fatal("retained source crossed lifetime or tenant boundary")
+				}
+				if omit && checkedCustody.depth.Load() != 1 {
+					t.Fatal("retained omission escaped custody fence")
+				}
+				return nil
+			}); err != nil || !called {
+				t.Fatalf("retained source callback missing: %v", err)
+			}
+		})
+	}
+	flagOnly := other
+	flagOnly.SensitiveErased = true
+	if err := planner.WithRetainedSource(t.Context(), flagOnly, func(_ context.Context, omit bool) error {
+		if omit {
+			t.Fatal("caller erased flag granted omission")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for name, change := range map[string]func(*events.Event){
+		"id":     func(e *events.Event) { e.ID += "changed" },
+		"type":   func(e *events.Event) { e.Type = "fixture.changed" },
+		"time":   func(e *events.Event) { e.Time = e.Time.Add(time.Nanosecond) },
+		"schema": func(e *events.Event) { e.SchemaVersion++ },
+		"tenant": func(e *events.Event) { e.TenantID = neighbor },
+		"key": func(e *events.Event) {
+			p := *e.Protection
+			p.KeyID = "a6fa418b-7358-4601-92b2-5c67d24d6556"
+			e.Protection = &p
+		},
+		"sequence": func(e *events.Event) { e.Sequence = newest.Sequence + 1 },
+	} {
+		t.Run("changed-retained-"+name, func(t *testing.T) {
+			candidate := private
+			change(&candidate)
+			called := false
+			if err := planner.WithRetainedSource(t.Context(), candidate, func(context.Context, bool) error { called = true; return nil }); err == nil || called {
+				t.Fatal("changed or unavailable source reached omission callback")
+			}
+		})
+	}
+	checkedCustody.reject.Store(true)
+	called := false
+	err = planner.WithRetainedSource(t.Context(), private, func(context.Context, bool) error { called = true; return nil })
+	checkedCustody.reject.Store(false)
+	if err == nil || called {
+		t.Fatal("retained source accepted unavailable current custody")
+	}
+	canceledRetained, cancelRetained := context.WithCancel(t.Context())
+	cancelRetained()
+	if err := planner.WithRetainedSource(canceledRetained, private, func(context.Context, bool) error { t.Fatal("canceled retained callback ran"); return nil }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("retained source lost cancellation: %v", err)
+	}
+	missingRetained := planner
+	missingRetained.Custody = nil
+	called = false
+	if err := missingRetained.WithRetainedSource(t.Context(), private, func(context.Context, bool) error { called = true; return nil }); err == nil || called {
+		t.Fatal("missing retained custody granted omission")
+	}
+	visitorErr := errors.New("retained visitor refused")
+	if err := planner.WithRetainedSource(t.Context(), private, func(context.Context, bool) error { return visitorErr }); !errors.Is(err, visitorErr) {
+		t.Fatalf("retained source hid callback failure: %v", err)
 	}
 	if err := source.Close(); err != nil {
 		t.Fatal(err)

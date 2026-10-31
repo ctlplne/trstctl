@@ -101,5 +101,13 @@ plan expires on callback return and rechecks current absence under one custody
 fence per omission. Core and optional projection preflights use that view; raw
 source, audit commitments and backup record counts do not. An activation-containing
 older source cut may omit a later-erased lifetime without inventing its offboard
-event. Pre-feature plaintext remains unchanged. Full backup/snapshot restore and
-warm catch-up still require their own integration proof.
+event. Pre-feature plaintext remains unchanged.
+
+Warm catch-up installs the same finite view before preflight and extension replay.
+The infinite tail instead verifies each message's exact retained metadata and
+one finite tenant lifetime against current signed absence. It caches no erasure
+grant and retains no additional history or custody fence for the worker's lifetime.
+Ordinary Apply and checkpoint SQL run after the additional decision callback
+releases its locks. The served driver's existing bounded pool and retry loop remain
+unchanged. Local controls cover active and erased keys; full backup/snapshot and
+isolated process restoration still need their own proof.

@@ -9494,17 +9494,21 @@ func (p *Projector) ProjectCatchUp(ctx context.Context, log *events.Log) error {
 }
 
 func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *events.Log) error {
+	return p.store.WithProjectionLock(ctx, func(locked context.Context) error {
+		return p.withErasedHistory(locked, log, func(read context.Context) error {
+			return p.projectCatchUpFromPlannedHistory(read, log)
+		})
+	})
+}
+
+func (p *Projector) projectCatchUpFromPlannedHistory(ctx context.Context, log *events.Log) error {
 	if err := p.validateSecretSyncRetainedHistory(ctx, log, true, true); err != nil {
 		return err
 	}
-	// Serialize the catch-up across replicas under the projection advisory lock
-	// (RESIL-004): N replicas booting at once each run this, and without
-	// coordination they would reset/replay extension state and replay into the
-	// same core read-model tables concurrently. Inside that lock, one history
-	// generation and inclusive head cover BOTH passes. An event appended while
-	// extensions rebuild is therefore either in both passes or beyond the saved
-	// checkpoint for the next catch-up/tailer; it can never land in core alone.
-	if err := p.store.WithProjectionLock(ctx, func(ctx context.Context) error {
+	// The caller already owns the projection advisory lock and one finite
+	// current-custody verified history view. Preflights, optional projections,
+	// core replay and final validation must all consume this same cut.
+	if err := p.withErasedHistory(ctx, log, func(ctx context.Context) error {
 		externalIssuer, err := p.externalIssuerProvenanceNeedsRebuild(ctx, log)
 		if err != nil {
 			return fmt.Errorf("projections: inspect external issuer provenance: %w", err)

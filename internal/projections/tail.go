@@ -85,11 +85,17 @@ func (w *TailWorker) Run(ctx context.Context) error {
 	if err := w.syncAppliedCheckpoint(ctx); err != nil {
 		return err
 	}
-	secretAuthority, err := classifySecretSyncLifecycle(ctx, w.log)
-	if err != nil {
-		return w.persistEnvelopeDecodeFailure(ctx, err)
-	}
-	dynamicSecretAuthority, err := classifyDynamicSecretLifecycle(ctx, w.log)
+	var secretAuthority *secretSyncLifecycleAuthority
+	var dynamicSecretAuthority *dynamicSecretLifecycleAuthority
+	err := w.proj.withErasedHistory(ctx, w.log, func(read context.Context) error {
+		var inspectErr error
+		secretAuthority, inspectErr = classifySecretSyncLifecycle(read, w.log)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		dynamicSecretAuthority, inspectErr = classifyDynamicSecretLifecycle(read, w.log)
+		return inspectErr
+	})
 	if err != nil {
 		return w.persistEnvelopeDecodeFailure(ctx, err)
 	}
@@ -110,6 +116,17 @@ func (w *TailWorker) Run(ctx context.Context) error {
 		sampler.Wait()
 	}()
 	tailErr := w.log.TailFrom(runCtx, w.proj.store.ProjectionCheckpoint, func(e events.Event) error {
+		erased, err := w.proj.retainedSourceErased(runCtx, w.log, e)
+		if err != nil {
+			return w.persistFailure(runCtx, e.Sequence, err)
+		}
+		if erased {
+			if err := w.proj.AdvanceCheckpoint(runCtx, e.Sequence); err != nil {
+				return w.persistFailure(runCtx, e.Sequence, err)
+			}
+			w.applied.Store(e.Sequence)
+			return nil
+		}
 		skip, err := secretAuthority.skip(e)
 		if err != nil {
 			return w.persistFailure(runCtx, e.Sequence, err)

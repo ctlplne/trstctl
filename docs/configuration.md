@@ -1068,10 +1068,14 @@ It omits a retired lifetime only when its retained activation matches the origin
 signed removal and the current custodian independently confirms key absence.
 An older source cut containing that activation can use the same current evidence;
 rebuild never appends missing offboard records or recreates a historical key.
-Later registrations and neighboring tenants remain independent. These tests do
-not establish complete authenticated backup or snapshot restoration. Public
-enable controls, warm catch-up, interrupted-journal startup recovery and protected
-artifacts still need the complete opt-in workflow.
+Later registrations and neighboring tenants remain independent. Local tests also
+cover warm catch-up and the ordered tail after removal. Catch-up uses one verified
+finite view before its preflights and optional projections. The tail checks each
+message against retained source metadata and current custody; its existing served
+driver owns bounded retries. Active-key replay and protected publication have
+separate controls. These tests do not establish complete authenticated backup or
+snapshot restoration. Public enable controls, interrupted-journal startup recovery
+and protected artifacts still need the complete opt-in workflow.
 
 ## Provider workforce identity and customer access
 
