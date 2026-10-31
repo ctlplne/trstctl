@@ -439,6 +439,13 @@ source, not the readable companion. Legacy records retain their existing shape.
 This read contract does not enable event-key protection; its production setup
 and complete restore proof remain [under development](../limitations.md#tenant-offboarding-boundary).
 
+The [independent custody setting](../configuration.md#independent-event-key-custody)
+is default-off. Startup and recovery attach its readers before opening source
+history, and the key directory must sit outside managed backup sources and
+destinations. Configuring it enables no tenant and supplies no missing historical
+key. Operator activation and the complete erasure-aware restore workflow remain
+required before the opt-in feature is available.
+
 For a protected record, native collector requests keep searchable actor/data
 fields separate from the encrypted commitment. HEC uses `signed_record` and
 `hash_scope: "signed_record"`; Sentinel uses `SignedRecord` and

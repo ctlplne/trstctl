@@ -2215,9 +2215,10 @@ func (a Audit) RetentionDuration() (time.Duration, error) {
 	return time.ParseDuration(a.Retention)
 }
 
-// Privacy configures personal-data controls outside the audit log.
+// Privacy configures personal-data retention and opt-in event-key custody.
 type Privacy struct {
-	Retention PrivacyRetention `json:"retention"`
+	Retention       PrivacyRetention `json:"retention"`
+	EventProtection EventProtection  `json:"event_protection,omitempty"`
 }
 
 // PrivacyRetention configures non-audit PII retention. Empty windows use the
@@ -3726,6 +3727,7 @@ func applyBackupEnv(getenv func(string) string, b *Backup) {
 }
 
 func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
+	setString(getenv, "TRSTCTL_PRIVACY_EVENT_PROTECTION_KEY_DIRECTORY", &privacy.EventProtection.KeyDirectory)
 	setBool(getenv, "TRSTCTL_PRIVACY_RETENTION_ENABLED", &privacy.Retention.Enabled)
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_INTERVAL", &privacy.Retention.Interval)
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_OWNERS", &privacy.Retention.Owners)
@@ -4415,6 +4417,7 @@ func validateOptionalServices(c *Config) []error {
 	if _, _, err := c.Backup.DrillObjectiveDurations(); err != nil {
 		errs = append(errs, fmt.Errorf("backup recovery objectives are invalid: %w", err))
 	}
+	errs = append(errs, validateEventProtection(c.Privacy.EventProtection)...)
 	if d, err := c.Privacy.Retention.IntervalDuration(); err != nil {
 		errs = append(errs, fmt.Errorf("privacy.retention.interval %q is invalid: %w", c.Privacy.Retention.Interval, err))
 	} else if c.Privacy.Retention.Enabled && d < 0 {

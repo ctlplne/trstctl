@@ -121,7 +121,8 @@ type IdempotencyResultMigrator interface {
 }
 
 type Deps struct {
-	FIPSRequired bool // resolved, fail-closed control-plane startup assertion
+	eventProtection *eventProtectionRuntime // owned by the opened source, never recreated by Build
+	FIPSRequired    bool                    // resolved, fail-closed control-plane startup assertion
 	// TenantAuthFactory is supplied only by the licensed tenant-auth attach seam.
 	TenantAuthFactory editionseam.TenantAuthFactory
 	// AuditComplianceFactory is attached only for licensed audit compliance.
@@ -1372,6 +1373,9 @@ func reconcileCrashFences(ctx context.Context, d Deps, a *api.API, orch *orchest
 func catchUpReadModel(ctx context.Context, d Deps) (*projections.Projector, error) {
 	options := append([]projections.Option(nil), d.LicensedProjectionOptions...)
 	options = append(options, ownershipProjectionOptions(d.OwnershipAttestationCadence)...)
+	if d.eventProtection != nil {
+		options = append(options, d.eventProtection.projectionOptions()...)
+	}
 	if d.AuditSigningKey != nil {
 		options = append(options, projections.WithRestoreDrillVerificationKeys(d.AuditSigningKey.JWKS()))
 	}

@@ -51,6 +51,7 @@ func recoveryProjectionOptions(
 	log *events.Log,
 	auditKey *jose.SigningKey,
 	factories []EditionProjectionOptionsFactory,
+	extra ...projections.Option,
 ) ([]projections.Option, error) {
 	if auditKey == nil {
 		return nil, errors.New("recovery requires the restored audit signing key to verify restore-drill history")
@@ -63,6 +64,7 @@ func recoveryProjectionOptions(
 	// Core options must not depend on the presence of an edition factory.
 	options := ownershipProjectionOptions(cadence)
 	options = append(options, projections.WithRestoreDrillVerificationKeys(auditKey.JWKS()))
+	options = append(options, extra...)
 	if len(factories) == 0 {
 		return options, nil
 	}
@@ -175,12 +177,11 @@ func RunBackup(ctx context.Context, cfg *config.Config, path string) (int, error
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, err := openSanitizedHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, []string{path})
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	defer func() { _ = log.Close() }()
 
 	// Event-only backup writes no postgres artifact, so the identity itself is
@@ -336,12 +337,11 @@ func RunFullBackup(ctx context.Context, cfg *config.Config, dir string) (backup.
 	if err := requireFullBackupSignerCustody(cfg.Signer.KeyStoreDir, issuingCAHandle, "audit-export"); err != nil {
 		return backup.FullManifest{}, err
 	}
-	log, err := openSanitizedHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, []string{dir})
 	if err != nil {
 		return backup.FullManifest{}, fmt.Errorf("open event log for full backup: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	defer func() { _ = log.Close() }()
 
 	var (
@@ -585,13 +585,11 @@ func restoreEventLog(
 		return 0, fmt.Errorf("configure authenticated backup restore authority: %w", err)
 	}
 	defer restoreAuthorizer.Destroy()
-	log, err := openHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey,
-		events.WithBackupRestoreAuthorizer(restoreAuthorizer),
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, false, []string{path}, events.WithBackupRestoreAuthorizer(restoreAuthorizer))
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	defer func() { _ = log.Close() }()
 	// Restore is the only production ingress allowed to see an artifact-bound
 	// raw prefix. Install the live floor immediately, but do not sanitize that
@@ -650,7 +648,7 @@ func restoreEventLog(
 	); err != nil {
 		return n, fmt.Errorf("sanitize restored scheduler history before rebuild: %w", err)
 	}
-	if err := rebuildRestoredReadModel(ctx, cfg, st, log, auditKey, rebuildLabel, factories); err != nil {
+	if err := rebuildRestoredReadModel(ctx, cfg, st, log, auditKey, rebuildLabel, factories, protection.projectionOptions()...); err != nil {
 		return n, err
 	}
 	return n, nil
@@ -667,8 +665,9 @@ func rebuildRestoredReadModel(
 	auditKey *jose.SigningKey,
 	label string,
 	factories []EditionProjectionOptionsFactory,
+	extra ...projections.Option,
 ) error {
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories)
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories, extra...)
 	if err != nil {
 		return err
 	}
@@ -817,14 +816,13 @@ func runFullRestore(
 		return result, fmt.Errorf("audit signing key for final full-restore rebuild: %w", err)
 	}
 	defer signerRuntime.Close()
-	log, err := openSanitizedHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, []string{dir})
 	if err != nil {
 		return result, fmt.Errorf("open event log for final full-restore rebuild: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	defer func() { _ = log.Close() }()
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories)
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories, protection.projectionOptions()...)
 	if err != nil {
 		return result, err
 	}
@@ -1056,12 +1054,11 @@ func RunRebuild(ctx context.Context, cfg *config.Config, factories ...EditionPro
 		return 0, err
 	}
 	defer signerRuntime.Close()
-	log, err := openSanitizedHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, nil)
 	if err != nil {
 		return 0, fmt.Errorf("open event log: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	defer func() { _ = log.Close() }()
 
 	// Count what we replay so the operator gets a concrete confirmation.
@@ -1069,7 +1066,7 @@ func RunRebuild(ctx context.Context, cfg *config.Config, factories ...EditionPro
 	if err := log.Replay(ctx, 0, func(events.Event) error { n++; return nil }); err != nil {
 		return 0, fmt.Errorf("count event log: %w", err)
 	}
-	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories)
+	options, err := recoveryProjectionOptions(ctx, cfg, st, log, auditKey, factories, protection.projectionOptions()...)
 	if err != nil {
 		return 0, err
 	}

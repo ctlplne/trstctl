@@ -142,12 +142,11 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 		return err
 	}
 	defer runSigner.Close()
-	log, err := openSanitizedHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, nil)
 	if err != nil {
 		return fmt.Errorf("open event log: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	serverOwnsLog := false
 	defer func() {
 		if !serverOwnsLog {
@@ -159,6 +158,7 @@ func RunWithExtraMigrations(ctx context.Context, cfg *config.Config, extraMigrat
 	if err != nil {
 		return err
 	}
+	deps.eventProtection = protection
 	if archiveStore != nil {
 		deps.ArchiveObjectStore = archiveStore
 	}

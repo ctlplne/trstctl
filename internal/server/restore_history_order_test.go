@@ -21,7 +21,10 @@ func TestRestoreResumesExactHistoryBeforeSchedulerSanitation(t *testing.T) {
 		t.Fatal("restoreEventLog source boundaries changed")
 	}
 	body = body[start : start+end]
-	open := strings.Index(body, "openHistoryAwareEventLog(")
+	// The configured wrapper must select raw history and retain the exact
+	// authenticated restore authority. The normal constructor below still owns
+	// the pending-restore-before-sanitation guard for every ordinary open.
+	open := strings.Index(body, "openConfiguredEventSource(ctx, cfg, st, auditKey, false, []string{path}, events.WithBackupRestoreAuthorizer(restoreAuthorizer))")
 	floor := strings.Index(body, "EnforceLegacySchedulerWriteFloor()")
 	restore := strings.Index(body, "backup.RestoreLogWithKey(")
 	pending := strings.Index(body, "RequireNoPendingBackupRestore(")
@@ -34,6 +37,20 @@ func TestRestoreResumesExactHistoryBeforeSchedulerSanitation(t *testing.T) {
 	}
 	if open >= floor || floor >= restore || restore >= pending || pending >= sanitize {
 		t.Fatalf("restore order = open:%d floor:%d exact:%d pending:%d sanitize:%d", open, floor, restore, pending, sanitize)
+	}
+	wrapper, err := os.ReadFile("event_protection_source.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	constructor := string(wrapper)
+	options := strings.Index(constructor, "options := append(protection.openOptions(), extra...)")
+	branch := strings.Index(constructor, "if sanitized {")
+	normal := strings.Index(constructor, "openSanitizedHistoryAwareEventLog(")
+	raw := strings.Index(constructor, "} else {\n\t\tlog, err = openHistoryAwareEventLog(")
+	if options < 0 || branch <= options || normal <= branch || raw <= normal ||
+		strings.Count(constructor, "openSanitizedHistoryAwareEventLog(") != 1 ||
+		strings.Count(constructor, "openHistoryAwareEventLog(") != 1 {
+		t.Fatal("configured source must attach protection before opening, and false must select only unsanitized history")
 	}
 }
 

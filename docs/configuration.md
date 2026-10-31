@@ -1016,6 +1016,25 @@ Operators can trigger and inspect the same served path with
 `POST /api/v1/privacy/retention-runs`, `GET /api/v1/privacy/retention-runs`, or
 the matching `trstctl privacy retention run/list` CLI commands.
 
+### Independent event-key custody
+
+`privacy.event_protection.key_directory`, or
+`TRSTCTL_PRIVACY_EVENT_PROTECTION_KEY_DIRECTORY`, supplies an independent software
+custody directory. It defaults to empty and requires an absolute path without
+surrounding whitespace. Setting it does not enable protection for any tenant;
+the complete opt-in offboarding workflow remains
+[under development](limitations.md#tenant-offboarding-boundary).
+
+Keep this directory outside the event log, PostgreSQL data, signer keys and
+authorization secret, audit signing key and archives, CA certificate, secrets KEK,
+and configured or explicitly selected backup destinations. Startup and recovery
+reject overlapping paths. The control plane attaches the configured custodian
+before opening event history, and backup, restore and rebuild use the same
+constructor. Protected reads fail when their current custody is unavailable.
+The directory must
+remain available until the source and its workers have stopped; changing custody
+requires a restart.
+
 ## Provider workforce identity and customer access
 
 The Provider plane is a different privilege domain from tenant login. OIDC or

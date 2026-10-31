@@ -138,12 +138,11 @@ func RunTokenCreate(ctx context.Context, cfg *config.Config, opts TokenCreateOpt
 		return nil, fmt.Errorf("bootstrap: audit signing key: %w", err)
 	}
 	defer signerRuntime.Close()
-	log, err := openSanitizedHistoryAwareEventLog(
-		ctx, cfg.NATS, st, auditKey, cfg.Secrets.SecretRotationHistoryFleetReady,
-	)
+	log, protection, err := openConfiguredEventSource(ctx, cfg, st, auditKey, true, nil)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: open event log: %w", err)
 	}
+	defer func() { _ = protection.Close() }()
 	defer func() { _ = log.Close() }()
 
 	kek, err := secrets.LoadOrCreateKEK(cfg.Secrets.KEKFile)

@@ -1725,8 +1725,10 @@ and durable receiver components have local tests. Audit search exposes separate
 readable companions in the API, CLI and console, with explicit erased and
 unavailable states; signed records remain encrypted. Collector commands also keep
 protected records encrypted and resolve current readable details at delivery,
-with a separate source commitment. Production startup, operator
-controls, protected backup/archive artifacts and restore are not served yet.
+with a separate source commitment. Startup and recovery now attach configured
+custody before source opens; setting the directory enables no tenant. Operator
+controls, background key workers, protected backup/archive artifacts and complete
+erasure-aware restore are not served yet.
 The current offboarding and retention boundaries below continue to apply.
 
 That is the limit of what tenant offboarding deletes — it is not a promise that
