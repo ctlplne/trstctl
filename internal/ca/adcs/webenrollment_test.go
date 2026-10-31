@@ -57,3 +57,26 @@ func TestWebEnrollmentTransportSubmitsAndRetrieves(t *testing.T) {
 		}
 	}
 }
+
+// A161: a denial page keeps only an allowlisted refusal code; anything else on
+// the page (an IIS echo of a submitted credential, for example) never crosses.
+func TestWebEnrollmentDenialCarriesOnlyAnAllowlistedCode(t *testing.T) {
+	for name, tc := range map[string]struct {
+		page, want string
+	}{
+		"template permissions": {"<P>Denied by Policy Module 0x80094012, The permissions on the certificate template do not allow the current user to enroll.</P>", "ADCS denied the request (0x80094012)"},
+		"echoed secret":        {"<P>Your request was denied. Authorization: Basic c3ZjOmh1bnRlcjI=</P>", "ADCS denied the request"},
+	} {
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"text/html"}}, Body: io.NopCloser(strings.NewReader(tc.page))}, nil
+		})}
+		transport, err := NewWebEnrollmentTransport(WebEnrollmentConfig{BaseURL: "https://adcs.example/certsrv", HTTPClient: client})
+		if err != nil {
+			t.Fatal(err)
+		}
+		sub, err := transport.Submit(context.Background(), `HOST\CA`, "WebServer", []byte("csr-der"))
+		if err != nil || sub.Disposition != DispDenied || sub.StatusMessage != tc.want {
+			t.Errorf("%s: Submit = %+v, %v; want message %q", name, sub, err, tc.want)
+		}
+	}
+}

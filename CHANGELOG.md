@@ -2,6 +2,10 @@
 
 ### Added
 
+- AD CS issuer health: `GET /api/v1/adcs/issuers/health` (CLI `trstctl adcs issuers health`, console
+  Posture → AD CS issuers) reports healthy, degraded, failing or idle for each AD CS issuer from its
+  recorded issuances and diagnosed refusals, with the latest cause and remediation. AD CS template
+  permission denials (0x80094012) are now diagnosed as such instead of unknown.
 - "Modernize this template": an inventoried AD CS template becomes a trstctl profile with its
   risky properties removed (names confined to its DNS domain so the requester no longer supplies
   the subject; Any Purpose, Smart Card Logon, PKINIT and Certificate Request Agent usages dropped;

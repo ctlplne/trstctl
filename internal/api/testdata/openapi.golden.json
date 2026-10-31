@@ -2427,6 +2427,74 @@
         ],
         "type": "object"
       },
+      "ADCSIssuerHealth": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "issued_in_window": {
+            "type": "integer"
+          },
+          "last_failure_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_failure_cause": {
+            "type": "string"
+          },
+          "last_failure_remediation": {
+            "type": "string"
+          },
+          "last_failure_summary": {
+            "type": "string"
+          },
+          "last_success_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "healthy",
+              "degraded",
+              "failing",
+              "idle"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "issued_in_window"
+        ],
+        "type": "object"
+      },
+      "ADCSIssuerHealthList": {
+        "properties": {
+          "guidance": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ADCSIssuerHealth"
+            },
+            "type": "array"
+          },
+          "window_days": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "window_days",
+          "guidance"
+        ],
+        "type": "object"
+      },
       "ADCSMembershipNode": {
         "properties": {
           "dn": {
@@ -47716,6 +47784,53 @@
         ],
         "summary": "Ingest certutil rows a domain-joined relay collected from a CA database; summarize by disposition",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/adcs/issuers/health": {
+      "get": {
+        "operationId": "getADCSIssuerHealth",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADCSIssuerHealthList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Whether issuance through each AD CS issuer is working: recent issuances and the latest classified refusal",
+        "x-trstctl-permission": "issuers:read"
       }
     },
     "/api/v1/agents": {

@@ -15633,6 +15633,55 @@ export const messages = {
     defaultMessage: "Secret",
     description: "Global search result kind label.",
   },
+  "adcs.issuerHealth.heading": {
+    defaultMessage: "AD CS issuers",
+    description: "A161: heading of the AD CS issuer health panel.",
+  },
+  "adcs.issuerHealth.description": {
+    defaultMessage:
+      "Whether issuance through each AD CS issuer is working over the last {days} days, from the certificates it issued and the refusals trstctl diagnosed.",
+    description: "A161: what the panel shows.",
+  },
+  "adcs.issuerHealth.error": {
+    defaultMessage: "AD CS issuer health is unavailable",
+    description: "A161: the health view could not load.",
+  },
+  "adcs.issuerHealth.none": {
+    defaultMessage: "No AD CS issuer is configured for this tenant.",
+    description: "A161: empty state.",
+  },
+  "adcs.issuerHealth.healthy": {
+    defaultMessage: "Healthy",
+    description: "A161: issued with no later refusal.",
+  },
+  "adcs.issuerHealth.degraded": {
+    defaultMessage: "Degraded",
+    description: "A161: a refusal in the window but a later success.",
+  },
+  "adcs.issuerHealth.failing": {
+    defaultMessage: "Failing",
+    description: "A161: the latest attempt was refused.",
+  },
+  "adcs.issuerHealth.idle": {
+    defaultMessage: "Idle",
+    description: "A161: no evidence yet.",
+  },
+  "adcs.issuerHealth.issued": {
+    defaultMessage: "{count} issued in the window",
+    description: "A161: issuance count.",
+  },
+  "adcs.issuerHealth.issuedWithLast": {
+    defaultMessage: "{count} issued in the window · last issued {time}",
+    description: "A161: issuance count and the latest issuance time.",
+  },
+  "adcs.issuerHealth.lastFailure": {
+    defaultMessage: "Last refusal {time}: {cause}",
+    description: "A161: latest classified refusal.",
+  },
+  "adcs.issuerHealth.remediation": {
+    defaultMessage: "What to do: {remediation}",
+    description: "A161: the diagnosis remediation.",
+  },
   "adcs.modernize.column": {
     defaultMessage: "Modernize",
     description: "A160: column of the template grid holding the Modernize action.",

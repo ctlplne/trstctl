@@ -565,6 +565,24 @@ export interface ADCSInventorySource {
   source_id: string;
 }
 
+export interface ADCSIssuerHealth {
+  id: string;
+  issued_in_window: number;
+  last_failure_at?: string;
+  last_failure_cause?: string;
+  last_failure_remediation?: string;
+  last_failure_summary?: string;
+  last_success_at?: string;
+  name: string;
+  status: "healthy" | "degraded" | "failing" | "idle";
+}
+
+export interface ADCSIssuerHealthList {
+  guidance: string;
+  items: ADCSIssuerHealth[];
+  window_days: number;
+}
+
 export interface ADCSMembershipNode {
   dn: string;
   kind: "group" | "user" | "computer";

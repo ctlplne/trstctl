@@ -779,6 +779,32 @@ ADCSInventorySource = TypedDict(
     total=False,
 )
 
+ADCSIssuerHealth = TypedDict(
+    'ADCSIssuerHealth',
+    {
+        'id': str,
+        'issued_in_window': int,
+        'last_failure_at': str,
+        'last_failure_cause': str,
+        'last_failure_remediation': str,
+        'last_failure_summary': str,
+        'last_success_at': str,
+        'name': str,
+        'status': str,
+    },
+    total=False,
+)
+
+ADCSIssuerHealthList = TypedDict(
+    'ADCSIssuerHealthList',
+    {
+        'guidance': str,
+        'items': list[dict[str, Any]],
+        'window_days': int,
+    },
+    total=False,
+)
+
 ADCSMembershipNode = TypedDict(
     'ADCSMembershipNode',
     {

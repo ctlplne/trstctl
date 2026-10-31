@@ -495,6 +495,12 @@ The signing worker still checks the actual CSR, including key strength and reque
 usages, before signing. A ready lifecycle preview therefore cannot turn an
 ACME-only profile into a queued API issuance.
 
+Each AD CS issuer's health is on Posture → **AD CS issuers** (and `GET
+/api/v1/adcs/issuers/health`): healthy, degraded, failing or idle over the last
+seven days, from the certificates it issued and the refusals trstctl diagnosed,
+with the latest refusal's cause (for example the template's permissions not
+allowing the requester to enroll) and what to do about it.
+
 A profile can also choose **who signs**. With `upstream_external_ca` set to a
 configured external CA's registry ID, ACME, EST, SCEP and CMP enrollments under
 that profile pass the profile's checks in trstctl and are then signed by that

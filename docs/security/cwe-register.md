@@ -326,7 +326,7 @@ not this file.
 | `internal/risk/contextual_test.go:214` | fabricated identifier, not credential material (CWE-798) |
 | `internal/schedulerhistory/history_test.go:12` | deliberately toxic non-routable fixture proves redaction (CWE-798). |
 | `internal/schedulerhistory/history_test.go:81` | deliberately toxic fixture proves closed parsing without echo (CWE-798). |
-| `internal/server/acme_adcs_upstream_served_test.go:125` | fabricated test-only webhook credential (CWE-798) |
+| `internal/server/acme_adcs_upstream_served_test.go:133` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/acme_dns01_live_txt_served_test.go:28` | fabricated fixture reference, no value is real (CWE-798) |
 | `internal/server/acme_dns01_qualification.go:23` | this is an operator-facing disclosure sentence, not credential material. |
 | `internal/server/acme_eab_rotation_served_test.go:40` | logical fixture name, not secret material (CWE-798) |
@@ -1284,8 +1284,8 @@ not this file.
 | `internal/protocols/acme/certbot_client_test.go:291` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/cmp/openssl_client_test.go:168` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/protocols/scep/sscep_client_test.go:196` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
-| `internal/server/acme_adcs_upstream_served_test.go:119` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
-| `internal/server/acme_adcs_upstream_served_test.go:150` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/acme_adcs_upstream_served_test.go:127` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/acme_adcs_upstream_served_test.go:158` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/agentchannel_served_test.go:1553` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/java_sdk_served_test.go:45` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:245` | the container's keycloak user must read the import directory (CWE-276) |

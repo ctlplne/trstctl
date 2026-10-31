@@ -36,6 +36,9 @@ type adcsCertsrvStandIn struct {
 	caKey     *crypto.LockedSigner
 	issued    map[int][]byte
 	templates []string
+	// deny makes certfnsh.asp refuse the way AD CS does when the template's
+	// permissions do not allow the requester to enroll.
+	deny bool
 }
 
 func newADCSCertsrvStandIn(t *testing.T) (*adcsCertsrvStandIn, *httptest.Server) {
@@ -67,6 +70,11 @@ func (a *adcsCertsrvStandIn) serve(w http.ResponseWriter, r *http.Request) {
 		block, _ := pem.Decode([]byte(r.Form.Get("CertRequest")))
 		if block == nil {
 			http.Error(w, "no CSR", http.StatusBadRequest)
+			return
+		}
+		if a.deny {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = fmt.Fprint(w, "<P>Your request was denied.</P><P>The request was denied by policy module 0x80094012: the permissions on the certificate template do not allow the current user to enroll.</P>")
 			return
 		}
 		leaf, err := crypto.SignLeafFromCSR(a.caDER, a.caKey, block.Bytes, 24*time.Hour)

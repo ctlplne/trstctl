@@ -3555,7 +3555,8 @@
                 "listKubernetesTrustRollouts",
                 "getKubernetesTrustRollout",
                 "pauseKubernetesTrustRollout",
-                "resumeKubernetesTrustRollout"
+                "resumeKubernetesTrustRollout",
+                "getADCSIssuerHealth"
             ],
             "api_na": "",
             "cli_surface": [
@@ -3580,7 +3581,8 @@
                 "kubernetes trust-rollouts list",
                 "kubernetes trust-rollouts get",
                 "kubernetes trust-rollouts pause",
-                "kubernetes trust-rollouts resume"
+                "kubernetes trust-rollouts resume",
+                "adcs issuers health"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -3891,7 +3891,16 @@ than sending an operator looking for a credential that was never there.
   stated exactly: this is the transport and parsing layer only. NOTHING YET
   CALLS THE DATABASE INGESTION — there is no scheduled or served ingest that
   pulls a CA database into inventory, so issued/pending/revoked state is not
-  reconciled by C4/XREC; and there is no AD CS issuer health view.
+  reconciled by C4/XREC. **The AD CS issuer health view is served** (A161):
+  `GET /api/v1/adcs/issuers/health` (`trstctl adcs issuers health`; console
+  Posture → AD CS issuers) reports, per `adcs` external CA the tenant can use,
+  healthy / degraded / failing / idle over seven days from the certificates
+  its issuance service recorded and the refusals trstctl diagnosed, with the
+  latest classified cause and remediation. A denial page's stable refusal
+  code (0x80094012, the template-permission denial, beside 0x80094800 and
+  0x80094801) now crosses the Web Enrollment transport, and only that code,
+  so the cause is named. Diagnoses are kept per cause, so the last refusal
+  shown is the latest one no other issuer hit since.
   **"Modernize this template" is served** (A160): from the AD CS posture grid
   (or `POST /api/v1/posture/adcs/templates/modernize[/preview]`, `trstctl
   posture adcs modernize[-preview]`) an inventoried template becomes a trstctl

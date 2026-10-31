@@ -66,6 +66,8 @@ public final class OpenApiSchemas {
       "ADCSEnrollmentTrustee",
       "ADCSFindingEvidence",
       "ADCSInventorySource",
+      "ADCSIssuerHealth",
+      "ADCSIssuerHealthList",
       "ADCSMembershipNode",
       "ADCSModernizeChange",
       "ADCSModernizePlan",

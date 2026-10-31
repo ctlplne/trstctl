@@ -728,6 +728,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/adcs/issuers/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether issuance through each AD CS issuer is working: recent issuances and the latest classified refusal */
+        get: operations["getADCSIssuerHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/agents": {
         parameters: {
             query?: never;
@@ -9446,6 +9463,25 @@ export interface components {
             schedule_id?: string;
             /** Format: uuid */
             source_id: string;
+        };
+        ADCSIssuerHealth: {
+            id: string;
+            issued_in_window: number;
+            /** Format: date-time */
+            last_failure_at?: string;
+            last_failure_cause?: string;
+            last_failure_remediation?: string;
+            last_failure_summary?: string;
+            /** Format: date-time */
+            last_success_at?: string;
+            name: string;
+            /** @enum {string} */
+            status: "healthy" | "degraded" | "failing" | "idle";
+        };
+        ADCSIssuerHealthList: {
+            guidance: string;
+            items: components["schemas"]["ADCSIssuerHealth"][];
+            window_days: number;
         };
         ADCSMembershipNode: {
             dn: string;
@@ -23019,6 +23055,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ADCSDatabaseSummary"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getADCSIssuerHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ADCSIssuerHealthList"];
                 };
             };
             /** @description client error */

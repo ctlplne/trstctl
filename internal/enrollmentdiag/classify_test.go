@@ -217,3 +217,13 @@ func TestActionableDiagnosesNameAnActionAndUnknownDoesNot(t *testing.T) {
 		t.Error("an unknown cause reported itself as actionable; it names nothing to do")
 	}
 }
+
+// A161: CERTSRV_E_TEMPLATE_DENIED is the CA's code for "the template's
+// permissions do not allow the requester to enroll"; the AD CS transport now
+// carries it (and only it) out of a denial page, so it names the cause.
+func TestClassifyADCSNamesTheTemplateDeniedCode(t *testing.T) {
+	got := enrollmentdiag.ClassifyADCS(enrollmentdiag.StepAuthorize, "adcs: request 0 not issued (denied, 0x80094012)", nil)
+	if got.Cause != enrollmentdiag.CauseTemplateACLDenied || got.Remediation == "" {
+		t.Fatalf("diagnosis = %+v; want the template ACL cause with a remediation", got)
+	}
+}

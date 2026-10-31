@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { AuthorityAgreementPanel } from "@/components/AuthorityAgreementPanel";
+import { ADCSIssuerHealthPanel } from "@/components/posture/ADCSIssuerHealthPanel";
 import { ADCSTemplatePanel } from "@/components/posture/ADCSTemplatePanel";
 import { ADCSDatabasePanel } from "@/components/posture/ADCSDatabasePanel";
 import { useTranslation, translateNow } from "@/i18n/I18nProvider";
@@ -353,6 +354,7 @@ export function Posture() {
             ) : null}
           </section>
 
+          <ADCSIssuerHealthPanel />
           <ADCSTemplatePanel />
           <ADCSDatabasePanel />
           {/* C4: whether the authorities agree about what was issued. Sits beside

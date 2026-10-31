@@ -92,13 +92,19 @@ func (e *RefusalError) Error() string {
 
 func safeRefusalCode(status string) string {
 	lower := strings.ToLower(status)
-	for _, code := range []string{"0x80094800", "0x80094801"} {
+	for _, code := range knownRefusalCodes {
 		if strings.Contains(lower, code) {
 			return code
 		}
 	}
 	return ""
 }
+
+// knownRefusalCodes are the CA's stable refusal HRESULTs that may leave a
+// refusal (A161): CERTSRV_E_UNSUPPORTED_CERT_TYPE, CERTSRV_E_NO_CERT_TYPE and
+// CERTSRV_E_TEMPLATE_DENIED (the template's permissions do not allow the
+// requester to enroll). Nothing else from a free-form response crosses.
+var knownRefusalCodes = []string{"0x80094800", "0x80094801", "0x80094012"}
 
 // Transport performs submission/retrieval against an ADCS CA. Production uses
 // WebEnrollmentTransport; tests may use an in-process double.

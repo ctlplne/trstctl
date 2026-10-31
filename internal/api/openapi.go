@@ -6643,6 +6643,21 @@ func componentSchemas() map[string]*Schema {
 		"allowed_algorithms":    {Type: "array", Items: &Schema{Type: "integer"}},
 		"max_age":               str(),
 	})
+	adcsIssuerHealthSchema := object(map[string]*Schema{
+		"id": str(), "name": str(),
+		"status":                   {Type: "string", Enum: []string{"healthy", "degraded", "failing", "idle"}},
+		"issued_in_window":         {Type: "integer"},
+		"last_success_at":          timestamp(),
+		"last_failure_at":          timestamp(),
+		"last_failure_cause":       str(),
+		"last_failure_summary":     str(),
+		"last_failure_remediation": str(),
+	}, "id", "name", "status", "issued_in_window")
+	adcsIssuerHealthListSchema := object(map[string]*Schema{
+		"items":       {Type: "array", Items: ref("ADCSIssuerHealth")},
+		"window_days": {Type: "integer"},
+		"guidance":    str(),
+	}, "items", "window_days", "guidance")
 	adcsModernizeRequestSchema := object(map[string]*Schema{
 		"domain": str(), "template": str(),
 		"dns_suffix":   {Type: "string", Description: "DNS domain certificates from the profile may name; defaults to the publishing CA's DNS domain"},
@@ -8526,6 +8541,8 @@ func componentSchemas() map[string]*Schema {
 		"AgentJobReceipts":                      agentJobReceipts,
 		"ADCSPosture":                           adcsPosture,
 		"ADCSModernizeRequest":                  adcsModernizeRequestSchema,
+		"ADCSIssuerHealth":                      adcsIssuerHealthSchema,
+		"ADCSIssuerHealthList":                  adcsIssuerHealthListSchema,
 		"ADCSModernizeChange":                   adcsModernizeChangeSchema,
 		"ADCSModernizePlan":                     adcsModernizePlanSchema,
 		"ADCSModernizeResult":                   adcsModernizeResultSchema,

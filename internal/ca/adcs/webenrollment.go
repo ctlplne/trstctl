@@ -228,7 +228,16 @@ func (t *WebEnrollmentTransport) roundTrip(req *http.Request) (Submission, error
 	requestID := parseRequestID(body)
 	switch {
 	case containsASCIIFold(body, []byte("denied")), containsASCIIFold(body, []byte("rejected")):
-		return Submission{Disposition: DispDenied, RequestID: requestID, StatusMessage: "ADCS denied the request"}, nil
+		// Only an allowlisted refusal code crosses (A161), so the refusal can be
+		// diagnosed without echoing the page.
+		message := "ADCS denied the request"
+		for _, code := range knownRefusalCodes {
+			if containsASCIIFold(body, []byte(code)) {
+				message += " (" + code + ")"
+				break
+			}
+		}
+		return Submission{Disposition: DispDenied, RequestID: requestID, StatusMessage: message}, nil
 	case containsASCIIFold(body, []byte("revoked")):
 		return Submission{Disposition: DispRevoked, RequestID: requestID, StatusMessage: "ADCS revoked the request"}, nil
 	case requestID != 0:

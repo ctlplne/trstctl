@@ -99,6 +99,8 @@ import type {
   ADCSInventorySource as GenADCSInventorySource,
   ADCSEnrollmentService as GenADCSEnrollmentService,
   ADCSPosture as GenADCSPosture,
+  ADCSIssuerHealth as GenADCSIssuerHealth,
+  ADCSIssuerHealthList as GenADCSIssuerHealthList,
   ADCSModernizePlan as GenADCSModernizePlan,
   ADCSModernizeRequest as GenADCSModernizeRequest,
   ADCSModernizeResult as GenADCSModernizeResult,
@@ -819,6 +821,8 @@ export interface IdentityStatusCounts {
   by_status: Record<string, number>;
 }
 export type ADCSPosture = GenADCSPosture;
+export type ADCSIssuerHealth = GenADCSIssuerHealth;
+export type ADCSIssuerHealthList = GenADCSIssuerHealthList;
 export type ADCSModernizePlan = GenADCSModernizePlan;
 export type ADCSModernizeRequest = GenADCSModernizeRequest;
 export type ADCSModernizeResult = GenADCSModernizeResult;
@@ -2138,6 +2142,7 @@ export interface Api {
   /** F1: AD CS certificate template posture observed by an in-domain relay. */
   adcsPosture(): Promise<ADCSPosture>;
   adcsDrift(): Promise<ADCSDriftHistory>;
+  adcsIssuerHealth(): Promise<ADCSIssuerHealthList>;
   previewADCSModernize(input: ADCSModernizeRequest): Promise<ADCSModernizePlan>;
   modernizeADCSTemplate(input: ADCSModernizeRequest): Promise<ADCSModernizeResult>;
   /** F4: per-CA certificate-database lifecycle visibility. */
@@ -2929,6 +2934,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   discoveryMonitoring: () => req<DiscoveryMonitoring>("/api/v1/discovery/monitoring"),
   adcsPosture: () => req<ADCSPosture>("/api/v1/posture/adcs"),
   adcsDrift: () => req<ADCSDriftHistory>("/api/v1/posture/adcs/drift"),
+  adcsIssuerHealth: () => req<ADCSIssuerHealthList>("/api/v1/adcs/issuers/health"),
   previewADCSModernize: (input) => postRead<ADCSModernizePlan>("/api/v1/posture/adcs/templates/modernize/preview", input),
   modernizeADCSTemplate: (input) => mutate<ADCSModernizeResult>("POST", "/api/v1/posture/adcs/templates/modernize", input),
   adcsDatabases: () => req<ADCSDatabaseList>("/api/v1/adcs/ca-database"),

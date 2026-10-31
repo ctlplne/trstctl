@@ -154,7 +154,8 @@ func ClassifyADCS(step Step, detail string, err error) Diagnosis {
 	lower := strings.ToLower(detail)
 	switch {
 	case strings.Contains(lower, "denied by policy module") ||
-		strings.Contains(lower, "0x80094800"): // CERTSRV_E_UNSUPPORTED_CERT_TYPE
+		strings.Contains(lower, "0x80094800") || // CERTSRV_E_UNSUPPORTED_CERT_TYPE
+		strings.Contains(lower, "0x80094012"): // CERTSRV_E_TEMPLATE_DENIED
 		return Diagnose(ProtocolADCS, orDefault(step, StepAuthorize), CauseTemplateACLDenied)
 	case strings.Contains(lower, "0x80094801") || // CERTSRV_E_NO_CERT_TYPE
 		strings.Contains(lower, "no certificate template"):
