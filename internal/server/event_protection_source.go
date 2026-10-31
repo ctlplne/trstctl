@@ -25,6 +25,13 @@ func openConfiguredEventSource(ctx context.Context, cfg *config.Config, st *stor
 	var log *events.Log
 	if sanitized {
 		log, err = openSanitizedHistoryAwareEventLog(ctx, cfg.NATS, st, key, cfg.Secrets.SecretRotationHistoryFleetReady, options...)
+		if err == nil {
+			if verifyErr := protection.reader.VerifyCurrentCustody(ctx); verifyErr != nil {
+				_ = log.Close()
+				log = nil
+				err = fmt.Errorf("verify current event-key custody: %w", verifyErr)
+			}
+		}
 	} else {
 		log, err = openHistoryAwareEventLog(ctx, cfg.NATS, st, key, options...)
 	}

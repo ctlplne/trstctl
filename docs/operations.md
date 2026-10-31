@@ -162,6 +162,22 @@ restored history awaits cutover. Both read **ok** on a deployment without the SS
 CA or audit service. Before them, `/healthz` and the other checks could report a
 restarted replica ready while its KRL answered 503 and its audit reads failed.
 
+Configured event-key custody also adds `event_key_custody`. Normal startup
+checks every retained activation against its exact source lifetime and current
+independent key or verified destruction receipt, including when SQL is already
+at the source checkpoint. After startup, losing key material fails `/readyz`
+with **503**; `/healthz` can still report that the process is running. Restore the
+original independent custodian and pinned verification trust; the check never
+creates a replacement key or treats an unexplained missing file as erasure.
+Its public result contains no custody path, tenant ID or key reference.
+
+The custody probe permits one check at a time with no waiting queue and uses the
+existing one-second probe budget. A busy or timed-out custody check fails
+readiness. The datastore load-shedding grace below does not make an unverified
+custodian healthy. Full restore resumes its exact raw history before any
+sanitation; its complete erasure-aware recovery workflow remains
+[under development](limitations.md#tenant-offboarding-boundary).
+
 ### Readiness under load
 
 The `db` check pings the probe pool and fails readiness when PostgreSQL is

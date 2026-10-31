@@ -443,7 +443,9 @@ The [independent custody setting](../configuration.md#independent-event-key-cust
 is default-off. Startup and recovery attach its readers before opening source
 history, and the key directory must sit outside managed backup sources and
 destinations. Configuring it enables no tenant and supplies no missing historical
-key. Operator activation and the complete erasure-aware restore workflow remain
+key. Normal startup and `event_key_custody` readiness verify current independent
+material or signed destruction; an unexplained missing key fails readiness and
+never triggers key regeneration. Operator activation and the complete erasure-aware restore workflow remain
 required before the opt-in feature is available.
 
 When an opted-in tenant key is preparing, new authorization audits keep only

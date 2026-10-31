@@ -19,18 +19,19 @@ import (
 // Attach its options before events.Open recovery. Keep it until workers stop
 // and the log closes; never replace the custodian of a running event log.
 type eventProtectionRuntime struct {
-	policy    eventprivacy.SourcePolicy
-	admission *eventprivacy.SourceAdmission
-	reader    *eventprivacy.SourceKeys
-	custody   *eventprotect.FileAuthority
-	authority *eventprivacy.DestructionAuthority
+	policy     eventprivacy.SourcePolicy
+	admission  *eventprivacy.SourceAdmission
+	reader     *eventprivacy.SourceKeys
+	custody    *eventprotect.FileAuthority
+	authority  *eventprivacy.DestructionAuthority
+	probeSlots chan struct{}
 }
 
 func newEventProtectionRuntime(cfg *config.Config, st *store.Store, key *jose.SigningKey, extraBackupRoots ...string) (*eventProtectionRuntime, error) {
 	if cfg == nil || st == nil || key == nil {
 		return nil, errors.New("server: event protection requires source coordination and pinned audit evidence trust")
 	}
-	r := &eventProtectionRuntime{policy: eventprivacy.SourcePolicy{Trust: key.JWKS()}}
+	r := &eventProtectionRuntime{policy: eventprivacy.SourcePolicy{Trust: key.JWKS()}, probeSlots: make(chan struct{}, 1)}
 	r.admission = &eventprivacy.SourceAdmission{Guard: st, Policy: r.policy}
 	r.reader = &eventprivacy.SourceKeys{Policy: r.policy}
 	if cfg.Privacy.EventProtection.KeyDirectory != "" {

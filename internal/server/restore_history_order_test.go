@@ -52,6 +52,10 @@ func TestRestoreResumesExactHistoryBeforeSchedulerSanitation(t *testing.T) {
 		strings.Count(constructor, "openHistoryAwareEventLog(") != 1 {
 		t.Fatal("configured source must attach protection before opening, and false must select only unsanitized history")
 	}
+	verify := strings.Index(constructor, "protection.reader.VerifyCurrentCustody(ctx)")
+	if verify <= normal || verify >= raw || strings.Count(constructor, "VerifyCurrentCustody(") != 1 {
+		t.Fatal("current custody verification must follow normal sanitized open; raw restore must resume exact history first")
+	}
 }
 
 func TestNormalHistoryConstructorRejectsPendingRestoreBeforeSanitation(t *testing.T) {

@@ -2685,6 +2685,9 @@ func (s *Server) readinessChecks(ctx context.Context, d Deps) []observ.Check {
 		{Name: "ssh_krl", Probe: s.probeSSHKRL},
 		{Name: "audit_read", Probe: s.probeAuditRead},
 	}
+	if d.eventProtection != nil {
+		checks = append(checks, observ.Check{Name: "event_key_custody", Probe: d.eventProtection.probeCurrentCustody})
+	}
 	if s.api != nil {
 		checks = append(checks, observ.Check{
 			Name: "application_secret_reconciliation", Probe: readyDespiteBackpressure("application_secret_reconciliation", s.api.ApplicationSecretMutationReconcileHealth, s.readinessShedGauge("application_secret_reconciliation")),

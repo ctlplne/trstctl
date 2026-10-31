@@ -1031,6 +1031,10 @@ and configured or explicitly selected backup destinations. Startup and recovery
 reject overlapping paths. The control plane attaches the configured custodian
 before opening event history, and backup, restore and rebuild use the same
 constructor. Protected reads fail when their current custody is unavailable.
+Normal startup verifies current custody after sanitized history opens, even at a
+warm SQL checkpoint; the served `event_key_custody` readiness check detects later
+material loss. A missing file is not verified destruction, and neither check
+provisions a replacement. See [readiness recovery](operations.md#readiness-after-a-restart).
 The directory must
 remain available until the source and its workers have stopped; changing custody
 requires a restart.
