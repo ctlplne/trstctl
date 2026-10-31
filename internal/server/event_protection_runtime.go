@@ -4,6 +4,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 
 	"trstctl.com/trstctl/internal/config"
@@ -31,16 +32,27 @@ func newEventProtectionRuntime(cfg *config.Config, st *store.Store, key *jose.Si
 	if cfg == nil || st == nil || key == nil {
 		return nil, errors.New("server: event protection requires source coordination and pinned audit evidence trust")
 	}
-	r := &eventProtectionRuntime{policy: eventprivacy.SourcePolicy{Trust: key.JWKS()}, probeSlots: make(chan struct{}, 1)}
-	r.admission = &eventprivacy.SourceAdmission{Guard: st, Policy: r.policy}
-	r.reader = &eventprivacy.SourceKeys{Policy: r.policy}
-	if cfg.Privacy.EventProtection.KeyDirectory != "" {
-		roots, err := eventProtectionBackupRoots(cfg, extraBackupRoots...)
+	var roots []string
+	var err error
+	if cfg.Privacy.EventProtection.KeyDirectory != "" || cfg.Privacy.EventProtection.VerificationKeysFile != "" {
+		roots, err = eventProtectionBackupRoots(cfg, extraBackupRoots...)
 		if err != nil {
 			return nil, err
 		}
+	}
+	var verification *jose.JWKSet
+	if cfg.Privacy.EventProtection.VerificationKeysFile != "" {
+		verification, err = eventprotect.LoadVerificationKeysFile(cfg.Privacy.EventProtection.VerificationKeysFile, roots)
+		if err != nil {
+			return nil, fmt.Errorf("server: load independently pinned event evidence verification keys: %w", err)
+		}
+	}
+	r := &eventProtectionRuntime{policy: eventprivacy.SourcePolicy{Trust: key.JWKS(), VerificationKeys: verification}, probeSlots: make(chan struct{}, 1)}
+	r.admission = &eventprivacy.SourceAdmission{Guard: st, Policy: r.policy}
+	r.reader = &eventprivacy.SourceKeys{Policy: r.policy}
+	if cfg.Privacy.EventProtection.KeyDirectory != "" {
 		r.authority = eventprivacy.NewDestructionAuthority()
-		r.custody, err = eventprotect.NewFileAuthority(eventprotect.FileAuthorityConfig{Directory: cfg.Privacy.EventProtection.KeyDirectory, BackupRoots: roots, Locker: st, EvidenceKey: key, DestructionAuthority: r.authority})
+		r.custody, err = eventprotect.NewFileAuthority(eventprotect.FileAuthorityConfig{Directory: cfg.Privacy.EventProtection.KeyDirectory, BackupRoots: roots, Locker: st, EvidenceKey: key, VerificationKeys: verification, DestructionAuthority: r.authority})
 		if err != nil {
 			return nil, err
 		}

@@ -9,18 +9,20 @@ import (
 )
 
 // EventProtection supplies independent software custody for tenant opt-in.
-// Configuring a directory does not enable protection for any tenant. The
-// directory must remain outside ordinary backup sources and destinations.
+// Configuring a directory does not enable protection for any tenant. Custody
+// and operator-pinned public evidence trust stay outside managed restore paths.
 type EventProtection struct {
-	KeyDirectory string `json:"key_directory,omitempty"`
+	KeyDirectory         string `json:"key_directory,omitempty"`
+	VerificationKeysFile string `json:"verification_keys_file,omitempty"`
 }
 
 func validateEventProtection(c EventProtection) []error {
-	if c.KeyDirectory == "" {
-		return nil
+	var errs []error
+	if c.KeyDirectory != "" && (strings.TrimSpace(c.KeyDirectory) != c.KeyDirectory || !filepath.IsAbs(c.KeyDirectory)) {
+		errs = append(errs, errors.New("privacy.event_protection.key_directory must be an absolute path without surrounding whitespace"))
 	}
-	if strings.TrimSpace(c.KeyDirectory) != c.KeyDirectory || !filepath.IsAbs(c.KeyDirectory) {
-		return []error{errors.New("privacy.event_protection.key_directory must be an absolute path without surrounding whitespace")}
+	if c.VerificationKeysFile != "" && (strings.TrimSpace(c.VerificationKeysFile) != c.VerificationKeysFile || !filepath.IsAbs(c.VerificationKeysFile)) {
+		errs = append(errs, errors.New("privacy.event_protection.verification_keys_file must be an absolute path without surrounding whitespace"))
 	}
-	return nil
+	return errs
 }

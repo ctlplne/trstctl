@@ -1039,6 +1039,17 @@ The directory must
 remain available until the source and its workers have stopped; changing custody
 requires a restart.
 
+For audit-signer rotation, `privacy.event_protection.verification_keys_file`
+(`TRSTCTL_PRIVACY_EVENT_PROTECTION_VERIFICATION_KEYS_FILE`) names an independently
+pinned public RSA JWKS file. It defaults to empty. Use an absolute path without
+surrounding whitespace, outside all managed data and backup paths listed above.
+The file must be regular and no larger than 1 MiB. Runtime creation reads it once
+and rejects missing, malformed, empty or oversized sets; configuration validation
+itself does not read it. The current signer remains trusted as well. These public
+keys verify retained evidence; they neither authorize removal nor create tenant
+keys. The runtime never takes verification keys from a receipt or backup artifact.
+Updating this file requires a restart.
+
 The assembled preparation and destruction receivers have local dispatcher and
 shutdown-drain lifecycle tests. They use separate bounded pools and exact
 queues; the ordinary outbox excludes both destinations even for an ad hoc drain.

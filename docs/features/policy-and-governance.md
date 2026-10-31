@@ -450,8 +450,12 @@ required before the opt-in feature is available. The assembled workers have loca
 live-dispatch and shutdown-drain tests: preparation independently reads its key;
 post-delete delivery verifies retained authority, deadline and signed removal.
 Ordinary drains cannot claim either queue. Public controls, settled-intent and
-interruption recovery, historical trust and the full backup/restore journey are
+interruption recovery and the full backup/restore journey are
 still required; this is not a served opt-in workflow.
+An explicit public JWKS file can retain destruction-evidence verification after
+signer rotation. It is loaded independently of data restore, with the same trust
+attached to custody, source readers and admission. Verification uses the original
+receipt and current absence; it never requests a replacement signature or key.
 
 When an opted-in tenant key is preparing, new authorization audits keep only
 permission, allow/deny and an explicit `details_omitted: "key_preparing"` marker.

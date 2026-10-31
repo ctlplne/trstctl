@@ -3732,6 +3732,7 @@ func applyBackupEnv(getenv func(string) string, b *Backup) {
 
 func applyPrivacyEnv(getenv func(string) string, privacy *Privacy) {
 	setString(getenv, "TRSTCTL_PRIVACY_EVENT_PROTECTION_KEY_DIRECTORY", &privacy.EventProtection.KeyDirectory)
+	setString(getenv, "TRSTCTL_PRIVACY_EVENT_PROTECTION_VERIFICATION_KEYS_FILE", &privacy.EventProtection.VerificationKeysFile)
 	setBool(getenv, "TRSTCTL_PRIVACY_RETENTION_ENABLED", &privacy.Retention.Enabled)
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_INTERVAL", &privacy.Retention.Interval)
 	setString(getenv, "TRSTCTL_PRIVACY_RETENTION_OWNERS", &privacy.Retention.Owners)

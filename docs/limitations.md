@@ -1735,8 +1735,11 @@ Preparation and exact post-delete destruction now have local tests through the
 assembled bounded dispatcher and shutdown drain, with independent key readback,
 signed removal and a preserved neighbor. Ordinary outbox drains exclude their
 queues. Public operator controls, settled-intent cleanup, interrupted-journal
-restart recovery, historical verification trust, protected backup/archive
+restart recovery, protected backup/archive
 artifacts and complete erasure-aware restore are not served yet.
+Separately pinned public verification keys now have runtime-configuration tests
+for signer rotation, original-receipt preservation and current material refusal;
+that component proof does not establish complete authenticated backup restore.
 The current offboarding and retention boundaries below continue to apply.
 
 That is the limit of what tenant offboarding deletes — it is not a promise that
