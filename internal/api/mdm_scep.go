@@ -27,6 +27,9 @@ type mdmSCEPPolicyRequest struct {
 	TrustAnchorRefs  json.RawMessage `json:"trust_anchor_refs,omitempty"`
 	ProfileGuidance  json.RawMessage `json:"profile_guidance,omitempty"`
 	Enabled          *bool           `json:"enabled,omitempty"`
+	// ChallengeCredentialRef (hmac-dynamic only) is the secret:// reference of
+	// the username:password an MDM uses to fetch per-device challenges.
+	ChallengeCredentialRef string `json:"challenge_credential_ref,omitempty"`
 }
 
 type mdmSCEPPolicyResponse struct {
@@ -42,9 +45,13 @@ type mdmSCEPPolicyResponse struct {
 	ProfileGuidance  json.RawMessage `json:"profile_guidance"`
 	Enabled          bool            `json:"enabled"`
 	RotationVersion  int             `json:"rotation_version"`
-	LastRotatedAt    string          `json:"last_rotated_at,omitempty"`
-	CreatedAt        string          `json:"created_at"`
-	UpdatedAt        string          `json:"updated_at"`
+	// ChallengeCredentialRef and ChallengePath describe an hmac-dynamic
+	// policy: the credential's reference and the page an MDM fetches.
+	ChallengeCredentialRef string `json:"challenge_credential_ref,omitempty"`
+	ChallengePath          string `json:"challenge_path,omitempty"`
+	LastRotatedAt          string `json:"last_rotated_at,omitempty"`
+	CreatedAt              string `json:"created_at"`
+	UpdatedAt              string `json:"updated_at"`
 }
 
 type mdmSCEPPolicyListResponse struct {
@@ -85,6 +92,8 @@ type mdmSCEPPolicyPreviewResponse struct {
 	ChallengeMode            string          `json:"challenge_mode"`
 	Enabled                  bool            `json:"enabled"`
 	TrustAnchorReferenceKeys []string        `json:"trust_anchor_reference_keys"`
+	ChallengeCredentialSet   bool            `json:"challenge_credential_configured"`
+	ChallengePath            string          `json:"challenge_path,omitempty"`
 	ProfileGuidance          json.RawMessage `json:"profile_guidance"`
 	DurableWrites            []string        `json:"durable_writes"`
 	OutsideCalls             []string        `json:"outside_calls"`
@@ -146,7 +155,7 @@ func (a *API) mdmSCEPPolicyPlan(req mdmSCEPPolicyRequest, operation, policyID st
 	// A stored policy for another mode or provider would never be selected by the
 	// protocol gate, so an enabled one must not be described as ready or saved.
 	if !mdmSCEPModeServed(req) {
-		blockers = append(blockers, "This provider and challenge mode are not served by the SCEP enrollment gate; keep the policy disabled until a tenant-bound validator and durable replay fence are available.")
+		blockers = append(blockers, "This provider and challenge mode are not served by the SCEP enrollment gate: intune-jws needs the intune provider, and hmac-dynamic needs challenge_credential_ref. Keep the policy disabled until it is complete.")
 	}
 	refs := map[string]string{}
 	_ = json.Unmarshal(req.TrustAnchorRefs, &refs)
@@ -165,6 +174,7 @@ func (a *API) mdmSCEPPolicyPlan(req mdmSCEPPolicyRequest, operation, policyID st
 		SCEPProfile: req.SCEPProfile, SCEPEndpoint: req.SCEPEndpoint,
 		ExpectedAudience: req.ExpectedAudience, ChallengeMode: req.ChallengeMode,
 		Enabled: req.Enabled != nil && *req.Enabled, TrustAnchorReferenceKeys: refKeys,
+		ChallengeCredentialSet: req.ChallengeCredentialRef != "", ChallengePath: mdmSCEPChallengePath(req.ChallengeMode, policyID),
 		ProfileGuidance: req.ProfileGuidance, DurableWrites: writes,
 		OutsideCalls: []string{}, SignerCalls: 0, Blockers: blockers,
 		RecoverySteps: []string{
@@ -177,7 +187,27 @@ func (a *API) mdmSCEPPolicyPlan(req mdmSCEPPolicyRequest, operation, policyID st
 }
 
 func mdmSCEPModeServed(req mdmSCEPPolicyRequest) bool {
-	return req.Enabled == nil || !*req.Enabled || (req.Provider == "intune" && req.ChallengeMode == "intune-jws")
+	if req.Enabled == nil || !*req.Enabled {
+		return true
+	}
+	switch req.ChallengeMode {
+	case "intune-jws":
+		return req.Provider == "intune"
+	case "hmac-dynamic":
+		// A154: the served gate resolves the policy a dynamic challenge names,
+		// verifies it against this credential and consumes it once.
+		return req.ChallengeCredentialRef != ""
+	}
+	return false
+}
+
+// mdmSCEPChallengePath is the page an MDM fetches per-device challenges from
+// for an hmac-dynamic policy (Jamf Pro: "URL To SCEP Admin").
+func mdmSCEPChallengePath(mode, policyID string) string {
+	if mode != "hmac-dynamic" || policyID == "" {
+		return ""
+	}
+	return "/scep/mscep_admin/" + policyID
 }
 
 func mdmSCEPPolicyBlockStatus(req mdmSCEPPolicyRequest) int {
@@ -386,6 +416,7 @@ func (a *API) emitMDMSCEPPolicy(ctx context.Context, tenantID, id string, req md
 		SCEPEndpoint: req.SCEPEndpoint, ExpectedAudience: req.ExpectedAudience,
 		ChallengeMode: req.ChallengeMode, TrustAnchorRefs: req.TrustAnchorRefs,
 		ProfileGuidance: req.ProfileGuidance, Enabled: *req.Enabled, RotationVersion: rotationVersion,
+		ChallengeCredentialRef: req.ChallengeCredentialRef,
 	})
 	if err != nil {
 		return err
@@ -426,6 +457,7 @@ func decodeMDMSCEPPolicyRequest(r *http.Request) (mdmSCEPPolicyRequest, error) {
 	req.SCEPEndpoint = strings.TrimSpace(req.SCEPEndpoint)
 	req.ExpectedAudience = strings.TrimSpace(req.ExpectedAudience)
 	req.ChallengeMode = strings.TrimSpace(req.ChallengeMode)
+	req.ChallengeCredentialRef = strings.TrimSpace(req.ChallengeCredentialRef)
 	if req.Name == "" || req.Provider == "" || req.SCEPProfile == "" || req.SCEPEndpoint == "" {
 		return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "name, provider, scep_profile, and scep_endpoint are required")
 	}
@@ -441,6 +473,14 @@ func decodeMDMSCEPPolicyRequest(r *http.Request) (mdmSCEPPolicyRequest, error) {
 	case "intune-jws", "hmac-dynamic":
 	default:
 		return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "challenge_mode must be intune-jws or hmac-dynamic")
+	}
+	if req.ChallengeCredentialRef != "" {
+		if req.ChallengeMode != "hmac-dynamic" {
+			return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "challenge_credential_ref applies only to the hmac-dynamic challenge mode")
+		}
+		if name, ok := strings.CutPrefix(req.ChallengeCredentialRef, "secret://"); !ok || strings.TrimSpace(strings.TrimPrefix(name, "/")) == "" {
+			return mdmSCEPPolicyRequest{}, errStatus(http.StatusBadRequest, "challenge_credential_ref must be a secret:// reference")
+		}
 	}
 	if req.Enabled == nil {
 		on := true
@@ -535,6 +575,7 @@ func toMDMSCEPPolicyResponse(rec store.MDMSCEPPolicy) mdmSCEPPolicyResponse {
 		SCEPProfile: rec.SCEPProfile, SCEPEndpoint: rec.SCEPEndpoint, ExpectedAudience: rec.ExpectedAudience,
 		ChallengeMode: rec.ChallengeMode, TrustAnchorRefs: refs, ProfileGuidance: guidance,
 		Enabled: rec.Enabled, RotationVersion: rec.RotationVersion,
+		ChallengeCredentialRef: rec.ChallengeCredentialRef, ChallengePath: mdmSCEPChallengePath(rec.ChallengeMode, rec.ID),
 		CreatedAt: rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}

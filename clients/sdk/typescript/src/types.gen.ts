@@ -15558,7 +15558,9 @@ export interface components {
             signer_calls: number;
         };
         MDMSCEPPolicy: {
+            challenge_credential_ref?: string;
             challenge_mode: string;
+            challenge_path?: string;
             /** Format: date-time */
             created_at: string;
             enabled: boolean;
@@ -15585,8 +15587,10 @@ export interface components {
         MDMSCEPPolicyPreview: {
             blockers: string[];
             capability: string;
+            challenge_credential_configured?: boolean;
             /** @enum {string} */
             challenge_mode: "intune-jws" | "hmac-dynamic";
+            challenge_path?: string;
             durable_writes: string[];
             effect_free: boolean;
             enabled: boolean;
@@ -15609,8 +15613,10 @@ export interface components {
             trust_anchor_reference_keys: string[];
         };
         MDMSCEPPolicyRequest: {
+            /** @description hmac-dynamic only: secret:// reference to the username:password the MDM uses to fetch challenges. */
+            challenge_credential_ref?: string;
             /**
-             * @description Only intune-jws with the intune provider can be enabled on the served SCEP gate. Other modes may be staged disabled; enabled previews and writes are blocked.
+             * @description intune-jws (intune provider) validates the MDM-signed challenge against trust_anchor_refs; hmac-dynamic serves per-device challenges at /scep/mscep_admin/{policy id} to the challenge_credential_ref credential and consumes each once.
              * @enum {string}
              */
             challenge_mode?: "intune-jws" | "hmac-dynamic";

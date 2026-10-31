@@ -33,12 +33,15 @@ type MDMSCEPPolicy struct {
 	ExpectedAudience string
 	ChallengeMode    string
 	TrustAnchorRefs  json.RawMessage
-	ProfileGuidance  json.RawMessage
-	Enabled          bool
-	RotationVersion  int
-	LastRotatedAt    *time.Time
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// ChallengeCredentialRef is the secret:// reference of an hmac-dynamic
+	// policy's challenge credential (A154); empty for other modes.
+	ChallengeCredentialRef string
+	ProfileGuidance        json.RawMessage
+	Enabled                bool
+	RotationVersion        int
+	LastRotatedAt          *time.Time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 // ApplyMDMSCEPPolicyUpsertedTx projects an mdm.scep_policy.upserted event.
@@ -72,9 +75,9 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 		`INSERT INTO mdm_scep_policies
 		    (id, tenant_id, name, provider, scep_profile, scep_endpoint, expected_audience,
 		     challenge_mode, trust_anchor_refs, profile_guidance, enabled, rotation_version,
-		     created_at, updated_at)
+		     created_at, updated_at, challenge_credential_ref)
 		 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb,
-		         $11, $12, $13, $14)
+		         $11, $12, $13, $14, $15)
 		 ON CONFLICT (id) DO UPDATE SET
 		     name = EXCLUDED.name,
 		     provider = EXCLUDED.provider,
@@ -83,6 +86,7 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 		     expected_audience = EXCLUDED.expected_audience,
 		     challenge_mode = EXCLUDED.challenge_mode,
 		     trust_anchor_refs = EXCLUDED.trust_anchor_refs,
+		     challenge_credential_ref = EXCLUDED.challenge_credential_ref,
 		     profile_guidance = EXCLUDED.profile_guidance,
 		     enabled = EXCLUDED.enabled,
 		     rotation_version = GREATEST(mdm_scep_policies.rotation_version, EXCLUDED.rotation_version),
@@ -91,7 +95,7 @@ func (s *Store) ApplyMDMSCEPPolicyUpsertedTx(ctx context.Context, tx pgx.Tx, p M
 		 WHERE mdm_scep_policies.tenant_id = EXCLUDED.tenant_id`,
 		p.ID, p.TenantID, p.Name, p.Provider, p.SCEPProfile, p.SCEPEndpoint, p.ExpectedAudience,
 		p.ChallengeMode, p.TrustAnchorRefs, p.ProfileGuidance, p.Enabled, p.RotationVersion,
-		p.CreatedAt, p.UpdatedAt)
+		p.CreatedAt, p.UpdatedAt, p.ChallengeCredentialRef)
 	if err != nil {
 		return err
 	}
@@ -135,7 +139,8 @@ func (s *Store) GetMDMSCEPPolicy(ctx context.Context, tenantID, id string) (MDMS
 		return scanMDMSCEPPolicy(tx.QueryRow(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, scep_profile, scep_endpoint,
 			        expected_audience, challenge_mode, trust_anchor_refs, profile_guidance,
-			        enabled, rotation_version, last_rotated_at, created_at, updated_at
+			        enabled, rotation_version, last_rotated_at, created_at, updated_at,
+			        challenge_credential_ref
 			   FROM mdm_scep_policies
 			  WHERE tenant_id = $1 AND id = $2`,
 			tenantID, id), &out)
@@ -153,7 +158,8 @@ func (s *Store) ListMDMSCEPPolicies(ctx context.Context, tenantID string) ([]MDM
 		rows, err := tx.Query(ctx,
 			`SELECT id::text, tenant_id::text, name, provider, scep_profile, scep_endpoint,
 			        expected_audience, challenge_mode, trust_anchor_refs, profile_guidance,
-			        enabled, rotation_version, last_rotated_at, created_at, updated_at
+			        enabled, rotation_version, last_rotated_at, created_at, updated_at,
+			        challenge_credential_ref
 			   FROM mdm_scep_policies
 			  WHERE tenant_id = $1
 			  ORDER BY name, id`,
@@ -177,5 +183,6 @@ func (s *Store) ListMDMSCEPPolicies(ctx context.Context, tenantID string) ([]MDM
 func scanMDMSCEPPolicy(row pgx.Row, p *MDMSCEPPolicy) error {
 	return row.Scan(&p.ID, &p.TenantID, &p.Name, &p.Provider, &p.SCEPProfile, &p.SCEPEndpoint,
 		&p.ExpectedAudience, &p.ChallengeMode, &p.TrustAnchorRefs, &p.ProfileGuidance,
-		&p.Enabled, &p.RotationVersion, &p.LastRotatedAt, &p.CreatedAt, &p.UpdatedAt)
+		&p.Enabled, &p.RotationVersion, &p.LastRotatedAt, &p.CreatedAt, &p.UpdatedAt,
+		&p.ChallengeCredentialRef)
 }

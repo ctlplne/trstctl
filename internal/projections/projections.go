@@ -2936,6 +2936,9 @@ type MDMSCEPPolicyUpserted struct {
 	ProfileGuidance  json.RawMessage `json:"profile_guidance"`
 	Enabled          bool            `json:"enabled"`
 	RotationVersion  int             `json:"rotation_version,omitempty"`
+	// ChallengeCredentialRef is the hmac-dynamic challenge credential's
+	// secret:// reference (A154), never its value.
+	ChallengeCredentialRef string `json:"challenge_credential_ref,omitempty"`
 }
 
 // MDMSCEPPolicyDeleted is the payload of mdm.scep_policy.deleted.
@@ -7008,7 +7011,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			SCEPProfile: pl.SCEPProfile, SCEPEndpoint: pl.SCEPEndpoint, ExpectedAudience: pl.ExpectedAudience,
 			ChallengeMode: pl.ChallengeMode, TrustAnchorRefs: pl.TrustAnchorRefs,
 			ProfileGuidance: pl.ProfileGuidance, Enabled: pl.Enabled, RotationVersion: pl.RotationVersion,
-			CreatedAt: e.Time, UpdatedAt: e.Time,
+			ChallengeCredentialRef: pl.ChallengeCredentialRef, CreatedAt: e.Time, UpdatedAt: e.Time,
 		})
 	case EventMDMSCEPPolicyDeleted:
 		var pl MDMSCEPPolicyDeleted

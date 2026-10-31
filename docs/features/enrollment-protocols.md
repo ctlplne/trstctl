@@ -276,6 +276,20 @@ that exact `aud` is refused. After validation, the verified policy's
 `scep_profile` is used for signer-backed issuance; the deployment's default
 profile is not substituted for a policy-backed enrollment.
 
+For Jamf Pro and other MDMs that fetch a one-time challenge per device, use the
+`hmac-dynamic` challenge mode. Store `username:password` in the secret store,
+name it in the policy's `challenge_credential_ref` (`secret://...`), and point
+the MDM at the policy's challenge page, `/scep/mscep_admin/{policy id}` (shown
+as `challenge_path`). In Jamf Pro that is the SCEP payload's challenge type
+**Dynamic-Microsoft CA**, with the page as **URL To SCEP Admin** and the same
+username and password. Each challenge names its policy, is bound to the tenant,
+the policy, its certificate profile and its challenge rotation version, expires
+after an hour, and is consumed once in the same durable fence as Intune
+challenges. A wrong credential gets 401 and any other policy 404; the page is
+rate limited per tenant. Rotating the credential, or the policy's challenge
+version, invalidates every outstanding challenge. A static shared challenge is
+not offered because it cannot be single-use.
+
 The **Protocols → Intune / MDM SCEP policies** section handles the first policy as
 well as later edits. Its three short steps ask: which MDM and certificate profile,
 how the device proves it came from that MDM, and what the server will do. The last
@@ -307,8 +321,10 @@ anchor changes take effect without restarting the handler; the static
 
 If policy setup is blocked, fix the named prerequisite and run the preview again;
 no partial policy exists to clean up. If a save is interrupted, retry with the same
-idempotency key. The rotation endpoint records a version and audit timestamp; it
-does not mint an MDM challenge or rotate the MDM's signing key. Rotate that key in
+idempotency key. The rotation endpoint records a version and audit timestamp. For
+an `hmac-dynamic` policy the new version invalidates every challenge issued
+before it; for an Intune policy it does not mint an MDM challenge or rotate the
+MDM's signing key. Rotate that key in
 the MDM, update the policy's trust-anchor reference, and refresh the device
 profile. An old signed challenge can remain valid until its expiry if its signing
 anchor is still trusted. If the version write fails, keep the dialog open, review

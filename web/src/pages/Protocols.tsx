@@ -1219,6 +1219,11 @@ export function Protocols() {
                           </td>
                           <td>
                             <p>{policy.challenge_mode}</p>
+                            {policy.challenge_path && (
+                              <p className="mt-1 font-mono text-xs text-muted-foreground" title={t("protocols.mdm.challengePathHelp")}>
+                                {policy.challenge_path}
+                              </p>
+                            )}
                             <p className="mt-1 text-caption text-muted-foreground">
                               {t("protocols.mdm.rotationVersion")} {policy.rotation_version}
                             </p>

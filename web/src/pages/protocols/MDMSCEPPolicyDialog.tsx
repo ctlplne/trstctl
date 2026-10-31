@@ -22,6 +22,7 @@ type PolicyForm = {
   scepEndpoint: string;
   scepProfile: string;
   challengeMode: "intune-jws" | "hmac-dynamic";
+  challengeCredentialRef: string;
   expectedAudience: string;
   trustAnchorRefsJSON: string;
   profileGuidanceJSON: string;
@@ -57,6 +58,7 @@ function defaults(policy?: MDMSCEPPolicy): PolicyForm {
     scepEndpoint: policy?.scep_endpoint ?? "/scep/pkiclient.exe",
     scepProfile: policy?.scep_profile ?? "",
     challengeMode: policy?.challenge_mode === "hmac-dynamic" ? "hmac-dynamic" : "intune-jws",
+    challengeCredentialRef: policy?.challenge_credential_ref ?? "",
     expectedAudience: policy?.expected_audience ?? "",
     trustAnchorRefsJSON: stringifyRecord(policy?.trust_anchor_refs),
     profileGuidanceJSON: stringifyRecord(policy?.profile_guidance),
@@ -72,6 +74,9 @@ function requestFrom(values: PolicyForm): MDMSCEPPolicyRequest {
     scep_profile: values.scepProfile.trim(),
     challenge_mode: values.challengeMode,
     enabled: values.enabled,
+    ...(values.challengeMode === "hmac-dynamic" && values.challengeCredentialRef.trim()
+      ? { challenge_credential_ref: values.challengeCredentialRef.trim() }
+      : {}),
     ...(values.expectedAudience.trim() ? { expected_audience: values.expectedAudience.trim() } : {}),
     trust_anchor_refs: parseRecord(values.trustAnchorRefsJSON),
     profile_guidance: parseRecord(values.profileGuidanceJSON),
@@ -96,17 +101,27 @@ export function MDMSCEPPolicyDialog({
   const [saveError, setSaveError] = useState<string | null>(null);
   const schema = useMemo(
     () =>
-      z.object({
-        name: z.string().trim().min(1, t("protocols.mdm.form.required")),
-        provider: z.enum(["intune", "jamf"]),
-        scepEndpoint: z.string().trim().min(1, t("protocols.mdm.form.required")),
-        scepProfile: z.string().trim().min(1, t("protocols.mdm.form.required")),
-        challengeMode: z.enum(["intune-jws", "hmac-dynamic"]),
-        expectedAudience: z.string(),
-        trustAnchorRefsJSON: recordText(t("protocols.mdm.form.jsonObject")),
-        profileGuidanceJSON: recordText(t("protocols.mdm.form.jsonObject")),
-        enabled: z.boolean(),
-      }),
+      z
+        .object({
+          name: z.string().trim().min(1, t("protocols.mdm.form.required")),
+          provider: z.enum(["intune", "jamf"]),
+          scepEndpoint: z.string().trim().min(1, t("protocols.mdm.form.required")),
+          scepProfile: z.string().trim().min(1, t("protocols.mdm.form.required")),
+          challengeMode: z.enum(["intune-jws", "hmac-dynamic"]),
+          challengeCredentialRef: z.string(),
+          expectedAudience: z.string(),
+          trustAnchorRefsJSON: recordText(t("protocols.mdm.form.jsonObject")),
+          profileGuidanceJSON: recordText(t("protocols.mdm.form.jsonObject")),
+          enabled: z.boolean(),
+        })
+        .superRefine((values, context) => {
+          // A154: an enabled dynamic challenge needs the credential the MDM fetches
+          // it with; a staged (disabled) policy may leave it empty, as the server allows.
+          const ref = values.challengeCredentialRef.trim();
+          if (values.challengeMode === "hmac-dynamic" && (ref ? !ref.startsWith("secret://") : values.enabled)) {
+            context.addIssue({ code: "custom", path: ["challengeCredentialRef"], message: t("protocols.mdm.form.credentialRefRequired") });
+          }
+        }),
     [t],
   );
   const form = useForm<PolicyForm>({ resolver: zodResolver(schema), defaultValues: defaults(policy), mode: "onTouched" });
@@ -242,6 +257,24 @@ export function MDMSCEPPolicyDialog({
                   </Select>
                 )}
               </Field>
+              {watchedValues.challengeMode === "hmac-dynamic" && (
+                <Field
+                  className="sm:col-span-2"
+                  label={t("protocols.mdm.form.credentialRef")}
+                  description={t("protocols.mdm.form.credentialRefHelp")}
+                  error={form.formState.errors.challengeCredentialRef?.message}
+                  required
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      {...form.register("challengeCredentialRef")}
+                      autoComplete="off"
+                      placeholder={t("protocols.mdm.form.credentialRefPlaceholder")}
+                    />
+                  )}
+                </Field>
+              )}
               <Field label={t("protocols.mdm.form.audience")} description={t("protocols.mdm.form.audienceHelp")}>
                 {(control) => <Input {...control} {...form.register("expectedAudience")} autoComplete="off" />}
               </Field>
@@ -291,6 +324,12 @@ export function MDMSCEPPolicyDialog({
                     <PreviewFact label={t("protocols.mdm.form.provider")} value={preview.provider} />
                     <PreviewFact label={t("protocols.mdm.form.profile")} value={preview.scep_profile} />
                     <PreviewFact label={t("protocols.mdm.form.challengeMode")} value={preview.challenge_mode} />
+                    {preview.challenge_mode === "hmac-dynamic" && (
+                      <PreviewFact
+                        label={t("protocols.mdm.form.credentialRef")}
+                        value={preview.challenge_credential_configured ? t("protocols.mdm.form.credentialConfigured") : t("protocols.mdm.form.none")}
+                      />
+                    )}
                     <PreviewFact label={t("protocols.mdm.form.writes")} value={String(preview.durable_writes.length)} />
                     <PreviewFact label={t("protocols.mdm.form.outsideCalls")} value={String(preview.outside_calls.length)} />
                     <PreviewFact label={t("protocols.mdm.form.signerCalls")} value={String(preview.signer_calls)} />

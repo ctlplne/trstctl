@@ -1360,12 +1360,24 @@ never live in the API process. What you can do end to end against the running bi
   surface serves `/api/v1/mdm/scep/status`, policy CRUD, challenge-rotation
   evidence, CLI commands, and Protocols UI telemetry. Live SCEP validator trust
   anchors resolve enabled policy `secret://` references per decision;
-  `protocols.scep.intune_challenge` is a bootstrap fallback. The selectable
-  `hmac-dynamic` and Jamf modes still lack a served policy resolver. Enabled
-  policies in those modes are now rejected by preview and create/update; disabled
-  policies can be staged but do not authorize enrollment. A tenant-bound
-  validator, durable replay fence, credential configuration path, stock client
-  replay, and cold recovery remain required before enabling these modes.
+  `protocols.scep.intune_challenge` is a bootstrap fallback. **Dynamic
+  challenges (`hmac-dynamic`) are served** for Jamf Pro and other MDMs that
+  fetch a one-time challenge per device. An enabled `hmac-dynamic` policy names
+  `challenge_credential_ref` (a `secret://` reference whose value is
+  `username:password`); the MDM fetches each device's challenge from
+  `/scep/mscep_admin/{policy id}` with that credential (Jamf Pro: SCEP payload
+  challenge type Dynamic-Microsoft CA, "URL To SCEP Admin"); the SCEP gate
+  verifies the challenge against the policy it names (bound to the tenant, the
+  policy, its certificate profile and its challenge rotation version, one-hour
+  expiry) and consumes it once in the same durable PostgreSQL fence, so a replay
+  is refused across restarts. Rotating the credential or the policy's challenge
+  version invalidates every outstanding challenge. The challenge page is limited
+  per tenant and answers 401 to a wrong credential and 404 to any other policy.
+  Proven against a simulated MDM and stock sscep; a live Jamf Pro tenant is not
+  yet proven. A static (shared) Jamf challenge is not offered: it cannot be
+  single-use. Enabled policies in other pairings (Jamf with `intune-jws`, or
+  `hmac-dynamic` without a credential reference) stay rejected by preview and
+  create/update.
 - Revocation hardening: RFC 5280 named revocation reasons, bulk revoke routes,
   delegated OCSP responders, OCSP nonce echo, nonce-free OCSP response caching,
   and CRL ETag / `If-None-Match` caching. CT precertificate/final-certificate

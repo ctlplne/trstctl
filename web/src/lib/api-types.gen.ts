@@ -5870,7 +5870,9 @@ export interface MDMSCEPChallengeRotationPreview {
 }
 
 export interface MDMSCEPPolicy {
+  challenge_credential_ref?: string;
   challenge_mode: string;
+  challenge_path?: string;
   created_at: string;
   enabled: boolean;
   expected_audience?: string;
@@ -5894,7 +5896,9 @@ export interface MDMSCEPPolicyList {
 export interface MDMSCEPPolicyPreview {
   blockers: string[];
   capability: string;
+  challenge_credential_configured?: boolean;
   challenge_mode: "intune-jws" | "hmac-dynamic";
+  challenge_path?: string;
   durable_writes: string[];
   effect_free: boolean;
   enabled: boolean;
@@ -5915,6 +5919,7 @@ export interface MDMSCEPPolicyPreview {
 }
 
 export interface MDMSCEPPolicyRequest {
+  challenge_credential_ref?: string;
   challenge_mode?: "intune-jws" | "hmac-dynamic";
   enabled?: boolean;
   expected_audience?: string;

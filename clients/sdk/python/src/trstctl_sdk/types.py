@@ -8118,7 +8118,9 @@ MDMSCEPChallengeRotationPreview = TypedDict(
 MDMSCEPPolicy = TypedDict(
     'MDMSCEPPolicy',
     {
+        'challenge_credential_ref': str,
         'challenge_mode': str,
+        'challenge_path': str,
         'created_at': str,
         'enabled': bool,
         'expected_audience': str,
@@ -8150,7 +8152,9 @@ MDMSCEPPolicyPreview = TypedDict(
     {
         'blockers': list[str],
         'capability': str,
+        'challenge_credential_configured': bool,
         'challenge_mode': str,
+        'challenge_path': str,
         'durable_writes': list[str],
         'effect_free': bool,
         'enabled': bool,
@@ -8175,6 +8179,7 @@ MDMSCEPPolicyPreview = TypedDict(
 MDMSCEPPolicyRequest = TypedDict(
     'MDMSCEPPolicyRequest',
     {
+        'challenge_credential_ref': str,
         'challenge_mode': str,
         'enabled': bool,
         'expected_audience': str,

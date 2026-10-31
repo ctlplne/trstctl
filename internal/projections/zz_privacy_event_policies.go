@@ -1958,6 +1958,7 @@ func projectorRejectPrivacyRules() map[string][]events.PrivacyFieldRule {
 		EventMDMSCEPPolicyUpserted: {
 			privacyRule("/trust_anchor_refs", opaque),
 			privacyRule("/profile_guidance", opaque),
+			privacyRule("/challenge_credential_ref", opaque),
 		},
 		EventWorkloadAttesterTrustSourceUpserted: {
 			privacyRule("/jwks", opaque),

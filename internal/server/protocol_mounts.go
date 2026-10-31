@@ -75,6 +75,7 @@ type servedProtocols struct {
 	est                http.Handler
 	estServer          *est.Server
 	scep               http.Handler
+	scepChallenge      http.Handler // A154: hmac-dynamic per-device challenge page
 	cmp                *cmp.Server
 	tsa                *tsa.Authority
 	tsaState           *tsaCertificateState
@@ -180,6 +181,7 @@ func (s *Server) buildServedProtocols(ctx context.Context, cfg config.Protocols,
 			}
 			sp.scepTenant = scepTenant
 			sp.scep = scepHandler
+			sp.scepChallenge = s.mdmSCEPChallengePage(scepTenant, keyWrapper)
 			sp.names = append(sp.names, "scep")
 		}
 		if cfg.CMP.Enabled {
@@ -447,6 +449,11 @@ func (sp *servedProtocols) routes(mux *http.ServeMux, bulk *bulkhead.Set) {
 		for _, pattern := range protocolHTTPMountPatterns("scep") {
 			mux.Handle(pattern, wrap(h))
 		}
+		if sp.scepChallenge != nil {
+			// A154: the per-device challenge page an MDM fetches with an
+			// hmac-dynamic policy's credential.
+			mux.Handle("GET /scep/mscep_admin/{policy}", wrap(sp.scepChallenge))
+		}
 	}
 	if sp.cmp != nil {
 		h := tenantCtxHandler(sp.cmp, func(ctx context.Context) context.Context { return cmp.WithTenant(ctx, sp.cmpTenant) })
@@ -584,13 +591,22 @@ func (s *Server) buildSCEPChallengeProfileValidator(cfg config.SCEPIntuneChallen
 		mdmchallenge.WithIntuneNonceConsumer(s.store.ConsumeMDMSCEPNonce),
 		mdmchallenge.WithIntuneTrustConfigResolver(s.mdmSCEPIntuneTrustConfigResolver(keyWrapper)),
 	)
+	// A154: a dynamic challenge names its hmac-dynamic policy; every other
+	// challenge goes to the Intune validator exactly as before.
+	dynamic := mdmchallenge.NewDynamicChallengeValidator(tenantID, func(ctx context.Context, tenant, policyID string) (mdmchallenge.DynamicPolicy, error) {
+		return s.mdmSCEPDynamicPolicy(ctx, tenant, policyID, keyWrapper)
+	}, s.store.ConsumeMDMSCEPNonce, s.log, nil)
 	return func(ctx context.Context, req scep.ChallengeRequest) (string, error) {
-		return validator.ValidateProfile(ctx, mdmchallenge.IntuneChallengeRequest{
+		decision := mdmchallenge.IntuneChallengeRequest{
 			TenantID:      req.TenantID,
 			Challenge:     req.Challenge,
 			CSRDER:        req.CSRDER,
 			TransactionID: req.TransactionID,
-		})
+		}
+		if mdmchallenge.IsDynamic(req.Challenge) {
+			return dynamic.ValidateProfile(ctx, decision)
+		}
+		return validator.ValidateProfile(ctx, decision)
 	}, nil
 }
 

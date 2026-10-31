@@ -600,6 +600,7 @@ describe("protocol surface", () => {
       enabled: input.enabled,
       ...(input.expected_audience ? { expected_audience: input.expected_audience } : {}),
       trust_anchor_reference_keys: Object.keys((input.trust_anchor_refs as Record<string, unknown>) ?? {}).sort(),
+      challenge_credential_configured: Boolean(input.challenge_credential_ref),
       profile_guidance: input.profile_guidance ?? {},
       durable_writes: ["mdm_scep_policies upsert", "mdm.scep_policy.upserted event"],
       outside_calls: [],
@@ -2104,6 +2105,36 @@ describe("protocol surface", () => {
         enabled: false,
         trust_anchor_refs: { root_ca_ref: "secret://mdm/intune/root-ca-next" },
         profile_guidance: { challenge_source: "hmac-dynamic" },
+      }),
+    );
+  });
+
+  it("requires the challenge credential reference for an enabled dynamic-challenge policy and sends only the reference", async () => {
+    const user = userEvent.setup();
+    await renderProtocols();
+
+    await user.click(screen.getByRole("button", { name: "Edit SCEP policy intune-mobile" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit MDM enrollment policy" });
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "MDM provider" }), "jamf");
+    await user.click(within(dialog).getByRole("button", { name: "Next" }));
+    await user.selectOptions(within(dialog).getByRole("combobox", { name: "Challenge check" }), "hmac-dynamic");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Expected audience (optional)" }), { target: { value: "" } });
+    await user.click(within(dialog).getByRole("button", { name: "Check the plan" }));
+    expect(await within(dialog).findByText("A dynamic challenge needs a secret:// credential reference.")).toBeInTheDocument();
+    expect(apiMock.previewMDMSCEPPolicyUpdate).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByRole("textbox", { name: /Challenge credential reference/ }), "secret://mdm/jamf/scep-challenge");
+    await user.click(within(dialog).getByRole("button", { name: "Check the plan" }));
+    expect(await within(dialog).findByText("Ready to save")).toBeInTheDocument();
+    expect(within(dialog).getByText("Configured")).toBeInTheDocument();
+    expect(within(dialog).queryByText("secret://mdm/jamf/scep-challenge")).not.toBeInTheDocument();
+    expect(apiMock.previewMDMSCEPPolicyUpdate).toHaveBeenCalledWith(
+      "01900000-0000-7000-8000-000000000056",
+      expect.objectContaining({
+        provider: "jamf",
+        challenge_mode: "hmac-dynamic",
+        enabled: true,
+        challenge_credential_ref: "secret://mdm/jamf/scep-challenge",
       }),
     );
   });

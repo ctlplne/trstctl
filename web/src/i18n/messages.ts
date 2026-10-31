@@ -21247,6 +21247,31 @@ export const messages = {
     defaultMessage: "Disabled",
     description: "Badge label for disabled MDM SCEP policy.",
   },
+  "protocols.mdm.form.credentialRef": {
+    defaultMessage: "Challenge credential reference",
+    description: "A154: the secret:// reference of the username:password an MDM fetches dynamic challenges with.",
+  },
+  "protocols.mdm.form.credentialRefHelp": {
+    defaultMessage:
+      "A secret:// reference whose value is username:password. Configure the same username and password in the MDM (Jamf Pro: SCEP payload, challenge type Dynamic-Microsoft CA), with the policy's challenge page as the URL To SCEP Admin.",
+    description: "A154: help for the challenge credential field.",
+  },
+  "protocols.mdm.form.credentialRefPlaceholder": {
+    defaultMessage: "secret://mdm/jamf/scep-challenge",
+    description: "A154: example challenge credential reference.",
+  },
+  "protocols.mdm.form.credentialRefRequired": {
+    defaultMessage: "A dynamic challenge needs a secret:// credential reference.",
+    description: "A154: validation message.",
+  },
+  "protocols.mdm.form.credentialConfigured": {
+    defaultMessage: "Configured",
+    description: "A154: the preview shows the credential reference is set (never its value).",
+  },
+  "protocols.mdm.challengePathHelp": {
+    defaultMessage: "The page the MDM fetches one-time device challenges from, with the policy's credential.",
+    description: "A154: tooltip for an hmac-dynamic policy's challenge page path.",
+  },
   "protocols.mdm.rotationVersion": {
     defaultMessage: "Rotation version",
     description: "MDM SCEP policy rotation-version label.",

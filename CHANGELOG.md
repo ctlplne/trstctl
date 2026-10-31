@@ -2,6 +2,11 @@
 
 ### Added
 
+- Dynamic SCEP challenges for Jamf Pro and other MDMs that fetch a one-time challenge per device
+  (`hmac-dynamic`): a policy names a `challenge_credential_ref`, the MDM fetches each challenge
+  from `/scep/mscep_admin/{policy id}` with that credential (Jamf Pro: Dynamic-Microsoft CA), and
+  the SCEP gate verifies it against the policy it names and consumes it once in the durable
+  replay fence. Console, API and CLI carry the credential reference and the challenge page path.
 - Tenant download of its own signed audit archives: with the separate `audit:archive.read`
   permission, `GET /api/v1/audit/archives` lists the tenant's archived segments and
   `GET /api/v1/audit/archives/{id}` returns one (`?format=jws` for the raw segment; CLI

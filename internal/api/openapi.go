@@ -3366,9 +3366,10 @@ func componentSchemas() map[string]*Schema {
 	mdmSCEPPolicyReq := object(map[string]*Schema{
 		"name": str(), "provider": {Type: "string", Enum: []string{"intune", "jamf"}},
 		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
-		"challenge_mode":    {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}, Description: "Only intune-jws with the intune provider can be enabled on the served SCEP gate. Other modes may be staged disabled; enabled previews and writes are blocked."},
+		"challenge_mode":    {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}, Description: "intune-jws (intune provider) validates the MDM-signed challenge against trust_anchor_refs; hmac-dynamic serves per-device challenges at /scep/mscep_admin/{policy id} to the challenge_credential_ref credential and consumes each once."},
 		"trust_anchor_refs": {Type: "object"}, "profile_guidance": {Type: "object"},
-		"enabled": {Type: "boolean"},
+		"enabled":                  {Type: "boolean"},
+		"challenge_credential_ref": {Type: "string", Description: "hmac-dynamic only: secret:// reference to the username:password the MDM uses to fetch challenges."},
 	}, "name", "provider", "scep_profile", "scep_endpoint")
 	mdmSCEPPolicy := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "provider": str(),
@@ -3377,6 +3378,7 @@ func componentSchemas() map[string]*Schema {
 		"profile_guidance": {Type: "object"}, "enabled": {Type: "boolean"},
 		"rotation_version": {Type: "integer"}, "last_rotated_at": timestamp(),
 		"created_at": timestamp(), "updated_at": timestamp(),
+		"challenge_credential_ref": str(), "challenge_path": str(),
 	}, "id", "tenant_id", "name", "provider", "scep_profile", "scep_endpoint", "challenge_mode", "trust_anchor_refs", "profile_guidance", "enabled", "rotation_version", "created_at", "updated_at")
 	mdmSCEPPolicyList := object(map[string]*Schema{
 		"items": {Type: "array", Items: ref("MDMSCEPPolicy")},
@@ -3386,16 +3388,18 @@ func componentSchemas() map[string]*Schema {
 		"operation": {Type: "string", Enum: []string{"create", "update"}}, "policy_id": uuid(),
 		"name": str(), "provider": {Type: "string", Enum: []string{"intune", "jamf"}},
 		"scep_profile": str(), "scep_endpoint": str(), "expected_audience": str(),
-		"challenge_mode":              {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}},
-		"enabled":                     {Type: "boolean"},
-		"trust_anchor_reference_keys": {Type: "array", Items: str()},
-		"profile_guidance":            {Type: "object"},
-		"durable_writes":              {Type: "array", Items: str()},
-		"outside_calls":               {Type: "array", Items: str()},
-		"signer_calls":                {Type: "integer"},
-		"blockers":                    {Type: "array", Items: str()},
-		"recovery_steps":              {Type: "array", Items: str()},
-		"secret_data_handling":        str(),
+		"challenge_mode":                  {Type: "string", Enum: []string{"intune-jws", "hmac-dynamic"}},
+		"enabled":                         {Type: "boolean"},
+		"trust_anchor_reference_keys":     {Type: "array", Items: str()},
+		"challenge_credential_configured": {Type: "boolean"},
+		"challenge_path":                  str(),
+		"profile_guidance":                {Type: "object"},
+		"durable_writes":                  {Type: "array", Items: str()},
+		"outside_calls":                   {Type: "array", Items: str()},
+		"signer_calls":                    {Type: "integer"},
+		"blockers":                        {Type: "array", Items: str()},
+		"recovery_steps":                  {Type: "array", Items: str()},
+		"secret_data_handling":            str(),
 	}, "capability", "ready", "effect_free", "operation", "name", "provider", "scep_profile", "scep_endpoint", "challenge_mode", "enabled", "trust_anchor_reference_keys", "profile_guidance", "durable_writes", "outside_calls", "signer_calls", "blockers", "recovery_steps", "secret_data_handling")
 	mdmSCEPTelemetry := object(map[string]*Schema{
 		"allowed": {Type: "integer"}, "denied": {Type: "integer"}, "replay_rejected": {Type: "integer"},
