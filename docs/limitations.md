@@ -105,7 +105,7 @@ receipt cannot certify it.
 | F36 | API key / token inventory | docs/features/discovery-and-inventory.md, docs/features/secrets.md |
 | F17 | Certificate Transparency monitoring | docs/features/observability-and-risk.md |
 | Discovery coverage & provenance | Served: coverage is measured against **operator-declared segments** rather than against what discovery happened to find, with a per-segment staleness SLO, declared exclusions carrying their reason, and a named blind-spot register. Every certificate carries provenance — which source last observed it, of what kind, and when — distinct from when trstctl first recorded it. Headlined on the Discovery console. **Nothing is rollable into coverage until an operator declares a segment**: an inventory built from findings can describe what it found and nothing else, so an estate with no declarations reports no coverage rather than 100% | [Coverage, provenance and blind spots](#coverage-provenance-and-blind-spots) |
-| Revocation through external issuers | Served for **letsencrypt (ACME), vaultpki and ejbca** — each proven end to end against that authority's own protocol, asserting the AUTHORITY was contacted rather than that the call returned nil. Every other issuer kind reports `revoke: false` on the served capability matrix with a note naming where to revoke instead. A documented vendor endpoint trstctl does not drive is **not** counted as a capability. Revocation that cannot reach the authority **fails visibly**; there is no silent no-op | [Per-issuer capabilities](#per-issuer-capabilities) |
+| Revocation through external issuers | Served for **letsencrypt (ACME), vaultpki, ejbca, digicert, sectigo, venafi, awspca, gcpcas and smallstep** — each proven end to end against that authority's protocol (the vendor rows against protocol stand-ins in the repository; live vendor accounts are Track B), asserting the AUTHORITY was contacted rather than that the call returned nil — and for `adcs` through a `revocation_relay`. The remaining issuer kinds report `revoke: false` on the served capability matrix with a note naming where to revoke instead. A documented vendor endpoint trstctl does not drive is **not** counted as a capability. Revocation that cannot reach the authority **fails visibly**; there is no silent no-op | [Per-issuer capabilities](#per-issuer-capabilities) |
 | Upstream domain validation (DNS-01 as an ACME client) | Served: obtaining a certificate FROM a public CA now negotiates the challenge type the authority offers and solves DNS-01 unattended, reusing the provider configs already persisted for the server direction. **Wildcard issuance from a public CA works for the first time** — DNS-01 is the only challenge that can authorize one. Two independent opt-ins, both default off: `upstream_dns01` on the ACME authority (which also requires that authority's own `caa_issuer_domain`) and `allow_upstream_dv` on each DNS-01 provider config. The console shows a domain-validation column beside every configured issuer — unattended or manual, with the reason — and an upstream authorization freshness panel reporting when each identifier last actually proved control, as against when it last rode a reuse. DNS-01 only: http-01 upstream would need an inbound listener this architecture does not have | [Upstream domain validation](#upstream-domain-validation) |
 | F18 | Drift detection | docs/features/observability-and-risk.md |
 | F19 | Credential risk scoring | docs/features/observability-and-risk.md |
@@ -7117,11 +7117,21 @@ and is proven against that authority's protocol by a test:
 | `letsencrypt` | yes | RFC 8555 §7.6 `revokeCert`, JWS-signed with the account key |
 | `vaultpki` | yes | `POST {mount}/revoke` by serial number |
 | `ejbca` | yes | REST `PUT /certificate/{issuer_dn}/{serial}/revoke` |
+| `digicert` | yes | CertCentral: the order found by `filters[serial_number]`, then `PUT /certificate/{id}/revoke` with the reason and `skip_approval`; done only when the order reads back `revoked` |
+| `sectigo` | yes | SCM `POST /ssl/v1/revoke/serial/{serial}`; a refused retry is read back by serial before it counts as a failure |
+| `venafi` | yes | `POST /vedsdk/Certificates/Revoke` by SHA-1 thumbprint; done only when Venafi answers `Revoked` |
+| `awspca` | yes | `RevokeCertificate` with the colon-separated serial; `RequestAlreadyProcessedException` on a retry counts as done |
+| `gcpcas` | yes | `caPools.certificates.list` filtered by hex serial, then `:revoke` on that resource name |
+| `smallstep` | yes | `POST /1.0/revoke` (passive) under a provisioner token whose subject is the decimal serial |
 
-Everything else reports `false` with a note saying where to revoke instead.
-DigiCert, Sectigo, Venafi, AWS Private CA, Google CAS and step-ca all document a
-revocation API; trstctl does not drive any of them, and a documented endpoint
-nobody has implemented is a plan rather than a capability. AD CS Web Enrollment
+The vendor rows (A164) are proven against each vendor's protocol stand-in in the
+repository, including an issue, a bulk revocation through trstctl that shows the
+certificate revoked in inventory, and a redelivery that calls the vendor no
+second time; live vendor accounts are Track B. A reason a vendor does not take is
+recorded there as unspecified, and trstctl's own event keeps the precise one. A
+revocation the vendor holds for an approver (DigiCert, Venafi) is not reported
+revoked; the outbox delivery retries it. Everything else reports `false` with a
+note saying where to revoke instead. AD CS Web Enrollment
 cannot revoke; an `adcs` issuer that names a `revocation_relay` revokes through
 that domain-joined relay with certutil (A162), and one without a relay still
 refuses. Azure Key Vault disables certificates rather than revoking them.

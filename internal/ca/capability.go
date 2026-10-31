@@ -194,30 +194,24 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 		UnattendedDVNote: "EJBCA issues under its own certificate profile with no domain-validation challenge.",
 	},
 	{
-		Issuer: "digicert", Discover: false, Issue: true, Renew: true, Revoke: false,
+		Issuer: "digicert", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		IssueProven: true,
-		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "DigiCert's API documents certificate revocation, but trstctl ships no " +
-			"implementation and none is tested against it. Revoke from the DigiCert console.",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "Public DV/OV issuance through DigiCert's API requires validation steps trstctl does not drive. Complete DCV in the DigiCert console; trstctl cannot keep this authority validated unattended.",
 	},
 	{
-		Issuer: "sectigo", Discover: false, Issue: true, Renew: true, Revoke: false,
+		Issuer: "sectigo", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationOrganizational,
-		IssueProven: true,
-		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "Sectigo's API documents revocation; trstctl ships no implementation. " +
-			"Revoke from the Sectigo console.",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "Sectigo SCM validation is completed in Sectigo's own console; trstctl drives no DCV method for it.",
 	},
 	{
-		Issuer: "venafi", Discover: false, Issue: true, Renew: true, Revoke: false,
+		Issuer: "venafi", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationAccountScoped,
-		IssueProven: true,
-		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "Venafi's API documents revocation; trstctl ships no implementation. " +
-			"Revoke from Venafi.",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "Venafi issues against a policy folder the account is already scoped to; trstctl performs no domain validation.",
 	},
 	{
@@ -237,21 +231,17 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 		UnattendedDVNote: "GlobalSign validation is an organizational step outside trstctl.",
 	},
 	{
-		Issuer: "awspca", Discover: false, Issue: true, Renew: true, Revoke: false,
+		Issuer: "awspca", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		IssueProven: true,
-		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "AWS Private CA exposes RevokeCertificate; trstctl ships no implementation. " +
-			"Revoke with the AWS API or console.",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "AWS Private CA is internal and performs no domain validation.",
 	},
 	{
-		Issuer: "gcpcas", Discover: false, Issue: true, Renew: true, Revoke: false,
+		Issuer: "gcpcas", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		IssueProven: true,
-		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "Google CAS exposes RevokeCertificate; trstctl ships no implementation. " +
-			"Revoke with the gcloud API or console.",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "Google CAS is internal and performs no domain validation.",
 	},
 	{
@@ -265,12 +255,10 @@ var issuerCapabilityMatrix = []IssuerCapabilities{
 		UnattendedDVNote: "AD CS issues from template policy against a domain identity; there is no DCV challenge to solve.",
 	},
 	{
-		Issuer: "smallstep", Discover: false, Issue: true, Renew: true, Revoke: false,
+		Issuer: "smallstep", Discover: false, Issue: true, Renew: true, Revoke: true,
 		KeyHandling: KeyRequesterGenerated, Validation: ValidationInternal,
-		IssueProven: true,
-		Evidence:    externalCAUniversalEvidence,
-		RevokeNote: "step-ca exposes a revoke endpoint; trstctl ships no implementation. " +
-			"Revoke with the step CLI.",
+		IssueProven:      true,
+		Evidence:         externalCAUniversalEvidence,
 		UnattendedDVNote: "step-ca issues under provisioner policy; trstctl drives no ACME challenge against it.",
 	},
 	{

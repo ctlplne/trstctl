@@ -28,8 +28,10 @@ const caPool = "projects/trstctl-test/locations/us-central1/caPools/test-pool"
 type API struct {
 	authority *cryptoca.Authority
 
-	mu  sync.Mutex
-	seq int
+	mu      sync.Mutex
+	seq     int
+	certs   map[string]string // certificate name -> leaf PEM
+	revoked map[string]string // certificate name -> CAS reason
 }
 
 var _ gcpcas.API = (*API)(nil)
@@ -40,7 +42,7 @@ func NewAPI() (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{authority: authority}, nil
+	return &API{authority: authority, certs: map[string]string{}, revoked: map[string]string{}}, nil
 }
 
 // CaPool is the CA pool resource the double recognizes.
@@ -72,6 +74,7 @@ func (a *API) CreateCertificate(_ context.Context, in gcpcas.CreateCertificateIn
 	if id == "" {
 		id = "cert-" + strconv.Itoa(a.seq)
 	}
+	a.certs[caPool+"/certificates/"+id] = leaf
 	a.mu.Unlock()
 
 	return gcpcas.Certificate{

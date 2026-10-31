@@ -41,6 +41,9 @@ type Server struct {
 	orders map[int]*order
 	certs  map[int][]byte // certificate_id -> chain PEM
 	seq    int
+	// revoked maps certificate_id to the CertCentral reason it was revoked with.
+	revoked             map[int]string
+	revokeNeedsApproval bool
 }
 
 // NewServer starts a fake CertCentral API backed by a fresh software CA.
@@ -49,10 +52,12 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{authority: authority, orders: map[int]*order{}, certs: map[int][]byte{}}
+	s := &Server{authority: authority, orders: map[int]*order{}, certs: map[int][]byte{}, revoked: map[int]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /services/v2/order/certificate/{product}", s.handleOrder)
 	mux.HandleFunc("GET /services/v2/order/certificate/{orderID}", s.handleOrderInfo)
+	mux.HandleFunc("GET /services/v2/order/certificate", s.handleOrderList)
+	mux.HandleFunc("PUT /services/v2/certificate/{certID}/revoke", s.handleRevoke)
 	mux.HandleFunc("GET /services/v2/certificate/{certID}/download/format/{format}", s.handleDownload)
 	s.ts = httptest.NewServer(s.auth(mux))
 	return s, nil

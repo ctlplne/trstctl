@@ -35,6 +35,7 @@ type Server struct {
 	certs        map[string][]byte // CertificateDN -> PEM chain
 	guids        map[string]string // Guid -> CertificateDN
 	retrieveSeen map[string]int
+	revoked      map[string]int // CertificateDN -> reason
 	pendingPolls int
 	seq          int
 }
@@ -50,10 +51,12 @@ func NewServer() (*Server, error) {
 		certs:        map[string][]byte{},
 		guids:        map[string]string{},
 		retrieveSeen: map[string]int{},
+		revoked:      map[string]int{},
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /vedsdk/Certificates/Request", s.handleRequest)
 	mux.HandleFunc("POST /vedsdk/Certificates/Retrieve", s.handleRetrieve)
+	mux.HandleFunc("POST /vedsdk/Certificates/Revoke", s.handleRevoke)
 	s.ts = httptest.NewServer(s.auth(mux))
 	return s, nil
 }

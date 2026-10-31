@@ -2,6 +2,9 @@
 
 ### Added
 
+- Upstream revocation for DigiCert, Sectigo, Venafi, AWS Private CA, Google CAS and step-ca: a revoke
+  through trstctl reaches the vendor's API with the reason, the certificate shows revoked in
+  inventory, and a retry changes nothing; the issuer capability matrix now shows revoke for each.
 - AD CS revocation through trstctl: an `adcs` issuer that names a `revocation_relay` hands each
   revocation to that domain-joined relay, which revokes with certutil, publishes a new CRL and reads
   the row back before trstctl records the certificate revoked.

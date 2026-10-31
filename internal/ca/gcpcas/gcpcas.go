@@ -51,6 +51,11 @@ type Certificate struct {
 // issued certificate directly.
 type API interface {
 	CreateCertificate(ctx context.Context, in CreateCertificateInput) (Certificate, error)
+	// FindCertificateBySerial and RevokeCertificate are the revocation subset
+	// (A164): the pool's certificate by hex serial, then its revocation by
+	// resource name. A second revocation returns ErrAlreadyRevoked.
+	FindCertificateBySerial(ctx context.Context, caPool, hexSerial string) (RevocationTarget, error)
+	RevokeCertificate(ctx context.Context, name, reason, requestID string) error
 }
 
 const defaultValidity = 90 * 24 * time.Hour

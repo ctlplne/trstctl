@@ -40,6 +40,7 @@ type Server struct {
 	mu           sync.Mutex
 	certs        map[int][]byte // sslId -> chain PEM
 	collectCount map[int]int    // sslId -> times collect has been called
+	revoked      map[int]int    // sslId -> revocation reason code
 	pendingPolls int            // initial collects per cert that report "being processed"
 	seq          int
 }
@@ -51,10 +52,13 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{authority: authority, certs: map[int][]byte{}, collectCount: map[int]int{}}
+	s := &Server{authority: authority, certs: map[int][]byte{}, collectCount: map[int]int{}, revoked: map[int]int{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/ssl/v1/enroll", s.handleEnroll)
 	mux.HandleFunc("GET /api/ssl/v1/collect/{sslID}/{format}", s.handleCollect)
+	mux.HandleFunc("POST /api/ssl/v1/revoke/serial/{serial}", s.handleRevokeBySerial)
+	mux.HandleFunc("GET /api/ssl/v1", s.handleList)
+	mux.HandleFunc("GET /api/ssl/v1/{sslID}", s.handleDetail)
 	s.ts = httptest.NewServer(s.auth(mux))
 	return s, nil
 }

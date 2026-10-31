@@ -73,6 +73,9 @@ type GetCertificateOutput struct {
 type API interface {
 	IssueCertificate(ctx context.Context, in IssueCertificateInput) (IssueCertificateOutput, error)
 	GetCertificate(ctx context.Context, in GetCertificateInput) (GetCertificateOutput, error)
+	// RevokeCertificate revokes one certificate by serial (A164). A second
+	// revocation of the same serial returns ErrAlreadyRevoked.
+	RevokeCertificate(ctx context.Context, in RevokeCertificateInput) error
 }
 
 const (

@@ -113,6 +113,11 @@ func (a *HTTPAPI) GetCertificate(ctx context.Context, in GetCertificateInput) (G
 	return out, err
 }
 
+// RevokeCertificate implements API through ACMPrivateCA.RevokeCertificate.
+func (a *HTTPAPI) RevokeCertificate(ctx context.Context, in RevokeCertificateInput) error {
+	return a.call(ctx, "RevokeCertificate", in, nil)
+}
+
 func (a *HTTPAPI) call(ctx context.Context, operation string, in, out any) error {
 	body, err := json.Marshal(in)
 	if err != nil {
@@ -129,7 +134,8 @@ func (a *HTTPAPI) call(ctx context.Context, operation string, in, out any) error
 	if err := cloudhttp.JSON(a.doer, req, out,
 		cloudhttp.WithTimeout(a.timeout), cloudhttp.WithSigner(a.sigV4Signer()),
 		cloudhttp.WithStatusMapper(mapAWSPrivateCAStatus)); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrRequestInProgress) {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrRequestInProgress) ||
+			errors.Is(err, ErrAlreadyRevoked) {
 			return err
 		}
 		var statusErr *cloudhttp.StatusError
@@ -145,6 +151,10 @@ func mapAWSPrivateCAStatus(_ int, body []byte) error {
 	if containsASCIIFold(body, []byte("requestinprogressexception")) ||
 		containsASCIIFold(body, []byte("request in progress")) {
 		return ErrRequestInProgress
+	}
+	// RevokeCertificate's answer for a serial it already revoked (A164).
+	if containsASCIIFold(body, []byte("requestalreadyprocessedexception")) {
+		return ErrAlreadyRevoked
 	}
 	return nil
 }

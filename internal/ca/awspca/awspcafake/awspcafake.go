@@ -31,6 +31,7 @@ type API struct {
 
 	mu           sync.Mutex
 	certs        map[string][]byte // certificate ARN -> chain PEM
+	revoked      map[string]string // certificate ARN -> RevocationReason
 	getCount     map[string]int
 	seq          int
 	pendingPolls int
@@ -45,7 +46,7 @@ func NewAPI() (*API, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &API{authority: authority, certs: map[string][]byte{}, getCount: map[string]int{}}, nil
+	return &API{authority: authority, certs: map[string][]byte{}, revoked: map[string]string{}, getCount: map[string]int{}}, nil
 }
 
 // CAArn is the certificate-authority ARN the double recognizes.

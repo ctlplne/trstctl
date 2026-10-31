@@ -221,6 +221,9 @@ func (b *backend) post(ctx context.Context, url string, body, out any) error {
 		return errors.New("smallstep: read response failed")
 	}
 	defer secret.Wipe(data)
+	if resp.StatusCode == http.StatusBadRequest && bytes.Contains(data, []byte("has already been revoked")) {
+		return errAlreadyRevoked
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return apiError(resp.StatusCode, data)
 	}

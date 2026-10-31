@@ -31,6 +31,7 @@ type Server struct {
 	ts        *httptest.Server
 	authority *cryptoca.Authority
 	key       []byte // the JWK (symmetric) provisioner secret
+	revoked   revocations
 }
 
 // NewServer starts a fake step-ca backed by a fresh software CA and a random
@@ -44,10 +45,11 @@ func NewServer() (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{authority: authority, key: key}
+	s := &Server{authority: authority, key: key, revoked: revocations{reasons: map[string]int{}}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("POST /1.0/sign", s.handleSign)
+	mux.HandleFunc("POST /1.0/revoke", s.handleRevoke)
 	s.ts = httptest.NewServer(mux)
 	return s, nil
 }

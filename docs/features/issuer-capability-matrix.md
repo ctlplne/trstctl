@@ -22,18 +22,18 @@ Before production, run the same scoped issuance with your configured account.
 | Issuer | Issue | Protocol issuance proof | Renew | Revoke | Unattended DV | Key handling |
 | --- | --- | --- | --- | --- | --- | --- |
 | `adcs` | yes | yes | yes | no | no | requester_csr |
-| `awspca` | yes | yes | yes | no | no | requester_csr |
+| `awspca` | yes | yes | yes | yes | no | requester_csr |
 | `azurekv` | yes | yes | yes | no | no | authority_generated |
-| `digicert` | yes | yes | yes | no | no | requester_csr |
+| `digicert` | yes | yes | yes | yes | no | requester_csr |
 | `ejbca` | yes | yes | yes | yes | no | requester_csr |
 | `entrust` | yes | yes | yes | no | no | requester_csr |
-| `gcpcas` | yes | yes | yes | no | no | requester_csr |
+| `gcpcas` | yes | yes | yes | yes | no | requester_csr |
 | `globalsign` | yes | yes | yes | no | no | requester_csr |
 | `letsencrypt` | yes | yes | yes | yes | yes | requester_csr |
-| `sectigo` | yes | yes | yes | no | no | requester_csr |
-| `smallstep` | yes | yes | yes | no | no | requester_csr |
+| `sectigo` | yes | yes | yes | yes | no | requester_csr |
+| `smallstep` | yes | yes | yes | yes | no | requester_csr |
 | `vaultpki` | yes | yes | yes | yes | no | requester_csr |
-| `venafi` | yes | yes | yes | no | no | requester_csr |
+| `venafi` | yes | yes | yes | yes | no | requester_csr |
 
 ## adcs
 
@@ -50,8 +50,6 @@ Before production, run the same scoped issuance with your configured account.
 **Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
-
-**Revocation:** AWS Private CA exposes RevokeCertificate; trstctl ships no implementation. Revoke with the AWS API or console.
 
 **Unattended domain validation:** AWS Private CA is internal and performs no domain validation.
 
@@ -70,8 +68,6 @@ Before production, run the same scoped issuance with your configured account.
 **Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
-
-**Revocation:** DigiCert's API documents certificate revocation, but trstctl ships no implementation and none is tested against it. Revoke from the DigiCert console.
 
 **Unattended domain validation:** Public DV/OV issuance through DigiCert's API requires validation steps trstctl does not drive. Complete DCV in the DigiCert console; trstctl cannot keep this authority validated unattended.
 
@@ -99,8 +95,6 @@ Before production, run the same scoped issuance with your configured account.
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
-**Revocation:** Google CAS exposes RevokeCertificate; trstctl ships no implementation. Revoke with the gcloud API or console.
-
 **Unattended domain validation:** Google CAS is internal and performs no domain validation.
 
 ## globalsign
@@ -125,8 +119,6 @@ Before production, run the same scoped issuance with your configured account.
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
 
-**Revocation:** Sectigo's API documents revocation; trstctl ships no implementation. Revoke from the Sectigo console.
-
 **Unattended domain validation:** Sectigo SCM validation is completed in Sectigo's own console; trstctl drives no DCV method for it.
 
 ## smallstep
@@ -134,8 +126,6 @@ Before production, run the same scoped issuance with your configured account.
 **Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
-
-**Revocation:** step-ca exposes a revoke endpoint; trstctl ships no implementation. Revoke with the step CLI.
 
 **Unattended domain validation:** step-ca issues under provisioner policy; trstctl drives no ACME challenge against it.
 
@@ -152,8 +142,6 @@ Before production, run the same scoped issuance with your configured account.
 **Backed by:** internal/server: TestDODExternalCAUniversalProductionAssembly; internal/ca: TestRevokeMatrixMatchesTheImplementations, TestUnattendedDVMatrixMatchesTheImplementations, TestExternalCAHTTPDefaultsBlockSSRF
 
 **Protocol issuance proof:** the universal DoD test drives this driver through its high-fidelity authority-protocol substrate and independently verifies the returned chain. This does not replace a scoped test against your real vendor account.
-
-**Revocation:** Venafi's API documents revocation; trstctl ships no implementation. Revoke from Venafi.
 
 **Unattended domain validation:** Venafi issues against a policy folder the account is already scoped to; trstctl performs no domain validation.
 
