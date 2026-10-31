@@ -58,7 +58,7 @@ func newSecretSyncLifecycleAuthority() *secretSyncLifecycleAuthority {
 func classifySecretSyncLifecycle(ctx context.Context, log *events.Log) (*secretSyncLifecycleAuthority, error) {
 	var authority *secretSyncLifecycleAuthority
 	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		head, err := log.LastSequence(readCtx)
+		head, err := projectionHistoryHead(readCtx, log)
 		if err != nil {
 			return err
 		}
@@ -81,7 +81,7 @@ func classifySecretSyncLifecycleThrough(
 ) (*secretSyncLifecycleAuthority, error) {
 	authority := newSecretSyncLifecycleAuthority()
 	authority.head = head
-	if err := log.ReplayThrough(ctx, 0, head, func(event events.Event) error {
+	if err := replayProjectionThrough(ctx, log, 0, head, func(event events.Event) error {
 		_, err := authority.observe(event)
 		return err
 	}); err != nil {

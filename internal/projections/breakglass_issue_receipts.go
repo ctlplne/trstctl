@@ -64,7 +64,7 @@ func (p *Projector) backfillBreakglassIssueReceipts(ctx context.Context, log *ev
 	if checked == through {
 		return nil
 	}
-	err = log.ReplayTypesThrough(ctx, checked+1, through, []string{EventBreakglassIssued}, func(e events.Event) error {
+	err = replayProjectionTypesThrough(ctx, log, checked+1, through, []string{EventBreakglassIssued}, func(e events.Event) error {
 		rec, online, err := breakglassIssueReceiptFromEvent(e)
 		if err != nil || !online {
 			return err

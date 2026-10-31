@@ -24,7 +24,7 @@ func (p *Projector) legacyManagedCAInventoryNeedsRebuild(ctx context.Context, lo
 		if err != nil {
 			return err
 		}
-		head, err := log.LastSequence(readCtx)
+		head, err := projectionHistoryHead(readCtx, log)
 		if err != nil {
 			return err
 		}
@@ -46,7 +46,7 @@ func (p *Projector) legacyManagedCAInventoryNeedsRebuild(ctx context.Context, lo
 		for _, tenant := range tenants {
 			registeredAt[tenant.TenantID] = tenant.EventSeq
 		}
-		err = log.ReplayThrough(readCtx, from, applied, func(e events.Event) error {
+		err = replayProjectionThrough(readCtx, log, from, applied, func(e events.Event) error {
 			registration, live := registeredAt[e.TenantID]
 			if !live || e.Sequence < registration || e.Type != EventCAEndEntityIssued ||
 				schemaVersionOf(e) != CAIssuedCertificateEvidenceSchemaVersion {

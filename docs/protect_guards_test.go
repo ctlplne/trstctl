@@ -3110,7 +3110,7 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 	for _, want := range []string{
 		"func (p *Projector) ProjectCatchUp(",
 		"from, err := p.store.ProjectionCheckpoint(readCtx)",
-		"log.ReplayThrough(readCtx, from+1, replayHead",
+		"replayProjectionThrough(readCtx, log, from+1, replayHead",
 		"p.store.AdvanceProjectionCheckpoint(readCtx, last)",
 		"const checkpointEvery = 256",
 		"func (p *Projector) Rebuild(",
@@ -3122,6 +3122,22 @@ func TestSpineStrengthGuardsStayRequired(t *testing.T) {
 			t.Errorf("SPINE-102: projections.go no longer contains %q; checkpoint/snapshot projection proof weakened", want)
 		}
 	}
+	// The extraction keeps the raw, finite log replay as the transport. Only a
+	// current-custody verified projection view may omit a retired lifetime, and
+	// known schema checks still apply before an omitted event is accepted.
+	erasedHistory := read(t, "../internal/projections/erased_history.go")
+	for _, want := range []string{
+		"log.ReplayThrough(ctx, from, through, projectionHistoryVisit(ctx, log, visit))",
+		"view.plan.WithSource(ctx, event,",
+		"return ValidateSchemaVersion(event)",
+		"through > view.plan.Head()",
+		"p.rebuildFromPlannedHistory(read, log)",
+	} {
+		if !strings.Contains(erasedHistory, want) {
+			t.Errorf("SPINE-102: erased_history.go no longer contains %q; finite authenticated reconstruction weakened", want)
+		}
+	}
+
 	snapshotGo := read(t, "../internal/store/snapshot.go")
 	for _, want := range []string{
 		"const SnapshotFormatVersion = 66",

@@ -99,7 +99,11 @@ func (r *eventProtectionRuntime) openOptions() []events.OpenOption {
 }
 
 func (r *eventProtectionRuntime) projectionOptions() []projections.Option {
-	options := []projections.Option{projections.WithEventProtectionOffboardPolicy(&r.policy)}
+	planner := &eventprivacy.ErasurePlanner{Policy: r.policy}
+	if r.custody != nil {
+		planner.Custody = r.custody
+	}
+	options := []projections.Option{projections.WithEventProtectionOffboardPolicy(&r.policy), projections.WithEventProtectionErasurePlanner(planner)}
 	activation := &eventprivacy.ActivationVerifier{Policy: r.policy}
 	completion := &eventprivacy.CompletionVerifier{Policy: r.policy}
 	if r.custody != nil {

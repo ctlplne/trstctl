@@ -1061,8 +1061,17 @@ committed invocation plus retained offboard, retention and hold authority.
 supply both independent pools. A bounded sweep removes finalized minimal intents
 only after rechecking retained signed completion and current independent absence.
 It uses the same worker family and shutdown barrier; a delivered row alone grants
-no cleanup. Public enable controls, interrupted-journal startup recovery, protected
-artifacts and full erasure-aware restore remain unavailable.
+no cleanup.
+
+Configured full read-model rebuild has local tests after completed destruction.
+It omits a retired lifetime only when its retained activation matches the original
+signed removal and the current custodian independently confirms key absence.
+An older source cut containing that activation can use the same current evidence;
+rebuild never appends missing offboard records or recreates a historical key.
+Later registrations and neighboring tenants remain independent. These tests do
+not establish complete authenticated backup or snapshot restoration. Public
+enable controls, warm catch-up, interrupted-journal startup recovery and protected
+artifacts still need the complete opt-in workflow.
 
 ## Provider workforce identity and customer access
 

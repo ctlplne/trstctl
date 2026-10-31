@@ -3854,6 +3854,7 @@ type identityTransitionEffect struct {
 // read model is always a projection of the log; nothing writes the served
 // domain read model except through here.
 type Projector struct {
+	eventProtectionErasurePlanner     *eventprivacy.ErasurePlanner
 	store                             *store.Store
 	eventProjections                  []EventProjection
 	allowSecretSyncRecoveryBootstrap  bool
@@ -4553,7 +4554,7 @@ func (p *Projector) rebuildEventProjectionsThrough(
 	if replayHead == 0 {
 		return nil
 	}
-	return log.ReplayThrough(ctx, 0, replayHead, func(e events.Event) error {
+	return replayProjectionThrough(ctx, log, 0, replayHead, func(e events.Event) error {
 		if isTenantLifecycleEventType(e.Type) {
 			return p.replayRetainedTenantLifecycleEventProjections(ctx, e)
 		}
@@ -9424,6 +9425,10 @@ func decode(e events.Event, v any) error {
 // from sequence 0; ProjectCatchUp is the bounded boot path. Project remains for
 // tests and for an explicit "apply everything from scratch" caller.
 func (p *Projector) Project(ctx context.Context, log *events.Log) error {
+	return p.withErasedHistory(ctx, log, func(read context.Context) error { return p.projectFromPlannedHistory(read, log) })
+}
+
+func (p *Projector) projectFromPlannedHistory(ctx context.Context, log *events.Log) error {
 	if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
 		return err
 	}
@@ -9438,7 +9443,7 @@ func (p *Projector) Project(ctx context.Context, log *events.Log) error {
 	if err := p.resetEventProjections(ctx); err != nil {
 		return err
 	}
-	if err := log.Replay(ctx, 0, func(e events.Event) error {
+	if err := replayProjection(ctx, log, 0, func(e events.Event) error {
 		skip, err := secretAuthority.skip(e)
 		if err != nil {
 			return err
@@ -9554,7 +9559,7 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			if err != nil {
 				return fmt.Errorf("projections: read checkpoint: %w", err)
 			}
-			replayHead, err := log.LastSequence(readCtx)
+			replayHead, err := projectionHistoryHead(readCtx, log)
 			if err != nil {
 				return fmt.Errorf("projections: capture catch-up history head: %w", err)
 			}
@@ -9590,7 +9595,7 @@ func (p *Projector) projectCatchUpWithPrivacyBarrier(ctx context.Context, log *e
 			var last uint64
 			sinceCheckpoint := 0
 			if from < replayHead {
-				err = log.ReplayThrough(readCtx, from+1, replayHead, func(e events.Event) error {
+				err = replayProjectionThrough(readCtx, log, from+1, replayHead, func(e events.Event) error {
 					skip, err := secretAuthority.skip(e)
 					if err != nil {
 						return err
@@ -9660,22 +9665,14 @@ func (p *Projector) AdvanceCheckpoint(ctx context.Context, seq uint64) error {
 // carries its tenant_id explicitly, so AN-1 holds even with RLS bypassed for this
 // trusted system operation.
 func (p *Projector) Rebuild(ctx context.Context, log *events.Log) error {
-	if !p.allowSecretSyncRecoveryBootstrap {
-		if err := p.validateSecretSyncRetainedHistory(ctx, log, false, false); err != nil {
-			return err
-		}
-	}
-	if err := p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
+	return p.store.WithPrivacyReadModelReplacementBarrier(ctx, func(barrierCtx context.Context) error {
 		return p.rebuildWithPrivacyBarrier(barrierCtx, log)
-	}); err != nil {
-		return err
-	}
-	return p.validateSecretSyncRetainedHistory(ctx, log, true, false)
+	})
 }
 
-func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.Log) error {
+func (p *Projector) rebuildFromPlannedHistory(ctx context.Context, log *events.Log) error {
 	return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		replayHead, err := log.LastSequence(readCtx)
+		replayHead, err := projectionHistoryHead(readCtx, log)
 		if err != nil {
 			return fmt.Errorf("projections: capture rebuild history head: %w", err)
 		}
@@ -9688,7 +9685,7 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 		if err != nil {
 			return fmt.Errorf("projections: preflight dynamic-secret lifecycle: %w", err)
 		}
-		if err := log.ReplayThrough(readCtx, 1, replayHead, func(event events.Event) error {
+		if err := replayProjectionThrough(readCtx, log, 1, replayHead, func(event events.Event) error {
 			if event.Type != audit.EventTypeArchived {
 				return nil
 			}
@@ -9768,7 +9765,7 @@ func (p *Projector) rebuildWithPrivacyBarrier(ctx context.Context, log *events.L
 			if err := p.store.ResetProjectionCheckpointTx(readCtx, tx); err != nil {
 				return err
 			}
-			if err := log.ReplayThrough(readCtx, 0, replayHead, func(e events.Event) error {
+			if err := replayProjectionThrough(readCtx, log, 0, replayHead, func(e events.Event) error {
 				// The preflight authority marks exactly the secret-bearing source and
 				// terminal sequences erased by an offboarded lifecycle. A later
 				// registration of the same tenant UUID is classified independently.
@@ -9896,7 +9893,7 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 		// checkpoint to the snapshot offset and replay the tail after it, advancing the
 		// checkpoint to the new head — all committing or rolling back together.
 		txErr := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-			replayHead, herr := log.LastSequence(readCtx)
+			replayHead, herr := projectionHistoryHead(readCtx, log)
 			if herr != nil {
 				return fmt.Errorf("projections: capture snapshot-tail history head: %w", herr)
 			}
@@ -9925,7 +9922,7 @@ func (p *Projector) restoreFromSnapshotWithPrivacyBarrier(
 				if serr := p.store.SetProjectionCheckpointTx(readCtx, tx, from); serr != nil {
 					return serr
 				}
-				if rerr := log.ReplayThrough(readCtx, from+1, replayHead, func(e events.Event) error {
+				if rerr := replayProjectionThrough(readCtx, log, from+1, replayHead, func(e events.Event) error {
 					_, skipSecretSync := secretAuthority.skipSequences[e.Sequence]
 					_, skipDynamicSecret := dynamicSecretAuthority.skipSequences[e.Sequence]
 					if skipSecretSync || skipDynamicSecret {

@@ -94,3 +94,12 @@ bytes. Its private authority/tenant grant expires on return and refuses concurre
 borrows. Native session-loss/close/cancellation tests run on macOS; Windows amd64
 and Linux arm64 locking paths have compile-only checks until native qualification.
 Independent host snapshots and copied keys remain outside physical-erasure proof.
+
+Configured full-source reconstruction uses `eventprivacy.ErasurePlanner` to match
+retained lifetime coordinates to the original signed current removal. Its finite
+plan expires on callback return and rechecks current absence under one custody
+fence per omission. Core and optional projection preflights use that view; raw
+source, audit commitments and backup record counts do not. An activation-containing
+older source cut may omit a later-erased lifetime without inventing its offboard
+event. Pre-feature plaintext remains unchanged. Full backup/snapshot restore and
+warm catch-up still require their own integration proof.

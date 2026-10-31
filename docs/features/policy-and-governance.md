@@ -452,7 +452,13 @@ post-delete delivery verifies retained authority, deadline and signed removal.
 Ordinary drains cannot claim either queue. Finalized intent cleanup rechecks the
 signed source and current custody before removing one exact operational row.
 Local tests cover zero tenant SQL residue, blocked prior-worker shutdown, invalid
-candidate paging and preservation of a later registration. Public controls,
+candidate paging and preservation of a later registration. Local operator rebuild
+tests also cover completed destruction, an older activation-containing source cut
+and a later registration. Reconstruction omits only the retired lifetime after
+checking its original signed receipt and current key absence; encrypted source
+bytes, raw counts, checkpoints and neighbor state remain intact. This is source
+reconstruction proof, not full authenticated backup or snapshot restore. Warm
+catch-up still needs that same protection before the workflow is available. Public controls,
 interrupted-journal startup recovery and the full backup/restore journey are
 still required; this is not a served opt-in workflow.
 An explicit public JWKS file can retain destruction-evidence verification after

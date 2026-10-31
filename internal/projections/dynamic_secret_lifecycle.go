@@ -83,7 +83,7 @@ func newDynamicSecretLifecycleAuthority() *dynamicSecretLifecycleAuthority {
 func classifyDynamicSecretLifecycle(ctx context.Context, log *events.Log) (*dynamicSecretLifecycleAuthority, error) {
 	var authority *dynamicSecretLifecycleAuthority
 	err := log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		head, err := log.LastSequence(readCtx)
+		head, err := projectionHistoryHead(readCtx, log)
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,7 @@ func classifyDynamicSecretLifecycleThrough(
 ) (*dynamicSecretLifecycleAuthority, error) {
 	authority := newDynamicSecretLifecycleAuthority()
 	authority.head = head
-	if err := log.ReplayThrough(ctx, 0, head, func(event events.Event) error {
+	if err := replayProjectionThrough(ctx, log, 0, head, func(event events.Event) error {
 		_, err := authority.observe(event)
 		return err
 	}); err != nil {

@@ -123,7 +123,7 @@ func (p *Projector) keyOriginDerivationNeedsRebuild(ctx context.Context, log *ev
 		if err != nil {
 			return err
 		}
-		head, err := log.LastSequence(readCtx)
+		head, err := projectionHistoryHead(readCtx, log)
 		if err != nil {
 			return err
 		}
@@ -137,7 +137,7 @@ func (p *Projector) keyOriginDerivationNeedsRebuild(ctx context.Context, log *ev
 		if from > applied {
 			return nil
 		}
-		err = log.ReplayThrough(readCtx, from, applied, func(e events.Event) error {
+		err = replayProjectionThrough(readCtx, log, from, applied, func(e events.Event) error {
 			if e.Type != EventCertificateRecorded {
 				return nil
 			}

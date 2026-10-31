@@ -38,7 +38,7 @@ func (p *Projector) validateSecretSyncRetainedHistory(
 		}
 	}
 	return log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		head, err := log.LastSequence(readCtx)
+		head, err := projectionHistoryHead(readCtx, log)
 		if err != nil {
 			return fmt.Errorf("projections: read secret-sync history head: %w", err)
 		}

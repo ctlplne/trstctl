@@ -29,7 +29,7 @@ func (p *Projector) backfillCertificateReprotectionIssuerNames(ctx context.Conte
 	if checked == through {
 		return nil
 	}
-	err = log.ReplayTypesThrough(ctx, checked+1, through, []string{EventCertificateReprotectionCutover}, func(e events.Event) error {
+	err = replayProjectionTypesThrough(ctx, log, checked+1, through, []string{EventCertificateReprotectionCutover}, func(e events.Event) error {
 		var cut store.CertificateReprotectionCutover
 		if err := json.Unmarshal(e.Data, &cut); err != nil {
 			return fmt.Errorf("projections: decode CA re-protection cutover for name recovery: %w", err)

@@ -19,7 +19,7 @@ func (p *Projector) backfillCertificateIssuanceReceipts(ctx context.Context, log
 	if err != nil || !needed {
 		return err
 	}
-	return log.ReplayThrough(ctx, 0, through, func(e events.Event) error {
+	return replayProjectionThrough(ctx, log, 0, through, func(e events.Event) error {
 		dependent, err := CertificateMetadataEvent(e)
 		if err != nil {
 			return err

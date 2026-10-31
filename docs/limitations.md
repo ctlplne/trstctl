@@ -1736,8 +1736,16 @@ assembled bounded dispatcher and shutdown drain, with independent key readback,
 signed removal and a preserved neighbor. Ordinary outbox drains exclude their
 queues. Finalized intents now have bounded source/current-custody-verified cleanup,
 with actual all-catalog SQL-zero, prior pooled-worker drain and invalid-page checks.
-Public operator controls, interrupted-journal restart recovery, protected backup/archive
-artifacts and complete erasure-aware restore are not served yet.
+Actual operator rebuild now has local tests after completed key destruction,
+including an older source cut that contains activation but predates offboarding,
+and a later registration of the same tenant UUID. Current signed removal and
+independent key absence select only the retired lifetime for omission from core
+and optional projections. The original source bytes, record count, checkpoint,
+receipt and neighboring tenant remain intact. Private secret lifecycle preflights
+use the same reconstruction view. This does not prove a full authenticated backup
+or snapshot restore. Public operator controls, warm catch-up, interrupted-journal
+restart recovery, protected backup/archive artifacts and complete erasure-aware
+restore are not served yet.
 Separately pinned public verification keys now have runtime-configuration tests
 for signer rotation, original-receipt preservation and current material refusal;
 that component proof does not establish complete authenticated backup restore.

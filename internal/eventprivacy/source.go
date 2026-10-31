@@ -68,6 +68,21 @@ func (policy SourcePolicy) LatestLifetime(ctx context.Context, tenantID string) 
 }
 
 func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string, visit func(Lifetime) error) error {
+	if policy.Log == nil {
+		return ErrSource
+	}
+	return policy.Log.WithHistoryRead(ctx, func(read context.Context) error {
+		head, err := policy.Log.LastSequence(read)
+		if err != nil {
+			return err
+		}
+		return policy.replayLifetimesThrough(read, tenantID, head, visit)
+	})
+}
+
+// replayLifetimesThrough keeps every tenant fold inside the same captured cut,
+// even when another writer appends within the retained history generation.
+func (policy SourcePolicy) replayLifetimesThrough(ctx context.Context, tenantID string, head uint64, visit func(Lifetime) error) error {
 	if policy.Log == nil || tenantID == "" || visit == nil {
 		return ErrSource
 	}
@@ -75,15 +90,11 @@ func (policy SourcePolicy) replayLifetimes(ctx context.Context, tenantID string,
 		tenantID = parsed.String()
 	}
 	return policy.Log.WithHistoryRead(ctx, func(readCtx context.Context) error {
-		head, err := policy.Log.LastSequence(readCtx)
-		if err != nil {
-			return err
-		}
 		var current *Lifetime
 		var lifetimes []*Lifetime
 		byKey := make(map[string]*Lifetime)
 		seen := make(map[string]events.EnvelopeMetadata)
-		err = policy.Log.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventHoldClearance, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
+		err := policy.Log.ReplayTenantMetadataTypesThrough(readCtx, tenantID, 1, head, []string{eventRegistered, eventOffboarded, EventRequested, EventActivated, EventHoldClearance, EventDestroyed}, func(meta events.EnvelopeMetadata) error {
 			if meta.SchemaVersion != 1 {
 				return ErrSource
 			}
