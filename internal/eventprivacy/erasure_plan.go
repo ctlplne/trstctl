@@ -157,7 +157,11 @@ func (planner ErasurePlanner) WithPlan(ctx context.Context, visit func(context.C
 					if err != nil {
 						return err
 					}
-					if !receiptMatchesAvailableLifetime(life, claims, head) {
+					matches, err := planner.Policy.receiptMatchesCurrentLifetime(fenced, life, claims, head, planner.Custody, receipt)
+					if err != nil {
+						return err
+					}
+					if !matches {
 						return ErrSource
 					}
 					if life.Completion != nil && life.Completion.JWS != receipt {
@@ -196,7 +200,18 @@ func receiptMatchesAvailableLifetime(life Lifetime, claims eventprotect.Destruct
 		return matchesLifetimeDestruction(life, claims.Request)
 	}
 	request := claims.Request
-	if request.OffboardSequence <= head || !request.NotBefore.Equal(request.OffboardedAt.Add(time.Duration(life.Activation.Body.RetentionNanos))) {
+	if request.OffboardSequence <= head {
+		return false
+	}
+	return receiptMatchesAbsentLifetime(life, claims)
+}
+
+func receiptMatchesAbsentLifetime(life Lifetime, claims eventprotect.DestructionClaims) bool {
+	if life.Activation == nil || claims.Request.Validate() != nil || claims.RemovedAt.Before(claims.Request.NotBefore) {
+		return false
+	}
+	request := claims.Request
+	if !request.NotBefore.Equal(request.OffboardedAt.Add(time.Duration(life.Activation.Body.RetentionNanos))) {
 		return false
 	}
 	// This temporary value is comparison material from the verified signature;

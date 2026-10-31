@@ -253,7 +253,7 @@ func TestEventProtectionFullRestoreHonorsCurrentErasureAndPreservesNeighborSQL(t
 func TestEventProtectionLegacySQLRestoreHonorsPreactivationCurrentErasure(t *testing.T) {
 	eventProtectionErasedSQLRestore(t, true)
 }
-func eventProtectionErasedSQLRestore(t *testing.T, legacy bool) {
+func eventProtectionErasedSQLRestore(t *testing.T, legacy bool) (*config.Config, *store.Store, protectedSQLBackupFixture, eventprotect.DestructionClaims) {
 	info := eventProtectionPostgresBackupFixture(t, time.Nanosecond, !legacy)
 	cfg := info.Config
 	if legacy {
@@ -392,6 +392,11 @@ func eventProtectionErasedSQLRestore(t *testing.T, legacy bool) {
 	if err != nil || crypto.SHA256Hex(after) != originalDigest {
 		t.Fatal("restore rewrote retained backup ciphertext")
 	}
+	claims, err := eventprotect.VerifyDestructionReceipt(key.JWKS(), receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return target, restored, info, claims
 }
 
 func protectedSQLRestoreTarget(t *testing.T, cfg *config.Config) *config.Config {

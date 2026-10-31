@@ -1127,6 +1127,14 @@ fixtures; CA/audit signing uses the shipped child in Mac evaluation mode. This
 proves those recovery paths, not public activation, snapshot/WORM integration,
 Linux hardening or a complete final-image operator workflow.
 
+An old restored source can grow on another tenant's branch past the original
+offboard sequence number. Derived rebuild, catch-up, tail and legacy SQL import
+now require the exact current creation identity, completed signed receipt and
+current material absence for that erased registration when this happens. A
+receipt-only adapter without current identity lookup retains the finite-cut rule.
+This floor grants no signing, key creation, removal or invented source control,
+and does not claim that the old source contains the original offboard event.
+
 ## Provider workforce identity and customer access
 
 The Provider plane is a different privilege domain from tenant login. OIDC or

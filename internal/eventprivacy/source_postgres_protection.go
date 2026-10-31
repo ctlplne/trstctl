@@ -105,7 +105,11 @@ func (p SourcePostgresProtection) withLifetimeKey(ctx context.Context, life Life
 		if err != nil {
 			return err
 		}
-		if !receiptMatchesAvailableLifetime(life, claims, p.Cut) || (life.Completion != nil && life.Completion.JWS != receipt) {
+		matches, err := p.Policy.receiptMatchesCurrentLifetime(fenced, life, claims, p.Cut, p.Custody, receipt)
+		if err != nil {
+			return err
+		}
+		if !matches || (life.Completion != nil && life.Completion.JWS != receipt) {
 			return ErrSource
 		}
 		erased = true

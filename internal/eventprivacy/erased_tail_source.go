@@ -82,7 +82,11 @@ func (planner ErasurePlanner) WithRetainedSource(ctx context.Context, event even
 				if err != nil {
 					return err
 				}
-				if !receiptMatchesAvailableLifetime(life, claims, head) || (life.Completion != nil && life.Completion.JWS != receipt) {
+				matches, err := planner.Policy.receiptMatchesCurrentLifetime(fenced, life, claims, head, planner.Custody, receipt)
+				if err != nil {
+					return err
+				}
+				if !matches || (life.Completion != nil && life.Completion.JWS != receipt) {
 					return ErrSource
 				}
 				omitted = true

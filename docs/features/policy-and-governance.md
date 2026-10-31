@@ -491,6 +491,12 @@ a local manifest-key fixture and the shipped CA/audit signer child in Mac evalua
 mode; public activation, snapshot/managed-archive integration and the full operator
 workflow remain pending.
 
+A restored pre-offboard cut also has continuation tests through catch-up, rebuild,
+live tail and current-custody readiness after neighbor events cross the original
+offboard ordinal. Exact current creation, signed removal and absence corroborate
+the erased registration; receipt-only evidence still retains the finite-cut rule.
+No historical control, key or removal authority is invented by this read floor.
+
 An explicit public JWKS file can retain destruction-evidence verification after
 signer rotation. It is loaded independently of data restore, with the same trust
 attached to custody, source readers and admission. Verification uses the original

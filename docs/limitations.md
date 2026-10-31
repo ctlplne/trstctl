@@ -1789,6 +1789,14 @@ shipped CA/audit signer child in Mac evaluation mode. They do not qualify public
 activation, snapshots, managed WORM archives, production authorization/Linux
 hardening or the final-image operator journey.
 
+Local continuation tests now grow a restored pre-offboard cut beyond its original
+offboard position with only neighboring writes. Catch-up, rebuild, live tail and
+current-custody readiness preserve the erased registration and the neighbor.
+Crossing that old numeric position requires independent current lookup matching
+the exact original creation and signed removal; a receipt alone, pending state,
+changed creation, changed receipt or unavailable lookup refuses. This is a current
+erasure floor, not a claim that missing historical controls were reconstructed.
+
 That is the limit of what tenant offboarding deletes — it is not a promise that
 the append-only event log or a signed audit archive disappears when a tenant is
 offboarded. Those records are governed by audit/privacy retention policy:

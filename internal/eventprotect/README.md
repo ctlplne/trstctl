@@ -145,3 +145,14 @@ A signer claim keeps only its retired denial digest after verified erasure.
 Native tests use fresh PostgreSQL databases, real source/worker removal and the
 shipped CA/audit signer child in Mac evaluation mode. Manifest keys and opt-in
 requests are explicit fixtures, not a complete public/operator or Linux proof.
+
+A restored activation-containing cut may grow along another tenant's branch past
+the original offboard ordinal. The existing receipt-only ordinal guard remains;
+read-side omission at that point requires independent current lookup of the exact
+source creation, identical signed removal and material absence. Plan, tail and
+SQL paths share this check under the existing custody fence. It proves a current
+erasure floor, not original offboard retention or authenticated source lineage.
+Native isolated full restore continues through catch-up, rebuild and live tail;
+current-custody readiness and neighboring SQL remain intact. Missing/pending or
+changed current identity/receipt/trust still refuses. Public controls, snapshot/
+archive integration and the complete operator workflow remain pending.
