@@ -38,10 +38,9 @@ type WebEnrollmentConfig struct {
 	// REPLACES Basic entirely: the relay is domain-joined, so it can answer a
 	// Negotiate or NTLM challenge without this process ever holding a password.
 	//
-	// An interface rather than a Kerberos implementation because the credential
-	// lives on the relay host, not here. Core stays free of a GSSAPI dependency
-	// and, more importantly, of any code path that could serialize a domain
-	// password.
+	// An interface so no implementation can serialize a domain password; the
+	// Kerberos implementation (internal/crypto/kerberos, A158) answers from a
+	// keytab and never holds one.
 	Authenticator Authenticator
 	HTTPClient    *http.Client
 	Timeout       time.Duration

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2035 annotated sites across 29 rules. Each row is
+2044 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (413 sites)
+### G101 — CWE-798 Use of hardcoded credentials (418 sites)
 
 | Location | Reason |
 |---|---|
@@ -209,19 +209,24 @@ not this file.
 | `internal/config/config_test.go:428` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/config_test.go:431` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:11` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:43` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:18` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:45` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:46` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:47` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:48` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:49` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:50` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/external_ca_test.go:51` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:52` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:53` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
 | `internal/config/external_ca_test.go:54` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:56` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:57` | fabricated fixture reference, no credential (CWE-798) |
 | `internal/config/external_ca_test.go:58` | fabricated fixture reference, no credential (CWE-798) |
-| `internal/config/external_ca_test.go:75` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/external_ca_test.go:99` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:59` | a deliberately malformed reference the validator must refuse; no credential (CWE-798) |
+| `internal/config/external_ca_test.go:60` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:64` | fabricated fixture reference, no credential (CWE-798) |
+| `internal/config/external_ca_test.go:81` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/external_ca_test.go:105` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/kerberos_test.go:8` | fabricated fixture paths and identifiers; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/ldap_test.go:8` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/managed_keys_providers_test.go:78` | fabricated fixture values; nothing here is real (CWE-798) |
@@ -1355,7 +1360,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (566 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (568 sites)
 
 | Location | Reason |
 |---|---|
@@ -1581,6 +1586,7 @@ not this file.
 | `internal/backup/objectstore.go:207` | a validated name inside the operator's new download directory (CWE-22) |
 | `internal/backup/objectstore_test.go:82` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/backup/objectstore_test.go:99` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/ca/adcs/kerberos_lab_test.go:33` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/ca/capability_evidence_test.go:65` | fixed in-tree proof manifest |
 | `internal/ca/external_error_redaction_test.go:62` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1625,6 +1631,7 @@ not this file.
 | `internal/connector/wasm/host/host_test.go:51` | the file this test just built (CWE-22). |
 | `internal/connector/wasm/host/host_test.go:293` | this repository's own connector sources (CWE-22). |
 | `internal/crypto/acmekey/production_guard_test.go:44` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/mtls/agent.go:215` | operator-configured certificate/key path from deployment config (CWE-22) |
 | `internal/crypto/mtls/agent.go:233` | operator-configured certificate/key path from deployment config (CWE-22) |
@@ -2160,7 +2167,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (111 sites)
+### G703 — CWE-22 Path traversal (taint) (113 sites)
 
 | Location | Reason |
 |---|---|
@@ -2188,6 +2195,7 @@ not this file.
 | `internal/agent/sshkrl/install_test.go:74` | a public KRL fixture (committed testdata bytes) written under t.TempDir; sshd lists are world-readable |
 | `internal/agent/sshtrust/sshd_live_test.go:115` | temp file beside the harness-owned sshd config in a test dir (CWE-22) |
 | `internal/agent/sshtrust/sshd_live_test.go:131` | atomic replace of the harness-owned sshd config in a test dir (CWE-22) |
+| `internal/ca/adcs/kerberos_lab_test.go:33` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:146` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/ca/profilelint/profilelint_test.go:173` | non-secret fixture directory in t.TempDir (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
@@ -2199,6 +2207,7 @@ not this file.
 | `internal/connector/wasm/host/gen/main.go:36` | a developer tool reading the module the make target just built (CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:52` | a public build artifact at a fixed repository path (CWE-276, CWE-22). |
 | `internal/connector/wasm/host/gen/main.go:56` | a public digest at a fixed repository path (CWE-276, CWE-22). |
+| `internal/crypto/kerberos/client_test.go:87` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/crypto/kerberos/lab_kdc_test.go:30` | lab password file named by the test environment, never by a request (CWE-22) |
 | `internal/kmip/pykmip_client_test.go:69` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
 | `internal/kmip/pykmip_tenants_test.go:72` | test-named files in the test's temp dir, readable by the container user (CWE-22, CWE-276) |
@@ -2276,13 +2285,15 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (8 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (10 sites)
 
 | Location | Reason |
 |---|---|
 | `cmd/trstctl/connector.go:426` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `cmd/trstctl/connector.go:446` | CLI calling the operator-specified connector base URL; their own target (CWE-918) |
 | `internal/agent/enrollproxy/proxy.go:207` | the destination host is the operator-configured upstream, |
+| `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
+| `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |

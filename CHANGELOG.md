@@ -2,6 +2,10 @@
 
 ### Added
 
+- Kerberos authentication for AD CS Web Enrollment: an `adcs` external CA can name a realm,
+  principal, KDCs and a keytab (`kerberos_*`); trstctl answers the Negotiate challenge with a
+  fresh service ticket per request and never holds or sends a password. Kerberos and Basic are
+  mutually exclusive, and a Kerberos failure never falls back to Basic.
 - Intune reads without a hand-rotated bearer: an Intune MDM poll schedule can name an Entra app
   registration (`client_credentials`: directory and application (client) ID); `token_ref` then
   holds its client secret and the network relay exchanges it for a Microsoft Graph token on each

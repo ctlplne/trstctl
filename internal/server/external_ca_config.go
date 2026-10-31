@@ -36,6 +36,7 @@ import (
 	"trstctl.com/trstctl/internal/ca/venafi"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/crypto/kerberos"
 	"trstctl.com/trstctl/internal/crypto/mtls"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/crypto/secretfile"
@@ -140,8 +141,14 @@ func externalCAFactoryFromConfig(item config.ExternalCAConfig, guard *egress.Gua
 			if loadErr != nil {
 				return fail(loadErr)
 			}
+			authenticator, chainedCleanup, buildErr := adcsKerberosAuthenticator(item, secrets, clientCleanup)
+			if buildErr != nil {
+				return fail(buildErr)
+			}
+			clientCleanup = chainedCleanup
 			transport, buildErr := adcs.NewWebEnrollmentTransport(adcs.WebEnrollmentConfig{
-				BaseURL: item.Endpoint, Username: item.Username, Password: password, HTTPClient: client, Timeout: client.Timeout,
+				BaseURL: item.Endpoint, Username: item.Username, Password: password, Authenticator: authenticator,
+				HTTPClient: client, Timeout: client.Timeout,
 			})
 			if buildErr != nil {
 				return fail(buildErr)
@@ -439,11 +446,47 @@ func bindAzureManagedCASigner(provider SignerProvider, tokenProvider signing.Sig
 	)
 }
 
+// adcsKerberosAuthenticator builds the Kerberos Negotiate authenticator an AD CS
+// external CA names (A158), or none, and returns cleanup extended to destroy
+// it. The keytab loads byte-exact; no password exists on this path.
+func adcsKerberosAuthenticator(item config.ExternalCAConfig, secrets *externalCASecretSet, cleanup func()) (adcs.Authenticator, func(), error) {
+	if strings.TrimSpace(item.KerberosKeytabRef) == "" {
+		return nil, cleanup, nil
+	}
+	keytabBytes, err := secrets.LoadBinary(item.KerberosKeytabRef)
+	if err != nil {
+		return nil, cleanup, err
+	}
+	negotiate, err := kerberos.NewClientAuthenticator(kerberos.ClientConfig{
+		Realm: item.KerberosRealm, Principal: item.KerberosPrincipal, KDCs: item.KerberosKDCs,
+		Keytab: keytabBytes, SPN: item.KerberosSPN,
+	})
+	if err != nil {
+		return nil, cleanup, err
+	}
+	return negotiate, func() {
+		negotiate.Destroy()
+		if cleanup != nil {
+			cleanup()
+		}
+	}, nil
+}
+
 type externalCASecretSet struct {
 	buffers []*secret.Buffer
 }
 
 func (s *externalCASecretSet) Load(ref string) ([]byte, error) {
+	return s.load(ref, true)
+}
+
+// LoadBinary loads a binary credential (a Kerberos keytab) without trimming a
+// trailing newline, which would corrupt it.
+func (s *externalCASecretSet) LoadBinary(ref string) ([]byte, error) {
+	return s.load(ref, false)
+}
+
+func (s *externalCASecretSet) load(ref string, trimText bool) ([]byte, error) {
 	path, ok := strings.CutPrefix(strings.TrimSpace(ref), "file:")
 	if !ok || strings.TrimSpace(path) == "" {
 		return nil, errors.New("external CA credential reference must use file:/absolute/path")
@@ -452,7 +495,10 @@ func (s *externalCASecretSet) Load(ref string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load external CA credential file: %w", err)
 	}
-	trimmed := bytes.TrimRight(raw, "\r\n")
+	trimmed := raw
+	if trimText {
+		trimmed = bytes.TrimRight(raw, "\r\n")
+	}
 	buffer, err := secret.NewFrom(trimmed)
 	secret.Wipe(raw)
 	if err != nil {

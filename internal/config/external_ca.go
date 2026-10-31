@@ -80,6 +80,15 @@ type ExternalCAConfig struct {
 	Username           string `json:"username,omitempty"`
 	PasswordRef        string `json:"password_ref,omitempty"`
 
+	// AD CS domain-integrated authentication (A158): a Kerberos keytab answers
+	// Web Enrollment's Negotiate challenge, so no password is configured. The
+	// keytab reference is a file:/absolute/path credential reference.
+	KerberosRealm     string   `json:"kerberos_realm,omitempty"`
+	KerberosPrincipal string   `json:"kerberos_principal,omitempty"`
+	KerberosKDCs      []string `json:"kerberos_kdcs,omitempty"`
+	KerberosKeytabRef string   `json:"kerberos_keytab_ref,omitempty"`
+	KerberosSPN       string   `json:"kerberos_spn,omitempty"`
+
 	// Entrust.
 	CAID      string `json:"ca_id,omitempty"`
 	ProfileID string `json:"profile_id,omitempty"`
@@ -334,6 +343,7 @@ func validateExternalCAProvider(where string, c ExternalCAConfig) []error {
 		require(c.CAConfig, "ca_config")
 		require(c.Template, "template")
 		credential(c.PasswordRef, "password_ref", true)
+		errs = append(errs, validateADCSKerberos(c, where)...)
 		if strings.TrimSpace(c.PasswordRef) != "" {
 			endpoint, _ := url.Parse(strings.TrimSpace(c.Endpoint))
 			if endpoint == nil || !strings.EqualFold(endpoint.Scheme, "https") {
@@ -455,6 +465,32 @@ func externalCAEndpoint(c ExternalCAConfig) string {
 		return strings.TrimSpace(c.DirectoryURL)
 	}
 	return strings.TrimSpace(c.Endpoint)
+}
+
+// validateADCSKerberos checks an AD CS Kerberos configuration (A158).
+// Kerberos replaces Basic entirely; configuring both would leave a password to
+// fall back to.
+func validateADCSKerberos(c ExternalCAConfig, where string) []error {
+	if strings.TrimSpace(c.KerberosKeytabRef) == "" {
+		return nil
+	}
+	var errs []error
+	if strings.TrimSpace(c.PasswordRef) != "" {
+		errs = append(errs, fmt.Errorf("%s: kerberos_keytab_ref and password_ref are mutually exclusive; Kerberos replaces Basic authentication", where))
+	}
+	if strings.TrimSpace(c.KerberosRealm) == "" {
+		errs = append(errs, fmt.Errorf("%s.kerberos_realm is required", where))
+	}
+	if strings.TrimSpace(c.KerberosPrincipal) == "" {
+		errs = append(errs, fmt.Errorf("%s.kerberos_principal is required", where))
+	}
+	if len(c.KerberosKDCs) == 0 {
+		errs = append(errs, fmt.Errorf("%s.kerberos_kdcs must name at least one KDC host:port", where))
+	}
+	if err := validateExternalCACredentialRef(c.KerberosKeytabRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s.kerberos_keytab_ref: %w", where, err))
+	}
+	return errs
 }
 
 func validateExternalCACredentialRef(raw string) error {

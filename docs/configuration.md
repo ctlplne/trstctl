@@ -376,6 +376,14 @@ credential bytes from that inherited anonymous pipe. It never receives `CA_TOKEN
 and trstctl consumes and wipes the byte buffer after the one child attempt. No
 credential pathname or filesystem-backed secret copy is created for the child.
 
+For `adcs`, Web Enrollment authenticates with Basic over HTTPS (`username`,
+`password_ref`) or with Kerberos: set `kerberos_realm` (the upper-case realm),
+`kerberos_principal` (the account name without the realm), `kerberos_kdcs`
+(domain controllers as `host:port`; DNS discovery is off) and
+`kerberos_keytab_ref` (`file:/absolute/path` to the account's keytab, exported
+with `ktpass` or `ktutil`); `kerberos_spn` overrides the default `HTTP/<endpoint
+host>`. Kerberos and `password_ref` are mutually exclusive.
+
 Supported `type` values are `adcs`, `awspca`, `azurekv`, `digicert`, `ejbca`,
 `entrust`, `gcpcas`, `globalsign`, `letsencrypt`, `sectigo`, `shellca`,
 `smallstep`, `vaultpki`, and `venafi`. `trstctl -check-config` validates every

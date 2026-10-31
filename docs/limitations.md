@@ -3865,11 +3865,17 @@ than sending an operator looking for a credential that was never there.
   enterprise CA directly — the compromise is not "an eavesdropper saw a request"
   but "an attacker can mint certificates the whole domain trusts". The refusal
   is at CONSTRUCTION, so a misconfiguration fails when an operator sets it up
-  rather than silently on the first production issuance. A domain-joined relay
-  can supply Kerberos/NTLM through a `WebEnrollmentConfig.Authenticator`, an
-  interface rather than a GSSAPI dependency because the credential belongs in
-  the host's credential store and core must have no code path that could
-  serialize a domain password. Configuring BOTH a password and an authenticator
+  rather than silently on the first production issuance. **Kerberos
+  authentication is served** (A158): an `adcs` external CA with
+  `kerberos_realm`, `kerberos_principal`, `kerberos_kdcs` and
+  `kerberos_keytab_ref` (a `file:` reference to the account's keytab, loaded
+  byte-exact) answers Web Enrollment's Negotiate challenge with a fresh service
+  ticket per request for the endpoint (`HTTP/<host>` unless `kerberos_spn`
+  names another). No password is configured, held or sent; the keytab is the
+  account's long-term key as the domain exported it. Proven against an MIT KDC
+  and a Negotiate-protected Web Enrollment stand-in; a live AD forest is not
+  yet proven. NTLM is not offered: Microsoft is retiring it, and a client
+  outside the domain would need a password-equivalent hash. Configuring BOTH a password and an authenticator
   is refused: the authenticator would win, leaving a live domain credential in
   configuration that nothing reads — which is exactly what somebody later
   "fixes" by making it take effect. A failing authenticator fails the request
@@ -3885,8 +3891,7 @@ than sending an operator looking for a credential that was never there.
   stated exactly: this is the transport and parsing layer only. NOTHING YET
   CALLS THE DATABASE INGESTION — there is no scheduled or served ingest that
   pulls a CA database into inventory, so issued/pending/revoked state is not
-  reconciled by C4/XREC; no Kerberos or NTLM Authenticator IMPLEMENTATION ships
-  (the seam exists, the relay-side implementation does not); the ACME/EST
+  reconciled by C4/XREC; the ACME/EST
   front-end that would issue a leaf through an AD CS template under a trstctl
   policy gate is not built; and there is no "modernize this template" console
   action or AD CS issuer health view.
@@ -4073,10 +4078,10 @@ than sending an operator looking for a credential that was never there.
   back, a re-sweep replaces rather than accumulates); the relay-side COLLECTION
   is not — the CA database is read by `certutil` on the domain-joined Windows
   relay, which this repository does not yet drive, so the rows arrive over the
-  ingest endpoint but nothing yet runs certutil to produce them. The rest of F4
-  — in-domain Kerberos/NTLM authentication (an `Authenticator` interface, not a
-  Kerberos implementation) and fronting AD CS templates with trstctl ACME/EST —
-  remains unbuilt.
+  ingest endpoint but nothing yet runs certutil to produce them. In-domain
+  Kerberos authentication is served (`kerberos_*`, A158; NTLM is not offered).
+  The rest of F4 — fronting AD CS templates with trstctl ACME/EST — remains
+  unbuilt.
 - PQC readiness reports are signed and offline-verifiable (M1, PARTIAL): a
   cohort's handshake evidence — every targeted client's outcome WITH its
   handshake size and latency — is turned into a verdict by `Assess` and
