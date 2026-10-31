@@ -180,11 +180,16 @@ func (s *Server) dispatchMDMSyncJob(ctx context.Context, tenantID string, sched 
 			slog.String("tenant_id", tenantID), slog.String("error", err.Error()))
 		return
 	}
-	payload, err := json.Marshal(mdm.SyncIntent{
+	intent := mdm.SyncIntent{
 		MDM: sched.MDM, BaseURL: sched.BaseURL, Filter: sched.Filter, TokenRef: sched.TokenRef,
 		RequiredAgentID: sched.RequiredAgentID,
 		SCEPProfileIDs:  profileIDs,
-	})
+	}
+	if sched.EntraClientID != "" {
+		// A156: the relay exchanges the redeemed client secret for a Graph token.
+		intent.ClientCredentials = &mdm.ClientCredentials{Authority: sched.EntraAuthority, DirectoryTenantID: sched.EntraDirectoryTenantID, ClientID: sched.EntraClientID}
+	}
+	payload, err := json.Marshal(intent)
 	if err != nil {
 		return
 	}

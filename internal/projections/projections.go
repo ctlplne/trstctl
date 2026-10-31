@@ -686,6 +686,16 @@ type MDMPollConfigured struct {
 	PrivateCIDRs      []string `json:"private_egress_cidrs,omitempty"`
 	Execution         string   `json:"execution,omitempty"`
 	RenewalWindowDays int      `json:"renewal_window_days,omitempty"`
+	// ClientCredentials names the Intune app registration whose client secret
+	// TokenRef holds (A156): identifiers only, never the secret.
+	ClientCredentials *MDMPollClientCredentials `json:"client_credentials,omitempty"`
+}
+
+// MDMPollClientCredentials is an Entra app registration's identifiers (A156).
+type MDMPollClientCredentials struct {
+	Authority         string `json:"authority,omitempty"`
+	DirectoryTenantID string `json:"directory_tenant_id"`
+	ClientID          string `json:"client_id"`
 }
 
 // IssuanceRequestOpened is the payload of an issuance.request.opened event (I3).
@@ -5438,13 +5448,17 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		return p.store.ApplyMDMPollConfiguredTx(ctx, tx, e.TenantID, store.MDMPollSchedule{
+		schedule := store.MDMPollSchedule{
 			MDM: pl.MDM, BaseURL: pl.BaseURL, TokenRef: pl.TokenRef, Filter: pl.Filter,
 			RequiredAgentID: pl.RequiredAgentID,
 			IntervalSeconds: pl.IntervalSeconds, Enabled: pl.Enabled,
 			AllowPrivateEndpoint: pl.AllowPrivate, PrivateEgressCIDRs: pl.PrivateCIDRs,
 			Execution: pl.Execution, RenewalWindowDays: pl.RenewalWindowDays,
-		})
+		}
+		if cc := pl.ClientCredentials; cc != nil {
+			schedule.EntraAuthority, schedule.EntraDirectoryTenantID, schedule.EntraClientID = cc.Authority, cc.DirectoryTenantID, cc.ClientID
+		}
+		return p.store.ApplyMDMPollConfiguredTx(ctx, tx, e.TenantID, schedule)
 	case EventMDMDeviceCorrelated:
 		var pl MDMDeviceCorrelated
 		if err := decode(e, &pl); err != nil {

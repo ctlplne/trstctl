@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2030 annotated sites across 29 rules. Each row is
+2035 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (408 sites)
+### G101 — CWE-798 Use of hardcoded credentials (413 sites)
 
 | Location | Reason |
 |---|---|
@@ -107,6 +107,8 @@ not this file.
 | `internal/agent/relay/hostdryrun_internal_test.go:11` | KeystorePasswordRef is a secret-store locator, not credential material (CWE-798). |
 | `internal/agent/relay/legacy_rollback_test.go:36` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/mdmsync_test.go:23` | credential reference (secret store pointer), no credential value present (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:159` | credential reference, no credential value present (CWE-798) |
+| `internal/agent/relay/mdmsync_test.go:160` | a stand-in fixture value, not a credential (CWE-798) |
 | `internal/agent/relay/plugin_call_test.go:65` | a reference name (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:37` | a credential reference name, not a credential (CWE-798) |
 | `internal/agent/relay/readback_families_test.go:45` | a credential reference name, not a credential (CWE-798) |
@@ -280,6 +282,9 @@ not this file.
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mcpserver/mcpserver_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/mdm/entra_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
+| `internal/mdm/entra_test.go:22` | an unsigned stand-in token shape, not a credential (CWE-798) |
+| `internal/mdm/entra_test.go:99` | malformed stand-in token responses, no credential value (CWE-798) |
 | `internal/notify/notify.go:89` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/client.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -644,10 +649,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6512` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6529` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6542` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6576` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6526` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6543` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6556` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6590` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -970,7 +975,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4181` | closed test table list above |
+| `internal/store/migration_content_test.go:4182` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 

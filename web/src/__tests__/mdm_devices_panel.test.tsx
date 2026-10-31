@@ -129,6 +129,48 @@ describe("MDM device evidence trace", () => {
     expect(await screen.findByText((_, node) => node?.tagName === "LI" && node.textContent?.startsWith("jamf · Enabled · relay") === true)).toBeInTheDocument();
   });
 
+  it("sends an Intune app registration so the relay exchanges the client secret", async () => {
+    apiMock.mdmDevices.mockResolvedValue({ items: [], failed: 0, unobserved: 0, renewal_at_risk: 0, guidance: "" });
+    apiMock.mdmPollSchedules.mockResolvedValue({ items: [], guidance: "Relay-only read." });
+    const app = { directory_tenant_id: "contoso.onmicrosoft.com", client_id: "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e" };
+    apiMock.putMDMPollSchedule.mockResolvedValue({
+      configured: true,
+      mdm: "intune",
+      base_url: "https://graph.microsoft.com",
+      token_ref: "secret://mdm/intune/client-secret",
+      required_agent_id: "44444444-4444-4444-8444-44444444a101",
+      interval_seconds: 3600,
+      enabled: true,
+      execution: "relay",
+      client_credentials: { ...app, authority: "https://login.microsoftonline.com" },
+    });
+    const user = userEvent.setup();
+    render(
+      <AppQueryProvider>
+        <MDMDevicesPanel />
+      </AppQueryProvider>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "MDM device correlation" })).toBeInTheDocument();
+    await user.click(screen.getByText("Configure MDM read schedule"));
+    await user.type(screen.getByLabelText("MDM API base URL"), "https://graph.microsoft.com");
+    await user.type(screen.getByLabelText("Bearer token secret reference"), "secret://mdm/intune/client-secret");
+    await user.selectOptions(screen.getByLabelText("Network relay for this MDM"), "44444444-4444-4444-8444-44444444a101");
+    await user.type(screen.getByLabelText("Entra directory (Intune app registration, optional)"), app.directory_tenant_id);
+    const clientID = screen.getByLabelText("Application (client) ID");
+    await user.type(clientID, "my-app");
+    await user.click(screen.getByRole("button", { name: "Review schedule" }));
+    expect(await screen.findByText("An app registration needs the directory and the application (client) GUID.")).toBeInTheDocument();
+    await user.clear(clientID);
+    await user.type(clientID, app.client_id);
+    await user.click(screen.getByRole("button", { name: "Review schedule" }));
+    expect(screen.getByText(/App registration 1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e in contoso.onmicrosoft.com/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save reviewed schedule" }));
+    expect(apiMock.putMDMPollSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ mdm: "intune", token_ref: "secret://mdm/intune/client-secret", client_credentials: app }),
+    );
+  });
+
   it("keeps read-only operators from configuring a relay schedule", async () => {
     apiMock.mdmDevices.mockResolvedValue({ items: [], failed: 0, unobserved: 0, renewal_at_risk: 0, guidance: "" });
     apiMock.mdmPollSchedules.mockResolvedValue({ items: [], guidance: "Relay-only read." });

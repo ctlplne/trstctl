@@ -15502,8 +15502,17 @@ export interface components {
                 transaction_id?: string;
             };
         };
+        MDMEntraAppRegistration: {
+            /** @description identity platform origin; defaults to https://login.microsoftonline.com */
+            authority?: string;
+            /** Format: uuid */
+            client_id: string;
+            /** @description the Entra directory's GUID or a verified domain */
+            directory_tenant_id: string;
+        };
         MDMPollSchedule: {
             base_url?: string;
+            client_credentials?: components["schemas"]["MDMEntraAppRegistration"];
             configured: boolean;
             enabled: boolean;
             /** @enum {string} */
@@ -15522,6 +15531,7 @@ export interface components {
         };
         MDMPollScheduleInput: {
             base_url: string;
+            client_credentials?: components["schemas"]["MDMEntraAppRegistration"];
             enabled?: boolean;
             /** @enum {string} */
             execution?: "relay" | "";

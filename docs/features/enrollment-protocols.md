@@ -341,7 +341,12 @@ device serial, and transaction. A success includes the signer-minted certificate
 serial, fingerprint, and expiry. The leader commits a durable `mdm.sync` intent;
 a NETWORK relay redeems the `secret://` bearer for that attempt and reads
 Intune's fixed `CertificatesByRAPolicy` report or Jamf's `CERTIFICATES`
-inventory. Only its bounded typed, signed observation returns to the control
+inventory. For Intune the schedule can instead name an Entra app registration
+(`client_credentials` with the directory and the application (client) ID): the
+reference then holds the app's client secret, and the relay exchanges it for a
+Microsoft Graph token on each read, so no operator pipeline has to rotate a
+bearer. The app needs Graph application permissions for managed-device reads and
+report export. Only its bounded typed, signed observation returns to the control
 plane, which binds it to the exact job payload before correlation and completes
 the claim plus outbox row atomically after projection. There is no control-plane
 MDM HTTP/token fallback. Installation is successful only when the exact device

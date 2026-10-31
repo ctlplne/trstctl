@@ -5816,8 +5816,15 @@ export interface MDMDeviceTrace {
   trace: { broke_at?: string; device_id?: string; device_name?: string; mdm?: string; mdm_device_id?: string; serial_number?: string; steps: MDMTraceStep[]; summary: string; transaction_id?: string };
 }
 
+export interface MDMEntraAppRegistration {
+  authority?: string;
+  client_id: string;
+  directory_tenant_id: string;
+}
+
 export interface MDMPollSchedule {
   base_url?: string;
+  client_credentials?: MDMEntraAppRegistration;
   configured: boolean;
   enabled: boolean;
   execution?: "relay" | "";
@@ -5834,6 +5841,7 @@ export interface MDMPollSchedule {
 
 export interface MDMPollScheduleInput {
   base_url: string;
+  client_credentials?: MDMEntraAppRegistration;
   enabled?: boolean;
   execution?: "relay" | "";
   filter?: string;

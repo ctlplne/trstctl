@@ -28435,6 +28435,31 @@ export const messages = {
   "mdm.poll.intune": { defaultMessage: "Intune", description: "Microsoft MDM provider name." },
   "mdm.poll.jamf": { defaultMessage: "Jamf", description: "Jamf MDM provider name." },
   "mdm.poll.baseURL": { defaultMessage: "MDM API base URL", description: "Absolute base URL reached by the network relay." },
+  "mdm.poll.appDirectory": {
+    defaultMessage: "Entra directory (Intune app registration, optional)",
+    description: "A156: the directory GUID or verified domain of the Intune app registration.",
+  },
+  "mdm.poll.appDirectoryExample": {
+    defaultMessage: "contoso.onmicrosoft.com",
+    description: "A156: example directory domain.",
+  },
+  "mdm.poll.appClient": {
+    defaultMessage: "Application (client) ID",
+    description: "A156: the app registration's application GUID.",
+  },
+  "mdm.poll.appHelp": {
+    defaultMessage:
+      "With an app registration, the secret reference holds the app's client secret; the relay exchanges it for a Microsoft Graph token on each read.",
+    description: "A156: how the client secret reference is used.",
+  },
+  "mdm.poll.appIncomplete": {
+    defaultMessage: "An app registration needs the directory and the application (client) GUID.",
+    description: "A156: validation message.",
+  },
+  "mdm.poll.reviewApp": {
+    defaultMessage: "App registration {client} in {directory}: the relay exchanges the client secret for a Graph token on each read.",
+    description: "A156: review line for an app registration.",
+  },
   "mdm.poll.tokenRef": { defaultMessage: "Bearer token secret reference", description: "Reference to the bearer redeemed only by the network relay." },
   "mdm.poll.tokenRefExample": { defaultMessage: "secret://mdm/provider", description: "Reference example, never an inline bearer." },
   "mdm.poll.relay": { defaultMessage: "Network relay for this MDM", description: "Bind the MDM bearer to one enrolled network agent." },

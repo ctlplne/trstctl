@@ -3794,7 +3794,7 @@ than sending an operator looking for a credential that was never there.
   READ-ONLY IS STRUCTURAL — inventory uses fixed GET paths
   (`/v1.0/deviceManagement/managedDevices` and
   `/api/v1/computers-inventory`). The one non-GET provider operation is
-  Microsoft's fixed `POST /beta/deviceManagement/reports/exportJobs` for the
+  Microsoft's fixed `POST /v1.0/deviceManagement/reports/exportJobs` for the
   `CertificatesByRAPolicy` READ artifact; it cannot name a policy, assignment,
   or device mutation path, and the Graph bearer is never forwarded to the
   signed report-download authority. There is no MDM write route;
@@ -3842,18 +3842,23 @@ than sending an operator looking for a credential that was never there.
   device renews by CHECKING IN, so nothing fails before the certificate
   expires in a drawer — and the count is served apart from `failed` because
   nothing has failed yet, which is the problem. The window is 30 days unless
-  the schedule sets `renewal_window_days`. Scope, stated exactly: no built-in
-  OAuth client-credential exchange — the token reference must resolve to a
-  bearer the MDM accepts, rotated by the operator's own pipeline; a device
+  the schedule sets `renewal_window_days`. Scope, stated exactly: an Intune schedule can name an Entra
+  app registration (`client_credentials`: directory and application (client)
+  ID); `token_ref` then holds the app's client secret, and the relay exchanges
+  it for a Microsoft Graph token on each read (OAuth client-credentials grant;
+  the token lives only in memory for that read). Proven against stand-in token
+  and Graph endpoints; a live Entra tenant is not yet proven. Without an app
+  registration, and for Jamf, the token reference must resolve to a bearer the
+  MDM accepts, rotated by the operator's own pipeline; a device
   with no certificate gets NO renewal verdict rather than a warning. The trace's
   `renewing` stage is now evidence-backed: a later distinct SCEP transaction
   supplies its request/result, while a certificate inside its renewal window
   with no later attempt and a stale device check-in is `unknown` with instructions
   to bring the device online and trigger an MDM check-in. The console device row
   opens this complete trace and shows the first failed stage plus its remediation.
-  Intune report export currently uses Microsoft Graph's beta report endpoint;
-  the operator-supplied bearer must already authorize both managed-device reads
-  and report export because trstctl does not perform an OAuth credential exchange.
+  Intune report export uses Microsoft Graph v1.0's report export
+  (`/v1.0/deviceManagement/reports/exportJobs`); the app registration or bearer
+  must authorize both managed-device reads and report export.
 - AD CS coexistence, first increment (F4): the `/certsrv` transport now REFUSES
   to send a password over plaintext. Basic is base64, not encryption, and on a
   plaintext hop anyone on the path reads a credential that can issue from the

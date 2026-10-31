@@ -138,13 +138,13 @@ func TestServedMDMPollerProvesExactIntuneCertificateInstallation(t *testing.T) {
 				{"id":"dev-exact","deviceName":"laptop-exact","serialNumber":"SER-EXACT","lastSyncDateTime":"2026-08-09T21:00:00Z"},
 				{"id":"dev-wrong","deviceName":"laptop-wrong","serialNumber":"SER-WRONG","lastSyncDateTime":"2026-08-09T21:00:00Z"}
 			]}`)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/beta/deviceManagement/reports/exportJobs"):
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1.0/deviceManagement/reports/exportJobs"):
 			requestBody, _ := io.ReadAll(r.Body)
 			if !bytes.Contains(requestBody, []byte(`"reportName":"CertificatesByRAPolicy"`)) {
 				t.Errorf("report export body does not select certificate evidence: %s", requestBody)
 			}
 			_, _ = io.WriteString(w, `{"id":"job-57","status":"notStarted"}`)
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/beta/deviceManagement/reports/exportJobs("):
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/v1.0/deviceManagement/reports/exportJobs("):
 			_, _ = io.WriteString(w, `{"id":"job-57","status":"completed","url":"`+intune.URL+`/report.zip"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/report.zip":
 			w.Header().Set("Content-Type", "application/zip")
@@ -370,13 +370,13 @@ func TestServedMDMPollerCorrelatesAndFlagsOfflineRenewals(t *testing.T) {
 				{"id":"dev-1","deviceName":"laptop-1","serialNumber":"SER-ENROLLED"},
 				{"id":"dev-2","deviceName":"laptop-2","serialNumber":"SER-UNKNOWN"}
 			]}`))
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/beta/deviceManagement/reports/exportJobs"):
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1.0/deviceManagement/reports/exportJobs"):
 			requestBody, _ := io.ReadAll(r.Body)
 			if !bytes.Contains(requestBody, []byte(`"reportName":"CertificatesByRAPolicy"`)) {
 				t.Errorf("the sole Intune POST is not the fixed certificate report artifact: %s", requestBody)
 			}
 			_, _ = io.WriteString(w, `{"id":"renewal-risk-report","status":"notStarted"}`)
-		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/beta/deviceManagement/reports/exportJobs("):
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/v1.0/deviceManagement/reports/exportJobs("):
 			_, _ = io.WriteString(w, `{"id":"renewal-risk-report","status":"completed","url":"`+intune.URL+`/report.zip"}`)
 		case r.Method == http.MethodGet && r.URL.Path == "/report.zip":
 			w.Header().Set("Content-Type", "application/zip")

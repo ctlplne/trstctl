@@ -78,9 +78,9 @@ func TestRelayMDMSyncCarriesExactIntuneCertificateEvidence(t *testing.T) {
 		switch {
 		case request.Method == http.MethodGet && strings.HasSuffix(request.URL.Path, "/v1.0/deviceManagement/managedDevices"):
 			return response(strings.NewReader(`{"value":[{"id":"dev-9","deviceName":"laptop-9","serialNumber":"SER9"}]}`))
-		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/beta/deviceManagement/reports/exportJobs"):
+		case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/v1.0/deviceManagement/reports/exportJobs"):
 			return response(strings.NewReader(`{"id":"job-9","status":"notStarted"}`))
-		case request.Method == http.MethodGet && strings.Contains(request.URL.Path, "/beta/deviceManagement/reports/exportJobs("):
+		case request.Method == http.MethodGet && strings.Contains(request.URL.Path, "/v1.0/deviceManagement/reports/exportJobs("):
 			return response(strings.NewReader(`{"id":"job-9","status":"completed","url":"https://download.example.test/report.zip"}`))
 		case request.Method == http.MethodGet && request.URL.Host == "download.example.test":
 			if request.Header.Get("Authorization") != "" {
@@ -145,5 +145,71 @@ func TestRelayMDMSyncRefusesAnUnknownMDM(t *testing.T) {
 		!strings.Contains(ch.reports[0].detail, "unknown mdm") {
 		t.Fatalf("reports = %+v; a vendor this build does not carry must be refused by name, and "+
 			"never fall through to a generic fetch against an endpoint shape it guessed", ch.reports)
+	}
+}
+
+// A156: an Intune read configured with an app registration exchanges the
+// redeemed client secret for a Graph token (OAuth client-credentials grant)
+// and reads with that token; a refused secret is a named failure that carries
+// neither the secret nor a token.
+func TestRelayMDMSyncExchangesTheClientSecretForAGraphToken(t *testing.T) {
+	const (
+		directory = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+		clientID  = "1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e"
+		secretRef = "secret://mdm/intune/client-secret" // #nosec G101 -- credential reference, no credential value present (CWE-798)
+		clientKey = "stand-in client secret"            // #nosec G101 -- a stand-in fixture value, not a credential (CWE-798)
+		exchanged = "graph-token-from-exchange"
+	)
+	tokenCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/"+directory+"/oauth2/v2.0/token":
+			tokenCalls++
+			if err := r.ParseForm(); err != nil || r.PostForm.Get("grant_type") != "client_credentials" ||
+				r.PostForm.Get("client_id") != clientID || r.PostForm.Get("scope") != mdm.GraphApplicationScope {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"error":"unauthorized_client"}`))
+				return
+			}
+			if r.PostForm.Get("client_secret") != clientKey {
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"invalid_client"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"token_type":"Bearer","expires_in":3599,"access_token":"` + exchanged + `"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1.0/deviceManagement/managedDevices":
+			if r.Header.Get("Authorization") != "Bearer "+exchanged {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_, _ = w.Write([]byte(`{"value":[{"id":"dev-1","deviceName":"laptop-9","serialNumber":"SER9","managedDeviceOwnerType":"company"}]}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	intent := mdm.SyncIntent{MDM: mdm.MDMIntune, BaseURL: srv.URL, TokenRef: secretRef,
+		ClientCredentials: &mdm.ClientCredentials{Authority: srv.URL, DirectoryTenantID: directory, ClientID: clientID}}
+
+	ch := &fakeChannel{jobs: []relay.Job{mdmJob(t, intent)}, material: map[string][]byte{secretRef: []byte(clientKey)}}
+	executed, err := relay.RunOnce(t.Context(), ch, srv.Client(), 4, 30)
+	if err != nil || executed != 1 || tokenCalls != 1 {
+		t.Fatalf("executed = %d, %v, token calls %d; reports: %+v", executed, err, tokenCalls, ch.reports)
+	}
+	var report struct {
+		Devices []mdm.Device `json:"devices"`
+	}
+	if err := json.Unmarshal([]byte(ch.reports[0].detail), &report); err != nil || len(report.Devices) != 1 || report.Devices[0].SerialNumber != "SER9" {
+		t.Fatalf("report = %q; want the device read with the exchanged token", ch.reports[0].detail)
+	}
+
+	refused := &fakeChannel{jobs: []relay.Job{mdmJob(t, intent)}, material: map[string][]byte{secretRef: []byte("wrong secret")}}
+	if executed, _ := relay.RunOnce(t.Context(), refused, srv.Client(), 4, 30); executed != 0 || len(refused.reports) != 1 {
+		t.Fatalf("a refused secret executed = %d; reports %+v", executed, refused.reports)
+	}
+	detail := refused.reports[0].detail
+	if detail != "the identity platform refused the client ID or client secret" ||
+		strings.Contains(detail, "wrong secret") || strings.Contains(detail, exchanged) {
+		t.Fatalf("refusal detail = %q; want the named refusal with no secret or token", detail)
 	}
 }

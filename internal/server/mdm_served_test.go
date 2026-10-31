@@ -311,7 +311,7 @@ func TestNoMDMCodePathCanWrite(t *testing.T) {
 			t.Fatalf("Intune report reader references http.%s; report evidence must never mutate a profile or device", verb)
 		}
 	}
-	for _, fixed := range []string{"/beta/deviceManagement/reports/exportJobs", "CertificatesByRAPolicy"} {
+	for _, fixed := range []string{"/v1.0/deviceManagement/reports/exportJobs", "CertificatesByRAPolicy"} {
 		if !strings.Contains(reportSource, fixed) {
 			t.Fatalf("Intune report reader lost fixed artifact selector %q", fixed)
 		}

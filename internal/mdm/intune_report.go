@@ -155,7 +155,7 @@ func intuneExportJobsURL(base string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/beta/deviceManagement/reports/exportJobs"
+	u.Path = strings.TrimRight(u.Path, "/") + "/v1.0/deviceManagement/reports/exportJobs"
 	u.RawQuery, u.Fragment = "", ""
 	return u.String(), nil
 }
@@ -168,7 +168,7 @@ func intuneExportJobURL(base, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/beta/deviceManagement/reports/exportJobs('" + id + "')"
+	u.Path = strings.TrimRight(u.Path, "/") + "/v1.0/deviceManagement/reports/exportJobs('" + id + "')"
 	u.RawQuery, u.Fragment = "", ""
 	return u.String(), nil
 }

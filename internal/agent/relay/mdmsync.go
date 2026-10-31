@@ -5,12 +5,14 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"time"
 
+	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/mdm"
 	"trstctl.com/trstctl/internal/secrettext"
 )
@@ -23,6 +25,18 @@ import (
 
 // KindMDMSync is the relay-executed MDM read (I5).
 const KindMDMSync = "mdm.sync"
+
+// clientCredentialsFailure names a refused token exchange without its details.
+func clientCredentialsFailure(err error) string {
+	switch {
+	case errors.Is(err, mdm.ErrClientCredentialsRefused):
+		return "the identity platform refused the client ID or client secret"
+	case errors.Is(err, mdm.ErrClientNotAuthorized):
+		return "the app registration is not authorized for Microsoft Graph application access"
+	default:
+		return "the client-credentials token exchange failed from this relay's vantage"
+	}
+}
 
 // runMDMSync executes one mdm.sync job: redeem the token, GET the fixed
 // endpoint, parse, report devices.
@@ -70,6 +84,21 @@ func runMDMSync(ctx context.Context, ch Channel, client *http.Client, job Job) b
 		// would bypass the egress posture the binary chose (SEC-005).
 		report(ctx, ch, job, OutcomeFailed, "this agent has no http client for mdm reads")
 		return false
+	}
+	if intent.ClientCredentials != nil {
+		// A156: the redeemed material is the app registration's client secret;
+		// exchange it for a Graph token that lives only for this job.
+		if intent.MDM != mdm.MDMIntune {
+			report(ctx, ch, job, OutcomeFailed, "client credentials are only valid for an Intune read")
+			return false
+		}
+		access, err := mdm.ExchangeClientCredentials(ctx, client, *intent.ClientCredentials, token)
+		if err != nil {
+			report(ctx, ch, job, OutcomeFailed, clientCredentialsFailure(err))
+			return false
+		}
+		defer secret.Wipe(access)
+		token = access
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

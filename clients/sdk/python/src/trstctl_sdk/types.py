@@ -8042,10 +8042,21 @@ MDMDeviceTrace = TypedDict(
     total=False,
 )
 
+MDMEntraAppRegistration = TypedDict(
+    'MDMEntraAppRegistration',
+    {
+        'authority': str,
+        'client_id': str,
+        'directory_tenant_id': str,
+    },
+    total=False,
+)
+
 MDMPollSchedule = TypedDict(
     'MDMPollSchedule',
     {
         'base_url': str,
+        'client_credentials': dict[str, Any],
         'configured': bool,
         'enabled': bool,
         'execution': str,
@@ -8066,6 +8077,7 @@ MDMPollScheduleInput = TypedDict(
     'MDMPollScheduleInput',
     {
         'base_url': str,
+        'client_credentials': dict[str, Any],
         'enabled': bool,
         'execution': str,
         'filter': str,

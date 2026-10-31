@@ -295,4 +295,7 @@ type SyncIntent struct {
 	Filter          string   `json:"filter,omitempty"`
 	TokenRef        string   `json:"token_ref"`
 	SCEPProfileIDs  []string `json:"scep_profile_ids,omitempty"`
+	// ClientCredentials (Intune, A156) makes TokenRef the app registration's
+	// client secret: the relay exchanges it per attempt for a Graph token.
+	ClientCredentials *ClientCredentials `json:"client_credentials,omitempty"`
 }

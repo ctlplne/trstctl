@@ -36,6 +36,8 @@ const scheduleSchema = z
       .trim()
       .regex(/^secret:\/\/.+$/, translateNow("mdm.poll.invalid")),
     required_agent_id: z.string().trim(),
+    entra_directory_tenant_id: z.string().trim(),
+    entra_client_id: z.string().trim(),
     filter: z.string().trim(),
     interval_seconds: z
       .string()
@@ -51,6 +53,17 @@ const scheduleSchema = z
     if (value.enabled && !value.required_agent_id) {
       ctx.addIssue({ code: "custom", path: ["required_agent_id"], message: translateNow("mdm.poll.relayRequired") });
     }
+    // A156: an Intune app registration needs both identifiers, and its client
+    // ID is the registration's application GUID.
+    const guid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (value.mdm === "intune" && (value.entra_directory_tenant_id || value.entra_client_id)) {
+      if (!value.entra_directory_tenant_id) {
+        ctx.addIssue({ code: "custom", path: ["entra_directory_tenant_id"], message: translateNow("mdm.poll.appIncomplete") });
+      }
+      if (!guid.test(value.entra_client_id)) {
+        ctx.addIssue({ code: "custom", path: ["entra_client_id"], message: translateNow("mdm.poll.appIncomplete") });
+      }
+    }
   });
 type ScheduleForm = z.infer<typeof scheduleSchema>;
 const emptySchedule: ScheduleForm = {
@@ -58,6 +71,8 @@ const emptySchedule: ScheduleForm = {
   base_url: "",
   token_ref: "",
   required_agent_id: "",
+  entra_directory_tenant_id: "",
+  entra_client_id: "",
   filter: "",
   interval_seconds: "3600",
   renewal_window_days: "0",
@@ -99,6 +114,8 @@ export function MDMDevicesPanel() {
       base_url: schedule?.base_url ?? "",
       token_ref: schedule?.token_ref ?? "",
       required_agent_id: schedule?.required_agent_id ?? "",
+      entra_directory_tenant_id: schedule?.client_credentials?.directory_tenant_id ?? "",
+      entra_client_id: schedule?.client_credentials?.client_id ?? "",
       filter: schedule?.filter ?? "",
       interval_seconds: String(schedule?.interval_seconds ?? 3600),
       renewal_window_days: String(schedule?.renewal_window_days ?? 0),
@@ -128,6 +145,9 @@ export function MDMDevicesPanel() {
       renewal_window_days: Number(values.renewal_window_days),
       enabled: values.enabled,
       execution: "relay",
+      ...(values.mdm === "intune" && values.entra_client_id
+        ? { client_credentials: { directory_tenant_id: values.entra_directory_tenant_id, client_id: values.entra_client_id } }
+        : {}),
     });
     setFormError("");
   });
@@ -148,6 +168,7 @@ export function MDMDevicesPanel() {
         (result.filter ?? "") !== reviewed.filter ||
         result.interval_seconds !== reviewed.interval_seconds ||
         (result.renewal_window_days ?? 0) !== reviewed.renewal_window_days ||
+        (result.client_credentials?.client_id ?? "") !== (reviewed.client_credentials?.client_id ?? "") ||
         result.enabled !== reviewed.enabled
       ) {
         throw new Error(translateNow("mdm.poll.unconfirmed"));
@@ -253,6 +274,34 @@ export function MDMDevicesPanel() {
                     />
                     {form.formState.errors.token_ref ? <span className="text-risk-critical">{form.formState.errors.token_ref.message}</span> : null}
                   </label>
+                  {scheduleMDM === "intune" ? (
+                    <>
+                      <label className="grid gap-1 text-sm">
+                        <span>{translateNow("mdm.poll.appDirectory")}</span>
+                        <input
+                          className="rounded-control border border-border bg-background p-2"
+                          autoComplete="off"
+                          {...form.register("entra_directory_tenant_id", { onChange: () => setReviewed(null) })}
+                          placeholder={translateNow("mdm.poll.appDirectoryExample")}
+                        />
+                        {form.formState.errors.entra_directory_tenant_id ? (
+                          <span className="text-risk-critical">{form.formState.errors.entra_directory_tenant_id.message}</span>
+                        ) : null}
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span>{translateNow("mdm.poll.appClient")}</span>
+                        <input
+                          className="rounded-control border border-border bg-background p-2"
+                          autoComplete="off"
+                          {...form.register("entra_client_id", { onChange: () => setReviewed(null) })}
+                        />
+                        {form.formState.errors.entra_client_id ? (
+                          <span className="text-risk-critical">{form.formState.errors.entra_client_id.message}</span>
+                        ) : null}
+                      </label>
+                      <p className="text-caption text-muted-foreground sm:col-span-2">{translateNow("mdm.poll.appHelp")}</p>
+                    </>
+                  ) : null}
                   <label className="grid gap-1 text-sm">
                     <span>{translateNow("mdm.poll.relay")}</span>
                     <select
@@ -330,6 +379,14 @@ export function MDMDevicesPanel() {
                   <p className="break-all font-mono text-xs">
                     {reviewed.base_url} · {reviewed.token_ref}
                   </p>
+                  {reviewed.client_credentials ? (
+                    <p>
+                      {translateNow("mdm.poll.reviewApp", {
+                        client: reviewed.client_credentials.client_id,
+                        directory: reviewed.client_credentials.directory_tenant_id,
+                      })}
+                    </p>
+                  ) : null}
                   <p>{translateNow("mdm.poll.reviewFilter", { filter: reviewed.filter || "—" })}</p>
                   <p>{translateNow("mdm.poll.reviewWindow", { days: reviewed.renewal_window_days ?? 0 })}</p>
                   <p>{translateNow("mdm.poll.reviewExecution")}</p>

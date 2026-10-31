@@ -33,6 +33,10 @@ type mdmPollScheduleBody struct {
 	Execution string `json:"execution,omitempty"`
 	// RenewalWindowDays overrides the offline-renewal check's standard window.
 	RenewalWindowDays int `json:"renewal_window_days,omitempty"`
+	// ClientCredentials (Intune only, A156) names the Entra app registration;
+	// token_ref then holds its client secret, which the relay exchanges per
+	// attempt for a Microsoft Graph token.
+	ClientCredentials *mdm.ClientCredentials `json:"client_credentials,omitempty"`
 	// Legacy control-plane egress fields remain only for clear rejection.
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
@@ -51,7 +55,9 @@ type mdmPollScheduleResponse struct {
 	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
 	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
 	RenewalWindowDays    int      `json:"renewal_window_days,omitempty"`
-	LastRunAt            string   `json:"last_run_at,omitempty"`
+	// ClientCredentials is the Intune app registration (identifiers only).
+	ClientCredentials *mdm.ClientCredentials `json:"client_credentials,omitempty"`
+	LastRunAt         string                 `json:"last_run_at,omitempty"`
 	// LastError is served, not just logged: a poll failing for a week
 	// otherwise looks identical to one with nothing to do.
 	LastError string `json:"last_error,omitempty"`
@@ -67,9 +73,11 @@ const mdmPollGuidance = "The poll re-reads the MDM on the tenant's own interval 
 	"devices to SCEP-enrolled identities by EXACT serial match. It is read-only by construction. " +
 	"token_ref is a secret:// reference, never the token itself; a network relay redeems it per " +
 	"attempt and the control plane never dials Microsoft Graph or Jamf. An enabled schedule binds " +
-	"one exact enrolled network relay, so another same-tenant relay cannot redeem its bearer. No " +
-	"built-in OAuth exchange is performed: the reference must resolve to a bearer the MDM accepts, " +
-	"rotated by the operator's own pipeline."
+	"one exact enrolled network relay, so another same-tenant relay cannot redeem its bearer. For " +
+	"Intune, client_credentials (directory_tenant_id and client_id of an Entra app registration with " +
+	"Graph application permissions) makes token_ref the app's client secret: the relay exchanges it " +
+	"per attempt for a Microsoft Graph token that lives only in memory for that read. Otherwise the " +
+	"reference must resolve to a bearer the MDM accepts, rotated by the operator's own pipeline."
 
 // minMDMPollInterval floors the poll, same reasoning as the CMDB's: device
 // check-in state changes on the order of hours, and a tight poll buys rate
@@ -136,6 +144,17 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest,
 				"allow_private_endpoint is a control-plane egress grant and is not valid for relay-only MDM reads")
 		}
+		var app *mdm.ClientCredentials
+		if body.ClientCredentials != nil {
+			if which != mdm.MDMIntune {
+				return 0, nil, errStatus(http.StatusBadRequest, "client_credentials are only valid for an Intune schedule")
+			}
+			normalized := body.ClientCredentials.Normalize()
+			if err := normalized.Validate(); err != nil {
+				return 0, nil, errWithStatus(http.StatusBadRequest, err)
+			}
+			app = &normalized
+		}
 		saved := store.MDMPollSchedule{
 			TenantID: tenantID, MDM: which,
 			BaseURL:         strings.TrimSpace(body.BaseURL),
@@ -147,12 +166,18 @@ func (a *API) putMDMPollSchedule(w http.ResponseWriter, r *http.Request) {
 			PrivateEgressCIDRs:   nil,
 			Execution:            execution, RenewalWindowDays: body.RenewalWindowDays,
 		}
+		var event *projections.MDMPollClientCredentials
+		if app != nil {
+			saved.EntraAuthority, saved.EntraDirectoryTenantID, saved.EntraClientID = app.Authority, app.DirectoryTenantID, app.ClientID
+			event = &projections.MDMPollClientCredentials{Authority: app.Authority, DirectoryTenantID: app.DirectoryTenantID, ClientID: app.ClientID}
+		}
 		if err := a.orch.ConfigureMDMPollSchedule(ctx, tenantID, projections.MDMPollConfigured{
 			MDM: saved.MDM, BaseURL: saved.BaseURL, TokenRef: saved.TokenRef, Filter: saved.Filter,
 			RequiredAgentID: saved.RequiredAgentID,
 			IntervalSeconds: saved.IntervalSeconds, Enabled: saved.Enabled,
 			AllowPrivate: saved.AllowPrivateEndpoint, PrivateCIDRs: saved.PrivateEgressCIDRs,
 			Execution: saved.Execution, RenewalWindowDays: saved.RenewalWindowDays,
+			ClientCredentials: event,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -185,6 +210,9 @@ func mdmPollScheduleFrom(s store.MDMPollSchedule, found bool) mdmPollScheduleRes
 		IntervalSeconds: s.IntervalSeconds, Enabled: s.Enabled, Execution: s.Execution,
 		AllowPrivateEndpoint: s.AllowPrivateEndpoint, PrivateEgressCIDRs: s.PrivateEgressCIDRs,
 		RenewalWindowDays: s.RenewalWindowDays, LastError: s.LastError, Guidance: mdmPollGuidance,
+	}
+	if s.EntraClientID != "" {
+		out.ClientCredentials = &mdm.ClientCredentials{Authority: s.EntraAuthority, DirectoryTenantID: s.EntraDirectoryTenantID, ClientID: s.EntraClientID}
 	}
 	if s.LastRunAt != nil {
 		out.LastRunAt = s.LastRunAt.UTC().Format(time.RFC3339)

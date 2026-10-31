@@ -110,7 +110,7 @@ func TestIntuneCertificateReportUsesOnlyExactDeviceAndCertificateEvidence(t *tes
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		var body string
 		switch {
-		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/beta/deviceManagement/reports/exportJobs"):
+		case req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/v1.0/deviceManagement/reports/exportJobs"):
 			body = `{"id":"job-7","status":"notStarted"}`
 		case req.Method == http.MethodGet && strings.Contains(req.URL.Path, "exportJobs"):
 			body = `{"id":"job-7","status":"completed","url":"https://download.example.test/report.zip"}`

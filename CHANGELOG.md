@@ -2,6 +2,11 @@
 
 ### Added
 
+- Intune reads without a hand-rotated bearer: an Intune MDM poll schedule can name an Entra app
+  registration (`client_credentials`: directory and application (client) ID); `token_ref` then
+  holds its client secret and the network relay exchanges it for a Microsoft Graph token on each
+  read (OAuth client-credentials grant, token held only in memory). Console schedule form, API and
+  OpenAPI carry it; the Intune report export moved to Graph v1.0.
 - Dynamic SCEP challenges for Jamf Pro and other MDMs that fetch a one-time challenge per device
   (`hmac-dynamic`): a policy names a `challenge_credential_ref`, the MDM fetches each challenge
   from `/scep/mscep_admin/{policy id}` with that credential (Jamf Pro: Dynamic-Microsoft CA), and

@@ -5956,6 +5956,7 @@ func componentSchemas() map[string]*Schema {
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
+		"client_credentials":  ref("MDMEntraAppRegistration"),
 		"last_run_at":         str(), "last_error": str(), "guidance": str(),
 	}, "configured", "enabled", "guidance")
 	mdmPollScheduleInput := object(map[string]*Schema{
@@ -5964,7 +5965,13 @@ func componentSchemas() map[string]*Schema {
 		"interval_seconds": {Type: "integer"}, "enabled": {Type: "boolean"},
 		"execution":           {Type: "string", Enum: []string{"relay", ""}},
 		"renewal_window_days": {Type: "integer"},
+		"client_credentials":  ref("MDMEntraAppRegistration"),
 	}, "mdm", "base_url", "token_ref", "interval_seconds")
+	mdmEntraAppRegistration := object(map[string]*Schema{
+		"authority":           {Type: "string", Description: "identity platform origin; defaults to https://login.microsoftonline.com"},
+		"directory_tenant_id": {Type: "string", Description: "the Entra directory's GUID or a verified domain"},
+		"client_id":           uuid(),
+	}, "directory_tenant_id", "client_id")
 	mdmPollScheduleList := object(map[string]*Schema{
 		"items":    {Type: "array", Items: ref("MDMPollSchedule")},
 		"guidance": str(),
@@ -8350,6 +8357,7 @@ func componentSchemas() map[string]*Schema {
 		"MDMDeviceList":                         mdmDeviceListSchema,
 		"MDMPollSchedule":                       mdmPollScheduleSchema,
 		"MDMPollScheduleInput":                  mdmPollScheduleInput,
+		"MDMEntraAppRegistration":               mdmEntraAppRegistration,
 		"MDMPollScheduleList":                   mdmPollScheduleList,
 		"ADCSDatabaseSummary":                   adcsDatabaseSummarySchema,
 		"ADCSDatabaseIngest":                    adcsDatabaseIngestSchema,

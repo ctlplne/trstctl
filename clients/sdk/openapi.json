@@ -24798,10 +24798,34 @@
         ],
         "type": "object"
       },
+      "MDMEntraAppRegistration": {
+        "properties": {
+          "authority": {
+            "description": "identity platform origin; defaults to https://login.microsoftonline.com",
+            "type": "string"
+          },
+          "client_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "directory_tenant_id": {
+            "description": "the Entra directory's GUID or a verified domain",
+            "type": "string"
+          }
+        },
+        "required": [
+          "directory_tenant_id",
+          "client_id"
+        ],
+        "type": "object"
+      },
       "MDMPollSchedule": {
         "properties": {
           "base_url": {
             "type": "string"
+          },
+          "client_credentials": {
+            "$ref": "#/components/schemas/MDMEntraAppRegistration"
           },
           "configured": {
             "type": "boolean"
@@ -24860,6 +24884,9 @@
         "properties": {
           "base_url": {
             "type": "string"
+          },
+          "client_credentials": {
+            "$ref": "#/components/schemas/MDMEntraAppRegistration"
           },
           "enabled": {
             "type": "boolean"
