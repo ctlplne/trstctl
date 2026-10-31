@@ -446,6 +446,17 @@ destinations. Configuring it enables no tenant and supplies no missing historica
 key. Operator activation and the complete erasure-aware restore workflow remain
 required before the opt-in feature is available.
 
+When an opted-in tenant key is preparing, new authorization audits keep only
+permission, allow/deny and an explicit `details_omitted: "key_preparing"` marker.
+After that protected lifetime is offboarded, the marker is `tenant_offboarded`.
+These closed records omit actor, roles, request path, target and free-text reason;
+Change history labels them **Details omitted** and explains why. They grant no
+permission or tenant service. An active protected lifetime keeps encrypted detailed
+decisions; feature-disabled tenants keep the existing detailed audit format,
+including audit-only writes after offboarding. A source or custody error reports
+audit unavailable rather than falling back to plaintext details. These component
+contracts do not make the unfinished opt-in lifecycle available.
+
 For a protected record, native collector requests keep searchable actor/data
 fields separate from the encrypted commitment. HEC uses `signed_record` and
 `hash_scope: "signed_record"`; Sentinel uses `SignedRecord` and

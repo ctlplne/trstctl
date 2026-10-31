@@ -2,11 +2,17 @@
 
 package projections
 
-import "trstctl.com/trstctl/internal/events"
+import (
+	"trstctl.com/trstctl/internal/eventprivacy"
+	"trstctl.com/trstctl/internal/events"
+)
 
 // These exact field classes describe subject erasure. They do not make other
 // opaque fields public: only SourceAdmission's closed controls bypass sealing.
 func addEventProtectionPrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
+	for version, policy := range eventprivacy.AuthorizationPrivacyPolicies() {
+		policies[privacyEventPolicyKey{eventprivacy.EventAuthorizationDecision, version}] = policy
+	}
 	opaque := events.PrivacyFieldOpaqueExact
 	request := []events.PrivacyFieldRule{
 		privacyRule("/registration_identity", opaque), privacyRule("/operation_id", opaque),
@@ -30,6 +36,9 @@ func addEventProtectionPrivacyPolicies(policies map[privacyEventPolicyKey]events
 }
 
 func addEventProtectionPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
+	for version, policy := range eventprivacy.AuthorizationPrivacyPolicies() {
+		shapes[privacyEventPolicyKey{eventprivacy.EventAuthorizationDecision, version}] = policy.PayloadShape
+	}
 	shapes[privacyEventPolicyKey{EventTenantEventProtectionRequested, 1}] = privacyPayloadShape[TenantEventProtectionRequested]()
 	shapes[privacyEventPolicyKey{EventTenantEventProtectionActivated, 1}] = privacyPayloadShape[TenantEventProtectionActivated]()
 	shapes[privacyEventPolicyKey{EventTenantEventProtectionHoldsCleared, 1}] = privacyPayloadShape[TenantEventProtectionHoldsCleared]()

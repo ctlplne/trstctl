@@ -254,4 +254,29 @@ describe("Route 035 change-history hierarchy", () => {
     expect(screen.queryByText("unrelated-private@example.invalid")).not.toBeInTheDocument();
     expect(screen.queryByText("Allowed", { exact: true })).not.toBeInTheDocument();
   });
+  it.each([
+    ["key_preparing", "Identity details were omitted because the event key is not ready."],
+    ["tenant_offboarded", "Identity details were omitted after tenant offboarding."],
+  ])("explains closed authorization identity omission (%s)", async (reason, explanation) => {
+    const user = userEvent.setup();
+    const event = {
+      id: "minimal-17",
+      sequence: 17,
+      tenant_id: "tenant-1",
+      type: "authz.decision",
+      time: "2026-10-30T00:00:00Z",
+      hash: "minimal-source-hash",
+      data: { permission: "owners:write", decision: "deny", details_omitted: reason },
+    };
+    apiMock.auditWindow.mockResolvedValue({ events: [event] });
+    renderAudit();
+    expect(await screen.findByRole("heading", { level: 2, name: "1 change is ready to search" })).toBeInTheDocument();
+    expect(await screen.findByText("Details omitted", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Denied", { exact: true })).toBeInTheDocument();
+    await user.click(within(screen.getByTestId("page-depth-operate")).getByRole("button", { name: "Search activity" }));
+    await user.click(await screen.findByRole("button", { name: "View event 17" }));
+    expect(await screen.findByText(explanation, { exact: true })).toBeInTheDocument();
+    expect(screen.queryByText("The hash covers the encrypted source. Readable details are supplied separately.", { exact: true })).not.toBeInTheDocument();
+    expect(event.hash).toBe("minimal-source-hash");
+  });
 });

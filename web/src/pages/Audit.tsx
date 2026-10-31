@@ -730,6 +730,11 @@ function EventDetail({ event, presentation }: { event: AuditEvent | null; presen
           <p className="mt-2 text-muted-foreground">{t("audit.protection.sourceBinding")}</p>
         </>
       ) : null}
+      {fields.detailsOmitted ? (
+        <p className="mt-3 text-muted-foreground">
+          {t(fields.detailsOmitted === "key_preparing" ? "audit.protection.preparingOmission" : "audit.protection.offboardedOmission")}
+        </p>
+      ) : null}
       {fields.state === "erased" ? (
         <p className="mt-3 text-muted-foreground">{t("audit.protection.erasedBody")}</p>
       ) : fields.state === "unavailable" ? (
@@ -803,6 +808,7 @@ function eventKey(event: AuditEvent): string {
 function presentationActorLabel(fields: AuditPresentation, t: ReturnType<typeof useTranslation>["t"]): string {
   if (fields.state === "erased") return t("audit.protection.detailsErased");
   if (fields.state === "unavailable") return t("audit.protection.detailsUnavailable");
+  if (fields.detailsOmitted) return t("audit.protection.detailsOmitted");
   return actorLabel(fields.actor);
 }
 

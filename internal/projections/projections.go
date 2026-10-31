@@ -38,6 +38,7 @@ import (
 	adcsdiscovery "trstctl.com/trstctl/internal/discovery/adcs"
 	"trstctl.com/trstctl/internal/discovery/segmentscan"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
+	"trstctl.com/trstctl/internal/eventprivacy"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/eventspec"
 	"trstctl.com/trstctl/internal/migration"
@@ -4579,6 +4580,7 @@ func (p *Projector) rebuildEventProjectionsThrough(
 // (ignored, keeping projections forward-compatible to new types). Only types with
 // an explicit decoder are gated, because only they would mis-project silently.
 var knownSchemaVersions = map[string]map[int]bool{
+	eventprivacy.EventAuthorizationDecision:       {1: true, 2: true},
 	EventSSHTrustFleetStarted:                     {1: true},
 	EventSSHTrustFleetObserved:                    {1: true},
 	"cmdb.certificate_export.requested":           {1: true},
@@ -4946,6 +4948,12 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return err
 	}
 	switch e.Type {
+	case eventprivacy.EventAuthorizationDecision:
+		if schemaVersionOf(e) == eventprivacy.MinimalAuthzSchemaVersion {
+			_, err := eventprivacy.ParseMinimalAuthzDecision(e)
+			return err
+		}
+		return nil
 	case EventTenantRegistered:
 		var payload tenantRegistered
 		if err := json.Unmarshal(e.Data, &payload); err != nil {

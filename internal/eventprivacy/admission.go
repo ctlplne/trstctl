@@ -78,7 +78,15 @@ func (admission SourceAdmission) EventProtectionFor(ctx context.Context, event e
 	case EventHoldClearance:
 		return admission.holdClearanceDecision(ctx, event)
 	}
+	if event.Type == EventAuthorizationDecision && event.SchemaVersion == MinimalAuthzSchemaVersion {
+		return admission.minimalAuthzDecision(event, lifetime)
+	}
 	if lifetime.Offboard != nil {
+		// Feature-disabled audit-only decisions keep their prior representation.
+		// Protected lifetimes use only the closed source-bound alternate above.
+		if lifetime.Request == nil && event.Type == EventAuthorizationDecision && event.SchemaVersion == 1 {
+			return events.EventProtectionDecision{Mode: events.EventProtectionLegacy}, nil
+		}
 		if event.Type == eventRegistered {
 			return events.EventProtectionDecision{Mode: events.EventProtectionLegacy}, nil
 		}

@@ -23,6 +23,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	ephemerallib "trstctl.com/trstctl/internal/ephemeral"
+	"trstctl.com/trstctl/internal/eventprivacy"
 	"trstctl.com/trstctl/internal/events"
 	"trstctl.com/trstctl/internal/privacy"
 	"trstctl.com/trstctl/internal/profile"
@@ -172,15 +173,7 @@ type profileVersionOptions struct {
 
 // AuthzDecision records the governed authorization decision for a sensitive
 // served mutation that has request-body-specific authorization inputs.
-type AuthzDecision struct {
-	Actor      string   `json:"actor"`
-	Permission string   `json:"permission"`
-	Resource   string   `json:"resource"`
-	Target     string   `json:"target"`
-	Decision   string   `json:"decision"`
-	Reason     string   `json:"reason,omitempty"`
-	Roles      []string `json:"roles,omitempty"`
-}
+type AuthzDecision = eventprivacy.AuthzDecision
 
 // ProfileApprovalRequirement is the profile-bound approval gate for an identity
 // issuance transition.
@@ -323,6 +316,19 @@ func (o *Orchestrator) emitPrepared(ctx context.Context, next events.Event) (eve
 // RecordAuthzDecision appends an immutable authorization decision event. It does
 // not project into a read model; the event log is the audit evidence.
 func (o *Orchestrator) RecordAuthzDecision(ctx context.Context, tenantID string, decision AuthzDecision) error {
+	if o.eventProtectionSourcePolicy != nil {
+		next, minimal, err := o.eventProtectionSourcePolicy.MinimalAuthzEvent(ctx, tenantID, decision.Permission, decision.Decision)
+		if err != nil {
+			return err
+		}
+		if minimal {
+			// Existing audit-only admission remains. SourceAdmission verifies the
+			// actual closed state again under its append fence. A race may report
+			// audit unavailable; it must never fall back to plaintext details.
+			_, err = o.emitPrepared(events.ContextWithoutActor(ctx), next)
+			return err
+		}
+	}
 	payload, err := json.Marshal(decision)
 	if err != nil {
 		return err

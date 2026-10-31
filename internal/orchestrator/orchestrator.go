@@ -91,6 +91,7 @@ type Orchestrator struct {
 	outbox                              *Outbox
 	proj                                *projections.Projector
 	eventProtectionDestructionAuthority *eventprivacy.DestructionAuthority
+	eventProtectionSourcePolicy         *eventprivacy.SourcePolicy
 	// pqcPilotReportSigner signs a finished pilot's readiness report inside
 	// the isolated signer (A28/A29); nil leaves finished pilots unsigned.
 	pqcPilotReportSigner PQCPilotReportSigner

@@ -1452,6 +1452,9 @@ func (s *Server) configureMutationSpine(
 		}),
 	)
 	orchOptions := historyRewriteOrchestratorOptions(d.Store, d.AuditSigningKey)
+	if d.eventProtection != nil {
+		orchOptions = append(orchOptions, orchestrator.WithEventProtectionSourcePolicy(&d.eventProtection.policy))
+	}
 	orchOptions = append(orchOptions, orchestrator.WithProjector(proj))
 	orchOptions = append(orchOptions, orchestrator.WithTenantCommandService(d.Store.BeginTenantService, d.TenantServiceCheck))
 	if d.EnableAgentChannel {

@@ -1997,6 +1997,18 @@ export const messages = {
       "Hash presence is not independent verification. Export the signed evidence bundle and verify it with the published key or the audit verify CLI command.",
     description: "Security boundary between displaying audit hashes and cryptographic verification.",
   },
+  "audit.protection.detailsOmitted": {
+    defaultMessage: "Details omitted",
+    description: "Identity fields were deliberately omitted from a closed audit record.",
+  },
+  "audit.protection.preparingOmission": {
+    defaultMessage: "Identity details were omitted because the event key is not ready.",
+    description: "Explain the closed audit payload used before tenant-key activation.",
+  },
+  "audit.protection.offboardedOmission": {
+    defaultMessage: "Identity details were omitted after tenant offboarding.",
+    description: "Explain why a new post-offboard audit does not carry identity fields.",
+  },
   "audit.protection.detailsErased": { defaultMessage: "Details erased", description: "Protected audit details are independently verified erased." },
   "audit.protection.detailsUnavailable": {
     defaultMessage: "Protected details unavailable",
