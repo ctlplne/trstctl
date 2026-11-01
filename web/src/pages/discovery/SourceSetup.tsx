@@ -17,6 +17,7 @@ import { useApiQuery } from "@/lib/query";
 import { translateNow, useTranslation } from "@/i18n/I18nProvider";
 
 import { ADCSFields, parseADCSProbeSuffixes } from "./SourceSetupADCSFields";
+import { SecretStoreFields, isSecretStoreProvider, secretStoreScope, secretStoreScopeProblems } from "./SourceSetupSecretStoreFields";
 
 import { SSHCollectionFields } from "./SSHCollectionFields";
 
@@ -61,6 +62,13 @@ const secretFieldPaths = [
   "providers[].label_value",
   "providers[].name_prefix",
   "providers[].inspect_content",
+  "providers[].owner",
+  "providers[].repo",
+  "providers[].environments",
+  "providers[].org",
+  "providers[].group",
+  "providers[].vaults",
+  "providers[].configs",
 ] as const;
 
 /** This is the deliberate React adapter side of the server-owned source
@@ -163,6 +171,13 @@ const setupSchema = z
     pathPrefix: z.string().trim(),
     namePrefix: z.string().trim(),
     inspectContent: z.boolean(),
+    owner: z.string().trim(),
+    repo: z.string().trim(),
+    environments: z.string(),
+    org: z.string().trim(),
+    group: z.string().trim(),
+    vaults: z.string(),
+    configs: z.string(),
     allowPrivateEndpoint: z.boolean(),
     privateEgressCIDRs: z.string(),
     adcsURL: z.string().trim(),
@@ -280,6 +295,12 @@ const setupSchema = z
       requireField(ctx, value.mount, "mount", translateNow("discovery.setup.validation.mount"));
       requireField(ctx, value.tokenRef, "tokenRef", translateNow("discovery.setup.validation.tokenRef"));
     }
+    if (isSecretStoreProvider(value.provider)) {
+      requireField(ctx, value.tokenRef, "tokenRef", translateNow("discovery.setup.validation.tokenRef"));
+      for (const problem of secretStoreScopeProblems(value)) {
+        ctx.addIssue({ code: "custom", path: [problem.path], message: translateNow(problem.key) });
+      }
+    }
     if (value.allowPrivateEndpoint && !splitList(value.privateEgressCIDRs).length) {
       ctx.addIssue({ code: "custom", path: ["privateEgressCIDRs"], message: translateNow("discovery.setup.validation.privateCidr") });
     }
@@ -318,6 +339,13 @@ const defaults: SetupValues = {
   pathPrefix: "",
   namePrefix: "",
   inspectContent: false,
+  owner: "",
+  repo: "",
+  environments: "",
+  org: "",
+  group: "",
+  vaults: "",
+  configs: "",
   allowPrivateEndpoint: false,
   privateEgressCIDRs: "",
   adcsURL: "ldaps://",
@@ -914,6 +942,7 @@ function CloudFields({ form, providers }: { form: ReturnType<typeof useForm<Setu
           {(control) => <Input {...control} {...form.register("tokenRef")} className="font-mono text-xs" placeholder={examples.discoveryTokenRef} />}
         </Field>
       ) : null}
+      {isSecretStoreProvider(provider) ? <SecretStoreFields form={form} provider={provider} /> : null}
       {isVault ? (
         <div className="grid gap-4 lg:grid-cols-3">
           <Field label={t("discovery.setup.mount")} error={form.formState.errors.mount?.message} required>
@@ -1133,6 +1162,8 @@ function buildConfig(values: SetupValues): Record<string, unknown> {
       mount: values.mount,
       path_prefix: values.pathPrefix,
     });
+  } else if (isSecretStoreProvider(values.provider)) {
+    provider = compact({ ...providerBase, token_ref: values.tokenRef, ...secretStoreScope(values) });
   } else {
     provider = providerBase;
   }

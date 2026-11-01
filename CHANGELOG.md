@@ -2,6 +2,9 @@
 
 ### Added
 
+- Secret-store discovery beyond the cloud secret managers: GitHub Actions secrets (repository,
+  environment and organization; metadata only), GitLab CI/CD variables, 1Password Connect items and
+  Doppler secrets, with the same optional content inspection for certificates and credentials.
 - API keys, tokens and private keys inside external secret stores: with content inspection, a
   cloud secret source checks each value it reads from AWS Secrets Manager, Google Secret Manager,
   Azure Key Vault or Vault KV against built-in credential rules and records each match with its

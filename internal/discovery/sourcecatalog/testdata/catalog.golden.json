@@ -899,6 +899,58 @@
           "description": "Optional resource-name filter."
         },
         {
+          "path": "providers[].owner",
+          "label": "GitHub owner",
+          "type": "string",
+          "required": false,
+          "description": "Repository owner (user or organization) for repository and environment secrets."
+        },
+        {
+          "path": "providers[].repo",
+          "label": "GitHub repository",
+          "type": "string",
+          "required": false,
+          "description": "Repository whose Actions secrets are listed."
+        },
+        {
+          "path": "providers[].environments",
+          "label": "GitHub environments",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Deployment environments whose secrets are listed too."
+        },
+        {
+          "path": "providers[].org",
+          "label": "GitHub organization",
+          "type": "string",
+          "required": false,
+          "description": "Organization whose Actions secrets are listed."
+        },
+        {
+          "path": "providers[].group",
+          "label": "GitLab group",
+          "type": "string",
+          "required": false,
+          "description": "Group ID or full path whose CI/CD variables are listed; a project uses the project field."
+        },
+        {
+          "path": "providers[].vaults",
+          "label": "1Password vaults",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Vault IDs or names; empty lists every vault the token can read."
+        },
+        {
+          "path": "providers[].configs",
+          "label": "Doppler configs",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Configs of the project; empty lists every config."
+        },
+        {
           "path": "providers[].inspect_content",
           "label": "Inspect content for certificates and credentials",
           "type": "boolean",
@@ -962,6 +1014,62 @@
             "mount",
             "path_prefix",
             "token_ref",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "github-actions",
+          "label": "GitHub Actions secrets",
+          "least_privilege": "Metadata only: a fine-grained token with Secrets read on the repository (and Environments read for environment secrets) or an org token with Secrets read. GitHub never returns values, so content inspection is refused.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "owner",
+            "repo",
+            "environments",
+            "org",
+            "token_ref",
+            "name_prefix"
+          ]
+        },
+        {
+          "id": "gitlab-ci",
+          "label": "GitLab CI/CD variables",
+          "least_privilege": "Metadata: a read_api token with at least Maintainer on the project or group (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "project",
+            "group",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "1password-connect",
+          "label": "1Password Connect",
+          "least_privilege": "Metadata: a Connect token with read access to the named vaults. Optional content inspection reads each item's fields.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "vaults",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "doppler",
+          "label": "Doppler",
+          "least_privilege": "Metadata: a read-only service or personal token; names come from the names-only endpoint. Optional content inspection reads each config's values once.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "project",
+            "configs",
+            "token_ref",
+            "name_prefix",
             "inspect_content"
           ]
         }
@@ -1156,6 +1264,58 @@
           "description": "Optional resource-name filter."
         },
         {
+          "path": "providers[].owner",
+          "label": "GitHub owner",
+          "type": "string",
+          "required": false,
+          "description": "Repository owner (user or organization) for repository and environment secrets."
+        },
+        {
+          "path": "providers[].repo",
+          "label": "GitHub repository",
+          "type": "string",
+          "required": false,
+          "description": "Repository whose Actions secrets are listed."
+        },
+        {
+          "path": "providers[].environments",
+          "label": "GitHub environments",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Deployment environments whose secrets are listed too."
+        },
+        {
+          "path": "providers[].org",
+          "label": "GitHub organization",
+          "type": "string",
+          "required": false,
+          "description": "Organization whose Actions secrets are listed."
+        },
+        {
+          "path": "providers[].group",
+          "label": "GitLab group",
+          "type": "string",
+          "required": false,
+          "description": "Group ID or full path whose CI/CD variables are listed; a project uses the project field."
+        },
+        {
+          "path": "providers[].vaults",
+          "label": "1Password vaults",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Vault IDs or names; empty lists every vault the token can read."
+        },
+        {
+          "path": "providers[].configs",
+          "label": "Doppler configs",
+          "type": "string_list",
+          "required": false,
+          "advanced": true,
+          "description": "Configs of the project; empty lists every config."
+        },
+        {
           "path": "providers[].inspect_content",
           "label": "Inspect content for certificates and credentials",
           "type": "boolean",
@@ -1219,6 +1379,62 @@
             "mount",
             "path_prefix",
             "token_ref",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "github-actions",
+          "label": "GitHub Actions secrets",
+          "least_privilege": "Metadata only: a fine-grained token with Secrets read on the repository (and Environments read for environment secrets) or an org token with Secrets read. GitHub never returns values, so content inspection is refused.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "owner",
+            "repo",
+            "environments",
+            "org",
+            "token_ref",
+            "name_prefix"
+          ]
+        },
+        {
+          "id": "gitlab-ci",
+          "label": "GitLab CI/CD variables",
+          "least_privilege": "Metadata: a read_api token with at least Maintainer on the project or group (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "project",
+            "group",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "1password-connect",
+          "label": "1Password Connect",
+          "least_privilege": "Metadata: a Connect token with read access to the named vaults. Optional content inspection reads each item's fields.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "vaults",
+            "token_ref",
+            "name_prefix",
+            "inspect_content"
+          ]
+        },
+        {
+          "id": "doppler",
+          "label": "Doppler",
+          "least_privilege": "Metadata: a read-only service or personal token; names come from the names-only endpoint. Optional content inspection reads each config's values once.",
+          "preferred_credential": "token_ref",
+          "fields": [
+            "endpoint",
+            "project",
+            "configs",
+            "token_ref",
+            "name_prefix",
             "inspect_content"
           ]
         }

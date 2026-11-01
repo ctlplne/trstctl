@@ -70,6 +70,8 @@ const catalog: DiscoveryCapabilityCatalog = {
     ]),
     capability("secret_store", [
       { id: "hashicorp-vault", label: "HashiCorp Vault", least_privilege: "List metadata", preferred_credential: "token_ref", fields: [] },
+      { id: "github-actions", label: "GitHub Actions secrets", least_privilege: "Secrets read", preferred_credential: "token_ref", fields: [] },
+      { id: "gitlab-ci", label: "GitLab CI/CD variables", least_privilege: "read_api", preferred_credential: "token_ref", fields: [] },
     ]),
   ],
 };
@@ -336,6 +338,40 @@ describe("typed discovery source setup", () => {
               }),
             ],
           }),
+        }),
+      ),
+    );
+  });
+
+  it("configures a code-host secret store and refuses GitHub content inspection", async () => {
+    const user = userEvent.setup();
+    renderSetup();
+
+    await screen.findByText("What this source does");
+    await user.selectOptions(screen.getByRole("combobox", { name: "What should trstctl inspect?" }), "secret_store");
+    await user.type(screen.getByRole("textbox", { name: "Source name" }), "CI secrets");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Provider" }), "github-actions");
+    await user.type(screen.getByRole("textbox", { name: "GitHub owner" }), "acme");
+    await user.type(screen.getByRole("textbox", { name: "GitHub repository" }), "api");
+    await user.type(screen.getByRole("textbox", { name: /GitHub environments/ }), "production, staging");
+    await user.type(screen.getByRole("textbox", { name: /Token reference/ }), "env:GITHUB_DISCOVERY_TOKEN");
+    await user.click(screen.getByRole("checkbox", { name: /Inspect secret content/ }));
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    expect(await screen.findByText(/GitHub never returns Actions secret values. Turn content inspection off/)).toBeInTheDocument();
+    expect(apiMock.createDiscoverySource).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("checkbox", { name: /Inspect secret content/ }));
+    await user.click(screen.getByRole("button", { name: "Review exact plan" }));
+    await user.click(await screen.findByRole("button", { name: "Save source" }));
+    await waitFor(() =>
+      expect(apiMock.createDiscoverySource).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "secret_store",
+          config: {
+            providers: [
+              { provider: "github-actions", owner: "acme", repo: "api", environments: ["production", "staging"], token_ref: "env:GITHUB_DISCOVERY_TOKEN" },
+            ],
+          },
         }),
       ),
     );

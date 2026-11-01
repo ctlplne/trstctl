@@ -95,6 +95,14 @@ type cloudSecretProviderConfig struct {
 	LabelValue           string   `json:"label_value"`
 	NamePrefix           string   `json:"name_prefix"`
 	InspectContent       bool     `json:"inspect_content"`
+	// Code-host and secret-store providers (A173).
+	Owner        string   `json:"owner"`
+	Repo         string   `json:"repo"`
+	Org          string   `json:"org"`
+	Environments []string `json:"environments"`
+	Group        string   `json:"group"`
+	Vaults       []string `json:"vaults"`
+	Configs      []string `json:"configs"`
 }
 
 type ctLogDiscoveryConfig struct {
@@ -1118,6 +1126,9 @@ func cloudSecretProvider(ctx context.Context, p cloudSecretProviderConfig) (clou
 			InspectContent: p.InspectContent, HTTPClient: client,
 		})
 	default:
+		if provider, ok, err := secretStoreProvider(ctx, p); ok {
+			return provider, err
+		}
 		return nil, fmt.Errorf("unsupported cloud secret-manager provider %q", p.Provider)
 	}
 }

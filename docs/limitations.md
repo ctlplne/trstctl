@@ -3201,9 +3201,13 @@ than sending an operator looking for a credential that was never there.
   `/api/v1/secrets/scans/*` routes. A `secret_store` source runs through the
   same served secret-manager connectors as `cloud_secret`
   (aws-secrets-manager, gcp-secret-manager, azure-key-vault,
-  hashicorp-vault; the kinds share the providers config shape), and a
-  provider outside that set fails with the connector's specific
-  "unsupported provider" error. One accepted kind carries no worker
+  hashicorp-vault, and since A173 github-actions, gitlab-ci,
+  1password-connect and doppler; the kinds share the providers config
+  shape), and a provider outside that set fails with the connector's
+  specific "unsupported provider" error. GitHub never returns an Actions
+  secret's value, so that provider is metadata-only and refuses content
+  inspection with the reason; a hidden GitLab variable is reported as not
+  inspectable. One accepted kind carries no worker
   executor: `agent` sources report through the agent mTLS channel instead
   of the worker. On the agent side, the shipped binary collects filesystem
   certificates, OS/Java/NSS/browser trust stores, and private-key material

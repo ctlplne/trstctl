@@ -10979,6 +10979,54 @@ export const messages = {
   "discovery.setup.validation.secretKeyRef": { defaultMessage: "Choose a secret-access-key reference.", description: "AWS secret-key reference validation." },
   "discovery.setup.validation.vaultUrl": { defaultMessage: "Enter the authorized vault URL.", description: "Vault URL validation." },
   "discovery.setup.validation.tokenRef": { defaultMessage: "Choose a least-privilege token reference.", description: "Provider token-reference validation." },
+  "discovery.setup.githubOwner": { defaultMessage: "GitHub owner", description: "GitHub repository owner field." },
+  "discovery.setup.githubRepo": { defaultMessage: "GitHub repository", description: "GitHub repository field." },
+  "discovery.setup.githubEnvironments": { defaultMessage: "GitHub environments", description: "GitHub deployment environments field." },
+  "discovery.setup.githubOrg": { defaultMessage: "GitHub organization", description: "GitHub organization field." },
+  "discovery.setup.githubMetadataOnly": {
+    defaultMessage: "GitHub never returns Actions secret values, so this provider inventories names and dates only. Leave content inspection off.",
+    description: "GitHub Actions metadata-only explanation.",
+  },
+  "discovery.setup.listDescription": { defaultMessage: "Optional. Separate several with commas.", description: "Comma-separated list field help." },
+  "discovery.setup.gitlabProject": { defaultMessage: "GitLab project", description: "GitLab project field." },
+  "discovery.setup.gitlabGroup": { defaultMessage: "GitLab group", description: "GitLab group field." },
+  "discovery.setup.gitlabPathDescription": {
+    defaultMessage: "Numeric ID or full path, for example group/app.",
+    description: "GitLab project or group identifier help.",
+  },
+  "discovery.setup.onePasswordVaults": { defaultMessage: "1Password vaults", description: "1Password Connect vaults field." },
+  "discovery.setup.onePasswordVaultsDescription": {
+    defaultMessage: "Vault names or IDs, separated by commas. Leave empty to list every vault the token can read.",
+    description: "1Password Connect vaults help.",
+  },
+  "discovery.setup.dopplerProject": { defaultMessage: "Doppler project", description: "Doppler project field." },
+  "discovery.setup.dopplerProjectDescription": {
+    defaultMessage: "Optional. Leave empty to list every project the token can read.",
+    description: "Doppler project help.",
+  },
+  "discovery.setup.dopplerConfigs": { defaultMessage: "Doppler configs", description: "Doppler configs field." },
+  "discovery.setup.validation.githubRepo": { defaultMessage: "Enter both the owner and the repository.", description: "GitHub repository validation." },
+  "discovery.setup.validation.githubScope": {
+    defaultMessage: "Enter a repository (owner and name) or an organization.",
+    description: "GitHub scope validation.",
+  },
+  "discovery.setup.validation.githubEnvironments": {
+    defaultMessage: "Environments belong to a repository. Enter the owner and repository.",
+    description: "GitHub environments validation.",
+  },
+  "discovery.setup.validation.githubNoContent": {
+    defaultMessage: "GitHub never returns Actions secret values. Turn content inspection off for this provider.",
+    description: "GitHub content-inspection validation.",
+  },
+  "discovery.setup.validation.gitlabScope": { defaultMessage: "Enter a GitLab project or group.", description: "GitLab scope validation." },
+  "discovery.setup.validation.connectEndpoint": {
+    defaultMessage: "Enter the 1Password Connect server URL as the API endpoint.",
+    description: "1Password Connect endpoint validation.",
+  },
+  "discovery.setup.validation.dopplerProject": {
+    defaultMessage: "Configs belong to a project. Enter the Doppler project.",
+    description: "Doppler project validation.",
+  },
   "discovery.setup.validation.gcpProject": { defaultMessage: "Enter the authorized Google Cloud project.", description: "Google Cloud project validation." },
   "discovery.setup.validation.gcpLocation": {
     defaultMessage: "Enter the Certificate Manager location.",

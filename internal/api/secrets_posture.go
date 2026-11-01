@@ -717,6 +717,8 @@ func normalizeCloudSecretManagerProvider(provider string) string {
 		return "azure-key-vault"
 	case "hashicorp-vault", "vault":
 		return "hashicorp-vault"
+	case "github-actions", "gitlab-ci", "1password-connect", "doppler":
+		return strings.TrimSpace(strings.ToLower(provider))
 	default:
 		return ""
 	}
@@ -856,6 +858,48 @@ func cloudSecretManagerProviderSpecs() []cloudSecretManagerProviderSpec {
 			SyncSupported:      false,
 			Capabilities:       []string{"cloud-secret-manager", "metadata-only-discovery", "vault-kv-v2"},
 			EvidenceRefs:       []string{"internal/discovery/cloudsecret/vaultkv/vaultkv.go"},
+		},
+		{
+			ID:                 "github-actions",
+			Name:               "GitHub Actions secrets",
+			Platform:           "github",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"GET /repos/{owner}/{repo}/actions/secrets", "GET /repos/{owner}/{repo}/environments/{env}/secrets", "GET /orgs/{org}/actions/secrets"},
+			SyncSupported:      true,
+			SyncTargetID:       "github-actions",
+			SyncWriteOperation: "PUT /repos/{owner}/{repo}/actions/secrets/{name}",
+			Capabilities:       []string{"code-host-secret-store", "metadata-only-discovery", "sealed-outbox-sync"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/githubactions/githubactions.go", "internal/secretsync/pushers.go"},
+		},
+		{
+			ID:                 "gitlab-ci",
+			Name:               "GitLab CI/CD variables",
+			Platform:           "gitlab",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"GET /api/v4/projects/{id}/variables", "GET /api/v4/groups/{id}/variables"},
+			SyncSupported:      true,
+			SyncTargetID:       "gitlab-ci",
+			SyncWriteOperation: "PUT /api/v4/projects/{id}/variables/{key}",
+			Capabilities:       []string{"code-host-secret-store", "metadata-only-discovery", "sealed-outbox-sync"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/gitlabci/gitlabci.go", "internal/secretsync/pushers.go"},
+		},
+		{
+			ID:                 "1password-connect",
+			Name:               "1Password Connect",
+			Platform:           "1password",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"GET /v1/vaults", "GET /v1/vaults/{vault}/items", "GET /v1/vaults/{vault}/items/{item}"},
+			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/onepassword/onepassword.go"},
+		},
+		{
+			ID:                 "doppler",
+			Name:               "Doppler",
+			Platform:           "doppler",
+			DiscoverySupported: true,
+			DiscoveryReadOps:   []string{"GET /v3/projects", "GET /v3/configs", "GET /v3/configs/config/secrets/names", "GET /v3/configs/config/secrets"},
+			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
+			EvidenceRefs:       []string{"internal/discovery/cloudsecret/doppler/doppler.go"},
 		},
 	}
 }

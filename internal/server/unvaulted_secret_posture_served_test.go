@@ -212,7 +212,7 @@ repoDelivered:
 	if posture.Capability != "CAP-SECR-07" || !posture.Served {
 		t.Fatalf("CAP-SECR-07 posture = %+v, want served CAP-SECR-07", posture)
 	}
-	if posture.Summary.RepositorySources != 1 || posture.Summary.CloudSecretSources != 1 || posture.Summary.VaultProvidersSupported != 4 || posture.Summary.VaultProvidersVisible != 4 || posture.Summary.SyncTargetsConfigured != 3 || posture.Summary.LeakedSecretFindings != 1 {
+	if posture.Summary.RepositorySources != 1 || posture.Summary.CloudSecretSources != 1 || posture.Summary.VaultProvidersSupported != 8 || posture.Summary.VaultProvidersVisible != 4 || posture.Summary.SyncTargetsConfigured != 3 || posture.Summary.LeakedSecretFindings != 1 {
 		t.Fatalf("CAP-SECR-07 summary = %+v, want repo scan + four vaults + three sync targets + one leak", posture.Summary)
 	}
 	for _, want := range []string{"aws-secrets-manager", "gcp-secret-manager", "azure-key-vault", "hashicorp-vault"} {
