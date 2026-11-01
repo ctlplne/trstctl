@@ -5584,6 +5584,15 @@ This is a deliberate, documented trust boundary, not an accident.
   reference test CA, through an RFC 2136 server. The draft can still change, and
   no public CA offers the challenge in production yet, so the console's issuer
   catalog does not list it.
+- Planned CA switch (P3): a migration run with `revoke_predecessors` moves cohorts to
+  a new trstctl issuer through the existing trust → successor → live-receipt gates and
+  revokes each previous certificate (superseded) through the CA that issued it only
+  after the endpoint serves the new chain. A failed canary or later cohort pauses the
+  run with nothing revoked; resuming retries exactly the failed members as the same
+  jobs; a repeated start changes nothing. Proven in the served test against a real TLS
+  endpoint and host agent. Cohorts are listed explicitly (no issuer/profile/tag
+  selector yet), and switching to or from an external (vendor) issuer is what comes
+  next: the target and the predecessors are trstctl CAs today.
 - ACME server with ARI: all three domain-validation challenges are validated
   for real, each failing closed — HTTP-01 (RFC 8555 §8.3), DNS-01 (§8.4, the
   `_acme-challenge` TXT digest), and TLS-ALPN-01 (RFC 8737, the `acme-tls/1`

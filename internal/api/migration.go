@@ -56,6 +56,9 @@ type migrationStartRequest struct {
 	// member's endpoint; pause when that proof is late.
 	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
 	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
+	// P3: a planned CA switch revokes each predecessor (superseded) once its
+	// successor is verified live, and pauses on a failed verification.
+	RevokePredecessors bool `json:"revoke_predecessors,omitempty"`
 }
 
 type migrationStartWave struct {
@@ -370,7 +373,8 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 		return migration.Run{}, nil, errors.New("new_authority_id has no parseable CA certificate")
 	}
 	run := migration.Run{ID: orchestrator.MigrationRunID(tenantID, idempotencyKey), PlanID: req.PlanID,
-		RequireObservedTraffic: req.RequireObservedTraffic, ObservedTrafficWindowSeconds: req.ObservedTrafficWindowSeconds}
+		RequireObservedTraffic: req.RequireObservedTraffic, ObservedTrafficWindowSeconds: req.ObservedTrafficWindowSeconds,
+		RevokePredecessors: req.RevokePredecessors}
 	var gated []migrationGatedMember
 	for _, requestedWave := range req.Waves {
 		wave := migration.RunWave{ID: strings.TrimSpace(requestedWave.ID), Ordinal: requestedWave.Ordinal}
@@ -387,10 +391,37 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 		}
 		run.Waves = append(run.Waves, wave)
 	}
+	if run.RevokePredecessors {
+		if err := a.bindSwitchPredecessorAuthorities(ctx, tenantID, &run); err != nil {
+			return migration.Run{}, nil, err
+		}
+	}
 	if err := migration.ValidateExecutableRunForStart(run); err != nil {
 		return migration.Run{}, nil, err
 	}
 	return run, gated, nil
+}
+
+// bindSwitchPredecessorAuthorities names, for a planned switch (P3), the
+// trstctl CA that issued each member's predecessor: the one that revokes it
+// once the successor is live. A predecessor no trstctl CA issued is refused
+// rather than left unrevoked.
+func (a *API) bindSwitchPredecessorAuthorities(ctx context.Context, tenantID string, run *migration.Run) error {
+	for wi := range run.Waves {
+		for mi := range run.Waves[wi].Members {
+			member := &run.Waves[wi].Members[mi]
+			cert, err := a.store.GetCertificate(ctx, tenantID, member.Binding.PredecessorCertificateID)
+			if err != nil {
+				return fmt.Errorf("switch member %s: its current certificate is no longer inventoried", member.IdentityID)
+			}
+			caID, err := a.store.ExactIssuedCertificateAuthority(ctx, tenantID, cert.Serial)
+			if err != nil || strings.TrimSpace(caID) == "" {
+				return fmt.Errorf("switch member %s: its current certificate does not resolve to exactly one trstctl CA that can revoke it", member.IdentityID)
+			}
+			member.Binding.PredecessorCAID = caID
+		}
+	}
+	return nil
 }
 
 func (a *API) buildMigrationMember(

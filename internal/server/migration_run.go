@@ -36,6 +36,7 @@ type migrationReceiptClaim struct {
 func (s *Server) recordMigrationResult(
 	ctx context.Context,
 	tenantID, agentID, destination, idempotencyKey string,
+	attempt int,
 	payload []byte,
 	outcome, report, evidenceDigest string,
 ) (bool, error) {
@@ -56,7 +57,13 @@ func (s *Server) recordMigrationResult(
 		}
 		obs.Verdict = migration.VerdictVerified
 	}
-	eventID := orchestrator.MigrationEventID(tenantID, claim.runID, "receipt:"+idempotencyKey)
+	receipt := "receipt:" + idempotencyKey
+	if attempt > 1 {
+		// A planned switch's retried job (P3) is the same job's next attempt;
+		// its receipt is a new fact, not a replay of the failed one.
+		receipt += fmt.Sprintf(":attempt:%d", attempt)
+	}
+	eventID := orchestrator.MigrationEventID(tenantID, claim.runID, receipt)
 	updated, err := s.orch.UpdateMigrationRun(ctx, tenantID, claim.runID, eventID,
 		func(current migration.Run) (migration.Run, []migration.Action, error) {
 			member, ok := migration.Member(current, claim.waveID, claim.identityID)

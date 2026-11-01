@@ -27905,6 +27905,9 @@
           "require_observed_traffic": {
             "type": "boolean"
           },
+          "revoke_predecessors": {
+            "type": "boolean"
+          },
           "rollback_attempt": {
             "type": "integer"
           },
@@ -27967,6 +27970,9 @@
       },
       "MigrationRunMember": {
         "properties": {
+          "attempt": {
+            "type": "integer"
+          },
           "binding": {
             "$ref": "#/components/schemas/MigrationMemberBinding"
           },
@@ -27976,6 +27982,9 @@
           },
           "live_verified_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "revocation_verdict": {
             "type": "string"
           },
           "rollback_successor_verdict": {
@@ -28069,6 +28078,10 @@
           },
           "require_observed_traffic": {
             "description": "hold each wave until an observer agent also saw new connections at every member's endpoint (X3)",
+            "type": "boolean"
+          },
+          "revoke_predecessors": {
+            "description": "planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members",
             "type": "boolean"
           },
           "waves": {

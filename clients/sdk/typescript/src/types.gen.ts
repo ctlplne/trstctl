@@ -16703,6 +16703,7 @@ export interface components {
             pause_reason?: string;
             plan_id?: string;
             require_observed_traffic?: boolean;
+            revoke_predecessors?: boolean;
             rollback_attempt?: number;
             rollback_stage?: string;
             rollback_wave_id?: string;
@@ -16718,11 +16719,13 @@ export interface components {
             next_cursor?: string;
         };
         MigrationRunMember: {
+            attempt?: number;
             binding: components["schemas"]["MigrationMemberBinding"];
             /** Format: uuid */
             identity_id: string;
             /** Format: date-time */
             live_verified_at?: string;
+            revocation_verdict?: string;
             rollback_successor_verdict?: string;
             rollback_trust_verdict?: string;
             successor_verdict?: string;
@@ -16754,6 +16757,8 @@ export interface components {
             plan_id: string;
             /** @description hold each wave until an observer agent also saw new connections at every member's endpoint (X3) */
             require_observed_traffic?: boolean;
+            /** @description planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members */
+            revoke_predecessors?: boolean;
             waves: components["schemas"]["MigrationRunStartWave"][];
         };
         MigrationRunStartWave: {

@@ -290,6 +290,15 @@ func (o *Orchestrator) applyMigrationEventTx(ctx context.Context, tx pgx.Tx, ev 
 		if _, err := o.outbox.EnqueueIfAbsent(ctx, tx, entry); err != nil {
 			return err
 		}
+		// A planned switch retries a member's failed gate as the same job
+		// (P3): the host agent kept that job's key and certificate, so the
+		// retry reuses them rather than signing a second successor.
+		if member, ok := migration.Member(recorded.Run, action.WaveID, action.IdentityID); ok && member.Attempt > 0 &&
+			(action.Kind == migration.ActionIssueSuccessor || action.Kind == migration.ActionDistributeTrust) {
+			if _, err := o.store.RearmOutboxCommandTx(ctx, tx, ev.TenantID, entry.Destination, entry.IdempotencyKey); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -326,6 +335,9 @@ type IncidentPredecessorRevocationIntent struct {
 	PredecessorCertificateID string `json:"predecessor_certificate_id"`
 	PredecessorFingerprint   string `json:"predecessor_fingerprint"`
 	PredecessorCAID          string `json:"predecessor_ca_id"`
+	// Reason is the RFC 5280 reason: superseded for a planned switch (P3);
+	// empty means keyCompromise, an incident's reason.
+	Reason string `json:"reason,omitempty"`
 }
 
 func migrationActionEntry(tenantID string, run migration.Run, action migration.Action) (Entry, error) {
@@ -380,14 +392,19 @@ func migrationActionEntry(tenantID string, run migration.Run, action migration.A
 			RequiredAgentID: b.RequiredAgentID,
 		})
 	case migration.ActionRevokePredecessor:
+		if run.Incident == nil && !run.RevokePredecessors {
+			return Entry{}, errors.New("orchestrator: predecessor revocation requires an incident plan or a planned switch")
+		}
+		reason := ""
 		if run.Incident == nil {
-			return Entry{}, errors.New("orchestrator: predecessor revocation requires an incident plan")
+			reason = "superseded"
 		}
 		destination = DestinationIncidentMigrationRevoke
 		payload, err = json.Marshal(IncidentPredecessorRevocationIntent{
 			RunID: run.ID, WaveID: action.WaveID, IdentityID: action.IdentityID,
 			PredecessorCertificateID: b.PredecessorCertificateID,
 			PredecessorFingerprint:   b.PredecessorFingerprint, PredecessorCAID: b.PredecessorCAID,
+			Reason: reason,
 		})
 	case migration.ActionRollbackSuccessor:
 		destination = relay.KindConnectorRollback

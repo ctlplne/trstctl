@@ -489,6 +489,22 @@ is there. Missing wire evidence is never recorded as a failed member. When a mem
 both proofs, the observer's findings for its predecessor certificate at that endpoint
 are marked remediated, naming the live receipt and the observed connections.
 
+**Planned CA switch (P3).** A run started with `"revoke_predecessors": true` moves its
+members to the new issuer and retires what they served before. Each cohort runs the
+same gates — the new root distributed and read back first, then the successor issued
+and deployed, then the signed live receipt that the endpoint serves the new chain
+(and the observed-traffic proof when the run requires it) — and only then is each
+member's previous certificate revoked, reason `superseded`, through the trstctl CA
+that issued it, which publishes its CRL before the cohort counts as done. A member
+whose current certificate no trstctl CA can revoke is refused at start rather than
+left valid. The first cohort is the canary: a failed trust readback or live check in
+any cohort pauses the run, naming the member, with nothing revoked and no later cohort
+started. Resuming retries exactly the failed members as the same jobs (the host agent
+reuses the key and certificate it kept for that job, so no second successor is
+signed); rolling back restores the current cohort, never a cohort whose predecessors
+are already revoked. Starting the same switch again with the same Idempotency-Key
+returns the existing run and changes nothing.
+
 ```sh
 trstctl migrations start -f run.json
 trstctl migrations list

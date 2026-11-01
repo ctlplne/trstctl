@@ -5856,6 +5856,7 @@ func componentSchemas() map[string]*Schema {
 		"waves":                           {Type: "array", Items: ref("MigrationRunStartWave")},
 		"require_observed_traffic":        {Type: "boolean", Description: "hold each wave until an observer agent also saw new connections at every member's endpoint (X3)"},
 		"observed_traffic_window_seconds": {Type: "integer", Description: "pause the run when a live member has no observed traffic this long after going live (default 3600, at most 604800)"},
+		"revoke_predecessors":             {Type: "boolean", Description: "planned CA switch (P3): revoke each member's previous certificate (superseded) through the trstctl CA that issued it once the successor is verified live; a failed verification pauses the run and a resume retries the failed members"},
 	}, "plan_id", "new_authority_id", "waves")
 	migrationMemberBinding := object(map[string]*Schema{
 		"issuing_authority_source": {Type: "string", Enum: []string{endpointIssuerPlatform, endpointIssuerPrivate, endpointIssuerExternal}},
@@ -5879,6 +5880,7 @@ func componentSchemas() map[string]*Schema {
 		"trust_verdict": str(), "successor_verdict": str(),
 		"rollback_successor_verdict": str(), "rollback_trust_verdict": str(),
 		"traffic_verdict": str(), "live_verified_at": timestamp(),
+		"revocation_verdict": str(), "attempt": {Type: "integer"},
 	}, "identity_id", "binding")
 	migrationRunWave := object(map[string]*Schema{
 		"id": str(), "ordinal": {Type: "integer"}, "phase": str(), "started": {Type: "boolean"}, "halt_reason": str(),
@@ -5893,6 +5895,7 @@ func componentSchemas() map[string]*Schema {
 		"approval":                        ref("MigrationApprovalUse"),
 		"require_observed_traffic":        {Type: "boolean"},
 		"observed_traffic_window_seconds": {Type: "integer"},
+		"revoke_predecessors":             {Type: "boolean"},
 	}, "id", "status", "waves")
 	migrationApprovalUse := object(map[string]*Schema{
 		"request_id": uuid(), "intent_digest": str(), "requester": str(), "resource_kind": str(), "resource_id": str(),

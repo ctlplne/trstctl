@@ -9075,6 +9075,7 @@ MigrationRun = TypedDict(
         'pause_reason': str,
         'plan_id': str,
         'require_observed_traffic': bool,
+        'revoke_predecessors': bool,
         'rollback_attempt': int,
         'rollback_stage': str,
         'rollback_wave_id': str,
@@ -9104,9 +9105,11 @@ MigrationRunList = TypedDict(
 MigrationRunMember = TypedDict(
     'MigrationRunMember',
     {
+        'attempt': int,
         'binding': dict[str, Any],
         'identity_id': str,
         'live_verified_at': str,
+        'revocation_verdict': str,
         'rollback_successor_verdict': str,
         'rollback_trust_verdict': str,
         'successor_verdict': str,
@@ -9146,6 +9149,7 @@ MigrationRunStartRequest = TypedDict(
         'observed_traffic_window_seconds': int,
         'plan_id': str,
         'require_observed_traffic': bool,
+        'revoke_predecessors': bool,
         'waves': list[dict[str, Any]],
     },
     total=False,

@@ -257,6 +257,9 @@ type RunMember struct {
 	// when the live receipt for the successor landed.
 	TrafficVerdict Verdict    `json:"traffic_verdict,omitempty"`
 	LiveVerifiedAt *time.Time `json:"live_verified_at,omitempty"`
+	// Attempt counts retries of this member's current gate after a failed
+	// verification in a planned switch (P3); it keys the retried work.
+	Attempt int `json:"attempt,omitempty"`
 }
 
 type RunWave struct {
@@ -288,6 +291,13 @@ type Run struct {
 	// the run instead of letting it advance.
 	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
 	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
+	// RevokePredecessors makes the run a planned CA switch (P3): once a
+	// member's successor is verified live, its predecessor is revoked through
+	// the CA that issued it (reason superseded), never before. A failed
+	// verification pauses such a run instead of rolling its cohort back;
+	// resuming retries the failed members, and a rollback stays the
+	// operator's call.
+	RevokePredecessors bool `json:"revoke_predecessors,omitempty"`
 	// Approval is the exact single-use operation approval that authorized the
 	// start when a member issues under an approval-required profile (A40). It
 	// mirrors the store's approval-use wire shape so the aggregate stays
@@ -398,7 +408,7 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		return in, nil, fmt.Errorf("migration: unsupported observation verdict %q", obs.Verdict)
 	}
 	if obs.Stage == StageRevocation && obs.Verdict != VerdictVerified {
-		return in, nil, errors.New("migration: incident revocation accepts only a verified control-plane receipt")
+		return in, nil, errors.New("migration: predecessor revocation accepts only a verified control-plane receipt")
 	}
 	if obs.Stage == StageObservedTraffic && (obs.Verdict != VerdictVerified || !in.RequireObservedTraffic) {
 		return in, nil, errors.New("migration: observed traffic is verified wire evidence for a run that requires it; its absence pauses the run")
@@ -460,6 +470,14 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 			wave.HaltReason = out.HaltReason
 			return out, nil, nil
 		}
+		if pausesOnFailure(out) {
+			// A planned switch stops here: nothing further is published until
+			// the operator resumes (retrying the failed members) or rolls back.
+			out.Status = RunPaused
+			out.PauseReason = reason
+			wave.HaltReason = reason
+			return out, nil, nil
+		}
 		out.HaltReason = reason
 		wave.HaltReason = reason
 		return beginRollback(out, reason)
@@ -483,7 +501,7 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		wave.Phase = PhaseVerifyingLive
 		return out, actionsFor(*wave, ActionIssueSuccessor), nil
 	case StageSuccessor:
-		if out.Incident != nil {
+		if revokesPredecessors(out) {
 			wave.Phase = PhaseRevokingPredecessor
 			return out, actionsFor(*wave, ActionRevokePredecessor), nil
 		}
@@ -531,6 +549,11 @@ func ResumeRun(in Run) (Run, []Action, error) {
 	out := cloneRun(in)
 	out.Status = RunRunning
 	out.PauseReason = ""
+	if pausesOnFailure(out) {
+		if retry := retryFailedMembers(&out); len(retry) > 0 {
+			return out, retry, nil
+		}
+	}
 	for waveIndex := range out.Waves {
 		wave := &out.Waves[waveIndex]
 		switch {
@@ -538,7 +561,7 @@ func ResumeRun(in Run) (Run, []Action, error) {
 			wave.Phase = PhaseVerifyingLive
 			return out, actionsFor(*wave, ActionIssueSuccessor), nil
 		case wave.Phase == PhaseVerifyingLive && liveGatePassed(out, *wave):
-			if out.Incident != nil {
+			if revokesPredecessors(out) {
 				wave.Phase = PhaseRevokingPredecessor
 				return out, actionsFor(*wave, ActionRevokePredecessor), nil
 			}
@@ -592,10 +615,19 @@ func StartRollback(in Run) (Run, []Action, error) {
 		return in, nil, fmt.Errorf("migration: run in %q cannot start rollback", in.Status)
 	}
 	out := cloneRun(in)
-	if out.Incident != nil {
-		for _, wave := range out.Waves {
+	if revokesPredecessors(out) {
+		guard := out.Waves
+		if pausesOnFailure(out) {
+			// A planned switch rolls back only its newest started cohort;
+			// cohorts that finished have revoked predecessors and stay switched.
+			guard = nil
+			if i := newestStartedWave(out); i >= 0 {
+				guard = out.Waves[i : i+1]
+			}
+		}
+		for _, wave := range guard {
 			if wave.Phase == PhaseRevokingPredecessor || hasVerified(wave, StageRevocation) {
-				return in, nil, errors.New("migration: incident predecessor revocation is irreversible; rollback must start before that gate")
+				return in, nil, errors.New("migration: predecessor revocation is irreversible; rollback must start before that gate")
 			}
 		}
 	}
@@ -755,6 +787,9 @@ func ValidateExecutableRun(run Run) error {
 			} else if b.IssuingAuthorityID != authorityID || b.TrustAnchorFingerprint != anchorFingerprint ||
 				!bytes.Equal(b.TrustAnchorPEM, anchorPEM) {
 				return errors.New("migration: every member must retain the same reviewed CA authority and public anchor")
+			}
+			if run.RevokePredecessors && run.Incident == nil && strings.TrimSpace(b.PredecessorCAID) == "" {
+				return fmt.Errorf("migration: switch member %s has no exact predecessor revocation authority", member.IdentityID)
 			}
 			if run.Incident != nil {
 				if strings.TrimSpace(b.PredecessorCAID) == "" {
@@ -998,7 +1033,7 @@ func requireObservationPhase(run Run, waveIndex int, stage ObservationStage) err
 			return nil
 		}
 	case StageRevocation:
-		if run.Incident != nil && (run.Status == RunRunning || run.Status == RunPaused) && wave.Phase == PhaseRevokingPredecessor {
+		if revokesPredecessors(run) && (run.Status == RunRunning || run.Status == RunPaused) && wave.Phase == PhaseRevokingPredecessor {
 			return nil
 		}
 	case StageRollbackSuccessor, StageRollbackTrust:
@@ -1101,10 +1136,10 @@ func newestStartedWave(run Run) int {
 }
 
 func nextRollbackWave(run Run, from int) int {
-	// An incident revokes each completed cohort's predecessor before advancing.
-	// Those predecessors cannot be made valid again, so an automatic failure
-	// inverse is deliberately bounded to the current cohort.
-	if run.Incident != nil {
+	// An incident or a planned switch revokes each completed cohort's
+	// predecessor before advancing. Those predecessors cannot be made valid
+	// again, so a failure inverse is deliberately bounded to the current cohort.
+	if revokesPredecessors(run) {
 		return -1
 	}
 	best, ordinal := -1, -1

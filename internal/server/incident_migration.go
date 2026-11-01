@@ -35,7 +35,7 @@ func (d *issuanceDispatcher) handleIncidentMigrationRevoke(ctx context.Context, 
 		return err
 	}
 	member, found := migration.Member(row.Run, intent.WaveID, intent.IdentityID)
-	if !found || row.Run.Incident == nil || member.Binding.PredecessorCertificateID != intent.PredecessorCertificateID ||
+	if !found || (row.Run.Incident == nil && !row.Run.RevokePredecessors) || member.Binding.PredecessorCertificateID != intent.PredecessorCertificateID ||
 		cleanFingerprint(member.Binding.PredecessorFingerprint) != cleanFingerprint(intent.PredecessorFingerprint) ||
 		member.Binding.PredecessorCAID != intent.PredecessorCAID {
 		return errors.New("server: incident predecessor revocation drifted from the immutable H2 member")
@@ -53,7 +53,11 @@ func (d *issuanceDispatcher) handleIncidentMigrationRevoke(ctx context.Context, 
 	// The revocation reason is an RFC 5280 enum. The stable event ID and H2
 	// member receipt bind the incident/run/certificate details for audit.
 	reason := string(crypto.RevocationReasonKeyCompromise)
-	reasonCode := crypto.CRLReasonCode(crypto.RevocationReasonKeyCompromise)
+	if row.Run.Incident == nil && intent.Reason == string(crypto.RevocationReasonSuperseded) {
+		// A planned switch (P3): the predecessor is retired, not compromised.
+		reason = intent.Reason
+	}
+	reasonCode := crypto.CRLReasonCode(crypto.RevocationReason(reason))
 	if err := d.orch.RevokeCertificateForCAWithEventID(ctx, m.TenantID,
 		orchestrator.MigrationEventID(m.TenantID, intent.RunID, "predecessor-revoked:"+m.IdempotencyKey),
 		cert.Fingerprint, cert.Serial, intent.PredecessorCAID, reason, reasonCode); err != nil {

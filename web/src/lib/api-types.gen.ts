@@ -6555,6 +6555,7 @@ export interface MigrationRun {
   pause_reason?: string;
   plan_id?: string;
   require_observed_traffic?: boolean;
+  revoke_predecessors?: boolean;
   rollback_attempt?: number;
   rollback_stage?: string;
   rollback_wave_id?: string;
@@ -6572,9 +6573,11 @@ export interface MigrationRunList {
 }
 
 export interface MigrationRunMember {
+  attempt?: number;
   binding: MigrationMemberBinding;
   identity_id: string;
   live_verified_at?: string;
+  revocation_verdict?: string;
   rollback_successor_verdict?: string;
   rollback_trust_verdict?: string;
   successor_verdict?: string;
@@ -6602,6 +6605,7 @@ export interface MigrationRunStartRequest {
   observed_traffic_window_seconds?: number;
   plan_id: string;
   require_observed_traffic?: boolean;
+  revoke_predecessors?: boolean;
   waves: MigrationRunStartWave[];
 }
 

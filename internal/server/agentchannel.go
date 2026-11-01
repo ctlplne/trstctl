@@ -351,7 +351,7 @@ type agentService struct {
 	// recordMigrationResult converts an exact-agent, lease-bound signed result
 	// into the trust/successor/rollback gate before the job claim is closed
 	// (AUD-40/H2).
-	recordMigrationResult                   func(ctx context.Context, tenantID, agentID, destination, idempotencyKey string, payload []byte, outcome, report, evidenceDigest string) (bool, error)
+	recordMigrationResult                   func(ctx context.Context, tenantID, agentID, destination, idempotencyKey string, attempt int, payload []byte, outcome, report, evidenceDigest string) (bool, error)
 	openPQCPostureJob                       func(context.Context, string, string, string, []byte) ([]byte, error)
 	recordPQCPostureResult                  func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error
 	recordPQCCertificateResult              func(context.Context, string, string, store.AgentJobResultClaim, *transport.ReportJobResultRequest, string, string) error

@@ -2,6 +2,11 @@
 
 ### Added
 
+- Planned CA switch: a migration run started with `revoke_predecessors` moves each cohort to the new issuer
+  and revokes every previous certificate (superseded) through the CA that issued it, but only after the
+  endpoint serves the new chain. A failed canary pauses the run with nothing revoked; resuming retries exactly
+  the failed members as the same jobs, so no second successor is signed; starting the same switch again changes
+  nothing.
 - Audit feeds to syslog and Elasticsearch: beside Splunk HEC and Sentinel, an audit feed can deliver to a
   syslog receiver over TLS (`syslog+tls://host:6514`; RFC 5424 messages, octet-counted as RFC 5425 requires;
   the receiver is verified through the system roots or a CA certificate reference) or to an Elasticsearch
