@@ -341,7 +341,7 @@ exhaustive subcommand list:
 | `pqc pilots`                      | Staged post-quantum handshake pilots with a canary halt and a signer-signed readiness report (`create` · `list` · `get`)
 | `pqc campaigns`                   | Core PQC migration ownership and evidence workflow (`create` · `list` · `get` · `update` · `readiness` · `disposition` · `close` · `evidence`)                                                                                                                                                                      |
 | `certificates`                    | Certificate inventory: ingest, list, get, health, bulk-revoke, recovery of a historical PKI-secret or managed CA leaf, recovery of a row's certificate bytes, device-bound key evidence and its offline check (`ingest` · `list` · `get` · `health` · `bulk-revoke` · `inventory-pki-secret` · `inventory-managed-ca` · `recover-der` · `key-attestation` · `verify-key-attestation`)                                                                                                |
-| `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity (`identities` · `preview` · `sign` · `keyless-preview` · `keyless`)                                                                                                                                                                               |
+| `code-signing`                    | Review and sign artifact digests with a managed key or a keyless Sigstore/Fulcio identity; read a key's certificate chain and get a CSR it signs (`identities` · `preview` · `sign` · `keyless-preview` · `keyless` · `keys certificate` · `keys csr`)                                                                                                                                                                               |
 | `compliance`                      | Compliance/inventory reporting, signed schedule runs, exact artifact download, recovery, and signed evidence-pack export (`inventory-report` · `nhi-report` · `report-schedules preview/create/list/pause/resume/runs` · `report-runs get/download/requeue/verify/legal-hold/release-hold` · `report-signing-key` · `evidence-pack`)                                                                                                                                                                           |
 | `connector target`                | Deployment connector targets: create, bind, test, deploy, roll back, exact host containment and its recovery check, material removal, verification address suggestions, and combined CA/host key-compromise response (`create` · `list` · `get` · `update` · `delete` · `bind` · `test` · `deploy` · `rollback` · `contain-preview` · `contain` · `recovery-check` · `recovery-status` · `purge-preview` · `purge` · `verification-suggestions` · `confirm-verification-address`) |
 | `connectors`                      | Connector catalog, outbox circuit-breaker state, delivery receipts (`catalog` · `outbox-circuits` · `deliveries`)                                                                                                                                                                                                   |
@@ -1393,6 +1393,12 @@ cat > code-sign-keyless.json <<'JSON'
 JSON
 trstctl-cli code-signing keyless-preview -f code-sign-keyless.json > code-sign-keyless-plan.json
 trstctl-cli --idempotency-key release-keyless-1 code-signing keyless -f code-sign-keyless.json
+
+# Get a certificate request the key signs inside the signer, and read the chain
+# configured for it (for Notation, cosign and other stock signing tools).
+echo '{"common_name":"Acme release signing"}' > csr.json
+trstctl-cli code-signing keys csr release-key -f csr.json
+trstctl-cli code-signing keys certificate release-key
 
 # On an enrolled host, report local public certificate files over the agent channel.
 trstctl-agent --enroll-url https://localhost:8443 \

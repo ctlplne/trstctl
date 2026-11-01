@@ -4329,6 +4329,37 @@ CodeSigningIdentityList = TypedDict(
     total=False,
 )
 
+CodeSigningKeyCSR = TypedDict(
+    'CodeSigningKeyCSR',
+    {
+        'csr_pem': str,
+        'key_id': str,
+    },
+    total=False,
+)
+
+CodeSigningKeyCSRRequest = TypedDict(
+    'CodeSigningKeyCSRRequest',
+    {
+        'common_name': str,
+    },
+    total=False,
+)
+
+CodeSigningKeyCertificate = TypedDict(
+    'CodeSigningKeyCertificate',
+    {
+        'algorithm': str,
+        'chain_pem': str,
+        'code_signing_eku': bool,
+        'key_id': str,
+        'leaf_fingerprint': str,
+        'not_after': str,
+        'public_key_der': str,
+    },
+    total=False,
+)
+
 CodeSigningKeylessRequest = TypedDict(
     'CodeSigningKeylessRequest',
     {

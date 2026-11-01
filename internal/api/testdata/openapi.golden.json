@@ -12783,6 +12783,69 @@
         ],
         "type": "object"
       },
+      "CodeSigningKeyCSR": {
+        "properties": {
+          "csr_pem": {
+            "type": "string"
+          },
+          "key_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "csr_pem"
+        ],
+        "type": "object"
+      },
+      "CodeSigningKeyCSRRequest": {
+        "properties": {
+          "common_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "common_name"
+        ],
+        "type": "object"
+      },
+      "CodeSigningKeyCertificate": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "chain_pem": {
+            "type": "string"
+          },
+          "code_signing_eku": {
+            "type": "boolean"
+          },
+          "key_id": {
+            "type": "string"
+          },
+          "leaf_fingerprint": {
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "public_key_der": {
+            "format": "byte",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key_id",
+          "algorithm",
+          "public_key_der",
+          "chain_pem",
+          "leaf_fingerprint",
+          "not_after",
+          "code_signing_eku"
+        ],
+        "type": "object"
+      },
       "CodeSigningKeylessRequest": {
         "properties": {
           "artifact_type": {
@@ -55647,6 +55710,141 @@
           }
         ],
         "summary": "Review an exact keyless signing plan without attesting, signing, or publishing",
+        "x-trstctl-permission": "keys:write"
+      }
+    },
+    "/api/v1/code-signing/keys/{key_id}/certificate": {
+      "get": {
+        "operationId": "getCodeSigningKeyCertificate",
+        "parameters": [
+          {
+            "description": "Code-signing key id",
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningKeyCertificate"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Read the certificate chain configured for a managed code-signing key",
+        "x-trstctl-permission": "keys:read"
+      }
+    },
+    "/api/v1/code-signing/keys/{key_id}/csr": {
+      "post": {
+        "operationId": "createCodeSigningKeyCSR",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Code-signing key id",
+            "in": "path",
+            "name": "key_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeSigningKeyCSRRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeSigningKeyCSR"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Get a certificate request signed by a managed code-signing key inside the signer",
         "x-trstctl-permission": "keys:write"
       }
     },

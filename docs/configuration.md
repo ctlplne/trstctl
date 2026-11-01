@@ -843,7 +843,13 @@ looks like this:
 ```
 
 `create_if_missing` provisions a `code-sign`-purpose-constrained handle inside the
-separate signer process; the control plane never receives the private key. Keyless
+separate signer process; the control plane never receives the private key.
+`certificate_chain_file` (optional) names a PEM chain, leaf first, that a CA issued
+for the key; startup refuses a chain whose leaf does not carry the key's public key
+or lacks the `codeSigning` extended key usage. trstctl serves it at
+`GET /api/v1/code-signing/keys/{key_id}/certificate` for stock signing tools, and
+`POST /api/v1/code-signing/keys/{key_id}/csr` returns a certificate request the key
+signs inside the signer. A changed chain takes effect at the next start. Keyless
 requests also create and destroy their one-use key inside that signer. Pin the Rekor
 log public key from the Rekor operator's authenticated distribution channel. Startup
 fails if this trust anchor is absent or malformed, and every outbox delivery verifies

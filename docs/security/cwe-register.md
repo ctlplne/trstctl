@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2133 annotated sites across 29 rules. Each row is
+2140 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -957,9 +957,9 @@ not this file.
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_completeness_test.go:276` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:908` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:974` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4721` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:919` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:985` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4732` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `internal/agent/discovery/filesystem.go:57` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
 | `internal/agent/discovery/privatekey.go:70` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22, CWE-367) |
@@ -1042,7 +1042,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (260 sites)
+### G204 — CWE-78 OS command injection (263 sites)
 
 | Location | Reason |
 |---|---|
@@ -1215,6 +1215,9 @@ not this file.
 | `internal/server/ca_hierarchy_pqc_served_test.go:32` | LookPath-resolved OpenSSL with fixed arguments |
 | `internal/server/ca_hierarchy_pqc_served_test.go:41` | LookPath-resolved OpenSSL; arguments are test-owned paths and flags |
 | `internal/server/cbom_native_served_test.go:166` | resolved stock OpenSSL, fixed arguments and owned loopback fixture paths (CWE-78). |
+| `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
+| `internal/server/codesign_stock_tools_served_test.go:245` | test builds the in-repo plugin (CWE-78) |
+| `internal/server/codesign_stock_tools_served_test.go:262` | test runs the plugin it just built (CWE-78) |
 | `internal/server/compose_e2e_tls_test.go:234` | exact shipped prefix plus fixed test invocation, only owned loopback listeners (CWE-78). |
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1419,11 +1422,13 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (588 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (591 sites)
 
 | Location | Reason |
 |---|---|
 | `clients/embedded/est_client_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
+| `clients/signing/trstctlsign/client.go:42` | the operator names the token file |
+| `clients/signing/trstctlsign/client.go:67` | the operator names the CA bundle |
 | `clients/terraform/internal/terraformprovider/client.go:94` | operator-selected public trust bundle (CWE-22) |
 | `cmd/trstctl-agent/cosign_attach.go:208` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |
@@ -1544,9 +1549,9 @@ not this file.
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
 | `docs/protect_guards_completeness_test.go:276` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:908` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:974` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_test.go:4721` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:919` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:985` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_test.go:4732` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/provenance/authorship_test.go:38` | fixed sibling path inside the package's own directory (CWE-22) |
 | `docs/provenance/authorship_test.go:103` | test walks the repo's own checkout; no hostile symlink exposure (CWE-22, CWE-367) |
 | `ee/auditcompliance/retention.go:56` | the archive path built above under the operator's archive dir (CWE-22) |
@@ -1834,6 +1839,7 @@ not this file.
 | `internal/server/ca_custody_test.go:261` | test-owned path under t.TempDir captures the planted mismatch (CWE-22) |
 | `internal/server/ca_custody_test.go:269` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
+| `internal/server/code_signing_config.go:86` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:34` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:38` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -2012,7 +2018,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (118 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (119 sites)
 
 | Location | Reason |
 |---|---|
@@ -2097,6 +2103,7 @@ not this file.
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/auth_unit_test.go:64` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/server/cbom_served_test.go:151` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:613` | public CA fixture (CWE-276) |
@@ -2236,7 +2243,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (15 sites)
+### G702 — CWE-78 OS command injection (taint) (16 sites)
 
 | Location | Reason |
 |---|---|
@@ -2248,6 +2255,7 @@ not this file.
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/server/audit_feed_lab_p5_test.go:208` | the runner's own lab container (CWE-78) |
 | `internal/server/audit_feed_lab_p5_test.go:215` | the runner's own lab container (CWE-78) |
+| `internal/server/codesign_cosign_lab_p9_test.go:67` | the lab runner names the network and the local cosign image (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2256,7 +2264,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (117 sites)
+### G703 — CWE-22 Path traversal (taint) (118 sites)
 
 | Location | Reason |
 |---|---|
@@ -2322,6 +2330,7 @@ not this file.
 | `internal/server/audit_feed_lab_p5_test.go:87` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/audit_feed_lab_p5_test.go:142` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
+| `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:229` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:357` | fixed invalid.pem filename below this test's private t.TempDir; deliberately invalid public fixture bytes are content only (CWE-22). |

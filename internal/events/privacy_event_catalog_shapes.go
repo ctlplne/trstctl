@@ -310,6 +310,8 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"principal":"","key":"","reason":""}`), true
 	case "codesign.signed":
 		return shape(`{"principal":"","key":"","artifact_type":"","digest":""}`), true
+	case "codesign.csr_signed":
+		return shape(`{"principal":"","key":"","csr_sha256":""}`), true
 	case "ca.plugin_issued", "ca.plugin_failed", "ca.plugin_denied":
 		return shape(`{"plugin":"","detail":""}`, catalogPrivacyShapeOptions{Optional: []string{"/detail"}}), true
 	case "connector.plugin_deployed", "connector.plugin_failed", "connector.plugin_denied":

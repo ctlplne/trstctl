@@ -2398,6 +2398,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/code-signing/keys/{key_id}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the certificate chain configured for a managed code-signing key */
+        get: operations["getCodeSigningKeyCertificate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/code-signing/keys/{key_id}/csr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get a certificate request signed by a managed code-signing key inside the signer */
+        post: operations["createCodeSigningKeyCSR"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/code-signing/preview": {
         parameters: {
             query?: never;
@@ -12634,6 +12668,24 @@ export interface components {
             not_published_count: number;
             total: number;
             verified_count: number;
+        };
+        CodeSigningKeyCSR: {
+            csr_pem: string;
+            key_id: string;
+        };
+        CodeSigningKeyCSRRequest: {
+            common_name: string;
+        };
+        CodeSigningKeyCertificate: {
+            algorithm: string;
+            chain_pem: string;
+            code_signing_eku: boolean;
+            key_id: string;
+            leaf_fingerprint: string;
+            /** Format: date-time */
+            not_after: string;
+            /** Format: byte */
+            public_key_der: string;
         };
         CodeSigningKeylessRequest: {
             artifact_type: string;
@@ -28164,6 +28216,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodeSigningPreview"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getCodeSigningKeyCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Code-signing key id */
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningKeyCertificate"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createCodeSigningKeyCSR: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Code-signing key id */
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodeSigningKeyCSRRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeSigningKeyCSR"];
                 };
             };
             /** @description client error */

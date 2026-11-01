@@ -195,6 +195,55 @@ It calls that same read-only qualification surface. It sends no request body or
 mutation headers and cannot issue a timestamp; use the OpenSSL flow above for the
 real RFC 3161 proof.
 
+### Sign with Notation, cosign and other stock tools
+
+Stock signing tools need a certificate that names the signing key; the key itself
+stays in the isolated signer. Get a certificate request the key signs inside the
+signer, have your CA issue a certificate with the `codeSigning` extended key usage
+from it, and configure the chain (leaf first) beside the key as
+`code_signing.keys[].certificate_chain_file`:
+
+```bash
+echo '{"common_name": "Acme release signing"}' > csr.json
+trstctl-cli code-signing keys csr release-key -f csr.json | jq -r .csr_pem > release-key.csr
+# your CA issues the certificate; save the chain, leaf first, as the configured file
+trstctl-cli code-signing keys certificate release-key
+```
+
+Startup refuses a chain whose leaf does not carry the key's public key or lacks the
+`codeSigning` usage. Each certificate request is recorded as `codesign.csr_signed`.
+The signing clients in [`clients/signing`](../../clients/signing/README.md) (MPL-2.0,
+standard library only) hash locally, have trstctl sign the digest, and return the
+signature with the chain; permissions, policy and approvals apply to every signature.
+
+- **Notation:** install the `notation-trstctl` plugin and add a key with
+  `notation key add release --plugin trstctl --id release-key`; `notation sign`
+  then signs through trstctl. Verify with a Notation trust policy rooted at your CA.
+  The plugin offers ECDSA P-256 keys: trstctl signs SHA-256 digests, and Notation
+  pairs P-384 with SHA-384 and RSA with RSASSA-PSS.
+- **cosign:** `cosign generate` writes the payload for an image, trstctl signs its
+  SHA-256 digest, and `cosign attach signature` stores the signature in the registry:
+
+```bash
+cosign generate registry.example.com/app@sha256:<digest> > payload.json
+printf '{"key_id":"release-key","artifact_type":"oci-image","digest":"%s"}' \
+  "$(openssl dgst -sha256 -binary payload.json | base64)" > sign.json
+trstctl-cli code-signing sign -f sign.json | jq -r .signature > payload.sig
+cosign attach signature --payload payload.json --signature payload.sig registry.example.com/app@sha256:<digest>
+trstctl-cli code-signing keys certificate release-key | jq -r .public_key_der | base64 -d |
+  openssl pkey -pubin -inform DER -out release-key.pub
+cosign verify --key release-key.pub --insecure-ignore-tlog=true registry.example.com/app@sha256:<digest>
+```
+
+`--insecure-ignore-tlog` tells cosign not to look for its own log bundle; trstctl
+records each signature in Rekor through the outbox as described above.
+
+A request trstctl refuses — a missing `keys:write`, a policy denial, an approval
+that is pending or denied — stops the tool with trstctl's reason; Notation reports
+it as `ACCESS_DENIED`. A PKCS #11 module for jarsigner and osslsigncode, and
+signing approvals bound to the artifact, signer, mechanism, count and expiry, are
+what comes next.
+
 ### Rotating and revoking the TSA certificate
 
 Every certificate the TSA signs under is an entry of its issuing CA's ledger, so
@@ -295,14 +344,16 @@ body as `preview_fingerprint`; never put an OIDC proof in logs or evidence.
 
 - **Code signing:** `POST /api/v1/code-signing/preview`,
   `POST /api/v1/code-signing/keyless/preview`, `POST /api/v1/code-signing/sign`,
-  `POST /api/v1/code-signing/keyless`, `trstctl-cli code-signing preview`,
+  `POST /api/v1/code-signing/keyless`, `GET /api/v1/code-signing/keys/{key_id}/certificate`,
+  `POST /api/v1/code-signing/keys/{key_id}/csr`, `trstctl-cli code-signing keys certificate`,
+  `trstctl-cli code-signing keys csr`, the `notation-trstctl` plugin, `trstctl-cli code-signing preview`,
   `trstctl-cli code-signing keyless-preview`, `trstctl-cli code-signing sign`,
   `trstctl-cli code-signing keyless`, `Service.Sign`, `Service.SignKeyless`,
   `Verify`, `VerifyKeyless`.
 - **Timestamping:** `Authority.Timestamp`, `Verify`, `VerifyLongTermValidity` (RFC 3161).
 - **Events:** `codesign.commanded`, `codesign.completed`, `codesign.failed`,
   `codesign.ephemeral.destroyed`, `codesign.signed`, `codesign.refused`,
-  `codesign.keyless.signed`, `attestation.verified`, `tsa.timestamp.issued`; worker
+  `codesign.keyless.signed`, `codesign.csr_signed`, `attestation.verified`, `tsa.timestamp.issued`; worker
   execution uses `codesign.command`/`codesign.cleanup`, and Rekor publication uses the
   `transparency.rekor` outbox destination.
 - **Related:** the signing key lives behind the separate, isolated

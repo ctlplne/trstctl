@@ -7661,6 +7661,12 @@ func componentSchemas() map[string]*Schema {
 		"required_permission", "request_fingerprint", "configuration_fingerprint", "approval_required", "blockers",
 		"preview_reads", "preview_writes", "preview_external_effects", "execute_writes", "execute_external_effects",
 		"recovery_steps", "verification_steps", "cli_argv", "secret_data_handling")
+	codeSigningKeyCertificate := object(map[string]*Schema{
+		"key_id": str(), "algorithm": str(), "public_key_der": {Type: "string", Format: "byte"},
+		"chain_pem": str(), "leaf_fingerprint": str(), "not_after": timestamp(), "code_signing_eku": {Type: "boolean"},
+	}, "key_id", "algorithm", "public_key_der", "chain_pem", "leaf_fingerprint", "not_after", "code_signing_eku")
+	codeSigningKeyCSRRequest := object(map[string]*Schema{"common_name": str()}, "common_name")
+	codeSigningKeyCSR := object(map[string]*Schema{"key_id": str(), "csr_pem": str()}, "key_id", "csr_pem")
 	codeSigningSignature := object(map[string]*Schema{
 		"algorithm": str(), "key_id": str(), "artifact_type": str(),
 		"signature": {Type: "string", Format: "byte"}, "public_key_der": {Type: "string", Format: "byte"},
@@ -8982,6 +8988,9 @@ func componentSchemas() map[string]*Schema {
 		"CodeSigningKeylessRequest":          codeSigningKeylessReq,
 		"CodeSigningPreview":                 codeSigningPreview,
 		"CodeSigningSignature":               codeSigningSignature,
+		"CodeSigningKeyCertificate":          codeSigningKeyCertificate,
+		"CodeSigningKeyCSRRequest":           codeSigningKeyCSRRequest,
+		"CodeSigningKeyCSR":                  codeSigningKeyCSR,
 		"ManagedKeyCustodyRequirement":       managedKeyCustodyRequirement,
 		"ManagedKeyCustodyProvider":          managedKeyCustodyProvider,
 		"ManagedKeyCustodyPlan":              managedKeyCustodyPlan,

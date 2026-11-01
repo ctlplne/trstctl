@@ -5853,6 +5853,17 @@ This is a deliberate, documented trust boundary, not an accident.
     SAN/issuer is derived. Rekor publication uses the transactional outbox
     and acknowledges only an exact HashedRekord receipt whose signed-entry
     timestamp verifies under the operator-pinned log key.
+  - Stock signing tools (P9): a code-signing key's certificate chain is configured
+    beside it (`certificate_chain_file`, checked against the key at startup) and
+    served at `GET /api/v1/code-signing/keys/{key_id}/certificate`; a certificate
+    request for the key is signed inside the signer and recorded. The
+    `notation-trstctl` plugin in `clients/signing` signs through the code-signing API
+    with ECDSA P-256 keys: the served test builds it and drives it over the Notation
+    plugin contract, and its signature verifies against the served leaf. Stock cosign
+    2.5.3 verifies an image in a local registry signed through trstctl. A run of the
+    stock `notation` CLI against a registry, the PKCS #11 module for jarsigner and
+    osslsigncode, and signing approvals bound to the artifact, signer, mechanism,
+    count and expiry are what comes next.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator

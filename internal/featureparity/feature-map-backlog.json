@@ -13154,7 +13154,9 @@
                 "previewCodeArtifact",
                 "previewCodeArtifactKeyless",
                 "signCodeArtifact",
-                "signCodeArtifactKeyless"
+                "signCodeArtifactKeyless",
+                "getCodeSigningKeyCertificate",
+                "createCodeSigningKeyCSR"
             ],
             "api_na": "",
             "cli_surface": [
@@ -13162,7 +13164,9 @@
                 "code-signing keyless",
                 "code-signing keyless-preview",
                 "code-signing preview",
-                "code-signing sign"
+                "code-signing sign",
+                "code-signing keys certificate",
+                "code-signing keys csr"
             ],
             "cli_na": "",
             "facet_evidence": {

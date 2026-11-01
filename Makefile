@@ -734,8 +734,9 @@ sdk-check: ## Verify the published client SDKs are in sync with the served OpenA
 	./scripts/gen-sdk.sh --check
 
 .PHONY: sdk-test
-sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs and the Terraform provider module
+sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs, the signing clients, and the Terraform provider module
 	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	cd clients/signing && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
 	cd $(TF_PROVIDER_DIR) && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
 	npm --prefix clients/sdk/typescript ci
 	npm --prefix clients/sdk/typescript run typecheck

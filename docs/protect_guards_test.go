@@ -631,9 +631,20 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		// trstctl binary, so they set up TLS and sign their client assertions
 		// with the standard library as a customer's own service would.
 		"test/interop/agentframeworks/",
+		// The signing clients are their own module too (trstctl.com/clients/signing,
+		// MPL-2.0, P9): they run inside stock signing tools and cannot import
+		// internal/crypto. They hold no key material — the key stays in trstctl's
+		// signer — and use the standard library only to hash what a tool asks them
+		// to sign and to build a CA-pinned TLS transport. Any other crypto import
+		// under clients/signing still trips.
+		"clients/signing/trstctlsign/client.go",
+		"clients/signing/cmd/notation-trstctl/main.go",
 	}
 	if !strings.Contains(read(t, "../test/interop/agentframeworks/go.mod"), "module trstctl.com/trstctl/test/interop/agentframeworks\n") {
 		t.Error("CRYPTO-101: test/interop/agentframeworks is allowed standard-library crypto only as its own module; its go.mod is missing or renamed")
+	}
+	if !strings.Contains(read(t, "../clients/signing/go.mod"), "module trstctl.com/clients/signing\n") {
+		t.Error("CRYPTO-101: clients/signing is allowed standard-library crypto only as its own module; its go.mod is missing or renamed")
 	}
 	forbiddenPrefixes := []string{
 		"crypto",

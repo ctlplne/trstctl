@@ -3095,6 +3095,25 @@ export interface CodeSigningIdentityList {
   verified_count: number;
 }
 
+export interface CodeSigningKeyCSR {
+  csr_pem: string;
+  key_id: string;
+}
+
+export interface CodeSigningKeyCSRRequest {
+  common_name: string;
+}
+
+export interface CodeSigningKeyCertificate {
+  algorithm: string;
+  chain_pem: string;
+  code_signing_eku: boolean;
+  key_id: string;
+  leaf_fingerprint: string;
+  not_after: string;
+  public_key_der: string;
+}
+
 export interface CodeSigningKeylessRequest {
   artifact_type: string;
   digest: string;

@@ -36,6 +36,10 @@ type CodeSigningKey struct {
 	Algorithm          string `json:"algorithm,omitempty"`
 	CreateIfMissing    bool   `json:"create_if_missing,omitempty"`
 	RequireDualControl bool   `json:"require_dual_control,omitempty"`
+	// CertificateChainFile is the PEM chain (leaf first) that names this key
+	// for stock signing tools (P9): its leaf must carry the key's public key
+	// and the codeSigning extended key usage, which startup checks.
+	CertificateChainFile string `json:"certificate_chain_file,omitempty"`
 }
 
 // CodeSigningGitHubOIDC is one tenant's offline GitHub Actions OIDC trust source.

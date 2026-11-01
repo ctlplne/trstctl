@@ -779,6 +779,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"code-signing", "preview"}, Method: "POST", Path: "/api/v1/code-signing/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact managed-key signing plan without signing or publishing"},
 	{Name: []string{"code-signing", "keyless-preview"}, Method: "POST", Path: "/api/v1/code-signing/keyless/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact keyless signing plan without attesting, signing, or publishing"},
 	{Name: []string{"code-signing", "sign"}, Method: "POST", Path: "/api/v1/code-signing/sign", Body: bodyFile, Summary: "Sign an artifact digest with a managed code-signing key"},
+	{Name: []string{"code-signing", "keys", "certificate"}, Method: "GET", Path: "/api/v1/code-signing/keys/{key_id}/certificate", Summary: "Show the certificate chain configured for a managed code-signing key (for jarsigner, osslsigncode, Notation)"},
+	{Name: []string{"code-signing", "keys", "csr"}, Method: "POST", Path: "/api/v1/code-signing/keys/{key_id}/csr", Body: bodyFile, Summary: "Get a certificate request signed by a managed code-signing key inside the signer"},
 	{Name: []string{"code-signing", "keyless"}, Method: "POST", Path: "/api/v1/code-signing/keyless", Body: bodyFile, Summary: "Sign an artifact digest with a verified Sigstore/Fulcio identity"},
 
 	// BYOK/HSM managed-key lifecycle (CRYPTO-005). Generate mints provider-resident

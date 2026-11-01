@@ -2,6 +2,13 @@
 
 ### Added
 
+- Signing with stock tools: a code-signing key's certificate chain can be configured beside it
+  (`code_signing.keys[].certificate_chain_file`, checked against the key at startup) and is served at
+  `GET /api/v1/code-signing/keys/{key_id}/certificate`; `POST /api/v1/code-signing/keys/{key_id}/csr`
+  returns a certificate request the key signs inside the signer, recorded as `codesign.csr_signed`. The new
+  `clients/signing` module (MPL-2.0) adds `notation-trstctl`, a Notation plugin that signs through the
+  code-signing API, and cosign can attach a trstctl signature that stock `cosign verify` accepts. The key
+  never leaves the signer, and a refused request stops the tool with trstctl's reason.
 - Planned CA switch: a migration run started with `revoke_predecessors` moves each cohort to the new issuer
   and revokes every previous certificate (superseded) through the CA that issued it, but only after the
   endpoint serves the new chain. A failed canary pauses the run with nothing revoked; resuming retries exactly

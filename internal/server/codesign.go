@@ -59,6 +59,10 @@ type CodeSigningConfig struct {
 
 	RekorDestination    string
 	TransparencyHandler orchestrator.Handler
+
+	// KeyCertificates holds each key's configured certificate chain (DER, leaf
+	// first), keyed by codeSigningKeyIdentity (P9).
+	KeyCertificates map[string][][]byte
 }
 
 func (c CodeSigningConfig) enabled() bool {

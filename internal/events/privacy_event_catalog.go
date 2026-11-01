@@ -236,6 +236,10 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 		entry("codesign.signed",
 			catalogPrivacyRule("/principal", exact), catalogPrivacyRule("/key", opaque),
 			catalogPrivacyRule("/artifact_type", opaque), catalogPrivacyRule("/digest", opaque)),
+		// P9: a certificate request signed by a managed code-signing key.
+		entry("codesign.csr_signed",
+			catalogPrivacyRule("/principal", exact), catalogPrivacyRule("/key", opaque),
+			catalogPrivacyRule("/csr_sha256", opaque)),
 		// WASM plugin evidence (AN-2): the CA and connector plugin managers append
 		// these for every plugin issue/deploy outcome; under the production gate an
 		// unregistered type is refused and the evidence silently never lands.

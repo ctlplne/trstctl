@@ -60,6 +60,7 @@ func codeSigningConfigFromConfig(ctx context.Context, cfg config.CodeSigning, si
 	}
 	client := signer.Client()
 	resolver := &tenantCodeSigningKeyResolver{keys: make(map[string]crypto.DigestSigner, len(cfg.Keys))}
+	var certificates map[string][][]byte
 	for _, keyCfg := range cfg.Keys {
 		if strings.TrimSpace(keyCfg.TenantID) == "" || strings.TrimSpace(keyCfg.ID) == "" {
 			return CodeSigningConfig{}, fmt.Errorf("code-signing key requires tenant_id and id")
@@ -81,6 +82,20 @@ func codeSigningConfigFromConfig(ctx context.Context, cfg config.CodeSigning, si
 			return CodeSigningConfig{}, fmt.Errorf("code-signing key %s: %w", keyCfg.ID, err)
 		}
 		resolver.keys[identity] = remote
+		if path := strings.TrimSpace(keyCfg.CertificateChainFile); path != "" {
+			raw, err := os.ReadFile(path) // #nosec G304 -- operator-configured certificate chain path (CWE-22)
+			if err != nil {
+				return CodeSigningConfig{}, fmt.Errorf("code-signing key %s: certificate_chain_file: %w", keyCfg.ID, err)
+			}
+			chain, err := loadCodeSigningKeyChain(raw, remote)
+			if err != nil {
+				return CodeSigningConfig{}, fmt.Errorf("code-signing key %s: certificate_chain_file: %w", keyCfg.ID, err)
+			}
+			if certificates == nil {
+				certificates = map[string][][]byte{}
+			}
+			certificates[identity] = chain
+		}
 	}
 
 	attestors, err := codeSigningAttestorsFromConfig(cfg.GitHubOIDCTenants)
@@ -96,7 +111,7 @@ func codeSigningConfigFromConfig(ctx context.Context, cfg config.CodeSigning, si
 		return CodeSigningConfig{}, err
 	}
 	return CodeSigningConfig{
-		Keys: resolver,
+		Keys: resolver, KeyCertificates: certificates,
 		AttestorsForTenant: func(tenantID string) []attest.Attestor {
 			return append([]attest.Attestor(nil), attestors[strings.TrimSpace(tenantID)]...)
 		},
