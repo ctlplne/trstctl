@@ -5562,6 +5562,24 @@ This is a deliberate, documented trust boundary, not an accident.
 
 ## Protocols
 
+- Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
+  challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
+  CA/Browser Forum Ballot SC-088v3) when
+  `protocols.acme_dns_persist.issuer_domain_names` (or
+  `TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS`) names this CA; it is off
+  otherwise. The applicant publishes one standing TXT record at
+  `_validation-persist.<domain>` naming one of those names and its ACME account
+  URL, and every order validates against it again: renewals need no DNS change
+  and no DNS API key, while a deleted record, a record naming another account, a
+  wildcard without `policy=wildcard` or a passed `persistUntil` refuses the next
+  order with the reason. Upstream, an ACME authority configured with
+  `upstream_dns_persist` (which needs `upstream_dns01`) answers the challenge by
+  publishing that record once through the consenting DNS-01 provider configs and
+  never retracting it. Proven against trstctl's own server (two orders on one
+  record; deletion and another account refused) and against Pebble 2.10.1, the
+  reference test CA, through an RFC 2136 server. The draft can still change, and
+  no public CA offers the challenge in production yet, so the console's issuer
+  catalog does not list it.
 - ACME server with ARI: all three domain-validation challenges are validated
   for real, each failing closed — HTTP-01 (RFC 8555 §8.3), DNS-01 (§8.4, the
   `_acme-challenge` TXT digest), and TLS-ALPN-01 (RFC 8737, the `acme-tls/1`
@@ -6871,6 +6889,17 @@ check against the authority's own identifier and the same retraction on every
 exit path. Proven against each vendor's protocol stand-in (the DigiCert path end
 to end through the served issue route and a webhook DNS provider); live vendor
 accounts are Track B.
+
+**A standing record instead of a challenge per order** (P1). An ACME authority
+configured with `upstream_dns_persist` (with `upstream_dns01`) prefers
+dns-persist-01 when the authority offers it. trstctl reads the issuer domain
+names from the authority's challenge, publishes
+`_validation-persist.<name> TXT "<issuer domain name>; accounturi=<account URL>"`
+once through the same provider configs, consent and CAA check, and never
+retracts it; while the record names the authority and the account, later orders
+reuse it with no provider call. Removing it is the operator's act. Proven
+against Pebble 2.10.1 through an RFC 2136 server; a public CA's production
+support is still to come.
 
 **Reused authorizations are recorded, and served.** An authority that already
 considers an identifier authorized issues without a challenge. That is normal

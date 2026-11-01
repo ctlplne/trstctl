@@ -15,6 +15,9 @@ type Validators struct {
 	HTTP01    Validator
 	DNS01     Validator
 	TLSALPN01 Validator
+	// DNSPersist01 checks dns-persist-01 records (P1). It needs the requesting
+	// account, so the server calls it directly rather than through Validate.
+	DNSPersist01 DNSPersistValidator
 }
 
 // DefaultValidators wires the real validators for all three DV methods (HTTP-01,
@@ -38,6 +41,8 @@ func (m Validators) Validate(ctx context.Context, challengeType, domain, token, 
 		v = m.DNS01
 	case ChallengeTLSALPN01:
 		v = m.TLSALPN01
+	case ChallengeDNSPersist01:
+		return fmt.Errorf("acme: %s is checked against the requesting account, not by this dispatcher (fail closed)", challengeType)
 	default:
 		return fmt.Errorf("acme: unknown challenge type %q", challengeType)
 	}
@@ -87,7 +92,7 @@ func SelectMethod(c MethodContext) (method, rationale string, err error) {
 
 func knownMethod(m string) bool {
 	switch m {
-	case ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01:
+	case ChallengeHTTP01, ChallengeDNS01, ChallengeTLSALPN01, ChallengeDNSPersist01:
 		return true
 	default:
 		return false

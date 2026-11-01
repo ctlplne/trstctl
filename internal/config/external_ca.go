@@ -126,6 +126,13 @@ type ExternalCAConfig struct {
 	// has not decided to hand trstctl publish rights in their zones.
 	UpstreamDNS01 bool `json:"upstream_dns01,omitempty"`
 
+	// UpstreamDNSPersist answers dns-persist-01 (P1) when the authority
+	// offers it: the standing record is published once through the same
+	// provider configs and never retracted, so renewals need no DNS change.
+	// Requires upstream_dns01; ACME authorities only. Off by default until a
+	// public CA offers the challenge in production.
+	UpstreamDNSPersist bool `json:"upstream_dns_persist,omitempty"`
+
 	// ARIIssuerKeyIDs names this authority's issuing intermediates by their
 	// Subject Key Identifier (hex), so a DISCOVERED leaf that carries one of
 	// them as its Authority Key Identifier gets an upstream ARI poll too (A51).
@@ -454,6 +461,9 @@ func validateExternalCAFieldScope(where string, c ExternalCAConfig) []error {
 		errs = append(errs, fmt.Errorf(
 			"%s.caa_issuer_domain is required when upstream_dns01 is enabled: the CAA check "+
 				"must name the authority that will issue, and an empty issuer authorizes every CA", where))
+	}
+	if c.UpstreamDNSPersist && (c.Type != "letsencrypt" || !c.UpstreamDNS01) {
+		errs = append(errs, fmt.Errorf("%s.upstream_dns_persist applies only to ACME (letsencrypt) authorities with upstream_dns01 enabled", where))
 	}
 	if c.Type != "letsencrypt" && strings.TrimSpace(c.ACMEProfile) != "" {
 		errs = append(errs, fmt.Errorf("%s.acme_profile applies only to ACME (letsencrypt) authorities, not %q", where, c.Type))

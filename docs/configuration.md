@@ -2862,6 +2862,7 @@ of your own, from discovery to a signed audit export, run
 | `TRSTCTL_PROTOCOLS_ACME_EAB_REQUIRED` | `false` | Require RFC 8555 External Account Binding on ACME `newAccount`; `/directory` advertises `externalAccountRequired`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_KEY_ID` | — | Public EAB `kid` accepted by the ACME server. The single env shortcut configures one key; JSON config can carry multiple `protocols.acme_eab.keys`. |
 | `TRSTCTL_PROTOCOLS_ACME_EAB_HMAC_KEY` / `…_FILE` | — | Byte-backed HS256 HMAC key for the EAB `kid`; use the file form for production secret injection. |
+| `TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS` | — | Comma-separated issuer domain names (`protocols.acme_dns_persist.issuer_domain_names`) that turn on dns-persist-01: an applicant's standing `_validation-persist` TXT record must name one of them and its ACME account. Empty keeps the challenge off. |
 
 Each entry in `protocols.acme_eab.keys[]` also carries the scope that credential
 authorizes — `allowed_identifiers` (exact names or `*.suffix`, which covers the apex

@@ -47,7 +47,10 @@ func TestDriverUsesInjectedHTTPClientAndDestroysAccountKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if driver.client.HTTPClient != client {
+	// The driver keeps the policy-controlled client's settings and sends every
+	// request through its transport (counted below); P1 wraps that transport
+	// to read the issuer domain names an authority names for dns-persist-01.
+	if _, ok := driver.client.HTTPClient.Transport.(*persistCapture); !ok || driver.client.HTTPClient.Timeout != client.Timeout {
 		t.Fatal("ACME driver did not retain the policy-controlled HTTP client")
 	}
 	if _, err := driver.client.Discover(context.Background()); err != nil {

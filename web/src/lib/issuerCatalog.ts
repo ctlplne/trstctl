@@ -53,7 +53,7 @@ export const issuerTypes: IssuerTypeConfig[] = [
           return translateNow("source.challenge.type.28e80b8fc5");
         },
         type: "select",
-        options: ["http-01", "dns-01", "dns-persist-01"],
+        options: ["http-01", "dns-01"],
         defaultValue: "http-01",
       },
       {

@@ -1042,6 +1042,9 @@ type Protocols struct {
 	// When Required is true, /directory advertises externalAccountRequired and
 	// new-account must carry an HMAC-verified binding for one configured key id.
 	ACMEEAB ACMEExternalAccountBinding `json:"acme_eab,omitempty"`
+	// ACMEDNSPersist offers dns-persist-01 (P1) for standing records that name
+	// one of these issuer domain names; empty keeps it off.
+	ACMEDNSPersist ACMEDNSPersist `json:"acme_dns_persist,omitempty"`
 	// RAKeyFile is the sealed-at-rest RSA transport identity SCEP/CMP use for CMS
 	// request decryption and response protection. It is not the issuing CA key, but
 	// it must survive restarts and be shared by replicas so clients that cached
@@ -3744,6 +3747,7 @@ func applyProtocolsEnv(getenv func(string) string, p *Protocols) {
 	if eabKey.KeyID != "" || len(eabKey.HMACKey) > 0 || eabKey.HMACKeyFile != "" {
 		p.ACMEEAB.Keys = []ACMEExternalAccountBindingKey{eabKey}
 	}
+	setCSV(getenv, "TRSTCTL_PROTOCOLS_ACME_DNS_PERSIST_ISSUER_DOMAINS", &p.ACMEDNSPersist.IssuerDomainNames)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_NONCES", &p.ACMEQuota.MaxNonces)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_ACCOUNTS", &p.ACMEQuota.MaxAccounts)
 	setInt(getenv, "TRSTCTL_PROTOCOLS_ACME_MAX_PENDING_ORDERS", &p.ACMEQuota.MaxPendingOrders)
@@ -4910,6 +4914,7 @@ func validateServedSurfaces(c *Config) []error {
 	errs = append(errs, validateSSHUserPrincipals(c.Protocols.SSHUserPrincipals)...)
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
+	errs = append(errs, validateACMEDNSPersist(c.Protocols.ACMEDNSPersist)...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
 	// name a directory and at least one trusted key, so the binary never serves an
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.

@@ -314,6 +314,8 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 		s.acmeDNS01.txtResolvers = []acme.Resolver{txtResolver}
 		acmeSrv = acmeSrv.WithDNS01Automation(s.acmeDNS01).WithDomainValidationPolicy(s.acmeDNS01)
 	}
+	// P1: persistent DNS validation for standing records that name this CA.
+	acmeSrv = acmeSrv.WithDNSPersist(cfg.ACMEDNSPersist.IssuerDomainNames, validators.DNSPersist01)
 	// I4: every refusal this server issues becomes a classified diagnosis an
 	// operator can read. Wired here rather than left as a library the served
 	// binary never calls — which is what it was.

@@ -134,6 +134,11 @@ type ChallengeRequest struct {
 	// SHA-256/base64url digest. The digest is computed and cross-checked inside
 	// this boundary before the raw value crosses the seam.
 	KeyAuth string
+	// IssuerDomainNames and AccountURI are set for dns-persist-01 (P1): the
+	// standing record names one of the authority's issuer domain names and
+	// this ACME account.
+	IssuerDomainNames []string
+	AccountURI        string
 }
 
 // ChallengeSolver satisfies challenges on behalf of the client.
@@ -204,6 +209,9 @@ type Driver struct {
 	// profile is the draft-ietf-acme-profiles profile requested on every
 	// order (A56); empty lets the authority choose.
 	profile string
+	// persist reads the issuer domain names an authority names for
+	// dns-persist-01 (P1).
+	persist *persistCapture
 }
 
 // WithExternalAccountBinding attaches the external account binding the
@@ -261,7 +269,9 @@ func newLocalDriverWithHTTPClient(directoryURL string, solver ChallengeSolver, h
 	// offering a real challenge appeared to validate: nothing was presented,
 	// the challenge was accepted, and the wait succeeded only because the
 	// fixture pre-authorized the order.
-	return &Driver{client: client, solver: solver}, nil
+	capture := &persistCapture{names: map[string][]string{}}
+	client.HTTPClient = capture.wrap(client.HTTPClient)
+	return &Driver{client: client, solver: solver, persist: capture}, nil
 }
 
 // NewDriverWithDigestSigner is the production AN-4 constructor. It drives the
@@ -278,7 +288,9 @@ func NewDriverWithDigestSigner(directoryURL string, solver ChallengeSolver, http
 	// offering a real challenge appeared to validate: nothing was presented,
 	// the challenge was accepted, and the wait succeeded only because the
 	// fixture pre-authorized the order.
-	return &Driver{client: client, solver: solver}, nil
+	capture := &persistCapture{names: map[string][]string{}}
+	client.HTTPClient = capture.wrap(client.HTTPClient)
+	return &Driver{client: client, solver: solver, persist: capture}, nil
 }
 
 // Destroy makes the driver fail closed and drops its account-key adapter. A
@@ -463,9 +475,19 @@ func (d *Driver) fulfill(ctx context.Context, tenantID string, order *acme.Order
 			}
 		}
 
+		var issuerNames []string
+		var accountURI string
+		if chal.Type == ChallengeDNSPersist01 {
+			issuerNames, accountURI = d.persist.issuerDomainNames(chal.URI), string(d.client.KID)
+			if len(issuerNames) == 0 || accountURI == "" {
+				return fmt.Errorf("acmekey: dns-persist-01 for %s: the authority named no issuer domain name, "+
+					"or the account URL is unknown", identifierOf(authz))
+			}
+		}
 		retract, err := d.solver.Solve(ctx, ChallengeRequest{
 			TenantID: tenantID, Type: chal.Type, Identifier: identifierOf(authz),
 			Token: chal.Token, KeyAuth: keyAuth,
+			IssuerDomainNames: issuerNames, AccountURI: accountURI,
 		})
 		if err != nil {
 			return fmt.Errorf("acmekey: present %s challenge for %s: %w", chal.Type, identifierOf(authz), err)

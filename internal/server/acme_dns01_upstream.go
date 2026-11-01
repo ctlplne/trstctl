@@ -52,6 +52,8 @@ type upstreamACMEDNS01Solver struct {
 	// windows; a row that did not name the authority would report their union
 	// and hide whichever is about to lapse.
 	issuer string
+	// persist answers dns-persist-01 with a standing record (P1).
+	persist bool
 }
 
 // SolvableChallenges reports dns-01 only.
@@ -62,6 +64,9 @@ type upstreamACMEDNS01Solver struct {
 // make the driver select http-01 and then fail at publish time, which is
 // exactly the shape of failure the census discipline exists to prevent.
 func (s *upstreamACMEDNS01Solver) SolvableChallenges() []string {
+	if s.persist {
+		return []string{acmekey.ChallengeDNSPersist01, acmekey.ChallengeDNS01}
+	}
 	return []string{acmekey.ChallengeDNS01}
 }
 
@@ -69,6 +74,9 @@ func (s *upstreamACMEDNS01Solver) SolvableChallenges() []string {
 func (s *upstreamACMEDNS01Solver) Solve(ctx context.Context, req acmekey.ChallengeRequest) (func(context.Context) error, error) {
 	if s == nil || s.automation == nil {
 		return nil, errors.New("server: upstream dns-01 solver is not configured")
+	}
+	if req.Type == acmekey.ChallengeDNSPersist01 && s.persist {
+		return s.solvePersist(ctx, req)
 	}
 	if req.Type != acmekey.ChallengeDNS01 {
 		return nil, fmt.Errorf("server: upstream solver was asked for %q; it solves dns-01 only", req.Type)
@@ -247,6 +255,7 @@ type upstreamDVBinding struct {
 	holder          *upstreamDVHolder
 	caaIssuerDomain string
 	issuer          string
+	persist         bool
 }
 
 var (
@@ -265,7 +274,7 @@ func (b *upstreamDVBinding) solver() *upstreamACMEDNS01Solver {
 	}
 	return &upstreamACMEDNS01Solver{
 		automation: automation, log: log,
-		caaIssuerDomain: b.caaIssuerDomain, issuer: b.issuer,
+		caaIssuerDomain: b.caaIssuerDomain, issuer: b.issuer, persist: b.persist,
 	}
 }
 

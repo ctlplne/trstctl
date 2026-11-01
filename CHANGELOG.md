@@ -2,6 +2,12 @@
 
 ### Added
 
+- Persistent DNS validation (dns-persist-01, the IETF draft): the ACME server offers it when
+  `protocols.acme_dns_persist.issuer_domain_names` names this CA, and each order validates against the
+  applicant's standing `_validation-persist` TXT record for this CA and account, so renewals need no DNS
+  change; a deleted record or one naming another account refuses the next order. An ACME authority with
+  `upstream_dns_persist` answers the challenge by publishing that record once through the DNS-01 provider
+  configs and never retracting it. Proven against Pebble 2.10.1.
 - CBOM import and code and image scanning: `POST /api/v1/cbom/imports` (`trstctl-cli cbom import --source
   vendor:|source:|image:<name>`) merges a vendor's, a code scan's or an image scan's CycloneDX CBOM into the
   crypto inventory with its source in every location; importing the same BOM again changes nothing.

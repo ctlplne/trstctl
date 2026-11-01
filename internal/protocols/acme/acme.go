@@ -330,6 +330,9 @@ type Server struct {
 	// reference (A54).
 	eabSecretResolver func(context.Context, string) ([]byte, error)
 
+	// dnsPersist offers dns-persist-01 when issuer domain names are configured (P1).
+	dnsPersist *dnsPersistConfig
+
 	mux *http.ServeMux
 }
 
@@ -612,14 +615,14 @@ func defaultChallengeTypes() []string {
 func (s *Server) challengeTypesForDomain(ctx context.Context, domain string) ([]string, error) {
 	var challengeTypes []string
 	if s.dvPolicy == nil {
-		challengeTypes = defaultChallengeTypes()
+		challengeTypes = s.offeredChallengeTypes()
 	} else {
 		methods, constrained, err := s.dvPolicy.AllowedMethods(ctx, s.stateTenantID, domain)
 		if err != nil {
 			return nil, fmt.Errorf("acme: domain-validation policy lookup for %q: %w", domain, err)
 		}
 		if !constrained {
-			challengeTypes = defaultChallengeTypes()
+			challengeTypes = s.offeredChallengeTypes()
 		} else {
 			allowed := make(map[string]bool, len(methods))
 			for _, method := range methods {
@@ -632,7 +635,7 @@ func (s *Server) challengeTypesForDomain(ctx context.Context, domain string) ([]
 				}
 				allowed[method] = true
 			}
-			for _, method := range defaultChallengeTypes() {
+			for _, method := range s.offeredChallengeTypes() {
 				if allowed[method] {
 					challengeTypes = append(challengeTypes, method)
 				}
@@ -1296,14 +1299,20 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 
 	var attested deviceAttestationOutcome
 	var cleanup func(context.Context) error
-	if ch.typ == ChallengeDeviceAttest01 {
+	switch ch.typ {
+	case ChallengeDeviceAttest01:
 		var err error
 		attested, err = s.validateDeviceAttestation(r.Context(), msg, acct, ch, az, o)
 		if err != nil {
 			s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
 			return
 		}
-	} else {
+	case ChallengeDNSPersist01:
+		if err := s.validateDNSPersist(r.Context(), az.domain, acct); err != nil {
+			s.problem(w, r, http.StatusBadRequest, "unauthorized", "challenge validation failed: "+err.Error())
+			return
+		}
+	default:
 		keyAuth := ch.token + "." + acct.key.Thumbprint()
 		if ch.typ == ChallengeDNS01 && s.dns01Automation != nil {
 			var err error
@@ -1388,9 +1397,7 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 		_ = cleanup(context.WithoutCancel(r.Context()))
 	}
 	addLink(w, base+"/acme/authz/"+az.id, "up")
-	writeJSON(w, http.StatusOK, map[string]any{
-		"type": ch.typ, "url": base + "/acme/chal/" + ch.id, "token": ch.token, "status": ch.status,
-	})
+	writeJSON(w, http.StatusOK, s.challengeJSON(base, ch))
 }
 
 func (s *Server) getOrder(w http.ResponseWriter, r *http.Request, _ *jose.ACMEMessage, acct *account) {
@@ -1978,9 +1985,7 @@ func (s *Server) orderJSON(base string, o *order, authzURLs []string) map[string
 func (s *Server) authzJSON(base string, az *authorization) map[string]any {
 	chals := make([]map[string]any, 0, len(az.challenges))
 	for _, ch := range az.challenges {
-		chals = append(chals, map[string]any{
-			"type": ch.typ, "url": base + "/acme/chal/" + ch.id, "token": ch.token, "status": ch.status,
-		})
+		chals = append(chals, s.challengeJSON(base, ch))
 	}
 	return map[string]any{
 		"status":     az.status,
