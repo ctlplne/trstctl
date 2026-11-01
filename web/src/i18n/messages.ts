@@ -2217,6 +2217,14 @@ export const messages = {
     defaultMessage: "Microsoft Sentinel",
     description: "Native Microsoft Sentinel provider option.",
   },
+  "audit.feeds.provider.syslog": {
+    defaultMessage: "Syslog over TLS (RFC 5424)",
+    description: "P5: syslog receiver provider option; the endpoint is syslog+tls://host:port.",
+  },
+  "audit.feeds.provider.elastic": {
+    defaultMessage: "Elasticsearch",
+    description: "P5: Elasticsearch bulk API provider option; the endpoint is https://host/<index>/_bulk.",
+  },
   "audit.feeds.endpoint": {
     defaultMessage: "Collector endpoint URL",
     description: "Audit feed collector endpoint field.",
@@ -2230,7 +2238,8 @@ export const messages = {
     description: "Audit feed credential-reference field.",
   },
   "audit.feeds.tokenRefHelp": {
-    defaultMessage: "Use an operator-allowlisted env:NAME reference. The credential value is never stored or returned.",
+    defaultMessage:
+      "Use an operator-allowlisted env:NAME reference. The credential value is never stored or returned. For Elasticsearch it holds the API key; for syslog it holds the receiver's CA certificate, or leave it empty to trust the system roots.",
     description: "Security guidance for the audit feed credential reference.",
   },
   "audit.feeds.tokenRefPlaceholder": {

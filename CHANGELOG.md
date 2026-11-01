@@ -2,6 +2,12 @@
 
 ### Added
 
+- Audit feeds to syslog and Elasticsearch: beside Splunk HEC and Sentinel, an audit feed can deliver to a
+  syslog receiver over TLS (`syslog+tls://host:6514`; RFC 5424 messages, octet-counted as RFC 5425 requires;
+  the receiver is verified through the system roots or a CA certificate reference) or to an Elasticsearch
+  bulk endpoint (`https://host/<index>/_bulk`, API key reference). Every collector receives the same audit
+  records in sequence order with the chain trailer; a redelivered batch adds nothing to the index, and a
+  stalled receiver holds only its own queue.
 - Persistent DNS validation (dns-persist-01, the IETF draft): the ACME server offers it when
   `protocols.acme_dns_persist.issuer_domain_names` names this CA, and each order validates against the
   applicant's standing `_validation-persist` TXT record for this CA and account, so renewals need no DNS

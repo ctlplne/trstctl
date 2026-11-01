@@ -1669,8 +1669,12 @@ never live in the API process. What you can do end to end against the running bi
   Every saved form therefore retains the record count, archived-prefix predecessor
   hash, chain head, and complete anchor without depending on HTTP headers. When
   operators need continuous delivery rather than a download, tenant-scoped
-  `GET|PUT /api/v1/audit/feeds[/{id}]` schedules bounded Splunk HEC or Sentinel
-  batches through the durable outbox. It persists exact record lag, cursor,
+  `GET|PUT /api/v1/audit/feeds[/{id}]` schedules bounded Splunk HEC, Sentinel,
+  syslog-over-TLS (RFC 5424/5425) or Elasticsearch bulk batches through the
+  durable outbox (P5: the same records in the same order to every collector; a
+  redelivered batch adds nothing to an index; a stalled receiver holds only its
+  own queue). Proven against stand-ins and against a stock rsyslog receiver over
+  TLS and a local search engine that speaks the Elasticsearch bulk API. It persists exact record lag, cursor,
   retries, safe terminal error codes, and collector request IDs; it does not store
   credential values or remote response bodies. This native feed is separate from
   the metadata-only OTLP log exporter and from incident-response SIEM dispatch.

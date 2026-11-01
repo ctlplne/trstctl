@@ -44,6 +44,10 @@ func NormalizeProvider(raw string) (string, bool) {
 		return ProviderSplunkHEC, true
 	case "sentinel", "azure-sentinel", "azure-monitor":
 		return ProviderSentinel, true
+	case "syslog", "syslog-tls", "rfc5424":
+		return ProviderSyslog, true
+	case "elastic", "elasticsearch", "elastic-bulk":
+		return ProviderElastic, true
 	default:
 		return "", false
 	}
@@ -173,6 +177,18 @@ func writeCollectorBatch(w io.Writer, batch FeedBatch, views map[collectorRecord
 			EventType: trailer.Type, Data: proof,
 		})
 		return json.NewEncoder(w).Encode(rows)
+	case ProviderSyslog, ProviderElastic:
+		records := make([]collectorRecord, 0, len(batch.Records)+1)
+		times := make([]time.Time, 0, len(batch.Records)+1)
+		for _, record := range batch.Records {
+			records = append(records, collectorRecordWithReadable(record, views))
+			times = append(times, record.Time)
+		}
+		records, times = append(records, trailer), append(times, when)
+		if provider == ProviderSyslog {
+			return writeSyslogBatch(w, records, times)
+		}
+		return writeElasticBatch(w, batch.BatchID, records, times)
 	default:
 		return fmt.Errorf("auditsink: unsupported audit-feed provider %q", batch.Provider)
 	}

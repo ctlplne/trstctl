@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"unicode"
@@ -28,7 +29,7 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	}
 	wantDestination, ok := orchestrator.AuditFeedDestination(batch.Provider)
 	if !ok || wantDestination != message.Destination || batch.BatchID == "" ||
-		batch.DestinationID == "" || batch.EndpointURL == "" || batch.TokenRef == "" ||
+		batch.DestinationID == "" || batch.EndpointURL == "" || (batch.TokenRef == "" && batch.Provider != auditsink.ProviderSyslog) ||
 		len(batch.Records) == 0 || batch.StartSequence != batch.Records[0].Sequence ||
 		batch.EndSequence != batch.Records[len(batch.Records)-1].Sequence || batch.ChainHead == "" {
 		return fmt.Errorf("server: audit feed batch authority is incomplete or mismatched")
@@ -43,6 +44,21 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	readable, err := d.audit.CollectorDetails(ctx, message.TenantID, batch.Records)
 	if err != nil {
 		return fmt.Errorf("server: collector source unavailable: %w", err)
+	}
+	if batch.Provider == auditsink.ProviderSyslog {
+		var framed bytes.Buffer
+		if err := auditsink.WriteCollectorBatchWithReadable(&framed, batch, readable); err != nil {
+			return fmt.Errorf("server: encode audit feed batch: %w", err)
+		}
+		defer secret.Wipe(framed.Bytes())
+		requestID, err := deliverSyslogBatch(ctx, batch, framed.Bytes())
+		if err != nil {
+			return err
+		}
+		if err := d.orch.RecordAuditFeedDelivered(ctx, message.TenantID, batch, message.IdempotencyKey, requestID); err != nil {
+			return fmt.Errorf("server: record audit feed delivery receipt: %w", err)
+		}
+		return nil
 	}
 	client, err := cloudHTTPClient(batch.EndpointURL, batch.AllowPrivateEndpoint, batch.PrivateEgressCIDRs)
 	if err != nil {
@@ -64,6 +80,9 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 		return fmt.Errorf("server: build audit feed request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if batch.Provider == auditsink.ProviderElastic {
+		req.Header.Set("Content-Type", "application/x-ndjson")
+	}
 	req.Header.Set("X-Trstctl-Idempotency-Key", message.IdempotencyKey)
 	req.Header.Set("Idempotency-Key", message.IdempotencyKey)
 	switch batch.Provider {
@@ -73,6 +92,8 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 	case auditsink.ProviderSentinel:
 		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", tokenBytes))
 		req.Header.Set("x-ms-client-request-id", batch.BatchID)
+	case auditsink.ProviderElastic:
+		req.Header.Set("Authorization", secrettext.Prefixed("ApiKey ", tokenBytes))
 	}
 	response, err := client.Do(req)
 	if err != nil {
@@ -83,6 +104,22 @@ func (d *issuanceDispatcher) handleAuditFeedBatch(ctx context.Context, message o
 		// Do not copy collector response bodies into the durable outbox error:
 		// upstreams routinely echo tokens, request fragments, or tenant data.
 		return fmt.Errorf("server: audit feed collector returned HTTP status %d", response.StatusCode)
+	}
+	if batch.Provider == auditsink.ProviderElastic {
+		// A bulk request answers 200 even when items failed; every item must
+		// be created or already present (a redelivery) before the batch counts.
+		raw, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+		if err != nil {
+			return fmt.Errorf("server: audit feed collector request failed: %w", err)
+		}
+		failed, status, err := auditsink.ElasticBulkResult(raw)
+		secret.Wipe(raw)
+		if err != nil {
+			return fmt.Errorf("server: audit feed collector returned an unreadable bulk response")
+		}
+		if failed > 0 {
+			return fmt.Errorf("server: audit feed collector refused %d bulk items (first HTTP status %d)", failed, status)
+		}
 	}
 	requestID := boundedCollectorRequestID(
 		response.Header.Get("X-Collector-Request-ID"),
@@ -120,6 +157,8 @@ func auditFeedFailureCode(err error) string {
 		return "credential_unavailable"
 	case strings.Contains(text, "endpoint rejected"):
 		return "endpoint_refused"
+	case strings.Contains(text, "bulk items"):
+		return "collector_rejected_records"
 	case strings.Contains(text, "http status"):
 		return "collector_http_error"
 	case strings.Contains(text, "deadline") || strings.Contains(text, "timeout"):

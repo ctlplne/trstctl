@@ -4749,7 +4749,7 @@ func componentSchemas() map[string]*Schema {
 	}, "keys")
 	auditFeedRequest := object(map[string]*Schema{
 		"name":         str(),
-		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel"}},
+		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel", "syslog", "elastic"}},
 		"endpoint_url": str(), "token_ref": str(),
 		"interval_seconds": {Type: "integer"}, "batch_size": {Type: "integer"},
 		"enabled": {Type: "boolean"}, "allow_private_endpoint": {Type: "boolean"},
@@ -4757,7 +4757,7 @@ func componentSchemas() map[string]*Schema {
 	}, "name", "provider", "endpoint_url", "token_ref", "interval_seconds", "batch_size", "enabled")
 	auditFeed := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(),
-		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel"}},
+		"provider":     {Type: "string", Enum: []string{"splunk-hec", "sentinel", "syslog", "elastic"}},
 		"endpoint_url": str(), "token_ref": str(),
 		"interval_seconds": {Type: "integer"}, "batch_size": {Type: "integer"},
 		"enabled": {Type: "boolean"}, "allow_private_endpoint": {Type: "boolean"},

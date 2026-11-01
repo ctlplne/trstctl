@@ -211,19 +211,23 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 	}
 	provider, ok := auditsink.NormalizeProvider(body.Provider)
 	if !ok {
-		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "provider must be splunk-hec or sentinel")
+		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "provider must be splunk-hec, sentinel, syslog or elastic")
 	}
 	endpoint := strings.TrimSpace(body.EndpointURL)
-	parsedEndpoint, err := validatedAuditFeedEndpoint(endpoint, body.AllowPrivateEndpoint)
+	parsedEndpoint, err := validatedAuditFeedEndpointFor(provider, endpoint, body.AllowPrivateEndpoint)
 	if err != nil {
 		return normalizedAuditFeedConfiguration{}, err
 	}
 	tokenRef := strings.TrimSpace(body.TokenRef)
-	if !strings.HasPrefix(tokenRef, "env:") {
-		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "token_ref must be an operator-approved env:NAME credential reference")
-	}
-	if err := a.requireOutboundEnvCredentialRefAllowed(tokenRef, "token_ref"); err != nil {
-		return normalizedAuditFeedConfiguration{}, err
+	// A syslog receiver is verified through the system roots unless token_ref
+	// names its CA certificate; every other collector needs a credential.
+	if tokenRef != "" || provider != auditsink.ProviderSyslog {
+		if !strings.HasPrefix(tokenRef, "env:") {
+			return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "token_ref must be an operator-approved env:NAME credential reference")
+		}
+		if err := a.requireOutboundEnvCredentialRefAllowed(tokenRef, "token_ref"); err != nil {
+			return normalizedAuditFeedConfiguration{}, err
+		}
 	}
 	if body.IntervalSeconds < minAuditFeedInterval {
 		return normalizedAuditFeedConfiguration{}, errStatus(http.StatusBadRequest, "interval_seconds must be at least 60")
@@ -258,6 +262,28 @@ func (a *API) normalizeAuditFeedConfiguration(ctx context.Context, tenantID, raw
 			AllowPrivateEndpoint: body.AllowPrivateEndpoint, PrivateEgressCIDRs: cidrs,
 		},
 	}, nil
+}
+
+// validatedAuditFeedEndpointFor checks the endpoint form each collector takes:
+// syslog+tls://host[:port] for syslog (P5), https://host/<index>/_bulk for
+// Elasticsearch, and an HTTP(S) URL for Splunk HEC and Sentinel.
+func validatedAuditFeedEndpointFor(provider, endpoint string, allowPrivate bool) (*url.URL, error) {
+	if provider == auditsink.ProviderSyslog {
+		if _, _, err := auditsink.SyslogEndpoint(endpoint); err != nil {
+			return nil, errStatus(http.StatusBadRequest, "endpoint_url: "+err.Error())
+		}
+		return url.Parse(strings.TrimSpace(endpoint))
+	}
+	parsed, err := validatedAuditFeedEndpoint(endpoint, allowPrivate)
+	if err != nil {
+		return nil, err
+	}
+	if provider == auditsink.ProviderElastic {
+		if _, err := auditsink.ElasticBulkIndex(parsed.Path); err != nil {
+			return nil, errStatus(http.StatusBadRequest, "endpoint_url: "+err.Error())
+		}
+	}
+	return parsed, nil
 }
 
 func validatedAuditFeedEndpoint(endpoint string, allowPrivate bool) (*url.URL, error) {

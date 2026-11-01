@@ -6911,7 +6911,9 @@
           "provider": {
             "enum": [
               "splunk-hec",
-              "sentinel"
+              "sentinel",
+              "syslog",
+              "elastic"
             ],
             "type": "string"
           },
@@ -7116,7 +7118,9 @@
           "provider": {
             "enum": [
               "splunk-hec",
-              "sentinel"
+              "sentinel",
+              "syslog",
+              "elastic"
             ],
             "type": "string"
           },

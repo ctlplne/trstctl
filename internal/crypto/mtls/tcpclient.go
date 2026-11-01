@@ -14,6 +14,10 @@ import (
 // sent. A nil CA PEM uses system roots; a supplied CA replaces them rather
 // than silently adding broad trust to an operator-pinned private service.
 func DialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte) (net.Conn, error) {
+	return dialVerifiedTCP(ctx, addr, serverName, caPEM, &net.Dialer{})
+}
+
+func dialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte, netDialer *net.Dialer) (net.Conn, error) {
 	if serverName == "" {
 		return nil, errors.New("mtls: expected TCP server name required")
 	}
@@ -25,7 +29,7 @@ func DialVerifiedTCP(ctx context.Context, addr, serverName string, caPEM []byte)
 		}
 	}
 	dialer := tls.Dialer{
-		NetDialer: &net.Dialer{},
+		NetDialer: netDialer,
 		Config: &tls.Config{
 			RootCAs: roots, ServerName: serverName, MinVersion: tls.VersionTLS12,
 		},

@@ -7821,8 +7821,8 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		if err := decode(e, &pl); err != nil {
 			return err
 		}
-		if pl.ID == "" || pl.Name == "" || pl.EndpointURL == "" || pl.TokenRef == "" ||
-			(pl.Provider != "splunk-hec" && pl.Provider != "sentinel") ||
+		if pl.ID == "" || pl.Name == "" || pl.EndpointURL == "" || (pl.TokenRef == "" && pl.Provider != "syslog") ||
+			(pl.Provider != "splunk-hec" && pl.Provider != "sentinel" && pl.Provider != "syslog" && pl.Provider != "elastic") ||
 			pl.IntervalSeconds < 60 || pl.BatchSize < 1 || pl.BatchSize > 500 {
 			return fmt.Errorf("projections: %s has invalid destination configuration", e.Type)
 		}

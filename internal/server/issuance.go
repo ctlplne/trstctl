@@ -357,7 +357,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 		return d.handleSplunkResponseIntegration(ctx, m)
 	case orchestrator.DestinationResponseJira:
 		return d.handleJiraResponseIntegration(ctx, m)
-	case orchestrator.DestinationAuditFeedSplunk, orchestrator.DestinationAuditFeedSentinel:
+	case orchestrator.DestinationAuditFeedSplunk, orchestrator.DestinationAuditFeedSentinel, orchestrator.DestinationAuditFeedSyslog, orchestrator.DestinationAuditFeedElastic:
 		return d.handleAuditFeedBatch(ctx, m)
 	case store.ObserverEventDestination:
 		return d.deliverObserverEvent(ctx, m)
@@ -444,7 +444,9 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 // need no callback; secret integrations and licensed managed keys do.
 func (d *issuanceDispatcher) DeliverTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) error {
 	if m.Destination == orchestrator.DestinationAuditFeedSplunk ||
-		m.Destination == orchestrator.DestinationAuditFeedSentinel {
+		m.Destination == orchestrator.DestinationAuditFeedSentinel ||
+		m.Destination == orchestrator.DestinationAuditFeedSyslog ||
+		m.Destination == orchestrator.DestinationAuditFeedElastic {
 		return d.failAuditFeedBatchTerminal(ctx, m, cause)
 	}
 	if m.Destination == orchestrator.DestinationConnectorRightSize {

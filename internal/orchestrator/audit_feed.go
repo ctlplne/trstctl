@@ -24,6 +24,8 @@ import (
 const (
 	DestinationAuditFeedSplunk   = "audit.feed.splunk"
 	DestinationAuditFeedSentinel = "audit.feed.sentinel"
+	DestinationAuditFeedSyslog   = "audit.feed.syslog"
+	DestinationAuditFeedElastic  = "audit.feed.elastic"
 )
 
 func AuditFeedDestination(provider string) (string, bool) {
@@ -32,6 +34,10 @@ func AuditFeedDestination(provider string) (string, bool) {
 		return DestinationAuditFeedSplunk, true
 	case auditsink.ProviderSentinel:
 		return DestinationAuditFeedSentinel, true
+	case auditsink.ProviderSyslog:
+		return DestinationAuditFeedSyslog, true
+	case auditsink.ProviderElastic:
+		return DestinationAuditFeedElastic, true
 	default:
 		return "", false
 	}

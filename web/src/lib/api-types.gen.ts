@@ -1676,7 +1676,7 @@ export interface AuditFeed {
   next_attempt_at?: string;
   next_run_at: string;
   private_egress_cidrs: string[];
-  provider: "splunk-hec" | "sentinel";
+  provider: "splunk-hec" | "sentinel" | "syslog" | "elastic";
   status: "not_started" | "queued" | "delivering" | "retrying" | "delivered" | "failed";
   tenant_id: string;
   token_ref: string;
@@ -1718,7 +1718,7 @@ export interface AuditFeedRequest {
   interval_seconds: number;
   name: string;
   private_egress_cidrs?: string[];
-  provider: "splunk-hec" | "sentinel";
+  provider: "splunk-hec" | "sentinel" | "syslog" | "elastic";
   token_ref: string;
 }
 

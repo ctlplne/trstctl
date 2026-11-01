@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2118 annotated sites across 29 rules. Each row is
+2132 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (449 sites)
+### G101 — CWE-798 Use of hardcoded credentials (455 sites)
 
 | Location | Reason |
 |---|---|
@@ -361,11 +361,17 @@ not this file.
 | `internal/server/aisurface_served_test.go:111` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/attack_path_served_test.go:45` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/attack_path_served_test.go:103` | credential references only; no credential value enters the config (CWE-798) |
+| `internal/server/audit_feed_lab_p5_test.go:49` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_lab_p5_test.go:50` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_lab_p5_test.go:51` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/audit_feed_protected_served_test.go:88` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:43` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:142` | the credential-bearing URL is a negative fixture that production must reject (CWE-798). |
 | `internal/server/audit_feed_served_test.go:160` | token_ref is a non-secret environment locator (CWE-798). |
 | `internal/server/audit_feed_served_test.go:167` | token_ref is a non-secret environment locator (CWE-798). |
+| `internal/server/audit_feed_syslog_elastic_served_test.go:61` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_syslog_elastic_served_test.go:63` | token_ref is a non-secret environment locator (CWE-798) |
+| `internal/server/audit_feed_syslog_elastic_served_test.go:65` | token_ref is a non-secret environment locator (CWE-798) |
 | `internal/server/auth_unit_test.go:96` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/azure_workload_identity_served_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/cloud_relay_execution_served_test.go:31` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -1035,7 +1041,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (258 sites)
+### G204 — CWE-78 OS command injection (260 sites)
 
 | Location | Reason |
 |---|---|
@@ -1201,6 +1207,8 @@ not this file.
 | `internal/server/archive_minio_served_test.go:51` | test inspects the container it started (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:267` | fixed binary built by this test; arguments are fixed/test-owned paths and enum values (CWE-78) |
 | `internal/server/audit_export_formats_served_test.go:292` | fixed repository binary and test-owned destination (CWE-78) |
+| `internal/server/audit_feed_lab_p5_test.go:208` | the runner's own lab container (CWE-78) |
+| `internal/server/audit_feed_lab_p5_test.go:215` | the runner's own lab container (CWE-78) |
 | `internal/server/backup_test.go:918` | fixed repository binary and test-owned destination (CWE-78) |
 | `internal/server/bundled_pg_dependency_test.go:19` | fixed local Go tool and package pattern (CWE-78) |
 | `internal/server/ca_hierarchy_pqc_served_test.go:32` | LookPath-resolved OpenSSL with fixed arguments |
@@ -1410,7 +1418,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (585 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (588 sites)
 
 | Location | Reason |
 |---|---|
@@ -1798,6 +1806,9 @@ not this file.
 | `internal/server/agent_workload_api_darwin_path_test.go:51` | test reads the binary it just built (CWE-22) |
 | `internal/server/agentchannel.go:134` | operator-configured agent CA certificate path from this server's own config (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:167` | the test's own archive (CWE-22) |
+| `internal/server/audit_feed_lab_p5_test.go:33` | the runner's lab CA (CWE-22) |
+| `internal/server/audit_feed_lab_p5_test.go:87` | the runner's mounted rsyslog output (CWE-22) |
+| `internal/server/audit_feed_lab_p5_test.go:142` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/backup.go:146` | operator-configured public trust anchor path (CWE-22) |
 | `internal/server/backup.go:209` | operator-invoked backup/restore over its own configured directory (CWE-22) |
 | `internal/server/backup.go:380` | operator-invoked backup/restore over its own configured directory (CWE-22) |
@@ -2224,7 +2235,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (13 sites)
+### G702 — CWE-78 OS command injection (taint) (15 sites)
 
 | Location | Reason |
 |---|---|
@@ -2234,6 +2245,8 @@ not this file.
 | `internal/objectstore/minio_lock_test.go:43` | test runs a fixed local tool with the image the operator named (CWE-78) |
 | `internal/protocols/est/differential_test.go:101` | test executes a fixed local tool or fixture it built itself (CWE-78) (-g: get cacerts) |
 | `internal/server/archive_minio_served_test.go:45` | test runs a fixed local tool with the image the operator named (CWE-78) |
+| `internal/server/audit_feed_lab_p5_test.go:208` | the runner's own lab container (CWE-78) |
+| `internal/server/audit_feed_lab_p5_test.go:215` | the runner's own lab container (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2242,7 +2255,7 @@ not this file.
 | `tools/dodcensus/proof/proof_test.go:1258` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `tools/dodcensus/runtime_runner.go:912` | developer tool running fixed toolchain commands over the repo (CWE-78) |
 
-### G703 — CWE-22 Path traversal (taint) (114 sites)
+### G703 — CWE-22 Path traversal (taint) (117 sites)
 
 | Location | Reason |
 |---|---|
@@ -2304,6 +2317,9 @@ not this file.
 | `internal/server/agent_workload_api_darwin_path_test.go:56` | test copies its own executable fixture (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:173` | the test's own archive under its t.TempDir (CWE-22) |
 | `internal/server/audit_archive_download_served_test.go:179` | the test's own archive under its t.TempDir (CWE-22) |
+| `internal/server/audit_feed_lab_p5_test.go:33` | the runner's lab CA (CWE-22) |
+| `internal/server/audit_feed_lab_p5_test.go:87` | the runner's mounted rsyslog output (CWE-22) |
+| `internal/server/audit_feed_lab_p5_test.go:142` | the runner's mounted rsyslog output (CWE-22) |
 | `internal/server/backup_reports.go:117` | the staging tree is this backup's own temp directory (CWE-22) |
 | `internal/server/compose_e2e_tls_test.go:149` | fixed helper filename below this test's private t.TempDir; source bytes are never a path (CWE-22). |
 | `internal/server/compose_e2e_tls_test.go:229` | fixed script filename below this test's private t.TempDir; test call text is file content, never a path (CWE-22). |
@@ -2361,7 +2377,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/sites_dump_test.go:30` | test-only maintenance dump to an operator-chosen path (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G704 — CWE-918 Server-side request forgery (taint) (10 sites)
+### G704 — CWE-918 Server-side request forgery (taint) (13 sites)
 
 | Location | Reason |
 |---|---|
@@ -2371,6 +2387,9 @@ not this file.
 | `internal/crypto/kerberos/client_test.go:115` | the test's own loopback httptest server (CWE-918) |
 | `internal/crypto/kerberos/client_test.go:125` | the test's own loopback httptest server (CWE-918) |
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
+| `internal/server/audit_feed_lab_p5_test.go:110` | the runner's own lab search engine (CWE-918) |
+| `internal/server/audit_feed_lab_p5_test.go:113` | the runner's own lab search engine (CWE-918) |
+| `internal/server/audit_feed_lab_p5_test.go:163` | the runner's own lab search engine (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |

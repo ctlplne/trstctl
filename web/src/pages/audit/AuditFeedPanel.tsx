@@ -34,12 +34,12 @@ function buildSchema(t: (key: ValidationMessage) => string) {
         .uuid(t("audit.feeds.validation.uuid"))
         .refine((value) => value !== "00000000-0000-0000-0000-000000000000", t("audit.feeds.validation.uuid")),
       name: z.string().trim().min(1, t("audit.feeds.validation.required")),
-      provider: z.enum(["splunk-hec", "sentinel"]),
+      provider: z.enum(["splunk-hec", "sentinel", "syslog", "elastic"]),
       endpointUrl: z.string().trim().url(t("audit.feeds.validation.url")),
       tokenRef: z
         .string()
         .trim()
-        .regex(/^env:[A-Z][A-Z0-9_]*$/, t("audit.feeds.validation.tokenRef")),
+        .regex(/^(env:[A-Z][A-Z0-9_]*)?$/, t("audit.feeds.validation.tokenRef")),
       intervalSeconds: z.number().int().min(60, t("audit.feeds.validation.interval")),
       batchSize: z.number().int().min(1, t("audit.feeds.validation.batch")).max(500, t("audit.feeds.validation.batch")),
       enabled: z.boolean(),
@@ -47,6 +47,11 @@ function buildSchema(t: (key: ValidationMessage) => string) {
       privateEgressCidrs: z.string(),
     })
     .superRefine((values, context) => {
+      // P5: a syslog receiver may be verified through the system roots, so its
+      // CA reference is optional; every other collector needs a credential.
+      if (values.provider !== "syslog" && values.tokenRef === "") {
+        context.addIssue({ code: "custom", path: ["tokenRef"], message: t("audit.feeds.validation.tokenRef") });
+      }
       if (values.allowPrivateEndpoint && lines(values.privateEgressCidrs).length === 0) {
         context.addIssue({ code: "custom", path: ["privateEgressCidrs"], message: t("audit.feeds.validation.cidrs") });
       }
@@ -274,13 +279,20 @@ export function AuditFeedPanel() {
                 <Select {...control} {...form.register("provider")}>
                   <option value="splunk-hec">{t("audit.feeds.provider.splunk")}</option>
                   <option value="sentinel">{t("audit.feeds.provider.sentinel")}</option>
+                  <option value="syslog">{t("audit.feeds.provider.syslog")}</option>
+                  <option value="elastic">{t("audit.feeds.provider.elastic")}</option>
                 </Select>
               )}
             </Field>
             <Field label={t("audit.feeds.endpoint")} error={form.formState.errors.endpointUrl?.message} required>
               {(control) => <Input {...control} type="url" placeholder={t("audit.feeds.endpointPlaceholder")} {...form.register("endpointUrl")} />}
             </Field>
-            <Field label={t("audit.feeds.tokenRef")} description={t("audit.feeds.tokenRefHelp")} error={form.formState.errors.tokenRef?.message} required>
+            <Field
+              label={t("audit.feeds.tokenRef")}
+              description={t("audit.feeds.tokenRefHelp")}
+              error={form.formState.errors.tokenRef?.message}
+              required={watchedValues.provider !== "syslog"}
+            >
               {(control) => <Input {...control} placeholder={t("audit.feeds.tokenRefPlaceholder")} autoComplete="off" {...form.register("tokenRef")} />}
             </Field>
             <Field label={t("audit.feeds.interval")} error={form.formState.errors.intervalSeconds?.message} required>

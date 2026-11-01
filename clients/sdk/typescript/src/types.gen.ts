@@ -10999,7 +10999,7 @@ export interface components {
             next_run_at: string;
             private_egress_cidrs: string[];
             /** @enum {string} */
-            provider: "splunk-hec" | "sentinel";
+            provider: "splunk-hec" | "sentinel" | "syslog" | "elastic";
             /** @enum {string} */
             status: "not_started" | "queued" | "delivering" | "retrying" | "delivered" | "failed";
             /** Format: uuid */
@@ -11044,7 +11044,7 @@ export interface components {
             name: string;
             private_egress_cidrs?: string[];
             /** @enum {string} */
-            provider: "splunk-hec" | "sentinel";
+            provider: "splunk-hec" | "sentinel" | "syslog" | "elastic";
             token_ref: string;
         };
         AuditReadableEvent: {

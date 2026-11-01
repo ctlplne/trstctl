@@ -183,6 +183,25 @@ reconciliation recreates a missing outbox row only after the event history still
 matches the recorded range, IDs, seed, and head. A changed range fails closed; it
 is never silently replaced by whichever records happen to be current.
 
+**Syslog over TLS and Elasticsearch** (P5) take the same records on the same
+outbox path. A `syslog` feed's endpoint is `syslog+tls://host[:port]` (6514 by
+default; plain TCP or UDP syslog is not offered). Each audit record and the chain
+trailer is one RFC 5424 message, facility *log audit* and severity
+*informational*, with the record JSON as its message body, octet-counted as RFC
+5425 requires. The receiver's certificate is verified through the system roots,
+or through the CA certificate a `token_ref` names; the dial passes the same
+egress guard as the HTTP collectors. Syslog acknowledges nothing per message, so
+a batch counts as delivered once every message is written and the TLS session
+closes cleanly; a retry resends the batch, and each message carries its audit
+sequence for the receiver to drop a repeat. An `elastic` feed posts an
+Elasticsearch `_bulk` body to `https://host[:port]/<index>/_bulk` with an API key
+reference (sent as `Authorization: ApiKey …`). Each record is created under its
+audit record ID with `@timestamp`, `event.action`, `event.sequence` and the
+collector record under `trstctl`; a create of an ID already indexed is a conflict,
+not a second copy, so a redelivered batch adds nothing, and any other failed item
+keeps the batch retrying. A stalled receiver holds only its own batch: the API and
+the other feeds keep moving, and its `lag_records` shows what it owes.
+
 The Audit page's **Hash coverage** panel reports only whether listed events carry
 hashes. That is not independent cryptographic verification. Export the signed JWS
 evidence bundle and verify it with the published verification key or `trstctl-cli
