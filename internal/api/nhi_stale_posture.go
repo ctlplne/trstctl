@@ -6,9 +6,11 @@ import (
 	"context"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"trstctl.com/trstctl/internal/api/problem"
 	"trstctl.com/trstctl/internal/discovery"
 )
 
@@ -118,7 +120,16 @@ func (a *API) listNHIStalePosture(w http.ResponseWriter, r *http.Request) {
 		a.writeProblem(w, problemUnauthorized())
 		return
 	}
-	out, err := a.nhiStalePosture(r.Context(), tenantID)
+	opts := defaultNHIStaleOptions()
+	if raw := strings.TrimSpace(r.URL.Query().Get("unused_days")); raw != "" {
+		days, err := strconv.Atoi(raw)
+		if err != nil || days < 1 || days > 3650 {
+			a.writeProblem(w, problem.New(http.StatusBadRequest, "unused_days must be a whole number of days from 1 to 3650"))
+			return
+		}
+		opts.unusedDays = days
+	}
+	out, err := a.nhiStalePostureWith(r.Context(), tenantID, opts)
 	if err != nil {
 		a.writeError(w, err)
 		return
@@ -127,11 +138,18 @@ func (a *API) listNHIStalePosture(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) nhiStalePosture(ctx context.Context, tenantID string) (nhiStalePostureResponse, error) {
+	return a.nhiStalePostureWith(ctx, tenantID, defaultNHIStaleOptions())
+}
+
+func (a *API) nhiStalePostureWith(ctx context.Context, tenantID string, opts nhiStaleOptions) (nhiStalePostureResponse, error) {
 	inventory, err := a.nhiInventory(ctx, tenantID)
 	if err != nil {
 		return nhiStalePostureResponse{}, err
 	}
 	now := time.Now().UTC()
+	if opts.gaps, err = a.store.CredentialUsageGapsOverlapping(ctx, tenantID, now.AddDate(0, 0, -opts.unusedDays-nhiDormantActivityThresholdDays), now); err != nil {
+		return nhiStalePostureResponse{}, err
+	}
 	out := nhiStalePostureResponse{
 		Capability:  "CAP-POST-02",
 		GeneratedAt: now,
@@ -139,7 +157,7 @@ func (a *API) nhiStalePosture(ctx context.Context, tenantID string) (nhiStalePos
 		Thresholds: nhiStaleThresholds{
 			StaleActivityDays:    nhiStaleActivityThresholdDays,
 			DormantActivityDays:  nhiDormantActivityThresholdDays,
-			UnusedNoActivityDays: nhiUnusedNoActivityThresholdDays,
+			UnusedNoActivityDays: opts.unusedDays,
 		},
 		Findings: []nhiStalePostureFinding{},
 	}
@@ -153,7 +171,7 @@ func (a *API) nhiStalePosture(ctx context.Context, tenantID string) (nhiStalePos
 			continue
 		}
 		out.Summary.TotalAnalyzed++
-		finding, ok := nhiStaleFindingForItem(item, now)
+		finding, ok := nhiStaleFindingForItemWith(item, now, opts)
 		if !ok {
 			continue
 		}
@@ -206,6 +224,10 @@ func nhiStaleAnalyzable(item nhiInventoryItem) bool {
 }
 
 func nhiStaleFindingForItem(item nhiInventoryItem, now time.Time) (nhiStalePostureFinding, bool) {
+	return nhiStaleFindingForItemWith(item, now, defaultNHIStaleOptions())
+}
+
+func nhiStaleFindingForItemWith(item nhiInventoryItem, now time.Time, opts nhiStaleOptions) (nhiStalePostureFinding, bool) {
 	meta := decodeNHIInventoryMetadata(item.Metadata)
 	lastActivity := latestNHIPostureTimestamp(meta, nhiActivityTimestampFields...)
 	lastSeen := firstNHIPostureTimestamp(meta, "last_seen_at", "last_observed_at")
@@ -224,6 +246,14 @@ func nhiStaleFindingForItem(item nhiInventoryItem, now time.Time) (nhiStalePostu
 		dormant = activityAge >= nhiDormantActivityThresholdDays
 	}
 	unused := lastActivity == nil && createdAge >= nhiUnusedNoActivityThresholdDays
+	var usageEvidence, newSources []string
+	if tracked, _ := meta["usage_tracked"].(bool); tracked {
+		unused, usageEvidence = nhiUsageUnused(item, meta, createdAt, lastUsed, now, opts)
+		newSources = nhiUsageNewSources(meta)
+		for _, src := range newSources {
+			usageEvidence = append(usageEvidence, "usage:new_source:"+src)
+		}
+	}
 
 	var findingTypes []string
 	if stale {
@@ -238,10 +268,16 @@ func nhiStaleFindingForItem(item nhiInventoryItem, now time.Time) (nhiStalePostu
 	if orphaned {
 		findingTypes = append(findingTypes, "orphaned_nhi")
 	}
+	if len(newSources) > 0 {
+		findingTypes = append(findingTypes, "new_source")
+	}
 	if len(findingTypes) == 0 {
 		return nhiStalePostureFinding{}, false
 	}
 	severity := nhiStaleSeverity(stale, dormant, unused, orphaned)
+	if len(newSources) > 0 && severityRank(severity) < severityRank("medium") {
+		severity = "medium"
+	}
 	riskScore := item.RiskScore
 	if riskScore == 0 {
 		riskScore = nhiStaleRiskScore(severity, activityAge, createdAge, len(findingTypes))
@@ -265,7 +301,7 @@ func nhiStaleFindingForItem(item nhiInventoryItem, now time.Time) (nhiStalePostu
 		LastUsedAt:      lastUsed,
 		CreatedAt:       createdAt,
 		Recommendation:  nhiStaleRecommendation(findingTypes, ownerStatus),
-		EvidenceRefs:    nhiStaleEvidence(item, meta, lastActivity != nil),
+		EvidenceRefs:    append(nhiStaleEvidence(item, meta, lastActivity != nil), usageEvidence...),
 	}, true
 }
 
@@ -349,6 +385,8 @@ func nhiStaleRecommendation(types []string, ownerStatus string) string {
 		parts[typ] = true
 	}
 	switch {
+	case parts["new_source"]:
+		return "Confirm the use from the new source is expected; if it is not, revoke the credential and investigate. The source becomes normal once used on three different days."
 	case parts["orphaned_nhi"] && parts["unused_no_activity"]:
 		return "Assign an accountable owner, confirm business need, then revoke or retire the NHI if no owner accepts it."
 	case parts["dormant_activity"]:

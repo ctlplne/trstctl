@@ -173,6 +173,14 @@ func addAPITokens(ctx context.Context, st *store.Store, tenantID string, g *Grap
 		if err != nil {
 			return err
 		}
+		ids := make([]string, 0, len(page))
+		for _, t := range page {
+			ids = append(ids, t.ID)
+		}
+		usage, err := st.CredentialUsageFor(ctx, tenantID, store.CredentialUsageAPIToken, ids)
+		if err != nil {
+			return err
+		}
 		for _, t := range page {
 			if t.RevokedAt != nil || (t.ExpiresAt != nil && !t.ExpiresAt.After(now)) {
 				continue
@@ -181,6 +189,11 @@ func addAPITokens(ctx context.Context, st *store.Store, tenantID string, g *Grap
 			attrs := map[string]string{"credential_kind": "api_token", "subject": t.Subject, "scopes": strings.Join(t.Scopes, " ")}
 			if t.ExpiresAt != nil {
 				attrs["expires_at"] = t.ExpiresAt.UTC().Format(time.RFC3339)
+			}
+			// M1: when and from which client network the token was last used.
+			if u, ok := usage[t.ID]; ok {
+				attrs["last_used_at"] = u.LastUsedAt.UTC().Format(time.RFC3339)
+				attrs["last_used_source"] = u.LastSource
 			}
 			g.AddNode(Node{ID: id, Kind: KindCredential, Name: "API token for " + t.Subject, Attrs: attrs})
 			g.AddEdge(Edge{From: principals.node(g, t.Subject), To: id, Type: EdgeHolds, Source: "API token subject", Confidence: confidenceAuthority})

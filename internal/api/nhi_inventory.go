@@ -184,11 +184,25 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 	if err != nil {
 		return out, err
 	}
+	tokenIDs := make([]string, 0, len(apiTokens))
+	for _, token := range apiTokens {
+		tokenIDs = append(tokenIDs, token.ID)
+	}
+	tokenUsage, err := a.credentialUsageIndex(ctx, tenantID, store.CredentialUsageAPIToken, tokenIDs)
+	if err != nil {
+		return out, err
+	}
 	for _, token := range apiTokens {
 		status := "active"
 		if token.RevokedAt != nil {
 			status = "revoked"
 		}
+		meta := map[string]any{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+			"token_type": "trstctl_api_token",
+			"scopes":     token.Scopes,
+			"expires_at": token.ExpiresAt,
+		}
+		tokenUsage.annotate(meta, token.ID)
 		add(nhiInventoryItem{
 			ID:          "api-token/" + token.ID,
 			TenantID:    token.TenantID,
@@ -197,12 +211,38 @@ func (a *API) nhiInventory(ctx context.Context, tenantID string) (nhiInventoryRe
 			DisplayName: token.Subject,
 			Status:      status,
 			Ref:         token.ID,
-			Metadata: marshalNHIInventoryMetadata(map[string]any{ // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
-				"token_type": "trstctl_api_token",
-				"scopes":     token.Scopes,
-				"expires_at": token.ExpiresAt,
-			}),
-			CreatedAt: token.CreatedAt,
+			Metadata:    marshalNHIInventoryMetadata(meta),
+			CreatedAt:   token.CreatedAt,
+		})
+	}
+
+	// M1: each machine login method in use, with the workloads that log in
+	// through it.
+	logins, err := a.store.ListCredentialUsage(ctx, tenantID, store.CredentialUsageMachineAuth, "", maxNHIInventoryRowsPerSource)
+	if err != nil {
+		return out, err
+	}
+	methods := make([]string, 0, len(logins))
+	for _, login := range logins {
+		methods = append(methods, login.CredentialID)
+	}
+	loginUsage, err := a.credentialUsageIndex(ctx, tenantID, store.CredentialUsageMachineAuth, methods)
+	if err != nil {
+		return out, err
+	}
+	for _, login := range logins {
+		meta := map[string]any{"login_method": login.CredentialID}
+		loginUsage.annotate(meta, login.CredentialID)
+		add(nhiInventoryItem{
+			ID:          "machine-login/" + login.CredentialID,
+			TenantID:    tenantID,
+			Kind:        "workload_identity",
+			Source:      "machine_login",
+			DisplayName: login.CredentialID + " machine login",
+			Status:      "active",
+			Ref:         login.CredentialID,
+			Metadata:    marshalNHIInventoryMetadata(meta),
+			CreatedAt:   login.FirstUsedAt,
 		})
 	}
 

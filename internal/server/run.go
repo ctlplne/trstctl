@@ -1669,6 +1669,8 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	agentHTTPRenewalW := startRuntimeWorker(ctx, srv.RunAgentHTTPRenewal)
 	estMTLSW := startRuntimeWorker(ctx, srv.RunESTMTLS)
 	kmipW := startRuntimeWorker(ctx, srv.RunKMIP)
+	// M1: every replica records the API-token uses it served.
+	usageW := startRuntimeWorker(ctx, srv.RunCredentialUsageRecorder)
 	logMountedSurfaces(srv, logger)
 	return func() {
 		stopLeader()
@@ -1680,6 +1682,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		agentHTTPRenewalW.Stop()
 		estMTLSW.Stop()
 		kmipW.Stop()
+		usageW.Stop()
 	}, nil
 }
 

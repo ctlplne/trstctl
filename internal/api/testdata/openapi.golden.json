@@ -69561,6 +69561,16 @@
     "/api/v1/nhi/posture/stale": {
       "get": {
         "operationId": "listNHIStalePosture",
+        "parameters": [
+          {
+            "description": "days without a recorded use before an API token or machine login method reads unused (1-3650, default 90)",
+            "in": "query",
+            "name": "unused_days",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

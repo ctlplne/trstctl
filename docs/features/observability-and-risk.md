@@ -91,6 +91,23 @@ exposure route is read-only and never echoes credential values. For example,
 `trstctl-cli nhi posture stale` reports each stale credential's activity age, owner
 status, severity, and remediation.
 
+**Usage from trstctl's own activity (M1).** API tokens and machine login methods carry
+their recorded usage, so the stale posture needs no operator input for them. Every
+authenticated API-token request is recorded with the client network it came from (the
+connection's peer address as a /24 or /64; forwarded-for headers are not trusted) and
+what it did (`api_call`, `secret_read`, `lease_request`): one `credential.used` event
+per token, network, action and hour, plus one each time that hour's count doubles, up
+to 1,024. Each machine login counts as a use of its login method by the workload it
+attested. `?unused_days=N` (CLI `--unused-days`, 1-3650, default 90) flags a token or
+login method with no recorded use for N days as `unused_no_activity`; a source not yet
+used on three different days is `new_source` while the credential also has a normal
+source, and the flag clears once it has been. Missing telemetry never counts as non-use:
+nothing is unused before the first recorded use in the tenant, an expired token is not
+idle, and a window in which uses could not be recorded (a full recorder queue or an
+unavailable event log, recorded as `credential.usage_gap`) suspends the verdict. The
+graph shows each token's `last_used_at` and `last_used_source`. Usage is recorded from
+the release that adds it; a full read-model rebuild also folds earlier machine logins.
+
 What the exposure posture reads from metadata can be checked live:
 `POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture exposure probe`,
 discovery:write) asks a network relay to connect to the exposed records' public

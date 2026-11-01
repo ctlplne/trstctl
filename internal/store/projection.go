@@ -832,6 +832,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"rogue_certificate_revocations",
 	// G2: projected from dynsecret.lease.access_observed.
 	"dynamic_secret_lease_access",
+	// M1: projected from credential.used, credential.usage_gap and
+	// secrets.session.started.
+	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",

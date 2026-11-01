@@ -1296,6 +1296,20 @@ never live in the API process. What you can do end to end against the running bi
   not record their approval. Since Q4 the person who asked the agent broker for an
   identity DELEGATED to the agent, and a live agent credential reaches the tools
   its scopes name; issuances recorded before Q4 name no requester.
+- Usage-based posture (M1): trstctl records API-token use from its own activity —
+  each authenticated request's client network (/24 or /64 of the connection's peer
+  address; forwarded-for headers are not trusted) and action (`api_call`,
+  `secret_read`, `lease_request`), at most one event per token, network, action and
+  hour plus doubling counts — and folds each machine login in as a use of its login
+  method by the attested workload. `GET /api/v1/nhi/posture/stale?unused_days=N` flags
+  a token or login method with no recorded use for N days and a source not yet used on
+  three different days (`new_source`, cleared once it has been), with no operator input.
+  Missing telemetry is never non-use: nothing is unused before the tenant's first
+  recorded use, expired tokens are not idle, and a recorded gap (full recorder queue,
+  event log unavailable) suspends the verdict. Usage starts at upgrade; a full rebuild
+  also folds earlier machine logins, and the rebuilt usage read model is identical.
+  Behind a load balancer every request has the balancer's address, so new-network
+  detection needs clients that reach trstctl directly.
 - Access graph, step 2 (G2): what a dynamic-secret lease reaches is read from the
   target itself. The leader reads each active lease within a minute of issue and
   every six hours after, through the provider's own credentials, and changes

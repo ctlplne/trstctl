@@ -2,6 +2,13 @@
 
 ### Added
 
+- Usage-based posture from trstctl's own activity: API-token requests are recorded with their client network and
+  action (bounded: one event per token, network, action and hour plus doubling counts), machine logins count as
+  uses of their login method by the attested workload, and `GET /api/v1/nhi/posture/stale?unused_days=N` (CLI
+  `--unused-days`) flags credentials with no recorded use for N days and use from a source not yet seen on three
+  days — with no operator input. A recorded telemetry gap suspends "unused" instead of counting as non-use; the
+  graph shows each token's last use.
+
 - Access graph, step 2: a dynamic-secret lease now shows what its login reaches, read from the target. A
   PostgreSQL lease links to its database with the login role and the grants PostgreSQL reports for it; an AWS
   STS lease links to the IAM role it assumed with the role's attached and inline policies from IAM
@@ -1036,6 +1043,8 @@
 
 ### Changed
 
+- The stale NHI posture no longer calls an API token unused when trstctl has no usage telemetry for it: before
+  this release every token older than 90 days read as unused.
 - An audit export or search that is an unbroken run of records selected only
   by time or sequence now carries the hashes its records have in the tenant's
   full audit chain, and its `prev_hash` is that chain's head just before its

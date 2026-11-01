@@ -247,7 +247,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"nhi", "posture", "shadow"}, Method: "GET", Path: "/api/v1/nhi/posture/shadow", Summary: "List shadow, unmanaged, and unregistered NHI posture findings"},
 	{Name: []string{"nhi", "policy", "compliance"}, Method: "GET", Path: "/api/v1/nhi/policy/compliance", Summary: "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose"},
 	{Name: []string{"nhi", "posture", "overprivilege"}, Method: "GET", Path: "/api/v1/nhi/posture/overprivilege", Summary: "List over-privileged NHIs with least-privilege recommendations"},
-	{Name: []string{"nhi", "posture", "stale"}, Method: "GET", Path: "/api/v1/nhi/posture/stale", Summary: "List stale, unused, orphaned, and dormant NHI posture findings"},
+	{Name: []string{"nhi", "posture", "stale"}, Method: "GET", Path: "/api/v1/nhi/posture/stale", Query: []string{"unused_days"}, Summary: "List stale, unused, orphaned, and dormant NHI posture findings"},
 	{Name: []string{"nhi", "posture", "static-credentials"}, Method: "GET", Path: "/api/v1/nhi/posture/static-credentials", Summary: "List long-lived and static NHI credential posture findings"},
 	{Name: []string{"nhi", "posture", "automation"}, Method: "GET", Path: "/api/v1/nhi/posture/automation", Summary: "Show the automatic actions the tenant's nhi_posture rules ask for and the last automatic run of each"},
 	{Name: []string{"nhi", "posture", "exposure", "probe"}, Method: "POST", Path: "/api/v1/nhi/posture/exposure/probe", Body: bodyFile, ExampleFile: "nhi-exposure-probe.json", Summary: "Probe exposed NHI endpoints for live reachability from a network relay"},

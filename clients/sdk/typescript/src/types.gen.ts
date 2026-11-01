@@ -37638,7 +37638,10 @@ export interface operations {
     };
     listNHIStalePosture: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description days without a recorded use before an API token or machine login method reads unused (1-3650, default 90) */
+                unused_days?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;

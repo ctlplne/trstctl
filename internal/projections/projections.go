@@ -5103,6 +5103,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 	if handled, err := p.applySecretIntegrationTx(ctx, tx, e); handled {
 		return err
 	}
+	if handled, err := p.applyCredentialUsageTx(ctx, tx, e); handled {
+		return err
+	}
 	if handled, err := p.applyManagedKeyTx(ctx, tx, e); handled {
 		return err
 	}
@@ -8286,6 +8289,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Scopes: pl.Scopes, Status: store.MachineSessionStatusActive,
 			IssuedAt: issuedAt, ExpiresAt: pl.ExpiresAt,
 		}, e.Sequence); err != nil {
+			return err
+		}
+		// M1: a machine login is a use of its login method.
+		if err := p.applyMachineLoginUseTx(ctx, tx, e, pl, issuedAt); err != nil {
 			return err
 		}
 		// Legacy v1 events have no token_hash and remain replayable as ledger-only

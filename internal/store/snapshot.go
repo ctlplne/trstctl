@@ -211,7 +211,10 @@ import (
 // Version 69 carries G2's observed access of each dynamic-secret lease; an
 // older snapshot has none, and restoring it would show every lease's grants as
 // unread while its covered offset skipped the observations.
-const SnapshotFormatVersion = 69
+// Version 70 carries M1's credential usage, its sources and recording gaps; an
+// older snapshot has none, so a restore would read every token as never used
+// while its covered offset skipped the uses.
+const SnapshotFormatVersion = 70
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -274,6 +277,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"rogue_certificate_revocations",
 	// Format 69: G2's observed access of each dynamic-secret lease.
 	"dynamic_secret_lease_access",
+	// Format 70: M1's credential usage, its sources and recording gaps.
+	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -595,6 +600,9 @@ SELECT jsonb_build_object(
   'kmip_clients', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM kmip_clients t),
   'rogue_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM rogue_certificate_revocations t),
   'dynamic_secret_lease_access', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM dynamic_secret_lease_access t),
+  'credential_usage', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage t),
+  'credential_usage_sources', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_sources t),
+  'credential_usage_gaps', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_gaps t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

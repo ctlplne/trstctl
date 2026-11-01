@@ -60,6 +60,8 @@ type API struct {
 	tenantServiceCheck  tenancy.ServiceCheck
 	store               *store.Store
 	log                 *events.Log
+	// usage notes authenticated API-token use for usage posture (M1).
+	usage *credentialUsageRecorder
 	// policyVersionMemo memoizes the policy-version projection against the
 	// event-log head so GET /api/v1/policy/versions stops replaying the whole
 	// log per request.
@@ -244,6 +246,8 @@ type config struct {
 	customRoles      []authz.Role
 	eventLog         *events.Log
 	principalFn      func(*http.Request) (authz.Principal, error)
+	// credentialUsageClock stamps noted API-token uses (M1); nil is the wall clock.
+	credentialUsageClock func() time.Time
 	// principalFromReg is a resolver factory the test-only header resolver uses.
 	// It is built against the API's role registry (so custom roles work) and the
 	// real authenticated resolver (so test servers still accept bearer tokens and
@@ -565,6 +569,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		tenantServiceCheck:     cfg.tenantServiceCheck,
 		store:                  st,
 		log:                    cfg.eventLog,
+		usage:                  newCredentialUsageRecorder(cfg.credentialUsageClock),
 		idem:                   idem,
 		orch:                   orch,
 		tenantFn:               tenantFromHeader,
@@ -1291,7 +1296,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/nhi/posture/shadow", opID: "listNHIShadowPosture", summary: "List shadow, unmanaged, and unregistered NHI posture findings", handler: a.listNHIShadowPosture, resSchema: "NHIShadowPosture", successCode: "200", perm: authz.NHIRead},
 		{method: "GET", path: "/api/v1/nhi/policy/compliance", opID: "listNHIPolicyCompliance", summary: "List NHI policy compliance violations for rotation, scope, geography, expiry, and business purpose", handler: a.listNHIPolicyCompliance, resSchema: "NHIPolicyCompliance", successCode: "200", perm: authz.NHIRead},
 		{method: "GET", path: "/api/v1/nhi/posture/overprivilege", opID: "listNHIOverPrivilegePosture", summary: "List over-privileged NHIs with usage-driven least-privilege recommendations", handler: a.listNHIOverPrivilegePosture, resSchema: "NHIOverPrivilegePosture", successCode: "200", perm: authz.NHIRead},
-		{method: "GET", path: "/api/v1/nhi/posture/stale", opID: "listNHIStalePosture", summary: "List stale, unused, orphaned, and dormant NHI posture findings", handler: a.listNHIStalePosture, resSchema: "NHIStalePosture", successCode: "200", perm: authz.NHIRead},
+		{method: "GET", path: "/api/v1/nhi/posture/stale", opID: "listNHIStalePosture", summary: "List stale, unused, orphaned, and dormant NHI posture findings", handler: a.listNHIStalePosture, query: []param{{name: "unused_days", typ: "integer", desc: "days without a recorded use before an API token or machine login method reads unused (1-3650, default 90)"}}, resSchema: "NHIStalePosture", successCode: "200", perm: authz.NHIRead},
 		{method: "POST", path: "/api/v1/nhi/posture/exposure/probe", opID: "probeNHIExposure", summary: "Probe exposed NHI endpoints for live reachability from a network relay", handler: a.probeNHIExposure, reqSchema: "NHIExposureProbeRequest", resSchema: "NHIExposureProbeResult", successCode: "202", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "POST", path: "/api/v1/nhi/posture/exposure/attack-paths", opID: "validateNHIAttackPaths", summary: "Validate exposed NHI endpoints against the cloud's own routes, network ACLs and security groups", handler: a.validateNHIAttackPaths, reqSchema: "NHIAttackPathRequest", resSchema: "NHIAttackPathResult", successCode: "202", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "POST", path: "/api/v1/nhi/posture/stale/handoff", opID: "handOffStaleNHIs", summary: "Hand stale NHIs to a new accountable owner and notify them", handler: a.handOffStaleNHIs, reqSchema: "NHIStaleHandoffRequest", resSchema: "NHIStaleHandoffResult", successCode: "200", mutation: true, perm: authz.OwnersWrite},
@@ -1813,6 +1818,7 @@ func (a *API) resolvePrincipal(r *http.Request) (authz.Principal, error) {
 			if rec.ExpiresAt != nil && !rec.ExpiresAt.After(time.Now()) {
 				return authz.Principal{}, errors.New("api: expired api token")
 			}
+			a.noteAPITokenUse(r, rec)
 			return auth.APIToken{TenantID: rec.TenantID, Subject: rec.Subject, Scopes: rec.Scopes, Delegated: rec.Delegated}.Principal(), nil
 		}
 		// A84: a bearer that is not an API token may be a workload's own
