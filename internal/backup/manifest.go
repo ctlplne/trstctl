@@ -214,6 +214,11 @@ var RecoveredFromPostgresBackup = []string{
 	// a redundant restore receiver; normal full-binary rebuild still erases and
 	// replays it from the immutable log.
 	"provider_operators",
+	// M2: Enterprise misuse findings share provider_operators' dual recovery
+	// posture: the licensed projection rebuilds them from misuse.finding.detected
+	// at boot, and the full PostgreSQL artifact carries the rows for a restore
+	// that starts without the governance edition attached.
+	"misuse_findings",
 	// A90: custom Provider roles share provider_operators' dual recovery
 	// posture: the EE projection rebuilds them from provider.role.* events, and
 	// the full PostgreSQL artifact carries the rows for an event-only restore

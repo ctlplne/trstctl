@@ -1407,6 +1407,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// as the Provider authority rows they describe, even without EE attached.
 		"provider_authority_projection_receipts",
 		"provider_authority_projection_state",
+		// M2: Enterprise misuse findings (tenant rows, no foreign keys); the
+		// licensed projection also rebuilds them from the log at boot.
+		"misuse_findings",
 	}
 	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
 		return nil, err

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2151 annotated sites across 29 rules. Each row is
+2156 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (455 sites)
+### G101 — CWE-798 Use of hardcoded credentials (459 sites)
 
 | Location | Reason |
 |---|---|
@@ -93,6 +93,7 @@ not this file.
 | `ee/enterpriseauth/scim_subject_binding_served_test.go:38` | fabricated local fixture, not a credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_served_test.go:101` | fabricated fixture credential (CWE-798) |
 | `ee/enterpriseauth/scim_writeback_served_test.go:102` | fabricated fixture credential (CWE-798) |
+| `ee/governance/misuse/misuse.go:40` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `ee/provider/aud58_test.go:173` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
 | `ee/provider/aud59_test.go:22` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/aud60_test.go:16` | deterministic non-deployable test bearer (CWE-798). |
@@ -294,6 +295,7 @@ not this file.
 | `internal/dns/ns1/ns1.go:47` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/dns/ns1/ns1_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/dynsecret/access_test.go:142` | test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:19` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -328,6 +330,8 @@ not this file.
 | `internal/perf/perf_test.go:242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/projections/credential_usage.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/credential_usage.go:23` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/projections.go:319` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_integrations.go:227` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:229` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -2420,7 +2424,7 @@ not this file.
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
 | `tools/dodcensus/proof/launched.go:1770` | developer tool calling the endpoint it was pointed at (CWE-918) |
 
-### G705 — CWE-79 Cross-site scripting (taint) (13 sites)
+### G705 — CWE-79 Cross-site scripting (taint) (14 sites)
 
 | Location | Reason |
 |---|---|
@@ -2434,6 +2438,7 @@ not this file.
 | `internal/secretstore/access.go:86` | the secret read API returns the secret by contract; served as octet-stream with nosniff, never an HTML context (CWE-79) |
 | `internal/secretstore/access.go:97` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
 | `internal/secretstore/access.go:113` | fixed-shape JSON carrying only an integer version, served as application/json with nosniff (CWE-79) |
+| `internal/server/dynamic_secret_access_served_test.go:60` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1101` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1172` | test writes fixture bytes to its own recorder/local server (CWE-79) |
 | `internal/server/secrets_sync_served_test.go:1282` | test writes fixture bytes to its own recorder/local server (CWE-79) |

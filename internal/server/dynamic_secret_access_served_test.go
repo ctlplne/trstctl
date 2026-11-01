@@ -57,7 +57,7 @@ func newG2AWSStandIn(t *testing.T) *g2AWSStandIn {
 			s.mu.Unlock()
 			expires := time.Now().UTC().Add(time.Duration(seconds)*time.Second + time.Minute).Format(time.RFC3339)
 			_, _ = fmt.Fprintf(w, `<AssumeRoleResponse><AssumeRoleResult><Credentials><AccessKeyId>ASIAG2SESSION%04d</AccessKeyId><SecretAccessKey>g2-session-secret-%d</SecretAccessKey><SessionToken>g2-session-token-%d</SessionToken><Expiration>%s</Expiration></Credentials><AssumedRoleUser><AssumedRoleId>AROAG2DEPLOYER:%s</AssumedRoleId></AssumedRoleUser></AssumeRoleResult></AssumeRoleResponse>`,
-				n, n, n, expires, r.Form.Get("RoleSessionName"))
+				n, n, n, expires, r.Form.Get("RoleSessionName")) // #nosec G705 -- test writes fixture bytes to its own recorder/local server (CWE-79)
 		case "ListAttachedRolePolicies", "ListRolePolicies":
 			s.mu.Lock()
 			s.iamCalls++

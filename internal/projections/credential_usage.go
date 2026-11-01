@@ -18,9 +18,9 @@ const (
 	// EventCredentialUsed is an API token's authenticated use: the first in a
 	// window per client network and action, and again each time the window's
 	// count doubles (2, 4, … 1024).
-	EventCredentialUsed = "credential.used"
+	EventCredentialUsed = "credential.used" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	// EventCredentialUsageGap is a window in which uses could not be recorded.
-	EventCredentialUsageGap = "credential.usage_gap"
+	EventCredentialUsageGap = "credential.usage_gap" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // Usage actions, so a later reader can tell routine calls from secret reads and

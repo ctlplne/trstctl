@@ -139,7 +139,7 @@ func TestAWSSTSLeaseAccessListsTheRolesPoliciesG2(t *testing.T) {
 
 func TestAccessTargetsNameNoCredentialsG2(t *testing.T) {
 	for dsn, want := range map[string]string{
-		"postgres://admin:s3cret@db.example:5433/app?sslmode=require":                "postgresql://db.example:5433/app",
+		"postgres://admin:s3cret@db.example:5433/app?sslmode=require":                "postgresql://db.example:5433/app", // #nosec G101 -- test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798)
 		"postgresql://admin:s3cret@db.example/app":                                   "postgresql://db.example/app",
 		"host=db.internal port=5432 user=admin password=s3cret dbname=app":           "postgresql://db.internal:5432/app",
 		"host='db.internal' user=admin password='s3cret' dbname=app sslmode=disable": "postgresql://db.internal/app",

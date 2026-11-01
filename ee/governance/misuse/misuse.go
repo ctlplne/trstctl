@@ -37,7 +37,7 @@ const EventFindingDetected = "misuse.finding.detected"
 // Rules.
 const (
 	RuleNewSourceLease  = "new_source_lease"
-	RuleSecretReadBurst = "secret_read_burst"
+	RuleSecretReadBurst = "secret_read_burst" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 const (
