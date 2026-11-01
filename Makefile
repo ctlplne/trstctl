@@ -149,6 +149,12 @@ build: ## Build all binaries into ./bin
 	@echo ">> build terraform-provider-trstctl ($(TF_PROVIDER_DIR) module)"
 	@$(GO_BUILD_TF) -o $(CURDIR)/$(BIN_DIR)/terraform-provider-trstctl .
 
+.PHONY: signing-clients
+signing-clients: ## Build the Notation plugin and the PKCS #11 module (needs cgo) from clients/signing into ./bin
+	@mkdir -p $(BIN_DIR)
+	$(GO) build -C clients/signing -trimpath -o $(CURDIR)/$(BIN_DIR)/notation-trstctl ./cmd/notation-trstctl
+	CGO_ENABLED=1 $(GO) build -C clients/signing -trimpath -buildmode=c-shared -o $(CURDIR)/$(BIN_DIR)/libtrstctl-pkcs11.so ./pkcs11
+
 .PHONY: build-trstctl
 build-trstctl: ## Build the default static control-plane artifact used by the DoD profile
 	@mkdir -p $(BIN_DIR)
@@ -737,6 +743,7 @@ sdk-check: ## Verify the published client SDKs are in sync with the served OpenA
 sdk-test: ## Build and test the Go, TypeScript, Python, and Java client SDKs, the signing clients, and the Terraform provider module
 	cd clients/sdk/go && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
 	cd clients/signing && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
+	cd clients/signing && CGO_ENABLED=0 $(GO) build ./...
 	cd $(TF_PROVIDER_DIR) && $(GO) build ./... && $(GO) vet ./... && $(GO) test ./... -count=1
 	npm --prefix clients/sdk/typescript ci
 	npm --prefix clients/sdk/typescript run typecheck

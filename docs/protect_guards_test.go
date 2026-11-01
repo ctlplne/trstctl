@@ -639,6 +639,9 @@ func TestProductionCryptoImportsStayCentralized(t *testing.T) {
 		// under clients/signing still trips.
 		"clients/signing/trstctlsign/client.go",
 		"clients/signing/cmd/notation-trstctl/main.go",
+		// The PKCS #11 token parses the served certificate and checks trstctl's
+		// signature against it before handing the signature to the tool.
+		"clients/signing/internal/token/token.go",
 	}
 	if !strings.Contains(read(t, "../test/interop/agentframeworks/go.mod"), "module trstctl.com/trstctl/test/interop/agentframeworks\n") {
 		t.Error("CRYPTO-101: test/interop/agentframeworks is allowed standard-library crypto only as its own module; its go.mod is missing or renamed")

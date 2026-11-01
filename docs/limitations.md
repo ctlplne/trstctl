@@ -5860,10 +5860,16 @@ This is a deliberate, documented trust boundary, not an accident.
     `notation-trstctl` plugin in `clients/signing` signs through the code-signing API
     with ECDSA P-256 keys: the served test builds it and drives it over the Notation
     plugin contract, and its signature verifies against the served leaf. Stock cosign
-    2.5.3 verifies an image in a local registry signed through trstctl. A run of the
-    stock `notation` CLI against a registry, the PKCS #11 module for jarsigner and
-    osslsigncode, and signing approvals bound to the artifact, signer, mechanism,
-    count and expiry are what comes next.
+    2.5.3 verifies an image in a local registry signed through trstctl. The
+    `libtrstctl-pkcs11` module offers the keys to PKCS #11 tools (ECDSA P-256 and
+    RSA; sensitive, never-extractable handles): stock jarsigner (Temurin 21,
+    SunPKCS11) and osslsigncode 2.5 (the OpenSSL pkcs11 engine) sign a JAR and a
+    Windows executable through it with both key types and their verifiers accept
+    the signatures, and a token without `keys:write` gets `CKR_FUNCTION_REJECTED`.
+    Built and proven on Linux (arm64); macOS builds, Windows (a KSP) is a separate
+    item. A run of the stock `notation` CLI against a registry, and signing
+    approvals bound to the artifact, signer, mechanism, count and expiry, are what
+    comes next.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator

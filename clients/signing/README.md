@@ -14,6 +14,7 @@ standard library.
 | Client | For | Status |
 | --- | --- | --- |
 | `cmd/notation-trstctl` | Notation (plugin contract 1.0, `SIGNATURE_GENERATOR.RAW`) | Available; ECDSA P-256 keys |
+| `pkcs11` | PKCS #11 tools: jarsigner, osslsigncode and others (`libtrstctl-pkcs11`) | Available; ECDSA P-256 and RSA keys |
 | `trstctlsign` | Go programs and the clients here | Available |
 
 ## Configuration
@@ -25,6 +26,42 @@ Every client reads:
 | `TRSTCTL_URL` | The control plane, for example `https://trstctl.example.com` |
 | `TRSTCTL_TOKEN` or `TRSTCTL_TOKEN_FILE` | An API token with `keys:write` (and `keys:read`) |
 | `TRSTCTL_CA_FILE` | Optional PEM roots for the control plane's TLS certificate |
+
+## PKCS #11 module
+
+`libtrstctl-pkcs11` is a PKCS #11 v2.40 module with one token, `trstctl`. Its
+PIN is the API token; `TRSTCTL_PKCS11_KEYS` names the code-signing keys
+(comma-separated) it offers. Each key appears as a private-key handle with its
+public key and certificate chain, paired by `CKA_ID` and labeled with the key
+id. The private-key handle is sensitive and never extractable — there is no
+key in the module — and the token signs and does nothing else.
+
+Mechanisms: `CKM_ECDSA` (a SHA-256 hash in), `CKM_ECDSA_SHA256`, `CKM_RSA_PKCS`
+(a SHA-256 DigestInfo in) and `CKM_SHA256_RSA_PKCS`. Each signature is checked
+against the key's certificate before it is returned, and trstctl records the
+mechanism as the request's artifact type (`pkcs11:CKM_ECDSA_SHA256`). A
+signature trstctl refuses is `CKR_FUNCTION_REJECTED`, with trstctl's reason on
+standard error.
+
+```bash
+make signing-clients     # bin/libtrstctl-pkcs11.so (needs cgo)
+export TRSTCTL_URL=https://trstctl.example.com TRSTCTL_PKCS11_KEYS=release-key
+```
+
+jarsigner, through the JDK's SunPKCS11 provider:
+
+```bash
+printf 'name = trstctl\nlibrary = /opt/trstctl/libtrstctl-pkcs11.so\nslotListIndex = 0\n' > trstctl.cfg
+jarsigner -keystore NONE -storetype PKCS11 -addprovider SunPKCS11 -providerArg trstctl.cfg \
+  -storepass:env TRSTCTL_TOKEN -sigalg SHA256withECDSA app.jar release-key
+```
+
+osslsigncode, through the OpenSSL pkcs11 engine (`libengine-pkcs11-openssl` on Debian):
+
+```bash
+osslsigncode sign -pkcs11module /opt/trstctl/libtrstctl-pkcs11.so -certs release-chain.pem \
+  -key 'pkcs11:object=release-key;type=private' -readpass token.txt -h sha256 -in app.exe -out app-signed.exe
+```
 
 ## Notation
 

@@ -2,6 +2,11 @@
 
 ### Added
 
+- PKCS #11 module for code signing: `libtrstctl-pkcs11` (`make signing-clients`, in `clients/signing`) offers
+  trstctl code-signing keys to jarsigner, osslsigncode and other PKCS #11 tools. The PIN is the API token,
+  each key comes with its certificate chain, the private-key handles are never extractable, and each
+  signature (ECDSA P-256 or RSA, SHA-256) is made by trstctl's signer and checked against the certificate
+  before the tool gets it. A refused signature is `CKR_FUNCTION_REJECTED` with trstctl's reason.
 - Signing with stock tools: a code-signing key's certificate chain can be configured beside it
   (`code_signing.keys[].certificate_chain_file`, checked against the key at startup) and is served at
   `GET /api/v1/code-signing/keys/{key_id}/certificate`; `POST /api/v1/code-signing/keys/{key_id}/csr`

@@ -238,11 +238,21 @@ cosign verify --key release-key.pub --insecure-ignore-tlog=true registry.example
 `--insecure-ignore-tlog` tells cosign not to look for its own log bundle; trstctl
 records each signature in Rekor through the outbox as described above.
 
+- **jarsigner, osslsigncode and other PKCS #11 tools:** `libtrstctl-pkcs11`
+  (`make signing-clients`) is a PKCS #11 module with one token whose PIN is your
+  API token and whose objects are the keys `TRSTCTL_PKCS11_KEYS` names, each with
+  its certificate chain. The private-key handles are sensitive and never
+  extractable; the module signs with ECDSA P-256 and RSA keys
+  (`CKM_ECDSA`, `CKM_ECDSA_SHA256`, `CKM_RSA_PKCS`, `CKM_SHA256_RSA_PKCS`) and
+  does nothing else. jarsigner loads it through SunPKCS11 and osslsigncode through
+  the OpenSSL pkcs11 engine; see [`clients/signing`](../../clients/signing/README.md)
+  for both command lines.
+
 A request trstctl refuses — a missing `keys:write`, a policy denial, an approval
 that is pending or denied — stops the tool with trstctl's reason; Notation reports
-it as `ACCESS_DENIED`. A PKCS #11 module for jarsigner and osslsigncode, and
-signing approvals bound to the artifact, signer, mechanism, count and expiry, are
-what comes next.
+it as `ACCESS_DENIED` and the PKCS #11 module as `CKR_FUNCTION_REJECTED`. Signing
+approvals bound to the artifact, signer, mechanism, count and expiry are what comes
+next.
 
 ### Rotating and revoking the TSA certificate
 
@@ -346,7 +356,8 @@ body as `preview_fingerprint`; never put an OIDC proof in logs or evidence.
   `POST /api/v1/code-signing/keyless/preview`, `POST /api/v1/code-signing/sign`,
   `POST /api/v1/code-signing/keyless`, `GET /api/v1/code-signing/keys/{key_id}/certificate`,
   `POST /api/v1/code-signing/keys/{key_id}/csr`, `trstctl-cli code-signing keys certificate`,
-  `trstctl-cli code-signing keys csr`, the `notation-trstctl` plugin, `trstctl-cli code-signing preview`,
+  `trstctl-cli code-signing keys csr`, the `notation-trstctl` plugin, the `libtrstctl-pkcs11` module,
+  `trstctl-cli code-signing preview`,
   `trstctl-cli code-signing keyless-preview`, `trstctl-cli code-signing sign`,
   `trstctl-cli code-signing keyless`, `Service.Sign`, `Service.SignKeyless`,
   `Verify`, `VerifyKeyless`.
