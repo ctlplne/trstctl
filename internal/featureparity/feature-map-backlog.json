@@ -15665,7 +15665,10 @@
                 "registerDecoySecret",
                 "listDecoySecrets",
                 "getDecoySecret",
-                "retireDecoySecret"
+                "retireDecoySecret",
+                "createDatabaseDecoy",
+                "listDatabaseDecoys",
+                "retireDatabaseDecoy"
             ],
             "api_na": "",
             "cli_surface": [
@@ -15684,7 +15687,10 @@
                 "secrets honeytokens secrets register",
                 "secrets honeytokens secrets list",
                 "secrets honeytokens secrets get",
-                "secrets honeytokens secrets retire"
+                "secrets honeytokens secrets retire",
+                "secrets honeytokens databases plant",
+                "secrets honeytokens databases list",
+                "secrets honeytokens databases retire"
             ],
             "cli_na": "",
             "facet_evidence": {

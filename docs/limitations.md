@@ -5126,7 +5126,14 @@ when off, requiring a KEK when on):
   Vault-compatible KV); names, metadata, the access preview, inventory, the
   graph and internal reads never alert, and a rebuild adds no alert. A reader
   who repeats a read after the delivered alert has left the outbox (retention)
-  alerts again. Decoy database logins are the next step of Q6.
+  alerts again. Decoy database logins: a tenant PostgreSQL dynamic-secret
+  provider listing the role `decoy` mints a login reaching only its own empty
+  database (`/api/v1/secrets/honeytokens/databases`); the leader reads that
+  database's session counter (PostgreSQL 14+) and the first use raises one
+  critical alert; probes and administration never alert. A failed login with a
+  wrong password is not detected, a statistics reset hides earlier uses, and only
+  PostgreSQL providers can mint decoys. Decoy SSH keys and Kubernetes tokens are
+  not built.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs and for durable static-provider
   commands: a configured PostgreSQL, MySQL or AWS IAM dynamic-secret provider with

@@ -127,6 +127,11 @@ func (b *PostgresBackend) Create(ctx context.Context, role string) (string, []by
 // the requested lease TTL. LeaseID makes the role name stable across a worker
 // retry after an interrupted response.
 func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequest) (string, []byte, error) {
+	// A decoy login is decided before anything else: any other role name that
+	// is not read-only becomes read-write below.
+	if req.Role == DecoyRole {
+		return b.createDecoyCredential(ctx, req)
+	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 63, "_")
 	if err != nil {
 		return "", nil, err
@@ -204,6 +209,10 @@ func (b *PostgresBackend) Revoke(ctx context.Context, ref string) error {
 		return err
 	}
 	defer func() { _ = conn.Close(ctx) }()
+	// A decoy login's own database goes first, while the role still proves it.
+	if err := dropDecoyDatabase(ctx, conn, ref); err != nil {
+		return err
+	}
 
 	var exists bool
 	if err := conn.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=$1)`, ref).Scan(&exists); err != nil {

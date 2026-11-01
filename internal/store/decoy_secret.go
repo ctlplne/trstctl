@@ -107,3 +107,58 @@ func (s *Store) ApplyDecoySecretReadTx(ctx context.Context, tx pgx.Tx, tenantID,
 		                       AND idempotency_key = $3)`, tenantID, alert, alertKey)
 	return err
 }
+
+// TenantsWithActiveDatabaseDecoys enumerates tenants holding an untriggered
+// decoy database login, so the leader-only watcher can visit each tenant under
+// its own RLS context.
+func (s *Store) TenantsWithActiveDatabaseDecoys(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants hold an active decoy database login so the leader-only watcher can visit each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM honey_tokens WHERE kind = 'database' AND state = 'active' ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		out = append(out, tenantID)
+	}
+	return out, rows.Err()
+}
+
+// ListActiveDatabaseDecoys returns the tenant's untriggered decoy database
+// logins, the ones the watcher still checks.
+func (s *Store) ListActiveDatabaseDecoys(ctx context.Context, tenantID string) ([]HoneyToken, error) {
+	return s.listHoneyTokensWhere(ctx, tenantID, `kind = 'database' AND state = 'active'`, "", 1000)
+}
+
+// ListDatabaseDecoysPage pages the tenant's decoy database logins in id order.
+func (s *Store) ListDatabaseDecoysPage(ctx context.Context, tenantID, afterID string, limit int) ([]HoneyToken, error) {
+	return s.listHoneyTokensWhere(ctx, tenantID, `kind = 'database'`, afterID, limit)
+}
+
+func (s *Store) listHoneyTokensWhere(ctx context.Context, tenantID, where, afterID string, limit int) ([]HoneyToken, error) {
+	out := make([]HoneyToken, 0)
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT `+honeyTokenColumns+` FROM honey_tokens
+			  WHERE tenant_id = $1 AND `+where+` AND id::text > $2 ORDER BY id::text LIMIT $3`, tenantID, afterID, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			h, err := scanHoneyToken(rows)
+			if err != nil {
+				return err
+			}
+			out = append(out, h)
+		}
+		return rows.Err()
+	})
+	return out, err
+}

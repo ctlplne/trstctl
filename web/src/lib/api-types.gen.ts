@@ -3659,6 +3659,52 @@ export interface DRPosture {
   verified: boolean;
 }
 
+export interface DatabaseDecoy {
+  created_at: string;
+  db_lease_id: string;
+  db_provider_id: string;
+  db_role: string;
+  id: string;
+  kind: "database";
+  name: string;
+  placement: string;
+  revoked_at?: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  triggered_at?: string;
+}
+
+export interface DatabaseDecoyCreateRequest {
+  name: string;
+  placement: string;
+  provider: string;
+  ttl_seconds: number;
+}
+
+export interface DatabaseDecoyCreateResponse {
+  created_at: string;
+  database: string;
+  db_lease_id: string;
+  db_provider_id: string;
+  db_role: string;
+  dsn: string;
+  id: string;
+  kind: "database";
+  name: string;
+  placement: string;
+  revoked_at?: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  triggered_at?: string;
+}
+
+export interface DatabaseDecoyList {
+  items: DatabaseDecoy[];
+  next_cursor?: string;
+}
+
 export interface DecoySecret {
   created_at: string;
   id: string;

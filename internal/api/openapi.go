@@ -4548,6 +4548,29 @@ func componentSchemas() map[string]*Schema {
 		"trigger_subject": {Type: "string", Description: "the first principal that read the decoy's value"},
 		"revoked_at":      timestamp(),
 	}, "id", "kind", "name", "placement", "secret_name", "state", "created_at")
+	// Q6: a decoy PostgreSQL login minted by a tenant's dynamic-secret provider.
+	databaseDecoyFields := map[string]*Schema{
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"database"}}, "name": str(), "placement": str(),
+		"db_provider_id": str(), "db_lease_id": str(),
+		"db_role":    {Type: "string", Description: "the login role; its own database is the role name followed by _db"},
+		"state":      {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
+		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),
+		"revoked_at": timestamp(),
+	}
+	databaseDecoy := object(databaseDecoyFields, "id", "kind", "name", "placement", "db_provider_id", "db_lease_id", "db_role", "state", "created_at")
+	databaseDecoyCreateRespFields := map[string]*Schema{
+		"database": str(),
+		"dsn":      {Type: "string", Description: "the decoy login's connection string, revealed once"},
+	}
+	for k, v := range databaseDecoyFields {
+		databaseDecoyCreateRespFields[k] = v
+	}
+	databaseDecoyCreateResp := object(databaseDecoyCreateRespFields, "id", "kind", "name", "placement", "db_provider_id", "db_lease_id", "db_role", "state", "created_at", "database", "dsn")
+	databaseDecoyCreateReq := object(map[string]*Schema{
+		"provider": {Type: "string", Description: "a PostgreSQL dynamic-secret provider whose allowed roles include decoy"},
+		"name":     str(), "placement": str(),
+		"ttl_seconds": {Type: "integer", Description: "the decoy login's lifetime, within the provider's maximum"},
+	}, "provider", "name", "placement", "ttl_seconds")
 	decoySecretRegisterReq := object(map[string]*Schema{
 		"secret_name": {Type: "string", Description: "an existing application secret, written through the normal create path"},
 		"name":        str(), "placement": str(),
@@ -8334,6 +8357,10 @@ func componentSchemas() map[string]*Schema {
 		"DecoySecret":                              decoySecret,
 		"DecoySecretList":                          list("DecoySecret"),
 		"DecoySecretRegisterRequest":               decoySecretRegisterReq,
+		"DatabaseDecoy":                            databaseDecoy,
+		"DatabaseDecoyList":                        list("DatabaseDecoy"),
+		"DatabaseDecoyCreateRequest":               databaseDecoyCreateReq,
+		"DatabaseDecoyCreateResponse":              databaseDecoyCreateResp,
 		"HoneyTokenCreateRequest":                  honeyTokenCreateReq,
 		"HoneyTokenCreateResponse":                 honeyTokenCreateResp,
 		"AWSHoneyAccount":                          awsHoneyAccount,

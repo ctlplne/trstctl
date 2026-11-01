@@ -4185,6 +4185,31 @@ export const messages = {
   "secrets.decoys.readFailed": { defaultMessage: "Could not read decoy secrets", description: "Decoy list failure." },
   "secrets.decoys.plantFailed": { defaultMessage: "Could not plant the decoy secret", description: "Decoy plant failure." },
   "secrets.decoys.retireFailed": { defaultMessage: "Could not retire the decoy secret", description: "Decoy retire failure." },
+  "secrets.decoyLogins.heading": { defaultMessage: "Decoy database logins", description: "Decoy database login workflow heading." },
+  "secrets.decoyLogins.description": {
+    defaultMessage:
+      "Mint a PostgreSQL login that reaches only its own empty database and looks like any generated application login. trstctl never uses it, so any login with it raises one critical alert. Scans that do not log in never alert. The provider must list the role decoy in its configuration.",
+    description: "Explains decoy database logins.",
+  },
+  "secrets.decoyLogins.provider": { defaultMessage: "PostgreSQL provider", description: "Decoy login provider field." },
+  "secrets.decoyLogins.providerHelp": {
+    defaultMessage: "A tenant PostgreSQL dynamic-secret provider whose allowed roles include decoy.",
+    description: "Help for the decoy login provider field.",
+  },
+  "secrets.decoyLogins.chooseProvider": { defaultMessage: "Choose a provider", description: "Empty provider option." },
+  "secrets.decoyLogins.days": { defaultMessage: "Lifetime in days", description: "Decoy login lifetime field." },
+  "secrets.decoyLogins.plant": { defaultMessage: "Mint decoy login", description: "Button that mints a decoy login." },
+  "secrets.decoyLogins.revealTitle": { defaultMessage: "Decoy connection string", description: "Reveal panel title." },
+  "secrets.decoyLogins.revealHelp": {
+    defaultMessage: "Copy it now and plant it where a thief would look. It is not shown again.",
+    description: "Reveal panel help.",
+  },
+  "secrets.decoyLogins.empty": { defaultMessage: "No decoy logins minted.", description: "Empty decoy login list." },
+  "secrets.decoyLogins.used": { defaultMessage: "Used at {at}", description: "When a decoy login was first used." },
+  "secrets.decoyLogins.error": { defaultMessage: "Decoy database logins", description: "Decoy login error title." },
+  "secrets.decoyLogins.readFailed": { defaultMessage: "Could not read decoy logins", description: "Decoy login list failure." },
+  "secrets.decoyLogins.plantFailed": { defaultMessage: "Could not mint the decoy login", description: "Decoy login plant failure." },
+  "secrets.decoyLogins.retireFailed": { defaultMessage: "Could not retire the decoy login", description: "Decoy login retire failure." },
   "secrets.decoys.exists": {
     defaultMessage: "A secret with this path already exists. Choose a new path; a decoy never replaces a real secret.",
     description: "Shown when the decoy path is taken.",

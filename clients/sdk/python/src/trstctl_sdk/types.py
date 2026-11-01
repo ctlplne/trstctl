@@ -5093,6 +5093,68 @@ DRPosture = TypedDict(
     total=False,
 )
 
+DatabaseDecoy = TypedDict(
+    'DatabaseDecoy',
+    {
+        'created_at': str,
+        'db_lease_id': str,
+        'db_provider_id': str,
+        'db_role': str,
+        'id': str,
+        'kind': str,
+        'name': str,
+        'placement': str,
+        'revoked_at': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+DatabaseDecoyCreateRequest = TypedDict(
+    'DatabaseDecoyCreateRequest',
+    {
+        'name': str,
+        'placement': str,
+        'provider': str,
+        'ttl_seconds': int,
+    },
+    total=False,
+)
+
+DatabaseDecoyCreateResponse = TypedDict(
+    'DatabaseDecoyCreateResponse',
+    {
+        'created_at': str,
+        'database': str,
+        'db_lease_id': str,
+        'db_provider_id': str,
+        'db_role': str,
+        'dsn': str,
+        'id': str,
+        'kind': str,
+        'name': str,
+        'placement': str,
+        'revoked_at': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+DatabaseDecoyList = TypedDict(
+    'DatabaseDecoyList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
 DecoySecret = TypedDict(
     'DecoySecret',
     {

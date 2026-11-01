@@ -1518,6 +1518,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunTelemetry),
 			startRuntimeWorker(workCtx, srv.RunDynamicLeaseWorker),
 			startRuntimeWorker(workCtx, srv.RunPAMSessionExpiry),
+			// Q6: decoy database logins are checked for use on the leader.
+			startRuntimeWorker(workCtx, srv.RunDecoyLoginWatch),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunHostRotationRecovery),

@@ -352,6 +352,10 @@ import type {
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
+  DatabaseDecoy,
+  DatabaseDecoyCreateRequest,
+  DatabaseDecoyCreateResponse,
+  DatabaseDecoyList,
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
@@ -768,6 +772,13 @@ export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.ge
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
+export type {
+  DatabaseDecoy,
+  DatabaseDecoyCreateRequest,
+  DatabaseDecoyCreateResponse,
+  DatabaseDecoyList,
+  DynamicSecretConfiguredProvider,
+} from "./api-types.gen";
 export type {
   ValidityReadinessCertificate,
   ValidityReadinessExport,
@@ -2585,6 +2596,9 @@ export interface Api {
   registerDecoySecret(input: DecoySecretRegisterRequest, idempotencyKey?: string): Promise<DecoySecret>;
   listDecoySecrets(cursor?: string): Promise<DecoySecretList>;
   retireDecoySecret(id: string): Promise<DecoySecret>;
+  createDatabaseDecoy(input: DatabaseDecoyCreateRequest, idempotencyKey?: string): Promise<DatabaseDecoyCreateResponse>;
+  listDatabaseDecoys(): Promise<DatabaseDecoyList>;
+  retireDatabaseDecoy(id: string): Promise<DatabaseDecoy>;
   previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest, idempotencyKey?: string): Promise<EphemeralAPIKey>;
   /** Prove the reveal-once bearer works on one access:read route without using
@@ -3451,6 +3465,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   registerDecoySecret: decoy.registerDecoySecret,
   listDecoySecrets: decoy.listDecoySecrets,
   retireDecoySecret: decoy.retireDecoySecret,
+  createDatabaseDecoy: decoy.createDatabaseDecoy,
+  listDatabaseDecoys: decoy.listDatabaseDecoys,
+  retireDatabaseDecoy: decoy.retireDatabaseDecoy,
   listAWSHoneyAccounts: () => req<AWSHoneyAccountCatalog>("/api/v1/secrets/honeytokens/aws/accounts"),
   previewAWSHoneyToken: (input) => postRead<AWSHoneyTokenPreview>("/api/v1/secrets/honeytokens/aws/preview", input),
   createAWSHoneyToken: (input, idempotencyKey) => mutate<AWSHoneyTokenCreateResponse>("POST", "/api/v1/secrets/honeytokens/aws", input, idempotencyKey),

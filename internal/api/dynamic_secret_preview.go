@@ -216,7 +216,10 @@ func dynamicSecretConfiguredProviderFrom(provider dynsecret.Provider) dynamicSec
 	if identity, ok := provider.(dynamicSecretProviderReviewIdentity); ok {
 		configured.Type = strings.TrimSpace(identity.DynamicSecretProviderType())
 		configured.Label = dynamicSecretProviderLabel(configured.Type)
-		configured.AllowedRoles = append([]string(nil), identity.DynamicSecretAllowedRoles()...)
+		// The decoy role is not an ordinary role: only the decoy endpoint mints
+		// it, so the catalog and the Vault role list never offer it (Q6).
+		configured.AllowedRoles = slices.DeleteFunc(append([]string(nil), identity.DynamicSecretAllowedRoles()...),
+			func(role string) bool { return role == dynsecret.DecoyRole })
 		sort.Strings(configured.AllowedRoles)
 		configured.ConfigurationRevision = strings.TrimSpace(identity.DynamicSecretConfigurationRevision())
 		configured.Ready = configured.Type != "" && configured.ConfigurationRevision != "" && len(configured.AllowedRoles) > 0
@@ -266,6 +269,11 @@ func normalizeDynamicLeaseIssueRequest(req dynamicLeaseIssueRequest) (dynamicLea
 	req.PreviewFingerprint = strings.TrimSpace(req.PreviewFingerprint)
 	if req.Provider == "" || req.Role == "" {
 		return dynamicLeaseIssueRequest{}, errStatus(http.StatusBadRequest, "provider and role are required")
+	}
+	if req.Role == dynsecret.DecoyRole {
+		// A decoy login exists only with its watch: mint it through
+		// POST /api/v1/secrets/honeytokens/databases (Q6).
+		return dynamicLeaseIssueRequest{}, errStatus(http.StatusUnprocessableEntity, "decoy logins are minted only through the decoy endpoint")
 	}
 	if req.TTLSeconds <= 0 {
 		return dynamicLeaseIssueRequest{}, errStatus(http.StatusBadRequest, "ttl_seconds must be positive")

@@ -285,6 +285,10 @@ func (p *configuredDynamicProvider) Generate(ctx context.Context, req dynsecret.
 }
 
 func (p *configuredDynamicProvider) generate(ctx context.Context, req dynsecret.GenerateRequest, prepared []byte) (dynsecret.Credential, error) {
+	if req.Role == dynsecret.DecoyRole && p.cfg.Type != "postgresql" {
+		// Other backends would read the unknown role as read-write.
+		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q cannot mint decoy logins: only PostgreSQL providers can", p.id))
+	}
 	if !p.allowedRoles[req.Role] {
 		return dynsecret.Credential{}, p.beforeDynamicReceiver(fmt.Errorf("dynamic-secret provider %q does not allow role %q", p.id, req.Role))
 	}

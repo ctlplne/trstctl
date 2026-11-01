@@ -1152,6 +1152,39 @@ internal reads never serve the value to a caller and never alert. A full read-mo
 rebuild keeps the decoy's state and adds no alert. `retire` stops watching; the
 secret stays in place until you delete it.
 
+#### Decoy database logins
+
+A decoy login is a PostgreSQL login that reaches only its own empty database.
+trstctl never uses it, so any login with it raises one critical
+`notification.honeytoken` alert. A tenant PostgreSQL dynamic-secret provider opts in
+by listing the role `decoy` in its `allowed_roles`; the ordinary lease routes, the
+Vault-compatible dynamic API and the provider catalog never offer that role, and an
+ordinary lease asking for it is refused (422). Only PostgreSQL providers can mint
+decoys: any other backend would read the unknown role as read-write, so it refuses.
+
+Mint one in the console (**Secrets → Automatic secret sources → Plant a decoy
+credential → Decoy database logins**), with `trstctl-cli secrets honeytokens databases
+plant -f decoy.json` (`{"provider": "warehouse-pg", "name": "warehouse db bait",
+"placement": "ops wiki runbook", "ttl_seconds": 2592000}`), or
+`POST /api/v1/secrets/honeytokens/databases` (`secrets:write`). The issue runs through
+the durable dynamic-secret lease, so a retried request replays the same connection
+string; the response shows it once. The provider creates a database named after the
+login (`<login>_db`), closes it to `PUBLIC`, creates the login valid for the lease and
+grants it `CONNECT` on that database only. Nothing in the connection string says
+"decoy": the login is named like any other generated application login of the
+provider. The decoy's lease is hidden from the ordinary lease routes.
+
+The leader reads each untriggered decoy database's session counter
+(`pg_stat_database.sessions`, PostgreSQL 14 and later) through the provider's admin
+connection every 30 seconds. The provider's own administration, a port or TLS probe
+and the watcher itself never establish a session on the decoy database, so they never
+alert. The first session marks the decoy `triggered` (method `LOGIN`, path
+`postgres/<database>`) and queues one critical alert; later logins do not re-alert.
+The counter persists in PostgreSQL, so a login while trstctl is down is seen at the
+next check; a statistics reset reads zero and alerts nothing. A failed login with a
+wrong password creates no session and is not detected. `retire` revokes the lease,
+which drops the login and its database, and stops watching.
+
 #### AWS IAM decoy keys
 
 **Secrets → Automatic secret sources → Plant a decoy credential** also has an

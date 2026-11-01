@@ -389,9 +389,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A167 adds `nhi posture exposure attack-paths`.
 	// A170/A171 add `discovery findings revoke-oauth-grant` and `block-oauth-app`.
 	// G1 adds `graph who-can-reach` and `graph path`.
-	// Q6 adds `secrets honeytokens secrets register|list|get|retire`.
-	if len(out) != 674 {
-		t.Fatalf("CLI commands = %d, want 674", len(out))
+	// Q6 adds `secrets honeytokens secrets register|list|get|retire` and
+	// `secrets honeytokens databases plant|list|retire`.
+	if len(out) != 677 {
+		t.Fatalf("CLI commands = %d, want 677", len(out))
 	}
 	return out
 }

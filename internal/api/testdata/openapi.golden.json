@@ -15709,6 +15709,193 @@
         ],
         "type": "object"
       },
+      "DatabaseDecoy": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "db_lease_id": {
+            "type": "string"
+          },
+          "db_provider_id": {
+            "type": "string"
+          },
+          "db_role": {
+            "description": "the login role; its own database is the role name followed by _db",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "database"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "triggered",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "trigger_method": {
+            "type": "string"
+          },
+          "trigger_path": {
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "db_provider_id",
+          "db_lease_id",
+          "db_role",
+          "state",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "DatabaseDecoyCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "provider": {
+            "description": "a PostgreSQL dynamic-secret provider whose allowed roles include decoy",
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "description": "the decoy login's lifetime, within the provider's maximum",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "name",
+          "placement",
+          "ttl_seconds"
+        ],
+        "type": "object"
+      },
+      "DatabaseDecoyCreateResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "database": {
+            "type": "string"
+          },
+          "db_lease_id": {
+            "type": "string"
+          },
+          "db_provider_id": {
+            "type": "string"
+          },
+          "db_role": {
+            "description": "the login role; its own database is the role name followed by _db",
+            "type": "string"
+          },
+          "dsn": {
+            "description": "the decoy login's connection string, revealed once",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "database"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "placement": {
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "triggered",
+              "revoked"
+            ],
+            "type": "string"
+          },
+          "trigger_method": {
+            "type": "string"
+          },
+          "trigger_path": {
+            "type": "string"
+          },
+          "triggered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "placement",
+          "db_provider_id",
+          "db_lease_id",
+          "db_role",
+          "state",
+          "created_at",
+          "database",
+          "dsn"
+        ],
+        "type": "object"
+      },
+      "DatabaseDecoyList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DatabaseDecoy"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "DecoySecret": {
         "properties": {
           "created_at": {
@@ -77212,6 +77399,205 @@
           }
         ],
         "summary": "Queue IAM key deletion and verify completion from the lease receipt",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/honeytokens/databases": {
+      "get": {
+        "operationId": "listDatabaseDecoys",
+        "parameters": [
+          {
+            "description": "page size (1-100)",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "opaque pagination cursor",
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDecoyList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List decoy database logins and whether one was used",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "post": {
+        "operationId": "createDatabaseDecoy",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseDecoyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDecoyCreateResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Mint a decoy PostgreSQL login whose any use raises a critical alert; reveal its DSN once",
+        "x-trstctl-permission": "secrets:write",
+        "x-trstctl-sensitive-response": true
+      }
+    },
+    "/api/v1/secrets/honeytokens/databases/{id}/retire": {
+      "post": {
+        "operationId": "retireDatabaseDecoy",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseDecoy"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Stop watching a decoy login and remove its role and database through the lease's revocation",
         "x-trstctl-permission": "secrets:write"
       }
     },

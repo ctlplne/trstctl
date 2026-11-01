@@ -672,6 +672,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	honeyTokenCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", clear),
 		privacyRule("/placement", clear), privacyRule("/token_hash", opaque), privacyRule("/secret_name", opaque),
+		privacyRule("/db_provider_id", opaque), privacyRule("/db_lease_id", opaque), privacyRule("/db_role", opaque),
 	)
 	honeyTokenTriggered := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/method", opaque),

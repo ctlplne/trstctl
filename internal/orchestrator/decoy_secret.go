@@ -40,3 +40,21 @@ func (o *Orchestrator) RecordDecoySecretRead(ctx context.Context, tenantID, id, 
 	_, err = o.emit(ctx, projections.EventHoneyTokenTriggered, tenantID, payload)
 	return err
 }
+
+// RegisterDatabaseDecoy records a decoy PostgreSQL login minted by a tenant's
+// dynamic-secret provider (Q6). The lease owns the login; the decoy names it so
+// the leader's watcher can read its database's session counter.
+func (o *Orchestrator) RegisterDatabaseDecoy(ctx context.Context, tenantID, name, placement, providerID, leaseID, role string) (store.HoneyToken, error) {
+	id := uuid.NewString()
+	payload, err := json.Marshal(projections.HoneyTokenCreated{
+		ID: id, Name: name, Placement: placement, TokenHash: "database-decoy:" + id,
+		DBProviderID: providerID, DBLeaseID: leaseID, DBRole: role,
+	})
+	if err != nil {
+		return store.HoneyToken{}, err
+	}
+	if _, err := o.emit(ctx, projections.EventHoneyTokenCreated, tenantID, payload); err != nil {
+		return store.HoneyToken{}, err
+	}
+	return o.store.GetHoneyToken(ctx, tenantID, id)
+}

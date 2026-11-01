@@ -360,6 +360,9 @@ var ledger = []FeatureEvent{
 	{"F39", "Honeytoken exposure detection", "register_decoy_secret", "registerDecoySecret", []string{EventHoneyTokenCreated}},
 	{"F39", "Honeytoken exposure detection", "retire_decoy_secret", "retireDecoySecret", []string{EventHoneyTokenRevoked}},
 	{"F39", "Honeytoken exposure detection", "read_decoy_secret", "recordDecoySecretRead", []string{EventHoneyTokenTriggered}},
+	{"F39", "Honeytoken exposure detection", "create_database_decoy", "createDatabaseDecoy", []string{EventHoneyTokenCreated}},
+	{"F39", "Honeytoken exposure detection", "retire_database_decoy", "retireDatabaseDecoy", []string{EventHoneyTokenRevoked}},
+	{"F39", "Honeytoken exposure detection", "observe_decoy_login", "watchDecoyLoginsOnce", []string{EventHoneyTokenTriggered}},
 
 	// F40 — per-tenant cryptographic custody. The migration operation reports
 	// resumable progress/failure through the same served command, while seal and

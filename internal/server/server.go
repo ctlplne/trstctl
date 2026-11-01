@@ -637,6 +637,9 @@ type Deps struct {
 	// DynamicLeaseWorkerInterval controls the served dynamic leaseworker cadence.
 	// Zero uses the production default.
 	DynamicLeaseWorkerInterval time.Duration
+	// DecoyLoginWatchInterval is how often the leader checks decoy database
+	// logins for use (Q6). Zero uses the production default.
+	DecoyLoginWatchInterval time.Duration
 
 	// EnableAISurface turns on the served AI / RCA / NL-query / MCP surface (SURFACE-003;
 	// F75/F76/F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. OFF by default (fail closed):
@@ -905,6 +908,8 @@ type Server struct {
 	// narrowing the grant takes effect on the next sync instead of on the next
 	// time somebody happens to re-save the schedule.
 	serviceNowBindings []api.ServiceNowBinding
+	// decoyLoginWatchInterval paces RunDecoyLoginWatch (Q6).
+	decoyLoginWatchInterval time.Duration
 
 	logger    *slog.Logger
 	registry  *observ.Registry
@@ -1139,6 +1144,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		tenantCrypto:              d.TenantCrypto,
 		kek:                       d.KEK,
 		restoreDrillSigner:        d.AuditSigningKey, deploymentKEK: d.DeploymentKEK,
+		decoyLoginWatchInterval: d.DecoyLoginWatchInterval,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",

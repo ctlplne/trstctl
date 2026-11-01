@@ -7551,6 +7551,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/honeytokens/databases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List decoy database logins and whether one was used */
+        get: operations["listDatabaseDecoys"];
+        put?: never;
+        /** Mint a decoy PostgreSQL login whose any use raises a critical alert; reveal its DSN once */
+        post: operations["createDatabaseDecoy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/honeytokens/databases/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop watching a decoy login and remove its role and database through the lease's revocation */
+        post: operations["retireDatabaseDecoy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/honeytokens/secrets": {
         parameters: {
             query?: never;
@@ -13327,6 +13362,65 @@ export interface components {
             /** Format: date-time */
             last_verified_at?: string;
             verified: boolean;
+        };
+        DatabaseDecoy: {
+            /** Format: date-time */
+            created_at: string;
+            db_lease_id: string;
+            db_provider_id: string;
+            /** @description the login role; its own database is the role name followed by _db */
+            db_role: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "database";
+            name: string;
+            placement: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** @enum {string} */
+            state: "active" | "triggered" | "revoked";
+            trigger_method?: string;
+            trigger_path?: string;
+            /** Format: date-time */
+            triggered_at?: string;
+        };
+        DatabaseDecoyCreateRequest: {
+            name: string;
+            placement: string;
+            /** @description a PostgreSQL dynamic-secret provider whose allowed roles include decoy */
+            provider: string;
+            /** @description the decoy login's lifetime, within the provider's maximum */
+            ttl_seconds: number;
+        };
+        DatabaseDecoyCreateResponse: {
+            /** Format: date-time */
+            created_at: string;
+            database: string;
+            db_lease_id: string;
+            db_provider_id: string;
+            /** @description the login role; its own database is the role name followed by _db */
+            db_role: string;
+            /** @description the decoy login's connection string, revealed once */
+            dsn: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "database";
+            name: string;
+            placement: string;
+            /** Format: date-time */
+            revoked_at?: string;
+            /** @enum {string} */
+            state: "active" | "triggered" | "revoked";
+            trigger_method?: string;
+            trigger_path?: string;
+            /** Format: date-time */
+            triggered_at?: string;
+        };
+        DatabaseDecoyList: {
+            items: components["schemas"]["DatabaseDecoy"][];
+            next_cursor?: string;
         };
         DecoySecret: {
             /** Format: date-time */
@@ -43033,6 +43127,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AWSHoneyTokenDetail"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDatabaseDecoys: {
+        parameters: {
+            query?: {
+                /** @description page size (1-100) */
+                limit?: number;
+                /** @description opaque pagination cursor */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDecoyList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createDatabaseDecoy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatabaseDecoyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDecoyCreateResponse"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    retireDatabaseDecoy: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseDecoy"];
                 };
             };
             /** @description client error */

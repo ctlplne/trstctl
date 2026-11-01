@@ -119,6 +119,7 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.cbomCycloneDXRoutes()...)       // see cbom_cyclonedx.go
 	out = append(out, a.graphAccessRoutes()...)         // see graph_access.go
 	out = append(out, a.decoySecretRoutes()...)         // see decoy_secrets.go
+	out = append(out, a.databaseDecoyRoutes()...)       // see decoy_databases.go
 	out = append(out, a.controlPlaneKeygenRoutes()...)  // see control_plane_keygen.go
 	out = append(out, a.revocationHealthRoutes()...)    // see revocation_health.go
 	out = append(out, a.verificationSuggestionRoutes()...)

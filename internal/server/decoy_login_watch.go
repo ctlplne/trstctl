@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: BUSL-1.1
+
+package server
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"trstctl.com/trstctl/internal/dynsecret"
+)
+
+// Decoy database login watch (Q6). A decoy login is a PostgreSQL role with
+// CONNECT on its own empty database only, minted by the tenant's dynamic-secret
+// provider. trstctl never connects with it, so that database's session counter
+// (pg_stat_database.sessions) counts only uses of the bait: the leader reads it
+// through the provider's admin connection and the first session raises the
+// decoy's critical alert. The counter persists in PostgreSQL, so a login while
+// trstctl is down is seen at the next check; a statistics reset reads zero and
+// alerts nothing. A probe that never authenticates (a TLS or port scan)
+// establishes no session.
+
+const defaultDecoyLoginWatchInterval = 30 * time.Second
+
+type decoySessionReader interface {
+	DecoySessions(ctx context.Context, role string) (int64, bool, error)
+}
+
+// DecoySessions reads a decoy login's database session counter through the
+// provider's admin connection, opened for this one read.
+func (p *configuredDynamicProvider) DecoySessions(ctx context.Context, role string) (int64, bool, error) {
+	if p.cfg.Type != "postgresql" {
+		return 0, false, fmt.Errorf("dynamic-secret provider %q cannot hold decoy logins", p.id)
+	}
+	backend, closeBackend, err := p.openBackend(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	defer closeBackend()
+	reader, ok := backend.(decoySessionReader)
+	if !ok {
+		return 0, false, fmt.Errorf("dynamic-secret provider %q cannot report decoy logins", p.id)
+	}
+	return reader.DecoySessions(ctx, role)
+}
+
+// RunDecoyLoginWatch checks every active decoy database login on the leader.
+func (s *Server) RunDecoyLoginWatch(ctx context.Context) {
+	interval := s.decoyLoginWatchInterval
+	if interval <= 0 {
+		interval = defaultDecoyLoginWatchInterval
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.WatchDecoyLoginsOnce(ctx); err != nil && s.logger != nil {
+				s.logger.Warn("decoy login watch could not check every decoy", slog.String("error", err.Error()))
+			}
+		}
+	}
+}
+
+// WatchDecoyLoginsOnce checks every untriggered decoy database login once. A
+// decoy it cannot read is reported in the returned error and checked again at
+// the next tick; it never counts as unused.
+func (s *Server) WatchDecoyLoginsOnce(ctx context.Context) error {
+	if s.store == nil || s.orch == nil || s.secretIntegrations == nil {
+		return nil
+	}
+	tenants, err := s.store.TenantsWithActiveDatabaseDecoys(ctx)
+	if err != nil {
+		return err
+	}
+	var firstErr error
+	note := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	for _, tenantID := range tenants {
+		decoys, err := s.store.ListActiveDatabaseDecoys(ctx, tenantID)
+		if err != nil {
+			note(err)
+			continue
+		}
+		providers := s.secretIntegrations.dynamicProvidersForTenant(tenantID)
+		for _, decoy := range decoys {
+			var reader decoySessionReader
+			for _, provider := range providers {
+				if provider.Name() == decoy.DBProviderID {
+					reader, _ = provider.(decoySessionReader)
+				}
+			}
+			if reader == nil {
+				note(fmt.Errorf("decoy %s: provider %q is not configured for decoy logins", decoy.ID, decoy.DBProviderID))
+				continue
+			}
+			sessions, exists, err := reader.DecoySessions(ctx, decoy.DBRole)
+			if err != nil {
+				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
+				continue
+			}
+			if !exists || sessions == 0 {
+				continue
+			}
+			if err := s.orch.RecordHoneyTokenTrigger(ctx, tenantID, decoy.ID, "LOGIN",
+				"postgres/"+dynsecret.DecoyDatabaseName(decoy.DBRole)); err != nil {
+				note(fmt.Errorf("decoy %s: %w", decoy.ID, err))
+			}
+		}
+	}
+	return firstErr
+}

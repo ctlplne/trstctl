@@ -7,6 +7,10 @@
   resolved reference or the Vault-compatible API raises one critical alert per reader, naming who read
   it; listing names, metadata, previews, inventory and the graph never alert. Only people who can plant
   decoys see which secrets are bait.
+- Decoy database logins: a PostgreSQL dynamic-secret provider that lists the role `decoy` mints a login
+  that reaches only its own empty database and looks like any generated login (console,
+  `trstctl-cli secrets honeytokens databases`, `/api/v1/secrets/honeytokens/databases`). trstctl never
+  uses it, so the first login with it raises one critical alert; probes and administration never do.
 - Who can reach a database, host or API: the credential graph now holds people (tenant members),
   their roles and AI agents (from agent-broker issuance), with the credentials they hold (API
   tokens, machine sessions, PAM sessions, dynamic-secret leases) and the approvals behind them.

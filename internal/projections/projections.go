@@ -4206,6 +4206,11 @@ type HoneyTokenCreated struct {
 	TokenHash string `json:"token_hash"`
 	// SecretName makes the decoy a secret decoy watching that stored secret (Q6).
 	SecretName string `json:"secret_name,omitempty"`
+	// DBProviderID, DBLeaseID and DBRole make it a decoy database login (Q6):
+	// the minting provider, the dynamic-secret lease and the login role.
+	DBProviderID string `json:"db_provider_id,omitempty"`
+	DBLeaseID    string `json:"db_lease_id,omitempty"`
+	DBRole       string `json:"db_role,omitempty"`
 }
 
 type HoneyTokenTriggered struct {
@@ -8057,6 +8062,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		return p.store.ApplyHoneyTokenCreatedTx(ctx, tx, store.HoneyToken{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Placement: pl.Placement,
 			TokenHash: pl.TokenHash, CreatedAt: e.Time, SecretName: pl.SecretName,
+			DBProviderID: pl.DBProviderID, DBLeaseID: pl.DBLeaseID, DBRole: pl.DBRole,
 		})
 	case EventHoneyTokenTriggered:
 		var pl HoneyTokenTriggered
