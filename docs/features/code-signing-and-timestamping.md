@@ -159,14 +159,18 @@ outcome is confirmed, including in the middle of a database write, is answered a
 deadline (a retryable `503` with `Retry-After`), never as a socket error; retrying with
 the same `Idempotency-Key` returns the recorded command's result.
 
-When `ca.policy.require_approval` is enabled, the first denied response is `403` with
-a non-secret `approval_required:codesign:<sha256>` resource. A distinct approver
-records `{"action":"sign"}` for it through
-`POST /api/v1/identities/{resource}/approvals`; the requester resubmits the same
-principal/key/digest with a new `Idempotency-Key`. The resource binds the tenant-scoped
-principal, key (or keyless identity), and exact digest, so it cannot authorize another
-caller or artifact — the approval route requires `certs:issue`, the signing request
-`keys:write`.
+When `ca.policy.require_approval` is enabled, the first request is refused (`403`) with
+a non-secret `approval_required:codesign:<sha256> request_id=<id> intent_digest=<digest>`,
+and an immutable approval request is recorded. A distinct approver grants it with
+`POST /api/v1/approval-requests/{id}/approvals` (`{"intent_digest": "<digest>"}`) or refuses
+it with `.../denials` and a reason; the requester repeats the same request with the same
+`Idempotency-Key`, which signs once and consumes the approval. The approval binds the
+tenant, the principal, the key (or keyless identity), the artifact type — which names the
+signing mechanism, such as `pkcs11:CKM_ECDSA_SHA256` or `notation:ECDSA-SHA-256` — the exact
+digest and the idempotency key, and expires: a modified artifact, another signer, key or
+mechanism, a used approval, an expired one or another tenant's cannot sign. Repeating an
+approved request returns the recorded signature without signing again. The approval
+routes require `certs:issue`, the signing request `keys:write`.
 
 For long-term validity, timestamp the returned signature through the TSA:
 
@@ -248,11 +252,13 @@ records each signature in Rekor through the outbox as described above.
   the OpenSSL pkcs11 engine; see [`clients/signing`](../../clients/signing/README.md)
   for both command lines.
 
-A request trstctl refuses — a missing `keys:write`, a policy denial, an approval
-that is pending or denied — stops the tool with trstctl's reason; Notation reports
-it as `ACCESS_DENIED` and the PKCS #11 module as `CKR_FUNCTION_REJECTED`. Signing
-approvals bound to the artifact, signer, mechanism, count and expiry are what comes
-next.
+While a signing approval is pending, the Notation plugin and the PKCS #11 module hold
+the tool's request open — resending the same request, which is what the approver
+grants — for up to `TRSTCTL_APPROVAL_WAIT` (default `10m`; `0` does not wait), and the
+tool signs once the approval is granted. A request trstctl refuses — a missing
+`keys:write`, a policy denial, an approval that is denied or expired, or a wait that
+runs out — stops the tool with trstctl's reason; Notation reports it as
+`ACCESS_DENIED` and the PKCS #11 module as `CKR_FUNCTION_REJECTED`.
 
 ### Rotating and revoking the TSA certificate
 

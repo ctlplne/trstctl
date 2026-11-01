@@ -31,6 +31,15 @@ type Client struct {
 	BaseURL string
 	Token   string
 	HTTP    *http.Client
+	// ApprovalWait is how long SignDigest holds a request open while a signing
+	// approval it needs is pending; zero stops at the first refusal.
+	ApprovalWait time.Duration
+	// ApprovalPoll is how often a pending approval is checked; zero means five
+	// seconds.
+	ApprovalPoll time.Duration
+	// Pending, when set, is told once that the request waits for approval,
+	// with trstctl's message naming the approval request.
+	Pending func(message string)
 }
 
 // FromEnv reads TRSTCTL_URL, the token from TRSTCTL_TOKEN or the file named by
@@ -48,7 +57,28 @@ func FromEnv() (*Client, error) {
 	if token == "" {
 		return nil, errors.New("set TRSTCTL_TOKEN (or TRSTCTL_TOKEN_FILE)")
 	}
-	return NewClient(os.Getenv("TRSTCTL_URL"), token, os.Getenv("TRSTCTL_CA_FILE"))
+	client, err := NewClient(os.Getenv("TRSTCTL_URL"), token, os.Getenv("TRSTCTL_CA_FILE"))
+	if err != nil {
+		return nil, err
+	}
+	if client.ApprovalWait, err = ApprovalWaitFromEnv(); err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// ApprovalWaitFromEnv reads TRSTCTL_APPROVAL_WAIT, a Go duration such as 15m;
+// unset means ten minutes and 0 means do not wait.
+func ApprovalWaitFromEnv() (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv("TRSTCTL_APPROVAL_WAIT"))
+	if raw == "" {
+		return 10 * time.Minute, nil
+	}
+	wait, err := time.ParseDuration(raw)
+	if err != nil || wait < 0 {
+		return 0, fmt.Errorf("TRSTCTL_APPROVAL_WAIT %q is not a duration such as 15m", raw)
+	}
+	return wait, nil
 }
 
 // NewClient builds a client for one control plane and API token. caFile, when
@@ -135,18 +165,41 @@ func (c *Client) SignDigest(ctx context.Context, keyID, artifactType string, dig
 	}
 	idempotencyKey := "trstctlsign-" + hex.EncodeToString(request.Sum(nil))
 	var out Signature
+	deadline := time.Now().Add(c.ApprovalWait)
+	told := false
 	for attempt := 1; ; attempt++ {
 		err = c.do(ctx, http.MethodPost, "/api/v1/code-signing/sign", body, idempotencyKey, &out)
 		var refused *APIError
-		retryable := err != nil && (!errors.As(err, &refused) || refused.Status == http.StatusBadGateway ||
-			refused.Status == http.StatusServiceUnavailable || refused.Status == http.StatusGatewayTimeout)
-		if !retryable || attempt == 3 || ctx.Err() != nil {
+		var wait time.Duration
+		switch {
+		case err == nil:
+			return out, nil
+		case errors.As(err, &refused) && refused.ApprovalPending():
+			// The same request — same digest, same idempotency key — is what the
+			// approver grants, so it is resent unchanged until the approval is
+			// granted, refused or out of time.
+			if !time.Now().Before(deadline) {
+				return out, err
+			}
+			if !told && c.Pending != nil {
+				c.Pending(refused.Message)
+			}
+			told, wait = true, c.ApprovalPoll
+			if wait <= 0 {
+				wait = 5 * time.Second
+			}
+		case errors.As(err, &refused) && refused.Status != http.StatusBadGateway &&
+			refused.Status != http.StatusServiceUnavailable && refused.Status != http.StatusGatewayTimeout:
 			return out, err
+		case attempt >= 3:
+			return out, err
+		default:
+			wait = time.Duration(attempt) * time.Second
 		}
 		select {
 		case <-ctx.Done():
 			return out, ctx.Err()
-		case <-time.After(time.Duration(attempt) * time.Second):
+		case <-time.After(wait):
 		}
 	}
 }
@@ -215,6 +268,14 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("trstctl refused (HTTP %d): %s", e.Status, e.Message)
+}
+
+// ApprovalPending reports whether trstctl holds the signature for an approval
+// that is still pending: waiting can help. A denied, expired, consumed or
+// superseded approval is final.
+func (e *APIError) ApprovalPending() bool {
+	return e.Status == http.StatusForbidden && strings.Contains(e.Message, "approval_required:") &&
+		strings.Contains(e.Message, " awaits ")
 }
 
 // Denied reports whether trstctl refused the signature itself — the caller

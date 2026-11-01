@@ -859,11 +859,18 @@ Code signing uses the shared live policy controls rather than a decorative, code
 allow list. With `ca.policy.enabled=true`, OPA receives action `code_sign`, the
 authenticated actor, the configured key ID (or `keyless:<verified-san>`), and
 `attrs.digest_sha256`; evaluation errors and policy-pool saturation fail closed. With
-`ca.policy.require_approval=true`, a denied response returns
-`approval_required:codesign:<sha256>`. A distinct `certs:issue` approver posts
-`{"action":"sign"}` to `/api/v1/identities/{that-resource}/approvals`, after which the
-requester retries the same signing tuple with a new `Idempotency-Key`. The resource hash
-binds tenant, authenticated requester, key/keyless identity, and exact digest.
+`ca.policy.require_approval=true`, the first request is refused (`403`) with
+`approval_required:codesign:<sha256> request_id=<id> intent_digest=<digest>`, and an
+immutable approval request is recorded. A distinct `certs:issue` approver grants it with
+`POST /api/v1/approval-requests/{id}/approvals` (`{"intent_digest": "<digest>"}`) or refuses
+it with `POST /api/v1/approval-requests/{id}/denials` (with a `reason`). Repeating the same
+request with the same `Idempotency-Key` then signs once and consumes the approval; the
+resource hash binds tenant, authenticated requester, key/keyless identity, artifact type
+(which carries the signing mechanism), exact digest and the idempotency key, so a changed
+artifact, another signer, key or mechanism, a new key or another tenant needs its own
+approval, and an expired request cannot be granted. The signing clients in
+`clients/signing` hold a pending request open for up to `TRSTCTL_APPROVAL_WAIT` (default
+`10m`).
 
 | Variable | Default | Meaning |
 | --- | --- | --- |

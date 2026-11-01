@@ -2,6 +2,10 @@
 
 ### Added
 
+- Signing approvals with stock tools: while a code-signing approval is pending, the Notation plugin and the
+  PKCS #11 module hold the tool's request open and sign once an approver grants it (`TRSTCTL_APPROVAL_WAIT`,
+  default ten minutes); a denied or expired approval stops the tool with the reason. The signing mechanism
+  is part of what is approved (`pkcs11:CKM_ECDSA_SHA256`, `notation:ECDSA-SHA-256`).
 - PKCS #11 module for code signing: `libtrstctl-pkcs11` (`make signing-clients`, in `clients/signing`) offers
   trstctl code-signing keys to jarsigner, osslsigncode and other PKCS #11 tools. The PIN is the API token,
   each key comes with its certificate chain, the private-key handles are never extractable, and each
@@ -904,6 +908,9 @@
 
 ### Fixed
 
+- The code-signing approval docs described the legacy identities approval route and a new Idempotency-Key;
+  the served flow is `POST /api/v1/approval-requests/{id}/approvals` (or `/denials`) and repeating the same
+  request with the same key, which consumes the approval once.
 - The RFC 2136 DNS provider's TSIG-signed updates are accepted by DNS servers: the signature now covers
   every TSIG variable RFC 8945 lists, including Other Len, which was left out, so a standards server (BIND,
   Knot, PowerDNS, miekg/dns) refused every signed update as "bad signature" and DNS-01 through RFC 2136

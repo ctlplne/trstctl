@@ -5867,9 +5867,14 @@ This is a deliberate, documented trust boundary, not an accident.
     Windows executable through it with both key types and their verifiers accept
     the signatures, and a token without `keys:write` gets `CKR_FUNCTION_REJECTED`.
     Built and proven on Linux (arm64); macOS builds, Windows (a KSP) is a separate
-    item. A run of the stock `notation` CLI against a registry, and signing
-    approvals bound to the artifact, signer, mechanism, count and expiry, are what
-    comes next.
+    item. Signing approvals bind the artifact digest, signer, mechanism (the artifact
+    type: `pkcs11:<mechanism>`, `notation:<algorithm>`), one use and an expiry; the
+    plugin and module hold a pending request open (`TRSTCTL_APPROVAL_WAIT`) and sign
+    once it is granted. The served test drives the built Notation plugin through a
+    granted, a denied and an expired approval and shows a modified artifact, another
+    signer, another mechanism, a used approval and another tenant's approval cannot
+    sign. A run of the stock `notation` CLI against a registry, and HSM- and KMS-held
+    code-signing keys, are what comes next.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator

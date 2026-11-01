@@ -1430,8 +1430,8 @@ not this file.
 | Location | Reason |
 |---|---|
 | `clients/embedded/est_client_test.go:81` | test reads its own fixture/tempdir path (CWE-22) |
-| `clients/signing/trstctlsign/client.go:42` | the operator names the token file |
-| `clients/signing/trstctlsign/client.go:67` | the operator names the CA bundle |
+| `clients/signing/trstctlsign/client.go:51` | the operator names the token file |
+| `clients/signing/trstctlsign/client.go:97` | the operator names the CA bundle |
 | `clients/terraform/internal/terraformprovider/client.go:94` | operator-selected public trust bundle (CWE-22) |
 | `cmd/trstctl-agent/cosign_attach.go:208` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |

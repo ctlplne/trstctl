@@ -26,6 +26,7 @@ Every client reads:
 | `TRSTCTL_URL` | The control plane, for example `https://trstctl.example.com` |
 | `TRSTCTL_TOKEN` or `TRSTCTL_TOKEN_FILE` | An API token with `keys:write` (and `keys:read`) |
 | `TRSTCTL_CA_FILE` | Optional PEM roots for the control plane's TLS certificate |
+| `TRSTCTL_APPROVAL_WAIT` | How long a signature waits for a pending approval (Go duration; default `10m`, `0` does not wait) |
 
 ## PKCS #11 module
 
@@ -77,8 +78,11 @@ The key needs a certificate chain configured in trstctl
 gets a certificate request the key signs inside the signer. Verify with a
 Notation trust policy rooted at the CA that issued that certificate.
 
-A signature trstctl refuses — a missing permission, a policy denial, or an
-approval that is pending or denied — stops the signing with `ACCESS_DENIED` and
-trstctl's reason. A retry after a lost response sends the same idempotency key
-for the same key, digest and credential, so trstctl returns the first signature
-rather than signing twice.
+When trstctl requires a signing approval, the request waits: the client resends
+the same request — the same digest and idempotency key, which is what the approver
+grants — until the approval is granted (the tool then signs), denied or expired,
+or `TRSTCTL_APPROVAL_WAIT` runs out. A signature trstctl refuses — a missing
+permission, a policy denial, a denied or expired approval — stops the signing with
+`ACCESS_DENIED` and trstctl's reason. A retry after a lost response sends the same
+idempotency key for the same key, digest and credential, so trstctl returns the first
+signature rather than signing twice.

@@ -251,16 +251,17 @@ func buildP9NotationPlugin(t *testing.T) string {
 	return out
 }
 
-func runP9NotationPlugin(t *testing.T, plugin string, h *servedHarness, token, command string, request any) (int, []byte, []byte) {
+func runP9NotationPlugin(t *testing.T, plugin string, h *servedHarness, token, command string, request any, env ...string) (int, []byte, []byte) {
 	t.Helper()
 	raw, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, plugin, command) // #nosec G204 -- test runs the plugin it just built (CWE-78)
-	cmd.Env = append(os.Environ(), "TRSTCTL_URL="+h.ts.URL, "TRSTCTL_TOKEN="+token, "TRSTCTL_TOKEN_FILE=", "TRSTCTL_CA_FILE=")
+	cmd.Env = append(append(os.Environ(), "TRSTCTL_URL="+h.ts.URL, "TRSTCTL_TOKEN="+token, "TRSTCTL_TOKEN_FILE=", "TRSTCTL_CA_FILE=",
+		"TRSTCTL_APPROVAL_WAIT=0"), env...)
 	cmd.Stdin = bytes.NewReader(raw)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

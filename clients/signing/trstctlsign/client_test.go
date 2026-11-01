@@ -12,8 +12,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 type signCall struct {
@@ -182,5 +184,98 @@ func TestFromEnv(t *testing.T) {
 	t.Setenv("TRSTCTL_URL", "ftp://trstctl.example")
 	if _, err := FromEnv(); err == nil {
 		t.Fatal("a non-HTTP URL was accepted")
+	}
+}
+
+// approvalServer answers each signing request in turn from replies: "pending",
+// "denied" or "ok".
+func approvalServer(t *testing.T, replies ...string) (*httptest.Server, func() []string) {
+	t.Helper()
+	var mu sync.Mutex
+	var keys []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		keys = append(keys, r.Header.Get("Idempotency-Key"))
+		n := len(keys)
+		mu.Unlock()
+		reply := "ok"
+		if n <= len(replies) {
+			reply = replies[n-1]
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch reply {
+		case "pending":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"detail":"codesign: approval_required:codesign:abc request_id=r1 intent_digest=d1: approval request r1 (d1) awaits 1 distinct approval(s)"}`))
+		case "denied":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"detail":"codesign: approval_required:codesign:abc request_id=r1 intent_digest=d1: approval request r1 (d1) denied"}`))
+		default:
+			_, _ = w.Write([]byte(`{"algorithm":"ECDSA-P256","signature":"AQID"}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), keys...)
+	}
+}
+
+// A request waiting for its approval is resent unchanged — same digest, same
+// idempotency key, which is what the approver grants — until it is granted.
+func TestSignDigestWaitsForAPendingApproval(t *testing.T) {
+	srv, keys := approvalServer(t, "pending", "pending")
+	var told []string
+	client := &Client{BaseURL: srv.URL, Token: "tok", HTTP: srv.Client(), ApprovalWait: 5 * time.Second,
+		ApprovalPoll: 10 * time.Millisecond, Pending: func(m string) { told = append(told, m) }}
+	sig, err := client.SignDigest(context.Background(), "release", "oci-image", digest(4))
+	if err != nil || !bytes.Equal(sig.Signature, []byte{1, 2, 3}) {
+		t.Fatalf("SignDigest = %+v, %v", sig, err)
+	}
+	got := keys()
+	if len(got) != 3 || got[0] != got[1] || got[1] != got[2] {
+		t.Fatalf("idempotency keys = %v, want the same request three times", got)
+	}
+	if len(told) != 1 || !strings.Contains(told[0], "request_id=r1") {
+		t.Fatalf("pending notices = %v, want one naming the approval request", told)
+	}
+}
+
+// A denied approval is final: the client stops at once with trstctl's reason.
+func TestSignDigestStopsOnADeniedApproval(t *testing.T) {
+	srv, keys := approvalServer(t, "pending", "denied", "ok")
+	client := &Client{BaseURL: srv.URL, Token: "tok", HTTP: srv.Client(), ApprovalWait: 5 * time.Second, ApprovalPoll: 10 * time.Millisecond}
+	_, err := client.SignDigest(context.Background(), "release", "oci-image", digest(5))
+	var refused *APIError
+	if !errors.As(err, &refused) || refused.ApprovalPending() || !refused.Denied() || !strings.HasSuffix(refused.Message, "denied") {
+		t.Fatalf("err = %v", err)
+	}
+	if n := len(keys()); n != 2 {
+		t.Fatalf("calls = %d, want 2 (pending, then denied)", n)
+	}
+}
+
+// With no wait configured, a pending approval is returned to the caller.
+func TestSignDigestWithoutAWaitReturnsThePendingRefusal(t *testing.T) {
+	srv, keys := approvalServer(t, "pending")
+	client := &Client{BaseURL: srv.URL, Token: "tok", HTTP: srv.Client()}
+	_, err := client.SignDigest(context.Background(), "release", "oci-image", digest(6))
+	var refused *APIError
+	if !errors.As(err, &refused) || !refused.ApprovalPending() || len(keys()) != 1 {
+		t.Fatalf("err = %v after %d calls", err, len(keys()))
+	}
+}
+
+func TestApprovalWaitFromEnv(t *testing.T) {
+	for raw, want := range map[string]time.Duration{"": 10 * time.Minute, "0": 0, "15m": 15 * time.Minute} {
+		t.Setenv("TRSTCTL_APPROVAL_WAIT", raw)
+		if got, err := ApprovalWaitFromEnv(); err != nil || got != want {
+			t.Fatalf("%q = %v, %v", raw, got, err)
+		}
+	}
+	t.Setenv("TRSTCTL_APPROVAL_WAIT", "soon")
+	if _, err := ApprovalWaitFromEnv(); err == nil {
+		t.Fatal("a non-duration accepted")
 	}
 }

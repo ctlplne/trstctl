@@ -76,7 +76,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, newClient fun
 		if err != nil {
 			return fail("VALIDATION_ERROR", err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		// A signing approval may be pending: the client holds the request open
+		// for up to TRSTCTL_APPROVAL_WAIT, so the deadline allows for it.
+		ctx, cancel := context.WithTimeout(context.Background(), client.ApprovalWait+2*time.Minute)
 		defer cancel()
 		cert, err := client.KeyCertificate(ctx, req.KeyID)
 		if err != nil {
@@ -94,7 +96,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer, newClient fun
 		if err != nil {
 			return fail("VALIDATION_ERROR", err)
 		}
-		signed, err := client.SignDigest(ctx, req.KeyID, "oci-image", digest)
+		// The mechanism is part of what trstctl approves and records.
+		signed, err := client.SignDigest(ctx, req.KeyID, "notation:"+sigAlg, digest)
 		if err != nil {
 			var refused *trstctlsign.APIError
 			if errors.As(err, &refused) && refused.Denied() {

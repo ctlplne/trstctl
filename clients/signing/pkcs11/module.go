@@ -11,7 +11,9 @@
 // The PIN is a trstctl API token with keys:read and keys:write. TRSTCTL_URL
 // names the control plane, TRSTCTL_CA_FILE optional roots for its TLS
 // certificate, and TRSTCTL_PKCS11_KEYS the code-signing keys (comma-separated)
-// the token offers; each needs a certificate chain configured in trstctl.
+// the token offers; each needs a certificate chain configured in trstctl. A
+// signature waiting for approval is held open for up to TRSTCTL_APPROVAL_WAIT
+// (ten minutes by default).
 package main
 
 /*
@@ -21,9 +23,11 @@ package main
 import "C"
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"trstctl.com/clients/signing/internal/token"
@@ -71,6 +75,11 @@ func C_Initialize(pInitArgs C.CK_VOID_PTR) C.CK_RV {
 		return token.CKR_CRYPTOKI_ALREADY_INITIALIZED
 	}
 	base, caFile := os.Getenv("TRSTCTL_URL"), os.Getenv("TRSTCTL_CA_FILE")
+	wait, err := trstctlsign.ApprovalWaitFromEnv()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "trstctl-pkcs11: %v\n", err)
+		return token.CKR_GENERAL_ERROR
+	}
 	tok = token.New(token.Config{
 		KeyIDs: strings.Split(os.Getenv("TRSTCTL_PKCS11_KEYS"), ","),
 		Connect: func(apiToken string) (token.API, error) {
@@ -78,9 +87,16 @@ func C_Initialize(pInitArgs C.CK_VOID_PTR) C.CK_RV {
 			if err != nil {
 				return nil, err
 			}
+			// A signature waiting for approval is held open with the same
+			// request until it is granted, refused or out of time.
+			client.ApprovalWait = wait
+			client.Pending = func(message string) {
+				fmt.Fprintf(os.Stderr, "trstctl-pkcs11: waiting for approval: %s\n", message)
+			}
 			return client, nil
 		},
-		Log: os.Stderr,
+		Timeout: wait + 2*time.Minute,
+		Log:     os.Stderr,
 	})
 	return token.CKR_OK
 }
