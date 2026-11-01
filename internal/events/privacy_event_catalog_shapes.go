@@ -233,9 +233,13 @@ func coreProductionPrivacyPayloadShape(eventType string) (PrivacyPayloadShape, b
 		return shape(`{"account_url":"","eab_key_id":"","identifiers":[""],"reason":""}`,
 			catalogPrivacyShapeOptions{Optional: []string{"/identifiers"}}), true
 	case "acme.order.created":
-		return shape(`{"seq":1,"order":{"id":"","account_url":"","issuance_key":"","domains":[""],"authz_ids":[""],"status":"","auth_mode":"","cert_id":"","replaces":"","profile":"","attested_key_sha256":"","created_at":""},"authorizations":[{"id":"","order_id":"","domain":"","status":"","created_at":"","challenges":[{"id":"","type":"","token":"","status":"","authz_id":""}]}]}`,
+		return shape(`{"seq":1,"order":{"id":"","account_url":"","issuance_key":"","domains":[""],"authz_ids":[""],"status":"","auth_mode":"","cert_id":"","replaces":"","profile":"","attested_key_sha256":"","identifier_type":"","created_at":""},"authorizations":[{"id":"","order_id":"","domain":"","identifier_type":"","status":"","created_at":"","challenges":[{"id":"","type":"","token":"","status":"","authz_id":"","email_token_part1_sha256":"","email_response_sha256":"","email_message_id":""}]}]}`,
 			catalogPrivacyShapeOptions{Optional: []string{
 				"/seq", "/order/issuance_key", "/order/auth_mode", "/order/cert_id", "/order/replaces", "/order/profile", "/order/attested_key_sha256",
+				// P15: RFC 8823 email orders.
+				"/order/identifier_type", "/authorizations/*/identifier_type",
+				"/authorizations/*/challenges/*/email_token_part1_sha256", "/authorizations/*/challenges/*/email_response_sha256",
+				"/authorizations/*/challenges/*/email_message_id",
 			}}), true
 	case "agent.job.receipt.reconciled":
 		return shape(`{"agent":"","job_id":1,"kind":"","attempt":1,"outcome":"","current_state_applied":false,"receipt_statement":"","receipt_signature":"","receipt_signer_fingerprint":""}`), true

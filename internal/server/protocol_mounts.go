@@ -316,6 +316,10 @@ func (s *Server) buildServedACME(ctx context.Context, cfg config.Protocols, tena
 	}
 	// P1: persistent DNS validation for standing records that name this CA.
 	acmeSrv = acmeSrv.WithDNSPersist(cfg.ACMEDNSPersist.IssuerDomainNames, validators.DNSPersist01)
+	// P15: S/MIME certificates for mailboxes proved by email-reply-00.
+	if s.acmeEmail != nil {
+		acmeSrv = acmeSrv.WithEmailChallenges(cfg.ACMEEmail.From, cfg.ACMEEmail.Domains, cfg.ACMEEmail.Profile, s.acmeEmail)
+	}
 	// I4: every refusal this server issues becomes a classified diagnosis an
 	// operator can read. Wired here rather than left as a library the served
 	// binary never calls — which is what it was.

@@ -209,6 +209,8 @@ type issuanceDispatcher struct {
 	// dns01 publishes and cleans ACME DNS-01 challenge records through tenant
 	// provider configs. Nil makes acme.dns01.* destinations fail closed.
 	dns01 *servedACMEDNS01Automation
+	// acmeEmail sends RFC 8823 challenge mail (P15).
+	acmeEmail *servedACMEEmailMailer
 	// licensed handles first-party destinations owned by EE packages. It returns
 	// handled=false for destinations it does not own, so core still fails closed for
 	// unknown first-party work.
@@ -292,6 +294,9 @@ func (d *issuanceDispatcher) deliverDirectoryWriteback(ctx context.Context, m or
 }
 
 func (d *issuanceDispatcher) deliverACMEDNS01(ctx context.Context, m orchestrator.Message) error {
+	if m.Destination == destinationACMEEmailChallenge {
+		return d.deliverACMEEmailChallenge(ctx, m) // P15: RFC 8823 challenge mail
+	}
 	if d.dns01 == nil {
 		return orchestrator.DefiniteNoEffect(fmt.Errorf("server: acme dns-01 outbox destination is not configured"))
 	}
@@ -340,7 +345,7 @@ func (d *issuanceDispatcher) deliver(ctx context.Context, m orchestrator.Message
 				"server: network and SSH discovery execute on a network relay, not the control plane"))
 		}
 		return d.handleDiscoveryRun(ctx, m)
-	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup:
+	case destinationACMEDNS01Present, destinationACMEDNS01Cleanup, destinationACMEEmailChallenge:
 		return d.deliverACMEDNS01(ctx, m)
 	case ca.DestinationExternalCAIssue:
 		if d.externalCAs == nil {

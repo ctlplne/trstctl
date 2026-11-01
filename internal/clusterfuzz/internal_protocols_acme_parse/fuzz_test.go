@@ -4,6 +4,7 @@ package clusterfuzz
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
@@ -76,6 +77,7 @@ func FuzzParseOrderRequest(f *testing.F) {
 	f.Add([]byte(`{"identifiers":[{"type":"dns","value":"x"}],"replaces":"abc"}`))
 	f.Add([]byte(`not json`))
 	f.Add([]byte(`{"identifiers":[{"type":"dns","value":""}]}`))
+	f.Add([]byte(`{"identifiers":[{"type":"email","value":"alice@example.com"}]}`))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		req, err := acmesrv.ParseOrderRequest(data)
 		if err != nil {
@@ -86,9 +88,51 @@ func FuzzParseOrderRequest(f *testing.F) {
 			t.Fatalf("accepted an order with no identifiers: %q", data)
 		}
 		for _, id := range req.Identifiers {
-			if id.Type != "dns" || id.Value == "" {
+			if (id.Type != acmesrv.IdentifierDNS && id.Type != acmesrv.IdentifierEmail) || id.Value == "" {
 				t.Fatalf("accepted a bad identifier %+v from %q", id, data)
 			}
+		}
+	})
+}
+
+// FuzzNormalizeEmailIdentifier: an accepted RFC 8823 email identifier is a
+// bounded ASCII dot-atom addr-spec with a lowercase DNS domain, never a
+// wildcard, and normalizing it again changes nothing (P15).
+func FuzzNormalizeEmailIdentifier(f *testing.F) {
+	for _, seed := range []string{"alice@example.com", "Alice.B+tag@Example.COM", "*@example.com", "a@b", "\"q\"@example.com", "a..b@example.com", ""} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		got, err := acmesrv.NormalizeEmailIdentifier(raw)
+		if err != nil {
+			return
+		}
+		at := strings.LastIndexByte(got, '@')
+		if at <= 0 || len(got) > 254 || strings.Contains(got, "*") || got[at+1:] != strings.ToLower(got[at+1:]) {
+			t.Fatalf("accepted %q as %q", raw, got)
+		}
+		if again, err := acmesrv.NormalizeEmailIdentifier(got); err != nil || again != got {
+			t.Fatalf("normalizing %q again gave %q, %v", got, again, err)
+		}
+	})
+}
+
+// FuzzExtractEmailResponse: the reply-body extractor never panics, and what
+// it returns has no white space and no padding (P15).
+func FuzzExtractEmailResponse(f *testing.F) {
+	for _, seed := range []string{
+		"-----BEGIN ACME RESPONSE-----\r\nLoqXcYV8q5ONbJQxbmR7SCTNo3tiAXDfowy\r\njxAjEuX0=\r\n-----END ACME RESPONSE-----\r\n",
+		"-----BEGIN ACME RESPONSE-----", "-----END ACME RESPONSE----------BEGIN ACME RESPONSE-----", "",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, body string) {
+		got, ok := acmesrv.ExtractEmailResponse(body)
+		if !ok {
+			return
+		}
+		if got == "" || strings.ContainsAny(got, " \t\r\n") || strings.HasSuffix(got, "=") {
+			t.Fatalf("extracted %q from %q", got, body)
 		}
 	})
 }

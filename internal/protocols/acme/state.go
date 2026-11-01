@@ -76,6 +76,8 @@ type acmeOrderState struct {
 	// DeviceAttestation is the evidence of a device-bound attested key, kept
 	// so the issued certificate can carry it (A131).
 	DeviceAttestation *acmeDeviceAttestationState `json:"device_attestation,omitempty"`
+	// IdentifierType is "email" for an S/MIME order (P15); absent is dns.
+	IdentifierType string `json:"identifier_type,omitempty"`
 }
 
 // acmeDeviceAttestationState is the retained evidence behind a device-bound
@@ -107,12 +109,15 @@ func (a *acmeDeviceAttestationState) issueEvidence() *ca.DeviceAttestation {
 }
 
 type acmeAuthorizationState struct {
-	ID         string               `json:"id"`
-	OrderID    string               `json:"order_id"`
-	Domain     string               `json:"domain"`
-	Status     string               `json:"status"`
-	CreatedAt  time.Time            `json:"created_at"`
-	Challenges []acmeChallengeState `json:"challenges"`
+	ID      string `json:"id"`
+	OrderID string `json:"order_id"`
+	Domain  string `json:"domain"`
+	// IdentifierType is "email" for an RFC 8823 authorization (P15); absent
+	// is dns, as every authorization recorded before P15.
+	IdentifierType string               `json:"identifier_type,omitempty"`
+	Status         string               `json:"status"`
+	CreatedAt      time.Time            `json:"created_at"`
+	Challenges     []acmeChallengeState `json:"challenges"`
 }
 
 type acmeChallengeState struct {
@@ -121,6 +126,12 @@ type acmeChallengeState struct {
 	Token   string `json:"token"`
 	Status  string `json:"status"`
 	AuthzID string `json:"authz_id"`
+	// email-reply-00 (P15): SHA-256 digests (hex) of token-part1 and of the
+	// expected response — never the values — and the challenge mail's
+	// Message-ID.
+	EmailTokenPart1SHA256 string `json:"email_token_part1_sha256,omitempty"`
+	EmailResponseSHA256   string `json:"email_response_sha256,omitempty"`
+	EmailMessageID        string `json:"email_message_id,omitempty"`
 }
 
 type acmeOrderCreatedEvent struct {
@@ -334,6 +345,7 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 		replaces:          payload.Order.Replaces,
 		attestedKeySHA256: payload.Order.AttestedKeySHA256,
 		deviceAttestation: payload.Order.DeviceAttestation,
+		identType:         payload.Order.IdentifierType,
 		createdAt:         payload.Order.CreatedAt,
 	}
 	if o.status == "" {
@@ -348,6 +360,7 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 			id:        azPayload.ID,
 			orderID:   azPayload.OrderID,
 			domain:    azPayload.Domain,
+			identType: azPayload.IdentifierType,
 			status:    azPayload.Status,
 			createdAt: azPayload.CreatedAt,
 		}
@@ -364,6 +377,10 @@ func (s *Server) applyOrderCreatedEventLocked(payload acmeOrderCreatedEvent) err
 				token:   chPayload.Token,
 				status:  chPayload.Status,
 				authzID: chPayload.AuthzID,
+
+				emailTokenPart1SHA256: chPayload.EmailTokenPart1SHA256,
+				emailResponseSHA256:   chPayload.EmailResponseSHA256,
+				emailMessageID:        chPayload.EmailMessageID,
 			}
 			if ch.status == "" {
 				ch.status = statusPending
@@ -481,16 +498,18 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 			Profile:           o.profile,
 			AttestedKeySHA256: o.attestedKeySHA256,
 			DeviceAttestation: o.deviceAttestation,
+			IdentifierType:    o.identType,
 			CreatedAt:         o.createdAt,
 		},
 	}
 	for _, az := range authzs {
 		azPayload := acmeAuthorizationState{
-			ID:        az.id,
-			OrderID:   az.orderID,
-			Domain:    az.domain,
-			Status:    az.status,
-			CreatedAt: az.createdAt,
+			ID:             az.id,
+			OrderID:        az.orderID,
+			Domain:         az.domain,
+			IdentifierType: az.identType,
+			Status:         az.status,
+			CreatedAt:      az.createdAt,
 		}
 		for _, ch := range az.challenges {
 			azPayload.Challenges = append(azPayload.Challenges, acmeChallengeState{
@@ -499,6 +518,10 @@ func orderCreatedEventFrom(o *order, authzs []*authorization, seq int) acmeOrder
 				Token:   ch.token,
 				Status:  ch.status,
 				AuthzID: ch.authzID,
+
+				EmailTokenPart1SHA256: ch.emailTokenPart1SHA256,
+				EmailResponseSHA256:   ch.emailResponseSHA256,
+				EmailMessageID:        ch.emailMessageID,
 			})
 		}
 		payload.Authorizations = append(payload.Authorizations, azPayload)

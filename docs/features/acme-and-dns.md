@@ -468,6 +468,45 @@ fingerprint and rollback reference to the exact wildcard. A failed issue keeps t
 open, shows the server's exact safe error, links to DNS-01 setup, and explicitly says not
 to weaken validation before retrying.
 
+### S/MIME certificates for a mailbox: email-reply-00 (P15, RFC 8823)
+
+With `protocols.acme_email` set, the ACME server also issues signing-only S/MIME
+certificates for mailboxes:
+
+```yaml
+protocols:
+  acme_email:
+    from: acme@ca.example.com          # sends the challenge mail; replies come back here
+    domains: [example.com]             # mail domains this server issues for
+    profile: smime-signing             # allowed_ekus: [emailProtection]
+    relay_addr: smtp.example.com:587   # must DKIM-sign mail for the from domain
+    relay_username: acme               # optional, with relay_password_ref
+    relay_password_ref: file:/run/secrets/smtp-relay
+```
+
+A client orders an `email` identifier. The authorization's one challenge is
+`email-reply-00`: its `token` is token-part2 and its `from` is the address above. The
+server mails token-part1 to the mailbox (`Subject: ACME: <token-part1>`,
+`Auto-Submitted: auto-generated; type=acme`) through the outbox and the relay. The
+client replies with `base64url(SHA-256(token-part1 || token-part2 "." thumbprint))`
+between `-----BEGIN ACME RESPONSE-----` and `-----END ACME RESPONSE-----`, then POSTs
+the challenge. The challenge reports `processing` until the reply is verified, and the
+reply may arrive before or after the POST. A reply from another mailbox, or with
+another token-part1, validates nothing. A wrong response from the right mailbox
+invalidates the challenge, because RFC 8823 allows one guess. The server keeps only
+SHA-256 digests of token-part1 and of the expected response, never the values.
+
+Finalize needs a CSR that names exactly the ordered addresses (a common name, if any,
+must be one of them) and asks for a signing-only key usage: digitalSignature and/or
+nonRepudiation and nothing else. A CSR with no key usage or with an encryption bit asks
+for an encryption certificate. That needs key escrow, which is not offered, so the CSR
+is refused. The certificate is issued under the configured profile with the
+emailProtection EKU, and the address is its only SAN. An order can't mix `email` and
+`dns` identifiers, and a trust-authenticated profile never skips the mailbox proof.
+
+In this release the reply reaches the server through its reply intake. The SMTP
+receiver that verifies the reply's DKIM signature is the next step (see limitations).
+
 ## Use it
 
 Point any ACME client at trstctl's directory. With certbot, using DNS-01:

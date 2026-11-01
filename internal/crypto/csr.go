@@ -165,6 +165,84 @@ func CSRRequestedIdentifiers(der []byte) (CSRIdentifiers, error) {
 	}, nil
 }
 
+// CSRKeyUsageRequest is the key usage a CSR asks for in its extensionRequest
+// (RFC 2985), grouped the way S/MIME issuance needs it (RFC 8823 §3.3).
+type CSRKeyUsageRequest struct {
+	// Present reports whether the CSR asks for a key usage at all.
+	Present bool
+	// DigitalSignature and ContentCommitment (nonRepudiation) are the signing bits.
+	DigitalSignature  bool
+	ContentCommitment bool
+	// Other is any other bit: an encryption or key-agreement usage, or a
+	// certificate- or CRL-signing usage.
+	Other bool
+}
+
+var oidExtensionKeyUsage = asn1.ObjectIdentifier{2, 5, 29, 15}
+
+// KeyUsageRequestExtension is a critical key-usage extension for a CSR's
+// extensionRequest (CertificateRequestTemplate.ExtraExtensions): bit 0
+// digitalSignature, bit 1 nonRepudiation, bit 2 keyEncipherment. An S/MIME
+// client asks for a signing-only certificate with the first two (RFC 8823
+// §3.3).
+func KeyUsageRequestExtension(digitalSignature, nonRepudiation, keyEncipherment bool) (CertificateExtension, error) {
+	var b byte
+	length := 0
+	for i, set := range []bool{digitalSignature, nonRepudiation, keyEncipherment} {
+		if set {
+			b |= 0x80 >> uint(i)
+			length = i + 1
+		}
+	}
+	if length == 0 {
+		return CertificateExtension{}, fmt.Errorf("crypto: a key usage extension needs at least one bit")
+	}
+	value, err := asn1.Marshal(asn1.BitString{Bytes: []byte{b}, BitLength: length})
+	if err != nil {
+		return CertificateExtension{}, err
+	}
+	return CertificateExtension{OID: oidExtensionKeyUsage.String(), Critical: true, Value: value}, nil
+}
+
+// CSRRequestedKeyUsage returns the key usage a CSR requests, WITHOUT verifying
+// its proof-of-possession (see CSRRequestedIdentifiers). A key usage requested
+// twice, or one that does not parse, is an error.
+func CSRRequestedKeyUsage(der []byte) (CSRKeyUsageRequest, error) {
+	csr, err := x509.ParseCertificateRequest(der)
+	if err != nil {
+		return CSRKeyUsageRequest{}, err
+	}
+	var out CSRKeyUsageRequest
+	for _, ext := range csr.Extensions {
+		if !ext.Id.Equal(oidExtensionKeyUsage) {
+			continue
+		}
+		if out.Present {
+			return CSRKeyUsageRequest{}, fmt.Errorf("crypto: the CSR requests key usage twice")
+		}
+		var bits asn1.BitString
+		rest, err := asn1.Unmarshal(ext.Value, &bits)
+		if err != nil || len(rest) != 0 {
+			return CSRKeyUsageRequest{}, fmt.Errorf("crypto: the CSR's key usage does not parse")
+		}
+		out.Present = true
+		for i := 0; i < bits.BitLength; i++ {
+			if bits.At(i) == 0 {
+				continue
+			}
+			switch i {
+			case 0:
+				out.DigitalSignature = true
+			case 1:
+				out.ContentCommitment = true
+			default:
+				out.Other = true
+			}
+		}
+	}
+	return out, nil
+}
+
 // InspectCSR parses a CSR (verifying its self-signature) and returns the
 // profile-relevant attributes of its public key and subject. It is the single
 // inspection seam used by profile validation.

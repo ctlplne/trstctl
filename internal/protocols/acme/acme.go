@@ -47,6 +47,7 @@ const (
 	statusReady       = "ready"
 	statusValid       = "valid"
 	statusDeactivated = "deactivated"
+	statusInvalid     = "invalid"
 	// statusProcessing is RFC 8555's state for an order whose finalize is in
 	// flight. It exists here to CLAIM an order atomically, so two concurrent
 	// finalize requests cannot both observe "ready" and both mint.
@@ -207,12 +208,20 @@ type challenge struct {
 	token   string
 	status  string
 	authzID string
+	// email-reply-00 (P15): digests of token-part1 and of the expected
+	// response, never the values, and the challenge mail's Message-ID.
+	emailTokenPart1SHA256 string
+	emailResponseSHA256   string
+	emailMessageID        string
 }
 
 type authorization struct {
-	id         string
-	orderID    string
+	id      string
+	orderID string
+	// domain is the identifier's value: a DNS name, or an email address when
+	// identType is email (P15).
 	domain     string
+	identType  string
 	status     string
 	challenges []*challenge
 	createdAt  time.Time
@@ -231,6 +240,7 @@ type order struct {
 	profile           string // A55/A56: the selected certificate profile; "" is the mount default
 	attestedKeySHA256 string
 	deviceAttestation *acmeDeviceAttestationState // A131: evidence of a device-bound attested key
+	identType         string                      // P15: "email" for an S/MIME order; "" is dns
 	createdAt         time.Time
 }
 
@@ -332,6 +342,8 @@ type Server struct {
 
 	// dnsPersist offers dns-persist-01 when issuer domain names are configured (P1).
 	dnsPersist *dnsPersistConfig
+	// email offers RFC 8823 email identifiers and email-reply-00 (P15).
+	email *emailChallengeConfig
 
 	mux *http.ServeMux
 }
@@ -1086,6 +1098,17 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.problem(w, r, http.StatusBadRequest, "malformed", err.Error())
 		return
 	}
+	// P15: an order naming email identifiers is an RFC 8823 S/MIME order; it
+	// holds only email identifiers, each in a mail domain this server issues for.
+	var emailAddresses []string
+	if req.hasIdentifierType(IdentifierEmail) {
+		addresses, problemType, detail := s.emailOrderIdentifiers(req)
+		if problemType != "" {
+			s.problem(w, r, http.StatusBadRequest, problemType, detail)
+			return
+		}
+		emailAddresses = addresses
+	}
 	// The credential that admitted this account decides what it may ask for
 	// (B4). This runs before any work is done and before any rate limiter, so a
 	// denial costs nothing and is recorded against the credential rather than
@@ -1102,6 +1125,15 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	// The profile the order is issued under (A55/A56): the credential's pin
 	// wins, a client's request must be advertised and must not contradict it.
 	selectedProfile, profileProblem := s.selectOrderProfile(req.Profile, eabCred)
+	if emailAddresses != nil {
+		selectedProfile, profileProblem = s.email.profile, ""
+		if requested := strings.TrimSpace(req.Profile); requested != "" && requested != s.email.profile {
+			profileProblem = "an S/MIME order is issued under profile " + strconv.Quote(s.email.profile)
+		}
+		if eabCred != nil && eabCred.policy.Profile != "" && eabCred.policy.Profile != s.email.profile {
+			profileProblem = "this account's external account credential pins a profile that does not issue S/MIME certificates"
+		}
+	}
 	if profileProblem != "" {
 		s.problem(w, r, http.StatusBadRequest, "invalidProfile", profileProblem)
 		return
@@ -1117,6 +1149,10 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	s.mu.Lock()
 	eabRequired := s.meta.ExternalAccountRequired
 	s.mu.Unlock()
+	if authMode == profile.ACMEAuthModeTrustAuthenticated && emailAddresses != nil {
+		s.problem(w, r, http.StatusForbidden, "unauthorized", "an S/MIME order always proves control of the mailbox")
+		return
+	}
 	if authMode == profile.ACMEAuthModeTrustAuthenticated && (!eabRequired || acct.eabKeyID == "") {
 		s.problem(w, r, http.StatusForbidden, "unauthorized", "internal-trust ACME orders require a required, EAB-bound account")
 		return
@@ -1136,6 +1172,11 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	pendingChallengeDelta := 0
 	if authMode == profile.ACMEAuthModeTrustAuthenticated {
 		pendingChallengeDelta = 0
+	} else if emailAddresses != nil {
+		for _, address := range emailAddresses {
+			challengeTypesByDomain[address] = []string{ChallengeEmailReply00}
+			pendingChallengeDelta++
+		}
 	} else {
 		for _, id := range req.Identifiers {
 			challengeTypes, err := s.challengeTypesForDomain(r.Context(), id.Value)
@@ -1166,7 +1207,12 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		s.rateLimited(w, r, "too many pending ACME orders for this account")
 		return
 	}
-	pendingAuthzDelta := len(req.Identifiers)
+	values := req.Domains()
+	identType := ""
+	if emailAddresses != nil {
+		values, identType = emailAddresses, IdentifierEmail
+	}
+	pendingAuthzDelta := len(values)
 	if authMode == profile.ACMEAuthModeTrustAuthenticated {
 		pendingAuthzDelta = 0
 	}
@@ -1188,21 +1234,25 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 		authzStatus = statusValid
 		challengeStatus = statusValid
 	}
-	o := &order{id: s.nextID(), accountURL: acct.url, status: orderStatus, authMode: authMode, replaces: req.Replaces, profile: selectedProfile, createdAt: now}
+	o := &order{id: s.nextID(), accountURL: acct.url, status: orderStatus, authMode: authMode, replaces: req.Replaces, profile: selectedProfile, identType: identType, createdAt: now}
 	// Persist this identity before issuance. A new order must renew even when
 	// the client reuses identical CSR bytes; retries must recover the same mint.
 	o.issuanceKey = ca.ProviderIdempotencyKey(strings.Join([]string{"acme-order-v1", s.stateTenantID, acct.url, o.id}, "\x00"))
 	var authzURLs []string
 	var authzs []*authorization
-	for _, id := range req.Identifiers {
-		o.domains = append(o.domains, id.Value)
-		az := &authorization{id: s.nextID(), orderID: o.id, domain: id.Value, status: authzStatus, createdAt: now}
-		challengeTypes := challengeTypesByDomain[id.Value]
+	var mails []EmailChallengeMail
+	for _, value := range values {
+		o.domains = append(o.domains, value)
+		az := &authorization{id: s.nextID(), orderID: o.id, domain: value, identType: identType, status: authzStatus, createdAt: now}
+		challengeTypes := challengeTypesByDomain[value]
 		if authMode == profile.ACMEAuthModeTrustAuthenticated {
 			challengeTypes = []string{ChallengeHTTP01}
 		}
 		for _, ct := range challengeTypes {
 			ch := &challenge{id: s.nextID(), typ: ct, token: randomToken(), status: challengeStatus, authzID: az.id}
+			if ct == ChallengeEmailReply00 {
+				mails = append(mails, s.newEmailChallenge(ch, value, acct.key.Thumbprint(), now))
+			}
 			az.challenges = append(az.challenges, ch)
 		}
 		authzs = append(authzs, az)
@@ -1223,6 +1273,15 @@ func (s *Server) newOrder(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	s.orders[o.id] = o
 	orderURL := base + "/acme/order/" + o.id
 	s.mu.Unlock()
+
+	// P15: the challenge mail goes out after the order exists (RFC 8823 §3
+	// step 4), through the outbox; it carries token-part1, which the state does not.
+	for _, mail := range mails {
+		if err := s.email.mailer.QueueChallengeMail(r.Context(), mail); err != nil {
+			s.problemWithError(w, r, http.StatusInternalServerError, "serverInternal", "the challenge mail could not be queued", err)
+			return
+		}
+	}
 
 	// Count the order against the credential only once it exists, so a rejected
 	// or failed order does not consume quota an operator granted (B4).
@@ -1287,6 +1346,19 @@ func (s *Server) acceptChallenge(w http.ResponseWriter, r *http.Request, msg *jo
 	if !s.accountOwns(o.accountURL, acct) {
 		s.mu.Unlock()
 		s.problem(w, r, http.StatusNotFound, "malformed", "no such challenge")
+		return
+	}
+	if ch.typ == ChallengeEmailReply00 {
+		// RFC 8823 §3 step 7: the client says it has replied. The reply itself
+		// validates the challenge when the intake verifies it (AcceptEmailReply),
+		// before or after this POST; until then the challenge is processing.
+		if ch.status == statusPending {
+			ch.status = statusProcessing
+		}
+		out := s.challengeJSON(base, ch)
+		s.mu.Unlock()
+		addLink(w, base+"/acme/authz/"+az.id, "up")
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
 	s.mu.Unlock()
@@ -1529,13 +1601,22 @@ func (s *Server) finalize(w http.ResponseWriter, r *http.Request, msg *jose.ACME
 	// opaque-bytes seam is intact: proof-of-possession remains the licensed
 	// issuer's job, and a CSR whose subject algorithm the core parser cannot
 	// verify still reaches the CA unchanged.
-	if err := csrIdentifiersMatchOrder(csr, o.domains); err != nil {
+	dnsNames := o.domains
+	if o.identType == IdentifierEmail {
+		// P15: RFC 8823 §3 step 8 and §3.3 — the CSR names exactly the order's
+		// addresses and asks for a signing-only key usage.
+		if err := csrEmailIdentifiersMatchOrder(csr, o.domains); err != nil {
+			s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
+			return
+		}
+		dnsNames = nil
+	} else if err := csrIdentifiersMatchOrder(csr, o.domains); err != nil {
 		s.problem(w, r, http.StatusBadRequest, "badCSR", err.Error())
 		return
 	}
 
 	cert, err := s.ca.Issue(r.Context(), ca.IssueRequest{
-		CSR: csr, DNSNames: o.domains, TTL: 90 * 24 * time.Hour,
+		CSR: csr, DNSNames: dnsNames, TTL: 90 * 24 * time.Hour,
 		ProviderIdempotencyKey: o.issuanceKey,
 		// A55/A56: the profile the order selected; empty keeps the mount default.
 		ProfileName: o.profile, Protocol: "acme",
@@ -1968,7 +2049,7 @@ func (s *Server) allAuthzValid(o *order) bool {
 func (s *Server) orderJSON(base string, o *order, authzURLs []string) map[string]any {
 	ids := make([]map[string]string, 0, len(o.domains))
 	for _, d := range o.domains {
-		ids = append(ids, map[string]string{"type": "dns", "value": d})
+		ids = append(ids, map[string]string{"type": identifierTypeOf(o.identType), "value": d})
 	}
 	out := map[string]any{
 		"status":         o.status,
@@ -1989,7 +2070,7 @@ func (s *Server) authzJSON(base string, az *authorization) map[string]any {
 	}
 	return map[string]any{
 		"status":     az.status,
-		"identifier": map[string]string{"type": "dns", "value": az.domain},
+		"identifier": map[string]string{"type": identifierTypeOf(az.identType), "value": az.domain},
 		"challenges": chals,
 	}
 }

@@ -2,6 +2,12 @@
 
 ### Added
 
+- S/MIME certificates over ACME (RFC 8823): with `protocols.acme_email`, an ACME client orders an `email`
+  identifier and answers the `email-reply-00` challenge. The server mails token-part1 through the outbox and the
+  configured SMTP relay, verifies the reply against stored digests (a wrong mailbox or token validates nothing, and a
+  wrong response invalidates the challenge), and issues a signing-only certificate with the emailProtection EKU and
+  the address as its only SAN. A CSR that asks for encryption is refused.
+
 - Move a leaked secret into the vault: `trstctl secrets scans move <finding-id> --repo <checkout> --name <secret>`
   re-finds the value a redacted repository finding names in your own checkout (the pinned gitleaks, its report on a
   pipe), stores it as a native secret and links the finding with

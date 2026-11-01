@@ -148,7 +148,13 @@ var coreProductionPrivacyEventCatalog = func() []productionPrivacyEventPolicy {
 			catalogPrivacyRule("/authorizations/*/challenges/*/type", opaque),
 			catalogPrivacyRule("/authorizations/*/challenges/*/token", opaque),
 			catalogPrivacyRule("/authorizations/*/challenges/*/status", opaque),
-			catalogPrivacyRule("/authorizations/*/challenges/*/authz_id", opaque)),
+			catalogPrivacyRule("/authorizations/*/challenges/*/authz_id", opaque),
+			// P15: an email order's identifier type, and the digests (never the
+			// values) and Message-ID of its email-reply-00 challenges.
+			catalogPrivacyRule("/order/identifier_type", opaque), catalogPrivacyRule("/authorizations/*/identifier_type", opaque),
+			catalogPrivacyRule("/authorizations/*/challenges/*/email_token_part1_sha256", opaque),
+			catalogPrivacyRule("/authorizations/*/challenges/*/email_response_sha256", opaque),
+			catalogPrivacyRule("/authorizations/*/challenges/*/email_message_id", opaque)),
 		// These canonical bytes carry an agent signature. Rewriting a name
 		// inside the statement would destroy the evidence; subject erasure
 		// must refuse this payload rather than silently invalidate it.

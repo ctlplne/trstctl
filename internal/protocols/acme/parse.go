@@ -102,8 +102,8 @@ func ParseOrderRequest(payload []byte) (OrderRequest, error) {
 	}
 	out := OrderRequest{Replaces: raw.Replaces, Profile: strings.TrimSpace(raw.Profile)}
 	for i, id := range raw.Identifiers {
-		if id.Type != "dns" {
-			return OrderRequest{}, fmt.Errorf("acme: identifier %d has unsupported type %q (only dns)", i, id.Type)
+		if id.Type != IdentifierDNS && id.Type != IdentifierEmail {
+			return OrderRequest{}, fmt.Errorf("acme: identifier %d has unsupported type %q (dns or email)", i, id.Type)
 		}
 		if id.Value == "" {
 			return OrderRequest{}, fmt.Errorf("acme: identifier %d has empty value", i)

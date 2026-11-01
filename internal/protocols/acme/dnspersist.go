@@ -215,5 +215,8 @@ func (s *Server) challengeJSON(base string, ch *challenge) map[string]any {
 	if ch.typ == ChallengeDNSPersist01 && s.dnsPersist != nil {
 		out["issuer-domain-names"] = append([]string(nil), s.dnsPersist.issuers...)
 	}
+	if ch.typ == ChallengeEmailReply00 && s.email != nil {
+		out["from"] = s.email.from // RFC 8823 §3 step 3
+	}
 	return out
 }

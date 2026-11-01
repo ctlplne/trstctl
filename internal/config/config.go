@@ -1045,6 +1045,9 @@ type Protocols struct {
 	// ACMEDNSPersist offers dns-persist-01 (P1) for standing records that name
 	// one of these issuer domain names; empty keeps it off.
 	ACMEDNSPersist ACMEDNSPersist `json:"acme_dns_persist,omitempty"`
+	// ACMEEmail offers S/MIME certificates over ACME (RFC 8823, P15); an empty
+	// from keeps it off.
+	ACMEEmail ACMEEmail `json:"acme_email,omitempty"`
 	// RAKeyFile is the sealed-at-rest RSA transport identity SCEP/CMP use for CMS
 	// request decryption and response protection. It is not the issuing CA key, but
 	// it must survive restarts and be shared by replicas so clients that cached
@@ -4931,6 +4934,7 @@ func validateServedSurfaces(c *Config) []error {
 	errs = append(errs, c.Protocols.ACMEQuota.validate()...)
 	errs = append(errs, validateACMEEAB(c.Protocols.ACMEEAB)...)
 	errs = append(errs, validateACMEDNSPersist(c.Protocols.ACMEDNSPersist)...)
+	errs = append(errs, validateACMEEmail(c.Protocols.ACMEEmail)...)
 	// Served plugin surface (EXC-WIRE-05; ARCH-007/SUPPLY-004): when enabled it must
 	// name a directory and at least one trusted key, so the binary never serves an
 	// unverifiable plugin path (fail closed). When disabled the block is ignored.
