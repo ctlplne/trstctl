@@ -265,6 +265,11 @@ func appendTSIG(msg []byte, id uint16, keyName string, secret []byte, now time.T
 	return out, nil
 }
 
+// tsigRData signs msg as RFC 8945 §4.3.3 specifies: the MAC covers the
+// message as sent (before the TSIG record is added and counted), then the
+// TSIG variables — key name, class ANY, TTL 0, algorithm, time signed, fudge,
+// error and other len. The MAC size, the MAC and the original ID are in the
+// record but not in the digest.
 func tsigRData(msg []byte, id uint16, keyName string, secret []byte, now time.Time) ([]byte, error) {
 	var signed []byte
 	signed = append(signed, msg...)
@@ -274,15 +279,18 @@ func tsigRData(msg []byte, id uint16, keyName string, secret []byte, now time.Ti
 	}
 	signed = appendUint16(signed, dnsClassANY)
 	signed = appendUint32(signed, 0)
-	if signed, err = appendTSIGVars(signed, now, 0); err != nil {
+	if signed, err = appendTSIGTimers(signed, now); err != nil {
 		return nil, err
 	}
+	signed = appendUint16(signed, 0) // error
+	signed = appendUint16(signed, 0) // other len
 	mac := crypto.HMACSHA256(secret, signed)
 
 	var rdata []byte
-	if rdata, err = appendTSIGVars(rdata, now, uint16(len(mac))); err != nil { // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
+	if rdata, err = appendTSIGTimers(rdata, now); err != nil {
 		return nil, err
 	}
+	rdata = appendUint16(rdata, uint16(len(mac))) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	rdata = append(rdata, mac...)
 	rdata = appendUint16(rdata, id)
 	rdata = appendUint16(rdata, 0) // error
@@ -290,7 +298,9 @@ func tsigRData(msg []byte, id uint16, keyName string, secret []byte, now time.Ti
 	return rdata, nil
 }
 
-func appendTSIGVars(out []byte, now time.Time, macSize uint16) ([]byte, error) {
+// appendTSIGTimers appends the algorithm name, the 48-bit time signed and the
+// fudge.
+func appendTSIGTimers(out []byte, now time.Time) ([]byte, error) {
 	var err error
 	if out, err = appendName(out, tsigAlg); err != nil {
 		return nil, err
@@ -298,7 +308,6 @@ func appendTSIGVars(out []byte, now time.Time, macSize uint16) ([]byte, error) {
 	secs := uint64(now.Unix())                                                                                   // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	out = append(out, byte(secs>>40), byte(secs>>32), byte(secs>>24), byte(secs>>16), byte(secs>>8), byte(secs)) // #nosec G115 -- DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190)
 	out = appendUint16(out, tsigFudge)
-	out = appendUint16(out, macSize)
 	return out, nil
 }
 

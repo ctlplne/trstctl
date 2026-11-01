@@ -875,6 +875,10 @@
 
 ### Fixed
 
+- The RFC 2136 DNS provider's TSIG-signed updates are accepted by DNS servers: the signature now covers
+  every TSIG variable RFC 8945 lists, including Other Len, which was left out, so a standards server (BIND,
+  Knot, PowerDNS, miekg/dns) refused every signed update as "bad signature" and DNS-01 through RFC 2136
+  never published.
 - A SPIRE server whose upstream authority is the trstctl plugin no longer stops
   at startup when trstctl does not serve JWT key publication (an older trstctl
   answers 404): the plugin reports publication as unsupported, so SPIRE logs a
