@@ -594,15 +594,13 @@ see in AWS Secrets Manager, Google Secret Manager, Azure Key Vault and HashiCorp
 (name, location, rotation and update times) as a `cloud_secret_resource` finding and
 never reads a value.
 
-Four more providers cover code hosts and secret stores outside the clouds (A173), each
-with a `token_ref` and an optional `endpoint` for a self-hosted server:
+Two more providers cover the code hosts' CI/CD secret stores (A173), each with a
+`token_ref` and an optional `endpoint` for a self-hosted server:
 
 | Provider | Scope fields | What it lists |
 |---|---|---|
 | `github-actions` | `owner` + `repo`, `environments`, `org` | Repository, environment and organization Actions secrets. GitHub never returns a value, so this provider is metadata-only and refuses `inspect_content`. |
 | `gitlab-ci` | `project`, `group` (ID or full path) | CI/CD variables with type, protection, masking, environment scope. A hidden variable's value is never returned and is reported as not inspectable. |
-| `1password-connect` | `vaults` (names or IDs; empty = all) | Items in a Connect server's vaults; with inspection, each item's fields. `endpoint` is the Connect server and is required. |
-| `doppler` | `project`, `configs` | Secret names per config from the names-only endpoint; with inspection, each config's values are read once. |
 
 With `inspect_content: true` on a provider, trstctl also reads each value it is allowed
 to, holds it only in wipeable memory, and looks inside it (A172):

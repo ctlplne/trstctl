@@ -95,14 +95,12 @@ type cloudSecretProviderConfig struct {
 	LabelValue           string   `json:"label_value"`
 	NamePrefix           string   `json:"name_prefix"`
 	InspectContent       bool     `json:"inspect_content"`
-	// Code-host and secret-store providers (A173).
+	// Code-host secret stores (A173).
 	Owner        string   `json:"owner"`
 	Repo         string   `json:"repo"`
 	Org          string   `json:"org"`
 	Environments []string `json:"environments"`
 	Group        string   `json:"group"`
-	Vaults       []string `json:"vaults"`
-	Configs      []string `json:"configs"`
 }
 
 type ctLogDiscoveryConfig struct {

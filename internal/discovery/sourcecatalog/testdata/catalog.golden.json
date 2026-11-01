@@ -935,22 +935,6 @@
           "description": "Group ID or full path whose CI/CD variables are listed; a project uses the project field."
         },
         {
-          "path": "providers[].vaults",
-          "label": "1Password vaults",
-          "type": "string_list",
-          "required": false,
-          "advanced": true,
-          "description": "Vault IDs or names; empty lists every vault the token can read."
-        },
-        {
-          "path": "providers[].configs",
-          "label": "Doppler configs",
-          "type": "string_list",
-          "required": false,
-          "advanced": true,
-          "description": "Configs of the project; empty lists every config."
-        },
-        {
           "path": "providers[].inspect_content",
           "label": "Inspect content for certificates and credentials",
           "type": "boolean",
@@ -1041,33 +1025,6 @@
             "endpoint",
             "project",
             "group",
-            "token_ref",
-            "name_prefix",
-            "inspect_content"
-          ]
-        },
-        {
-          "id": "1password-connect",
-          "label": "1Password Connect",
-          "least_privilege": "Metadata: a Connect token with read access to the named vaults. Optional content inspection reads each item's fields.",
-          "preferred_credential": "token_ref",
-          "fields": [
-            "endpoint",
-            "vaults",
-            "token_ref",
-            "name_prefix",
-            "inspect_content"
-          ]
-        },
-        {
-          "id": "doppler",
-          "label": "Doppler",
-          "least_privilege": "Metadata: a read-only service or personal token; names come from the names-only endpoint. Optional content inspection reads each config's values once.",
-          "preferred_credential": "token_ref",
-          "fields": [
-            "endpoint",
-            "project",
-            "configs",
             "token_ref",
             "name_prefix",
             "inspect_content"
@@ -1300,22 +1257,6 @@
           "description": "Group ID or full path whose CI/CD variables are listed; a project uses the project field."
         },
         {
-          "path": "providers[].vaults",
-          "label": "1Password vaults",
-          "type": "string_list",
-          "required": false,
-          "advanced": true,
-          "description": "Vault IDs or names; empty lists every vault the token can read."
-        },
-        {
-          "path": "providers[].configs",
-          "label": "Doppler configs",
-          "type": "string_list",
-          "required": false,
-          "advanced": true,
-          "description": "Configs of the project; empty lists every config."
-        },
-        {
           "path": "providers[].inspect_content",
           "label": "Inspect content for certificates and credentials",
           "type": "boolean",
@@ -1406,33 +1347,6 @@
             "endpoint",
             "project",
             "group",
-            "token_ref",
-            "name_prefix",
-            "inspect_content"
-          ]
-        },
-        {
-          "id": "1password-connect",
-          "label": "1Password Connect",
-          "least_privilege": "Metadata: a Connect token with read access to the named vaults. Optional content inspection reads each item's fields.",
-          "preferred_credential": "token_ref",
-          "fields": [
-            "endpoint",
-            "vaults",
-            "token_ref",
-            "name_prefix",
-            "inspect_content"
-          ]
-        },
-        {
-          "id": "doppler",
-          "label": "Doppler",
-          "least_privilege": "Metadata: a read-only service or personal token; names come from the names-only endpoint. Optional content inspection reads each config's values once.",
-          "preferred_credential": "token_ref",
-          "fields": [
-            "endpoint",
-            "project",
-            "configs",
             "token_ref",
             "name_prefix",
             "inspect_content"

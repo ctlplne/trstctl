@@ -6,9 +6,9 @@
   a Jira export, a CI log or a container image can be written back as a thread reply, an issue
   comment, a commit status at GitHub or GitLab, or an OCI referrer on the image, by an operator or
   automatically, naming the rule and the finding and never the secret.
-- Secret-store discovery beyond the cloud secret managers: GitHub Actions secrets (repository,
-  environment and organization; metadata only), GitLab CI/CD variables, 1Password Connect items and
-  Doppler secrets, with the same optional content inspection for certificates and credentials.
+- Code-host secret stores in discovery: GitHub Actions secrets (repository, environment and
+  organization; metadata only) and GitLab CI/CD variables (project and group, hidden variables
+  flagged), with the same optional content inspection for certificates and credentials.
 - API keys, tokens and private keys inside external secret stores: with content inspection, a
   cloud secret source checks each value it reads from AWS Secrets Manager, Google Secret Manager,
   Azure Key Vault or Vault KV against built-in credential rules and records each match with its

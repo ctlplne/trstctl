@@ -10994,17 +10994,6 @@ export const messages = {
     defaultMessage: "Numeric ID or full path, for example group/app.",
     description: "GitLab project or group identifier help.",
   },
-  "discovery.setup.onePasswordVaults": { defaultMessage: "1Password vaults", description: "1Password Connect vaults field." },
-  "discovery.setup.onePasswordVaultsDescription": {
-    defaultMessage: "Vault names or IDs, separated by commas. Leave empty to list every vault the token can read.",
-    description: "1Password Connect vaults help.",
-  },
-  "discovery.setup.dopplerProject": { defaultMessage: "Doppler project", description: "Doppler project field." },
-  "discovery.setup.dopplerProjectDescription": {
-    defaultMessage: "Optional. Leave empty to list every project the token can read.",
-    description: "Doppler project help.",
-  },
-  "discovery.setup.dopplerConfigs": { defaultMessage: "Doppler configs", description: "Doppler configs field." },
   "discovery.setup.validation.githubRepo": { defaultMessage: "Enter both the owner and the repository.", description: "GitHub repository validation." },
   "discovery.setup.validation.githubScope": {
     defaultMessage: "Enter a repository (owner and name) or an organization.",
@@ -11019,14 +11008,6 @@ export const messages = {
     description: "GitHub content-inspection validation.",
   },
   "discovery.setup.validation.gitlabScope": { defaultMessage: "Enter a GitLab project or group.", description: "GitLab scope validation." },
-  "discovery.setup.validation.connectEndpoint": {
-    defaultMessage: "Enter the 1Password Connect server URL as the API endpoint.",
-    description: "1Password Connect endpoint validation.",
-  },
-  "discovery.setup.validation.dopplerProject": {
-    defaultMessage: "Configs belong to a project. Enter the Doppler project.",
-    description: "Doppler project validation.",
-  },
   "discovery.setup.validation.gcpProject": { defaultMessage: "Enter the authorized Google Cloud project.", description: "Google Cloud project validation." },
   "discovery.setup.validation.gcpLocation": {
     defaultMessage: "Enter the Certificate Manager location.",

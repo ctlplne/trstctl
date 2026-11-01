@@ -15,15 +15,15 @@ import (
 	"trstctl.com/trstctl/internal/discovery/cloudsecret/secretstoretest"
 )
 
-// A173 Done-when: secret stores beyond the four cloud secret managers. One
-// served secret_store source reads GitHub Actions secrets (repository,
-// environment and organization; metadata only, because GitHub never returns
-// a value), GitLab CI/CD variables (project and group; a hidden variable is
-// reported as not inspectable), 1Password Connect items and Doppler secrets.
-// With content inspection, a certificate and API keys inside GitLab,
-// 1Password and Doppler values become findings and no value is kept; asking
-// to inspect GitHub secrets fails that provider with the reason; a provider
-// outside the set is refused at creation with the specific unsupported error.
+// A173 Done-when: code-host secret stores beside the four cloud secret
+// managers. One served secret_store source reads GitHub Actions secrets
+// (repository, environment and organization; metadata only, because GitHub
+// never returns a value) and GitLab CI/CD variables (project and group; a
+// hidden variable is flagged as not inspectable). With content inspection, a
+// certificate and an API key in GitLab variables become findings and no
+// value is kept; asking to inspect GitHub secrets fails that provider with
+// the reason; a provider outside the set is refused with the specific
+// unsupported error; and the source catalog lists six secret-store providers.
 func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 	der, _, err := ctlogtest.IssueCert("ci.a173.example", "ci.a173.example")
 	if err != nil {
@@ -31,9 +31,7 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 	}
 	certPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 	gitlabToken := "gl" + "pat-" + strings.Repeat("A173srv", 4)[:24]
-	stripe := "sk" + "_live_" + strings.Repeat("A173srvop", 4)[:28]
-	slack := "xo" + "xb-" + strings.Repeat("17320-", 7)[:36]
-	raw := []string{gitlabToken, stripe, slack}
+	raw := []string{gitlabToken}
 
 	github := secretstoretest.NewGitHub("gh-token", "acme", "api", "acme-org", []secretstoretest.GitHubSecret{
 		{Scope: "repo", Name: "DEPLOY_KEY"}, {Scope: "env:production", Name: "PROD_DB_URL"}, {Scope: "org", Name: "ORG_PAT", Visibility: "all"},
@@ -46,19 +44,10 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 		{Scope: "group:acme", Key: "REGION", Value: "us-east-1"},
 	})
 	t.Cleanup(gitlab.Close)
-	onePassword := secretstoretest.NewOnePassword("op-token", []secretstoretest.OnePasswordItem{
-		{Vault: "Payments", Title: "Stripe live", Fields: map[string]string{"credential": stripe, "username": "payments-bot"}},
-	})
-	t.Cleanup(onePassword.Close)
-	doppler := secretstoretest.NewDoppler("dp-token", []secretstoretest.DopplerSecret{
-		{Project: "backend", Config: "prd", Name: "SLACK_BOT_TOKEN", Value: slack},
-		{Project: "backend", Config: "prd", Name: "LOG_LEVEL", Value: "info"},
-	})
-	t.Cleanup(doppler.Close)
-	for env, value := range map[string]string{"TRSTCTL_A173_GH": "gh-token", "TRSTCTL_A173_GL": "gl-token", "TRSTCTL_A173_OP": "op-token", "TRSTCTL_A173_DP": "dp-token"} {
+	for env, value := range map[string]string{"TRSTCTL_A173_GH": "gh-token", "TRSTCTL_A173_GL": "gl-token"} {
 		t.Setenv(env, value)
 	}
-	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A173_GH", "env:TRSTCTL_A173_GL", "env:TRSTCTL_A173_OP", "env:TRSTCTL_A173_DP"))
+	h := newOperatingServedHarness(t, config.Protocols{}, allowOutboundEnvCredentialRefs("env:TRSTCTL_A173_GH", "env:TRSTCTL_A173_GL"))
 	tok := seedScopedToken(t, h.store, h.tenant, "discovery:read", "discovery:write", string(authz.PrivateEgress))
 
 	at := func(url string, fields map[string]any) map[string]any {
@@ -125,11 +114,9 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 	sourceID, run := runSource("code-hosts-and-stores",
 		at(github.URL(), map[string]any{"provider": "github-actions", "owner": "acme", "repo": "api", "environments": []string{"production"}, // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
 			"org": "acme-org", "token_ref": "env:TRSTCTL_A173_GH"}),
-		at(gitlab.URL(), map[string]any{"provider": "gitlab-ci", "project": "acme/api", "group": "acme", "token_ref": "env:TRSTCTL_A173_GL", "inspect_content": true}),          // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
-		at(onePassword.URL(), map[string]any{"provider": "1password-connect", "vaults": []string{"Payments"}, "token_ref": "env:TRSTCTL_A173_OP", "inspect_content": true}),     // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
-		at(doppler.URL(), map[string]any{"provider": "doppler", "project": "backend", "configs": []string{"prd"}, "token_ref": "env:TRSTCTL_A173_DP", "inspect_content": true}), // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
+		at(gitlab.URL(), map[string]any{"provider": "gitlab-ci", "project": "acme/api", "group": "acme", "token_ref": "env:TRSTCTL_A173_GL", "inspect_content": true}), // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
 	)
-	if run.Status != "succeeded" || len(run.TargetResults) != 4 {
+	if run.Status != "succeeded" || len(run.TargetResults) != 2 {
 		t.Fatalf("run = %+v", run)
 	}
 	rows, body := findings(sourceID)
@@ -143,14 +130,10 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 		}
 	}
 	want := map[string]int{
-		"github-actions/cloud_secret_resource":    3,
-		"gitlab-ci/cloud_secret_resource":         4,
-		"gitlab-ci/x509_certificate":              1,
-		"gitlab-ci/secret_store_api_key":          1,
-		"1password-connect/cloud_secret_resource": 1,
-		"1password-connect/secret_store_api_key":  1,
-		"doppler/cloud_secret_resource":           2,
-		"doppler/secret_store_api_key":            1,
+		"github-actions/cloud_secret_resource": 3,
+		"gitlab-ci/cloud_secret_resource":      4,
+		"gitlab-ci/x509_certificate":           1,
+		"gitlab-ci/secret_store_api_key":       1,
 	}
 	for key, n := range want {
 		if got[key] != n {
@@ -175,20 +158,44 @@ func TestServedSecretStoreProvidersBeyondCloudSecretManagers(t *testing.T) {
 	// reason and the rest of the source still runs.
 	_, run = runSource("github-inspect-refused",
 		at(github.URL(), map[string]any{"provider": "github-actions", "owner": "acme", "repo": "api", "token_ref": "env:TRSTCTL_A173_GH", "inspect_content": true}), // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
-		at(doppler.URL(), map[string]any{"provider": "doppler", "project": "backend", "token_ref": "env:TRSTCTL_A173_DP"}),                                          // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
+		at(gitlab.URL(), map[string]any{"provider": "gitlab-ci", "group": "acme", "token_ref": "env:TRSTCTL_A173_GL"}),                                              // #nosec G101 -- credential references to fabricated fixture values (CWE-798)
 	)
 	outcomes := map[string]string{}
 	for _, r := range run.TargetResults {
 		outcomes[r.Target] = r.Status + ": " + r.Error
 	}
-	if run.Status != "partial" || !strings.Contains(outcomes["github-actions"], "never returns Actions secret values") || !strings.HasPrefix(outcomes["doppler"], "succeeded") {
+	if run.Status != "partial" || !strings.Contains(outcomes["github-actions"], "never returns Actions secret values") || !strings.HasPrefix(outcomes["gitlab-ci"], "succeeded") {
 		t.Fatalf("run = %s / %+v", run.Status, outcomes)
 	}
 	// A provider outside the served set is refused when the source is
 	// created, naming it.
 	status, body := secretsReq(t, h, http.MethodPost, "/api/v1/discovery/sources", tok, map[string]any{
-		"name": "unserved-store", "kind": "secret_store", "config": map[string]any{"providers": []map[string]any{{"provider": "infisical"}}}})
-	if status != http.StatusBadRequest || !strings.Contains(string(body), `unsupported provider \"infisical\"`) {
+		"name": "unserved-store", "kind": "secret_store", "config": map[string]any{"providers": []map[string]any{{"provider": "unlisted-store"}}}})
+	if status != http.StatusBadRequest || !strings.Contains(string(body), `unsupported provider \"unlisted-store\"`) {
 		t.Fatalf("unserved provider = %d %s", status, body)
+	}
+	// The source catalog lists the six served secret-store providers.
+	status, body = secretsReq(t, h, http.MethodGet, "/api/v1/discovery/capabilities", tok, nil)
+	var catalog struct {
+		Items []struct {
+			Kind      string `json:"kind"`
+			Providers []struct {
+				ID string `json:"id"`
+			} `json:"providers"`
+		} `json:"items"`
+	}
+	if status != http.StatusOK || json.Unmarshal(body, &catalog) != nil {
+		t.Fatalf("catalog = %d %s", status, body)
+	}
+	var ids []string
+	for _, item := range catalog.Items {
+		if item.Kind == "secret_store" {
+			for _, p := range item.Providers {
+				ids = append(ids, p.ID)
+			}
+		}
+	}
+	if strings.Join(ids, ",") != "aws-secrets-manager,gcp-secret-manager,azure-key-vault,hashicorp-vault,github-actions,gitlab-ci" {
+		t.Fatalf("secret_store providers = %v, want the six served ones", ids)
 	}
 }

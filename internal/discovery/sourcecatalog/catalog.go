@@ -227,8 +227,6 @@ func cloudSecretCapability(kind, label string) Capability {
 			provider("hashicorp-vault", "HashiCorp Vault KV", "Metadata: list/read on the approved metadata path. Optional content inspection additionally needs read on the filtered data path.", "token_ref", "vault_url", "api_version", "mount", "path_prefix", "token_ref", "inspect_content"),
 			provider("github-actions", "GitHub Actions secrets", "Metadata only: a fine-grained token with Secrets read on the repository (and Environments read for environment secrets) or an org token with Secrets read. GitHub never returns values, so content inspection is refused.", "token_ref", "endpoint", "owner", "repo", "environments", "org", "token_ref", "name_prefix"),
 			provider("gitlab-ci", "GitLab CI/CD variables", "Metadata: a read_api token with at least Maintainer on the project or group (GitLab returns values in the listing; trstctl wipes them unless content inspection is chosen). Hidden variables are never returned.", "token_ref", "endpoint", "project", "group", "token_ref", "name_prefix", "inspect_content"),
-			provider("1password-connect", "1Password Connect", "Metadata: a Connect token with read access to the named vaults. Optional content inspection reads each item's fields.", "token_ref", "endpoint", "vaults", "token_ref", "name_prefix", "inspect_content"),
-			provider("doppler", "Doppler", "Metadata: a read-only service or personal token; names come from the names-only endpoint. Optional content inspection reads each config's values once.", "token_ref", "endpoint", "project", "configs", "token_ref", "name_prefix", "inspect_content"),
 		},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#cloud-secret-managers",
 	}
@@ -264,8 +262,6 @@ func cloudFields(secret bool) []Field {
 			field("providers[].environments", "GitHub environments", "string_list", false, false, true, "Deployment environments whose secrets are listed too."),
 			field("providers[].org", "GitHub organization", "string", false, false, false, "Organization whose Actions secrets are listed."),
 			field("providers[].group", "GitLab group", "string", false, false, false, "Group ID or full path whose CI/CD variables are listed; a project uses the project field."),
-			field("providers[].vaults", "1Password vaults", "string_list", false, false, true, "Vault IDs or names; empty lists every vault the token can read."),
-			field("providers[].configs", "Doppler configs", "string_list", false, false, true, "Configs of the project; empty lists every config."),
 			field("providers[].inspect_content", "Inspect content for certificates and credentials", "boolean", false, false, true, "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata and masked, fingerprinted API-key, token, and private-key findings only."),
 		)
 	}

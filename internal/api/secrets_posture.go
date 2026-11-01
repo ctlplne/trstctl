@@ -717,7 +717,7 @@ func normalizeCloudSecretManagerProvider(provider string) string {
 		return "azure-key-vault"
 	case "hashicorp-vault", "vault":
 		return "hashicorp-vault"
-	case "github-actions", "gitlab-ci", "1password-connect", "doppler":
+	case "github-actions", "gitlab-ci":
 		return strings.TrimSpace(strings.ToLower(provider))
 	default:
 		return ""
@@ -882,24 +882,6 @@ func cloudSecretManagerProviderSpecs() []cloudSecretManagerProviderSpec {
 			SyncWriteOperation: "PUT /api/v4/projects/{id}/variables/{key}",
 			Capabilities:       []string{"code-host-secret-store", "metadata-only-discovery", "sealed-outbox-sync"},
 			EvidenceRefs:       []string{"internal/discovery/cloudsecret/gitlabci/gitlabci.go", "internal/secretsync/pushers.go"},
-		},
-		{
-			ID:                 "1password-connect",
-			Name:               "1Password Connect",
-			Platform:           "1password",
-			DiscoverySupported: true,
-			DiscoveryReadOps:   []string{"GET /v1/vaults", "GET /v1/vaults/{vault}/items", "GET /v1/vaults/{vault}/items/{item}"},
-			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
-			EvidenceRefs:       []string{"internal/discovery/cloudsecret/onepassword/onepassword.go"},
-		},
-		{
-			ID:                 "doppler",
-			Name:               "Doppler",
-			Platform:           "doppler",
-			DiscoverySupported: true,
-			DiscoveryReadOps:   []string{"GET /v3/projects", "GET /v3/configs", "GET /v3/configs/config/secrets/names", "GET /v3/configs/config/secrets"},
-			Capabilities:       []string{"secret-store", "metadata-only-discovery"},
-			EvidenceRefs:       []string{"internal/discovery/cloudsecret/doppler/doppler.go"},
 		},
 	}
 }

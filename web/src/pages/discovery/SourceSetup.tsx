@@ -67,8 +67,6 @@ const secretFieldPaths = [
   "providers[].environments",
   "providers[].org",
   "providers[].group",
-  "providers[].vaults",
-  "providers[].configs",
 ] as const;
 
 /** This is the deliberate React adapter side of the server-owned source
@@ -176,8 +174,6 @@ const setupSchema = z
     environments: z.string(),
     org: z.string().trim(),
     group: z.string().trim(),
-    vaults: z.string(),
-    configs: z.string(),
     allowPrivateEndpoint: z.boolean(),
     privateEgressCIDRs: z.string(),
     adcsURL: z.string().trim(),
@@ -344,8 +340,6 @@ const defaults: SetupValues = {
   environments: "",
   org: "",
   group: "",
-  vaults: "",
-  configs: "",
   allowPrivateEndpoint: false,
   privateEgressCIDRs: "",
   adcsURL: "ldaps://",
