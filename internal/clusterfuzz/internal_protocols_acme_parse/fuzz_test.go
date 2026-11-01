@@ -156,3 +156,27 @@ func FuzzParseRevokeRequest(f *testing.F) {
 		}
 	})
 }
+
+// FuzzParseEmailReply: a received RFC 8823 reply is untrusted mail; parsing it
+// never panics, and an accepted reply names one mailbox and non-empty token
+// and response (P15).
+func FuzzParseEmailReply(f *testing.F) {
+	block := "-----BEGIN ACME RESPONSE-----\r\nabc\r\n-----END ACME RESPONSE-----\r\n"
+	for _, seed := range []string{
+		"From: alice@p15.test\r\nSubject: Re: ACME: tok\r\n\r\n" + block,
+		"From: alice@p15.test\r\nSubject: ACME: tok\r\nContent-Type: multipart/alternative; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\n" + block + "--b--\r\n",
+		"From: a@b.test\r\nSubject: ACME: t\r\nContent-Transfer-Encoding: base64\r\n\r\n!!!!\r\n",
+		"", "\r\n\r\n",
+	} {
+		f.Add([]byte(seed))
+	}
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		got, err := acmesrv.ParseEmailReply(raw)
+		if err != nil {
+			return
+		}
+		if got.From == "" || got.SubjectToken == "" || got.Response == "" || strings.ContainsAny(got.Response, " \t\r\n") {
+			t.Fatalf("accepted %+v from %q", got, raw)
+		}
+	})
+}

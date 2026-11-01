@@ -13,6 +13,18 @@ import (
 // stream — a syslog receiver (RFC 5425) rather than HTTPS — with the same
 // floor and certificate reload as ServeHTTPS.
 func (s *ServerCert) Listener(ln net.Listener) net.Listener {
+	return tls.NewListener(ln, s.streamTLSConfig())
+}
+
+// ServerConn upgrades an accepted connection to TLS with this server
+// certificate — SMTP STARTTLS, where the plaintext greeting comes first — with
+// the same floor and certificate reload as Listener.
+func (s *ServerCert) ServerConn(conn net.Conn) net.Conn {
+	return tls.Server(conn, s.streamTLSConfig())
+}
+
+// streamTLSConfig is the server TLS configuration for a non-HTTP stream.
+func (s *ServerCert) streamTLSConfig() *tls.Config {
 	cfg := &tls.Config{MinVersion: tls.VersionTLS13, CurvePreferences: CurvePreferences()}
 	if s.AllowTLS12 {
 		cfg.MinVersion = tls.VersionTLS12
@@ -23,7 +35,7 @@ func (s *ServerCert) Listener(ln net.Listener) net.Listener {
 	} else {
 		cfg.Certificates = []tls.Certificate{s.cert}
 	}
-	return tls.NewListener(ln, cfg)
+	return cfg
 }
 
 // DialVerifiedTCPWithControl is DialVerifiedTCP whose dial passes through

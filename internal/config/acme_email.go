@@ -24,6 +24,14 @@ type ACMEEmail struct {
 	RelayAddr        string   `json:"relay_addr,omitempty"`
 	RelayUsername    string   `json:"relay_username,omitempty"`
 	RelayPasswordRef string   `json:"relay_password_ref,omitempty"`
+	// SMTPListen is the address of the reply intake, an SMTP receiver for the
+	// from address only; the mail system routes replies to it. Empty keeps it
+	// off.
+	SMTPListen string `json:"smtp_listen,omitempty"`
+	// DKIMKeys pins DKIM key records ("v=DKIM1; k=rsa; p=...") by name
+	// ("<selector>._domainkey.<domain>") for mail domains whose keys are not
+	// in DNS; other keys are read from DNS.
+	DKIMKeys map[string]string `json:"dkim_keys,omitempty"`
 }
 
 func validateACMEEmail(p ACMEEmail) []error {
@@ -58,6 +66,20 @@ func validateACMEEmail(p ACMEEmail) []error {
 	}
 	if (p.RelayUsername == "") != (p.RelayPasswordRef == "") {
 		errs = append(errs, fmt.Errorf("protocols.acme_email.relay_username and relay_password_ref are set together"))
+	}
+	if listen := strings.TrimSpace(p.SMTPListen); listen != "" {
+		if _, port, err := net.SplitHostPort(listen); err != nil || port == "" {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.smtp_listen %q is not host:port", p.SMTPListen))
+		}
+	}
+	for name, record := range p.DKIMKeys {
+		selector, domain, ok := strings.Cut(name, "._domainkey.")
+		if !ok || selector == "" || !issuerDomainNamePattern.MatchString(domain) {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_keys name %q is not <selector>._domainkey.<domain>", name))
+		}
+		if !strings.Contains(record, "p=") {
+			errs = append(errs, fmt.Errorf("protocols.acme_email.dkim_keys[%q] has no p= key", name))
+		}
 	}
 	return errs
 }

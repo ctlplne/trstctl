@@ -2,6 +2,11 @@
 
 ### Added
 
+- An SMTP reply intake for ACME email challenges: `protocols.acme_email.smtp_listen` receives RFC 8823 replies for
+  the challenge address only, verifies each one's DKIM signature for its From domain (rsa-sha256 and
+  ed25519-sha256, keys from DNS or pinned in `dkim_keys`) and hands it to the ACME server; a reply that fails is
+  refused with a 5xx reason so it bounces to the sender. STARTTLS is offered when the control plane has a certificate.
+
 - S/MIME certificates over ACME (RFC 8823): with `protocols.acme_email`, an ACME client orders an `email`
   identifier and answers the `email-reply-00` challenge. The server mails token-part1 through the outbox and the
   configured SMTP relay, verifies the reply against stored digests (a wrong mailbox or token validates nothing, and a

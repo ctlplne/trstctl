@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/smtp"
 	"strings"
 	"sync"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/acmekey"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
+	"trstctl.com/trstctl/internal/dkim"
 	acmesrv "trstctl.com/trstctl/internal/protocols/acme"
 )
 
@@ -267,4 +269,169 @@ func TestServedACMEEmailChallengeIssuesSigningOnlySMIMEP15(t *testing.T) {
 			leaf.EmailAddresses, leaf.DNSNames, leaf.ExtKeyUsages, leaf.KeyUsageDigitalSig, leaf.KeyUsageEncipher)
 	}
 	t.Logf("P15A_OK leaf_emails=%v eku=%v digitalSignature=%v", leaf.EmailAddresses, leaf.ExtKeyUsages, leaf.KeyUsageDigitalSig)
+}
+
+// P15 part b: replies reach the ACME server over SMTP through the intake,
+// which verifies each one's DKIM signature for its From domain before the
+// ACME server matches it. An unsigned reply, one signed with an unknown key, a
+// mailing-list message, a reply from another mailbox or with another token,
+// and mail for another recipient are refused with their reason; the signed
+// reply from the right mailbox validates the challenge and the order issues.
+func TestServedACMEEmailReplyIntakeVerifiesDKIMP15(t *testing.T) {
+	relay := startP15SMTPRelay(t)
+	dkimKey, err := crypto.GenerateLockedKey(crypto.RSA2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(dkimKey.Destroy)
+	h := newOperatingServedHarness(t, config.Protocols{
+		ACME: config.ProtocolToggle{Enabled: true, TenantID: servedTestTenant},
+		ACMEEmail: config.ACMEEmail{From: "acme@ca.p15.test", Domains: []string{"p15.test"},
+			Profile: "smime-signing", RelayAddr: relay.addr, SMTPListen: "127.0.0.1:0",
+			DKIMKeys: map[string]string{
+				"lab._domainkey.p15.test":   "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dkimKey.Public().DER),
+				"lab._domainkey.other.test": "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(dkimKey.Public().DER),
+			}},
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	spec, err := json.Marshal(map[string]any{"name": "smime-signing", "max_validity": "2160h",
+		"allowed_ekus": []string{"emailProtection"}, "allowed_email_domains": []string{"p15.test"}, "allowed_protocols": []string{"acme"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.srv.orch.CreateProfile(ctx, h.tenant, "smime-signing", spec); err != nil {
+		t.Fatal(err)
+	}
+	startServedDirectOutboxPump(t, h.srv)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go h.srv.serveACMEEmailIntake(ctx, ln, nil)
+
+	client, err := acmekey.NewClient(h.ts.URL + "/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Register(ctx, &xacme.Account{}, xacme.AcceptTOS); err != nil {
+		t.Fatal(err)
+	}
+	thumbprint, err := xacme.JWKThumbprint(client.Key.Public())
+	if err != nil {
+		t.Fatal(err)
+	}
+	order, err := client.AuthorizeOrder(ctx, []xacme.AuthzID{{Type: "email", Value: "alice@p15.test"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authz, err := client.GetAuthorization(ctx, order.AuthzURLs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mail string
+	select {
+	case mail = <-relay.mails:
+	case <-ctx.Done():
+		t.Fatal("no challenge mail reached the relay")
+	}
+	tokenPart1 := ""
+	messageID := ""
+	for _, line := range strings.Split(strings.SplitN(mail, "\r\n\r\n", 2)[0], "\r\n") {
+		if v, ok := strings.CutPrefix(line, "Subject: ACME: "); ok {
+			tokenPart1 = v
+		}
+		if v, ok := strings.CutPrefix(line, "Message-ID: "); ok {
+			messageID = v
+		}
+	}
+	digest, err := crypto.Digest(crypto.SHA256, []byte(tokenPart1+authz.Challenges[0].Token+"."+thumbprint))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := base64.RawURLEncoding.EncodeToString(digest)
+	reply := func(from, token string, extra string) []byte {
+		return []byte("From: " + from + "\r\nTo: acme@ca.p15.test\r\nSubject: Re: ACME: " + token + "\r\n" +
+			"Date: Sun, 01 Nov 2026 12:00:00 +0000\r\nMessage-ID: <r" + token[:6] + "@p15.test>\r\nIn-Reply-To: " + messageID + "\r\n" +
+			extra + "Content-Type: text/plain; charset=US-ASCII\r\n\r\nYes.\r\n\r\n-----BEGIN ACME RESPONSE-----\r\n" + response + "\r\n-----END ACME RESPONSE-----\r\n")
+	}
+	signAs := func(msg []byte, domain, selector string) []byte {
+		t.Helper()
+		signed, err := dkim.Sign(msg, domain, selector, []string{"From", "To", "Subject", "Date", "Message-ID", "In-Reply-To", "Content-Type"}, dkimKey, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signed
+	}
+	sign := func(msg []byte, selector string) []byte { return signAs(msg, "p15.test", selector) }
+	send := func(rcpt string, msg []byte) string {
+		t.Helper()
+		c, err := smtp.Dial(ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		if err := c.Hello("mta.p15.test"); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.Mail("alice@p15.test"); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.Rcpt(rcpt); err != nil {
+			return strings.ReplaceAll(err.Error(), `"`, "")
+		}
+		wc, err := c.Data()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := wc.Write(msg); err != nil {
+			t.Fatal(err)
+		}
+		if err := wc.Close(); err != nil {
+			return strings.ReplaceAll(err.Error(), `"`, "")
+		}
+		_ = c.Quit()
+		return "250"
+	}
+	for name, tc := range map[string]struct {
+		rcpt string
+		msg  []byte
+		want string
+	}{
+		"another recipient":      {"postmaster@ca.p15.test", sign(reply("alice@p15.test", tokenPart1, ""), "lab"), "550 5.1.1"},
+		"an unsigned reply":      {"acme@ca.p15.test", reply("alice@p15.test", tokenPart1, ""), "550 5.7.20"},
+		"an unknown key":         {"acme@ca.p15.test", sign(reply("alice@p15.test", tokenPart1, ""), "other"), "550 5.7.20"},
+		"another signing domain": {"acme@ca.p15.test", signAs(reply("alice@p15.test", tokenPart1, ""), "other.test", "lab"), "550 5.7.20"},
+		"a mailing list":         {"acme@ca.p15.test", sign(reply("alice@p15.test", tokenPart1, "List-Id: <team.p15.test>\r\n"), "lab"), "550 5.6.0"},
+		"another mailbox":        {"acme@ca.p15.test", sign(reply("bob@p15.test", tokenPart1, ""), "lab"), "550 5.7.1 no pending"},
+		"another token-part 1":   {"acme@ca.p15.test", sign(reply("alice@p15.test", "x"+tokenPart1, ""), "lab"), "550 5.7.1 no pending"},
+	} {
+		if got := send(tc.rcpt, tc.msg); !strings.HasPrefix(got, tc.want) {
+			t.Fatalf("%s: SMTP answered %q, want %s", name, got, tc.want)
+		}
+	}
+	if got := send("acme@ca.p15.test", sign(reply("alice@p15.test", tokenPart1, ""), "lab")); got != "250" {
+		t.Fatalf("the signed reply: %s", got)
+	}
+	if valid, err := client.WaitAuthorization(ctx, authz.URI); err != nil || valid.Status != xacme.StatusValid {
+		t.Fatalf("authorization after the reply = %+v %v", valid, err)
+	}
+	ku, err := crypto.KeyUsageRequestExtension(true, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csr, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+		EmailAddresses: []string{"alice@p15.test"}, ExtraExtensions: []crypto.CertificateExtension{ku}}, dkimKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain, _, err := client.CreateOrderCert(ctx, order.FinalizeURL, csr, true)
+	if err != nil || len(chain) == 0 {
+		t.Fatalf("finalize: %v", err)
+	}
+	leaf, err := certinfo.Inspect(chain[0])
+	if err != nil || strings.Join(leaf.EmailAddresses, ",") != "alice@p15.test" || strings.Join(leaf.ExtKeyUsages, ",") != "emailProtection" {
+		t.Fatalf("issued certificate %+v %v", leaf, err)
+	}
+	t.Logf("P15B_OK intake=%s leaf=%v", ln.Addr(), leaf.EmailAddresses)
 }

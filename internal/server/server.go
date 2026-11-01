@@ -751,6 +751,7 @@ type Server struct {
 	handler              http.Handler
 	acmeDNS01            *servedACMEDNS01Automation
 	acmeEmail            *servedACMEEmailMailer // P15: RFC 8823 challenge mail
+	acmeEmailIntake      *acmeEmailIntake       // P15: the SMTP reply intake
 	transit              *transitpkg.Service
 	transitStore         *transitpkg.Store
 	transitStateMu       sync.RWMutex
@@ -2147,6 +2148,7 @@ func (s *Server) configureIssuanceSurfaces(ctx context.Context, d Deps, orch *or
 		if d.Protocols.ACMEEmail.From != "" {
 			s.acmeEmail = &servedACMEEmailMailer{store: d.Store, outbox: s.outbox, wake: s.wakeOutbox, cfg: d.Protocols.ACMEEmail,
 				tenantID: d.Protocols.ACME.TenantID, resolver: integrationCredentialResolver{store: d.Store, kek: d.KEK, crypto: d.TenantCrypto}}
+			s.acmeEmailIntake = newACMEEmailIntake(d.Protocols.ACMEEmail)
 		}
 		// Close the late-binding seam: from here an ACME authority configured
 		// with upstream_dns01 can actually publish challenge records (B7).

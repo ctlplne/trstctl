@@ -1672,6 +1672,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 	agentHTTPRenewalW := startRuntimeWorker(ctx, srv.RunAgentHTTPRenewal)
 	estMTLSW := startRuntimeWorker(ctx, srv.RunESTMTLS)
 	kmipW := startRuntimeWorker(ctx, srv.RunKMIP)
+	acmeEmailW := startRuntimeWorker(ctx, srv.RunACMEEmailIntake) // P15: RFC 8823 replies over SMTP
 	// M1: every replica records the API-token uses it served.
 	usageW := startRuntimeWorker(ctx, srv.RunCredentialUsageRecorder)
 	logMountedSurfaces(srv, logger)
@@ -1685,6 +1686,7 @@ func startBackgroundRuntime(ctx context.Context, cfg *config.Config, srv *Server
 		agentHTTPRenewalW.Stop()
 		estMTLSW.Stop()
 		kmipW.Stop()
+		acmeEmailW.Stop()
 		usageW.Stop()
 	}, nil
 }
@@ -1707,6 +1709,9 @@ func logMountedSurfaces(srv *Server, logger *slog.Logger) {
 	}
 	if addr := srv.KMIPAddr(); addr != "" {
 		logger.Info("served KMIP mTLS listener mounted", slog.String("addr", addr))
+	}
+	if addr := srv.ACMEEmailIntakeAddr(); addr != "" {
+		logger.Info("served ACME email reply intake (SMTP, RFC 8823) mounted", slog.String("addr", addr))
 	}
 	if srv.apiAISurfaceServed() {
 		logger.Info("served AI/RCA/NL-query/MCP surface mounted (read-only, tenant-scoped)")

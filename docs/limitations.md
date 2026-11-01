@@ -5648,10 +5648,15 @@ This is a deliberate, documented trust boundary, not an accident.
   must DKIM-sign it), validates a reply against digests only (wrong mailbox or token →
   nothing; wrong response → challenge invalid), and issues signing-only certificates
   (emailProtection, the address as the only SAN). Encryption certificates are refused:
-  key escrow is not offered. Not yet served: the SMTP reply intake with DKIM
-  verification (next), and the proof with a stock RFC 8823 client and mail client
-  (waits for the owner's approval of the downloads). Internationalized addresses, quoted
-  local parts and EAB credentials scoped to mail domains are not supported.
+  key escrow is not offered. Replies arrive at an SMTP reply intake
+  (`protocols.acme_email.smtp_listen`) that verifies each reply's DKIM signature for its
+  From domain (rsa-sha256, ed25519-sha256; keys from DNS or `dkim_keys`) before the
+  ACME server matches it; refusals bounce with a 5xx reason. ACME state is per process,
+  so replies must reach the process that created the order. Not yet proven: a stock
+  RFC 8823 client and a stock mail client (waits for the owner's approval of the
+  downloads). SPF/DMARC checks, trstctl signing its own challenge mail (the relay
+  signs), internationalized addresses, quoted local parts and EAB credentials scoped to
+  mail domains are not supported.
 - Persistent DNS validation, dns-persist-01 (P1): the ACME server offers the
   challenge from the IETF draft draft-ietf-acme-dns-persist (allowed by
   CA/Browser Forum Ballot SC-088v3) when

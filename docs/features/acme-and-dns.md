@@ -504,8 +504,30 @@ is refused. The certificate is issued under the configured profile with the
 emailProtection EKU, and the address is its only SAN. An order can't mix `email` and
 `dns` identifiers, and a trust-authenticated profile never skips the mailbox proof.
 
-In this release the reply reaches the server through its reply intake. The SMTP
-receiver that verifies the reply's DKIM signature is the next step (see limitations).
+Replies arrive at the **reply intake**, an SMTP receiver for the `from` address only:
+
+```yaml
+protocols:
+  acme_email:
+    smtp_listen: ":2525"               # route replies for the from address here
+    dkim_keys:                         # optional: keys for mail domains not in DNS
+      lab._domainkey.example.com: "v=DKIM1; k=rsa; p=MIIBIjAN..."
+```
+
+Point the mail system at it: an MX for the `from` domain, or a transport rule that
+delivers the `from` address to this host and port. The intake offers STARTTLS when the
+control plane has a TLS certificate. It accepts one recipient (the `from` address),
+never relays, and bounds message size (256 KiB), sessions and commands. Each reply is
+parsed (one From mailbox, the token after `ACME:` in the Subject, no `List-*` fields, a
+`text/plain` body or `multipart/alternative` with a `text/plain` part). Its DKIM
+signature must verify for its From domain: `d=` equal to that domain, `rsa-sha256` or
+`ed25519-sha256`, keys from DNS (`<selector>._domainkey.<domain>`) or `dkim_keys`.
+Then the reply is matched to its challenge. A reply that fails a step is refused with a
+5xx code that names the step, so the user's mail system bounces it back:
+`550 5.7.20` for no valid DKIM signature, `550 5.6.0` for a message that isn't an RFC 8823
+reply, and `550 5.7.1` for no matching challenge or a wrong response. A signature over
+part of the body (`l=`) or `rsa-sha1` is never accepted. Like every ACME request, a
+reply must reach the control-plane process that created the order.
 
 ## Use it
 
