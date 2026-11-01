@@ -296,7 +296,10 @@ func managedKeyCustodyProviders() []ManagedKeyCustodyProvider {
 		}},
 		{ID: "azure-key-vault", Label: "Azure Key Vault / Managed HSM", Custody: "Azure creates and retains the asymmetric private key inside the selected vault or Managed HSM.", Requirements: []ManagedKeyCustodyRequirement{
 			value("vault_url", "Vault URL", "TRSTCTL_MANAGED_KEYS_AZURE_VAULT_URL", "HTTPS URL of the tenant-approved vault or Managed HSM.", true),
-			secretFile("bearer_token_file", "Bearer token file", "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE", "Mode-0600 file containing a short-lived Azure access token.", true),
+			secretFile("bearer_token_file", "Bearer token file", "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE", "Mode-0600 file containing a short-lived Azure access token. Omit it when the signer uses workload identity.", false),
+			value("workload_identity.tenant_id", "Workload identity tenant", "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_TENANT_ID", "Entra tenant UUID; with the client and federated token file it replaces the bearer token file.", false),
+			value("workload_identity.client_id", "Workload identity client", "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_CLIENT_ID", "Entra application (client) UUID whose federated credential trusts this workload's token.", false),
+			secretFile("workload_identity.federated_token_file", "Federated token file", "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_FEDERATED_TOKEN_FILE", "Projected token the platform rotates, such as a Kubernetes service-account token; re-read at each exchange.", false),
 		}},
 		{ID: "gcp-kms", Label: "Google Cloud KMS", Custody: "Google Cloud creates and retains the asymmetric private key inside Cloud KMS.", Requirements: []ManagedKeyCustodyRequirement{
 			value("parent", "Key ring resource", "TRSTCTL_MANAGED_KEYS_GCP_PARENT", "Full projects/.../locations/.../keyRings/... parent resource.", true),

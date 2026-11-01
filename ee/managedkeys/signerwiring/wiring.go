@@ -15,6 +15,7 @@ import (
 	"os"
 	"strings"
 
+	"trstctl.com/trstctl/internal/cloudauth"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/secret"
 	"trstctl.com/trstctl/internal/kms/awskms"
@@ -76,12 +77,22 @@ type awsConfig struct {
 }
 
 type cloudTokenConfig struct {
-	VaultURL              string   `json:"vault_url,omitempty"`
-	Endpoint              string   `json:"endpoint,omitempty"`
-	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
-	BearerToken           []byte   `json:"bearer_token,omitempty"`
-	BearerTokenFile       string   `json:"bearer_token_file,omitempty"`
-	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	VaultURL              string                 `json:"vault_url,omitempty"`
+	Endpoint              string                 `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool                   `json:"allow_insecure_loopback,omitempty"`
+	BearerToken           []byte                 `json:"bearer_token,omitempty"`
+	BearerTokenFile       string                 `json:"bearer_token_file,omitempty"`
+	WorkloadIdentity      *azureWorkloadIdentity `json:"workload_identity,omitempty"`
+	PrivateEgressCIDRs    []string               `json:"private_egress_cidrs,omitempty"`
+}
+
+// azureWorkloadIdentity mirrors config.ManagedKeysAzureWorkloadIdentity (A169).
+type azureWorkloadIdentity struct {
+	TenantID           string `json:"tenant_id,omitempty"`
+	ClientID           string `json:"client_id,omitempty"`
+	FederatedTokenFile string `json:"federated_token_file,omitempty"`
+	AuthorityHost      string `json:"authority_host,omitempty"`
+	Scope              string `json:"scope,omitempty"`
 }
 
 type gcpConfig struct {
@@ -252,7 +263,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		if err := kmsconn.ValidateEndpoints("azure managed-key", cfg.Azure.AllowInsecureLoopback, cfg.Azure.VaultURL, cfg.Azure.Endpoint); err != nil {
 			return "", nil, err
 		}
-		token, wipe, err := credential("azure bearer token", cfg.Azure.BearerToken, cfg.Azure.BearerTokenFile, true)
+		creds, wipe, err := azureCredentials(cfg.Azure)
 		if err != nil {
 			return "", nil, err
 		}
@@ -269,7 +280,7 @@ func provider(cfg managedKeyConfig) (string, crypto.RemoteKeyLifecycle, error) {
 		if cfg.Azure.Endpoint != "" {
 			opts = append(opts, azurekv.WithEndpoint(cfg.Azure.Endpoint))
 		}
-		backend, err := azurekv.NewSecure(cfg.Azure.VaultURL, azurekv.Credentials{BearerToken: token}, opts...)
+		backend, err := azurekv.NewSecure(cfg.Azure.VaultURL, creds, opts...)
 		return "azure-key-vault", backend, err
 	case providerGCP:
 		if err := kmsconn.ValidateEndpoints("gcp managed-key", cfg.GCP.AllowInsecureLoopback, cfg.GCP.Endpoint); err != nil {
@@ -347,4 +358,53 @@ func credential(name string, inline []byte, file string, required bool) ([]byte,
 		return nil, func() {}, fmt.Errorf("%s must use a file reference in trstctl-signer config; inline secrets are forbidden", name)
 	}
 	return kmsconn.CredentialFile(name, file, required)
+}
+
+// azureCredentials returns the Key Vault credential the configuration names:
+// the static bearer token file, or a workload identity token source that
+// exchanges the platform's projected federated token for short-lived Entra
+// tokens (A169). The two are exclusive.
+func azureCredentials(cfg cloudTokenConfig) (azurekv.Credentials, func(), error) {
+	wi := cfg.WorkloadIdentity
+	if wi == nil {
+		token, wipe, err := credential("azure bearer token", cfg.BearerToken, cfg.BearerTokenFile, true)
+		if err != nil {
+			return azurekv.Credentials{}, func() {}, err
+		}
+		return azurekv.Credentials{BearerToken: token}, wipe, nil
+	}
+	if len(cfg.BearerToken) > 0 || strings.TrimSpace(cfg.BearerTokenFile) != "" {
+		return azurekv.Credentials{}, func() {}, fmt.Errorf("azure managed-key: workload_identity replaces the static bearer token; set one, not both")
+	}
+	host := strings.TrimSpace(wi.AuthorityHost)
+	if host == "" {
+		host = "https://login.microsoftonline.com"
+	}
+	// EgressClient admits the authority over HTTPS, or plain HTTP only on an
+	// allowed loopback stand-in, and keeps the SSRF guard on every redirect.
+	client, err := kmsconn.EgressClient(cfg.PrivateEgressCIDRs, host, cfg.AllowInsecureLoopback)
+	if err != nil {
+		return azurekv.Credentials{}, func() {}, fmt.Errorf("azure workload identity egress: %w", err)
+	}
+	scope := strings.TrimSpace(wi.Scope)
+	if scope == "" {
+		scope = azureKeyVaultScope(cfg.VaultURL)
+	}
+	source, err := cloudauth.NewAzureFederatedTokenSource(cloudauth.AzureFederatedTokenSourceConfig{
+		TenantID: wi.TenantID, ClientID: wi.ClientID, FederatedTokenFile: wi.FederatedTokenFile,
+		AuthorityHost: host, Scope: scope, Doer: client,
+	})
+	if err != nil {
+		return azurekv.Credentials{}, func() {}, fmt.Errorf("azure managed-key: %w", err)
+	}
+	return azurekv.Credentials{TokenSource: source}, func() {}, nil
+}
+
+// azureKeyVaultScope is the token scope the vault URL implies: Managed HSM
+// pools have their own resource; every other vault is Key Vault.
+func azureKeyVaultScope(vaultURL string) string {
+	if strings.Contains(strings.ToLower(vaultURL), ".managedhsm.") {
+		return "https://managedhsm.azure.net/.default"
+	}
+	return "https://vault.azure.net/.default"
 }

@@ -133,14 +133,60 @@ type ManagedKeysAWSKMS struct {
 
 // ManagedKeysAzureKV configures Azure Key Vault / Managed HSM custody for managed
 // keys. The bearer token is a short-lived AAD access token minted outside trstctl
-// and kept as bytes until the HTTP authorization edge.
+// and kept as bytes until the HTTP authorization edge. WorkloadIdentity replaces
+// it (A169): the signer exchanges the platform's projected federated token for
+// short-lived Entra tokens itself, so no static token is configured.
 type ManagedKeysAzureKV struct {
-	VaultURL              string   `json:"vault_url,omitempty"`
-	Endpoint              string   `json:"endpoint,omitempty"`
-	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
-	BearerToken           []byte   `json:"bearer_token,omitempty"`
-	BearerTokenFile       string   `json:"bearer_token_file,omitempty"`
-	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	VaultURL              string                            `json:"vault_url,omitempty"`
+	Endpoint              string                            `json:"endpoint,omitempty"`
+	AllowInsecureLoopback bool                              `json:"allow_insecure_loopback,omitempty"`
+	BearerToken           []byte                            `json:"bearer_token,omitempty"`
+	BearerTokenFile       string                            `json:"bearer_token_file,omitempty"`
+	WorkloadIdentity      *ManagedKeysAzureWorkloadIdentity `json:"workload_identity,omitempty"`
+	PrivateEgressCIDRs    []string                          `json:"private_egress_cidrs,omitempty"`
+}
+
+// ManagedKeysAzureWorkloadIdentity names the Entra application whose federated
+// credential trusts the platform's token (A169). FederatedTokenFile is the
+// projected token the platform rotates (a Kubernetes service-account token, for
+// example); it is re-read at each exchange. AuthorityHost defaults to
+// https://login.microsoftonline.com and Scope to the Key Vault or Managed HSM
+// scope the vault URL implies.
+type ManagedKeysAzureWorkloadIdentity struct {
+	TenantID           string `json:"tenant_id,omitempty"`
+	ClientID           string `json:"client_id,omitempty"`
+	FederatedTokenFile string `json:"federated_token_file,omitempty"`
+	AuthorityHost      string `json:"authority_host,omitempty"`
+	Scope              string `json:"scope,omitempty"`
+}
+
+// validateManagedKeysAzureCredential requires exactly one Azure credential: a
+// static bearer token (or its file) or a workload identity (A169).
+func validateManagedKeysAzureCredential(a ManagedKeysAzureKV) []error {
+	static := len(a.BearerToken) > 0 || strings.TrimSpace(a.BearerTokenFile) != ""
+	wi := a.WorkloadIdentity
+	switch {
+	case wi == nil && !static:
+		return []error{errors.New("managed_keys.azure.bearer_token, bearer_token_file or workload_identity is required when managed-key custody uses Azure Key Vault HSM")}
+	case wi == nil:
+		return nil
+	case static:
+		return []error{errors.New("managed_keys.azure.workload_identity replaces the static bearer token; set one, not both")}
+	}
+	var errs []error
+	if _, err := uuid.Parse(strings.TrimSpace(wi.TenantID)); err != nil {
+		errs = append(errs, errors.New("managed_keys.azure.workload_identity.tenant_id must be the Entra tenant UUID"))
+	}
+	if _, err := uuid.Parse(strings.TrimSpace(wi.ClientID)); err != nil {
+		errs = append(errs, errors.New("managed_keys.azure.workload_identity.client_id must be the Entra application (client) UUID"))
+	}
+	if strings.TrimSpace(wi.FederatedTokenFile) == "" {
+		errs = append(errs, errors.New("managed_keys.azure.workload_identity.federated_token_file is required"))
+	}
+	if host := strings.TrimSpace(wi.AuthorityHost); host != "" {
+		errs = append(errs, validateManagedKeyEndpoint("managed_keys.azure.workload_identity.authority_host", host, a.AllowInsecureLoopback)...)
+	}
+	return errs
 }
 
 // ManagedKeysGCPKMS configures Google Cloud KMS custody for managed keys. Parent
@@ -250,9 +296,7 @@ func validateManagedKeyProvider(m ManagedKeys, provider string) []error {
 		} else {
 			errs = append(errs, validateManagedKeyEndpoint("managed_keys.azure.vault_url", m.Azure.VaultURL, m.Azure.AllowInsecureLoopback)...)
 		}
-		if len(m.Azure.BearerToken) == 0 && strings.TrimSpace(m.Azure.BearerTokenFile) == "" {
-			errs = append(errs, errors.New("managed_keys.azure.bearer_token or managed_keys.azure.bearer_token_file is required when managed-key custody uses Azure Key Vault HSM"))
-		}
+		errs = append(errs, validateManagedKeysAzureCredential(m.Azure)...)
 		if m.Azure.Endpoint != "" {
 			errs = append(errs, validateManagedKeyEndpoint("managed_keys.azure.endpoint", m.Azure.Endpoint, m.Azure.AllowInsecureLoopback)...)
 		}

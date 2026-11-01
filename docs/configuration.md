@@ -2489,7 +2489,12 @@ stays in the inventory but cannot be changed until that provider returns.
 | `TRSTCTL_MANAGED_KEYS_AZURE_ENDPOINT` | unset | Optional absolute HTTPS endpoint override for private endpoints. Leave unset for the vault URL. |
 | `TRSTCTL_MANAGED_KEYS_AZURE_ALLOW_INSECURE_LOOPBACK` | `false` | Development-only plaintext opt-in restricted to a loopback `vault_url` or endpoint; it cannot authorize private-network or public HTTP. |
 | `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN` | unset | Inline compatibility input. The isolated child-signer path rejects it; use the file variant. |
-| `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE` | unset | File containing the Azure bearer token. Startup reads it, constructs the backend, and wipes the temporary file buffer. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE` | unset | File containing the Azure bearer token. Startup reads it, constructs the backend, and wipes the temporary file buffer. Omit it when the signer uses workload identity. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_TENANT_ID` | unset | Entra tenant UUID for workload identity (`managed_keys.azure.workload_identity.tenant_id`). With the client ID and federated token file it replaces the bearer token: the signer exchanges the platform's projected token for short-lived Entra tokens itself, reusing each until shortly before it expires. Exactly one of the bearer token (or its file) and workload identity may be set. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_CLIENT_ID` | unset | Entra application (client) UUID whose federated credential trusts the platform's token. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_FEDERATED_TOKEN_FILE` | unset | Projected token the platform rotates, for example a Kubernetes service-account token at `/var/run/secrets/azure/tokens/azure-identity-token`. Re-read at each exchange; trstctl creates no assertion of its own. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_AUTHORITY_HOST` | `https://login.microsoftonline.com` | Entra authority for sovereign clouds. |
+| `TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_SCOPE` | from the vault URL | Token scope; defaults to `https://managedhsm.azure.net/.default` for a Managed HSM pool and `https://vault.azure.net/.default` otherwise. |
 | `TRSTCTL_MANAGED_KEYS_AZURE_PRIVATE_EGRESS_CIDRS` | unset | Comma-separated private CIDRs explicitly granted to an Azure private endpoint. Metadata and link-local destinations remain blocked. |
 | `TRSTCTL_MANAGED_KEYS_GCP_PARENT` | unset | GCP Cloud KMS key-ring resource, for example `projects/P/locations/L/keyRings/R`. Required when provider is `gcp-kms`. |
 | `TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT` | unset | Optional absolute HTTPS endpoint override for private service endpoints. Leave unset for `https://cloudkms.googleapis.com/v1`. |

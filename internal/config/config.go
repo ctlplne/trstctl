@@ -3605,6 +3605,19 @@ func applyManagedKeysEnv(getenv func(string) string, m *ManagedKeys) {
 	setBool(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_ALLOW_INSECURE_LOOPBACK", &m.Azure.AllowInsecureLoopback)
 	setBytes(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN", &m.Azure.BearerToken)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN_FILE", &m.Azure.BearerTokenFile)
+	// A169: workload identity in place of the static bearer token.
+	var wi ManagedKeysAzureWorkloadIdentity
+	if m.Azure.WorkloadIdentity != nil {
+		wi = *m.Azure.WorkloadIdentity
+	}
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_TENANT_ID", &wi.TenantID)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_CLIENT_ID", &wi.ClientID)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_FEDERATED_TOKEN_FILE", &wi.FederatedTokenFile)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_AUTHORITY_HOST", &wi.AuthorityHost)
+	setString(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_SCOPE", &wi.Scope)
+	if wi != (ManagedKeysAzureWorkloadIdentity{}) {
+		m.Azure.WorkloadIdentity = &wi
+	}
 	setCSV(getenv, "TRSTCTL_MANAGED_KEYS_AZURE_PRIVATE_EGRESS_CIDRS", &m.Azure.PrivateEgressCIDRs)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_PARENT", &m.GCP.Parent)
 	setString(getenv, "TRSTCTL_MANAGED_KEYS_GCP_ENDPOINT", &m.GCP.Endpoint)

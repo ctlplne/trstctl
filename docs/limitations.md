@@ -5178,9 +5178,15 @@ the token endpoint or target can receive a request, fails that delivery once, an
 does not retry forever. The resulting GCP or Azure bearer is passed to the existing
 hand-written `internal/secretsync` pusher; no vendor SDK or provider-specific cache
 is added. For Azure this replaces the `azure-key-vault` sync target's static
-`token_ref`. It does **not** replace
-`TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN(_FILE)`: those settings and
-`internal/kms/azurekv` belong to the separate managed-key child-signer path.
+`token_ref`. The separate managed-key child-signer path takes a workload identity of its own
+(A169): `managed_keys.azure.workload_identity` (or the
+`TRSTCTL_MANAGED_KEYS_AZURE_WORKLOAD_*` variables) replaces
+`TRSTCTL_MANAGED_KEYS_AZURE_BEARER_TOKEN(_FILE)`, and the isolated signer exchanges the
+platform's projected federated token for short-lived Entra tokens through the same
+`internal/cloudauth` exchange, keeping each in locked memory until shortly before it
+expires; exactly one of the two credentials may be set. Proven against an Entra token
+stand-in and the Key Vault double (conformance through the managed-key backend with no
+static token); a live tenant is Track B.
 `TestServedAzureFederatedOutboxTenantIsolationTokenRedaction` and
 `TestServedAzureFederatedAirGapIsTerminalWithoutNetwork` prove the served Azure
 exchange, target readback, tenant isolation, token redaction, and zero-network

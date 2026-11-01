@@ -2,6 +2,9 @@
 
 ### Added
 
+- Workload identity for the Azure managed-key signer: `managed_keys.azure.workload_identity` exchanges
+  the platform's projected federated token for short-lived Entra tokens, replacing the static bearer
+  token file.
 - Cross-reconciliation of an AWS KMS account against trstctl's managed-key record: an `awskms`
   authority source and a `managed_keys` authority, so a reconciliation round witnesses keys only
   one side holds and keys whose state drifted.

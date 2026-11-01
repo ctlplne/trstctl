@@ -41,8 +41,17 @@ const defaultOpTimeout = 30 * time.Second
 
 // Credentials carry the AAD access (bearer) token used to authenticate requests. The token
 // is supplied by the caller (no OAuth flow is performed here); it is opaque and never logged.
+// TokenSource replaces the static token with one that is minted per request from a workload
+// identity and refreshed before it expires (A169); exactly one of the two is set.
 type Credentials struct {
 	BearerToken []byte
+	TokenSource TokenSource
+}
+
+// TokenSource yields the Entra access token for one request. The bytes are valid until
+// wipe is called, which the backend does once the request is authorized.
+type TokenSource interface {
+	Token(ctx context.Context) (token []byte, wipe func(), err error)
 }
 
 // HTTPDoer is the minimal HTTP client seam (tests inject the double's client).
@@ -55,6 +64,7 @@ type Backend struct {
 	vaultURL  string
 	endpoint  string
 	token     *secret.Buffer
+	tokens    TokenSource
 	doer      HTTPDoer
 	n         int
 	opTimeout time.Duration
@@ -109,16 +119,19 @@ func New(vaultURL string, creds Credentials, opts ...Option) *Backend {
 // NewSecure retains the Entra bearer only in locked, non-dumpable memory.
 // Production signer composition uses this constructor and propagates failures.
 func NewSecure(vaultURL string, creds Credentials, opts ...Option) (*Backend, error) {
-	if len(creds.BearerToken) == 0 {
-		return nil, fmt.Errorf("azure-key-vault: bearer token is required")
-	}
-	token, err := secret.NewFrom(creds.BearerToken)
-	if err != nil {
-		return nil, fmt.Errorf("azure-key-vault: protect bearer token: %w", err)
+	if (len(creds.BearerToken) == 0) == (creds.TokenSource == nil) {
+		return nil, fmt.Errorf("azure-key-vault: exactly one of a bearer token or a workload identity token source is required")
 	}
 	b := &Backend{
-		vaultURL: strings.TrimRight(vaultURL, "/"), token: token,
+		vaultURL: strings.TrimRight(vaultURL, "/"), tokens: creds.TokenSource,
 		doer: netsec.SafeClient(defaultOpTimeout), opTimeout: defaultOpTimeout,
+	}
+	if creds.TokenSource == nil {
+		token, err := secret.NewFrom(creds.BearerToken)
+		if err != nil {
+			return nil, fmt.Errorf("azure-key-vault: protect bearer token: %w", err)
+		}
+		b.token = token
 	}
 	b.endpoint = b.vaultURL
 	for _, o := range opts {
@@ -360,7 +373,7 @@ func (s *kvSigner) signDigestContext(ctx context.Context, digest []byte, opts cr
 // bounded read, non-2xx normalization, JSON decode — is internal/cloudhttp (CODE-006). The
 // per-op timeout is already applied by the caller via withTimeout(ctx) (CODE-002).
 func (b *Backend) call(ctx context.Context, method, path string, body []byte, out any) error {
-	if b.initErr != nil || b.token == nil {
+	if b.initErr != nil || (b.token == nil && b.tokens == nil) {
 		return fmt.Errorf("azure-key-vault: credentials unavailable: %w", b.initErr)
 	}
 	u := b.endpoint + path + "?api-version=" + apiVersion
@@ -376,8 +389,22 @@ func (b *Backend) call(ctx context.Context, method, path string, body []byte, ou
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/json")
-	// Bearer auth: the AAD access token authenticates every request.
-	req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))
+	// Bearer auth: the AAD access token authenticates every request. A workload identity
+	// source mints (or reuses, until shortly before expiry) the token for this request.
+	if b.tokens != nil {
+		token, wipe, err := b.tokens.Token(ctx)
+		if wipe == nil {
+			wipe = func() {}
+		}
+		if err != nil {
+			wipe()
+			return fmt.Errorf("azure-key-vault: workload identity token: %w", err)
+		}
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", token))
+		wipe()
+	} else {
+		req.Header.Set("Authorization", secrettext.Prefixed("Bearer ", b.token.Bytes()))
+	}
 	if err := cloudhttp.JSON(b.doer, req, out); err != nil {
 		return fmt.Errorf("azure-key-vault: %w", err)
 	}
