@@ -395,8 +395,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// Q1 adds `access reviews generate`.
 	// X6 adds `cbom import`, `cbom scan-source` and `cbom scan-image`.
 	// P9 adds `code-signing keys certificate` and `code-signing keys csr`.
-	if len(out) != 684 {
-		t.Fatalf("CLI commands = %d, want 684", len(out))
+	// P6 adds `secrets scans hooks test`.
+	if len(out) != 685 {
+		t.Fatalf("CLI commands = %d, want 685", len(out))
 	}
 	return out
 }

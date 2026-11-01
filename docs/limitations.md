@@ -1310,6 +1310,13 @@ never live in the API process. What you can do end to end against the running bi
   also folds earlier machine logins, and the rebuilt usage read model is identical.
   Behind a load balancer every request has the balancer's address, so new-network
   detection needs clients that reach trstctl directly.
+- Native GitHub secret-scan webhooks (P6): `POST /api/v1/secrets/scans/hooks/{id}`
+  verifies `X-Hub-Signature-256` with the hook's own secret (`secrets.scan_webhooks`)
+  before reading the delivery, refuses a missing or wrong signature, answers `ping`,
+  and turns a verified `push` into a repository secret scan of the pushed commit;
+  `X-GitHub-Delivery` makes redeliveries idempotent. The normalized webhook and polling
+  remain. GitLab/Bitbucket native signatures and private-repository clone credentials
+  are not served.
 - Token exchange (M4, RFC 8693): `POST /oauth2/token` swaps a platform JWT (a
   Kubernetes projected service-account token, a CI id_token) verified by the tenant's
   machine-login method for its issuer into a five-minute JWT-SVID for the workload's

@@ -354,8 +354,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// Q1 adds generating an access review from the graph or stale attestations.
 	// X6 adds importing a CycloneDX CBOM.
 	// P9 adds reading a code-signing key's certificate chain and getting a CSR it signed.
-	if len(out) != 619 {
-		t.Fatalf("OpenAPI operationIds = %d, want 619", len(out))
+	// P6's native GitHub scan webhook raised it to 620.
+	if len(out) != 620 {
+		t.Fatalf("OpenAPI operationIds = %d, want 620", len(out))
 	}
 	return out
 }

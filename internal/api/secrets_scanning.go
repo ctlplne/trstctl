@@ -586,44 +586,50 @@ func (a *API) receiveSecretRepoWebhook(w http.ResponseWriter, r *http.Request) {
 		if err := decodeJSON(r, &req); err != nil {
 			return 0, nil, errWithStatus(http.StatusBadRequest, err)
 		}
-		cfg, err := secretRepoScanConfig(provider, req)
-		if err != nil {
-			return 0, nil, err
-		}
-		body, err := json.Marshal(cfg)
-		if err != nil {
-			return 0, nil, err
-		}
-		sourceID := secretRepoSourceID(tenantID, cfg)
-		src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
-			ID:     sourceID,
-			Kind:   secretscan.RepositorySourceKind,
-			Name:   secretRepoSourceName(cfg, sourceID),
-			Config: body,
-		})
-		if err != nil {
-			return 0, nil, err
-		}
-		run, err := a.orch.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
-			SourceID: src.ID,
-			DryRun:   false,
-		})
-		if err != nil {
-			return 0, nil, err
-		}
-		return http.StatusAccepted, secretRepoScanWebhookResponse{
-			Capability:        "CAP-SCAN-01",
-			Provider:          cfg.Provider,
-			Repository:        cfg.Repository,
-			SourceID:          src.ID,
-			RunID:             run.ID,
-			Queued:            true,
-			Status:            run.Status,
-			OutboxDestination: "discovery.run",
-			Scanner:           "gitleaks " + secretscan.GitleaksPinnedVersion,
-			DiscoveryRunPath:  "/api/v1/discovery/runs/" + run.ID,
-		}, nil
+		return a.queueSecretRepoScan(ctx, tenantID, provider, req)
 	})
+}
+
+// queueSecretRepoScan upserts the repository's secret_repo discovery source
+// and queues one discovery.run for it.
+func (a *API) queueSecretRepoScan(ctx context.Context, tenantID, provider string, req secretRepoScanWebhookRequest) (int, any, error) {
+	cfg, err := secretRepoScanConfig(provider, req)
+	if err != nil {
+		return 0, nil, err
+	}
+	body, err := json.Marshal(cfg)
+	if err != nil {
+		return 0, nil, err
+	}
+	sourceID := secretRepoSourceID(tenantID, cfg)
+	src, err := a.orch.UpsertDiscoverySource(ctx, tenantID, store.DiscoverySource{
+		ID:     sourceID,
+		Kind:   secretscan.RepositorySourceKind,
+		Name:   secretRepoSourceName(cfg, sourceID),
+		Config: body,
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	run, err := a.orch.QueueDiscoveryRun(ctx, tenantID, store.DiscoveryRun{
+		SourceID: src.ID,
+		DryRun:   false,
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	return http.StatusAccepted, secretRepoScanWebhookResponse{
+		Capability:        "CAP-SCAN-01",
+		Provider:          cfg.Provider,
+		Repository:        cfg.Repository,
+		SourceID:          src.ID,
+		RunID:             run.ID,
+		Queued:            true,
+		Status:            run.Status,
+		OutboxDestination: "discovery.run",
+		Scanner:           "gitleaks " + secretscan.GitleaksPinnedVersion,
+		DiscoveryRunPath:  "/api/v1/discovery/runs/" + run.ID,
+	}, nil
 }
 
 func buildThirdPartySecretScanPosture(generatedAt string) thirdPartySecretScanPostureResponse {

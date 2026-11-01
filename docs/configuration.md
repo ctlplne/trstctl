@@ -2307,6 +2307,13 @@ The runtime client resolves and dials loopback only, so changing DNS or adding a
 CIDR cannot stretch this development switch to a LAN, VPC, metadata service, or public
 host.
 
+Provider-native repository webhooks are configured under `secrets.scan_webhooks`: each
+entry has an `id` (one path segment; the hook's URL is
+`/api/v1/secrets/scans/hooks/{id}`), the `tenant_id` whose scans it queues,
+`provider: github`, and `secret_ref` (`file:` or `secret://`) holding the webhook
+secret GitHub signs deliveries with. Startup refuses a duplicate id, a provider other
+than github or an invalid reference.
+
 Machine-auth methods beyond the HMAC token are configured in the JSON/YAML config
 file under `secrets.machine_auth`. Each entry names one method: `kubernetes`,
 `aws-iam`, `gcp`, `azure`, `oidc`, or `jwt`. JWT-family methods require

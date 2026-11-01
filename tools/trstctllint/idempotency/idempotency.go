@@ -282,7 +282,10 @@ func approvedIdempotencyHelperProvenance(pass *analysis.Pass, call *ast.CallExpr
 		return false
 	}
 	switch fn.Name() {
-	case "vaultIdempotencyKey", "vaultMutationKey", "vaultStockCLIKey", "vaultLifecycleKey", "vaultLeaseCommandKey", "scimIdempotencyKey":
+	case "vaultIdempotencyKey", "vaultMutationKey", "vaultStockCLIKey", "vaultLifecycleKey", "vaultLeaseCommandKey", "scimIdempotencyKey",
+		// The native GitHub scan webhook (P6) keys on GitHub's own unique
+		// X-GitHub-Delivery ID, which GitHub keeps on every redelivery.
+		"githubDeliveryIdempotencyKey":
 		// These exact API-package helpers preserve explicit keys. The stock
 		// Vault CLI helpers derive a token-keyed request digest for reviewed
 		// KV/PKI and event-generation-bound mount/ACL commands; other Vault

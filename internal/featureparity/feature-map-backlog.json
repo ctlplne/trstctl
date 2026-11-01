@@ -15667,10 +15667,11 @@
                 "web/src/pages/Secrets.tsx"
             ],
             "status": "closed",
-            "notes": "F39 convergence at g161/a37d8519a9dfa1d3acdf3e7beb5ed1ae4e836b12 adds the exact effect-free scan preview, tenant/caller/configuration/custom-rules-content binding, 409 stale-review rejection before process launch, same-key retry/replay recovery, extracted StepShell console journey, OpenAPI/SDK/CLI parity, and redacted discovery handoff. COMPETE-046 adds CAP-SCAN-01 repository realtime ingress; COMPETE-047 adds CAP-SCAN-02 local staged-diff/pre-commit guardrails; COMPETE-048 adds CAP-SCAN-03 Git-history/custom-rules scanning; COMPETE-068 adds CAP-SCAN-04 third-party artifact ingest. Native provider signature verification, private credential_ref clone resolution, provider-native annotations, native polling, artifact retention automation, and richer owner/rotation/false-positive triage remain documented non-primary increments rather than hidden or counted as this vertical-slice blocker.",
+            "notes": "F39 convergence at g161/a37d8519a9dfa1d3acdf3e7beb5ed1ae4e836b12 adds the exact effect-free scan preview, tenant/caller/configuration/custom-rules-content binding, 409 stale-review rejection before process launch, same-key retry/replay recovery, extracted StepShell console journey, OpenAPI/SDK/CLI parity, and redacted discovery handoff. COMPETE-046 adds CAP-SCAN-01 repository realtime ingress; COMPETE-047 adds CAP-SCAN-02 local staged-diff/pre-commit guardrails; COMPETE-048 adds CAP-SCAN-03 Git-history/custom-rules scanning; COMPETE-068 adds CAP-SCAN-04 third-party artifact ingest. P6 adds native GitHub webhooks (receiveSecretScanHook: X-Hub-Signature-256 under the hook's own secret, X-GitHub-Delivery idempotency). Native GitLab/Bitbucket signature verification, private credential_ref clone resolution, provider-native annotations, native polling, artifact retention automation, and richer owner/rotation/false-positive triage remain documented non-primary increments rather than hidden or counted as this vertical-slice blocker.",
             "api_surface": [
                 "getSecretRepositoryScanning",
                 "receiveSecretRepositoryWebhook",
+                "receiveSecretScanHook",
                 "getThirdPartySecretScanning",
                 "ingestThirdPartySecretScan",
                 "scanSecrets",
@@ -15692,6 +15693,7 @@
                 "secrets scans pre-commit install",
                 "secrets scans repositories",
                 "secrets scans repositories webhook",
+                "secrets scans hooks test",
                 "secrets scans third-party",
                 "secrets scans third-party ingest",
                 "secrets scans run",

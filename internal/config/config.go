@@ -2701,6 +2701,21 @@ type Secrets struct {
 	// or token-bound with tenant_claim; otherwise a credential could be replayed
 	// across tenant headers.
 	MachineAuth []MachineAuthMethod `json:"machine_auth,omitempty"`
+	// ScanWebhooks are provider-native repository webhooks (P6): GitHub signs
+	// each delivery with the hook's own secret, and a push it verifies queues a
+	// repository secret scan for the hook's tenant.
+	ScanWebhooks []SecretScanWebhook `json:"scan_webhooks,omitempty"`
+}
+
+// SecretScanWebhook is one provider-native repository webhook endpoint,
+// POST /api/v1/secrets/scans/hooks/{id}.
+type SecretScanWebhook struct {
+	ID       string `json:"id"`
+	TenantID string `json:"tenant_id"`
+	// Provider is github (X-Hub-Signature-256 over the body).
+	Provider string `json:"provider"`
+	// SecretRef holds the hook's signing secret (file: or secret://).
+	SecretRef string `json:"secret_ref"`
 }
 
 // Transit configures the encryption-as-a-service keyring's durability.
@@ -4894,6 +4909,7 @@ func validateServedSurfaces(c *Config) []error {
 		}
 	}
 	errs = append(errs, validateSecretsMachineAuth(c.Secrets.MachineAuth)...)
+	errs = append(errs, validateSecretScanWebhooks(c.Secrets.ScanWebhooks)...)
 	errs = append(errs, validateTenantSealLocalWrappers(c.Secrets.TenantSealLocalWrappers)...)
 	errs = append(errs, validateTenantSealPKCS11Wrappers(c.Secrets.TenantSealPKCS11Wrappers)...)
 	errs = append(errs, validateManagedKeys(c.ManagedKeys)...)
@@ -5127,6 +5143,32 @@ func validateACMEEAB(e ACMEExternalAccountBinding) []error {
 			if strings.TrimSpace(identifier) == "" {
 				errs = append(errs, fmt.Errorf("%s.allowed_identifiers[%d] must not be empty; an empty entry silently widens the scope it looks like it narrows", label, j))
 			}
+		}
+	}
+	return errs
+}
+
+func validateSecretScanWebhooks(hooks []SecretScanWebhook) []error {
+	var errs []error
+	seen := map[string]bool{}
+	for i, hook := range hooks {
+		where := fmt.Sprintf("secrets.scan_webhooks[%d]", i)
+		id := strings.TrimSpace(hook.ID)
+		switch {
+		case id == "" || strings.ContainsAny(id, "/?# "):
+			errs = append(errs, fmt.Errorf("%s: id is required and must be a single path segment", where))
+		case seen[id]:
+			errs = append(errs, fmt.Errorf("%s: id %q is used twice", where, id))
+		}
+		seen[id] = true
+		if _, err := uuid.Parse(strings.TrimSpace(hook.TenantID)); err != nil {
+			errs = append(errs, fmt.Errorf("%s: tenant_id must be a UUID", where))
+		}
+		if hook.Provider != "github" {
+			errs = append(errs, fmt.Errorf("%s: provider must be github", where))
+		}
+		if err := validateCredentialRef(hook.SecretRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s: secret_ref: %w", where, err))
 		}
 	}
 	return errs

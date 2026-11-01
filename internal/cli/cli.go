@@ -96,6 +96,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runAuditVerify(rest[2:], stdin, stdout, stderr)
 	}
+	if len(rest) >= 4 && hasPrefix(rest, []string{"secrets", "scans", "hooks", "test"}) {
+		if commandHelpRequested(rest[4:]) {
+			secretScanHookTestUsage(stdout)
+			return 0
+		}
+		return runSecretScanHookTest(ctx, rest[4:], env, stdout, stderr, *server, *caFile)
+	}
 	if len(rest) >= 3 && hasPrefix(rest, []string{"secrets", "scans", "staged-diff"}) {
 		if commandHelpRequested(rest[3:]) {
 			secretScanStagedDiffUsage(stdout)

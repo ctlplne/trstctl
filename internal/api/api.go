@@ -62,6 +62,8 @@ type API struct {
 	log                 *events.Log
 	// usage notes authenticated API-token use for usage posture (M1).
 	usage *credentialUsageRecorder
+	// secretScanHooks resolves provider-native scan webhooks (P6).
+	secretScanHooks SecretScanHookLookup
 	// policyVersionMemo memoizes the policy-version projection against the
 	// event-log head so GET /api/v1/policy/versions stops replaying the whole
 	// log per request.
@@ -248,6 +250,8 @@ type config struct {
 	principalFn      func(*http.Request) (authz.Principal, error)
 	// credentialUsageClock stamps noted API-token uses (M1); nil is the wall clock.
 	credentialUsageClock func() time.Time
+	// secretScanHooks resolves provider-native scan webhooks (P6).
+	secretScanHooks SecretScanHookLookup
 	// principalFromReg is a resolver factory the test-only header resolver uses.
 	// It is built against the API's role registry (so custom roles work) and the
 	// real authenticated resolver (so test servers still accept bearer tokens and
@@ -570,6 +574,7 @@ func New(st *store.Store, idem *orchestrator.Idempotency, orch *orchestrator.Orc
 		store:                  st,
 		log:                    cfg.eventLog,
 		usage:                  newCredentialUsageRecorder(cfg.credentialUsageClock),
+		secretScanHooks:        cfg.secretScanHooks,
 		idem:                   idem,
 		orch:                   orch,
 		tenantFn:               tenantFromHeader,
@@ -876,24 +881,6 @@ func (a *API) Routes() []Route {
 // trailing-wildcard segment ("{name...}") to "{name}". It is the single place that
 // mapping lives, shared by Routes and buildSpec.
 func openapiPath(p string) string { return strings.ReplaceAll(p, "...}", "}") }
-
-func publicRationaleForRoute(r route) string {
-	if r.perm != "" {
-		return ""
-	}
-	switch r.opID {
-	case "machineLogin":
-		return "public credential exchange: the presented machine credential authenticates the workload and yields a tenant-scoped session."
-	case "getOpenAPISpec":
-		return specPublicRationale
-	case "getBrand":
-		return brandPublicRationale
-	case "getEditions":
-		return editionsPublicRationale
-	default:
-		return ""
-	}
-}
 
 // param is an OpenAPI query parameter descriptor.
 type param struct {
@@ -1573,6 +1560,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/secrets/syncs/{id}", opID: "getSecretSyncJob", summary: "Read tenant-scoped projected delivery status for a secret-sync job", handler: a.getSecretSyncJob, pathParams: []param{pathString("id", "durable secret-sync job id")}, resSchema: "SecretSyncJob", successCode: "200", perm: authz.SecretsRead},
 		{method: "GET", path: "/api/v1/secrets/scans/repositories", opID: "getSecretRepositoryScanning", summary: "Report real-time repository secret-scanning posture", handler: a.secretRepoScanPosture, resSchema: "SecretRepositoryScanPosture", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/scans/repositories/{provider}/webhook", opID: "receiveSecretRepositoryWebhook", summary: "Queue a normalized provider repository secret scan", handler: a.receiveSecretRepoWebhook, pathParams: []param{{name: "provider", typ: "string", desc: "github, gitlab, or bitbucket"}}, reqSchema: "SecretRepositoryWebhookRequest", resSchema: "SecretRepositoryWebhookReceipt", successCode: "202", mutation: true, perm: authz.SecretsWrite},
+		{method: "POST", path: "/api/v1/secrets/scans/hooks/{hook_id}", opID: "receiveSecretScanHook", summary: "Receive a provider-signed (GitHub X-Hub-Signature-256) push webhook and queue a repository secret scan", handler: a.receiveSecretScanHook, pathParams: []param{{name: "hook_id", typ: "string", desc: "the configured secrets.scan_webhooks id"}}, resSchema: "SecretRepositoryWebhookReceipt", successCode: "202", mutation: true},
 		{method: "GET", path: "/api/v1/secrets/scans/third-party", opID: "getThirdPartySecretScanning", summary: "Report CI/CD, registry, Slack, and Jira secret-scanning posture", handler: a.thirdPartySecretScanPosture, resSchema: "ThirdPartySecretScanPosture", successCode: "200", perm: authz.SecretsRead},
 		{method: "POST", path: "/api/v1/secrets/scans/third-party/{provider}/ingest", opID: "ingestThirdPartySecretScan", summary: "Queue a third-party artifact secret scan", handler: a.ingestThirdPartySecretScan, pathParams: []param{{name: "provider", typ: "string", desc: "cicd_log, container_registry, slack, or jira"}}, reqSchema: "ThirdPartySecretScanIngestRequest", resSchema: "ThirdPartySecretScanReceipt", successCode: "202", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/scans/preview", opID: "previewSecretScan", summary: "Review an exact effect-free Gitleaks scan plan", handler: a.previewSecretScan, reqSchema: "SecretScanRequest", resSchema: "SecretScanPreview", successCode: "200", perm: authz.SecretsWrite},

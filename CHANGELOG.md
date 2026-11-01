@@ -2,6 +2,10 @@
 
 ### Added
 
+- Native GitHub webhooks for repository secret scanning: `secrets.scan_webhooks` names a hook and its secret, and
+  `POST /api/v1/secrets/scans/hooks/{id}` verifies GitHub's `X-Hub-Signature-256` before queueing a scan of the
+  pushed commit; a wrong or missing signature is refused and redeliveries queue nothing new.
+
 - OAuth token exchange (RFC 8693): `POST /oauth2/token` swaps a workload's platform token (a Kubernetes projected
   service-account token, a CI id_token) for a five-minute, scoped JWT-SVID signed in the isolated signer and
   verifiable offline against `GET /oauth2/jwks`; subject tokens are single-use and every exchange is recorded.

@@ -595,6 +595,8 @@ type Deps struct {
 	// verifier an explicit, least-privilege tenant authority.
 	SecretsAuthTokenTenantID string
 	SecretsAuthTokenScopes   []string
+	// SecretScanWebhooks are provider-native repository webhooks (P6).
+	SecretScanWebhooks []config.SecretScanWebhook
 	// MachineAuthMethods returns tenant-scoped workload login methods such as
 	// Kubernetes SAT, AWS IAM, GCP, Azure, OIDC, and JWT. Empty keeps those methods
 	// off while preserving the HMAC token method when SecretsAuthSecret is configured.
@@ -1703,7 +1705,7 @@ func (s *Server) configureAPI(ctx context.Context, d Deps, orch *orchestrator.Or
 	// probing the intentionally dark /provider/v1 namespace.
 	defaults = append(defaults, api.WithProviderPlaneAvailable(d.ProviderHandler != nil))
 	defaults = append(defaults, api.WithComplianceReportArchive(d.AuditArchiveDir), api.WithComplianceReportObjectStore(d.ArchiveObjectStore))
-	defaults = append(defaults, api.WithFirstIssuanceRetry(s), eventProtectionAPIOption(d, orch), s.auditArchiveAPIOption(d, orch))
+	defaults = append(defaults, api.WithFirstIssuanceRetry(s), eventProtectionAPIOption(d, orch), s.auditArchiveAPIOption(d, orch), secretScanHooksAPIOption(d))
 	a := api.New(d.Store, idem, orch, append(defaults, d.APIOptions...)...)
 	s.api = a
 	s.tenantServices.api.Store(a)

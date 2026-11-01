@@ -1323,9 +1323,20 @@ posture for GitHub, GitLab, and Bitbucket; `POST
 upserts a tenant-scoped `secret_repo` discovery source plus a `discovery.run` outbox
 row. The outbox worker scans `checkout_path` directly, or clones a public/local
 `clone_url`; credential-bearing URLs are rejected, and private credentials must stay
-secret references, never payload values. Native GitHub/GitLab/Bitbucket signature
-verification and private `credential_ref` clone resolution remain shortfalls, not
-served.
+secret references, never payload values.
+
+GitHub can also call trstctl directly (P6): configure a hook under
+`secrets.scan_webhooks` (an `id`, the `tenant_id`, `provider: github` and a
+`secret_ref` holding the webhook's secret) and point the repository's webhook at
+`POST /api/v1/secrets/scans/hooks/{id}`. trstctl checks `X-Hub-Signature-256`
+(HMAC-SHA256 of the exact body under that secret) in constant time before reading
+anything else and refuses a missing or wrong signature with 401; `ping` answers
+`{"pong": true}`; a `push` queues the same scan as the normalized route for the
+pushed repository's `clone_url` at the pushed commit. `X-GitHub-Delivery` is the
+idempotency key, so a redelivery returns the recorded answer and queues nothing new.
+The normalized route and scheduled polling stay for installs that cannot accept
+webhooks. Native GitLab and Bitbucket signatures and private `credential_ref` clone
+resolution remain shortfalls, not served.
 
 Third-party artifacts use the same shape: `GET /api/v1/secrets/scans/third-party` and
 `POST /api/v1/secrets/scans/third-party/{provider}/ingest` cover `cicd_log`,

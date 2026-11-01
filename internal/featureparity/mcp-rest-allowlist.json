@@ -29,6 +29,12 @@
       "method": "GET",
       "path": "/api/v1/brand",
       "justification": "public presentation-only endpoint; the brand tells a browser how to render the login screen and carries no tenant data, so exposing it as an AI tool action would add a tool that can only answer what the page already shows"
+    },
+    {
+      "operation_id": "receiveSecretScanHook",
+      "method": "POST",
+      "path": "/api/v1/secrets/scans/hooks/{hook_id}",
+      "justification": "provider webhook receiver: only GitHub, holding the hook's signing secret, can call it (X-Hub-Signature-256); an AI tool could neither sign a delivery nor need to, since scans are queued through the authenticated repository scan routes"
     }
   ]
 }

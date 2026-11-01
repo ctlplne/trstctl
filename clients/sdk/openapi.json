@@ -80076,6 +80076,65 @@
         "x-trstctl-permission": "secrets:write"
       }
     },
+    "/api/v1/secrets/scans/hooks/{hook_id}": {
+      "post": {
+        "operationId": "receiveSecretScanHook",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "the configured secrets.scan_webhooks id",
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRepositoryWebhookReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "summary": "Receive a provider-signed (GitHub X-Hub-Signature-256) push webhook and queue a repository secret scan",
+        "x-trstctl-public-rationale": "public provider webhook: GitHub authenticates each delivery with an HMAC-SHA256 signature under the hook's own secret (X-Hub-Signature-256), checked before any work; the configured hook names its tenant."
+      }
+    },
     "/api/v1/secrets/scans/preview": {
       "post": {
         "operationId": "previewSecretScan",
