@@ -174,6 +174,8 @@ const (
 	EventPrivacyArchiveErasureAttested      = "privacy.archive_erasure.attested"
 	EventNHIAccessReviewCampaignStarted     = "nhi.access_review.campaign.started"
 	EventNHIAccessReviewItemDecided         = "nhi.access_review.item.decided"
+	EventNHIAccessReviewItemRevoked         = "nhi.access_review.item.revocation_recorded"
+	EventNHIAccessReviewItemClosed          = "nhi.access_review.item.closed"
 	EventAccessChangeRequestCreated         = "access.change_request.created"
 	EventAccessChangeRequestDecided         = "access.change_request.decided"
 	EventTenantKeyDomainMigrationStarted    = "tenant.key_domain.migration_started"
@@ -425,6 +427,9 @@ var ledger = []FeatureEvent{
 	{"F62", "Cryptographic compliance reporting & posture dashboards", "schedule_report", "createComplianceReportSchedule", []string{EventComplianceReportScheduleUpserted, EventComplianceReportRunRecorded}},
 	{"F62", "NHI access certification campaigns", "start_nhi_review", "startNHIReviewCampaign", []string{EventNHIAccessReviewCampaignStarted}},
 	{"F62", "NHI access certification campaigns", "decide_nhi_review_item", "decideNHIReviewItem", []string{EventNHIAccessReviewItemDecided}},
+	{"F62", "NHI access certification campaigns", "act_on_nhi_review_revoke", "decideNHIReviewItem", []string{EventNHIAccessReviewItemRevoked}},
+	{"F62", "NHI access certification campaigns", "close_nhi_review_item", "reconcileNHIReviewRevocations", []string{EventNHIAccessReviewItemClosed}},
+	{"F62", "NHI access certification campaigns", "generate_nhi_review_campaign", "generateNHIReviewCampaign", []string{EventNHIAccessReviewCampaignStarted}},
 
 	// F37 — rollback-safe static secret rotation schedules.
 	{"F37", "Secret rotation engine", "schedule_secret_rotation", "createSecretRotationSchedule", []string{EventSecretRotationScheduleUpserted}},

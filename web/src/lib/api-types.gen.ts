@@ -7029,11 +7029,28 @@ export interface NHIReviewCampaignStartRequest {
 export interface NHIReviewDecisionRequest {
   decision: "certified" | "revoked" | "exception";
   decision_evidence_refs?: string[];
+  next_review_days?: number;
   reason?: string;
   reviewer_subject?: string;
 }
 
+export interface NHIReviewGenerateRequest {
+  due_at?: string;
+  name: string;
+  older_than_days?: number;
+  reviewer_subject?: string;
+  source: "graph_reachers" | "stale_owner_attestation";
+  target?: string;
+}
+
+export interface NHIReviewGenerateResponse {
+  campaign: NHIReviewCampaign;
+  coverage?: { not_covered: string[]; note: string; sources: string[] };
+}
+
 export interface NHIReviewItem {
+  closed_at?: string;
+  closing_evidence?: string;
   created_at: string;
   decided_at?: string;
   decision_by?: string;
@@ -7043,10 +7060,14 @@ export interface NHIReviewItem {
   entitlement: string;
   evidence_refs: string[];
   item_id: string;
+  next_review_at?: string;
   nhi_id: string;
   nhi_kind: string;
   owner_ref?: string;
   resource: string;
+  revocation_detail?: string;
+  revocation_requested_at?: string;
+  revocation_status?: "requested" | "manual" | "failed" | "closed";
   risk: string;
   status: "pending" | "certified" | "revoked" | "exception";
   updated_at: string;

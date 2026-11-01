@@ -101,6 +101,14 @@ func TestServedDecoyDatabaseLoginAlertsOnUseQ6(t *testing.T) {
 		strings.Contains(string(catalog), `"decoy"`) || !strings.Contains(string(catalog), `"readonly"`) {
 		t.Fatalf("the provider catalog offers the decoy role: HTTP %d %s", status, catalog)
 	}
+	// Q1: the access graph does not list the decoy login either, so a graph
+	// reader cannot tell decoys from real logins and a generated access review
+	// never offers the bait for revocation.
+	graphReader := seedScopedTokenSubject(t, h.store, h.tenant, "graph-reader", "graph:read")
+	if status, g := secretsReq(t, h, http.MethodGet, "/api/v1/graph", graphReader, nil); status != http.StatusOK ||
+		strings.Contains(string(g), planted.DBLeaseID) || strings.Contains(string(g), "decoy@") {
+		t.Fatalf("the access graph lists the decoy login: HTTP %d", status)
+	}
 
 	// No false alarms: the provider's own administration, a port probe and a
 	// TLS probe establish no session on the decoy database, and the watcher

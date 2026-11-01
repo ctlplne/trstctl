@@ -32,6 +32,8 @@ import (
 const (
 	trstctlAPIResource  = "res:trstctl-api"
 	confidenceAuthority = "authoritative"
+	// decoyLeaseRole is dynsecret.DecoyRole: a decoy login's lease role.
+	decoyLeaseRole = "decoy"
 )
 
 // principalIndex resolves an authenticated subject to its graph node.
@@ -305,7 +307,9 @@ func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID strin
 			return err
 		}
 		for _, l := range page {
-			if !l.ExpiresAt.After(now) {
+			// A decoy login (Q6) is bait that reaches nothing; listing it would
+			// tell a graph reader which logins are decoys.
+			if !l.ExpiresAt.After(now) || l.Role == decoyLeaseRole {
 				continue
 			}
 			id := credentialID("lease", l.ID)

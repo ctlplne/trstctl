@@ -1713,6 +1713,7 @@ func componentSchemas() map[string]*Schema {
 		"decision":         {Type: "string", Enum: []string{"certified", "revoked", "exception"}},
 		"reviewer_subject": str(), "reason": str(),
 		"decision_evidence_refs": {Type: "array", Items: str()},
+		"next_review_days":       {Type: "integer", Description: "keep decisions: days until the next review, 1-730 (default 90)"},
 	}, "decision")
 	nhiReviewItem := object(map[string]*Schema{
 		"item_id": uuid(), "nhi_id": str(), "nhi_kind": str(), "display_name": str(),
@@ -1722,7 +1723,26 @@ func componentSchemas() map[string]*Schema {
 		"decision_by":   str(), "decision_reason": str(),
 		"decision_evidence_refs": {Type: "array", Items: str()},
 		"decided_at":             timestamp(), "created_at": timestamp(), "updated_at": timestamp(),
+		"revocation_status": {Type: "string", Enum: []string{"requested", "manual", "failed", "closed"},
+			Description: "what trstctl did about a revoke decision; closed only once the credential reads revoked"},
+		"revocation_detail": str(), "revocation_requested_at": timestamp(), "closed_at": timestamp(),
+		"closing_evidence": {Type: "string", Description: "what showed the credential revoked"},
+		"next_review_at":   {Type: "string", Format: "date-time", Description: "a keep decision's next review date; no upstream right changed"},
 	}, "item_id", "nhi_id", "nhi_kind", "display_name", "resource", "entitlement", "risk", "evidence_refs", "status", "created_at", "updated_at")
+	// Q1: a campaign generated from the access graph or stale owner attestations.
+	nhiReviewGenerateReq := object(map[string]*Schema{
+		"name":             str(),
+		"source":           {Type: "string", Enum: []string{"graph_reachers", "stale_owner_attestation"}},
+		"target":           {Type: "string", Description: "graph_reachers: the graph node whose reachers to review"},
+		"older_than_days":  {Type: "integer", Description: "stale_owner_attestation: attested longer ago than this (default: the attestation cadence)"},
+		"reviewer_subject": str(), "due_at": timestamp(),
+	}, "name", "source")
+	nhiReviewGenerateResp := object(map[string]*Schema{
+		"campaign": ref("NHIReviewCampaign"),
+		"coverage": object(map[string]*Schema{
+			"sources": {Type: "array", Items: str()}, "not_covered": {Type: "array", Items: str()}, "note": str(),
+		}, "sources", "not_covered", "note"),
+	}, "campaign")
 	nhiReviewCampaign := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "name": str(), "scope": str(),
 		"reviewer_subject": str(), "requested_by": str(),
@@ -7940,6 +7960,8 @@ func componentSchemas() map[string]*Schema {
 		"NHIReviewItem":                         nhiReviewItem,
 		"NHIReviewCampaign":                     nhiReviewCampaign,
 		"NHIReviewCampaignList":                 list("NHIReviewCampaign"),
+		"NHIReviewGenerateRequest":              nhiReviewGenerateReq,
+		"NHIReviewGenerateResponse":             nhiReviewGenerateResp,
 		"PQCMigrationCampaignStartRequest":      pqcCampaignStartReq,
 		"PQCMigrationCampaignUpdateRequest":     pqcCampaignUpdateReq,
 		"PQCMigrationCampaignReadinessRequest":  pqcCampaignReadinessReq,

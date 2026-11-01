@@ -15477,6 +15477,44 @@ export const messages = {
     defaultMessage: "Your session needs access:write to decide this campaign.",
     description: "Guidance when a review campaign is visible but the operator lacks the decision permission.",
   },
+  "policy.nhiReview.generate.heading": {
+    defaultMessage: "Generate a review",
+    description: "Q1: heading for building an access review from trstctl's records.",
+  },
+  "policy.nhiReview.generate.help": {
+    defaultMessage:
+      "Build the items from who can reach a resource in the access graph, or from owners whose attestation is stale. A revoke decision then revokes the credential once, and a keep renews the owner's attestation.",
+    description: "Q1: explains generated access reviews.",
+  },
+  "policy.nhiReview.generate.name": { defaultMessage: "Campaign name", description: "Q1: generated review name field." },
+  "policy.nhiReview.generate.source": { defaultMessage: "Build from", description: "Q1: what the generated review lists." },
+  "policy.nhiReview.generate.sourceGraph": { defaultMessage: "Who can reach a resource (access graph)", description: "Q1: graph source option." },
+  "policy.nhiReview.generate.sourceStale": { defaultMessage: "Owners with a stale attestation", description: "Q1: stale owner source option." },
+  "policy.nhiReview.generate.target": { defaultMessage: "Graph node to review", description: "Q1: the graph node whose reachers are reviewed." },
+  "policy.nhiReview.generate.targetPlaceholder": {
+    defaultMessage: "res:pam:postgres:pg-main",
+    description: "Q1: example graph node id for a generated review (a database reached through PAM).",
+  },
+  "policy.nhiReview.generate.olderThanDays": {
+    defaultMessage: "Attested more than this many days ago (blank uses the attestation cadence)",
+    description: "Q1: stale owner window.",
+  },
+  "policy.nhiReview.generate.reviewer": { defaultMessage: "Assigned reviewer", description: "Q1: generated review reviewer field." },
+  "policy.nhiReview.generate.action": { defaultMessage: "Generate review", description: "Q1: button that generates an access review." },
+  "policy.nhiReview.generate.done": { defaultMessage: "Review generated: {count} to decide.", description: "Q1: notice after a review is generated." },
+  "policy.nhiReview.generate.failed": { defaultMessage: "Could not generate the review", description: "Q1: generated review failure." },
+  "policy.nhiReview.generate.coverage": { defaultMessage: "Coverage: {note}", description: "Q1: what the access graph sees, shown with a generated review." },
+  "policy.nhiReview.outcome.requested": { defaultMessage: "Revocation requested", description: "Q1: trstctl asked the credential's own revoke." },
+  "policy.nhiReview.outcome.manual": {
+    defaultMessage: "Revoke it through its own revocation",
+    description: "Q1: trstctl does not revoke this kind from a review.",
+  },
+  "policy.nhiReview.outcome.failed": { defaultMessage: "Revocation failed", description: "Q1: the credential's revoke refused." },
+  "policy.nhiReview.outcome.closed": { defaultMessage: "Closed: the credential reads revoked", description: "Q1: the item closed on evidence." },
+  "policy.nhiReview.outcome.nextReview": {
+    defaultMessage: "Next review {date}; no upstream right changed",
+    description: "Q1: a keep decision's next review date.",
+  },
   "policy.accessChange.decisionEvidenceRefs": {
     defaultMessage: "Approval evidence refs",
     description: "Evidence references entered by this approver for this decision, separate from request evidence.",

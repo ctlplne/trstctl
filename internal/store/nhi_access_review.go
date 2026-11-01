@@ -62,6 +62,14 @@ type NHIReviewItem struct {
 	DecidedAt            *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	// Q1: what trstctl did about a revoke decision, when the reviewed
+	// credential was seen revoked, and a keep decision's next review date.
+	RevocationStatus      string
+	RevocationDetail      string
+	RevocationRequestedAt *time.Time
+	ClosedAt              *time.Time
+	ClosingEvidence       string
+	NextReviewAt          *time.Time
 }
 
 // NHIReviewDecision is a reviewer decision for one campaign item.
@@ -73,6 +81,8 @@ type NHIReviewDecision struct {
 	Reason               string
 	DecisionEvidenceRefs []string
 	DecidedAt            time.Time
+	// NextReviewAt is a keep decision's next review date (Q1).
+	NextReviewAt *time.Time
 }
 
 // CheckNHIReviewDecisionAuthorityTx locks the campaign and exact item before
@@ -150,12 +160,13 @@ func (s *Store) ApplyNHIReviewItemDecidedTx(ctx context.Context, tx pgx.Tx, tena
 		        decision_reason = $6,
 		        decision_evidence_refs = $7,
 		        decided_at = $8,
-		        updated_at = $8
+		        updated_at = $8,
+		        next_review_at = $9
 		  WHERE tenant_id = $1
 		    AND campaign_id = $2
 		    AND item_id = $3
 		    AND status = 'pending'`,
-		tenantID, d.CampaignID, d.ItemID, d.Decision, d.ReviewerSubject, d.Reason, refs, d.DecidedAt)
+		tenantID, d.CampaignID, d.ItemID, d.Decision, d.ReviewerSubject, d.Reason, refs, d.DecidedAt, d.NextReviewAt)
 	if err != nil {
 		return err
 	}
@@ -294,9 +305,7 @@ func (s *Store) ListNHIReviewCampaignsPage(ctx context.Context, tenantID, after 
 
 func (s *Store) listNHIReviewItemsTx(ctx context.Context, tx pgx.Tx, tenantID, campaignID string) ([]NHIReviewItem, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT tenant_id::text, campaign_id::text, item_id::text, nhi_id, nhi_kind, display_name,
-		        owner_ref, resource, entitlement, risk, evidence_refs, status, decision_by,
-		        decision_reason, decision_evidence_refs, decided_at, created_at, updated_at
+		`SELECT `+nhiReviewItemColumns+`
 		   FROM nhi_access_review_items
 		  WHERE tenant_id = $1
 		    AND campaign_id = $2
@@ -330,6 +339,14 @@ func scanNHIReviewItem(row pgx.Row) (NHIReviewItem, error) {
 	err := row.Scan(&item.TenantID, &item.CampaignID, &item.ItemID, &item.NHIID, &item.NHIKind,
 		&item.DisplayName, &item.OwnerRef, &item.Resource, &item.Entitlement, &item.Risk,
 		&item.EvidenceRefs, &item.Status, &item.DecisionBy, &item.DecisionReason,
-		&item.DecisionEvidenceRefs, &item.DecidedAt, &item.CreatedAt, &item.UpdatedAt)
+		&item.DecisionEvidenceRefs, &item.DecidedAt, &item.CreatedAt, &item.UpdatedAt,
+		&item.RevocationStatus, &item.RevocationDetail, &item.RevocationRequestedAt,
+		&item.ClosedAt, &item.ClosingEvidence, &item.NextReviewAt)
 	return item, err
 }
+
+const nhiReviewItemColumns = `tenant_id::text, campaign_id::text, item_id::text, nhi_id, nhi_kind, display_name,
+		        owner_ref, resource, entitlement, risk, evidence_refs, status, decision_by,
+		        decision_reason, decision_evidence_refs, decided_at, created_at, updated_at,
+		        revocation_status, revocation_detail, revocation_requested_at, closed_at,
+		        closing_evidence, next_review_at`

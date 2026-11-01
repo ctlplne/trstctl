@@ -1694,6 +1694,8 @@ type NHIAccessReviewItemDecided struct {
 	Reason               string    `json:"reason,omitempty"`
 	DecisionEvidenceRefs []string  `json:"decision_evidence_refs,omitempty"`
 	DecidedAt            time.Time `json:"decided_at,omitempty"`
+	// NextReviewAt is a keep decision's next review date (Q1).
+	NextReviewAt *time.Time `json:"next_review_at,omitempty"`
 }
 
 // PQCPilotStarted is the full rebuildable plan of a staged post-quantum
@@ -4930,6 +4932,8 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventPAMSessionRevoked:                        {1: true},
 	EventNHIAccessReviewCampaignStarted:           {1: true},
 	EventNHIAccessReviewItemDecided:               {1: true},
+	EventNHIAccessReviewItemRevocationRecorded:    {1: true},
+	EventNHIAccessReviewItemClosed:                {1: true},
 	EventPQCMigrationCampaignStarted:              {1: true},
 	EventPQCMigrationCampaignUpdated:              {1: true},
 	EventPQCMigrationCampaignFindingDispositioned: {1: true},
@@ -8642,6 +8646,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CampaignID: pl.CampaignID, ItemID: pl.ItemID, Decision: pl.Decision,
 			ReviewerSubject: pl.ReviewerSubject, Reason: pl.Reason,
 			DecisionEvidenceRefs: pl.DecisionEvidenceRefs, DecidedAt: decidedAt,
+			NextReviewAt: pl.NextReviewAt,
 		}
 		if isGovernanceDecisionHistoryReplay(ctx) {
 			disposition, err := p.store.ApplyNHIReviewItemDecidedReplayTx(ctx, tx, e.TenantID, decision)
@@ -8653,6 +8658,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			return err
 		}
 		return p.store.ApplyNHIReviewItemDecidedTx(ctx, tx, e.TenantID, decision)
+	case EventNHIAccessReviewItemRevocationRecorded:
+		return p.applyNHIReviewRevocationRecorded(ctx, tx, e)
+	case EventNHIAccessReviewItemClosed:
+		return p.applyNHIReviewItemClosed(ctx, tx, e)
 	case EventAccessChangeRequestCreated:
 		var pl AccessChangeRequestCreated
 		if err := decode(e, &pl); err != nil {

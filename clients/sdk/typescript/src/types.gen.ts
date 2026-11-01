@@ -177,6 +177,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/access/reviews/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start an NHI access review built from the access graph or from stale owner attestations */
+        post: operations["generateNHIReviewCampaign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/access/reviews/{id}": {
         parameters: {
             query?: never;
@@ -17168,10 +17185,36 @@ export interface components {
             /** @enum {string} */
             decision: "certified" | "revoked" | "exception";
             decision_evidence_refs?: string[];
+            /** @description keep decisions: days until the next review, 1-730 (default 90) */
+            next_review_days?: number;
             reason?: string;
             reviewer_subject?: string;
         };
+        NHIReviewGenerateRequest: {
+            /** Format: date-time */
+            due_at?: string;
+            name: string;
+            /** @description stale_owner_attestation: attested longer ago than this (default: the attestation cadence) */
+            older_than_days?: number;
+            reviewer_subject?: string;
+            /** @enum {string} */
+            source: "graph_reachers" | "stale_owner_attestation";
+            /** @description graph_reachers: the graph node whose reachers to review */
+            target?: string;
+        };
+        NHIReviewGenerateResponse: {
+            campaign: components["schemas"]["NHIReviewCampaign"];
+            coverage?: {
+                not_covered: string[];
+                note: string;
+                sources: string[];
+            };
+        };
         NHIReviewItem: {
+            /** Format: date-time */
+            closed_at?: string;
+            /** @description what showed the credential revoked */
+            closing_evidence?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -17184,10 +17227,23 @@ export interface components {
             evidence_refs: string[];
             /** Format: uuid */
             item_id: string;
+            /**
+             * Format: date-time
+             * @description a keep decision's next review date; no upstream right changed
+             */
+            next_review_at?: string;
             nhi_id: string;
             nhi_kind: string;
             owner_ref?: string;
             resource: string;
+            revocation_detail?: string;
+            /** Format: date-time */
+            revocation_requested_at?: string;
+            /**
+             * @description what trstctl did about a revoke decision; closed only once the credential reads revoked
+             * @enum {string}
+             */
+            revocation_status?: "requested" | "manual" | "failed" | "closed";
             risk: string;
             /** @enum {string} */
             status: "pending" | "certified" | "revoked" | "exception";
@@ -21946,6 +22002,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NHIReviewCampaign"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    generateNHIReviewCampaign: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NHIReviewGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NHIReviewGenerateResponse"];
                 };
             };
             /** @description client error */

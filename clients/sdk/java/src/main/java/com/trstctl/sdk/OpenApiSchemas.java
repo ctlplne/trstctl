@@ -688,6 +688,8 @@ public final class OpenApiSchemas {
       "NHIReviewCampaignList",
       "NHIReviewCampaignStartRequest",
       "NHIReviewDecisionRequest",
+      "NHIReviewGenerateRequest",
+      "NHIReviewGenerateResponse",
       "NHIReviewItem",
       "NHIReviewItemRequest",
       "NHIShadowFinding",

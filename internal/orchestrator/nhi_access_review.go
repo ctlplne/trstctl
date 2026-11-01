@@ -49,6 +49,9 @@ type NHIReviewDecisionRequest struct {
 	ReviewerSubject      string   `json:"reviewer_subject,omitempty"`
 	Reason               string   `json:"reason,omitempty"`
 	DecisionEvidenceRefs []string `json:"decision_evidence_refs,omitempty"`
+	// NextReviewDays sets a keep (certified) decision's next review date,
+	// 1-730 days after the decision; 0 means 90 (Q1).
+	NextReviewDays int `json:"next_review_days,omitempty"`
 }
 
 func (o *Orchestrator) StartNHIReviewCampaign(ctx context.Context, tenantID string, in NHIReviewCampaignStartRequest) (store.NHIReviewCampaign, error) {
@@ -225,10 +228,25 @@ func normalizeNHIReviewDecision(ctx context.Context, campaignID, itemID string, 
 	if err != nil {
 		return projections.NHIAccessReviewItemDecided{}, err
 	}
+	decidedAt := time.Now().UTC()
+	var next *time.Time
+	if decision == "certified" {
+		// A keep decision attests access for a scope and sets when to ask
+		// again; it changes nothing upstream.
+		days := in.NextReviewDays
+		if days == 0 {
+			days = 90
+		}
+		if days < 1 || days > 730 {
+			return projections.NHIAccessReviewItemDecided{}, fmt.Errorf("next_review_days must be between 1 and 730")
+		}
+		at := decidedAt.AddDate(0, 0, days)
+		next = &at
+	}
 	return projections.NHIAccessReviewItemDecided{
 		CampaignID: campaignID, ItemID: itemID, Decision: decision,
 		ReviewerSubject: reviewer, Reason: reason, DecisionEvidenceRefs: refs,
-		DecidedAt: time.Now().UTC(),
+		DecidedAt: decidedAt, NextReviewAt: next,
 	}, nil
 }
 

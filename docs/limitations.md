@@ -1282,6 +1282,17 @@ never live in the API process. What you can do end to end against the running bi
   OCSP and the agent key set follow, so relying parties refuse the next use;
   one batch revocation event names who revoked. Relying parties that cache the CRL
   or OCSP answer see it at their own refresh.
+- Access reviews that act (Q1): a revoke decision runs the credential's own
+  revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases)
+  and the item closes only when the credential reads revoked; certificates and
+  identities are left to their own revocation and close when trstctl sees them
+  revoked. A keep decision renews the named owner's attestation and records a
+  next review date without changing any upstream right.
+  `POST /api/v1/access/reviews/generate` builds a campaign from who can reach a
+  graph node (with the graph's coverage statement) or from stale owner
+  attestations. A failed revoke stays visible and is not retried on its own; a
+  credential trstctl no longer holds leaves its item open. Decoy logins no longer
+  appear in the access graph.
 - Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
   exact trust scope, trust-before-leaf ordering, or signed live health before

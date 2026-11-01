@@ -9729,8 +9729,31 @@ NHIReviewDecisionRequest = TypedDict(
     {
         'decision': str,
         'decision_evidence_refs': list[str],
+        'next_review_days': int,
         'reason': str,
         'reviewer_subject': str,
+    },
+    total=False,
+)
+
+NHIReviewGenerateRequest = TypedDict(
+    'NHIReviewGenerateRequest',
+    {
+        'due_at': str,
+        'name': str,
+        'older_than_days': int,
+        'reviewer_subject': str,
+        'source': str,
+        'target': str,
+    },
+    total=False,
+)
+
+NHIReviewGenerateResponse = TypedDict(
+    'NHIReviewGenerateResponse',
+    {
+        'campaign': dict[str, Any],
+        'coverage': dict[str, Any],
     },
     total=False,
 )
@@ -9738,6 +9761,8 @@ NHIReviewDecisionRequest = TypedDict(
 NHIReviewItem = TypedDict(
     'NHIReviewItem',
     {
+        'closed_at': str,
+        'closing_evidence': str,
         'created_at': str,
         'decided_at': str,
         'decision_by': str,
@@ -9747,10 +9772,14 @@ NHIReviewItem = TypedDict(
         'entitlement': str,
         'evidence_refs': list[str],
         'item_id': str,
+        'next_review_at': str,
         'nhi_id': str,
         'nhi_kind': str,
         'owner_ref': str,
         'resource': str,
+        'revocation_detail': str,
+        'revocation_requested_at': str,
+        'revocation_status': str,
         'risk': str,
         'status': str,
         'updated_at': str,

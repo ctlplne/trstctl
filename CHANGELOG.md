@@ -2,6 +2,12 @@
 
 ### Added
 
+- Access reviews that act: a revoke decision revokes the reviewed PAM session, API token, machine
+  session or dynamic-secret lease once (an exact retry replays, a second decision is refused) and the
+  item closes only when the credential reads revoked, with that evidence; a keep decision renews the
+  owner's attestation and sets a next review date. `POST /api/v1/access/reviews/generate`
+  (`trstctl-cli access reviews generate`, console) builds a campaign from who can reach a resource in the
+  access graph or from owners whose attestation is stale. Decoy logins no longer appear in the graph.
 - Decoy secrets: register a stored secret as bait (console, `trstctl-cli secrets honeytokens secrets`,
   `/api/v1/secrets/honeytokens/secrets`). Every read of its value through the API, its history, a
   resolved reference or the Vault-compatible API raises one critical alert per reader, naming who read

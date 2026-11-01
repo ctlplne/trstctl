@@ -711,6 +711,32 @@ with non-secret NHI/resource/entitlement items, then records each item decision 
 under [Reference](#reference). The request body accepts identifiers and evidence refs
 only; inline secrets and credential values are rejected.
 
+Decisions act (Q1). A revoke decision runs the reviewed credential's own revoke,
+once: every attempt uses the idempotency key `nhi-review:<campaign>:<item>`, so an
+exact retry replays, a second decision is refused, and the leader's reconcile never
+revokes again. trstctl revokes PAM sessions (the database role or SSH certificate
+is withdrawn), API tokens, machine sessions and dynamic-secret leases itself; a
+certificate or identity is left to its own revocation and the item says so
+(`manual`). The item records what happened (`requested`, `manual`, `failed` with the
+reason) and closes only when the credential reads revoked, with that evidence
+(`closing_evidence`); a request alone never closes it. Each minute the leader
+re-checks open items and finishes a decision whose act was interrupted. A failed
+revoke stays visible and is not retried on its own. A keep (`certified`) decision
+records a next review date (`next_review_days`, default 90) and, when the item
+names an owner (`owner_ref` `wl:<owner id>`), renews that owner's attestation as the
+reviewer; it changes no right upstream. A keep whose owner has no application or
+environment is refused before anything is recorded.
+
+A campaign can be generated instead of typed: `POST /api/v1/access/reviews/generate`
+with `source` `graph_reachers` and a graph `target` lists every credential that
+reaches that node in the access graph, with its holders, approvers and grant as
+evidence and the graph's coverage statement (an empty or short list is not proof
+that nobody else has access); it needs `graph:read` as well as `access:write`.
+`stale_owner_attestation` lists the credentials of every complete owner whose
+attestation is older than `older_than_days` (default: the attestation cadence) or
+was never made. A campaign holds at most 100 items; a larger answer asks for a
+narrower target.
+
 ### Credential assurance records (A179)
 
 `GET /api/v1/certificates/{id}/assurance-record` (`certs:read`; CLI `trstctl
@@ -928,6 +954,8 @@ trstctl-cli --idempotency-key release-run-1 compliance report-runs release-hold 
 trstctl-cli access reviews start -f nhi-review.json
 # Sign in as that assigned reviewer before making the decision.
 trstctl-cli access reviews decide <campaign-id> <item-id> -f nhi-review-decision.json
+# or generate one from who can reach a database, then decide its items
+trstctl-cli --idempotency-key pg-review-1 access reviews generate -f generate.json
 
 # file and review data-subject privacy controls
 trstctl-cli privacy erasures erase -f subject-erasure.json
@@ -1031,9 +1059,11 @@ auth:
   CA/Browser Forum Baseline Requirements (`cabf-br`), WebTrust (`webtrust`), ETSI
   (`etsi`), eIDAS (`eidas`), and NIS2 (`nis2`).
 - **NHI access reviews:** `POST|GET /api/v1/access/reviews[/{id}]`, `POST
-  /api/v1/access/reviews/{id}/items/{item_id}/decision`; decisions `certified`,
-  `revoked`, `exception`; events `nhi.access_review.campaign.started` and
-  `nhi.access_review.item.decided`. The console asks the creator to assign a
+  /api/v1/access/reviews/{id}/items/{item_id}/decision`, `POST
+  /api/v1/access/reviews/generate`; decisions `certified`, `revoked`,
+  `exception`; events `nhi.access_review.campaign.started`,
+  `nhi.access_review.item.decided`, `nhi.access_review.item.revocation_recorded`
+  and `nhi.access_review.item.closed`. The console asks the creator to assign a
   different authenticated reviewer with `reviewer_subject`. API and CLI callers
   may omit that optional field; the campaign then enters the explicit
   `urn:trstctl:access-review:any-distinct` reviewer queue. A different

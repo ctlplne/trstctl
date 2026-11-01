@@ -27,6 +27,7 @@ export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as decoy from "./decoyApi";
 import * as agentIdentity from "./agentIdentityApi";
+import * as accessReview from "./accessReviewApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
 import * as verificationAddress from "./verificationSuggestionsApi";
 import * as certificateBytes from "./certificateBytesApi";
@@ -2504,6 +2505,7 @@ export interface Api {
   brokerAgentIdentities(options?: BrokerHistoryQuery, signal?: AbortSignal): Promise<BrokerAgentIdentityHistoryList>;
   brokerAgentIdentity(id: string, signal?: AbortSignal): Promise<BrokerAgentIdentityHistory>;
   revokeBrokerAgentIdentity(id: string, input: BrokerAgentIdentityRevokeRequest, idempotencyKey?: string): Promise<BulkRevokeResult>;
+  generateNHIReviewCampaign: typeof accessReview.generateNHIReviewCampaign;
   workloadAttesterTrustSources(): Promise<WorkloadAttesterTrustSourceList>;
   createWorkloadAttesterTrustSource(input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
   updateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
@@ -3364,6 +3366,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
     req<BrokerAgentIdentityHistoryList>(`/api/v1/broker/agent-identities${brokerHistoryQueryString(options)}`, { signal }),
   brokerAgentIdentity: (id, signal) => req<BrokerAgentIdentityHistory>(`/api/v1/broker/agent-identities/${encodeURIComponent(id)}`, { signal }),
   revokeBrokerAgentIdentity: agentIdentity.revokeBrokerAgentIdentity,
+  generateNHIReviewCampaign: accessReview.generateNHIReviewCampaign,
   workloadAttesterTrustSources: () => req<WorkloadAttesterTrustSourceList>("/api/v1/workloads/attester-trust-sources"),
   createWorkloadAttesterTrustSource: (input) => mutate<WorkloadAttesterTrustSource>("POST", "/api/v1/workloads/attester-trust-sources", input),
   updateWorkloadAttesterTrustSource: (id, input) =>

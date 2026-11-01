@@ -754,7 +754,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/campaign_id", opaque), privacyRule("/item_id", opaque),
 		privacyRule("/decision", opaque), privacyRule("/reviewer_subject", exact),
 		privacyRule("/reason", clear), privacyRule("/decision_evidence_refs/*", clear),
-		privacyRule("/decided_at", opaque),
+		privacyRule("/decided_at", opaque), privacyRule("/next_review_at", opaque),
 	)
 	accessChangeRequest := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/requested_action", opaque),
@@ -1042,6 +1042,8 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventRemediationPlaybookRunRecorded, 1}:                                             remediationRun,
 		{EventNHIAccessReviewCampaignStarted, 1}:                                             accessReviewCampaign,
 		{EventNHIAccessReviewItemDecided, 1}:                                                 accessReviewDecision,
+		{EventNHIAccessReviewItemRevocationRecorded, 1}:                                      nhiReviewRevocationRecordedPrivacyPolicy(),
+		{EventNHIAccessReviewItemClosed, 1}:                                                  nhiReviewItemClosedPrivacyPolicy(),
 		{EventAccessChangeRequestCreated, 1}:                                                 accessChangeRequest,
 		{EventAccessChangeRequestDecided, 1}:                                                 accessChangeDecision,
 		{EventCertificateRevoked, 1}:                                                         certificateRevoked,
@@ -1591,6 +1593,8 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventRemediationPlaybookRunRecorded, 1}:                                             privacyPayloadShape[RemediationPlaybookRunRecorded](),
 		{EventNHIAccessReviewCampaignStarted, 1}:                                             privacyPayloadShape[NHIAccessReviewCampaignStarted](),
 		{EventNHIAccessReviewItemDecided, 1}:                                                 privacyPayloadShape[NHIAccessReviewItemDecided](),
+		{EventNHIAccessReviewItemRevocationRecorded, 1}:                                      privacyPayloadShape[NHIAccessReviewItemRevocationRecorded](),
+		{EventNHIAccessReviewItemClosed, 1}:                                                  privacyPayloadShape[NHIAccessReviewItemClosed](),
 		{EventAccessChangeRequestCreated, 1}:                                                 privacyPayloadShape[AccessChangeRequestCreated](),
 		{EventAccessChangeRequestDecided, 1}:                                                 privacyPayloadShape[AccessChangeRequestDecided](),
 		{EventCertificateRevoked, 1}:                                                         privacyPayloadShape[CertificateRevoked](),

@@ -1145,6 +1145,7 @@ var valueChangingMigrationContentHarnesses = map[int]bool{
 	344: true, // TestMigration0344KeepsEdgePoliciesAndStartsWithRenewalOff
 	354: true, // TestMigration0354KeepsEdgeRowsAndStartsWithoutTokenAttestation
 	355: true, // TestMigration0355KeepsPAMSessionsAndStartsWithoutAnApprovalLink
+	358: true, // TestMigration0358KeepsReviewItemsAndStartsWithNoOutcome
 	340: true, // TestMigration0340KeepsRevocationAnswersAsEndpointChecks
 	334: true, // TestMigration0334KeepsReportRunsAndStartsUnheldAndUnexpired
 	332: true, // TestMigration0332KeepsStaticRotationCommandsAndStartsWithNoLeaseTTL

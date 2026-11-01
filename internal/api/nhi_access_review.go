@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/orchestrator"
@@ -50,6 +51,14 @@ type nhiReviewItemResponse struct {
 	DecidedAt            *time.Time `json:"decided_at,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
+	// Q1: what trstctl did about a revoke decision, the evidence that closed
+	// it, and a keep decision's next review date.
+	RevocationStatus      string     `json:"revocation_status,omitempty"`
+	RevocationDetail      string     `json:"revocation_detail,omitempty"`
+	RevocationRequestedAt *time.Time `json:"revocation_requested_at,omitempty"`
+	ClosedAt              *time.Time `json:"closed_at,omitempty"`
+	ClosingEvidence       string     `json:"closing_evidence,omitempty"`
+	NextReviewAt          *time.Time `json:"next_review_at,omitempty"`
 }
 
 //trstctl:mutation
@@ -147,6 +156,11 @@ func (a *API) decideNHIReviewItem(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(raw, &req); err != nil {
 			return 0, nil, errStatus(http.StatusBadRequest, "invalid NHI access review decision request")
 		}
+		if strings.EqualFold(strings.TrimSpace(req.Decision), "certified") {
+			if err := a.checkNHIReviewKeep(ctx, tenantID, campaignID, itemID); err != nil {
+				return 0, nil, err
+			}
+		}
 		campaign, err := a.orch.DecideNHIReviewItem(ctx, tenantID, campaignID, itemID, req)
 		if err != nil {
 			if errors.Is(err, store.ErrNHIReviewReviewerUnauthorized) {
@@ -159,6 +173,11 @@ func (a *API) decideNHIReviewItem(w http.ResponseWriter, r *http.Request) {
 				return 0, nil, errStatus(http.StatusNotFound, "NHI access review item not found")
 			}
 			return 0, nil, errStatus(http.StatusBadRequest, err.Error())
+		}
+		// Q1: the decision acts. A revoke runs the credential's own revoke
+		// once; a keep renews the named owner's attestation.
+		if campaign, err = a.actOnNHIReviewDecision(ctx, tenantID, campaign, itemID); err != nil {
+			return 0, nil, err
 		}
 		return http.StatusOK, toNHIReviewCampaignResponse(campaign, true), nil
 	})
@@ -197,5 +216,8 @@ func toNHIReviewItemResponse(item store.NHIReviewItem) nhiReviewItemResponse {
 		Risk: item.Risk, EvidenceRefs: refs, Status: item.Status, DecisionBy: item.DecisionBy,
 		DecisionReason: item.DecisionReason, DecisionEvidenceRefs: decisionRefs,
 		DecidedAt: item.DecidedAt, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		RevocationStatus: item.RevocationStatus, RevocationDetail: item.RevocationDetail,
+		RevocationRequestedAt: item.RevocationRequestedAt, ClosedAt: item.ClosedAt,
+		ClosingEvidence: item.ClosingEvidence, NextReviewAt: item.NextReviewAt,
 	}
 }

@@ -472,6 +472,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"access", "reviews", "start"}, Method: "POST", Path: "/api/v1/access/reviews", Body: bodyFile, Summary: "Start an NHI access certification campaign"},
 	{Name: []string{"access", "reviews", "list"}, Method: "GET", Path: "/api/v1/access/reviews", Query: []string{"limit", "cursor"}, Summary: "List NHI access certification campaigns"},
 	{Name: []string{"access", "reviews", "get"}, Method: "GET", Path: "/api/v1/access/reviews/{id}", Summary: "Get an NHI access certification campaign"},
+	{Name: []string{"access", "reviews", "generate"}, Method: "POST", Path: "/api/v1/access/reviews/generate", Body: bodyFile, Summary: "Start an NHI access review built from who can reach a resource or from stale owner attestations"},
 	{Name: []string{"access", "reviews", "decide"}, Method: "POST", Path: "/api/v1/access/reviews/{id}/items/{item_id}/decision", Body: bodyFile, Summary: "Record an NHI access-review item decision"},
 
 	{Name: []string{"profiles", "create"}, Method: "POST", Path: "/api/v1/profiles", Body: bodyFile, Summary: "Create a certificate profile version"},

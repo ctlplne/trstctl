@@ -125,5 +125,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.revocationHealthRoutes()...)    // see revocation_health.go
 	out = append(out, a.verificationSuggestionRoutes()...)
 	out = append(out, a.certificateDERRecoveryRoutes()...)
+	out = append(out, a.nhiReviewGenerateRoutes()...)
 	return out
 }

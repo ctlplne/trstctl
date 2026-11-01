@@ -29862,6 +29862,10 @@
             },
             "type": "array"
           },
+          "next_review_days": {
+            "description": "keep decisions: days until the next review, 1-730 (default 90)",
+            "type": "integer"
+          },
           "reason": {
             "type": "string"
           },
@@ -29874,8 +29878,86 @@
         ],
         "type": "object"
       },
+      "NHIReviewGenerateRequest": {
+        "properties": {
+          "due_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "older_than_days": {
+            "description": "stale_owner_attestation: attested longer ago than this (default: the attestation cadence)",
+            "type": "integer"
+          },
+          "reviewer_subject": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "graph_reachers",
+              "stale_owner_attestation"
+            ],
+            "type": "string"
+          },
+          "target": {
+            "description": "graph_reachers: the graph node whose reachers to review",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source"
+        ],
+        "type": "object"
+      },
+      "NHIReviewGenerateResponse": {
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/NHIReviewCampaign"
+          },
+          "coverage": {
+            "properties": {
+              "not_covered": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "note": {
+                "type": "string"
+              },
+              "sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sources",
+              "not_covered",
+              "note"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "campaign"
+        ],
+        "type": "object"
+      },
       "NHIReviewItem": {
         "properties": {
+          "closed_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "closing_evidence": {
+            "description": "what showed the credential revoked",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -29912,6 +29994,11 @@
             "format": "uuid",
             "type": "string"
           },
+          "next_review_at": {
+            "description": "a keep decision's next review date; no upstream right changed",
+            "format": "date-time",
+            "type": "string"
+          },
           "nhi_id": {
             "type": "string"
           },
@@ -29922,6 +30009,23 @@
             "type": "string"
           },
           "resource": {
+            "type": "string"
+          },
+          "revocation_detail": {
+            "type": "string"
+          },
+          "revocation_requested_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "revocation_status": {
+            "description": "what trstctl did about a revoke decision; closed only once the credential reads revoked",
+            "enum": [
+              "requested",
+              "manual",
+              "failed",
+              "closed"
+            ],
             "type": "string"
           },
           "risk": {
@@ -46305,6 +46409,74 @@
           }
         ],
         "summary": "Start an NHI access certification campaign",
+        "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/access/reviews/generate": {
+      "post": {
+        "operationId": "generateNHIReviewCampaign",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NHIReviewGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NHIReviewGenerateResponse"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Start an NHI access review built from the access graph or from stale owner attestations",
         "x-trstctl-permission": "access:write"
       }
     },

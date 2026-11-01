@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ComplianceEvidencePackPanel } from "@/components/ComplianceEvidencePackPanel";
 import { PolicyRuleEditor } from "@/pages/policy/PolicyRuleEditor";
+import { AccessReviewGenerate, AccessReviewOutcome } from "@/pages/policy/AccessReviewActs";
 import { useAuth } from "@/auth/AuthProvider";
 import { hasPermission } from "@/lib/access";
 import { AppQueryProvider, useApiQuery, useHasAppQueryProvider, useQueryClient } from "@/lib/query";
@@ -1159,6 +1160,7 @@ function PolicyContent() {
               </h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">{translateNow("source.campaigns.certify.non.human.identity.acces.5d99189fbe")}</p>
             </div>
+            <AccessReviewGenerate onGenerated={(id) => void refreshNHIReviews(id)} />
 
             <form className="grid gap-3 rounded-md border border-border p-4 text-sm lg:grid-cols-6" onSubmit={(event) => void startNHIReviewCampaign(event)}>
               <label className="grid gap-1 lg:col-span-2">
@@ -1767,6 +1769,7 @@ function NHIReviewCampaignPanel({
                           {(item.decision_evidence_refs?.length ?? 0) > 0 && (
                             <p className="mt-1 break-all text-xs text-muted-foreground">{item.decision_evidence_refs?.join(", ")}</p>
                           )}
+                          <AccessReviewOutcome item={item} />
                         </div>
                       )}
                     </td>
