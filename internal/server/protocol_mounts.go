@@ -1126,8 +1126,9 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		SPIFFEID:  "spiffe://" + td + "/workload",
 		Selectors: []string{"unix"},
 	}}
+	tenantIssuer := tenantSPIFFEIssuer{Issuer: issuer, tenantID: tenant, check: s.tenantServiceCheck, work: s.store.BeginTenantService, store: s.store}
 	wl, err := spiffe.New(spiffe.Config{
-		Issuer: tenantSPIFFEIssuer{Issuer: issuer, tenantID: tenant, check: s.tenantServiceCheck, work: s.store.BeginTenantService, store: s.store}, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,
+		Issuer: tenantIssuer, TenantID: tenant, TrustDomain: td, Entries: entries, Pool: pool,
 		TenantServiceWork: s.store.BeginTenantService,
 		// AN-2: SVID issuance is audited into the event log (the source of truth),
 		// the same adapter the rest of the spine uses.
@@ -1173,6 +1174,7 @@ func (s *Server) buildSPIFFE(ctx context.Context, cfg config.SPIFFEProtocol, ten
 		workloadOpts = append(workloadOpts, spiffe.WithAdditionalX509SVIDIssuer(additional))
 	}
 	return &spiffeProtocol{
+		issuer:                 tenantIssuer,
 		server:                 spiffe.NewWorkloadAPIServer(wl, []string{"unix"}, workloadOpts...),
 		socket:                 socket,
 		tenantID:               tenant,

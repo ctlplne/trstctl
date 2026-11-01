@@ -793,6 +793,12 @@ func seedRecoveredFromPostgresTables(
 			// freely again — which is the pre-durability defect a restore must
 			// not reintroduce.
 			{`INSERT INTO provider_tenant_quotas (tenant_id, max_certificates_stored, updated_by) VALUES ($1, $2, $3)`, []any{tenantA, 25, "full-dr-admin"}},
+			// M4: a machine login token's single use. A restore that lost it
+			// would re-admit the still-valid token once.
+			{`INSERT INTO machine_credential_replays (tenant_id, method, key_digest, expires_at, used_at) VALUES ($1, $2, $3, $4, $5)`, []any{tenantA, "oidc", "jti:" + strings.Repeat("b", 64), now.Add(10 * time.Minute), now}},
+			// M2: an Enterprise misuse finding, carried by the dump for a restore
+			// that starts without the governance edition attached.
+			{`INSERT INTO misuse_findings (tenant_id, finding_id, rule, credential_id, principal, source, window_start, observed_count, baseline, alerted, detected_at, event_sequence) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, []any{tenantA, "00000000-0000-0000-0000-00000000a0f1", "secret_read_burst", "00000000-0000-0000-0000-00000000a001", "ci", "10.0.0.0/24", now.Truncate(time.Hour), 64, 2, true, now, int64(1)}},
 			// L3: the provider's customer registry is the business-level source used
 			// to list and manage tenants. It is not projected from the event log, so
 			// a full restore must carry the actual slug, name, and lifecycle state.

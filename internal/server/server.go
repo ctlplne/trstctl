@@ -2762,6 +2762,9 @@ func (s *Server) configureRootMux(d Deps, a *api.API) {
 	// Public like /crl/ and /ocsp/: each agent's current public keys, for the
 	// customer's authorization server to check the agent's client assertions.
 	mux.Handle(agentKeySetPrefix, bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.agentKeySetHandler()))
+	// M4: OAuth token exchange (RFC 8693) and the key its JWT-SVIDs verify against.
+	mux.Handle("POST /oauth2/token", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeHandler(d.MachineAuthMethods)))
+	mux.Handle("GET /oauth2/jwks", bulkheadHandler(s.bulk, bulkhead.SubsystemAPI, s.tokenExchangeJWKSHandler()))
 	if s.protocols != nil {
 		s.protocols.routes(mux, s.bulk)
 	}

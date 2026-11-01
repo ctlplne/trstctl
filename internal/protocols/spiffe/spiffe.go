@@ -71,6 +71,26 @@ func (c *CAIssuer) SignJWTSVID(_ context.Context, spiffeID string, audience []st
 	return crypto.SignJWT(c.JWTSigner, c.JWTKeyID, claims)
 }
 
+// SignJWTSVIDWithClaims signs a JWT-SVID carrying extra claims (M4's token
+// exchange adds scope, jti and act). The registered claims sub, aud, iat and
+// exp are the SVID's own and cannot be replaced.
+func (c *CAIssuer) SignJWTSVIDWithClaims(_ context.Context, spiffeID string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
+	if len(audience) == 0 {
+		return "", fmt.Errorf("spiffe: JWT-SVID requires at least one audience")
+	}
+	now := time.Now()
+	claims := map[string]any{}
+	for name, value := range extra {
+		switch name {
+		case "sub", "aud", "iat", "exp":
+			return "", fmt.Errorf("spiffe: claim %q is the SVID's own", name)
+		}
+		claims[name] = value
+	}
+	claims["sub"], claims["aud"], claims["iat"], claims["exp"] = spiffeID, audience, now.Unix(), now.Add(ttl).Unix()
+	return crypto.SignJWT(c.JWTSigner, c.JWTKeyID, claims)
+}
+
 // X509Bundle implements Issuer.
 func (c *CAIssuer) X509Bundle(context.Context) ([][]byte, error) {
 	return [][]byte{c.CACertDER}, nil

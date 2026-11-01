@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"trstctl.com/trstctl/internal/protocols/spiffe"
@@ -37,6 +38,26 @@ func (i tenantSPIFFEIssuer) SignX509SVID(ctx context.Context, id string, pub []b
 		return nil, err
 	}
 	return i.Issuer.SignX509SVID(ctx, id, pub, ttl)
+}
+
+// SignJWTSVIDWithClaims signs a JWT-SVID with extra claims (M4) under the same
+// tenant service checks.
+func (i tenantSPIFFEIssuer) SignJWTSVIDWithClaims(ctx context.Context, id string, audience []string, ttl time.Duration, extra map[string]any) (string, error) {
+	signer, ok := i.Issuer.(interface {
+		SignJWTSVIDWithClaims(context.Context, string, []string, time.Duration, map[string]any) (string, error)
+	})
+	if !ok {
+		return "", errors.New("server: the SPIFFE issuer cannot sign JWT-SVIDs with extra claims")
+	}
+	ctx, release, err := i.work.Begin(ctx, i.tenantID)
+	if err != nil {
+		return "", err
+	}
+	defer release()
+	if err := i.check.Check(ctx, i.tenantID); err != nil {
+		return "", err
+	}
+	return signer.SignJWTSVIDWithClaims(ctx, id, audience, ttl, extra)
 }
 
 func (i tenantSPIFFEIssuer) SignJWTSVID(ctx context.Context, id string, audience []string, ttl time.Duration) (string, error) {

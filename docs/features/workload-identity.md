@@ -459,6 +459,31 @@ SPIRE container test runs both: against a stand-in that serves publication, a
 JWT-SVID signed with another server's published key verifies with the SPIRE
 bundle; against one that does not, SPIRE starts and mints X.509 and JWT-SVIDs.
 
+### Token exchange (RFC 8693, M4) — a platform token in, a five-minute JWT-SVID out
+
+A workload that already holds a token from its platform — a Kubernetes projected
+service-account token, a CI provider's id_token — swaps it for a JWT-SVID without
+any stored secret. `POST /oauth2/token` (form-encoded, `X-Tenant-ID` header) takes
+`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`, `subject_token`,
+`subject_token_type` (`urn:ietf:params:oauth:token-type:jwt` or `…:id_token`),
+`audience` (or `resource`) and an optional space-separated `scope`. trstctl picks
+the tenant's machine-login method whose `issuer` the token names, verifies the token
+with it, and answers with a JWT-SVID (`issued_token_type` JWT, `expires_in` 300):
+`sub` is the workload's SPIFFE ID (`spiffe://<trust domain>/ns/<namespace>/sa/<name>`
+for a Kubernetes service account, `…/machine/<method>/<principal>` otherwise), `aud`
+the requested audience, `scope` the requested scopes the method grants (all of them
+when none is asked for), `act` the subject token's issuer and subject, and a fresh
+`jti`. It is signed by the SPIFFE JWT key in the isolated signer; relying parties
+verify it offline against `GET /oauth2/jwks`, so the exchange and the verification
+work with no internet. Each subject token is single-use: trstctl records it (as a
+digest) only after the whole request has been checked, and refuses it again with
+`invalid_grant`; errors follow RFC 6749 (`invalid_request`, `invalid_grant`,
+`invalid_target`, `invalid_scope`, `unsupported_grant_type`). Every exchange is
+recorded as `token.exchanged`. The SPIFFE surface must be enabled for the tenant.
+Because subject tokens are single-use and Kubernetes hands a pod the same projected
+token until kubelet rotates it, a pod that exchanges more than once per rotation
+requests a fresh token (the TokenRequest API) for each exchange.
+
 ### Ephemeral issuance (F25) — attestation in, short-lived cert out
 
 The ephemeral issuer ties it together: it verifies an attestation (refusing to sign on

@@ -460,6 +460,8 @@ type spiffeProtocol struct {
 	wl *spiffe.Server
 	// trustDomain is carried for the console's per-host status view.
 	trustDomain string
+	// issuer signs the token exchange's JWT-SVIDs (M4) with the SPIFFE JWT key.
+	issuer tenantSPIFFEIssuer
 }
 
 // RunSPIFFE serves the SPIFFE Workload API gRPC server on its UDS until ctx is

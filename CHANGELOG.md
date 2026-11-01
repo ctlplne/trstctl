@@ -2,6 +2,10 @@
 
 ### Added
 
+- OAuth token exchange (RFC 8693): `POST /oauth2/token` swaps a workload's platform token (a Kubernetes projected
+  service-account token, a CI id_token) for a five-minute, scoped JWT-SVID signed in the isolated signer and
+  verifiable offline against `GET /oauth2/jwks`; subject tokens are single-use and every exchange is recorded.
+
 - Single-use machine login tokens: an `oidc` or `jwt` login token is recorded (as a digest) until it expires and
   refused if presented again, on any replica and across restarts; a token refused for another reason never uses up
   a valid one.

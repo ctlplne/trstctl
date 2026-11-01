@@ -417,12 +417,14 @@ func (o OIDCMethod) Authenticate(ctx context.Context, credential []byte) (string
 		now:             o.Now,
 		leeway:          o.Leeway,
 		replay:          o.Replay,
-		guard:           o.Guard,
 	})
 	if err != nil {
 		return "", nil, err
 	}
 	defer v.destroy()
+	if err := useOnce(ctx, o.Guard, o.Name(), v); err != nil {
+		return "", nil, err
+	}
 	return v.principal, v.scopes, nil
 }
 

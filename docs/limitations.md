@@ -1310,6 +1310,16 @@ never live in the API process. What you can do end to end against the running bi
   also folds earlier machine logins, and the rebuilt usage read model is identical.
   Behind a load balancer every request has the balancer's address, so new-network
   detection needs clients that reach trstctl directly.
+- Token exchange (M4, RFC 8693): `POST /oauth2/token` swaps a platform JWT (a
+  Kubernetes projected service-account token, a CI id_token) verified by the tenant's
+  machine-login method for its issuer into a five-minute JWT-SVID for the workload's
+  SPIFFE ID, scoped to the requested scopes the method grants, signed by the SPIFFE JWT
+  key in the isolated signer and verifiable offline against `GET /oauth2/jwks`. Each
+  subject token is single-use (a replay is `invalid_grant`); every exchange is recorded
+  as `token.exchanged`. Proven with a pod-bound token minted by a real Kubernetes API
+  server (kind). Needs the SPIFFE surface enabled for the tenant; JWT is the only issued
+  token type; a pod exchanging more than once per kubelet rotation needs a fresh token
+  per exchange.
 - Single-use machine login tokens (M4's prerequisite): an `oidc` or `jwt` machine
   login token logs in once; trstctl records a digest of it (issuer + `jti`, else the
   whole token) in PostgreSQL until it expires and refuses it again on any replica or

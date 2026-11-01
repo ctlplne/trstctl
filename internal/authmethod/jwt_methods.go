@@ -3,8 +3,11 @@
 package authmethod
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -67,12 +70,14 @@ func (j JWTMethod) Authenticate(ctx context.Context, credential []byte) (string,
 		now:             j.Now,
 		leeway:          j.Leeway,
 		replay:          j.Replay,
-		guard:           j.Guard,
 	})
 	if err != nil {
 		return "", nil, err
 	}
 	defer v.destroy()
+	if err := useOnce(ctx, j.Guard, j.Name(), v); err != nil {
+		return "", nil, err
+	}
 	return v.principal, v.scopes, nil
 }
 
@@ -110,7 +115,6 @@ func (k KubernetesSATMethod) Authenticate(ctx context.Context, credential []byte
 		now:         k.Now,
 		leeway:      k.Leeway,
 		replay:      k.Replay,
-		guard:       k.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -148,6 +152,9 @@ func (k KubernetesSATMethod) Authenticate(ctx context.Context, credential []byte
 	if v.principal != wantSub {
 		return "", nil, fmt.Errorf("kubernetes: subject does not match namespace/serviceaccount")
 	}
+	if err := useOnce(ctx, k.Guard, k.Name(), v); err != nil {
+		return "", nil, err
+	}
 	return v.principal, v.scopes, nil
 }
 
@@ -184,7 +191,6 @@ func (g GCPMethod) Authenticate(ctx context.Context, credential []byte) (string,
 		now:         g.Now,
 		leeway:      g.Leeway,
 		replay:      g.Replay,
-		guard:       g.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -209,6 +215,9 @@ func (g GCPMethod) Authenticate(ctx context.Context, credential []byte) (string,
 	}
 	if len(g.AllowedProjects) > 0 && !g.AllowedProjects[ce.ProjectID] {
 		return "", nil, fmt.Errorf("gcp: project %s is not allowed", ce.ProjectID)
+	}
+	if err := useOnce(ctx, g.Guard, g.Name(), v); err != nil {
+		return "", nil, err
 	}
 	return "gcp:" + ce.ProjectID + "/" + ce.InstanceID, v.scopes, nil
 }
@@ -252,7 +261,6 @@ func (a AzureMethod) Authenticate(ctx context.Context, credential []byte) (strin
 		now:          a.Now,
 		leeway:       a.Leeway,
 		replay:       a.Replay,
-		guard:        a.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -266,6 +274,9 @@ func (a AzureMethod) Authenticate(ctx context.Context, credential []byte) (strin
 		if !ok || !a.AllowedAzureTenants[tid] {
 			return "", nil, fmt.Errorf("azure: tenant is not allowed")
 		}
+	}
+	if err := useOnce(ctx, a.Guard, a.Name(), v); err != nil {
+		return "", nil, err
 	}
 	return "azure:" + v.principal, v.scopes, nil
 }
@@ -285,7 +296,6 @@ type jwtMethodOptions struct {
 	now             func() time.Time
 	leeway          time.Duration
 	replay          *JTICache
-	guard           ReplayGuard
 }
 
 type verifiedJWT struct {
@@ -293,6 +303,8 @@ type verifiedJWT struct {
 	claims    jwtClaimSet
 	principal string
 	scopes    []string
+	useKey    string
+	exp       time.Time
 }
 
 func (v *verifiedJWT) destroy() {
@@ -432,23 +444,56 @@ func authenticateJWT(ctx context.Context, credential []byte, opts jwtMethodOptio
 		}
 		scopes = fromToken
 	}
-	// The durable single-use record is taken last, after every other check, so a
-	// token that fails verification never uses up a valid token's one use.
-	if opts.guard != nil {
-		key := "token:" + crypto.SHA256Hex(credential)
-		if reg.JTI != "" {
-			key = "jti:" + crypto.SHA256Hex([]byte(reg.Iss+"\x00"+reg.JTI))
-		}
-		first, err := opts.guard.FirstUse(ctx, methodName, key, time.Unix(reg.Exp, 0))
-		if err != nil {
-			return verifiedJWT{}, fmt.Errorf("%s: record single use: %w", methodName, err)
-		}
-		if !first {
-			return verifiedJWT{}, fmt.Errorf("%s: %w", methodName, ErrCredentialReplayed)
-		}
+	// The single-use key; useOnce records it after the method's own checks.
+	useKey := "token:" + crypto.SHA256Hex(credential)
+	if reg.JTI != "" {
+		useKey = "jti:" + crypto.SHA256Hex([]byte(reg.Iss+"\x00"+reg.JTI))
 	}
 	retainRaw = true
-	return verifiedJWT{raw: raw, claims: claims, principal: principal, scopes: scopes}, nil
+	return verifiedJWT{raw: raw, claims: claims, principal: principal, scopes: scopes, useKey: useKey, exp: time.Unix(reg.Exp, 0)}, nil
+}
+
+// UseKey is the single-use key and expiry of a JWT credential that a method has
+// already verified: the same key the methods' guards record, so a token used for
+// one purpose counts as used for every other. It reads the claims without
+// verifying them; call it only after Authenticate succeeded.
+func UseKey(credential []byte) (string, time.Time, error) {
+	parts := bytes.Split(credential, []byte("."))
+	if len(parts) != 3 {
+		return "", time.Time{}, errors.New("authmethod: not a JWT")
+	}
+	payload := make([]byte, base64.RawURLEncoding.DecodedLen(len(parts[1])))
+	n, err := base64.RawURLEncoding.Decode(payload, parts[1])
+	if err != nil {
+		return "", time.Time{}, errors.New("authmethod: unreadable JWT claims")
+	}
+	defer secret.Wipe(payload)
+	var reg registeredJWTClaims
+	if err := json.Unmarshal(payload[:n], &reg); err != nil || reg.Exp == 0 {
+		return "", time.Time{}, errors.New("authmethod: unreadable JWT claims")
+	}
+	key := "token:" + crypto.SHA256Hex(credential)
+	if reg.JTI != "" {
+		key = "jti:" + crypto.SHA256Hex([]byte(reg.Iss+"\x00"+reg.JTI))
+	}
+	return key, time.Unix(reg.Exp, 0), nil
+}
+
+// useOnce records the token's single use with the method's durable guard. Each
+// method calls it last, after its own checks, so a token refused for any reason
+// never uses up a valid token's one use.
+func useOnce(ctx context.Context, guard ReplayGuard, method string, v verifiedJWT) error {
+	if guard == nil {
+		return nil
+	}
+	first, err := guard.FirstUse(ctx, method, v.useKey, v.exp)
+	if err != nil {
+		return fmt.Errorf("%s: record single use: %w", method, err)
+	}
+	if !first {
+		return fmt.Errorf("%s: %w", method, ErrCredentialReplayed)
+	}
+	return nil
 }
 
 func (c jwtClaimSet) string(name string) (string, bool, error) {
