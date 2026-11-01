@@ -33,6 +33,7 @@ import { PQCPilots } from "@/pages/posture/PQCPilots";
 import { DriftRecoveryWorkflow } from "@/pages/posture/DriftRecoveryWorkflow";
 import { loadLatestDriftRuns } from "@/pages/posture/DriftLatestRuns";
 import { CBOMScanWorkflow } from "@/pages/posture/CBOMScanWorkflow";
+import { CBOMCycloneDXExport } from "@/pages/posture/CBOMCycloneDXExport";
 import { PCASSuccessionWorkflow } from "@/pages/posture/PCASSuccessionWorkflow";
 import {
   CTFindingsDashboard,
@@ -433,6 +434,7 @@ export function Posture() {
           </dl>
           <PQCReadinessSummary progress={cbomProgress} />
           <AlgorithmRollup assets={cbomInventory.items} loading={cbomLoading} />
+          <CBOMCycloneDXExport />
 
           {lastCBOMScan ? (
             <dl className="grid gap-3 rounded-panel border border-border p-comfortable text-sm md:grid-cols-6">

@@ -312,6 +312,8 @@ const (
 	// ArtifactEvaluationPack signs a design-partner evaluation run's evidence
 	// pack (trstctl evaluate).
 	ArtifactEvaluationPack = "trstctl.audit-evidence/evaluation-pack/v1"
+	// ArtifactCBOMCycloneDX signs a CycloneDX 1.6 CBOM export's exact bytes.
+	ArtifactCBOMCycloneDX = "trstctl.audit-evidence/cbom-cyclonedx-export/v1"
 )
 
 // GenerateRSASigningKey generates a 2048-bit RSA signing key tagged with kid.

@@ -6688,6 +6688,14 @@ func componentSchemas() map[string]*Schema {
 		"reasons": {Type: "array", Items: str()}, "migration_target": str(),
 		"migration_standard": str(), "migration_generation": str(),
 	}, "id", "kind", "location", "strength", "quantum_vulnerable", "out_of_policy", "migration_target", "migration_standard", "migration_generation")
+	cbomCycloneDXExport := object(map[string]*Schema{
+		"spec_version": {Type: "string", Enum: []string{"1.6"}},
+		"components":   {Type: "integer", Description: "one cryptographic-asset component per inventory asset"},
+		"bom":          {Type: "object", AdditionalProperties: &Schema{}, Description: "the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs"},
+		"bom_sha256":   str(),
+		"signed_bom":   {Type: "string", Description: "compact JWS over the BOM bytes under the audit evidence key; verify offline with trstctl-cli cbom verify-cyclonedx"},
+		"public_jwks":  {Type: "object", AdditionalProperties: &Schema{}},
+	}, "spec_version", "components", "bom", "bom_sha256", "signed_bom", "public_jwks")
 	cbomInventory := object(map[string]*Schema{
 		"items":              {Type: "array", Items: ref("CBOMAsset")},
 		"migration_progress": ref("CBOMMigrationProgress"),
@@ -7927,6 +7935,7 @@ func componentSchemas() map[string]*Schema {
 		"CBOMMigrationProgress":                 cbomMigrationProgress,
 		"CBOMAsset":                             cbomAsset,
 		"CBOMInventory":                         cbomInventory,
+		"CBOMCycloneDXExport":                   cbomCycloneDXExport,
 		"CBOMScan":                              cbomScan,
 		"IdentityIssuanceResult":                identityIssuanceResult,
 		"FirstIssuanceRetryRequest":             firstIssuanceRetryRequest,

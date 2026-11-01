@@ -200,6 +200,7 @@ import type {
   CAKeyCeremony,
   CBOMAsset as GenCBOMAsset,
   CBOMInventory,
+  CBOMCycloneDXExport,
   CBOMMigrationProgress,
   CBOMScan,
   CBOMScanPreview,
@@ -1162,6 +1163,7 @@ export type {
   CAOfflineCrossSignImportRequest,
   CAKeyCeremony,
   CBOMInventory,
+  CBOMCycloneDXExport,
   CBOMMigrationProgress,
   CBOMScan,
   CBOMScanPreview,
@@ -2452,6 +2454,7 @@ export interface Api {
   mcpTools(): Promise<MCPToolList>;
   callMCPTool(tool: string, input: MCPToolCall): Promise<MCPToolResult>;
   listCBOMAssets(): Promise<CBOMInventory>;
+  exportCBOMCycloneDX(): Promise<CBOMCycloneDXExport>;
   previewCBOMScan(input: CBOMScanRequest): Promise<CBOMScanPreview>;
   startCBOMScan(input: CBOMScanRequest): Promise<CBOMScan>;
   pqcCampaigns(options?: { limit?: number; cursor?: string }): Promise<PQCMigrationCampaignList>;
@@ -3296,6 +3299,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   mcpTools: () => req<MCPToolList>("/api/v1/mcp/tools"),
   callMCPTool: (tool, input) => postRead<MCPToolResult>(`/api/v1/mcp/tools/${encodeURIComponent(tool)}`, input),
   listCBOMAssets: () => req<CBOMInventory>("/api/v1/cbom/assets"),
+  exportCBOMCycloneDX: () => req<CBOMCycloneDXExport>("/api/v1/cbom/export/cyclonedx"),
   previewCBOMScan: (input) => postRead<CBOMScanPreview>("/api/v1/cbom/scans/preview", input),
   startCBOMScan: (input) => mutate<CBOMScan>("POST", "/api/v1/cbom/scans", input),
   pqcCampaigns: (options) => req<PQCMigrationCampaignList>(`/api/v1/pqc/campaigns${pageQueryString(options)}`),

@@ -346,8 +346,8 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A163 adds revoking a rogue certificate at its issuer.
 	// A167 adds validating exposed endpoints against the cloud's network paths.
 	// A170/A171 add revoking an OAuth grant and blocking its app at the provider.
-	if len(out) != 604 {
-		t.Fatalf("OpenAPI operationIds = %d, want 604", len(out))
+	if len(out) != 605 {
+		t.Fatalf("OpenAPI operationIds = %d, want 605", len(out))
 	}
 	return out
 }

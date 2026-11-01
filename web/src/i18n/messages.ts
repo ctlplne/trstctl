@@ -29813,6 +29813,22 @@ export const messages = {
     defaultMessage: "remaining",
     description: "S-C13: title of the unfilled portion of the risk score meter.",
   },
+  "posture.cbom.cyclonedx.heading": {
+    defaultMessage: "CycloneDX CBOM",
+    description: "Heading of the CycloneDX 1.6 CBOM export section on the crypto inventory.",
+  },
+  "posture.cbom.cyclonedx.help": {
+    defaultMessage:
+      "Export this inventory as a CycloneDX 1.6 cryptographic bill of materials that scanners and agencies can ingest. It is signed with the audit evidence key; verify it offline with trstctl cbom verify-cyclonedx. It lists only what trstctl observed and claims no compliance.",
+    description: "Explanation of the CBOM export: format, signature, offline verification and coverage.",
+  },
+  "posture.cbom.cyclonedx.downloadBom": { defaultMessage: "Download CycloneDX CBOM", description: "Button that saves the CycloneDX BOM." },
+  "posture.cbom.cyclonedx.downloadSigned": {
+    defaultMessage: "Download signed export",
+    description: "Button that saves the BOM with its signature and verification keys.",
+  },
+  "posture.cbom.cyclonedx.saved": { defaultMessage: "Saved a CBOM with {components} components.", description: "Notice after the CBOM export is saved." },
+  "posture.cbom.cyclonedx.failed": { defaultMessage: "The CBOM could not be exported.", description: "Notice when the CBOM export fails." },
   "posture.cbom.inventoryLoadFailed": { defaultMessage: "The saved crypto inventory could not be loaded", description: "CBOM inventory read failure title." },
   "posture.cbom.workflow.scope": { defaultMessage: "Choose what to inspect", description: "First CBOM scan workflow step." },
   "posture.cbom.workflow.scopeBody": {

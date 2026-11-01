@@ -1124,6 +1124,11 @@ trstctl-cli cbom preview -f cbom-scan.json
 trstctl-cli cbom scan -f cbom-scan.json
 trstctl-cli cbom assets
 
+# Export the inventory as a signed CycloneDX 1.6 CBOM and verify it offline
+# against the audit evidence keys you pinned (audit verification-keys).
+trstctl-cli cbom export-cyclonedx > cbom-export.json
+trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.jwks.json --bom-out cbom.cdx.json
+
 # Track migration work and evidence in Core, independent of execution.
 # Operators may remediate manually or with any external tool, then record evidence.
 cat > pqc-campaign.json <<'JSON'

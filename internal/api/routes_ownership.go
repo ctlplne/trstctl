@@ -116,6 +116,7 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.distrustRemovalRoutes()...)     // see distrust_removal.go
 	out = append(out, a.oauthProviderActionRoutes()...) // see oauth_provider_action.go
 	out = append(out, a.scanAnnotationRoutes()...)      // see scan_annotation.go
+	out = append(out, a.cbomCycloneDXRoutes()...)       // see cbom_cyclonedx.go
 	out = append(out, a.controlPlaneKeygenRoutes()...)  // see control_plane_keygen.go
 	out = append(out, a.revocationHealthRoutes()...)    // see revocation_health.go
 	out = append(out, a.verificationSuggestionRoutes()...)

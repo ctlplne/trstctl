@@ -2,6 +2,10 @@
 
 ### Added
 
+- CycloneDX 1.6 CBOM export of the crypto inventory: one cryptographic-asset component per asset
+  with algorithm, key size, quantum security level, protocol and where it was observed, a coverage
+  statement, signed with the audit evidence key and verifiable offline with
+  `trstctl-cli cbom verify-cyclonedx`; a console download and a CLI export.
 - Hardware attestation for PKCS#11 edge CA keys: a token's own attestation of the key (read by the
   agent from the token's certificate objects) that reaches a vendor root the segment pins records
   the delegation as hardware-key attested, with the device serial and key policies; a segment can

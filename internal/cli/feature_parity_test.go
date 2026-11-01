@@ -388,8 +388,8 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// A163 adds `revocation rogue-certificates revoke`.
 	// A167 adds `nhi posture exposure attack-paths`.
 	// A170/A171 add `discovery findings revoke-oauth-grant` and `block-oauth-app`.
-	if len(out) != 666 {
-		t.Fatalf("CLI commands = %d, want 666", len(out))
+	if len(out) != 668 {
+		t.Fatalf("CLI commands = %d, want 668", len(out))
 	}
 	return out
 }

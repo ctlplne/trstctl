@@ -2057,6 +2057,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cbom/export/cyclonedx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export the crypto inventory as a signed CycloneDX 1.6 CBOM */
+        get: operations["exportCBOMCycloneDX"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cbom/scans": {
         parameters: {
             query?: never;
@@ -11724,6 +11741,22 @@ export interface components {
             quantum_vulnerable: boolean;
             reasons?: string[];
             strength: string;
+        };
+        CBOMCycloneDXExport: {
+            /** @description the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs */
+            bom: {
+                [key: string]: unknown;
+            };
+            bom_sha256: string;
+            /** @description one cryptographic-asset component per inventory asset */
+            components: number;
+            public_jwks: {
+                [key: string]: unknown;
+            };
+            /** @description compact JWS over the BOM bytes under the audit evidence key; verify offline with trstctl-cli cbom verify-cyclonedx */
+            signed_bom: string;
+            /** @enum {string} */
+            spec_version: "1.6";
         };
         CBOMInventory: {
             items: components["schemas"]["CBOMAsset"][];
@@ -26861,6 +26894,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBOMInventory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    exportCBOMCycloneDX: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBOMCycloneDXExport"];
                 };
             };
             /** @description client error */

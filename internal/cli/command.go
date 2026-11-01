@@ -633,6 +633,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"cbom", "preview"}, Method: "POST", Path: "/api/v1/cbom/scans/preview", Body: bodyFile, ReadOnly: true, Summary: "Normalize and review a CBOM scan without connecting, reading files, or writing state"},
 	{Name: []string{"cbom", "scan"}, Method: "POST", Path: "/api/v1/cbom/scans", Body: bodyFile, Summary: "Run the reviewed bounded CBOM scan"},
 	{Name: []string{"cbom", "assets"}, Method: "GET", Path: "/api/v1/cbom/assets", Summary: "List CBOM assets and crypto migration posture"},
+	{Name: []string{"cbom", "export-cyclonedx"}, Method: "GET", Path: "/api/v1/cbom/export/cyclonedx", Summary: "Export the crypto inventory as a signed CycloneDX 1.6 CBOM"},
+	{Name: []string{"cbom", "verify-cyclonedx"}, Summary: "Verify a saved CycloneDX CBOM export offline against the audit evidence keys you pinned, and write the verified BOM"},
 	{Name: []string{"pqc", "campaigns", "create"}, Method: "POST", Path: "/api/v1/pqc/campaigns", Body: bodyFile, Summary: "Start a core PQC migration tracking campaign"},
 	{Name: []string{"pqc", "campaigns", "list"}, Method: "GET", Path: "/api/v1/pqc/campaigns", Query: []string{"limit", "cursor"}, Summary: "List core PQC migration tracking campaigns"},
 	{Name: []string{"pqc", "campaigns", "get"}, Method: "GET", Path: "/api/v1/pqc/campaigns/{id}", Summary: "Get a core PQC migration tracking campaign"},

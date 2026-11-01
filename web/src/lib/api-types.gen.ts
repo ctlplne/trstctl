@@ -2474,6 +2474,15 @@ export interface CBOMAsset {
   strength: string;
 }
 
+export interface CBOMCycloneDXExport {
+  bom: Record<string, unknown>;
+  bom_sha256: string;
+  components: number;
+  public_jwks: Record<string, unknown>;
+  signed_bom: string;
+  spec_version: "1.6";
+}
+
 export interface CBOMInventory {
   items: CBOMAsset[];
   migration_progress: CBOMMigrationProgress;

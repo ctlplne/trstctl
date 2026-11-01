@@ -10145,6 +10145,45 @@
         ],
         "type": "object"
       },
+      "CBOMCycloneDXExport": {
+        "properties": {
+          "bom": {
+            "additionalProperties": {},
+            "description": "the CycloneDX 1.6 BOM, exactly the bytes signed_bom signs",
+            "type": "object"
+          },
+          "bom_sha256": {
+            "type": "string"
+          },
+          "components": {
+            "description": "one cryptographic-asset component per inventory asset",
+            "type": "integer"
+          },
+          "public_jwks": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "signed_bom": {
+            "description": "compact JWS over the BOM bytes under the audit evidence key; verify offline with trstctl-cli cbom verify-cyclonedx",
+            "type": "string"
+          },
+          "spec_version": {
+            "enum": [
+              "1.6"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "spec_version",
+          "components",
+          "bom",
+          "bom_sha256",
+          "signed_bom",
+          "public_jwks"
+        ],
+        "type": "object"
+      },
       "CBOMInventory": {
         "properties": {
           "items": {
@@ -53661,6 +53700,53 @@
           }
         ],
         "summary": "List CBOM assets with crypto migration posture",
+        "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/cbom/export/cyclonedx": {
+      "get": {
+        "operationId": "exportCBOMCycloneDX",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBOMCycloneDXExport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Export the crypto inventory as a signed CycloneDX 1.6 CBOM",
         "x-trstctl-permission": "risk:read"
       }
     },

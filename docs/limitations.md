@@ -1252,6 +1252,15 @@ never live in the API process. What you can do end to end against the running bi
   `crypto_assets`. `GET /api/v1/cbom/assets` returns the inventory plus
   migration targets and `migration_progress`. With PQC in the core, the targets are the concrete FIPS 203/204/205 algorithms and
   `migration_progress` counts which assets are already post-quantum-ready.
+  `GET /api/v1/cbom/export/cyclonedx` (Q3) exports the same inventory as a
+  CycloneDX 1.6 CBOM: one cryptographic-asset component per asset (algorithm,
+  key size or curve, NIST quantum security level where known, protocol or
+  cipher suite, and where it was observed), a coverage statement, and an
+  "incomplete" composition; it claims no compliance. The audit evidence key
+  signs the exact BOM bytes, and `trstctl-cli cbom verify-cyclonedx` checks it
+  offline against the separately pinned keys. The console's test suite validates
+  the encoder's output against the official CycloneDX 1.6 schema with an
+  independent validator. Importing other scanners' CBOMs is X6.
 - Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
   exact trust scope, trust-before-leaf ordering, or signed live health before

@@ -275,6 +275,28 @@ prior facts so a failed probe cannot falsely clear a risk. `GET /api/v1/cbom/ass
 The four-worker, 64-slot CBOM bulkhead prevents a wide sweep from starving API or
 enrollment work.
 
+The same inventory exports as a CycloneDX 1.6 CBOM that scanners and agencies can
+ingest: `GET /api/v1/cbom/export/cyclonedx` (`risk:read`), `trstctl-cli cbom
+export-cyclonedx`, or **Download CycloneDX CBOM** under the crypto inventory in Posture.
+Each inventory asset is one `cryptographic-asset` component whose `bom-ref` is the
+asset ID: a certificate key as an algorithm (for example `RSA-2048` with its parameter
+set, or `ECDSA-P256` with its curve, the OID, and the classical and NIST quantum
+security levels where they are known), a TLS endpoint or declared host protocol as a
+protocol with its version, and a declared cipher as a TLS cipher suite. Each carries
+where it was observed (`evidence.occurrences`) and the inventory's classification as
+`trstctl:` properties. The document states its coverage in its metadata, marks its
+composition `incomplete` (it lists what trstctl observed, never the whole estate), and
+claims no compliance: choosing an algorithm does not make a deployment compliant.
+
+The response carries the BOM, its SHA-256, a compact JWS over the exact BOM bytes from
+the audit evidence key, and the public keys. Verify a saved export offline against the
+keys you pinned from `trstctl-cli audit verification-keys`:
+
+```bash
+trstctl-cli cbom export-cyclonedx > cbom-export.json
+trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.jwks.json --bom-out cbom.cdx.json
+```
+
 The scan response includes `observed_asset_ids`: stable IDs for findings that this
 run appended and projected. Read those exact IDs back through `GET
 /api/v1/cbom/assets` before claiming durable evidence. The console does this check;

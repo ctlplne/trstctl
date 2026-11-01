@@ -103,6 +103,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runSecretScanStagedDiff(ctx, rest[3:], stdout, stderr)
 	}
+	if len(rest) >= 2 && hasPrefix(rest, []string{"cbom", "verify-cyclonedx"}) {
+		if commandHelpRequested(rest[2:]) {
+			cbomVerifyCycloneDXUsage(stdout)
+			return 0
+		}
+		return runCBOMVerifyCycloneDX(rest[2:], stdout, stderr)
+	}
 	if len(rest) >= 3 && hasPrefix(rest, []string{"compliance", "report-runs", "verify"}) {
 		if commandHelpRequested(rest[3:]) {
 			complianceReportRunVerifyUsage(stdout)

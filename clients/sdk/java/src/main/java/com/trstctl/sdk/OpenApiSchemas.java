@@ -262,6 +262,7 @@ public final class OpenApiSchemas {
       "CARolloverDraft",
       "CASpec",
       "CBOMAsset",
+      "CBOMCycloneDXExport",
       "CBOMInventory",
       "CBOMMigrationProgress",
       "CBOMReport",

@@ -3472,6 +3472,19 @@ CBOMAsset = TypedDict(
     total=False,
 )
 
+CBOMCycloneDXExport = TypedDict(
+    'CBOMCycloneDXExport',
+    {
+        'bom': dict[str, Any],
+        'bom_sha256': str,
+        'components': int,
+        'public_jwks': dict[str, Any],
+        'signed_bom': str,
+        'spec_version': str,
+    },
+    total=False,
+)
+
 CBOMInventory = TypedDict(
     'CBOMInventory',
     {
