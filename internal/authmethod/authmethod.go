@@ -14,6 +14,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -370,7 +371,19 @@ type OIDCMethod struct {
 	Leeway time.Duration
 	// Replay, when non-nil, enforces single-use tokens by jti (see WithReplayGuard).
 	Replay *JTICache
+	// Guard, when non-nil, records each accepted token's single use durably, so
+	// a replay is refused across processes and restarts until the token expires.
+	Guard ReplayGuard
 }
+
+// ReplayGuard is a durable single-use record. FirstUse records key as used for
+// method until expires and reports whether this was its first use.
+type ReplayGuard interface {
+	FirstUse(ctx context.Context, method, key string, expires time.Time) (bool, error)
+}
+
+// ErrCredentialReplayed is returned for a token presented a second time.
+var ErrCredentialReplayed = errors.New("credential already used")
 
 // WithReplayGuard returns a copy of o with a bounded jti replay cache attached,
 // so a token presented twice (same jti, before exp) is rejected the second time.
@@ -389,8 +402,8 @@ func (OIDCMethod) Name() string { return "oidc" }
 const defaultLeeway = 60 * time.Second
 
 // Authenticate implements Method.
-func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	v, err := authenticateJWT(credential, jwtMethodOptions{
+func (o OIDCMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:            o.Name(),
 		jwks:            o.JWKS,
 		issuer:          o.Issuer,
@@ -404,6 +417,7 @@ func (o OIDCMethod) Authenticate(_ context.Context, credential []byte) (string, 
 		now:             o.Now,
 		leeway:          o.Leeway,
 		replay:          o.Replay,
+		guard:           o.Guard,
 	})
 	if err != nil {
 		return "", nil, err

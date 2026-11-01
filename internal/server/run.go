@@ -821,7 +821,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 		SecretsAuthSecret:           sec.authSecret,
 		SecretsAuthTokenTenantID:    cfg.Secrets.AuthTokenTenantID,
 		SecretsAuthTokenScopes:      append([]string(nil), cfg.Secrets.AuthTokenScopes...),
-		MachineAuthMethods:          machineAuthMethods,
+		MachineAuthMethods:          withMachineCredentialReplayGuard(machineAuthMethods, st),
 		SecretScanGitleaksBin:       cfg.Secrets.GitleaksBin,
 		SecretScanRoots:             append([]string(nil), cfg.Secrets.ScanRoots...),
 		EnableAISurface:             cfg.AI.EnableAPI, AIModel: aiModel, AIModelStatus: aiModelStatus,

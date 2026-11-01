@@ -1310,6 +1310,10 @@ never live in the API process. What you can do end to end against the running bi
   also folds earlier machine logins, and the rebuilt usage read model is identical.
   Behind a load balancer every request has the balancer's address, so new-network
   detection needs clients that reach trstctl directly.
+- Single-use machine login tokens (M4's prerequisite): an `oidc` or `jwt` machine
+  login token logs in once; trstctl records a digest of it (issuer + `jti`, else the
+  whole token) in PostgreSQL until it expires and refuses it again on any replica or
+  after a restart. `kubernetes`, `gcp` and `azure` login tokens stay reusable.
 - Misuse detection (M2, Enterprise `governance`): every minute the leader checks the last
   two hours of M1's usage record and flags a dynamic-secret lease requested from a client
   network the token has not used on three different days (while it has one it has) and

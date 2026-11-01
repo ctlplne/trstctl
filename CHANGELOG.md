@@ -2,6 +2,10 @@
 
 ### Added
 
+- Single-use machine login tokens: an `oidc` or `jwt` login token is recorded (as a digest) until it expires and
+  refused if presented again, on any replica and across restarts; a token refused for another reason never uses up
+  a valid one.
+
 - Misuse detection (Enterprise governance): from trstctl's own usage record, a dynamic-secret lease requested from a
   client network the token has not used on three days, and an hour of secret reads well above the token's baseline,
   each raise one finding and one alert with evidence on the risk notification route; repeats fold into the day's

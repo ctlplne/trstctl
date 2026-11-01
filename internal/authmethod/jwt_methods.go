@@ -33,6 +33,7 @@ type JWTMethod struct {
 	Now             func() time.Time
 	Leeway          time.Duration
 	Replay          *JTICache
+	Guard           ReplayGuard
 }
 
 // Name implements Method.
@@ -50,8 +51,8 @@ func (j JWTMethod) WithReplayGuard(maxEntries int) JWTMethod {
 }
 
 // Authenticate implements Method.
-func (j JWTMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	v, err := authenticateJWT(credential, jwtMethodOptions{
+func (j JWTMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:            j.Name(),
 		jwks:            j.JWKS,
 		issuer:          j.Issuer,
@@ -66,6 +67,7 @@ func (j JWTMethod) Authenticate(_ context.Context, credential []byte) (string, [
 		now:             j.Now,
 		leeway:          j.Leeway,
 		replay:          j.Replay,
+		guard:           j.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -89,14 +91,15 @@ type KubernetesSATMethod struct {
 	Now                    func() time.Time
 	Leeway                 time.Duration
 	Replay                 *JTICache
+	Guard                  ReplayGuard
 }
 
 // Name implements Method.
 func (KubernetesSATMethod) Name() string { return "kubernetes" }
 
 // Authenticate implements Method.
-func (k KubernetesSATMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	v, err := authenticateJWT(credential, jwtMethodOptions{
+func (k KubernetesSATMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:        k.Name(),
 		jwks:        k.JWKS,
 		issuer:      k.Issuer,
@@ -107,6 +110,7 @@ func (k KubernetesSATMethod) Authenticate(_ context.Context, credential []byte) 
 		now:         k.Now,
 		leeway:      k.Leeway,
 		replay:      k.Replay,
+		guard:       k.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -161,14 +165,15 @@ type GCPMethod struct {
 	Now             func() time.Time
 	Leeway          time.Duration
 	Replay          *JTICache
+	Guard           ReplayGuard
 }
 
 // Name implements Method.
 func (GCPMethod) Name() string { return "gcp" }
 
 // Authenticate implements Method.
-func (g GCPMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
-	v, err := authenticateJWT(credential, jwtMethodOptions{
+func (g GCPMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
+	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:        g.Name(),
 		jwks:        g.JWKS,
 		issuer:      g.Issuer,
@@ -179,6 +184,7 @@ func (g GCPMethod) Authenticate(_ context.Context, credential []byte) (string, [
 		now:         g.Now,
 		leeway:      g.Leeway,
 		replay:      g.Replay,
+		guard:       g.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -222,18 +228,19 @@ type AzureMethod struct {
 	Now                 func() time.Time
 	Leeway              time.Duration
 	Replay              *JTICache
+	Guard               ReplayGuard
 }
 
 // Name implements Method.
 func (AzureMethod) Name() string { return "azure" }
 
 // Authenticate implements Method.
-func (a AzureMethod) Authenticate(_ context.Context, credential []byte) (string, []string, error) {
+func (a AzureMethod) Authenticate(ctx context.Context, credential []byte) (string, []string, error) {
 	subjectClaim := a.PrincipalClaim
 	if subjectClaim == "" {
 		subjectClaim = "oid"
 	}
-	v, err := authenticateJWT(credential, jwtMethodOptions{
+	v, err := authenticateJWT(ctx, credential, jwtMethodOptions{
 		name:         a.Name(),
 		jwks:         a.JWKS,
 		issuer:       a.Issuer,
@@ -245,6 +252,7 @@ func (a AzureMethod) Authenticate(_ context.Context, credential []byte) (string,
 		now:          a.Now,
 		leeway:       a.Leeway,
 		replay:       a.Replay,
+		guard:        a.Guard,
 	})
 	if err != nil {
 		return "", nil, err
@@ -277,6 +285,7 @@ type jwtMethodOptions struct {
 	now             func() time.Time
 	leeway          time.Duration
 	replay          *JTICache
+	guard           ReplayGuard
 }
 
 type verifiedJWT struct {
@@ -311,7 +320,7 @@ type registeredJWTClaims struct {
 
 type jwtClaimSet map[string]json.RawMessage
 
-func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, error) {
+func authenticateJWT(ctx context.Context, credential []byte, opts jwtMethodOptions) (verifiedJWT, error) {
 	methodName := firstNonEmpty(opts.name, "jwt")
 	raw, err := crypto.VerifyJWTBytes(credential, opts.jwks)
 	if err != nil {
@@ -422,6 +431,21 @@ func authenticateJWT(credential []byte, opts jwtMethodOptions) (verifiedJWT, err
 			return verifiedJWT{}, fmt.Errorf("%s: token has no non-empty %s scopes claim", methodName, opts.scopesClaim)
 		}
 		scopes = fromToken
+	}
+	// The durable single-use record is taken last, after every other check, so a
+	// token that fails verification never uses up a valid token's one use.
+	if opts.guard != nil {
+		key := "token:" + crypto.SHA256Hex(credential)
+		if reg.JTI != "" {
+			key = "jti:" + crypto.SHA256Hex([]byte(reg.Iss+"\x00"+reg.JTI))
+		}
+		first, err := opts.guard.FirstUse(ctx, methodName, key, time.Unix(reg.Exp, 0))
+		if err != nil {
+			return verifiedJWT{}, fmt.Errorf("%s: record single use: %w", methodName, err)
+		}
+		if !first {
+			return verifiedJWT{}, fmt.Errorf("%s: %w", methodName, ErrCredentialReplayed)
+		}
 	}
 	retainRaw = true
 	return verifiedJWT{raw: raw, claims: claims, principal: principal, scopes: scopes}, nil

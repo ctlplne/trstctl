@@ -1410,6 +1410,9 @@ func postgresStateRestoreOrder() ([]string, error) {
 		// M2: Enterprise misuse findings (tenant rows, no foreign keys); the
 		// licensed projection also rebuilds them from the log at boot.
 		"misuse_findings",
+		// M4: single-use records of machine login tokens (tenant rows, no
+		// foreign keys).
+		"machine_credential_replays",
 	}
 	if err := validatePostgresStateRestoreOrder(parentFirst); err != nil {
 		return nil, err

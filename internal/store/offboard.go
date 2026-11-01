@@ -256,6 +256,8 @@ var TenantScopedTables = []string{
 	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
 	// M1's hourly usage windows and the licensed misuse findings (M2).
 	"credential_usage_windows", "misuse_findings",
+	// M4: single-use records of machine login tokens.
+	"machine_credential_replays",
 	// Asset overrides reference owners through a composite tenant FK.
 	"ownership_assignments",
 	"owners",

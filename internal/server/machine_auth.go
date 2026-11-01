@@ -3,14 +3,52 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/authmethod"
 	"trstctl.com/trstctl/internal/config"
 	"trstctl.com/trstctl/internal/crypto"
+	"trstctl.com/trstctl/internal/store"
 )
+
+// withMachineCredentialReplayGuard makes every oidc and jwt machine login token
+// single-use: its use is recorded durably until it expires, so presenting it
+// again — on any replica, after a restart — is refused.
+func withMachineCredentialReplayGuard(methods func(string) []authmethod.Method, st *store.Store) func(string) []authmethod.Method {
+	if methods == nil || st == nil {
+		return methods
+	}
+	return func(tenantID string) []authmethod.Method {
+		out := methods(tenantID)
+		guard := machineCredentialReplayGuard{store: st, tenantID: tenantID}
+		for i, m := range out {
+			switch method := m.(type) {
+			case authmethod.OIDCMethod:
+				method.Guard = guard
+				out[i] = method
+			case authmethod.JWTMethod:
+				method.Guard = guard
+				out[i] = method
+			}
+		}
+		return out
+	}
+}
+
+// machineCredentialReplayGuard is authmethod.ReplayGuard over the tenant's
+// durable single-use record.
+type machineCredentialReplayGuard struct {
+	store    *store.Store
+	tenantID string
+}
+
+func (g machineCredentialReplayGuard) FirstUse(ctx context.Context, method, key string, expires time.Time) (bool, error) {
+	return g.store.FirstMachineCredentialUse(ctx, g.tenantID, method, key, expires)
+}
 
 type configuredMachineAuthMethod struct {
 	cfg  config.MachineAuthMethod

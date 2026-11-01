@@ -2323,6 +2323,13 @@ entries with the same name are valid only when both have different fixed
 `tenant_id` values. A tenant-claim entry applies across tenants and cannot
 share its method name with another entry, so the login preview and exchange
 always use the same verifier and permission source.
+An `oidc` or `jwt` login token is single-use: trstctl records each accepted token
+(a digest of its issuer and `jti`, or of the whole token when it has no `jti`, never
+the token) until it expires, and refuses the same token again on any replica or after
+a restart. The record is taken only after every other check passes, so a token
+refused for another reason never uses up a valid one. `kubernetes`, `gcp` and `azure`
+login tokens stay reusable for login, because those platforms hand a workload the same
+token until they rotate it.
 
 Treat the credential-store KEK as the root that also protects the signer's sealed
 audit-evidence handle: **protect it and back it up** (a lost KEK means sealed
