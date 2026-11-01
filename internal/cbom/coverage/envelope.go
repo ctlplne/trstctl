@@ -30,6 +30,9 @@ const (
 	AssetThirdPartySecret     AssetClass = "third-party-secret"
 	AssetOperatorDeclared     AssetClass = "operator-declared"
 	AssetNetworkPath          AssetClass = "network-path"
+	// AssetPassiveWireTraffic is what connections' handshakes state on an
+	// interface an observer agent watches (X1).
+	AssetPassiveWireTraffic AssetClass = "passive-wire-traffic" // #nosec G101 -- an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798)
 )
 
 // Precondition names what must be true of the deployment before a source of a
@@ -47,6 +50,7 @@ const (
 	PrecondClusterCredential    Precondition = "cluster-credential-configured"   // #nosec G101 -- precondition identifier matching the credential-name heuristic; no credential value (CWE-798)
 	PrecondRepositoryConfigured Precondition = "repository-configured"
 	PrecondOperatorFindings     Precondition = "operator-supplied-findings"
+	PrecondObserverReporting    Precondition = "observer-agent-reporting"
 )
 
 // DefaultFreshness is the declared window after a completed run inside which
@@ -69,6 +73,15 @@ type Envelope struct {
 // connector records operator-supplied findings. Its envelope is exactly that —
 // the operator's own declarations, nothing observed by trstctl itself.
 const ManualKind = "manual"
+
+// ObserverKind is the network observer (X1): agents holding the observer role
+// report what connections' handshakes state on the interfaces they watch.
+// Agents run it, not the server, so it has no server executor.
+const ObserverKind = "network-observer"
+
+// AgentReportedKinds are the envelope kinds agents report rather than the
+// server runs; the registry's weld test exempts them from needing an executor.
+func AgentReportedKinds() map[string]bool { return map[string]bool{ObserverKind: true} }
 
 // Envelopes returns the observability envelope for every served discovery
 // source kind, keyed by kind. TestEveryDiscoverySourceDeclaresEnvelope welds
@@ -106,6 +119,10 @@ func Envelopes() map[string]Envelope {
 		env("secret_repo", []AssetClass{AssetRepositorySecret}, PrecondRepositoryConfigured),
 		env("secret_third_party", []AssetClass{AssetThirdPartySecret}, PrecondConnectorCredential),
 		env(ManualKind, []AssetClass{AssetOperatorDeclared}, PrecondOperatorFindings),
+		// Handshake metadata an observer agent saw on the interface it
+		// watches: TLS versions, groups and TLS 1.2 certificates, SSH key
+		// exchange, plaintext protocols; never payload (X1).
+		env(ObserverKind, []AssetClass{AssetPassiveWireTraffic}, PrecondObserverReporting),
 	} {
 		out[e.Kind] = e
 	}

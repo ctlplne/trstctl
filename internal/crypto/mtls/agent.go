@@ -834,6 +834,10 @@ const (
 	// redeemed appliance credentials, which is why granting it is a deliberate
 	// operator act rather than a default.
 	AgentRoleNetwork = "network"
+	// AgentRoleObserver watches a mirrored or host interface and reports what
+	// connections' handshakes state in the clear (X1). It sees which systems
+	// talk to which, so granting it is a deliberate operator act, like network.
+	AgentRoleObserver = "observer"
 )
 
 // AgentRoleSPIFFEID is the capability SAN for one role.
@@ -849,7 +853,7 @@ func AgentRoleSPIFFEID(tenantID, cn, role string) string {
 // refused at enrollment rather than stamped and puzzled over later.
 func ValidAgentRole(role string) bool {
 	switch strings.TrimSpace(role) {
-	case AgentRoleHost, AgentRoleNetwork:
+	case AgentRoleHost, AgentRoleNetwork, AgentRoleObserver:
 		return true
 	default:
 		return false
@@ -862,7 +866,7 @@ func ValidAgentRole(role string) bool {
 func NormalizeAgentRoles(roles []string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, role := range []string{AgentRoleHost, AgentRoleNetwork} {
+	for _, role := range []string{AgentRoleHost, AgentRoleNetwork, AgentRoleObserver} {
 		for _, candidate := range roles {
 			if strings.TrimSpace(candidate) == role && !seen[role] {
 				seen[role] = true

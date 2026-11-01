@@ -33,6 +33,9 @@ func TestEveryDiscoverySourceDeclaresEnvelope(t *testing.T) {
 		if kind == coverage.ManualKind {
 			continue // the fallback for kinds with no dedicated connector
 		}
+		if coverage.AgentReportedKinds()[kind] {
+			continue // agents run it and report over the agent channel (X1)
+		}
 		if _, served := discoveryRunExecutors[kind]; !served {
 			t.Errorf("coverage.Envelopes() declares an envelope for %q, but the server has no executor for that kind; a phantom envelope overstates coverage", kind)
 		}

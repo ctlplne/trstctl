@@ -1282,6 +1282,15 @@ never live in the API process. What you can do end to end against the running bi
   OCSP and the agent key set follow, so relying parties refuse the next use;
   one batch revocation event names who revoked. Relying parties that cache the CRL
   or OCSP answer see it at their own refresh.
+- Passive network crypto observer (X1): an agent with the observer role reports
+  TLS versions, suites and key-exchange groups, TLS 1.2 certificates, SSH key
+  exchange and plaintext HTTP/LDAP from a watched Linux interface, never payload;
+  proven with stock OpenSSL 3.5, OpenSSH 10 and curl/ldapsearch in a Linux container
+  (about 920 handshakes per second at 8% of one core and 4 MiB heap on the build
+  Mac). Capture throughput on the x86 QA machine is a Track B qualification. It
+  reads untagged IPv4 without fragments and IPv6 without extension headers, follows
+  connections in order (a gap ends reading of that connection), does not read QUIC
+  or TLS over UDP, and needs Linux AF_PACKET (other platforms report an error).
 - Host crypto discovery depth (X2): the agent reports Java keystore and PKCS#12
   key entries (alias, key type and size, public-key fingerprint; never key bytes)
   and the versions of TLS libraries and Go programs with whether each can negotiate

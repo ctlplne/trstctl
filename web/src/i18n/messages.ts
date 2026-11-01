@@ -31482,6 +31482,12 @@ export const messages = {
       "Acts on things in its segment that cannot run an agent — load balancers, appliances, cloud certificate stores — and verifies endpoints from a client's vantage.",
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",
   },
+  "agents.role.observer": { defaultMessage: "Observer", description: "X1: the agent role that observes connections' handshakes on an interface." },
+  "agents.role.observer.help": {
+    defaultMessage:
+      "Watches a mirrored interface, or one on the agent's own machine, and reports what connections' handshakes state in the clear: TLS versions, key exchange groups, TLS 1.2 certificates, SSH key exchange and plaintext protocols, never payload. It sees which systems talk to which, so granting it requires the agents:relay.grant permission.",
+    description: "X1: what the observer role does and who may grant it.",
+  },
   "source.agent.role.relay.warning.a2r0le0007": {
     defaultMessage: "A relay holds the credentials for the devices it fronts. Granting this role requires the agents:relay.grant permission.",
     description: "A2: agent role-gated enrollment (host vs network relay) on src/pages/Agents.tsx.",

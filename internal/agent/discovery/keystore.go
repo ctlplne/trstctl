@@ -21,6 +21,10 @@ import (
 // decrypted.
 const SourceKeystore = "keystore"
 
+// SourceNetworkObserver is the source passive observers report under (X1);
+// the agent's observe package collects it.
+const SourceNetworkObserver = "network-observer"
+
 const maxKeystoreFileSize = 8 << 20
 
 // keystoreExtensions name the files a directory walk reads as keystores; a

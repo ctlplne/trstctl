@@ -51,15 +51,16 @@ type agentDiscoveryCapabilityResponse struct {
 // of kinds actually advertised comes from discovery.ShippedSourceKinds, not from
 // here, so a label cannot resurrect a capability the agent binary does not have.
 var agentDiscoveryCapabilityLabels = map[string]string{
-	"filesystem":     "Filesystem certificates",
-	"pkcs11":         "PKCS#11 token certificates",
-	"windows-store":  "Windows certificate store",
-	"k8s-secret":     "Kubernetes TLS Secrets",
-	"trust-store":    "OS, Java, NSS, and browser trust stores",
-	"private-key":    "Private-key material locations", // #nosec G101 -- source-kind label naming where key material was located; no credential value present (CWE-798)
-	"ssh":            "SSH keys, authorized access, known hosts, and trusted CAs",
-	"keystore":       "Java keystore and PKCS#12 key entries",
-	"crypto-library": "TLS libraries and Go programs, with their post-quantum key exchange",
+	"filesystem":       "Filesystem certificates",
+	"pkcs11":           "PKCS#11 token certificates",
+	"windows-store":    "Windows certificate store",
+	"k8s-secret":       "Kubernetes TLS Secrets",
+	"trust-store":      "OS, Java, NSS, and browser trust stores",
+	"private-key":      "Private-key material locations", // #nosec G101 -- source-kind label naming where key material was located; no credential value present (CWE-798)
+	"ssh":              "SSH keys, authorized access, known hosts, and trusted CAs",
+	"keystore":         "Java keystore and PKCS#12 key entries",
+	"crypto-library":   "TLS libraries and Go programs, with their post-quantum key exchange",
+	"network-observer": "Handshakes observed on a watched interface (observer role)",
 }
 
 // agentDiscoveryCapabilities advertises exactly the source kinds the shipped
@@ -731,7 +732,7 @@ func (r enrollmentTokenResponse) wipeSecrets() { r.Token.wipe() }
 type enrollmentTokenRequest struct {
 	AllowedIdentity string `json:"allowed_identity,omitempty"`
 	// Roles is the capability grant the enrolled agent's certificate will carry
-	// (epic A2): "host", "network", or both. Empty means host-only, which is what
+	// (epic A2): "host", "network", "observer" (X1), or several. Empty means host-only, which is what
 	// every agent enrolled before roles existed effectively had.
 	Roles []string `json:"roles,omitempty"`
 }
@@ -817,7 +818,7 @@ func (a *API) previewEnrollmentToken(w http.ResponseWriter, r *http.Request) {
 
 	blocked := a.agentEnrollmentBlockers()
 	permissions := []string{string(authz.AgentsWrite)}
-	if slices.Contains(roles, mtls.AgentRoleNetwork) {
+	if slices.Contains(roles, mtls.AgentRoleNetwork) || slices.Contains(roles, mtls.AgentRoleObserver) {
 		permissions = append(permissions, string(authz.AgentsGrantRelay))
 	}
 	a.writeJSON(w, http.StatusOK, enrollmentPlanPreview{
@@ -893,9 +894,9 @@ func (a *API) parseEnrollmentTokenGrant(r *http.Request) (enrollmentTokenRequest
 	// Granting the network role is a separate authority from enrolling agents: a
 	// relay holds the credentials for the appliances it fronts, so placing one is
 	// a different decision from adding a host agent (epic A2).
-	if slices.Contains(roles, mtls.AgentRoleNetwork) && !a.canGrantRelayRole(r) {
+	if (slices.Contains(roles, mtls.AgentRoleNetwork) || slices.Contains(roles, mtls.AgentRoleObserver)) && !a.canGrantRelayRole(r) {
 		return enrollmentTokenRequest{}, nil, errStatus(http.StatusForbidden,
-			"granting an agent the network relay role requires the agents:relay.grant permission")
+			"granting an agent the network relay or observer role requires the agents:relay.grant permission")
 	}
 	return req, roles, nil
 }
@@ -990,8 +991,8 @@ func normalizeEnrollmentRoles(requested []string) ([]string, error) {
 			continue
 		}
 		if !mtls.ValidAgentRole(role) {
-			return nil, fmt.Errorf("unknown agent role %q: expected %q or %q",
-				role, mtls.AgentRoleHost, mtls.AgentRoleNetwork)
+			return nil, fmt.Errorf("unknown agent role %q: expected %q, %q or %q",
+				role, mtls.AgentRoleHost, mtls.AgentRoleNetwork, mtls.AgentRoleObserver)
 		}
 	}
 	return mtls.NormalizeAgentRoles(requested), nil

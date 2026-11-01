@@ -262,8 +262,9 @@ Enrollment is deliberately two steps in **Agents → Add agent**:
    browser does not save it to local or session storage.
 
 Leaving the identity blank means any agent identity in the caller's tenant may use the
-token. Selecting **Network relay** also requires `agents:relay.grant`; ordinary
-`agents:write` authority cannot silently turn a host agent into a relay. If the public
+token. Selecting **Network relay** or **Observer** also requires `agents:relay.grant`;
+ordinary `agents:write` authority cannot silently turn a host agent into a relay or an
+observer. If the public
 agent address or TLS name is missing, preview says exactly what must be configured and
 minting stays unavailable. Headless operators use `trstctl agents enroll-token-preview`
 with the same JSON body before `trstctl agents enroll-token`.
@@ -442,6 +443,39 @@ path, format, algorithm, file-mode metadata, and — when the key is parseable �
 fingerprint derived from the public key. Encrypted keys are located and tagged as
 encrypted, but no passphrase is requested and no private bytes ever reach the control
 plane.
+
+### Passive network crypto observer (X1)
+
+Active scans see what an endpoint offers a scanner; an observer sees what real clients
+negotiate. An agent granted the **observer** role (`agents:relay.grant`; it sees which
+systems talk to which) and started with `--observe-interface <if>` watches a mirror or
+span port, or its own host's interface, on Linux (`CAP_NET_RAW`; other platforms report
+an error, never an empty observation set). A kernel filter keeps only the ports in
+`--observe-ports` (default 443, 8443, 636, 993, 995, 465, 22, 80, 389, 5432, 3306; at
+most 32), and the agent reads only the first bytes of each connection, in order, up to
+16 KiB a direction:
+
+- TLS: the negotiated version, cipher suite and key-exchange group (X25519MLKEM768 and the
+  other ML-KEM hybrids by name), the server name, and for TLS 1.2 the server certificate
+  (fingerprint, key type and size, expiry). TLS 1.3 encrypts the certificate, so the
+  observation says `certificate_visible=false` and the active probe reads the chain.
+- SSH: both banners and the key exchange, host key and cipher the two sides agree on
+  (RFC 4253's choice), so `mlkem768x25519-sha256` and `sntrup761x25519` read as
+  post-quantum.
+- Plaintext: an HTTP request line or an LDAP operation before StartTLS on a watched port
+  raises one `plaintext_protocol` finding per endpoint.
+
+No payload byte is stored or reported: the buffers are dropped once the handshake is
+read, and an HTTP path or LDAP bind never leaves the parser. Each endpoint and set of
+handshake facts is one finding with connection and client counts, first and last seen,
+reported every `--observe-report-interval` (default one minute) under the
+`network-observer` source; the server accepts that source only from a certificate that
+carries the observer role, and only observation kinds from it. The flow table is bounded
+(`--observe-max-flows`, default 2048); a connection that does not fit, arrives out of
+order or is not a handshake the observer reads is counted, never buffered, and every
+report carries the observer's own CPU time, heap and drops. Observations are discovery
+findings, kept across restarts, and they make `passive-wire-traffic` an observed class
+in [computed coverage](../design/cbom-coverage.md).
 
 Keystores get the same treatment (X2). `--inventory-keystores` names Java keystores
 (JKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`, `.keystore`,

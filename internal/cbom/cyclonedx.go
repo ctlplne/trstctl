@@ -157,7 +157,7 @@ func CycloneDX(assets []CycloneDXAsset, meta CycloneDXMeta) CycloneDXBOM {
 				{Name: "trstctl:coverage:assets", Value: strconv.Itoa(len(sorted))},
 				{Name: "trstctl:coverage:asset_kinds", Value: strings.Join(kindNames, ",")},
 				{Name: "trstctl:coverage:locations", Value: strconv.Itoa(len(locations))},
-				{Name: "trstctl:coverage:not_covered", Value: "addresses and files no scan named; network traffic not observed passively; source code and container images not scanned"},
+				{Name: "trstctl:coverage:not_covered", Value: "addresses and files no scan named; network traffic outside the interfaces observer agents watch; source code and container images not scanned"},
 				{Name: "trstctl:coverage:compliance", Value: "none claimed: an algorithm choice is not a compliance determination"},
 			},
 		},

@@ -101,6 +101,12 @@ const agentMaxInventoryFindings = 1000
 // a narrow compatibility translation for that one historical shape.
 const agentTrustStoreFindingKind = "trust-store"
 
+// agentObserverSourceKind is the inventory source passive observers report
+// under (X1), and agentObservationKinds the finding kinds only it may report.
+const agentObserverSourceKind = "network-observer"
+
+var agentObservationKinds = map[string]bool{"tls_handshake": true, "ssh_kex": true, "plaintext_protocol": true}
+
 // agentServiceDependencyFindingKind is a metadata-only network observation:
 // one exact owner-model workload relies on one exact resource. It travels over
 // the already tenant-bound agent mTLS channel and becomes an immutable
@@ -1139,6 +1145,16 @@ func (a *agentService) ReportInventory(ctx context.Context, req *transport.Inven
 		return nil, status.Errorf(codes.InvalidArgument, "inventory report has %d findings; maximum is %d", len(req.Findings), agentMaxInventoryFindings)
 	}
 	sourceKind := strings.TrimSpace(req.SourceKind)
+	// X1: what an observer saw on the wire is accepted only from an agent whose
+	// certificate carries the observer role, and only as observation kinds.
+	if sourceKind == agentObserverSourceKind && !agentHasRole(info.Roles, mtls.AgentRoleObserver) {
+		return nil, status.Error(codes.PermissionDenied, "observation reports need the observer role; this agent's certificate does not carry it")
+	}
+	for _, f := range req.Findings {
+		if agentObservationKinds[strings.TrimSpace(f.Kind)] != (sourceKind == agentObserverSourceKind) {
+			return nil, status.Errorf(codes.InvalidArgument, "inventory finding %q: observation kinds come only from the %s source, and that source reports only them", f.Ref, agentObserverSourceKind)
+		}
+	}
 	findings := make([]store.DiscoveryFinding, 0, len(req.Findings))
 	for _, f := range req.Findings {
 		kind := strings.TrimSpace(f.Kind)

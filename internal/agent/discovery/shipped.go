@@ -97,6 +97,12 @@ func ShippedSourceKinds() []ShippedSourceKind {
 			Flags:       []string{"--inventory-crypto-libraries", "--inventory-go-binaries"},
 		},
 		{
+			// X1: handshake metadata from a watched interface; needs the observer role.
+			Kind:        SourceNetworkObserver,
+			Constructor: "NewAssembler",
+			Flags:       []string{"--observe-interface", "--observe-ports", "--observe-max-flows", "--observe-report-interval"},
+		},
+		{
 			// SSH inventory is collected by the sibling sshdiscovery package
 			// rather than a Source in this one; the kind is what the served
 			// surface advertises, so it belongs on this list either way.

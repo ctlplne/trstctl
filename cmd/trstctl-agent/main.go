@@ -921,6 +921,8 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 		}
 	}
 
+	stopObserver := startObserver(ctx, a, ch) // X1: passive handshake observation, observer role only
+	defer stopObserver()
 	heartbeatTimer := time.NewTimer(nextHeartbeat)
 	defer heartbeatTimer.Stop()
 	rotateTimer := time.NewTimer(nextRotationDelay(o.rotateEvery, a.CertificateNotAfter(), time.Now(), rng))

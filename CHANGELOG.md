@@ -2,6 +2,11 @@
 
 ### Added
 
+- Passive network crypto observer: an agent granted the new observer role and started with
+  `--observe-interface` reports, from the handshakes it sees, each endpoint's TLS version, cipher suite and
+  key-exchange group (X25519MLKEM768 by name), TLS 1.2 certificates, SSH key exchange and plaintext
+  HTTP/LDAP, never payload. The server accepts observations only from the observer role, and passive traffic
+  is now an observed class in discovery coverage.
 - Keystores and crypto libraries on hosts: `--inventory-keystores` reports each key entry of a Java
   keystore or PKCS#12 file (alias, key type and size, public-key fingerprint; no key material leaves the
   host, and a JKS key is never decrypted), and `--inventory-crypto-libraries` / `--inventory-go-binaries`

@@ -675,8 +675,13 @@ func (a *API) getDiscoveryCoverage(w http.ResponseWriter, r *http.Request) {
 	}
 	states := make([]coverage.SourceState, 0, len(rows))
 	for _, row := range rows {
+		kind := row.SourceKind
+		// X1: an agent's network-observer reports count as the observer source.
+		if kind == "agent" && strings.HasSuffix(row.SourceName, ":"+coverage.ObserverKind) {
+			kind = coverage.ObserverKind
+		}
 		states = append(states, coverage.SourceState{
-			SourceID: row.SourceID, Kind: row.SourceKind, Name: row.SourceName,
+			SourceID: row.SourceID, Kind: kind, Name: row.SourceName,
 			LastRunStatus: row.LastRunStatus, LastCompletedAt: row.LastCompletedAt,
 		})
 	}

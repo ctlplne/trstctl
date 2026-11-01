@@ -136,6 +136,11 @@ func Classify(now time.Time, sources []SourceState) Report {
 			cc.Reason = "no configured source observes this class"
 			cc.Action = fmt.Sprintf("configure a discovery source of kind %s (needs: %s)",
 				strings.Join(kinds, " or "), preconditionsOf(envs, kinds))
+			if len(kinds) == 1 && kinds[0] == ObserverKind {
+				// Agents report it: nothing is configured on the server.
+				cc.Action = fmt.Sprintf("grant an agent the observer role and start it with --observe-interface on the interface to watch (needs: %s)",
+					preconditionsOf(envs, kinds))
+			}
 			rep.Unobserved++
 		case staleSource != nil:
 			env := envs[resolveKind(envs, staleSource.Kind)]

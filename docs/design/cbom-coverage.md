@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 18 served source kinds
+## Observability envelopes — 19 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -52,6 +52,7 @@ served set by construction.
 | `k8s_ingress_gateway` | `kubernetes-tls-endpoint` | `cluster-credential-configured` | 24h0m0s |
 | `manual` | `operator-declared` | `operator-supplied-findings` | 24h0m0s |
 | `network` | `certificate-key`, `tls-endpoint` | `scan-ranges-configured` | 24h0m0s |
+| `network-observer` | `passive-wire-traffic` | `observer-agent-reporting` | 24h0m0s |
 | `nhi_behavior` | `nhi-behavior` | `connector-credential-configured` | 24h0m0s |
 | `nhi_cross_surface` | `nhi-identity` | `connector-credential-configured` | 24h0m0s |
 | `oauth_grant` | `oauth-grant` | `connector-credential-configured` | 24h0m0s |
@@ -65,7 +66,7 @@ served set by construction.
 connector records operator-supplied findings, and its envelope says exactly
 that — the operator's own declarations, nothing observed by trstctl itself.
 
-## Structurally unobservable classes — 7
+## Structurally unobservable classes — 6
 
 These are the honest edges of the product. They are enumerated **in code**
 (`internal/cbom/coverage/unobservable.go`), not in prose, and a class added
@@ -80,7 +81,6 @@ same test.
 | `data-at-rest-posture` | volume, database, and KMS at-rest encryption state is invisible to network or API observation; the agent posture source (WS-4) is not built |
 | `unroutable-segment` | workloads scans cannot reach and where no agent runs are invisible — the cloudcert blind-spot admission generalized: reachability is a precondition of every active source |
 | `directory-unlinked-account` | a served one-sided source cannot claim AD or cloud directory category coverage from only one side (the serviceaccount admission); accounts visible only in an unconnected directory are not observed |
-| `passive-wire-traffic` | trstctl probes actively and never captures traffic; taps, span ports, and inline appliances are a deliberate non-goal |
 | `dormant-kmip-object` | KMIP-managed objects not presently in use are not enumerated (WS-5 not built); traffic- and use-based observation cannot see them by construction |
 
 ## Worked example
@@ -93,7 +93,7 @@ Estate: a `network` source that succeeded 2h ago, an `ssh` source whose last
 success was 72h ago (past its 24h0m0s window), a `ct_log` source whose last run
 failed, and a `cloud_certificate` source that has never completed a run.
 
-**2 observed · 17 observable-unobserved · 7 structurally unobservable** across 26 classes.
+**2 observed · 18 observable-unobserved · 6 structurally unobservable** across 26 classes.
 
 | Class | Bucket | Reason / attribution |
 |---|---|---|
@@ -109,6 +109,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `nhi-identity` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind nhi_cross_surface (needs: connector-credential-configured)** |
 | `oauth-grant` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind oauth_grant (needs: connector-credential-configured)** |
 | `operator-declared` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind manual (needs: operator-supplied-findings)** |
+| `passive-wire-traffic` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **grant an agent the observer role and start it with --observe-interface on the interface to watch (needs: observer-agent-reporting)** |
 | `repository-secret` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind secret_repo (needs: repository-configured)** |
 | `service-account` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind service_account (needs: connector-credential-configured)** |
 | `ssh-host-key` | `OBSERVABLE-UNOBSERVED` | last successful run of "bastions" completed 2026-07-29T12:00:00Z, older than the 24h0m0s freshness window — **re-run discovery source "bastions"** |
@@ -121,7 +122,6 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `data-at-rest-posture` | `STRUCTURALLY-UNOBSERVABLE` | volume, database, and KMS at-rest encryption state is invisible to network or API observation; the agent posture source (WS-4) is not built |
 | `unroutable-segment` | `STRUCTURALLY-UNOBSERVABLE` | workloads scans cannot reach and where no agent runs are invisible — the cloudcert blind-spot admission generalized: reachability is a precondition of every active source |
 | `directory-unlinked-account` | `STRUCTURALLY-UNOBSERVABLE` | a served one-sided source cannot claim AD or cloud directory category coverage from only one side (the serviceaccount admission); accounts visible only in an unconnected directory are not observed |
-| `passive-wire-traffic` | `STRUCTURALLY-UNOBSERVABLE` | trstctl probes actively and never captures traffic; taps, span ports, and inline appliances are a deliberate non-goal |
 | `dormant-kmip-object` | `STRUCTURALLY-UNOBSERVABLE` | KMIP-managed objects not presently in use are not enumerated (WS-5 not built); traffic- and use-based observation cannot see them by construction |
 
 ## What this does not prove

@@ -14,8 +14,8 @@ type UnobservableClass struct {
 }
 
 // StructurallyUnobservable enumerates the classes outside every served
-// envelope. Sources: the standing non-goals (no firmware scanner, no passive
-// capture, no SAST), the two in-tree blind-spot admissions
+// envelope. Sources: the standing non-goals (no firmware scanner, no SAST), the
+// two in-tree blind-spot admissions
 // (internal/discovery/cloudcert, internal/discovery/serviceaccount), and the
 // unbuilt workstreams of the CBOM coverage card (vendor CBOM ingest,
 // data-at-rest posture, dormant KMIP enumeration).
@@ -31,8 +31,6 @@ func StructurallyUnobservable() []UnobservableClass {
 			Reason: "workloads scans cannot reach and where no agent runs are invisible — the cloudcert blind-spot admission generalized: reachability is a precondition of every active source"},
 		{Class: "directory-unlinked-account",
 			Reason: "a served one-sided source cannot claim AD or cloud directory category coverage from only one side (the serviceaccount admission); accounts visible only in an unconnected directory are not observed"},
-		{Class: "passive-wire-traffic",
-			Reason: "trstctl probes actively and never captures traffic; taps, span ports, and inline appliances are a deliberate non-goal"},
 		{Class: "dormant-kmip-object",
 			Reason: "KMIP-managed objects not presently in use are not enumerated (WS-5 not built); traffic- and use-based observation cannot see them by construction"},
 	}

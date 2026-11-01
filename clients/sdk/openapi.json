@@ -4427,7 +4427,8 @@
             "items": {
               "enum": [
                 "host",
-                "network"
+                "network",
+                "observer"
               ],
               "type": "string"
             },
@@ -4995,7 +4996,8 @@
             "items": {
               "enum": [
                 "host",
-                "network"
+                "network",
+                "observer"
               ],
               "type": "string"
             },
@@ -5029,7 +5031,8 @@
             "items": {
               "enum": [
                 "host",
-                "network"
+                "network",
+                "observer"
               ],
               "type": "string"
             },
@@ -20252,7 +20255,8 @@
             "items": {
               "enum": [
                 "host",
-                "network"
+                "network",
+                "observer"
               ],
               "type": "string"
             },
@@ -20293,7 +20297,8 @@
             "items": {
               "enum": [
                 "host",
-                "network"
+                "network",
+                "observer"
               ],
               "type": "string"
             },
@@ -20320,7 +20325,8 @@
             "items": {
               "enum": [
                 "host",
-                "network"
+                "network",
+                "observer"
               ],
               "type": "string"
             },
