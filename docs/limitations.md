@@ -3183,9 +3183,16 @@ than sending an operator looking for a credential that was never there.
 - Discovery collectors with residual connector-owned execution: SSH host-key
   scanning is served through the discovery outbox worker, and on-host
   SSH/private-key inventory is served through the agent mTLS inventory report
-  path. Connector-specific external secret-store/API-key scanners remain
-  source-plugin or provider-owned unless a native served source kind supplies
-  findings. The network, ssh, cloud_certificate, cloud_secret, ct_log, drift,
+  path. API-key scanning of external secret stores is native (A172): with
+  `inspect_content`, every value a `cloud_secret` or `secret_store` provider
+  reads is checked by built-in, prefix-anchored credential rules (cloud access
+  keys, code-host, chat and package-registry tokens, payment keys, JWTs,
+  trstctl tokens, PEM private keys and Google service account keys), field by
+  field where the value has fields, and each match becomes a
+  `secret_store_api_key` finding with its rule, field, masked display and a
+  fingerprint shared by every stored copy of the credential; the value is
+  wiped after inspection and never persisted. There is deliberately no generic
+  high-entropy rule. The network, ssh, cloud_certificate, cloud_secret, ct_log, drift,
   k8s_ingress_gateway, and manual source kinds are wired through the served
   discovery worker (see "Discovery control plane" above), alongside the NHI
   kinds (nhi_cross_surface, oauth_grant, service_account, nhi_behavior,

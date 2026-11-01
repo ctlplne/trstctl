@@ -7,7 +7,6 @@
 package vaultkv
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -182,11 +181,16 @@ func (e *Enumerator) listKeys(ctx context.Context, prefix string) ([]string, err
 }
 
 func (e *Enumerator) inspectSecret(ctx context.Context, path string) ([]cloudsecret.Found, error) {
-	value, customMeta, err := e.readSecret(ctx, path)
+	value, fields, customMeta, err := e.readSecret(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 	defer secret.Wipe(value)
+	defer func() {
+		for _, f := range fields {
+			secret.Wipe(f.Value)
+		}
+	}()
 	if e.cfg.TagKey != "" && customMeta[e.cfg.TagKey] != e.cfg.TagValue {
 		return nil, nil
 	}
@@ -197,6 +201,7 @@ func (e *Enumerator) inspectSecret(ctx context.Context, path string) ([]cloudsec
 		Location:   e.host,
 		Provenance: resource,
 		Value:      value,
+		Fields:     fields,
 		Metadata: map[string]string{
 			"secret_name":       path,
 			"resource_id":       resource,
@@ -208,10 +213,13 @@ func (e *Enumerator) inspectSecret(ctx context.Context, path string) ([]cloudsec
 	return found, err
 }
 
-func (e *Enumerator) readSecret(ctx context.Context, path string) ([]byte, map[string]string, error) {
+// readSecret returns the secret's fields joined for certificate inspection,
+// the same fields by name for credential inspection (A172), and its custom
+// metadata. Every returned byte slice is the caller's to wipe.
+func (e *Enumerator) readSecret(ctx context.Context, path string) ([]byte, []cloudsecret.SecretField, map[string]string, error) {
 	raw, err := e.do(ctx, http.MethodGet, e.endpoint("data", path))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	var resp struct {
 		Data struct {
@@ -222,10 +230,10 @@ func (e *Enumerator) readSecret(ctx context.Context, path string) ([]byte, map[s
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, nil, fmt.Errorf("vaultkv: parse read: %w", err)
+		return nil, nil, nil, fmt.Errorf("vaultkv: parse read: %w", err)
 	}
 	defer wipeSecretMap(resp.Data.Data)
-	return concatenateSecretFields(resp.Data.Data), resp.Data.Metadata.CustomMetadata, nil
+	return concatenateSecretFields(resp.Data.Data), secretFields(resp.Data.Data), resp.Data.Metadata.CustomMetadata, nil
 }
 
 func (e *Enumerator) do(ctx context.Context, method, target string) ([]byte, error) {
@@ -259,22 +267,38 @@ func (e *Enumerator) endpoint(kind, path string) string {
 
 func concatenateSecretFields(fields map[string]secretjson.StringBytes) []byte {
 	keys := make([]string, 0, len(fields))
-	for key := range fields {
+	size := 0
+	for key, value := range fields {
 		keys = append(keys, key)
+		size += len(value) + 1
 	}
 	sort.Strings(keys)
-	var buf bytes.Buffer
+	// One exact-size buffer: no growth copies are left behind unwiped.
+	out := make([]byte, 0, size)
 	for _, key := range keys {
 		value := fields[key]
 		if len(value) == 0 {
 			continue
 		}
-		if buf.Len() > 0 {
-			buf.WriteByte('\n')
+		if len(out) > 0 {
+			out = append(out, '\n')
 		}
-		buf.Write(value)
+		out = append(out, value...)
 	}
-	return append([]byte(nil), buf.Bytes()...)
+	return out
+}
+
+// secretFields copies each non-empty field by name, sorted.
+func secretFields(fields map[string]secretjson.StringBytes) []cloudsecret.SecretField {
+	out := make([]cloudsecret.SecretField, 0, len(fields))
+	for key, value := range fields {
+		if len(value) == 0 {
+			continue
+		}
+		out = append(out, cloudsecret.SecretField{Name: key, Value: append([]byte(nil), value...)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 func wipeSecretMap(fields map[string]secretjson.StringBytes) {

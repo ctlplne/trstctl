@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2074 annotated sites across 29 rules. Each row is
+2079 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (433 sites)
+### G101 — CWE-798 Use of hardcoded credentials (438 sites)
 
 | Location | Reason |
 |---|---|
@@ -283,6 +283,7 @@ not this file.
 | `internal/discovery/apikey/apikey_test.go:13` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:20` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
 | `internal/discovery/apikey/apikey_test.go:25` | synthetic credential REFERENCE (ref + fingerprint only, no value): the package's contract (CWE-798) |
+| `internal/discovery/cloudsecret/apikeys.go:26` | a hash domain-separation tag, not a credential (CWE-798) |
 | `internal/discovery/cloudsecret/outcomes_test.go:35` | fabricated fixture secret name; the test needs the shape, no value is real (CWE-798) |
 | `internal/discovery/netpath/awsnetpath/awsnetpath_test.go:17` | fabricated fixture credential (CWE-798) |
 | `internal/dns/akamai/akamai_test.go:26` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -457,6 +458,10 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_integrations.go:1129` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_store_api_key_served_test.go:104` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_api_key_served_test.go:106` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_api_key_served_test.go:107` | credential references to fabricated fixture values (CWE-798) |
+| `internal/server/secret_store_api_key_served_test.go:108` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_third_party_scan_retention_served_test.go:25` | fabricated fixture (CWE-798) |
 | `internal/server/secret_third_party_scan_served_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:29` | fabricated fixture (CWE-798) |

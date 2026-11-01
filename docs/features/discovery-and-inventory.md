@@ -506,7 +506,7 @@ that shape eight times, here is what each one actually finds:
 | `nhi_behavior`                        | Behavior anomalies (unfamiliar IP, geo, or user-agent; usage spikes; off-hours activity) against a learned per-principal baseline                                                                                                                                                             | `events[]`: `principal`, `occurred_at`, `ip`, `geo`, `user_agent`, `action`, `usage_count`, `baseline`; optional `business_hours` window                                                  |
 | `credential_compromise` (CAP-ITDR-02) | Leaked, replayed, or honeytoken-flagged credentials (OWASP NHI2 signals)                                                                                                                                                                                                                      | `signals[]`: `principal`, `credential_ref`, `credential_kind`, `provider`, `detector`, `observed_at`, `reason`, `confidence`, `evidence_refs`                                             |
 | `k8s_ingress_gateway` (CAP-K8S-03)    | Kubernetes `Ingress`/`Gateway` API TLS needs; with a cluster agent bound, hands each TLS block to that agent, which generates the key in the cluster and writes the Secret; without one, reports each resource not delivered                                                               | `resources[]`: `kind` (`Ingress` or `Gateway`), `namespace`, `name`, `tls_secret_name`, `hosts`, `auto_issue`; optional `cluster_agent_id`, `owner_id` (required with it), `verify_address` |
-| `secret_store` / `api_key` (F35, F36) | Secrets, API keys, tokens, and PATs by reference only — path, name, or ARN plus a masked fingerprint, never a value; also covers cloud secret-manager import from AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV for certificate material stored as secrets | path/name/ARN, `masked_fingerprint`, scope, expiry, `rotation_age_days`; secret-shaped fields (`token_value`, `secret`, `password`, `private_key`) are rejected before a source is stored |
+| `secret_store` / `api_key` (F35, F36) | Secrets, API keys, tokens, and PATs by reference only — path, name, or ARN plus a masked fingerprint, never a value; also covers cloud secret-manager import from AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV for certificate material stored as secrets and, with content inspection, the API keys, tokens, and private keys stored in them (`secret_store_api_key`, masked and fingerprinted) | path/name/ARN, `masked_fingerprint`, scope, expiry, `rotation_age_days`; secret-shaped fields (`token_value`, `secret`, `password`, `private_key`) are rejected before a source is stored |
 
 All eight run through the discovery outbox worker, normalize their input into
 metadata-only findings carrying a stable provenance string (`<kind>:<key-parts>`), and
@@ -566,6 +566,32 @@ application, and **Block app at provider** (`... block-oauth-app ID`) deactivate
 Okta app or disables the Entra service principal. Google Workspace grants can be
 revoked; its apps are blocked in its own admin console. The finding then shows what
 the provider confirmed.
+
+### Cloud secret managers
+
+A `cloud_secret` or `secret_store` source lists the secrets an authorized principal can
+see in AWS Secrets Manager, Google Secret Manager, Azure Key Vault and HashiCorp Vault KV
+(`providers[]`, credentials by reference). By default it records each secret's metadata
+(name, location, rotation and update times) as a `cloud_secret_resource` finding and
+never reads a value.
+
+With `inspect_content: true` on a provider, trstctl also reads each value it is allowed
+to, holds it only in wipeable memory, and looks inside it (A172):
+
+- certificates become `x509_certificate` findings and inventory rows;
+- API keys, tokens and private keys become `secret_store_api_key` findings. The built-in
+  rules recognize AWS access key IDs and secret access keys, GitHub and GitLab tokens,
+  Slack tokens and webhook URLs, Stripe live keys, Google API keys, npm tokens, SendGrid
+  keys, trstctl API tokens, JWTs, PEM private keys and Google service account key files.
+  A value that is a JSON object, or a Vault secret's fields, is read field by field, and
+  the finding names the field.
+
+A credential finding records the rule, the credential kind, the field, a masked display
+(the credential's public prefix and its length, a PEM block's BEGIN line, or a service
+account's email) and a fingerprint: a SHA-256 of the credential that is the same
+wherever it is stored, so two stores holding one key show one fingerprint. The value is
+wiped after inspection and never stored, logged or shown. There is no generic
+high-entropy rule: a string that matches no rule is not reported.
 
 ### Cloud network paths
 
@@ -842,7 +868,7 @@ code awaiting control-plane wiring (this matters for an honest evaluation — se
 | Agent-based discovery (F3)                                | **Served** — enrollment (`/enroll/bootstrap`, `/api/v1/agents`) and the mTLS `ReportInventory` path record source/run/finding rows and graph nodes                                       |
 | SSH discovery (F42)                                       | **Served** — source/schedule/run/finding APIs + CLI/UI; host-key scans execute through the outbox, and on-host SSH/private-key inventory reports through the agent mTLS path             |
 | Agentless cloud discovery (F49)                           | **Served** — AWS ACM, Azure Key Vault, and GCP Certificate Manager provider execution runs from the outbox with credential references; the shipped demo lab proves the AWS provider against its LocalStack emulator, and a run names each provider's outcome |
-| Secret-store & API-key discovery (F35, F36)               | **Served for cloud secret managers** — AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports; metadata-only references and fingerprints, never values; the demo lab seeds a tagged certificate secret in LocalStack so the AWS collector is proven locally, and a partial run names the provider that failed |
+| Secret-store & API-key discovery (F35, F36)               | **Served for cloud secret managers** — AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and HashiCorp Vault KV imports; metadata-only references and fingerprints, never values; opt-in content inspection also finds the API keys, tokens, and private keys stored as secrets (masked, fingerprinted); the demo lab seeds a tagged certificate secret in LocalStack so the AWS collector is proven locally, and a partial run names the provider that failed |
 | Cross-surface NHI discovery                               | **Served** — six-surface (IdP/cloud/SaaS/on-prem/code/CI) metadata-only findings                                                                                                         |
 | Unified NHI inventory                                     | **Served** — `/api/v1/nhi/inventory` normalizes identities, certificates, tokens, agents, and findings across eleven kinds                                                               |
 | Service-account discovery (CAP-NHI-03)                    | **Served** — AD/on-prem and cloud service-account findings                                                                                                                               |

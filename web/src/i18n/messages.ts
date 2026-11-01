@@ -11236,12 +11236,12 @@ export const messages = {
     description: "Discovery provider name-prefix explanation.",
   },
   "discovery.setup.inspectContent": {
-    defaultMessage: "Inspect secret content for certificates.",
+    defaultMessage: "Inspect secret content for certificates and credentials.",
     description: "Optional cloud-secret content inspection choice.",
   },
   "discovery.setup.inspectContentDescription": {
     defaultMessage:
-      "Optional and off by default. The provider value is held only in wipeable memory; trstctl emits certificate metadata and never stores, logs, or renders the value.",
+      "Optional and off by default. The provider value is held only in wipeable memory; trstctl emits certificate metadata and masked, fingerprinted API-key, token, and private-key findings, and never stores, logs, or renders the value.",
     description: "Cloud-secret content inspection safety explanation.",
   },
   "discovery.setup.privateEndpointBoundary": { defaultMessage: "Private endpoint boundary", description: "Discovery private-endpoint section." },

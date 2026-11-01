@@ -32,12 +32,15 @@ const (
 
 // Secret is one secret-manager value under inspection. Value may contain private
 // material and must be wiped by the provider after InspectSecret returns.
+// Fields, when the provider's value is a field map, carries the same material
+// by field (also the provider's to wipe) so a credential finding names its field.
 type Secret struct {
 	Name       string
 	ResourceID string
 	Location   string
 	Provenance string
 	Value      []byte
+	Fields     []SecretField
 	Metadata   map[string]string
 }
 
@@ -50,6 +53,8 @@ type Found struct {
 	Location   string
 	Provenance string
 	Cert       certinfo.Info
+	// Credential is set on FindingKindAPIKey findings.
+	Credential *Credential
 	Metadata   map[string]string
 }
 
@@ -62,15 +67,13 @@ func MetadataFound(provider, resourceID, name, location, provenance string, meta
 	}
 }
 
-// InspectSecret extracts certificate findings from one secret value. Non-certificate
-// secrets return no findings and no error.
+// InspectSecret extracts certificate findings and credential findings (API
+// keys, tokens, private keys; A172) from one secret value. A value holding
+// neither returns no findings and no error.
 func InspectSecret(provider string, secret Secret) ([]Found, error) {
 	infos, err := certinfo.InspectAll(secret.Value)
 	if err != nil {
 		return nil, err
-	}
-	if len(infos) == 0 {
-		return nil, nil
 	}
 	out := make([]Found, 0, len(infos))
 	for i, info := range infos {
@@ -89,7 +92,7 @@ func InspectSecret(provider string, secret Secret) ([]Found, error) {
 			Metadata:   meta,
 		})
 	}
-	return out, nil
+	return append(out, inspectCredentials(provider, secret)...), nil
 }
 
 func cloneMap(in map[string]string) map[string]string {

@@ -2,6 +2,11 @@
 
 ### Added
 
+- API keys, tokens and private keys inside external secret stores: with content inspection, a
+  cloud secret source checks each value it reads from AWS Secrets Manager, Google Secret Manager,
+  Azure Key Vault or Vault KV against built-in credential rules and records each match with its
+  rule, field, a masked display and a fingerprint shared by every copy of the credential; the value
+  is wiped and never stored.
 - Act at the identity provider on an abusive OAuth grant: an OAuth grant finding can revoke the
   user's grant at Okta, Microsoft Entra or Google Workspace, and block the app at Okta or Entra,
   through an admin connection the discovery source names by token reference.

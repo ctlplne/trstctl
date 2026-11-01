@@ -217,8 +217,8 @@ func cloudNetworkPathCapability() Capability {
 func cloudSecretCapability(kind, label string) Capability {
 	return Capability{
 		Kind: kind, Label: label, Tool: "Discover", Route: "/discovery?tab=sources&kind=" + kind, SetupSurface: SetupSourceWizard,
-		Purpose:      "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates through a separate explicit choice.",
-		DataHandling: "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata only, and never persists, logs, or renders the value.",
+		Purpose:      "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates and for the API keys, tokens, and private keys stored in it through a separate explicit choice.",
+		DataHandling: "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata and masked, fingerprinted credential findings only, and never persists, logs, or renders the value.",
 		Permission:   "discovery:write", Edition: "core", Execution: "control plane",
 		Configuration: cloudFields(true), Providers: []Provider{
 			provider("aws-secrets-manager", "AWS Secrets Manager", "Metadata: secretsmanager:ListSecrets. Optional content inspection additionally needs GetSecretValue on the filtered scope.", "env: credential references", "region", "endpoint", "access_key_id_ref", "secret_access_key_ref", "session_token_ref", "tag_key", "tag_value", "name_prefix", "inspect_content"),
@@ -255,7 +255,7 @@ func cloudFields(secret bool) []Field {
 			field("providers[].label_key", "GCP label key", "string", false, false, true, "Optional metadata-only inventory filter."),
 			field("providers[].label_value", "GCP label value", "string", false, false, true, "Optional metadata-only inventory filter."),
 			field("providers[].name_prefix", "Name prefix", "string", false, false, true, "Optional resource-name filter."),
-			field("providers[].inspect_content", "Inspect content for certificates", "boolean", false, false, true, "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata only."),
+			field("providers[].inspect_content", "Inspect content for certificates and credentials", "boolean", false, false, true, "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata and masked, fingerprinted API-key, token, and private-key findings only."),
 		)
 	}
 	return fields

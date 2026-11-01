@@ -733,8 +733,8 @@
     {
       "kind": "cloud_secret",
       "label": "Cloud secret managers",
-      "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates through a separate explicit choice.",
-      "data_handling": "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata only, and never persists, logs, or renders the value.",
+      "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates and for the API keys, tokens, and private keys stored in it through a separate explicit choice.",
+      "data_handling": "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata and masked, fingerprinted credential findings only, and never persists, logs, or renders the value.",
       "tool": "Discover",
       "route": "/discovery?tab=sources\u0026kind=cloud_secret",
       "setup_surface": "source_wizard",
@@ -900,11 +900,11 @@
         },
         {
           "path": "providers[].inspect_content",
-          "label": "Inspect content for certificates",
+          "label": "Inspect content for certificates and credentials",
           "type": "boolean",
           "required": false,
           "advanced": true,
-          "description": "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata only."
+          "description": "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata and masked, fingerprinted API-key, token, and private-key findings only."
         }
       ],
       "providers": [
@@ -990,8 +990,8 @@
     {
       "kind": "secret_store",
       "label": "Secret stores",
-      "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates through a separate explicit choice.",
-      "data_handling": "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata only, and never persists, logs, or renders the value.",
+      "purpose": "Inventory every authorized secret resource's metadata without retrieving its value; optionally inspect content for certificates and for the API keys, tokens, and private keys stored in it through a separate explicit choice.",
+      "data_handling": "Metadata-only is the default. Optional content inspection retrieves only candidate values, keeps them in wipeable bytes, emits certificate metadata and masked, fingerprinted credential findings only, and never persists, logs, or renders the value.",
       "tool": "Discover",
       "route": "/discovery?tab=sources\u0026kind=secret_store",
       "setup_surface": "source_wizard",
@@ -1157,11 +1157,11 @@
         },
         {
           "path": "providers[].inspect_content",
-          "label": "Inspect content for certificates",
+          "label": "Inspect content for certificates and credentials",
           "type": "boolean",
           "required": false,
           "advanced": true,
-          "description": "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata only."
+          "description": "Explicit opt-in to retrieve candidate values into wipeable memory and emit certificate metadata and masked, fingerprinted API-key, token, and private-key findings only."
         }
       ],
       "providers": [

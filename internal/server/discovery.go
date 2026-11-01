@@ -1587,6 +1587,9 @@ func (s cloudSecretDiscoveryRunSink) Record(ctx context.Context, f cloudsecret.F
 	if location == "" {
 		location = f.SecretName
 	}
+	if f.Kind == cloudsecret.FindingKindAPIKey {
+		return s.recordCredential(ctx, location, f)
+	}
 	if f.Kind == cloudsecret.FindingKindSecretResource {
 		metaMap := map[string]any{
 			"provider": f.Provider, "resource_id": f.ResourceID, "secret_name": f.SecretName,
