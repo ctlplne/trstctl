@@ -1,7 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "http://cyclonedx.org/schema/spdx.schema.json",
-  "$comment": "v1.0-3.17",
   "type": "string",
   "enum": [
     "CC-BY-NC-ND-2.0",
