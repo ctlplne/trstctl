@@ -742,6 +742,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "syncs", "workload-identities", "update"}, Method: "PUT", Path: "/api/v1/secrets/syncs/workload-identity-sources/{id}", Body: bodyFile, Summary: "Replace a secret-sync workload-identity source"},
 	{Name: []string{"secrets", "syncs", "workload-identities", "delete"}, Method: "DELETE", Path: "/api/v1/secrets/syncs/workload-identity-sources/{id}", Summary: "Delete a secret-sync workload-identity source"},
 	{Name: []string{"secrets", "scans", "repositories"}, Method: "GET", Path: "/api/v1/secrets/scans/repositories", Summary: "Show repository secret-scanning posture"},
+	{Name: []string{"secrets", "scans", "move"}, Method: "POST", Path: "/api/v1/discovery/findings/{id}/secret-move", Summary: "Move a leaked secret a scan found into the native store: re-find it in your checkout, store it, link the finding"},
 	{Name: []string{"secrets", "scans", "hooks", "test"}, Method: "POST", Path: "/api/v1/secrets/scans/hooks/{hook_id}", Summary: "Send a signed ping (or a push payload) to a native GitHub scan webhook with its secret, as GitHub would"},
 	{Name: []string{"secrets", "scans", "repositories", "webhook"}, Method: "POST", Path: "/api/v1/secrets/scans/repositories/{provider}/webhook", Body: bodyFile, Summary: "Queue a normalized repository secret scan"},
 	{Name: []string{"secrets", "scans", "third-party"}, Method: "GET", Path: "/api/v1/secrets/scans/third-party", Summary: "Show CI/CD, registry, Slack, and Jira secret-scanning posture"},

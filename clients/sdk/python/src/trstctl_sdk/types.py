@@ -5474,6 +5474,7 @@ DiscoveryFinding = TypedDict(
         'risk_accepted_until': str,
         'risk_score': int,
         'run_id': str,
+        'secret_move': dict[str, Any],
         'seen_count': int,
         'source_id': str,
         'tenant_id': str,
@@ -5506,6 +5507,16 @@ DiscoveryFindingResolutionRequest = TypedDict(
         'evidence_ref': str,
         'expires_at': str,
         'reason': str,
+    },
+    total=False,
+)
+
+DiscoveryFindingSecretMoveRequest = TypedDict(
+    'DiscoveryFindingSecretMoveRequest',
+    {
+        'history_residue': list[dict[str, Any]],
+        'secret_name': str,
+        'secret_version': int,
     },
     total=False,
 )

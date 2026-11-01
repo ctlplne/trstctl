@@ -837,6 +837,9 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
 	// M1's hourly usage windows, projected from credential.used.
 	"credential_usage_windows",
+	// P6: projected from discovery.finding.secret_moved and
+	// discovery.finding.secret_consumer_read.
+	"discovery_finding_secret_moves",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",

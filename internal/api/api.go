@@ -1095,6 +1095,7 @@ func (a *API) routes() []route {
 	discoveryFindingQuery := []param{
 		{name: "limit", typ: "integer", desc: "maximum items per page (1-100, default 20)"},
 		{name: "cursor", typ: "string", desc: "opaque pagination cursor from a prior page"},
+		{name: "id", typ: "string", format: "uuid", desc: "return only this finding"},
 		{name: "run_id", typ: "string", format: "uuid", desc: "return only findings from this discovery run"},
 		{name: "source_kind", typ: "string", desc: "return only findings recorded under sources of this kind (for example ct_log or drift)"},
 		{name: "kind", typ: "string", desc: "return only findings of this kind"},
@@ -1344,6 +1345,7 @@ func (a *API) routes() []route {
 		{method: "GET", path: "/api/v1/discovery/findings", opID: "listDiscoveryFindings", summary: "List discovery findings", handler: a.listDiscoveryFindings, query: discoveryFindingQuery, resSchema: "DiscoveryFindingList", successCode: "200", perm: authz.DiscoveryRead},
 		{method: "POST", path: "/api/v1/discovery/findings/{id}/claim", opID: "claimDiscoveryFinding", summary: "Claim a discovery finding as managed", handler: a.claimDiscoveryFinding, pathParams: idPath, reqSchema: "DiscoveryFindingTriageRequest", resSchema: "DiscoveryFinding", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "POST", path: "/api/v1/discovery/findings/{id}/dismiss", opID: "dismissDiscoveryFinding", summary: "Dismiss a discovery finding", handler: a.dismissDiscoveryFinding, pathParams: idPath, reqSchema: "DiscoveryFindingTriageRequest", resSchema: "DiscoveryFinding", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
+		{method: "POST", path: "/api/v1/discovery/findings/{id}/secret-move", opID: "moveDiscoveryFindingSecret", summary: "Link a leaked-secret finding to the native secret version its value moved into", handler: a.moveDiscoveryFindingSecret, pathParams: idPath, reqSchema: "DiscoveryFindingSecretMoveRequest", resSchema: "DiscoveryFinding", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
 		{method: "POST", path: "/api/v1/discovery/findings/{id}/resolution", opID: "resolveDiscoveryFinding", summary: "Investigate, record remediated, accept the risk until a time, or reopen a discovery finding", handler: a.resolveDiscoveryFinding, pathParams: idPath, reqSchema: "DiscoveryFindingResolutionRequest", resSchema: "DiscoveryFinding", successCode: "200", mutation: true, perm: authz.DiscoveryWrite},
 
 		{method: "GET", path: "/api/v1/connectors/catalog", opID: "listConnectorCatalog", summary: "List served connector kinds, rollback posture, and signed relay plugin runtimes", handler: a.listConnectorCatalog, query: page, resSchema: "ConnectorCatalog", successCode: "200", perm: authz.ConnectorsRead},

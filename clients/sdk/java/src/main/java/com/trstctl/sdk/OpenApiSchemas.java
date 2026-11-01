@@ -401,6 +401,7 @@ public final class OpenApiSchemas {
       "DiscoveryFinding",
       "DiscoveryFindingList",
       "DiscoveryFindingResolutionRequest",
+      "DiscoveryFindingSecretMoveRequest",
       "DiscoveryFindingTriageRequest",
       "DiscoveryMonitoring",
       "DiscoveryMonitoringSource",

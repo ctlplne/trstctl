@@ -3930,6 +3930,7 @@ export interface DiscoveryFinding {
   risk_accepted_until?: string;
   risk_score?: number;
   run_id: string;
+  secret_move?: { consumer_read_at?: string; consumer_read_version?: number; consumer_reader?: string; history_residue: { commit: string; file: string; line: number; rule_id: string }[]; moved_at: string; moved_by?: string; reference: string; secret_name: string; secret_version: number };
   seen_count: number;
   source_id: string;
   tenant_id: string;
@@ -3954,6 +3955,12 @@ export interface DiscoveryFindingResolutionRequest {
   evidence_ref?: string;
   expires_at?: string;
   reason: string;
+}
+
+export interface DiscoveryFindingSecretMoveRequest {
+  history_residue?: { commit: string; file: string; line: number; rule_id: string }[];
+  secret_name: string;
+  secret_version: number;
 }
 
 export interface DiscoveryFindingTriageRequest {

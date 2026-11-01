@@ -43,13 +43,16 @@ func discoveryTriageFilter(raw string) (string, error) {
 func discoveryFindingFilterFromQuery(r *http.Request) (store.DiscoveryFindingFilter, error) {
 	q := r.URL.Query()
 	filter := store.DiscoveryFindingFilter{
+		ID:         strings.TrimSpace(q.Get("id")),
 		RunID:      strings.TrimSpace(q.Get("run_id")),
 		SourceKind: strings.TrimSpace(q.Get("source_kind")),
 		Kind:       strings.TrimSpace(q.Get("kind")),
 	}
-	if filter.RunID != "" {
-		if _, err := googleuuid.Parse(filter.RunID); err != nil {
-			return filter, errors.New("run_id must be a UUID")
+	for _, field := range []struct{ name, value string }{{"id", filter.ID}, {"run_id", filter.RunID}} {
+		if field.value != "" {
+			if _, err := googleuuid.Parse(field.value); err != nil {
+				return filter, fmt.Errorf("%s must be a UUID", field.name)
+			}
 		}
 	}
 	for _, field := range []struct{ name, value string }{{"source_kind", filter.SourceKind}, {"kind", filter.Kind}} {

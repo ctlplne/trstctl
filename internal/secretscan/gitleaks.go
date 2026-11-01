@@ -99,6 +99,16 @@ func (r *GitleaksRunner) Scan(ctx context.Context, target string) (Report, error
 	return r.ScanWithOptions(ctx, target, ScanOptions{})
 }
 
+// ScanClone scans a checkout this process cloned into its own temporary
+// directory (a repository scan's clone_url). That directory alone is the scan
+// root: the operator's scan roots need not cover the temporary directory, and
+// nothing outside the clone is reachable.
+func (r *GitleaksRunner) ScanClone(ctx context.Context, dir string) (Report, error) {
+	clone := *r
+	clone.AllowedRoots = []string{dir}
+	return clone.ScanWithOptions(ctx, dir, ScanOptions{})
+}
+
 // Plan validates the exact target, confinement boundary, mode, scanner binary,
 // and additive custom rules without starting a process or writing a file.
 func (r *GitleaksRunner) Plan(target string, opts ScanOptions) (Plan, error) {
@@ -474,9 +484,17 @@ func resolveAllowedPath(path string, allowedRoots []string) (string, error) {
 
 func relativizeFindings(findings []Finding, root string) {
 	for i := range findings {
-		file := filepath.Clean(findings[i].File)
+		reported := findings[i].File
+		file := filepath.Clean(reported)
 		if rel, err := filepath.Rel(root, file); err == nil && rel != "." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != ".." {
 			file = filepath.ToSlash(rel)
+			// A directory scan's fingerprint starts with the path gitleaks
+			// reported. Keep the finding's identity independent of where the
+			// checkout sat: a clone lands in a new temporary directory on every
+			// scan, and the same leak must stay the same finding (P6).
+			if rest, ok := strings.CutPrefix(findings[i].Fingerprint, reported+":"); ok {
+				findings[i].Fingerprint = file + ":" + rest
+			}
 		}
 		findings[i].File = file
 		findings[i].CredentialRef = findings[i].RuleID + "@" + file

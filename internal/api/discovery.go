@@ -480,6 +480,9 @@ type discoveryFindingResponse struct {
 	RiskAcceptedUntil *time.Time `json:"risk_accepted_until,omitempty"`
 	Overdue           bool       `json:"overdue,omitempty"`
 	Regressed         bool       `json:"regressed,omitempty"`
+	// SecretMove links a leaked-secret finding to the native secret its value
+	// moved into (P6).
+	SecretMove *discoveryFindingSecretMoveResponse `json:"secret_move,omitempty"`
 }
 
 type discoveryFindingTriageRequest struct {
@@ -1333,6 +1336,10 @@ func (a *API) listDiscoveryFindings(w http.ResponseWriter, r *http.Request) {
 	items := make([]discoveryFindingResponse, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, toDiscoveryFindingResponse(row))
+	}
+	if err := a.withSecretMoves(r.Context(), tenantID, items); err != nil {
+		a.writeError(w, err)
+		return
 	}
 	next := ""
 	if len(rows) == limit {

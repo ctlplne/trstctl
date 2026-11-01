@@ -54,3 +54,32 @@ func discoveryProviderActionPrivacyPolicy() events.PrivacyEventPolicy {
 		privacyRule("/reason", clear), privacyRule("/actor", exact), privacyRule("/provider_ref", opaque),
 	)
 }
+
+// discoverySecretMovedPrivacyPolicy classifies a leaked secret moved into the
+// native store (P6): the mover is an identity; the secret's name and version
+// and the residue's repository locations are opaque. No value is carried.
+func discoverySecretMovedPrivacyPolicy() events.PrivacyEventPolicy {
+	const (
+		exact  = events.PrivacyFieldIdentityExact
+		opaque = events.PrivacyFieldOpaqueExact
+	)
+	return privacyRules(
+		privacyRule("/finding_id", opaque), privacyRule("/secret_name", opaque),
+		privacyRule("/secret_version", opaque), privacyRule("/moved_by", exact),
+		privacyRule("/residue/*/rule_id", opaque), privacyRule("/residue/*/file", opaque),
+		privacyRule("/residue/*/line", opaque), privacyRule("/residue/*/commit", opaque),
+	)
+}
+
+// discoverySecretConsumerReadPrivacyPolicy classifies the first read of a
+// moved secret's rotated version (P6): the reader is an identity.
+func discoverySecretConsumerReadPrivacyPolicy() events.PrivacyEventPolicy {
+	const (
+		exact  = events.PrivacyFieldIdentityExact
+		opaque = events.PrivacyFieldOpaqueExact
+	)
+	return privacyRules(
+		privacyRule("/finding_id", opaque), privacyRule("/secret_name", opaque),
+		privacyRule("/version", opaque), privacyRule("/reader", exact), privacyRule("/read_at", opaque),
+	)
+}

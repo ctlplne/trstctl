@@ -1358,7 +1358,13 @@ func (d *issuanceDispatcher) executeSecretRepositoryDiscoveryRun(ctx context.Con
 		return netscan.Report{}, "", "", err
 	}
 	defer target.Cleanup()
-	report, err := d.secretRepoScanner.Scan(ctx, target.Path)
+	scan := d.secretRepoScanner.Scan
+	if cloner, ok := d.secretRepoScanner.(cloneSecretScanner); ok && target.Mode == "clone_url" {
+		// The clone sits in a temporary directory trstctl just made, outside
+		// the operator's scan roots; that directory alone is this scan's root.
+		scan = cloner.ScanClone
+	}
+	report, err := scan(ctx, target.Path)
 	if err != nil {
 		return netscan.Report{}, "", "", err
 	}

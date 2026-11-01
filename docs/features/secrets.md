@@ -1338,6 +1338,38 @@ The normalized route and scheduled polling stay for installs that cannot accept
 webhooks. Native GitLab and Bitbucket signatures and private `credential_ref` clone
 resolution remain shortfalls, not served.
 
+A leaked secret a scan found moves into the native store from the CLI (P6):
+
+```
+trstctl secrets scans move <finding-id> --repo ./payments --name payments/slack-bot-token
+```
+
+The served finding is redacted — it names the rule, the file and the line, never the
+value. The CLI reads the finding, re-finds that one value in your own checkout with the
+pinned gitleaks (its unredacted report read from a pipe, never written to disk; every
+other value it held is wiped), stores it with `POST /api/v1/secrets/store` and links the
+finding with `POST /api/v1/discovery/findings/{id}/secret-move` by the secret's name and
+version only. The same local run lists every history commit that still holds the value;
+those locations (commit, file, line, rule — no value) are kept on the finding as
+`secret_move.history_residue`. The CLI prints the reference to use instead
+(`${secret.payments/slack-bot-token}`, or `trstctl run --secret ENV=payments/slack-bot-token`).
+The value appears in no finding, event or log.
+
+Moving does not close the finding: the leaked value still works until it is rotated. The
+leader closes a moved finding as `remediated` (actor `system:leaked-secret-closure`) only
+when all three hold: the secret was rotated (a version newer than the moved one exists),
+a consumer read a rotated version through the store (recorded once as
+`secret_move.consumer_read_*`), and a scan of the finding's source completed after the
+rotation without seeing the leak. A scan that fails — a clone or provider error — is no
+evidence, and a scan that still sees the leak (the value still in the file) keeps the
+finding open. The evidence reference names the rotated version, the read and the scan
+run; after it closes, the history commits stay listed on the finding, because cleaning
+the latest file does not remove the value from history (rotation is what ends the
+exposure). A finding seen again after it closed shows as regressed.
+
+Reads through the native store's own routes count as consumer reads; reads through the
+KV-compatible `/v1` surface and deliveries by secret sync do not yet.
+
 Third-party artifacts use the same shape: `GET /api/v1/secrets/scans/third-party` and
 `POST /api/v1/secrets/scans/third-party/{provider}/ingest` cover `cicd_log`,
 `container_registry`, `slack`, and `jira` — a source plus operator-owned

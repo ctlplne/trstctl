@@ -1523,6 +1523,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunDecoyLoginWatch),
 			// G2: what each dynamic-secret lease reaches is read from its target.
 			startRuntimeWorker(workCtx, srv.RunDynamicSecretAccessWatch),
+			// P6: moved leaked-secret findings close on rotation, read and scan evidence.
+			startRuntimeWorker(workCtx, srv.RunSecretMoveClosure),
 			// Q1: access review revoke decisions finish and close on evidence.
 			startRuntimeWorker(workCtx, srv.RunNHIReviewReconcile),
 			// X3: migration waves that require observed traffic advance on wire evidence or pause.

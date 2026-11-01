@@ -21,6 +21,8 @@ import (
 // SourceKind matches the kind of the source a finding was recorded under;
 // TriageStatus "unmanaged" also matches a finding never triaged.
 type DiscoveryFindingFilter struct {
+	// ID selects one finding (P6: the CLI reads the finding it moves).
+	ID           string
 	RunID        string
 	SourceKind   string
 	Kind         string
@@ -47,6 +49,10 @@ var ErrDiscoveryFindingTallyTooWide = errors.New("store: discovery finding count
 // where appends the filter's predicates to a query over discovery_findings f.
 func (f DiscoveryFindingFilter) where(args []any) (string, []any) {
 	var b strings.Builder
+	if f.ID != "" {
+		args = append(args, f.ID)
+		fmt.Fprintf(&b, " AND f.id = $%d", len(args))
+	}
 	if f.RunID != "" {
 		args = append(args, f.RunID)
 		fmt.Fprintf(&b, " AND f.run_id = $%d", len(args))

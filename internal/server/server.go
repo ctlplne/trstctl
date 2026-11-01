@@ -645,6 +645,9 @@ type Deps struct {
 	// DynamicSecretAccessInterval is how often the leader reads what new or
 	// stale dynamic-secret leases reach (G2). Zero uses the production default.
 	DynamicSecretAccessInterval time.Duration
+	// SecretMoveClosureInterval is how often the leader closes moved
+	// leaked-secret findings on evidence (P6). Zero uses the production default.
+	SecretMoveClosureInterval time.Duration
 
 	// EnableAISurface turns on the served AI / RCA / NL-query / MCP surface (SURFACE-003;
 	// F75/F76/F77/F78) under /api/v1/ai/* and /api/v1/mcp/*. OFF by default (fail closed):
@@ -917,6 +920,8 @@ type Server struct {
 	decoyLoginWatchInterval time.Duration
 	// dynamicSecretAccessInterval paces RunDynamicSecretAccessWatch (G2).
 	dynamicSecretAccessInterval time.Duration
+	// secretMoveClosureInterval paces RunSecretMoveClosure (P6).
+	secretMoveClosureInterval time.Duration
 
 	logger    *slog.Logger
 	registry  *observ.Registry
@@ -1151,7 +1156,7 @@ func Build(ctx context.Context, d Deps) (_ *Server, err error) {
 		tenantCrypto:              d.TenantCrypto,
 		kek:                       d.KEK,
 		restoreDrillSigner:        d.AuditSigningKey, deploymentKEK: d.DeploymentKEK,
-		decoyLoginWatchInterval: d.DecoyLoginWatchInterval, dynamicSecretAccessInterval: d.DynamicSecretAccessInterval,
+		decoyLoginWatchInterval: d.DecoyLoginWatchInterval, dynamicSecretAccessInterval: d.DynamicSecretAccessInterval, secretMoveClosureInterval: d.SecretMoveClosureInterval,
 	}
 	s.agentMetrics = newAgentChannelMetrics(s.registry)
 	s.mAgentEnrollments = s.registry.CounterVec("trstctl_agent_enrollments_total",

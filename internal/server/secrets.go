@@ -38,6 +38,12 @@ type secretScanner interface {
 	Scan(ctx context.Context, path string) (secretscan.Report, error)
 }
 
+// cloneSecretScanner scans a clone trstctl made in its own temporary
+// directory, which is the scan root for that one scan (P6).
+type cloneSecretScanner interface {
+	ScanClone(ctx context.Context, dir string) (secretscan.Report, error)
+}
+
 func secretScannerFromDeps(d Deps) secretScanner {
 	if d.SecretScanner != nil {
 		return d.SecretScanner

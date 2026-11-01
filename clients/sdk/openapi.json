@@ -16808,6 +16808,70 @@
             "format": "uuid",
             "type": "string"
           },
+          "secret_move": {
+            "properties": {
+              "consumer_read_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "consumer_read_version": {
+                "type": "integer"
+              },
+              "consumer_reader": {
+                "type": "string"
+              },
+              "history_residue": {
+                "items": {
+                  "properties": {
+                    "commit": {
+                      "type": "string"
+                    },
+                    "file": {
+                      "type": "string"
+                    },
+                    "line": {
+                      "type": "integer"
+                    },
+                    "rule_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "rule_id",
+                    "file",
+                    "line",
+                    "commit"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "moved_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "moved_by": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "secret_name": {
+                "type": "string"
+              },
+              "secret_version": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "secret_name",
+              "secret_version",
+              "reference",
+              "moved_at",
+              "history_residue"
+            ],
+            "type": "object"
+          },
           "seen_count": {
             "type": "integer"
           },
@@ -16917,6 +16981,47 @@
         "required": [
           "action",
           "reason"
+        ],
+        "type": "object"
+      },
+      "DiscoveryFindingSecretMoveRequest": {
+        "properties": {
+          "history_residue": {
+            "items": {
+              "properties": {
+                "commit": {
+                  "type": "string"
+                },
+                "file": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "rule_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "rule_id",
+                "file",
+                "line",
+                "commit"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "secret_name": {
+            "type": "string"
+          },
+          "secret_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "secret_name",
+          "secret_version"
         ],
         "type": "object"
       },
@@ -58754,6 +58859,15 @@
             }
           },
           {
+            "description": "return only this finding",
+            "in": "query",
+            "name": "id",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "description": "return only findings from this discovery run",
             "in": "query",
             "name": "run_id",
@@ -59380,6 +59494,83 @@
           }
         ],
         "summary": "Investigate, record remediated, accept the risk until a time, or reopen a discovery finding",
+        "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/secret-move": {
+      "post": {
+        "operationId": "moveDiscoveryFindingSecret",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryFindingSecretMoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryFinding"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Link a leaked-secret finding to the native secret version its value moved into",
         "x-trstctl-permission": "discovery:write"
       }
     },

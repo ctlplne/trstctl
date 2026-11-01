@@ -2258,6 +2258,16 @@ func componentSchemas() map[string]*Schema {
 	discoveryRunReq := object(map[string]*Schema{
 		"source_id": uuid(), "schedule_id": uuid(), "dry_run": {Type: "boolean"},
 	}, "source_id")
+	// P6: a leaked-secret finding moved into the native store, and the history
+	// commits that still held its value (locations only, never the value).
+	secretResidueLocation := object(map[string]*Schema{
+		"rule_id": str(), "file": str(), "line": {Type: "integer"}, "commit": str(),
+	}, "rule_id", "file", "line", "commit")
+	discoveryFindingSecretMove := object(map[string]*Schema{
+		"secret_name": str(), "secret_version": {Type: "integer"}, "reference": str(),
+		"moved_by": str(), "moved_at": timestamp(), "history_residue": {Type: "array", Items: secretResidueLocation},
+		"consumer_read_version": {Type: "integer"}, "consumer_reader": str(), "consumer_read_at": timestamp(),
+	}, "secret_name", "secret_version", "reference", "moved_at", "history_residue")
 	discoveryFinding := object(map[string]*Schema{
 		"id": uuid(), "tenant_id": uuid(), "run_id": uuid(), "source_id": uuid(),
 		"kind": str(), "ref": str(), "provenance": str(), "fingerprint": str(),
@@ -2266,8 +2276,12 @@ func componentSchemas() map[string]*Schema {
 		"managed_identity_id": uuid(), "triage_actor": str(), "triage_reason": str(), "triaged_at": timestamp(),
 		"first_seen_at": timestamp(), "last_seen_at": timestamp(), "seen_count": {Type: "integer"},
 		"triage_assignee": str(), "triage_due_at": timestamp(), "triage_evidence_ref": str(), "risk_accepted_until": timestamp(),
-		"overdue": {Type: "boolean"}, "regressed": {Type: "boolean"},
+		"overdue": {Type: "boolean"}, "regressed": {Type: "boolean"}, "secret_move": discoveryFindingSecretMove,
 	}, "id", "tenant_id", "run_id", "source_id", "kind", "ref", "provenance", "fingerprint", "metadata", "discovered_at", "first_seen_at", "last_seen_at", "seen_count")
+	discoveryFindingSecretMoveReq := object(map[string]*Schema{
+		"secret_name": str(), "secret_version": {Type: "integer"},
+		"history_residue": {Type: "array", Items: secretResidueLocation},
+	}, "secret_name", "secret_version")
 	discoveryFindingTriageReq := object(map[string]*Schema{
 		"managed_identity_id": uuid(), "reason": str(), "owner": str(), "team": str(),
 		"tags": {Type: "array", Items: str()},
@@ -8111,6 +8125,7 @@ func componentSchemas() map[string]*Schema {
 		"DiscoveryFinding":                         discoveryFinding,
 		"DiscoveryFindingTriageRequest":            discoveryFindingTriageReq,
 		"DiscoveryFindingResolutionRequest":        discoveryFindingResolutionReq,
+		"DiscoveryFindingSecretMoveRequest":        discoveryFindingSecretMoveReq,
 		"DiscoveryFindingList":                     list("DiscoveryFinding"),
 		"DiscoveryMonitoringSummary":               discoveryMonitoringSummary,
 		"DiscoveryMonitoringSource":                discoveryMonitoringSource,

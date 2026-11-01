@@ -687,6 +687,7 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 			a.writeError(w, err)
 			return
 		}
+		a.observeMovedSecretRead(r, tenantID, name, version)
 		resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
 		a.writeJSON(w, http.StatusOK, resp)
 		secret.Wipe(value)
@@ -715,6 +716,7 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 	if rec, gerr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, name); gerr == nil {
 		version = rec.Version
 	}
+	a.observeMovedSecretRead(r, tenantID, name, version)
 	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
 	a.writeJSON(w, http.StatusOK, resp)
 	secret.Wipe(value)
@@ -758,6 +760,7 @@ func (a *API) getSecretVersion(w http.ResponseWriter, r *http.Request) {
 		a.writeError(w, err)
 		return
 	}
+	a.observeMovedSecretRead(r, tenantID, name, rec.Version)
 	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: rec.Version}
 	a.writeJSON(w, http.StatusOK, resp)
 	secret.Wipe(value)

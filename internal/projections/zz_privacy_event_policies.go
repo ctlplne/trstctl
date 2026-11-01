@@ -962,8 +962,6 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 			privacyRule("/subject", exact), privacyRule("/reason", clear),
 			privacyRule("/offboarded_by", exact), privacyRule("/revoked_token_count", opaque),
 		),
-		{EventCredentialUsed, 1}:       credentialUsedPrivacyPolicy(),
-		{EventTokenExchanged, 1}:       tokenExchangedPrivacyPolicy(),
 		{EventAPITokenCreated, 1}:      apiTokenCreated,
 		{EventAPITokenRevoked, 1}:      apiTokenRevoked,
 		{EventHoneyTokenCreated, 1}:    honeyTokenCreated,
@@ -1088,6 +1086,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	for key, policy := range machineAuthMethodPrivacyPolicies() {
 		policies[key] = policy
 	}
+	addCredentialActivityPrivacyPolicies(policies)
 	for _, eventType := range []string{EventIdentityDeployed, EventIdentityRenewed, EventIdentityRenewalRecovered} {
 		policies[privacyEventPolicyKey{EventType: eventType, Version: LifecycleOwnershipReadinessEventSchemaVersion}] = identityTransitionV6
 	}
@@ -1538,8 +1537,6 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventMachineAuthMethodEnabled, 1}:                                                   privacyPayloadShape[MachineAuthMethodOverride](),
 		{EventHoneyTokenCreated, 1}:                                                          privacyPayloadShape[HoneyTokenCreated](),
 		{EventHoneyTokenTriggered, 1}:                                                        privacyPayloadShape[HoneyTokenTriggered](),
-		{EventCredentialUsed, 1}:                                                             privacyPayloadShape[CredentialUsed](),
-		{EventTokenExchanged, 1}:                                                             privacyPayloadShape[TokenExchanged](),
 		{EventHoneyTokenRevoked, 1}:                                                          privacyPayloadShape[HoneyTokenRevoked](),
 		{EventAWSHoneyTokenCreated, 1}:                                                       privacyPayloadShape[AWSHoneyTokenCreated](),
 		{EventAWSHoneyScanPage, 1}:                                                           privacyPayloadShape[store.AWSHoneyScanPage](),
@@ -1641,6 +1638,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 	addCACeremonyPrivacyShapes(shapes)
 	addEventProtectionPrivacyShapes(shapes)
 	addSSHTrustFleetPrivacyShapes(shapes)
+	addCredentialActivityPrivacyShapes(shapes)
 	shapes[privacyEventPolicyKey{EventAgentHeartbeat, AgentHeartbeatSSHTrustSchemaVersion}] = privacyPayloadShape[AgentHeartbeat]()
 	return shapes
 }

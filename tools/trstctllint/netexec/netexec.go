@@ -213,6 +213,18 @@ var reviewedExecUses = map[string]map[string]bool{
 	"internal/secretscan/gitleaks.go": {
 		"ScanWithOptions": true,
 	},
+	// P6's `secrets scans move` re-finds one leaked value in the operator's
+	// own checkout. The binary is the pinned gitleaks (resolved like every
+	// scan's); every argv entry is a fixed flag, the scan command ("dir" or
+	// "git") or the checkout confined to the runner's allowed roots; no shell
+	// is involved. The unredacted report goes to stdout only (never a file),
+	// is bounded (64 MiB), and every value but the one the finding names is
+	// wiped. Pinned by TestReviewedExecAllowlistPinsSecretMoveLocate;
+	// internal/secretscan's TestLocateSecretForMoveFindsTheValueAndItsHistoryP6
+	// pins the locate.
+	"internal/secretscan/move.go": {
+		"unredactedReport": true,
+	},
 	"internal/secretscan/repository.go": {
 		"runGit": true,
 	},

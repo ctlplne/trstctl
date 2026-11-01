@@ -1317,6 +1317,15 @@ never live in the API process. What you can do end to end against the running bi
   `X-GitHub-Delivery` makes redeliveries idempotent. The normalized webhook and polling
   remain. GitLab/Bitbucket native signatures and private-repository clone credentials
   are not served.
+- Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
+  redacted repository finding's value in the operator's checkout with the pinned
+  gitleaks, stores it as a native secret and links the finding
+  (`POST /api/v1/discovery/findings/{id}/secret-move`); no value reaches a finding,
+  event or log. The leader closes the finding only on a rotation, a consumer's read of
+  the rotated version and a completed scan that no longer sees the leak; failed scans
+  never close it and the history commits holding the value stay listed. Consumer reads
+  count through the native store's routes only (not the KV-compatible `/v1` surface or
+  secret-sync deliveries); image-layer residue belongs to registry scanning (N6).
 - Token exchange (M4, RFC 8693): `POST /oauth2/token` swaps a platform JWT (a
   Kubernetes projected service-account token, a CI id_token) verified by the tenant's
   machine-login method for its issuer into a five-minute JWT-SVID for the workload's

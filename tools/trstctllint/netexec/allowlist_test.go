@@ -236,3 +236,10 @@ func TestReviewedExecAllowlistPinsCBOMScanImage(t *testing.T) {
 		t.Fatalf("internal/cli/cbom_scan.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}
 }
+
+func TestReviewedExecAllowlistPinsSecretMoveLocate(t *testing.T) {
+	want := map[string]bool{"unredactedReport": true}
+	if got := reviewedExecUses["internal/secretscan/move.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal/secretscan/move.go reviewed exec allowlist = %#v, want %#v", got, want)
+	}
+}

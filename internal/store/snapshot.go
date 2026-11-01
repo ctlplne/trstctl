@@ -217,7 +217,10 @@ import (
 // Version 71 carries M1's hourly usage windows; an older snapshot has none, so a
 // restore would forget every recent hour's counts while its covered offset
 // skipped the uses.
-const SnapshotFormatVersion = 71
+// Version 72 carries P6's moved leaked-secret findings; an older snapshot has
+// none, so a restore would unlink every moved finding from its secret while
+// its covered offset skipped the moves.
+const SnapshotFormatVersion = 72
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -284,6 +287,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
 	// Format 71: M1's hourly usage windows.
 	"credential_usage_windows",
+	// Format 72: P6's leaked-secret findings moved into the native store.
+	"discovery_finding_secret_moves",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -609,6 +614,7 @@ SELECT jsonb_build_object(
   'credential_usage_sources', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_sources t),
   'credential_usage_gaps', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_gaps t),
   'credential_usage_windows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_windows t),
+  'discovery_finding_secret_moves', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM discovery_finding_secret_moves t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

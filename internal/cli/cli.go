@@ -103,6 +103,13 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runSecretScanHookTest(ctx, rest[4:], env, stdout, stderr, *server, *caFile)
 	}
+	if len(rest) >= 3 && hasPrefix(rest, []string{"secrets", "scans", "move"}) {
+		if commandHelpRequested(rest[3:]) {
+			secretScanMoveUsage(stdout)
+			return 0
+		}
+		return runSecretScanMove(ctx, rest[3:], env, stdout, stderr, *server, *token, *tenant, *caFile)
+	}
 	if len(rest) >= 3 && hasPrefix(rest, []string{"secrets", "scans", "staged-diff"}) {
 		if commandHelpRequested(rest[3:]) {
 			secretScanStagedDiffUsage(stdout)

@@ -2,6 +2,13 @@
 
 ### Added
 
+- Move a leaked secret into the vault: `trstctl secrets scans move <finding-id> --repo <checkout> --name <secret>`
+  re-finds the value a redacted repository finding names in your own checkout (the pinned gitleaks, its report on a
+  pipe), stores it as a native secret and links the finding with
+  `POST /api/v1/discovery/findings/{id}/secret-move`; no value reaches a finding, event or log. The finding closes
+  as remediated only after the secret is rotated, a consumer reads the rotated version and a completed scan no longer
+  sees the leak; a failed scan never closes it, and the history commits that held the value stay listed on it.
+
 - Native GitHub webhooks for repository secret scanning: `secrets.scan_webhooks` names a hook and its secret, and
   `POST /api/v1/secrets/scans/hooks/{id}` verifies GitHub's `X-Hub-Signature-256` before queueing a scan of the
   pushed commit; a wrong or missing signature is refused and redeliveries queue nothing new.
@@ -942,6 +949,11 @@
   or `not_proven`) in its response and its creation event.
 
 ### Fixed
+
+- Repository secret scans of a `clone_url` now run with the real scanner: the clone lands in a temporary directory
+  outside the configured scan roots, which the scanner refused, so every cloned repository scan failed; that one
+  directory is now the clone scan's root. A cloned repository's finding also keeps one identity across scans (its
+  fingerprint no longer names the temporary directory), so a rescan sees the same finding instead of adding another.
 
 - CBOM import refused ordinary image scans: the shared 1 MiB mutation body limit applied before the import's
   own limit, and an import held at most 5,000 components, while the real cbomkit-theia's CBOM for a small Alpine

@@ -36,3 +36,22 @@ func credentialUsedPrivacyPolicy() events.PrivacyEventPolicy {
 		privacyRule("/count", opaque),
 	)
 }
+
+// addCredentialActivityPrivacyPolicies registers the exact policies of the
+// credential-activity events — usage (M1), token exchange (M4) and leaked
+// secrets moved into the store (P6) — so the central registry stays within its
+// served-source size guard.
+func addCredentialActivityPrivacyPolicies(policies map[privacyEventPolicyKey]events.PrivacyEventPolicy) {
+	policies[privacyEventPolicyKey{EventCredentialUsed, 1}] = credentialUsedPrivacyPolicy()
+	policies[privacyEventPolicyKey{EventTokenExchanged, 1}] = tokenExchangedPrivacyPolicy()
+	policies[privacyEventPolicyKey{EventDiscoveryFindingSecretMoved, 1}] = discoverySecretMovedPrivacyPolicy()
+	policies[privacyEventPolicyKey{EventDiscoveryFindingSecretConsumerRead, 1}] = discoverySecretConsumerReadPrivacyPolicy()
+}
+
+// addCredentialActivityPrivacyShapes registers the same events' payload shapes.
+func addCredentialActivityPrivacyShapes(shapes map[privacyEventPolicyKey]events.PrivacyPayloadShape) {
+	shapes[privacyEventPolicyKey{EventCredentialUsed, 1}] = privacyPayloadShape[CredentialUsed]()
+	shapes[privacyEventPolicyKey{EventTokenExchanged, 1}] = privacyPayloadShape[TokenExchanged]()
+	shapes[privacyEventPolicyKey{EventDiscoveryFindingSecretMoved, 1}] = privacyPayloadShape[DiscoveryFindingSecretMoved]()
+	shapes[privacyEventPolicyKey{EventDiscoveryFindingSecretConsumerRead, 1}] = privacyPayloadShape[DiscoveryFindingSecretConsumerRead]()
+}

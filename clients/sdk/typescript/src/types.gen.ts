@@ -3221,6 +3221,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/secret-move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link a leaked-secret finding to the native secret version its value moved into */
+        post: operations["moveDiscoveryFindingSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/monitoring": {
         parameters: {
             query?: never;
@@ -13780,6 +13797,24 @@ export interface components {
             risk_score?: number;
             /** Format: uuid */
             run_id: string;
+            secret_move?: {
+                /** Format: date-time */
+                consumer_read_at?: string;
+                consumer_read_version?: number;
+                consumer_reader?: string;
+                history_residue: {
+                    commit: string;
+                    file: string;
+                    line: number;
+                    rule_id: string;
+                }[];
+                /** Format: date-time */
+                moved_at: string;
+                moved_by?: string;
+                reference: string;
+                secret_name: string;
+                secret_version: number;
+            };
             seen_count: number;
             /** Format: uuid */
             source_id: string;
@@ -13810,6 +13845,16 @@ export interface components {
             /** Format: date-time */
             expires_at?: string;
             reason: string;
+        };
+        DiscoveryFindingSecretMoveRequest: {
+            history_residue?: {
+                commit: string;
+                file: string;
+                line: number;
+                rule_id: string;
+            }[];
+            secret_name: string;
+            secret_version: number;
         };
         DiscoveryFindingTriageRequest: {
             /** Format: uuid */
@@ -30279,6 +30324,8 @@ export interface operations {
                 limit?: number;
                 /** @description opaque pagination cursor from a prior page */
                 cursor?: string;
+                /** @description return only this finding */
+                id?: string;
                 /** @description return only findings from this discovery run */
                 run_id?: string;
                 /** @description return only findings recorded under sources of this kind (for example ct_log or drift) */
@@ -30624,6 +30671,53 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DiscoveryFindingResolutionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoveryFinding"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    moveDiscoveryFindingSecret: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryFindingSecretMoveRequest"];
             };
         };
         responses: {
