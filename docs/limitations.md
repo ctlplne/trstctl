@@ -1282,6 +1282,15 @@ never live in the API process. What you can do end to end against the running bi
   OCSP and the agent key set follow, so relying parties refuse the next use;
   one batch revocation event names who revoked. Relying parties that cache the CRL
   or OCSP answer see it at their own refresh.
+- Host crypto discovery depth (X2): the agent reports Java keystore and PKCS#12
+  key entries (alias, key type and size, public-key fingerprint; never key bytes)
+  and the versions of TLS libraries and Go programs with whether each can negotiate
+  X25519MLKEM768; the CBOM host-config scan reads HAProxy, Envoy, the OpenSSL
+  configuration file and `java.security`. A PKCS#12 file holds one key here (a
+  multi-key file is not read), JCEKS is not read, a PKCS#12 key is decoded in memory
+  on the way to its certificates (wiped at once), and BoringSSL, LibreSSL, GnuTLS, NSS
+  and Java providers are not rated. Keystore and library findings are discovery
+  findings, not yet CBOM assets.
 - Access reviews that act (Q1): a revoke decision runs the credential's own
   revoke once (PAM sessions, API tokens, machine sessions, dynamic-secret leases)
   and the item closes only when the credential reads revoked; certificates and

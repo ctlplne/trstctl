@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 
 // Package hostsource is a CBOM source that reads host TLS configuration files
-// (nginx, Apache, sshd-style) and reports the protocol versions and cipher
-// suites they declare in use — read-only, non-invasive file reads (F52).
+// (nginx, Apache, sshd-style; since X2 also HAProxy, Envoy, the OpenSSL
+// configuration file and java.security) and reports the protocol versions and
+// cipher suites they declare in use — read-only, non-invasive file reads (F52).
 package hostsource
 
 import (
@@ -68,6 +69,7 @@ func (s *Source) Scan(_ context.Context) ([]cbom.Finding, error) {
 			continue
 		}
 		out = append(out, parseConfig(path, data)...)
+		out = append(out, parseExtended(path, data)...)
 	}
 	if failures > 0 {
 		return out, &cbom.PartialScanError{Failures: failures, Err: errors.New("one or more CBOM host config selectors could not be read within safety limits")}

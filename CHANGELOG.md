@@ -2,6 +2,12 @@
 
 ### Added
 
+- Keystores and crypto libraries on hosts: `--inventory-keystores` reports each key entry of a Java
+  keystore or PKCS#12 file (alias, key type and size, public-key fingerprint; no key material leaves the
+  host, and a JKS key is never decrypted), and `--inventory-crypto-libraries` / `--inventory-go-binaries`
+  report OpenSSL and Go versions with whether each can negotiate X25519MLKEM768. CBOM host-config scans
+  now read HAProxy, Envoy, the OpenSSL configuration file and `java.security`; a HAProxy file that allows
+  TLS 1.0 raises one weak finding.
 - Access reviews that act: a revoke decision revokes the reviewed PAM session, API token, machine
   session or dynamic-secret lease once (an exact retry replays, a second decision is refused) and the
   item closes only when the credential reads revoked, with that evidence; a keep decision renews the

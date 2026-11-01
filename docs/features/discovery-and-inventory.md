@@ -443,6 +443,27 @@ fingerprint derived from the public key. Encrypted keys are located and tagged a
 encrypted, but no passphrase is requested and no private bytes ever reach the control
 plane.
 
+Keystores get the same treatment (X2). `--inventory-keystores` names Java keystores
+(JKS) and PKCS#12 files, directories or globs; a directory walk reads `.jks`, `.keystore`,
+`.ks`, `.p12` and `.pfx` files. Each key entry is reported as private-key metadata: the
+alias, the key type and size, the public-key fingerprint (the same basis as a key file,
+so one key found in both places correlates) and the chain length, all read from the
+entry's certificate. A JKS key is never decrypted: JKS keeps certificate chains in the
+clear, so its entries are listed even without the store password and marked
+`integrity_verified=false` until a password from `--inventory-keystore-password-file`
+(one per line, tried before the published default `changeit`) matches. A PKCS#12 file
+decodes its key with its password on the way to the certificates; the agent wipes it at
+once, and a file no password opens is reported `locked`, with nothing listed.
+
+`--inventory-crypto-libraries` names TLS libraries (`libssl`, `libcrypto`) and
+`--inventory-go-binaries` names Go programs. The agent reads each version from the file
+itself (the library's version string, the binary's build information; nothing is
+executed or loaded) and says whether that version can negotiate the X25519MLKEM768
+hybrid key exchange: OpenSSL 3.5 and later and Go 1.24 and later can (unless built with
+`tlsmlkem=0`), OpenSSL before 3.5 and Go before 1.24 cannot, and BoringSSL and LibreSSL
+read `unknown`, because their version does not settle it. A loaded OpenSSL provider that
+adds ML-KEM to an older OpenSSL is not checked.
+
 ### SSH credential discovery (F42) — keys and standing access
 
 SSH is where forgotten access hides. trstctl inventories SSH credentials two ways: a

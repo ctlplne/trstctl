@@ -51,13 +51,15 @@ type agentDiscoveryCapabilityResponse struct {
 // of kinds actually advertised comes from discovery.ShippedSourceKinds, not from
 // here, so a label cannot resurrect a capability the agent binary does not have.
 var agentDiscoveryCapabilityLabels = map[string]string{
-	"filesystem":    "Filesystem certificates",
-	"pkcs11":        "PKCS#11 token certificates",
-	"windows-store": "Windows certificate store",
-	"k8s-secret":    "Kubernetes TLS Secrets",
-	"trust-store":   "OS, Java, NSS, and browser trust stores",
-	"private-key":   "Private-key material locations", // #nosec G101 -- source-kind label naming where key material was located; no credential value present (CWE-798)
-	"ssh":           "SSH keys, authorized access, known hosts, and trusted CAs",
+	"filesystem":     "Filesystem certificates",
+	"pkcs11":         "PKCS#11 token certificates",
+	"windows-store":  "Windows certificate store",
+	"k8s-secret":     "Kubernetes TLS Secrets",
+	"trust-store":    "OS, Java, NSS, and browser trust stores",
+	"private-key":    "Private-key material locations", // #nosec G101 -- source-kind label naming where key material was located; no credential value present (CWE-798)
+	"ssh":            "SSH keys, authorized access, known hosts, and trusted CAs",
+	"keystore":       "Java keystore and PKCS#12 key entries",
+	"crypto-library": "TLS libraries and Go programs, with their post-quantum key exchange",
 }
 
 // agentDiscoveryCapabilities advertises exactly the source kinds the shipped

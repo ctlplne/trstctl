@@ -1453,6 +1453,10 @@ preserved exactly; `action` is one of `rotate`, `revoke`, or `zeroize`.
 but reports only metadata: path, key format, algorithm, file-mode status, and a
 public-key-derived fingerprint when one can be computed. The agent wipes file buffers
 after inspection and never sends PEM/DER key bytes to the control plane.
+`--inventory-keystores` (with `--inventory-keystore-password-file`) does the same for
+the key entries of Java keystores and PKCS#12 files, and `--inventory-crypto-libraries`
+and `--inventory-go-binaries` report TLS library and Go program versions with whether
+each can negotiate X25519MLKEM768.
 
 Path parameters are positional; list filters (`--limit`, `--cursor`, `--sort`,
 …) are flags; request bodies come from `-f <file>` or `-f -` (stdin).

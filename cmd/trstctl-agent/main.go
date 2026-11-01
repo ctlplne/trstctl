@@ -894,6 +894,7 @@ func runAgentUntilRotation(ctx context.Context, o agentOptions) error {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: private-key inventory report failed:", err)
 		}
 	}
+	reportHostCryptoInventory(ctx, a, ch) // X2: keystores, TLS libraries, Go programs
 	if hasSSHInventory(o.inventorySSH) {
 		if err := reportSSHInventory(ctx, a, ch, o.inventorySSH); err != nil {
 			fmt.Fprintln(os.Stderr, "trstctl-agent: SSH inventory report failed:", err)

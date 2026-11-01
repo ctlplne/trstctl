@@ -240,7 +240,10 @@ withheld until the operator can refresh a trustworthy view.
 ### The CBOM — cryptographic bill of materials (F52)
 
 You can't plan a crypto migration without knowing what crypto you run. The CBOM scanner
-inventories cryptographic usage across TLS endpoints and host config files, then
+inventories cryptographic usage across TLS endpoints and host config files (nginx,
+Apache and sshd directives; HAProxy, Envoy, the OpenSSL configuration file and
+`java.security` since X2, each reporting the lowest protocol a statement explicitly
+allows, never a product default), then
 classifies each observation: algorithm family and strength, whether it's
 [quantum-vulnerable](../glossary.md), and whether it meets policy (default floor:
 RSA-2048, EC-256, TLS 1.2; bans 3DES/DES/RC4/NULL/EXPORT/MD5/anon). Findings become

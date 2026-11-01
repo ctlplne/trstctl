@@ -85,6 +85,18 @@ func ShippedSourceKinds() []ShippedSourceKind {
 			Flags:       []string{"--inventory-private-key-roots"},
 		},
 		{
+			// X2: key entries of Java keystores and PKCS#12 files, metadata only.
+			Kind:        SourceKeystore,
+			Constructor: "NewKeystoreSource",
+			Flags:       []string{"--inventory-keystores", "--inventory-keystore-password-file"},
+		},
+		{
+			// X2: TLS library and Go program versions with their X25519MLKEM768 answer.
+			Kind:        SourceCryptoLibrary,
+			Constructor: "NewCryptoLibrarySource",
+			Flags:       []string{"--inventory-crypto-libraries", "--inventory-go-binaries"},
+		},
+		{
 			// SSH inventory is collected by the sibling sshdiscovery package
 			// rather than a Source in this one; the kind is what the served
 			// surface advertises, so it belongs on this list either way.
