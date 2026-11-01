@@ -548,6 +548,13 @@ func componentSchemas() map[string]*Schema {
 		"ceremony_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "spec")
 	oauthProviderActionReq := object(map[string]*Schema{"reason": str()})
+	findingAnnotationReq := object(map[string]*Schema{"reason": str()})
+	findingAnnotationResult := object(map[string]*Schema{
+		"request_id": uuid(), "finding_id": uuid(),
+		"provider": {Type: "string", Enum: []string{"slack", "jira", "github", "gitlab", "registry"}},
+		"object":   {Type: "object", AdditionalProperties: str()},
+		"status":   {Type: "string", Enum: []string{"queued"}},
+	}, "request_id", "finding_id", "provider", "object", "status")
 	oauthProviderActionResult := object(map[string]*Schema{
 		"request_id": uuid(), "finding_id": uuid(),
 		"action":   {Type: "string", Enum: []string{"revoke_grant", "block_app"}},
@@ -7399,6 +7406,13 @@ func componentSchemas() map[string]*Schema {
 		"source": str(), "artifact_path": str(), "artifact_kind": str(), "event": str(), "credential_ref": str(),
 		"signature_path": str(), "signer_public_key_pem": str(), "require_signature": {Type: "boolean"},
 		"delete_artifact_after_scan": {Type: "boolean"},
+		"annotation": object(map[string]*Schema{
+			"system":   {Type: "string", Enum: []string{"github", "gitlab"}, Description: "CI logs only: where the run's commit lives."},
+			"base_url": str(), "token_ref": str(), "username_ref": str(),
+			"allow_private_endpoint": {Type: "boolean"}, "private_egress_cidrs": {Type: "array", Items: str()},
+			"repo": str(), "commit_sha": str(), "repository": str(), "digest": str(),
+			"auto": {Type: "boolean", Description: "Annotate each new finding without an operator."},
+		}, "base_url", "token_ref"),
 	}, "source", "artifact_path")
 	thirdPartySecretScanReceipt := object(map[string]*Schema{
 		"capability": str(), "provider": str(), "source": str(), "source_id": uuid(),
@@ -8566,6 +8580,8 @@ func componentSchemas() map[string]*Schema {
 		"DistrustedRootRemovalRequest":          distrustedRootRemovalReq,
 		"OAuthProviderActionRequest":            oauthProviderActionReq,
 		"OAuthProviderActionResult":             oauthProviderActionResult,
+		"FindingAnnotationRequest":              findingAnnotationReq,
+		"FindingAnnotationResult":               findingAnnotationResult,
 		"CAImportExistingRequest":               caImportExistingReq,
 		"CAPrepareExistingImportCSRRequest":     caPrepareExistingImportCSRReq,
 		"CAExistingImportCSR":                   caExistingImportCSR,

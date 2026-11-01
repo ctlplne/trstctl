@@ -24,15 +24,21 @@ type DiscoveryFindingProviderAction struct {
 	Provider  string
 	Detail    string
 	RequestID string
-	At        time.Time
+	// ProviderRef is the provider's reference for the effect (A174).
+	ProviderRef string
+	At          time.Time
 }
 
 // ApplyDiscoveryFindingProviderActionTx projects one provider action step.
 func (s *Store) ApplyDiscoveryFindingProviderActionTx(ctx context.Context, tx pgx.Tx, a DiscoveryFindingProviderAction) error {
-	state, err := json.Marshal(map[string]any{
+	fields := map[string]any{
 		"status": a.Status, "provider": a.Provider, "detail": a.Detail,
 		"request_id": a.RequestID, "updated_at": a.At.UTC().Format(time.RFC3339Nano),
-	})
+	}
+	if a.ProviderRef != "" {
+		fields["provider_ref"] = a.ProviderRef
+	}
+	state, err := json.Marshal(fields)
 	if err != nil {
 		return err
 	}

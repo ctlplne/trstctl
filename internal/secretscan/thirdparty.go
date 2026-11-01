@@ -52,6 +52,9 @@ type ThirdPartyScanConfig struct {
 	// is terminal, so an export containing live secrets does not outlive the
 	// scan that redacted it. Only a single regular file is removed.
 	DeleteArtifactAfterScan bool `json:"delete_artifact_after_scan,omitempty"`
+	// Annotation writes findings back at the provider (A174); see
+	// AnnotationConfig.
+	Annotation *AnnotationConfig `json:"annotation,omitempty"`
 }
 
 // ArtifactSignatureEvidence is what a verified provider signature contributes

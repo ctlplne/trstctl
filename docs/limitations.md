@@ -4656,8 +4656,19 @@ than sending an operator looking for a credential that was never there.
   scan is terminal (one regular file; directory exports stay), and the privacy
   retention worker deletes redacted third-party findings older than
   `TRSTCTL_PRIVACY_RETENTION_THIRD_PARTY_SCANS` (default 90 days) while the run
-  record stays. Native provider API polling and provider-native annotations
-  remain architecture shortfalls.
+  record stays. Provider-native annotations are served (A174): an ingest may
+  name an `annotation` connection (`base_url`, `token_ref`, optional
+  `username_ref` for Jira basic authentication, private-endpoint fields; for
+  a CI log the `system` (github or gitlab), `repo` and `commit_sha`; for an
+  image the `repository` and `digest`). Each finding records the provider
+  object it sat in (a Slack export's channel and message, a Jira export's
+  issue, the CI commit, the image), and `POST
+  /api/v1/discovery/findings/{id}/annotate` (or `auto: true`) writes one
+  note there through a control-plane outbox row: a reply in the Slack
+  thread, a comment on the Jira issue, a failed commit status at GitHub or
+  GitLab, or an OCI referrer on the image. The note names the rule and the
+  finding and never the secret; the finding records what the provider
+  confirmed. Native provider API polling remains a shortfall (P14).
 - React console scale work: cursor-aware inventory pages consume `next_cursor`
   and accumulate additional pages on explicit operator action. Every
   DataGrid-backed large table switches to a bounded, overscanned DOM window

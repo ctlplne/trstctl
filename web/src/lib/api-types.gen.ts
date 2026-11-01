@@ -4958,6 +4958,18 @@ export interface FIPSStatus {
   validated_module_path?: boolean;
 }
 
+export interface FindingAnnotationRequest {
+  reason?: string;
+}
+
+export interface FindingAnnotationResult {
+  finding_id: string;
+  object: Record<string, unknown>;
+  provider: "slack" | "jira" | "github" | "gitlab" | "registry";
+  request_id: string;
+  status: "queued";
+}
+
 export interface FirstIssuanceRetry {
   attempt_grant: number;
   attempts: number;
@@ -10192,6 +10204,7 @@ export interface TenantWriteFence {
 }
 
 export interface ThirdPartySecretScanIngestRequest {
+  annotation?: { allow_private_endpoint?: boolean; auto?: boolean; base_url: string; commit_sha?: string; digest?: string; private_egress_cidrs?: string[]; repo?: string; repository?: string; system?: "github" | "gitlab"; token_ref: string; username_ref?: string };
   artifact_kind?: string;
   artifact_path: string;
   credential_ref?: string;

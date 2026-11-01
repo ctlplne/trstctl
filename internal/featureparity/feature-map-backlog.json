@@ -375,6 +375,7 @@
                 "removeDistrustedRoot",
                 "revokeOAuthGrantAtProvider",
                 "blockOAuthAppAtProvider",
+                "annotateFindingAtProvider",
                 "getADCSPosture",
                 "getADCSTemplateDrift",
                 "getDiscoveryCoverage",
@@ -434,7 +435,8 @@
                 "posture adcs modernize-preview",
                 "posture adcs modernize",
                 "discovery findings revoke-oauth-grant",
-                "discovery findings block-oauth-app"
+                "discovery findings block-oauth-app",
+                "discovery findings annotate"
             ],
             "cli_na": "",
             "facet_evidence": {

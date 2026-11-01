@@ -122,6 +122,8 @@ type thirdPartySecretScanIngestRequest struct {
 	// DeleteArtifactAfterScan (A12) removes the artifact file once the scan is
 	// terminal; the run records the removal.
 	DeleteArtifactAfterScan bool `json:"delete_artifact_after_scan,omitempty"`
+	// Annotation (A174) writes findings back at the provider.
+	Annotation *secretscan.AnnotationConfig `json:"annotation,omitempty"`
 }
 
 type thirdPartySecretScanReceipt struct {
@@ -522,6 +524,9 @@ func (a *API) ingestThirdPartySecretScan(w http.ResponseWriter, r *http.Request)
 		if err != nil {
 			return 0, nil, err
 		}
+		if err := a.requireAnnotationAllowed(ctx, tenantID, cfg.Annotation); err != nil {
+			return 0, nil, err
+		}
 		body, err := json.Marshal(cfg)
 		if err != nil {
 			return 0, nil, err
@@ -854,6 +859,9 @@ func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestR
 			return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, "signer_public_key_pem must be a PEM PUBLIC KEY")
 		}
 	}
+	if err := secretscan.ValidateAnnotation(provider, req.Annotation); err != nil {
+		return secretscan.ThirdPartyScanConfig{}, errStatus(http.StatusBadRequest, err.Error())
+	}
 	return secretscan.ThirdPartyScanConfig{
 		Provider:                provider,
 		Source:                  source,
@@ -865,6 +873,7 @@ func thirdPartySecretScanConfig(provider string, req thirdPartySecretScanIngestR
 		SignerPublicKeyPEM:      signerKey,
 		RequireSignature:        req.RequireSignature,
 		DeleteArtifactAfterScan: req.DeleteArtifactAfterScan,
+		Annotation:              req.Annotation,
 	}, nil
 }
 

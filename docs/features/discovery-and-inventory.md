@@ -567,6 +567,25 @@ Okta app or disables the Entra service principal. Google Workspace grants can be
 revoked; its apps are blocked in its own admin console. The finding then shows what
 the provider confirmed.
 
+### Annotate a leaked credential where it was seen
+
+A third-party secret scan (CI logs, container images, Slack and Jira exports) can write
+each finding back at the provider (A174). Ingest the export with an `annotation`
+connection:
+
+```json
+"annotation": {"base_url": "https://slack.com", "token_ref": "env:SLACK_BOT_TOKEN"}
+```
+
+For a CI log add `system` (`github` or `gitlab`), `repo` and `commit_sha`; for an image,
+`repository` and `digest`; Jira may add `username_ref` for basic authentication. Each
+finding then records where it sat (the Slack channel and message, the Jira issue, the
+commit, the image), and **Annotate at provider** on the finding (or `trstctl-cli
+discovery findings annotate ID`, or `auto: true` on the ingest) writes one note there: a
+reply in the Slack thread, a comment on the Jira issue, a failed commit status, or an
+OCI referrer on the image. The note names the rule and the finding, never the secret,
+and the finding shows what the provider confirmed.
+
 ### Cloud secret managers
 
 A `cloud_secret` or `secret_store` source lists the secrets an authorized principal can

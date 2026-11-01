@@ -6852,6 +6852,26 @@ FIPSStatus = TypedDict(
     total=False,
 )
 
+FindingAnnotationRequest = TypedDict(
+    'FindingAnnotationRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+FindingAnnotationResult = TypedDict(
+    'FindingAnnotationResult',
+    {
+        'finding_id': str,
+        'object': dict[str, Any],
+        'provider': str,
+        'request_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
 FirstIssuanceRetry = TypedDict(
     'FirstIssuanceRetry',
     {
@@ -14068,6 +14088,7 @@ TenantWriteFence = TypedDict(
 ThirdPartySecretScanIngestRequest = TypedDict(
     'ThirdPartySecretScanIngestRequest',
     {
+        'annotation': dict[str, Any],
         'artifact_kind': str,
         'artifact_path': str,
         'credential_ref': str,

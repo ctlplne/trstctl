@@ -413,6 +413,8 @@ import type {
   NHIAttackPathResult,
   OAuthProviderActionRequest,
   OAuthProviderActionResult,
+  FindingAnnotationRequest,
+  FindingAnnotationResult,
   NHIExposureAttackPath,
   NHIPostureAutomation,
   NHIInventory,
@@ -1335,6 +1337,8 @@ export type {
   NHIAttackPathResult,
   OAuthProviderActionRequest,
   OAuthProviderActionResult,
+  FindingAnnotationRequest,
+  FindingAnnotationResult,
   NHIExposureAttackPath,
   NHIPostureAutomation,
   NHIInventory,
@@ -2180,6 +2184,7 @@ export interface Api {
   resolveDiscoveryFinding(id: string, input: DiscoveryFindingResolutionRequest): Promise<DiscoveryFinding>;
   removeDistrustedRoot(id: string, input: DistrustedRootRemovalRequest): Promise<ConnectorDelivery>;
   revokeOAuthGrantAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
+  annotateFindingAtProvider(id: string, input: FindingAnnotationRequest): Promise<FindingAnnotationResult>;
   blockOAuthAppAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
@@ -2991,6 +2996,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   dismissDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/dismiss`, input),
   resolveDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/resolution`, input),
   removeDistrustedRoot: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/remove-distrusted-root`, input),
+  annotateFindingAtProvider: (id, input) => mutate<FindingAnnotationResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/annotate`, input),
   revokeOAuthGrantAtProvider: (id, input) =>
     mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/revoke`, input),
   blockOAuthAppAtProvider: (id, input) =>

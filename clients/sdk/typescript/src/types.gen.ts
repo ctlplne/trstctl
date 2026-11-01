@@ -3000,6 +3000,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discovery/findings/{id}/annotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write a leaked-secret finding back at the provider where the credential was seen */
+        post: operations["annotateFindingAtProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discovery/findings/{id}/claim": {
         parameters: {
             query?: never;
@@ -14652,6 +14669,22 @@ export interface components {
             standard?: string;
             validated_module_path?: boolean;
         };
+        FindingAnnotationRequest: {
+            reason?: string;
+        };
+        FindingAnnotationResult: {
+            /** Format: uuid */
+            finding_id: string;
+            object: {
+                [key: string]: string;
+            };
+            /** @enum {string} */
+            provider: "slack" | "jira" | "github" | "gitlab" | "registry";
+            /** Format: uuid */
+            request_id: string;
+            /** @enum {string} */
+            status: "queued";
+        };
         /** @description One audited additional attempt for the original failed ca.issue command. Attempts is its cumulative count before this grant, which always permits one additional claim. The original command, issuer binding and idempotency key are preserved. Retained source replay never refunds a consumed grant. Historical requests without a recorded certificate or recoverable signing operation require issuer reconciliation. */
         FirstIssuanceRetry: {
             attempt_grant: number;
@@ -20489,6 +20522,24 @@ export interface components {
             scope: string;
         };
         ThirdPartySecretScanIngestRequest: {
+            annotation?: {
+                allow_private_endpoint?: boolean;
+                /** @description Annotate each new finding without an operator. */
+                auto?: boolean;
+                base_url: string;
+                commit_sha?: string;
+                digest?: string;
+                private_egress_cidrs?: string[];
+                repo?: string;
+                repository?: string;
+                /**
+                 * @description CI logs only: where the run's commit lives.
+                 * @enum {string}
+                 */
+                system?: "github" | "gitlab";
+                token_ref: string;
+                username_ref?: string;
+            };
             artifact_kind?: string;
             artifact_path: string;
             credential_ref?: string;
@@ -29497,6 +29548,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoveryFindingList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    annotateFindingAtProvider: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FindingAnnotationRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingAnnotationResult"];
                 };
             };
             /** @description client error */

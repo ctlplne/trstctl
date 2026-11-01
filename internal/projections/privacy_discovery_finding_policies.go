@@ -51,6 +51,6 @@ func discoveryProviderActionPrivacyPolicy() events.PrivacyEventPolicy {
 	return privacyRules(
 		privacyRule("/finding_id", opaque), privacyRule("/action", opaque), privacyRule("/status", opaque),
 		privacyRule("/provider", opaque), privacyRule("/detail", clear), privacyRule("/request_id", opaque),
-		privacyRule("/reason", clear), privacyRule("/actor", exact),
+		privacyRule("/reason", clear), privacyRule("/actor", exact), privacyRule("/provider_ref", opaque),
 	)
 }

@@ -486,6 +486,8 @@ public final class OpenApiSchemas {
       "FIPSNonFIPSFence",
       "FIPSRegulatedDeploymentProfile",
       "FIPSStatus",
+      "FindingAnnotationRequest",
+      "FindingAnnotationResult",
       "FirstIssuanceRetry",
       "FirstIssuanceRetryRequest",
       "FleetReissuanceActionRequest",

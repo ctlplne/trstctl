@@ -2,6 +2,10 @@
 
 ### Added
 
+- Annotate a leaked credential where it was seen: a third-party scan finding from a Slack export,
+  a Jira export, a CI log or a container image can be written back as a thread reply, an issue
+  comment, a commit status at GitHub or GitLab, or an OCI referrer on the image, by an operator or
+  automatically, naming the rule and the finding and never the secret.
 - Secret-store discovery beyond the cloud secret managers: GitHub Actions secrets (repository,
   environment and organization; metadata only), GitLab CI/CD variables, 1Password Connect items and
   Doppler secrets, with the same optional content inspection for certificates and credentials.

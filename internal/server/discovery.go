@@ -1461,7 +1461,7 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 		if ref == "" {
 			ref = f.RuleID + "@" + f.File
 		}
-		meta, err := json.Marshal(map[string]any{
+		fields := map[string]any{
 			"capability":         "CAP-SCAN-04",
 			"scanner":            report.Scanner,
 			"engine_version":     report.EngineVersion,
@@ -1476,11 +1476,16 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 			"line":               f.Line,
 			"signature_verified": signature.Verified,
 			"signer_key_sha256":  signature.SignerKeySHA256,
-		})
+		}
+		object := thirdPartyFindingObject(cfg, target.Path, f)
+		if object != nil {
+			fields["provider_object"], fields["annotation_provider"] = object, cfg.AnnotationProvider()
+		}
+		meta, err := json.Marshal(fields)
 		if err != nil {
 			return rep, "", "", err
 		}
-		if _, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
+		recorded, err := d.orch.RecordDiscoveryFinding(ctx, tenantID, store.DiscoveryFinding{
 			RunID:       run.ID,
 			SourceID:    src.ID,
 			Kind:        "leaked_secret",
@@ -1489,7 +1494,11 @@ func (d *issuanceDispatcher) executeThirdPartySecretDiscoveryRun(ctx context.Con
 			Fingerprint: firstNonEmpty(f.Fingerprint, ref),
 			RiskScore:   95,
 			Metadata:    json.RawMessage(meta),
-		}); err != nil {
+		})
+		if err != nil {
+			return rep, "", "", err
+		}
+		if err := d.autoAnnotate(ctx, tenantID, cfg, recorded, f.RuleID, object); err != nil {
 			return rep, "", "", err
 		}
 		rep.Discovered++

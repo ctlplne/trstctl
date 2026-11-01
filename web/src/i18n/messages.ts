@@ -13695,6 +13695,29 @@ export const messages = {
     defaultMessage: "Choose a host agent",
     description: "Empty migration agent option.",
   },
+  "discovery.findings.annotation.heading": {
+    defaultMessage: "Tell the people where it leaked",
+    description: "Heading of the finding section that writes a leaked credential back at the provider where it was seen.",
+  },
+  "discovery.findings.annotation.where": {
+    defaultMessage: "At {provider}: {place}",
+    description: "Where at the provider the credential was seen: a channel and message, an issue, a commit or an image.",
+  },
+  "discovery.findings.annotation.state": {
+    defaultMessage: "Annotation: {status}. {detail}",
+    description: "Status of the annotation at the provider: queued, confirmed, already present or failed, with the provider's detail.",
+  },
+  "discovery.findings.annotation.annotate": { defaultMessage: "Annotate at {provider}", description: "Button that writes the finding back at the provider." },
+  "discovery.findings.annotation.unavailable": {
+    defaultMessage:
+      "This scan has no annotation connection, or trstctl could not tell where at the provider the credential was seen. Ingest the export with an annotation connection to write findings back.",
+    description: "Why a third-party finding cannot be annotated.",
+  },
+  "discovery.findings.annotation.queued": {
+    defaultMessage: "Annotation queued at {provider} (request {request}).",
+    description: "Notice after an annotation is queued.",
+  },
+  "discovery.findings.annotation.error": { defaultMessage: "The annotation could not be queued.", description: "Notice when queuing an annotation fails." },
   "discovery.findings.oauthProvider.heading": {
     defaultMessage: "Act at {provider}",
     description: "Heading of the OAuth grant finding section that revokes the grant or blocks the app at the provider.",

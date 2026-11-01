@@ -2837,6 +2837,9 @@ type DiscoveryFindingProviderAction struct {
 	RequestID string `json:"request_id"`
 	Reason    string `json:"reason,omitempty"`
 	Actor     string `json:"actor,omitempty"`
+	// ProviderRef is the provider's own reference for what it did: a Slack
+	// reply's ts, a Jira comment, a commit status, a referrer digest (A174).
+	ProviderRef string `json:"provider_ref,omitempty"`
 }
 
 // DiscoveryFindingTriageChanged is the payload of discovery.finding.triage_changed.
@@ -6708,7 +6711,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyDiscoveryFindingProviderActionTx(ctx, tx, store.DiscoveryFindingProviderAction{
 			TenantID: e.TenantID, FindingID: pl.FindingID, Action: pl.Action, Status: pl.Status,
-			Provider: pl.Provider, Detail: pl.Detail, RequestID: pl.RequestID, At: e.Time,
+			Provider: pl.Provider, Detail: pl.Detail, RequestID: pl.RequestID, ProviderRef: pl.ProviderRef, At: e.Time,
 		})
 	case EventDiscoveryFindingTriageChanged:
 		var pl DiscoveryFindingTriageChanged

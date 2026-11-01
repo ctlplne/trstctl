@@ -21173,6 +21173,56 @@
         ],
         "type": "object"
       },
+      "FindingAnnotationRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "FindingAnnotationResult": {
+        "properties": {
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "object": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "provider": {
+            "enum": [
+              "slack",
+              "jira",
+              "github",
+              "gitlab",
+              "registry"
+            ],
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "finding_id",
+          "provider",
+          "object",
+          "status"
+        ],
+        "type": "object"
+      },
       "FirstIssuanceRetry": {
         "description": "One audited additional attempt for the original failed ca.issue command. Attempts is its cumulative count before this grant, which always permits one additional claim. The original command, issuer binding and idempotency key are preserved. Retained source replay never refunds a consumed grant. Historical requests without a recorded certificate or recoverable signing operation require issuer reconciliation.",
         "properties": {
@@ -42819,6 +42869,57 @@
       },
       "ThirdPartySecretScanIngestRequest": {
         "properties": {
+          "annotation": {
+            "properties": {
+              "allow_private_endpoint": {
+                "type": "boolean"
+              },
+              "auto": {
+                "description": "Annotate each new finding without an operator.",
+                "type": "boolean"
+              },
+              "base_url": {
+                "type": "string"
+              },
+              "commit_sha": {
+                "type": "string"
+              },
+              "digest": {
+                "type": "string"
+              },
+              "private_egress_cidrs": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "repo": {
+                "type": "string"
+              },
+              "repository": {
+                "type": "string"
+              },
+              "system": {
+                "description": "CI logs only: where the run's commit lives.",
+                "enum": [
+                  "github",
+                  "gitlab"
+                ],
+                "type": "string"
+              },
+              "token_ref": {
+                "type": "string"
+              },
+              "username_ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "base_url",
+              "token_ref"
+            ],
+            "type": "object"
+          },
           "artifact_kind": {
             "type": "string"
           },
@@ -57551,6 +57652,82 @@
         ],
         "summary": "List discovery findings",
         "x-trstctl-permission": "discovery:read"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/annotate": {
+      "post": {
+        "operationId": "annotateFindingAtProvider",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindingAnnotationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingAnnotationResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Write a leaked-secret finding back at the provider where the credential was seen",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/discovery/findings/{id}/claim": {

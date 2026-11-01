@@ -11,6 +11,7 @@ import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressC
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
 import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
+import { FindingAnnotation } from "./discovery/FindingAnnotation";
 import { CoverageCandidatesPanel } from "./discovery/CoverageCandidatesPanel";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
 import { RunTable } from "./discovery/DiscoveryRunTableParts";
@@ -2244,6 +2245,19 @@ function FindingTable({
     }
   }
 
+  async function annotateAtProvider(finding: DiscoveryFinding) {
+    setActionBusy(true);
+    onNotice(null);
+    try {
+      const queued = await api.annotateFindingAtProvider(finding.id, {});
+      onNotice({ kind: "success", message: t("discovery.findings.annotation.queued", { provider: queued.provider, request: queued.request_id }) });
+    } catch (err) {
+      onNotice(noticeForError(err, t("discovery.findings.annotation.error")));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   async function actAtOAuthProvider(finding: DiscoveryFinding, action: OAuthProviderAction) {
     setActionBusy(true);
     onNotice(null);
@@ -2495,6 +2509,7 @@ function FindingTable({
           </div>
 
           <OAuthGrantProviderActions finding={selected} busy={actionBusy} onAction={(action) => actAtOAuthProvider(selected, action)} />
+          <FindingAnnotation finding={selected} busy={actionBusy} onAnnotate={() => annotateAtProvider(selected)} />
 
           {(() => {
             const removal = distrustedRootRemoval(selected);
