@@ -17,6 +17,7 @@ import (
 	"trstctl.com/trstctl/internal/cbom/tlssource"
 	"trstctl.com/trstctl/internal/crypto/tlsprobe"
 	"trstctl.com/trstctl/internal/events"
+	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -25,10 +26,12 @@ type cbomService struct {
 	nativeTLSExecutable string
 	store               *store.Store
 	log                 *events.Log
+	// orch records CBOM imports as discovery runs (X6).
+	orch *orchestrator.Orchestrator
 }
 
 func (s *Server) buildCBOMService(d Deps) api.CBOMService {
-	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL}
+	return &cbomService{store: d.Store, log: d.Log, nativeTLSExecutable: d.CBOMTLSProbeOpenSSL, orch: s.orch}
 }
 
 const (
@@ -261,14 +264,7 @@ func (s *eventedCBOMSink) Record(ctx context.Context, f cbom.Finding) error {
 	if s.log == nil || s.store == nil {
 		return errors.New("server: CBOM sink requires store and event log")
 	}
-	asset := store.CryptoAsset{
-		TenantID: s.tenantID, Kind: string(f.Kind), Location: f.Location, CertificateFingerprint: f.CertificateFingerprint,
-		Algorithm: f.Algorithm, KeyBits: f.KeyBits, Protocol: f.Protocol,
-		Cipher: f.Cipher, Library: f.Library, Strength: string(f.Class.Strength),
-		QuantumVulnerable: f.Class.QuantumVulnerable, OutOfPolicy: f.Class.OutOfPolicy,
-		Reasons: f.Class.Reasons,
-	}
-	asset.ID = store.StableCryptoAssetID(asset.TenantID, asset.Signature())
+	asset := cbomAssetFor(s.tenantID, f)
 	payload := projections.CBOMAssetObserved{
 		ID: asset.ID, Kind: asset.Kind, Location: asset.Location, Algorithm: asset.Algorithm, CertificateFingerprint: asset.CertificateFingerprint,
 		KeyBits: asset.KeyBits, Protocol: asset.Protocol, Cipher: asset.Cipher,

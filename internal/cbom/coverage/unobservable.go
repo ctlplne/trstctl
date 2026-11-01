@@ -14,17 +14,15 @@ type UnobservableClass struct {
 }
 
 // StructurallyUnobservable enumerates the classes outside every served
-// envelope. Sources: the standing non-goals (no firmware scanner, no SAST), the
-// two in-tree blind-spot admissions
+// envelope. Sources: the standing non-goal (no firmware scanner), the two
+// in-tree blind-spot admissions
 // (internal/discovery/cloudcert, internal/discovery/serviceaccount), and the
 // unbuilt workstreams of the CBOM coverage card (vendor CBOM ingest,
 // data-at-rest posture, dormant KMIP enumeration).
 func StructurallyUnobservable() []UnobservableClass {
 	return []UnobservableClass{
 		{Class: "firmware-embedded-crypto",
-			Reason: "no source inspects device firmware; vendor-published CBOM ingest is not built, and a firmware scanner is a standing non-goal"},
-		{Class: "vendor-embedded-crypto",
-			Reason: "cryptography inside third-party appliances and products is invisible to every served source; vendor CBOM ingest (WS-3) is not built"},
+			Reason: "no source inspects device firmware, and a firmware scanner is a standing non-goal; a vendor's published CBOM for it imports as vendor-embedded-crypto"},
 		{Class: "data-at-rest-posture",
 			Reason: "volume, database, and KMS at-rest encryption state is invisible to network or API observation; the agent posture source (WS-4) is not built"},
 		{Class: "unroutable-segment",

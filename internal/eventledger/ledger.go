@@ -238,6 +238,7 @@ var ledger = []FeatureEvent{
 	{"F2", "Network discovery", "triage_finding", "claimDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F2", "Network discovery", "dismiss_finding", "dismissDiscoveryFinding", []string{EventDiscoveryFindingTriageChanged}},
 	{"F52", "Cryptographic Bill of Materials", "scan", "startCBOMScan", []string{EventCBOMAssetObserved, EventCBOMSourceReconciled}},
+	{"F52", "Cryptographic Bill of Materials", "import", "importCBOM", []string{EventDiscoverySourceUpserted, EventDiscoveryRunQueued, EventCBOMAssetObserved}},
 	{"F52", "Cryptographic Bill of Materials", "start_campaign", "startPQCMigrationCampaign", []string{EventPQCMigrationCampaignStarted}},
 	{"F52", "Cryptographic Bill of Materials", "update_campaign", "updatePQCMigrationCampaign", []string{EventPQCMigrationCampaignUpdated}},
 	{"F52", "Cryptographic Bill of Materials", "record_readiness", "setPQCMigrationCampaignReadiness", []string{EventPQCMigrationCampaignUpdated}},

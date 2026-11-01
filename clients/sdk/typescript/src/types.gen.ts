@@ -2108,6 +2108,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cbom/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import a CycloneDX CBOM (a vendor's, a source scan's or an image scan's) into the crypto inventory; the same BOM again changes nothing */
+        post: operations["importCBOM"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cbom/scans": {
         parameters: {
             query?: never;
@@ -11918,6 +11935,22 @@ export interface components {
             signed_bom: string;
             /** @enum {string} */
             spec_version: "1.6";
+        };
+        CBOMImport: {
+            asset_ids: string[];
+            components: number;
+            findings: number;
+            /** @description this BOM was imported before; nothing was written */
+            replayed: boolean;
+            /** Format: uuid */
+            run_id: string;
+            serial_number?: string;
+            source: string;
+            version: number;
+        };
+        /** @description a CycloneDX 1.4-1.6 BOM (bomFormat CycloneDX) with cryptographic-asset components or crypto library components */
+        CBOMImportDocument: {
+            [key: string]: unknown;
         };
         CBOMInventory: {
             items: components["schemas"]["CBOMAsset"][];
@@ -27358,6 +27391,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CBOMCycloneDXExport"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    importCBOM: {
+        parameters: {
+            query?: {
+                /** @description vendor:<name>, source:<repository> or image:<reference> */
+                source?: string;
+            };
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CBOMImportDocument"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBOMImport"];
                 };
             };
             /** @description client error */

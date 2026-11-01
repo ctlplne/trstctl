@@ -229,3 +229,10 @@ func TestReviewedExecAllowlistPinsADCSCertutil(t *testing.T) {
 		t.Fatalf("internal/agent/relay/adcsdatabase.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}
 }
+
+func TestReviewedExecAllowlistPinsCBOMScanImage(t *testing.T) {
+	want := map[string]bool{"runCBOMScanImage": true}
+	if got := reviewedExecUses["internal/cli/cbom_scan.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal/cli/cbom_scan.go reviewed exec allowlist = %#v, want %#v", got, want)
+	}
+}

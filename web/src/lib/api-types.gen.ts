@@ -2488,6 +2488,20 @@ export interface CBOMCycloneDXExport {
   spec_version: "1.6";
 }
 
+export interface CBOMImport {
+  asset_ids: string[];
+  components: number;
+  findings: number;
+  replayed: boolean;
+  run_id: string;
+  serial_number?: string;
+  source: string;
+  version: number;
+}
+
+export interface CBOMImportDocument {
+}
+
 export interface CBOMInventory {
   items: CBOMAsset[];
   migration_progress: CBOMMigrationProgress;

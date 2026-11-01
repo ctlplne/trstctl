@@ -10203,6 +10203,54 @@
         ],
         "type": "object"
       },
+      "CBOMImport": {
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "components": {
+            "type": "integer"
+          },
+          "findings": {
+            "type": "integer"
+          },
+          "replayed": {
+            "description": "this BOM was imported before; nothing was written",
+            "type": "boolean"
+          },
+          "run_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "serial_number": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "source",
+          "version",
+          "components",
+          "findings",
+          "asset_ids",
+          "replayed"
+        ],
+        "type": "object"
+      },
+      "CBOMImportDocument": {
+        "additionalProperties": {},
+        "description": "a CycloneDX 1.4-1.6 BOM (bomFormat CycloneDX) with cryptographic-asset components or crypto library components",
+        "type": "object"
+      },
       "CBOMInventory": {
         "properties": {
           "items": {
@@ -54467,6 +54515,82 @@
         ],
         "summary": "Export the crypto inventory as a signed CycloneDX 1.6 CBOM",
         "x-trstctl-permission": "risk:read"
+      }
+    },
+    "/api/v1/cbom/imports": {
+      "post": {
+        "operationId": "importCBOM",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "vendor:\u003cname\u003e, source:\u003crepository\u003e or image:\u003creference\u003e",
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CBOMImportDocument"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CBOMImport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Import a CycloneDX CBOM (a vendor's, a source scan's or an image scan's) into the crypto inventory; the same BOM again changes nothing",
+        "x-trstctl-permission": "discovery:write"
       }
     },
     "/api/v1/cbom/scans": {

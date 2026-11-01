@@ -6735,6 +6735,15 @@ func componentSchemas() map[string]*Schema {
 		"tls_endpoints": {Type: "array", Items: str()},
 		"host_configs":  {Type: "array", Items: str()},
 	})
+	// X6: a CycloneDX CBOM taken into the inventory.
+	cbomImportDocument := &Schema{Type: "object", Description: "a CycloneDX 1.4-1.6 BOM (bomFormat CycloneDX) with cryptographic-asset components or crypto library components",
+		AdditionalProperties: &Schema{}}
+	cbomImport := object(map[string]*Schema{
+		"run_id": uuid(), "source": str(), "serial_number": str(), "version": {Type: "integer"},
+		"components": {Type: "integer"}, "findings": {Type: "integer"},
+		"asset_ids": {Type: "array", Items: str()},
+		"replayed":  {Type: "boolean", Description: "this BOM was imported before; nothing was written"},
+	}, "run_id", "source", "version", "components", "findings", "asset_ids", "replayed")
 	cbomScanPreview := object(map[string]*Schema{
 		"capability": {Type: "string"}, "ready": {Type: "boolean"}, "effect_free": {Type: "boolean"},
 		"normalized_request": ref("CBOMScanRequest"), "source_count": {Type: "integer"},
@@ -8024,6 +8033,8 @@ func componentSchemas() map[string]*Schema {
 		"CBOMInventory":                         cbomInventory,
 		"CBOMCycloneDXExport":                   cbomCycloneDXExport,
 		"CBOMScan":                              cbomScan,
+		"CBOMImportDocument":                    cbomImportDocument,
+		"CBOMImport":                            cbomImport,
 		"IdentityIssuanceResult":                identityIssuanceResult,
 		"FirstIssuanceRetryRequest":             firstIssuanceRetryRequest,
 		"FirstIssuanceRetry":                    firstIssuanceRetry,

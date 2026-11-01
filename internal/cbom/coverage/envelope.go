@@ -33,6 +33,10 @@ const (
 	// AssetPassiveWireTraffic is what connections' handshakes state on an
 	// interface an observer agent watches (X1).
 	AssetPassiveWireTraffic AssetClass = "passive-wire-traffic" // #nosec G101 -- an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798)
+	// Imported CBOMs (X6): vendors' own, source-code scans and image scans.
+	AssetVendorEmbedded AssetClass = "vendor-embedded-crypto"
+	AssetSourceCode     AssetClass = "source-code-crypto"
+	AssetContainerImage AssetClass = "container-image-crypto"
 )
 
 // Precondition names what must be true of the deployment before a source of a
@@ -51,6 +55,7 @@ const (
 	PrecondRepositoryConfigured Precondition = "repository-configured"
 	PrecondOperatorFindings     Precondition = "operator-supplied-findings"
 	PrecondObserverReporting    Precondition = "observer-agent-reporting"
+	PrecondCBOMImported         Precondition = "cbom-imported"
 )
 
 // DefaultFreshness is the declared window after a completed run inside which
@@ -79,9 +84,22 @@ const ManualKind = "manual"
 // Agents run it, not the server, so it has no server executor.
 const ObserverKind = "network-observer"
 
-// AgentReportedKinds are the envelope kinds agents report rather than the
-// server runs; the registry's weld test exempts them from needing an executor.
-func AgentReportedKinds() map[string]bool { return map[string]bool{ObserverKind: true} }
+// CBOM import kinds (X6): an import's source prefix names what it covers.
+const (
+	ImportVendorKind = "cbom_import_vendor"
+	ImportSourceKind = "cbom_import_source"
+	ImportImageKind  = "cbom_import_image"
+)
+
+// ReportedKinds are the envelope kinds reported to the server — by agents
+// (the observer) or by CBOM imports — rather than run by it; the registry's
+// weld test exempts them from needing an executor.
+func ReportedKinds() map[string]bool {
+	return map[string]bool{ObserverKind: true, ImportVendorKind: true, ImportSourceKind: true, ImportImageKind: true}
+}
+
+// importPrefix is the import source prefix that feeds each import kind.
+var importPrefix = map[string]string{ImportVendorKind: "vendor:", ImportSourceKind: "source:", ImportImageKind: "image:"}
 
 // Envelopes returns the observability envelope for every served discovery
 // source kind, keyed by kind. TestEveryDiscoverySourceDeclaresEnvelope welds
@@ -123,6 +141,12 @@ func Envelopes() map[string]Envelope {
 		// watches: TLS versions, groups and TLS 1.2 certificates, SSH key
 		// exchange, plaintext protocols; never payload (X1).
 		env(ObserverKind, []AssetClass{AssetPassiveWireTraffic}, PrecondObserverReporting),
+		// Imported CycloneDX CBOMs: a vendor's for its product, a source scan
+		// of a repository, an image or directory scan (X6). A vendor CBOM stays
+		// current for a release, so its window is longer.
+		{Kind: ImportVendorKind, Observes: []AssetClass{AssetVendorEmbedded}, Preconditions: []Precondition{PrecondCBOMImported}, Freshness: 90 * 24 * time.Hour},
+		env(ImportSourceKind, []AssetClass{AssetSourceCode}, PrecondCBOMImported),
+		env(ImportImageKind, []AssetClass{AssetContainerImage}, PrecondCBOMImported),
 	} {
 		out[e.Kind] = e
 	}

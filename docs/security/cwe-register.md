@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2111 annotated sites across 29 rules. Each row is
+2117 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -189,9 +189,9 @@ not this file.
 | `internal/ca/letsencrypt/acmefake/acmefake.go:30` | fabricated fixture challenge token in a test double; no value is real (CWE-798) |
 | `internal/ca/venafi/venafifake/venafifake.go:25` | test-support package compiled only into test binaries (CWE-798) |
 | `internal/cbom/coverage/envelope.go:35` | an asset-class identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cbom/coverage/envelope.go:46` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
-| `internal/cbom/coverage/envelope.go:49` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cbom/coverage/envelope.go:50` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:53` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
+| `internal/cbom/coverage/envelope.go:54` | precondition identifier matching the credential-name heuristic; no credential value (CWE-798) |
 | `internal/cli/agent_delegation_command_test.go:14` | API route names are public identifiers, not credential values (CWE-798) |
 | `internal/cloudauth/azure.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/cloudauth/gcp.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -1035,7 +1035,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (257 sites)
+### G204 — CWE-78 OS command injection (258 sites)
 
 | Location | Reason |
 |---|---|
@@ -1123,6 +1123,7 @@ not this file.
 | `internal/api/headerauth_guard_test.go:34` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/api/headerauth_guard_test.go:39` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/ca/shellca/shellca.go:120` | the shell-CA backend exists to run the operator's configured signing command (CWE-78) |
+| `internal/cli/cbom_scan.go:91` | the operator names the scanner and its arguments; running it is the command's purpose (CWE-78) |
 | `internal/cli/cli_test.go:2634` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/connector/localops.go:417` | operator-configured local-ops action command; running it is the feature (CWE-78) |
 | `internal/connector/wasm/host/host_test.go:44` | fixed toolchain and package; output confined to the temp dir (CWE-78). |
@@ -1409,7 +1410,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (581 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (584 sites)
 
 | Location | Reason |
 |---|---|
@@ -1648,6 +1649,8 @@ not this file.
 | `internal/ca/shellca/shellca_test.go:161` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cbom/cyclonedx_test.go:104` | the package's own golden test fixture (CWE-22) |
 | `internal/cbom/hostsource/hostsource.go:81` | an authorized, previewed discovery selector; the read is size-bounded below (CWE-22) |
+| `internal/cbom/sourcescan/sourcescan.go:94` | a repository the operator named; reading its files is the product function (CWE-22) |
+| `internal/cbom/sourcescan/sourcescan.go:253` | a repository the operator named; reading its files is the product function (CWE-22) |
 | `internal/cbom/tlssource/tlssource_key_verdict_test.go:19` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/cli/assurance_verify.go:41` | operator-named local file (CWE-22) |
 | `internal/cli/assurance_verify.go:46` | operator-named local file (CWE-22) |
@@ -1656,13 +1659,14 @@ not this file.
 | `internal/cli/ca_key_wrap.go:85` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap.go:100` | operator-named local file (CWE-22) |
 | `internal/cli/ca_key_wrap_test.go:63` | test reads its own fixture/tempdir path (CWE-22) |
+| `internal/cli/cbom_scan_test.go:32` | the test's own temp file (CWE-22) |
 | `internal/cli/cbom_verify.go:109` | operator-named local file (CWE-22) |
 | `internal/cli/cbom_verify_test.go:61` | a file this test wrote under t.TempDir (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:71` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:81` | operator-named local file (CWE-22) |
 | `internal/cli/certificate_key_attestation.go:87` | operator-named local file (CWE-22) |
-| `internal/cli/cli.go:233` | the operator explicitly names the public trust-bundle path (CWE-22) |
-| `internal/cli/cli.go:591` | operator-passed local file argument on their own command line (CWE-22) |
+| `internal/cli/cli.go:247` | the operator explicitly names the public trust-bundle path (CWE-22) |
+| `internal/cli/cli.go:605` | operator-passed local file argument on their own command line (CWE-22) |
 | `internal/cli/cli_test.go:2176` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/cli/doctor/doctor_test.go:98` | test reads its own tempdir receipt (CWE-22) |
 | `internal/cli/doctor/probes_objectstore_test.go:50` | test reads its own tempdir receipt (CWE-22) |
@@ -1995,7 +1999,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (116 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (118 sites)
 
 | Location | Reason |
 |---|---|
@@ -2045,6 +2049,8 @@ not this file.
 | `internal/ca/profilelint/profilelint_test.go:241` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/ca/profilelint/profilelint_test.go:254` | fixture file in a test tempdir; the mode is part of the fixture (CWE-22, CWE-276) |
 | `internal/cbom/hostsource/hostsource_test.go:23` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
+| `internal/cli/cbom_scan_test.go:24` | the stand-in scanner must be executable (CWE-276) |
+| `internal/cli/cbom_scan_test.go:41` | executable stand-in (CWE-276) |
 | `internal/cli/cli_test.go:2664` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/cli/secret_scan_local.go:137` | a git hook must be executable; 0755 is the working minimum (CWE-276) |
 | `internal/connector/localops_test.go:159` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
@@ -2176,7 +2182,7 @@ not this file.
 | `cmd/trstctl-agent/rotation_schedule_test.go:88` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:105` | jitter spread (CWE-338) |
 | `internal/agent/k8s/informer.go:208` | reconnect jitter, not a security decision (CWE-338) |
-| `internal/cli/cli.go:599` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
+| `internal/cli/cli.go:613` | idempotency-key uniqueness suffix; deliberately outside the AN-3 boundary, not a secret (CWE-338) |
 | `internal/crypto/scep_property_test.go:145` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/scep_property_test.go:184` | deterministic property-test stream, not security randomness (CWE-338) |
 | `internal/crypto/sshkeys/property_test.go:100` | deterministic property-test stream, not security randomness (CWE-338) |

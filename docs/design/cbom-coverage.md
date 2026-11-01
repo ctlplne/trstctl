@@ -29,7 +29,7 @@ carries both the specific reason and the action that would close it; a
 `STRUCTURALLY-UNOBSERVABLE` row names the class and states plainly that no served
 source covers it.
 
-## Observability envelopes — 19 served source kinds
+## Observability envelopes — 22 served source kinds
 
 The authoritative catalog is the **served executor set**: the source kinds the
 server can actually run when an operator queues a discovery run
@@ -43,6 +43,9 @@ served set by construction.
 | Source kind | Observes | Preconditions | Freshness |
 |---|---|---|---|
 | `api_key` | `api-key-token` | `connector-credential-configured` | 24h0m0s |
+| `cbom_import_image` | `container-image-crypto` | `cbom-imported` | 24h0m0s |
+| `cbom_import_source` | `source-code-crypto` | `cbom-imported` | 24h0m0s |
+| `cbom_import_vendor` | `vendor-embedded-crypto` | `cbom-imported` | 2160h0m0s |
 | `cloud_certificate` | `cloud-certificate` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_network_path` | `network-path` | `cloud-credential-configured` | 24h0m0s |
 | `cloud_secret` | `stored-secret` | `cloud-credential-configured` | 24h0m0s |
@@ -66,7 +69,7 @@ served set by construction.
 connector records operator-supplied findings, and its envelope says exactly
 that — the operator's own declarations, nothing observed by trstctl itself.
 
-## Structurally unobservable classes — 6
+## Structurally unobservable classes — 5
 
 These are the honest edges of the product. They are enumerated **in code**
 (`internal/cbom/coverage/unobservable.go`), not in prose, and a class added
@@ -76,8 +79,7 @@ same test.
 
 | Class | Why no configured source can observe it |
 |---|---|
-| `firmware-embedded-crypto` | no source inspects device firmware; vendor-published CBOM ingest is not built, and a firmware scanner is a standing non-goal |
-| `vendor-embedded-crypto` | cryptography inside third-party appliances and products is invisible to every served source; vendor CBOM ingest (WS-3) is not built |
+| `firmware-embedded-crypto` | no source inspects device firmware, and a firmware scanner is a standing non-goal; a vendor's published CBOM for it imports as vendor-embedded-crypto |
 | `data-at-rest-posture` | volume, database, and KMS at-rest encryption state is invisible to network or API observation; the agent posture source (WS-4) is not built |
 | `unroutable-segment` | workloads scans cannot reach and where no agent runs are invisible — the cloudcert blind-spot admission generalized: reachability is a precondition of every active source |
 | `directory-unlinked-account` | a served one-sided source cannot claim AD or cloud directory category coverage from only one side (the serviceaccount admission); accounts visible only in an unconnected directory are not observed |
@@ -93,7 +95,7 @@ Estate: a `network` source that succeeded 2h ago, an `ssh` source whose last
 success was 72h ago (past its 24h0m0s window), a `ct_log` source whose last run
 failed, and a `cloud_certificate` source that has never completed a run.
 
-**2 observed · 18 observable-unobserved · 6 structurally unobservable** across 26 classes.
+**2 observed · 21 observable-unobserved · 5 structurally unobservable** across 28 classes.
 
 | Class | Bucket | Reason / attribution |
 |---|---|---|
@@ -101,6 +103,7 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `certificate-key` | `OBSERVED` | observed by dc-east |
 | `cloud-certificate` | `OBSERVABLE-UNOBSERVED` | source "acm-prod" is configured but has never completed a run — **run discovery source "acm-prod"** |
 | `compromised-credential` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind credential_compromise (needs: connector-credential-configured)** |
+| `container-image-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source image:<name> (needs: cbom-imported)** |
 | `ct-exposed-certificate` | `OBSERVABLE-UNOBSERVED` | last run of "ct-watch" finished "failed", not "succeeded" — **fix and re-run discovery source "ct-watch"** |
 | `deployed-certificate` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind drift (needs: deployment-baseline-configured)** |
 | `kubernetes-tls-endpoint` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind k8s_ingress_gateway (needs: cluster-credential-configured)** |
@@ -112,13 +115,14 @@ failed, and a `cloud_certificate` source that has never completed a run.
 | `passive-wire-traffic` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **grant an agent the observer role and start it with --observe-interface on the interface to watch (needs: observer-agent-reporting)** |
 | `repository-secret` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind secret_repo (needs: repository-configured)** |
 | `service-account` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind service_account (needs: connector-credential-configured)** |
+| `source-code-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source source:<name> (needs: cbom-imported)** |
 | `ssh-host-key` | `OBSERVABLE-UNOBSERVED` | last successful run of "bastions" completed 2026-07-29T12:00:00Z, older than the 24h0m0s freshness window — **re-run discovery source "bastions"** |
 | `ssh-private-key` | `OBSERVABLE-UNOBSERVED` | last successful run of "bastions" completed 2026-07-29T12:00:00Z, older than the 24h0m0s freshness window — **re-run discovery source "bastions"** |
 | `stored-secret` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind cloud_secret or secret_store (needs: cloud-credential-configured)** |
 | `third-party-secret` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **configure a discovery source of kind secret_third_party (needs: connector-credential-configured)** |
 | `tls-endpoint` | `OBSERVED` | observed by dc-east |
-| `firmware-embedded-crypto` | `STRUCTURALLY-UNOBSERVABLE` | no source inspects device firmware; vendor-published CBOM ingest is not built, and a firmware scanner is a standing non-goal |
-| `vendor-embedded-crypto` | `STRUCTURALLY-UNOBSERVABLE` | cryptography inside third-party appliances and products is invisible to every served source; vendor CBOM ingest (WS-3) is not built |
+| `vendor-embedded-crypto` | `OBSERVABLE-UNOBSERVED` | no configured source observes this class — **import a CycloneDX CBOM with trstctl cbom import --source vendor:<name> (needs: cbom-imported)** |
+| `firmware-embedded-crypto` | `STRUCTURALLY-UNOBSERVABLE` | no source inspects device firmware, and a firmware scanner is a standing non-goal; a vendor's published CBOM for it imports as vendor-embedded-crypto |
 | `data-at-rest-posture` | `STRUCTURALLY-UNOBSERVABLE` | volume, database, and KMS at-rest encryption state is invisible to network or API observation; the agent posture source (WS-4) is not built |
 | `unroutable-segment` | `STRUCTURALLY-UNOBSERVABLE` | workloads scans cannot reach and where no agent runs are invisible — the cloudcert blind-spot admission generalized: reachability is a precondition of every active source |
 | `directory-unlinked-account` | `STRUCTURALLY-UNOBSERVABLE` | a served one-sided source cannot claim AD or cloud directory category coverage from only one side (the serviceaccount admission); accounts visible only in an unconnected directory are not observed |

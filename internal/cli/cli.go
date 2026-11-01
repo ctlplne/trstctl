@@ -103,6 +103,20 @@ func Run(ctx context.Context, args []string, env Env, stdin io.Reader, stdout, s
 		}
 		return runSecretScanStagedDiff(ctx, rest[3:], stdout, stderr)
 	}
+	if len(rest) >= 2 && hasPrefix(rest, []string{"cbom", "scan-source"}) {
+		if commandHelpRequested(rest[2:]) {
+			cbomScanSourceUsage(stdout)
+			return 0
+		}
+		return runCBOMScanSource(ctx, rest[2:], stdout, stderr)
+	}
+	if len(rest) >= 2 && hasPrefix(rest, []string{"cbom", "scan-image"}) {
+		if commandHelpRequested(rest[2:]) {
+			cbomScanImageUsage(stdout)
+			return 0
+		}
+		return runCBOMScanImage(ctx, rest[2:], stdout, stderr)
+	}
 	if len(rest) >= 2 && hasPrefix(rest, []string{"cbom", "verify-cyclonedx"}) {
 		if commandHelpRequested(rest[2:]) {
 			cbomVerifyCycloneDXUsage(stdout)

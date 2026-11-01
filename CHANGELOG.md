@@ -2,6 +2,13 @@
 
 ### Added
 
+- CBOM import and code and image scanning: `POST /api/v1/cbom/imports` (`trstctl-cli cbom import --source
+  vendor:|source:|image:<name>`) merges a vendor's, a code scan's or an image scan's CycloneDX CBOM into the
+  crypto inventory with its source in every location; importing the same BOM again changes nothing.
+  `trstctl-cli cbom scan-source` finds RSA, ECDH, ECDSA and legacy algorithms in Go, Java and Python code
+  with file and line, and `trstctl-cli cbom scan-image` runs an installed CBOM scanner over an image,
+  directory or archive; both run offline. Discovery coverage counts vendor, source-code and container-image
+  crypto as observed while an import is recent.
 - Closed-loop verification for migrations: a run started with `require_observed_traffic` advances each wave only
   when the live receipt and an observer agent's new connections at every endpoint agree, pauses when the wire proof
   is late, and then marks the observer's finding for the old certificate remediated naming both proofs.

@@ -264,6 +264,8 @@ public final class OpenApiSchemas {
       "CASpec",
       "CBOMAsset",
       "CBOMCycloneDXExport",
+      "CBOMImport",
+      "CBOMImportDocument",
       "CBOMInventory",
       "CBOMMigrationProgress",
       "CBOMReport",

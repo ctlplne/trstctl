@@ -33,7 +33,7 @@
       },
       {
         "name": "trstctl:coverage:not_covered",
-        "value": "addresses and files no scan named; network traffic outside the interfaces observer agents watch; source code and container images not scanned"
+        "value": "addresses and files no scan named; network traffic outside the interfaces observer agents watch; source code and container images only as far as imported CBOMs cover them"
       },
       {
         "name": "trstctl:coverage:compliance",

@@ -300,6 +300,51 @@ trstctl-cli cbom export-cyclonedx > cbom-export.json
 trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.jwks.json --bom-out cbom.cdx.json
 ```
 
+#### Importing CBOMs from vendors, code and images
+
+`POST /api/v1/cbom/imports?source=<source>` (`discovery:write`, `trstctl-cli cbom import
+--source <source> -f bom.cdx.json`) takes a CycloneDX 1.4–1.6 CBOM into the same inventory.
+The source says who produced it and is part of every location: `vendor:<product>` for a
+CBOM a vendor published for its appliance or software, `source:<repository>` for a scan of
+code, `image:<reference>` for a scan of a container image, directory or archive. Each
+cryptographic asset (algorithm, certificate, key or other crypto material, protocol with
+its cipher suites) and each crypto library component (OpenSSL, BoringSSL, Bouncy Castle and
+others) becomes one inventory finding located at `<source>:<occurrence>` (the file and line
+the BOM gives, or the component's reference), classified like trstctl's own scans: a
+1024-bit RSA key is weak, TLS 1.0 is weak, ECDH is quantum-vulnerable. A document that is
+not a CycloneDX BOM, or holds no crypto, is refused; one import takes at most 5,000
+components and 8 MiB.
+
+Each import is a discovery run keyed by the source and the BOM's serial number and
+version (its SHA-256 when it has no serial number). Importing the same BOM again returns
+the first import's result with `replayed: true` and writes nothing; a new version of the
+BOM is a new import. Every finding is recorded as `cbom.asset.observed` first. Discovery
+coverage counts imports: `vendor-embedded-crypto`, `source-code-crypto` and
+`container-image-crypto` are observed while an import of that kind is recent (90 days for
+a vendor's CBOM, which describes a release; the ordinary window for code and images).
+
+Two commands produce a CBOM to import on your own machine, offline; neither sends
+anything:
+
+```bash
+# Code: Go through its syntax tree, Java's JCA calls and Python's cryptography package.
+# RSA with its key size, ECDH and ECDSA curves, DSA, 3DES, RC4, MD5 and SHA-1, each with
+# its file and line; vendored and generated directories are skipped.
+trstctl-cli cbom scan-source ./payments --out payments.cdx.json
+trstctl-cli cbom import --source source:payments -f payments.cdx.json
+
+# Images, directories and archives: runs the CBOM scanner you installed (cbomkit-theia),
+# passing the arguments after -- unchanged, and keeps its output only when it is a CBOM
+# with crypto in it. trstctl never downloads the scanner.
+trstctl-cli cbom scan-image --scanner /usr/local/bin/cbomkit-theia --out app.cdx.json -- image registry.example/app:1.4
+trstctl-cli cbom import --source image:registry.example/app:1.4 -f app.cdx.json
+```
+
+Imported findings are what the BOM says. trstctl does not re-check a vendor's claims or
+the image scanner's results, and the source scan finds calls it recognizes, not every
+path by which code reaches cryptography; the location names the source so a reader knows
+whose statement each row is.
+
 The scan response includes `observed_asset_ids`: stable IDs for findings that this
 run appended and projected. Read those exact IDs back through `GET
 /api/v1/cbom/assets` before claiming durable evidence. The console does this check;

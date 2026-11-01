@@ -393,8 +393,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// `secrets honeytokens databases plant|list|retire`.
 	// Q4 adds `broker agent-identities revoke`.
 	// Q1 adds `access reviews generate`.
-	if len(out) != 679 {
-		t.Fatalf("CLI commands = %d, want 679", len(out))
+	// X6 adds `cbom import`, `cbom scan-source` and `cbom scan-image`.
+	if len(out) != 682 {
+		t.Fatalf("CLI commands = %d, want 682", len(out))
 	}
 	return out
 }

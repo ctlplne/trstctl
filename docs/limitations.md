@@ -1260,7 +1260,22 @@ never live in the API process. What you can do end to end against the running bi
   signs the exact BOM bytes, and `trstctl-cli cbom verify-cyclonedx` checks it
   offline against the separately pinned keys. The console's test suite validates
   the encoder's output against the official CycloneDX 1.6 schema with an
-  independent validator. Importing other scanners' CBOMs is X6.
+  independent validator.
+- CBOM import and code and image scanning (X6): `POST /api/v1/cbom/imports`
+  (`trstctl-cli cbom import --source vendor:|source:|image:<name>`) merges a
+  CycloneDX 1.4–1.6 CBOM into the inventory, each finding located under its
+  source and classified like trstctl's own scans; importing the same BOM again
+  replays and writes nothing. `trstctl-cli cbom scan-source` finds RSA (with key
+  size), ECDH, ECDSA and legacy algorithms in Go, Java and Python code with file
+  and line, and `trstctl-cli cbom scan-image` runs an installed CBOM scanner
+  (cbomkit-theia) over an image, directory or archive; both run offline. Coverage
+  shows vendor, source-code and container-image crypto as observed while an
+  import is recent, and vendor-embedded crypto is no longer listed as
+  unobservable. Proven with a vendor CBOM, a sample repository and an image
+  scanner's CBOM; the wrapper is proven against a stand-in scanner, and the run
+  against the real cbomkit-theia waits for the owner's approval to fetch a
+  pinned release (outside input). Imported rows are the BOM's statements; the
+  source scan recognizes direct API calls, not every indirect path.
 - Access graph, step 1 (G1): the credential graph holds people (tenant
   members), their roles and AI agents (from agent-broker issuance), with the
   credentials they hold (API tokens, machine sessions, PAM sessions,

@@ -18,6 +18,7 @@ const (
 	RemediationRotationSourcePrefix = "remediation-rotation:"
 	ProfilePostureSourcePrefix      = "profile-posture:"
 	ExternalObserverSourcePrefix    = "external-observer:"
+	CBOMImportSourcePrefix          = "cbom-import:"
 )
 
 type ReservedNamespace struct {
@@ -36,6 +37,7 @@ var reservedNamespaces = [...]ReservedNamespace{
 	{RemediationRotationSourcePrefix, "credential-rotate replacement verification"},
 	{ProfilePostureSourcePrefix, "certificate profile posture"},
 	{ExternalObserverSourcePrefix, "external observation intake"},
+	{CBOMImportSourcePrefix, "CycloneDX CBOM import"},
 }
 
 // ReservedNamespaces returns a copy for the registration guard and docs.

@@ -31,6 +31,7 @@ func TestEveryDiscoverySourceRegistrationHasOwnerClassification(t *testing.T) {
 		"internal/orchestrator/remediation_rotate.go:RecordRotationUnverified":        "product-owned credential-rotate replacement verification",
 		"internal/orchestrator/profile_posture.go:recordProfileRSAFloorFinding":       "product-owned certificate profile posture",
 		"internal/orchestrator/external_observation.go:recordObservationFinding":      "product-owned external observation intake",
+		"internal/orchestrator/cbom_import.go:BeginCBOMImport":                        "product-owned CycloneDX CBOM import",
 	}
 	found := make(map[string]bool)
 	for _, tree := range []string{"internal", "cmd", "ee", "deploy", "plugins", "clients"} {
@@ -97,6 +98,7 @@ func TestEveryProductSourceNamespaceIsRegistered(t *testing.T) {
 		RemediationRotationSourcePrefix: "credential-rotate replacement verification",
 		ProfilePostureSourcePrefix:      "certificate profile posture",
 		ExternalObserverSourcePrefix:    "external observation intake",
+		CBOMImportSourcePrefix:          "CycloneDX CBOM import",
 	}
 	seen := make(map[string]bool)
 	for _, namespace := range ReservedNamespaces() {

@@ -3494,6 +3494,28 @@ CBOMCycloneDXExport = TypedDict(
     total=False,
 )
 
+CBOMImport = TypedDict(
+    'CBOMImport',
+    {
+        'asset_ids': list[str],
+        'components': int,
+        'findings': int,
+        'replayed': bool,
+        'run_id': str,
+        'serial_number': str,
+        'source': str,
+        'version': int,
+    },
+    total=False,
+)
+
+CBOMImportDocument = TypedDict(
+    'CBOMImportDocument',
+    {
+    },
+    total=False,
+)
+
 CBOMInventory = TypedDict(
     'CBOMInventory',
     {

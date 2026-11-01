@@ -1131,6 +1131,13 @@ trstctl-cli cbom assets
 trstctl-cli cbom export-cyclonedx > cbom-export.json
 trstctl-cli cbom verify-cyclonedx --export cbom-export.json --audit-jwks audit.jwks.json --bom-out cbom.cdx.json
 
+# Import CBOMs from vendors, code and images (offline scans; nothing is sent until import).
+trstctl-cli cbom import --source vendor:acme-router -f acme-router.cdx.json
+trstctl-cli cbom scan-source ./payments --out payments.cdx.json
+trstctl-cli cbom import --source source:payments -f payments.cdx.json
+trstctl-cli cbom scan-image --scanner /usr/local/bin/cbomkit-theia --out app.cdx.json -- image registry.example/app:1.4
+trstctl-cli cbom import --source image:registry.example/app:1.4 -f app.cdx.json
+
 # Track migration work and evidence in Core, independent of execution.
 # Operators may remediate manually or with any external tool, then record evidence.
 cat > pqc-campaign.json <<'JSON'

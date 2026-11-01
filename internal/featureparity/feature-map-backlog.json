@@ -3226,6 +3226,7 @@
                 "startCBOMScan",
                 "listCBOMAssets",
                 "exportCBOMCycloneDX",
+                "importCBOM",
                 "startPQCMigrationCampaign",
                 "listPQCMigrationCampaigns",
                 "getPQCMigrationCampaign",
@@ -3244,6 +3245,9 @@
                 "cbom assets",
                 "cbom export-cyclonedx",
                 "cbom verify-cyclonedx",
+                "cbom import",
+                "cbom scan-source",
+                "cbom scan-image",
                 "pqc campaigns create",
                 "pqc campaigns list",
                 "pqc campaigns get",
@@ -3291,6 +3295,7 @@
                         "cli_surface: cbom preview posts the same body to the effect-free plan endpoint without an Idempotency-Key.",
                         "cli_surface: cbom scan posts a CBOM scan request body with an Idempotency-Key.",
                         "cli_surface: cbom assets reads the served CBOM inventory and migration_progress.",
+                        "cli_surface: cbom import posts a CycloneDX CBOM with --source vendor:|source:|image: and an Idempotency-Key; cbom scan-source and cbom scan-image write a CBOM on the operator's machine, offline, and send nothing (X6).",
                         "cli_surface: pqc campaigns exposes all eight core campaign operations; mutations carry Idempotency-Key and close requires --force."
                     ],
                     "refs": [
@@ -3303,6 +3308,7 @@
                     "evidence": [
                         "api_surface: previewCBOMScan, startCBOMScan, and listCBOMAssets are in the served OpenAPI route registry and generated clients.",
                         "api_surface: eight core PQC campaign operations are in the served OpenAPI contract and regenerated SDKs.",
+                        "api_surface: importCBOM takes a CycloneDX 1.4-1.6 CBOM into the inventory with its source; importing the same BOM again replays the first result and writes nothing (X6).",
                         "Responses state automated execution is unavailable while leaving the complete campaign workflow usable."
                     ],
                     "refs": [
@@ -3321,7 +3327,8 @@
                         "web/src/__tests__/pqc_campaigns.test.tsx covers list/create/readiness/disposition/close/export/error and axe.",
                         "FeatureFacetCoverage enforces served/UI/CLI/API/test/docs/RBAC/audit/telemetry/a11y/i18n cells for this row.",
                         "Route parity and feature coverage tests keep feature evidence tied to registered customer routes.",
-                        "TestServedCBOMScanPopulatesMigrationInventory is a named acceptance test executed by the CI make test package set."
+                        "TestServedCBOMScanPopulatesMigrationInventory is a named acceptance test executed by the CI make test package set.",
+                        "TestServedCBOMImportX6 imports a vendor CBOM twice (one run, inventory unchanged), an image scanner's CBOM (certificate, key, OpenSSL configuration) and a source scan's RSA and ECDH uses, and reads each coverage class back as observed."
                     ],
                     "refs": [
                         "internal/featureparity/feature_facet_coverage_test.go",
@@ -3330,12 +3337,14 @@
                         "web/src/__tests__/accept/WIRE-03.test.tsx",
                         "web/src/__tests__/pqc_campaigns.test.tsx",
                         "web/src/__tests__/feature_coverage.test.tsx",
-                        "web/src/__tests__/route_parity.test.ts"
+                        "web/src/__tests__/route_parity.test.ts",
+                        "internal/server/cbom_import_served_test.go"
                     ]
                 },
                 "docs": {
                     "evidence": [
-                        "CBOM preview/execution limits, partial-failure recovery, API/CLI/UI workflow, core campaign ownership, edition boundary, event model, closure gate, and signed proof are documented."
+                        "CBOM preview/execution limits, partial-failure recovery, API/CLI/UI workflow, core campaign ownership, edition boundary, event model, closure gate, and signed proof are documented.",
+                        "CycloneDX CBOM import, the offline source and image scans, and what each import source covers are documented (X6)."
                     ],
                     "refs": [
                         "docs/features/observability-and-risk.md",
@@ -3346,6 +3355,7 @@
                 "rbac": {
                     "evidence": [
                         "Effect-free POST /api/v1/cbom/scans/preview and mutating POST /api/v1/cbom/scans require discovery:write; GET /api/v1/cbom/assets requires risk:read.",
+                        "POST /api/v1/cbom/imports requires discovery:write (X6).",
                         "PQC campaign reads/evidence require risk:read; all campaign mutations require discovery:write.",
                         "Feature authz manifest tests bind both operations to OpenAPI security and route permissions."
                     ],
@@ -3357,6 +3367,7 @@
                 "audit": {
                     "evidence": [
                         "Each served scan observation appends cbom.asset.observed before the inventory row is projected.",
+                        "Each CBOM import records a discovery run for its source and appends cbom.asset.observed per asset; the run is keyed by the BOM's serial number and version, so a second import writes nothing (X6).",
                         "Campaign mutations append pqc.migration_campaign.started/updated/finding_dispositioned/closed before projection.",
                         "The event ledger maps all F52 campaign mutation operationIds to those immutable events."
                     ],

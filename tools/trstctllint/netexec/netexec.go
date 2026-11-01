@@ -185,6 +185,18 @@ var reviewedExecUses = map[string]map[string]bool{
 	"internal/ca/shellca/shellca.go": {
 		"run": true,
 	},
+	// X6's `cbom scan-image` runs the CBOM scanner the operator installed
+	// (cbomkit-theia) on the operator's own machine. The executable is the
+	// operator's --scanner argument and the argv after `--` is theirs, passed
+	// unchanged with no shell; trstctl never downloads the scanner. The run
+	// has a deadline, its output is bounded (64 MiB) and kept only when it
+	// parses as an importable CycloneDX CBOM. Pinned by
+	// TestReviewedExecAllowlistPinsCBOMScanImage; internal/cli's
+	// TestCBOMScanImageAndSourceWriteImportableCBOMs pins the pass-through and
+	// the CBOM check.
+	"internal/cli/cbom_scan.go": {
+		"runCBOMScanImage": true,
+	},
 	"internal/connector/localops.go": {
 		"ExecContext": true,
 	},
