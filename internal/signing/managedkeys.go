@@ -72,13 +72,16 @@ func WithManagedKeyProviders(journalDir string, providers map[string]crypto.Remo
 }
 
 type managedKeyRuntime struct {
-	mu         sync.Mutex
-	root       string
-	providers  map[string]crypto.RemoteKeyLifecycle
-	owners     map[string]managedKeyOwner
-	volatile   map[string]managedKeyOperation
-	usedNonces map[string]int64
-	loadErr    error
+	mu        sync.Mutex
+	root      string
+	providers map[string]crypto.RemoteKeyLifecycle
+	owners    map[string]managedKeyOwner
+	volatile  map[string]managedKeyOperation
+	// volatileSigns journals managed-key signatures by operation id when the
+	// runtime has no journal directory (tests).
+	volatileSigns map[string]managedKeySignRecord
+	usedNonces    map[string]int64
+	loadErr       error
 }
 
 type managedKeyOwner struct {
@@ -119,7 +122,8 @@ func newManagedKeyRuntime(root string, providers map[string]crypto.RemoteKeyLife
 	r := &managedKeyRuntime{
 		root: strings.TrimSpace(root), providers: providers,
 		owners: make(map[string]managedKeyOwner), volatile: make(map[string]managedKeyOperation),
-		usedNonces: make(map[string]int64),
+		volatileSigns: make(map[string]managedKeySignRecord),
+		usedNonces:    make(map[string]int64),
 	}
 	if err := r.loadOwners(); err != nil {
 		r.loadErr = fmt.Errorf("load managed-key ownership: %w", err)
@@ -172,38 +176,38 @@ func (s *Server) SignManagedKey(ctx context.Context, req *signerpb.SignManagedKe
 	if s.managedKeys == nil {
 		return nil, status.Error(codes.FailedPrecondition, "no managed-key provider is configured in the signer")
 	}
-	signature, err := s.managedKeys.signDigest(ctx, req, s.authorizer)
+	signature, replayed, err := s.managedKeys.signDigest(ctx, req, s.authorizer)
 	if err != nil {
 		return nil, err
 	}
-	return &signerpb.SignManagedKeyResponse{Signature: signature}, nil
+	return &signerpb.SignManagedKeyResponse{Signature: signature, Replayed: replayed}, nil
 }
 
-func (r *managedKeyRuntime) signDigest(ctx context.Context, req *signerpb.SignManagedKeyRequest, authorizer *crypto.SignAuthorizer) ([]byte, error) {
+func (r *managedKeyRuntime) signDigest(ctx context.Context, req *signerpb.SignManagedKeyRequest, authorizer *crypto.SignAuthorizer) ([]byte, bool, error) {
 	if req == nil || req.GetTenantId() == "" || req.GetProvider() == "" || req.GetKeyId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "managed-key tenant, provider, and key id are required")
+		return nil, false, status.Error(codes.InvalidArgument, "managed-key tenant, provider, and key id are required")
 	}
 	if authorizer == nil {
-		return nil, status.Error(codes.FailedPrecondition, "managed-key signing has no independent content authorizer configured")
+		return nil, false, status.Error(codes.FailedPrecondition, "managed-key signing has no independent content authorizer configured")
 	}
 	defer secret.Wipe(req.AuthorizationToken)
 	alg, err := algorithmFromProto(req.GetAlgorithm())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, false, status.Error(codes.InvalidArgument, err.Error())
 	}
 	hash, digestLength, err := hashFromProto(req.GetHash())
 	if err != nil || len(req.GetDigest()) != digestLength {
-		return nil, status.Errorf(codes.InvalidArgument, "managed-key digest length %d does not match the declared hash", len(req.GetDigest()))
+		return nil, false, status.Errorf(codes.InvalidArgument, "managed-key digest length %d does not match the declared hash", len(req.GetDigest()))
 	}
 	if !validManagedKeySignPurpose(req.GetPurpose()) {
-		return nil, status.Error(codes.PermissionDenied, "managed-key sign purpose is missing or unsupported")
+		return nil, false, status.Error(codes.PermissionDenied, "managed-key sign purpose is missing or unsupported")
 	}
 	now := time.Now()
 	if req.GetAuthorizationExpiresUnix() <= now.Unix() || req.GetAuthorizationExpiresUnix() > now.Add(managedKeySignMaxAuthorization).Unix() {
-		return nil, status.Error(codes.PermissionDenied, "managed-key sign authorization is expired or exceeds the maximum lifetime")
+		return nil, false, status.Error(codes.PermissionDenied, "managed-key sign authorization is expired or exceeds the maximum lifetime")
 	}
 	if len(req.GetAuthorizationNonce()) < 16 || len(req.GetAuthorizationNonce()) > 64 || len(req.GetAuthorizationToken()) == 0 {
-		return nil, status.Error(codes.PermissionDenied, "managed-key sign authorization nonce and token are required")
+		return nil, false, status.Error(codes.PermissionDenied, "managed-key sign authorization nonce and token are required")
 	}
 	providerName := normalizeManagedKeyProvider(req.GetProvider())
 	opts := crypto.SignOptions{Hash: hash, RSAPadding: paddingFromProto(req.GetRsaPadding())}
@@ -212,44 +216,165 @@ func (r *managedKeyRuntime) signDigest(ctx context.Context, req *signerpb.SignMa
 		req.GetAuthorizationExpiresUnix(), req.GetAuthorizationNonce(), req.GetDigest(), opts,
 	)
 	if err != nil || !authorizer.Verify(intent, req.GetAuthorizationToken()) {
-		return nil, status.Error(codes.PermissionDenied, "managed-key sign authorization is invalid for this request")
+		return nil, false, status.Error(codes.PermissionDenied, "managed-key sign authorization is invalid for this request")
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.loadErr != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "managed-key signer journal is unavailable: %v", r.loadErr)
+		return nil, false, status.Errorf(codes.FailedPrecondition, "managed-key signer journal is unavailable: %v", r.loadErr)
 	}
 	provider := r.providers[providerName]
 	if provider == nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "managed-key provider %q is not configured in the signer", providerName)
+		return nil, false, status.Errorf(codes.FailedPrecondition, "managed-key provider %q is not configured in the signer", providerName)
 	}
 	owner, ok := r.owners[managedKeyOwnerKey(providerName, req.GetKeyId())]
 	if !ok || owner.TenantID != req.GetTenantId() || owner.Algorithm != alg {
-		return nil, status.Error(codes.PermissionDenied, "managed-key ref is not owned by this tenant/provider/algorithm")
+		return nil, false, status.Error(codes.PermissionDenied, "managed-key ref is not owned by this tenant/provider/algorithm")
 	}
 	if owner.State != "active" {
-		return nil, status.Errorf(codes.FailedPrecondition, "managed-key state %q cannot sign", owner.State)
+		return nil, false, status.Errorf(codes.FailedPrecondition, "managed-key state %q cannot sign", owner.State)
 	}
 	digestSigner, ok := provider.(crypto.RemoteKeyDigestSigner)
 	if !ok {
-		return nil, status.Error(codes.Unimplemented, "managed-key provider does not implement digest signing")
+		return nil, false, status.Error(codes.Unimplemented, "managed-key provider does not implement digest signing")
+	}
+	// An operation id binds the signature to one durable command (P9): a
+	// redelivered command gets the journaled signature back rather than a
+	// second one from the provider, and the id cannot sign another tuple.
+	operationID := req.GetOperationId()
+	var requestHash string
+	if operationID != "" {
+		requestHash, err = managedKeySignRequestHash(req, providerName, alg)
+		if err != nil {
+			return nil, false, status.Errorf(codes.Internal, "managed-key sign journal: %v", err)
+		}
+		prior, found, err := r.loadSignRecord(operationID)
+		if err != nil {
+			return nil, false, status.Errorf(codes.Internal, "managed-key sign journal: %v", err)
+		}
+		if found && prior.RequestHash != requestHash {
+			return nil, false, status.Error(codes.AlreadyExists, "managed-key sign journal: the operation id already binds a different signing tuple")
+		}
+		if found && prior.State == managedKeySignCompleted {
+			// The authorization is still consumed: a token signs at most once,
+			// even when the answer is a journaled signature.
+			if err := r.consumeSignNonce(req.GetAuthorizationNonce(), req.GetAuthorizationExpiresUnix(), now); err != nil {
+				if errors.Is(err, errManagedKeySignAuthorizationReplay) {
+					return nil, false, status.Error(codes.PermissionDenied, err.Error())
+				}
+				return nil, false, status.Errorf(codes.Internal, "persist managed-key sign authorization consumption: %v", err)
+			}
+			return bytes.Clone(prior.Signature), true, nil
+		}
 	}
 	if err := r.consumeSignNonce(req.GetAuthorizationNonce(), req.GetAuthorizationExpiresUnix(), now); err != nil {
 		if errors.Is(err, errManagedKeySignAuthorizationReplay) {
-			return nil, status.Error(codes.PermissionDenied, err.Error())
+			return nil, false, status.Error(codes.PermissionDenied, err.Error())
 		}
-		return nil, status.Errorf(codes.Internal, "persist managed-key sign authorization consumption: %v", err)
+		return nil, false, status.Errorf(codes.Internal, "persist managed-key sign authorization consumption: %v", err)
+	}
+	if operationID != "" {
+		// Executing before the provider call: a signature cannot leave this
+		// process before its completed record is durable, so an executing
+		// record after a restart is a call that returned nothing.
+		if err := r.saveSignRecord(managedKeySignRecord{
+			Version: managedKeySignJournalVersion, OperationID: operationID, RequestHash: requestHash, State: managedKeySignExecuting,
+		}); err != nil {
+			return nil, false, status.Errorf(codes.Internal, "managed-key sign journal: %v", err)
+		}
 	}
 	signature, err := digestSigner.SignManagedDigest(ctx, crypto.KeyRef{ID: owner.KeyID, Algorithm: owner.Algorithm}, bytes.Clone(req.GetDigest()), crypto.SignOptions{
 		Hash: opts.Hash, RSAPadding: opts.RSAPadding,
 	})
 	if err != nil {
-		return nil, managedKeyClosedFailure(codes.Unavailable, managedKeyFailureProviderSign)
+		return nil, false, managedKeyClosedFailure(codes.Unavailable, managedKeyFailureProviderSign)
 	}
 	if len(signature) == 0 {
-		return nil, managedKeyClosedFailure(codes.Internal, managedKeyFailureProviderEmpty)
+		return nil, false, managedKeyClosedFailure(codes.Internal, managedKeyFailureProviderEmpty)
 	}
-	return signature, nil
+	if operationID != "" {
+		if err := r.saveSignRecord(managedKeySignRecord{
+			Version: managedKeySignJournalVersion, OperationID: operationID, RequestHash: requestHash,
+			State: managedKeySignCompleted, Signature: bytes.Clone(signature),
+		}); err != nil {
+			return nil, false, status.Errorf(codes.Internal, "managed-key sign journal completion: %v", err)
+		}
+	}
+	return signature, false, nil
+}
+
+const (
+	managedKeySignJournalVersion = 1
+	managedKeySignExecuting      = "executing"
+	managedKeySignCompleted      = "completed"
+)
+
+// managedKeySignRecord is one journaled managed-key signature.
+type managedKeySignRecord struct {
+	Version     int    `json:"version"`
+	OperationID string `json:"operation_id"`
+	RequestHash string `json:"request_hash"`
+	State       string `json:"state"`
+	Signature   []byte `json:"signature,omitempty"`
+}
+
+// managedKeySignIntent is the tuple an operation id binds.
+type managedKeySignIntent struct {
+	TenantID  string              `json:"tenant_id"`
+	Provider  string              `json:"provider"`
+	KeyID     string              `json:"key_id"`
+	Algorithm crypto.Algorithm    `json:"algorithm"`
+	Digest    []byte              `json:"digest"`
+	Hash      signerpb.Hash       `json:"hash"`
+	Padding   signerpb.RSAPadding `json:"padding"`
+	Purpose   signerpb.KeyPurpose `json:"purpose"`
+}
+
+func managedKeySignRequestHash(req *signerpb.SignManagedKeyRequest, provider string, algorithm crypto.Algorithm) (string, error) {
+	body, err := json.Marshal(managedKeySignIntent{
+		TenantID: req.GetTenantId(), Provider: provider, KeyID: req.GetKeyId(), Algorithm: algorithm,
+		Digest: req.GetDigest(), Hash: req.GetHash(), Padding: req.GetRsaPadding(), Purpose: req.GetPurpose(),
+	})
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex(body), nil
+}
+
+func (r *managedKeyRuntime) signRecordPath(operationID string) string {
+	return filepath.Join(r.root, "managed-key-operations", "sign-"+crypto.SHA256Hex([]byte(operationID))+".json")
+}
+
+func (r *managedKeyRuntime) loadSignRecord(operationID string) (managedKeySignRecord, bool, error) {
+	if r.root == "" {
+		record, ok := r.volatileSigns[operationID]
+		return record, ok, nil
+	}
+	raw, err := os.ReadFile(r.signRecordPath(operationID)) // #nosec G304 -- the signer's own journal directory from its config (CWE-22)
+	if errors.Is(err, os.ErrNotExist) {
+		return managedKeySignRecord{}, false, nil
+	}
+	if err != nil {
+		return managedKeySignRecord{}, false, err
+	}
+	var record managedKeySignRecord
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return managedKeySignRecord{}, false, err
+	}
+	if record.Version != managedKeySignJournalVersion || record.OperationID != operationID ||
+		(record.State != managedKeySignExecuting && record.State != managedKeySignCompleted) ||
+		(record.State == managedKeySignCompleted && len(record.Signature) == 0) {
+		return managedKeySignRecord{}, false, fmt.Errorf("invalid managed-key sign journal record")
+	}
+	return record, true, nil
+}
+
+func (r *managedKeyRuntime) saveSignRecord(record managedKeySignRecord) error {
+	if r.root == "" {
+		r.volatileSigns[record.OperationID] = record
+		return nil
+	}
+	return atomicJSONFile(r.signRecordPath(record.OperationID), record)
 }
 
 func (r *managedKeyRuntime) execute(ctx context.Context, req *signerpb.ManageKeyRequest) (managedKeyJournalResult, bool, error) {

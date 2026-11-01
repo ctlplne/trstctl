@@ -2,6 +2,11 @@
 
 ### Added
 
+- Code-signing keys in an HSM or cloud KMS: `code_signing.keys[].managed_key_provider` and `managed_key_id`
+  bind a code-signing key to an Enterprise managed key instead of a signer handle; startup checks it is active
+  and of the configured algorithm. Every signature runs in the provider through the isolated signer, which now
+  journals managed-key signatures by operation id (`SignManagedKeyRequest.operation_id`), so a retried signing
+  command gets the same signature instead of a second one.
 - Signing approvals with stock tools: while a code-signing approval is pending, the Notation plugin and the
   PKCS #11 module hold the tool's request open and sign once an approver grants it (`TRSTCTL_APPROVAL_WAIT`,
   default ten minutes); a denied or expired approval stops the tool with the reason. The signing mechanism

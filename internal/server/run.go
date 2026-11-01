@@ -729,7 +729,7 @@ func buildRunDeps(ctx context.Context, cfg *config.Config, st *store.Store, log 
 	// Build, buildRunDeps owns every channel credential. Any later constructor
 	// failure must wipe that authority rather than abandoning locked buffers.
 	defer notificationOwner.closeOnError(&err)
-	codeSigning, err := codeSigningConfigFromConfig(ctx, cfg.CodeSigning, signer.signer, signer.tokenProvider, egressGuard)
+	codeSigning, err := codeSigningConfigFromConfig(ctx, cfg.CodeSigning, signer.signer, signer.tokenProvider, egressGuard, st.GetManagedKey)
 	if err != nil {
 		return Deps{}, fmt.Errorf("code-signing: %w", err)
 	}

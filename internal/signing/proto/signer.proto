@@ -470,10 +470,17 @@ message SignManagedKeyRequest {
   int64 authorization_expires_unix = 9;
   bytes authorization_nonce = 10;
   bytes authorization_token = 11;
+  // operation_id binds a durable control-plane command to one exact
+  // managed-key signature, as SignRequest.operation_id does for signer
+  // handles: the signer journals the request tuple and the signature before
+  // replying, a redelivery returns the original bytes, and a changed tuple is
+  // rejected. Empty preserves the ordinary non-journaled behavior.
+  string operation_id = 12;
 }
 
 message SignManagedKeyResponse {
   bytes signature = 1;
+  bool replayed = 2;
 }
 
 message HealthRequest {}

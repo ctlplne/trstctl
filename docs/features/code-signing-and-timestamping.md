@@ -242,6 +242,11 @@ cosign verify --key release-key.pub --insecure-ignore-tlog=true registry.example
 `--insecure-ignore-tlog` tells cosign not to look for its own log bundle; trstctl
 records each signature in Rekor through the outbox as described above.
 
+- **Keys in an HSM or cloud KMS:** a code-signing key can be an Enterprise managed
+  key (`managed_key_provider`, `managed_key_id`; see
+  [Configuration](../configuration.md#code-signing)) instead of a signer handle. The
+  stock tools above use it the same way; each signature runs in the HSM or KMS through
+  the isolated signer, authorized per signature and journaled by the signing command.
 - **jarsigner, osslsigncode and other PKCS #11 tools:** `libtrstctl-pkcs11`
   (`make signing-clients`) is a PKCS #11 module with one token whose PIN is your
   API token and whose objects are the keys `TRSTCTL_PKCS11_KEYS` names, each with

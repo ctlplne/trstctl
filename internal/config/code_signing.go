@@ -40,6 +40,13 @@ type CodeSigningKey struct {
 	// for stock signing tools (P9): its leaf must carry the key's public key
 	// and the codeSigning extended key usage, which startup checks.
 	CertificateChainFile string `json:"certificate_chain_file,omitempty"`
+	// ManagedKeyProvider and ManagedKeyID name a key held in an HSM or cloud
+	// KMS — an Enterprise managed key, created through the managed-keys API —
+	// to sign with instead of a signer handle (P9). Startup checks the key is
+	// active and of Algorithm; it cannot be combined with Handle,
+	// CreateIfMissing or RequireDualControl.
+	ManagedKeyProvider string `json:"managed_key_provider,omitempty"`
+	ManagedKeyID       string `json:"managed_key_id,omitempty"`
 }
 
 // CodeSigningGitHubOIDC is one tenant's offline GitHub Actions OIDC trust source.

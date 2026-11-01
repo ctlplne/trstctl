@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"trstctl.com/trstctl/internal/crypto"
@@ -74,6 +75,26 @@ func (s *ManagedKeySigner) Public() crypto.PublicKey { return s.public }
 func (s *ManagedKeySigner) Algorithm() crypto.Algorithm { return s.algorithm }
 
 func (s *ManagedKeySigner) SignDigest(digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	return s.signDigest("", digest, opts)
+}
+
+// SignDigestForOperation signs like SignDigest with the signature journaled in
+// the signer under operationID: a repeated call for the same command and
+// digest returns the first signature, which the served code-signing path
+// requires of every signer (P9).
+func (s *ManagedKeySigner) SignDigestForOperation(operationID string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	if strings.TrimSpace(operationID) == "" {
+		return nil, fmt.Errorf("signing: managed-key operation id is required")
+	}
+	return s.signDigest(operationID, digest, opts)
+}
+
+func (s *ManagedKeySigner) signDigest(operationID string, digest []byte, opts crypto.SignOptions) ([]byte, error) {
+	// The signer rebuilds the authorization intent from the request, where the
+	// RSA padding always has a value. Authorize that value, not the empty one an
+	// ECDSA caller (an X.509 or CSR signature) leaves unset, or the signer
+	// refuses every such signature as an invalid authorization.
+	opts.RSAPadding = paddingFromProto(paddingToProto(opts.RSAPadding))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	nonce, err := crypto.RandomBytes(32)
@@ -96,6 +117,7 @@ func (s *ManagedKeySigner) SignDigest(digest []byte, opts crypto.SignOptions) ([
 		Hash: hashToProto(opts.Hash), RsaPadding: paddingToProto(opts.RSAPadding),
 		Purpose: s.purpose, AuthorizationExpiresUnix: expiresUnix,
 		AuthorizationNonce: bytes.Clone(nonce), AuthorizationToken: bytes.Clone(token),
+		OperationId: operationID,
 	}
 	// gRPC marshals but does not wipe the caller-owned protobuf. Destroy the
 	// request clone as soon as the call returns; wiping only token above would

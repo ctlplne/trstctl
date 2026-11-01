@@ -849,7 +849,15 @@ for the key; startup refuses a chain whose leaf does not carry the key's public 
 or lacks the `codeSigning` extended key usage. trstctl serves it at
 `GET /api/v1/code-signing/keys/{key_id}/certificate` for stock signing tools, and
 `POST /api/v1/code-signing/keys/{key_id}/csr` returns a certificate request the key
-signs inside the signer. A changed chain takes effect at the next start. Keyless
+signs inside the signer. A changed chain takes effect at the next start.
+`managed_key_provider` and `managed_key_id` bind a code-signing key held in an HSM or
+cloud KMS — an Enterprise managed key created with `POST /api/v1/managed-keys` — instead
+of a signer handle, and cannot be combined with `handle`, `create_if_missing` or
+`require_dual_control`. Startup checks the key is active and of `algorithm`. The signer
+needs its managed-key providers (`--managed-keys-config`) and an independent sign
+authorizer (`signer.auth_token_command`): every signature runs in the HSM or KMS through
+the isolated signer, which journals it by the signing command so a retried command gets
+the same signature. Keyless
 requests also create and destroy their one-use key inside that signer. Pin the Rekor
 log public key from the Rekor operator's authenticated distribution channel. Startup
 fails if this trust anchor is absent or malformed, and every outbox delivery verifies

@@ -18,6 +18,7 @@ import (
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/egress"
 	"trstctl.com/trstctl/internal/signing"
+	"trstctl.com/trstctl/internal/store"
 )
 
 type tenantCodeSigningKeyResolver struct {
@@ -48,10 +49,14 @@ func (r *tenantCodeSigningKeyResolver) CodeSigningKeyMetadata(tenantID, keyID st
 	return string(signer.Algorithm()), true
 }
 
+// managedKeyLookup reads a tenant's managed-key record; production passes
+// store.GetManagedKey.
+type managedKeyLookup func(ctx context.Context, tenantID, provider, keyID string) (store.ManagedKey, error)
+
 // codeSigningConfigFromConfig is the production composition seam named by the
 // wiring census. Every private operation stays behind SignerProvider.Client();
 // neither persistent nor keyless private key material enters this process.
-func codeSigningConfigFromConfig(ctx context.Context, cfg config.CodeSigning, signer SignerProvider, tokenProvider signing.SignTokenProvider, guard *egress.Guard) (CodeSigningConfig, error) {
+func codeSigningConfigFromConfig(ctx context.Context, cfg config.CodeSigning, signer SignerProvider, tokenProvider signing.SignTokenProvider, guard *egress.Guard, managedKeys managedKeyLookup) (CodeSigningConfig, error) {
 	if !cfg.Enabled {
 		return CodeSigningConfig{}, nil
 	}
@@ -73,11 +78,16 @@ func codeSigningConfigFromConfig(ctx context.Context, cfg config.CodeSigning, si
 		if err != nil {
 			return CodeSigningConfig{}, fmt.Errorf("code-signing key %s: %w", keyCfg.ID, err)
 		}
-		handle := strings.TrimSpace(keyCfg.Handle)
-		if handle == "" {
-			handle = "codesign-" + crypto.SHA256Hex([]byte(identity))[:32]
+		var remote crypto.DigestSigner
+		if strings.TrimSpace(keyCfg.ManagedKeyProvider) != "" || strings.TrimSpace(keyCfg.ManagedKeyID) != "" {
+			remote, err = bindManagedCodeSigningKey(ctx, client, keyCfg, algorithm, tokenProvider, managedKeys)
+		} else {
+			handle := strings.TrimSpace(keyCfg.Handle)
+			if handle == "" {
+				handle = "codesign-" + crypto.SHA256Hex([]byte(identity))[:32]
+			}
+			remote, err = bindOrCreateCodeSigningKey(ctx, client, handle, algorithm, keyCfg.CreateIfMissing, keyCfg.RequireDualControl, tokenProvider)
 		}
-		remote, err := bindOrCreateCodeSigningKey(ctx, client, handle, algorithm, keyCfg.CreateIfMissing, keyCfg.RequireDualControl, tokenProvider)
 		if err != nil {
 			return CodeSigningConfig{}, fmt.Errorf("code-signing key %s: %w", keyCfg.ID, err)
 		}
@@ -207,6 +217,37 @@ func bindOrCreateCodeSigningKey(ctx context.Context, client *signing.Client, han
 		return nil, fmt.Errorf("provision signer handle %q: %w", handle, err)
 	}
 	return remote, nil
+}
+
+// bindManagedCodeSigningKey binds a code-signing key held in an HSM or cloud
+// KMS — an Enterprise managed key (P9). The private operation runs in that
+// provider through the isolated signer, which requires an independent
+// authorization for every signature and journals each by the code-signing
+// command's operation id, so a redelivered command gets its first signature.
+func bindManagedCodeSigningKey(ctx context.Context, client *signing.Client, keyCfg config.CodeSigningKey, algorithm crypto.Algorithm, tokenProvider signing.SignTokenProvider, lookup managedKeyLookup) (crypto.DigestSigner, error) {
+	tenantID := strings.TrimSpace(keyCfg.TenantID)
+	provider, keyID := strings.TrimSpace(keyCfg.ManagedKeyProvider), strings.TrimSpace(keyCfg.ManagedKeyID)
+	switch {
+	case provider == "" || keyID == "":
+		return nil, fmt.Errorf("managed_key_provider and managed_key_id are both required")
+	case strings.TrimSpace(keyCfg.Handle) != "" || keyCfg.CreateIfMissing || keyCfg.RequireDualControl:
+		return nil, fmt.Errorf("a managed key cannot also name a signer handle, create_if_missing or require_dual_control")
+	case tokenProvider == nil:
+		return nil, fmt.Errorf("a managed key requires signer.auth_token_command or an explicitly enabled co-resident eval authorizer")
+	case lookup == nil:
+		return nil, fmt.Errorf("managed keys are not available to code signing in this deployment")
+	}
+	key, err := lookup(ctx, tenantID, provider, keyID)
+	if err != nil {
+		return nil, fmt.Errorf("managed key %s/%s: %w", provider, keyID, err)
+	}
+	if key.State != "active" {
+		return nil, fmt.Errorf("managed key %s/%s is %s, not active", provider, keyID, key.State)
+	}
+	if crypto.Algorithm(key.Algorithm) != algorithm {
+		return nil, fmt.Errorf("managed key %s/%s uses %s, want %s", provider, keyID, key.Algorithm, algorithm)
+	}
+	return client.SignerForManagedKey(tenantID, key.Provider, key.KeyID, algorithm, key.PublicDER, signing.PurposeCodeSign, tokenProvider)
 }
 
 func codeSigningAttestorsFromConfig(items []config.CodeSigningGitHubOIDC) (map[string][]attest.Attestor, error) {

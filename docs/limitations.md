@@ -5873,8 +5873,15 @@ This is a deliberate, documented trust boundary, not an accident.
     once it is granted. The served test drives the built Notation plugin through a
     granted, a denied and an expired approval and shows a modified artifact, another
     signer, another mechanism, a used approval and another tenant's approval cannot
-    sign. A run of the stock `notation` CLI against a registry, and HSM- and KMS-held
-    code-signing keys, are what comes next.
+    sign. Code-signing keys can be held in an HSM or cloud KMS (an Enterprise managed
+    key, bound with `managed_key_provider`/`managed_key_id`): the signer journals each
+    managed-key signature by the signing command, so the served path signs once per
+    command, proven with SoftHSM standing in for the HSM (an RSA-2048 key generated in
+    the token, never extractable; a certificate request and code signatures made inside
+    it; a repeated command answered from the journal; another tenant refused). The
+    PKCS#11 provider generates RSA-2048 keys; EC keys in an HSM are what comes next. A run of the stock `notation`
+    CLI against a registry, real HSM and cloud KMS accounts, and the Windows signing
+    adapter (a KSP for signtool) are what comes next.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator

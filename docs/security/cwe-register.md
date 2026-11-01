@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2145 annotated sites across 29 rules. Each row is
+2146 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1425,7 +1425,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (592 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (593 sites)
 
 | Location | Reason |
 |---|---|
@@ -1842,7 +1842,7 @@ not this file.
 | `internal/server/ca_custody_test.go:261` | test-owned path under t.TempDir captures the planted mismatch (CWE-22) |
 | `internal/server/ca_custody_test.go:269` | same test-owned path proves the mismatch was not overwritten (CWE-22) |
 | `internal/server/cmdb_readonly_test.go:126` | test reads repo source files it names itself (CWE-22) |
-| `internal/server/code_signing_config.go:86` | operator-configured certificate chain path (CWE-22) |
+| `internal/server/code_signing_config.go:96` | operator-configured certificate chain path (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:69` | the lab runner's build output (CWE-22) |
 | `internal/server/discovery_key_posture_test.go:18` | a fixed test fixture, named by the test itself (CWE-22) |
 | `internal/server/distrust_removal_served_test.go:34` | a fixed test fixture, named by the test itself (CWE-22) |
@@ -1915,8 +1915,9 @@ not this file.
 | `internal/signing/keystore_test.go:139` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/keystore_test.go:229` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/signing/legacy_migration.go:32` | signer operator supplies the one legacy migration path |
-| `internal/signing/managedkeys.go:592` | the signer's own keystore/journal directory from its config (CWE-22) |
-| `internal/signing/managedkeys.go:735` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:353` | the signer's own journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:717` | the signer's own keystore/journal directory from its config (CWE-22) |
+| `internal/signing/managedkeys.go:860` | the signer's own keystore/journal directory from its config (CWE-22) |
 | `internal/signing/managedkeys_test.go:553` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `internal/signing/offline_breakglass.go:290` | path is the signer-owned offline vault journal or kit (CWE-22) |
 | `internal/signing/offline_lock_unix.go:14` | fixed lock name under dedicated operator-selected offline vault (CWE-22) |

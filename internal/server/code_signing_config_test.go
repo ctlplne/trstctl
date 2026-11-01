@@ -59,11 +59,11 @@ func TestCodeSigningAlgorithmsAndTenantResolverFailClosed(t *testing.T) {
 }
 
 func TestCodeSigningCompositionRequiresIsolatedSignerAndConstrainedHandles(t *testing.T) {
-	got, err := codeSigningConfigFromConfig(context.Background(), config.CodeSigning{}, nil, nil, nil)
+	got, err := codeSigningConfigFromConfig(context.Background(), config.CodeSigning{}, nil, nil, nil, nil)
 	if err != nil || got.Keys != nil || got.NewEphemeralSigner != nil {
 		t.Fatalf("disabled code signing config = %+v, %v", got, err)
 	}
-	if _, err := codeSigningConfigFromConfig(context.Background(), config.CodeSigning{Enabled: true}, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "isolated signing service") {
+	if _, err := codeSigningConfigFromConfig(context.Background(), config.CodeSigning{Enabled: true}, nil, nil, nil, nil); err == nil || !strings.Contains(err.Error(), "isolated signing service") {
 		t.Fatalf("enabled code signing without signer error = %v", err)
 	}
 	if _, err := bindOrCreateCodeSigningKey(context.Background(), nil, "", crypto.ECDSAP256, false, false, nil); err == nil {
@@ -150,7 +150,7 @@ func TestCodeSigningCompositionBindsPurposeConstrainedIsolatedKeys(t *testing.T)
 			Endpoint: "https://rekor.example.test/api/v1/log/entries", LogPublicKeyFile: logKeyPath,
 		},
 	}
-	composed, err := codeSigningConfigFromConfig(context.Background(), cfg, signing.StaticProvider{C: client}, authorizer, nil)
+	composed, err := codeSigningConfigFromConfig(context.Background(), cfg, signing.StaticProvider{C: client}, authorizer, nil, nil)
 	if err != nil {
 		t.Fatalf("codeSigningConfigFromConfig: %v", err)
 	}
@@ -184,11 +184,11 @@ func TestCodeSigningCompositionBindsPurposeConstrainedIsolatedKeys(t *testing.T)
 	}
 
 	cfg.Keys[0].CreateIfMissing = false
-	if _, err := codeSigningConfigFromConfig(context.Background(), cfg, signing.StaticProvider{C: client}, authorizer, nil); err != nil {
+	if _, err := codeSigningConfigFromConfig(context.Background(), cfg, signing.StaticProvider{C: client}, authorizer, nil, nil); err != nil {
 		t.Fatalf("bind existing constrained key: %v", err)
 	}
 	cfg.Keys[0].Algorithm = "rsa-2048"
-	if _, err := codeSigningConfigFromConfig(context.Background(), cfg, signing.StaticProvider{C: client}, authorizer, nil); err == nil || !strings.Contains(err.Error(), "uses ECDSA-P256") {
+	if _, err := codeSigningConfigFromConfig(context.Background(), cfg, signing.StaticProvider{C: client}, authorizer, nil, nil); err == nil || !strings.Contains(err.Error(), "uses ECDSA-P256") {
 		t.Fatalf("algorithm-confused existing handle error = %v", err)
 	}
 

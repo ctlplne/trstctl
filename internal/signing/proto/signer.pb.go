@@ -1762,8 +1762,14 @@ type SignManagedKeyRequest struct {
 	AuthorizationExpiresUnix int64      `protobuf:"varint,9,opt,name=authorization_expires_unix,json=authorizationExpiresUnix,proto3" json:"authorization_expires_unix,omitempty"`
 	AuthorizationNonce       []byte     `protobuf:"bytes,10,opt,name=authorization_nonce,json=authorizationNonce,proto3" json:"authorization_nonce,omitempty"`
 	AuthorizationToken       []byte     `protobuf:"bytes,11,opt,name=authorization_token,json=authorizationToken,proto3" json:"authorization_token,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// operation_id binds a durable control-plane command to one exact
+	// managed-key signature, as SignRequest.operation_id does for signer
+	// handles: the signer journals the request tuple and the signature before
+	// replying, a redelivery returns the original bytes, and a changed tuple is
+	// rejected. Empty preserves the ordinary non-journaled behavior.
+	OperationId   string `protobuf:"bytes,12,opt,name=operation_id,json=operationId,proto3" json:"operation_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SignManagedKeyRequest) Reset() {
@@ -1873,9 +1879,17 @@ func (x *SignManagedKeyRequest) GetAuthorizationToken() []byte {
 	return nil
 }
 
+func (x *SignManagedKeyRequest) GetOperationId() string {
+	if x != nil {
+		return x.OperationId
+	}
+	return ""
+}
+
 type SignManagedKeyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Signature     []byte                 `protobuf:"bytes,1,opt,name=signature,proto3" json:"signature,omitempty"`
+	Replayed      bool                   `protobuf:"varint,2,opt,name=replayed,proto3" json:"replayed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1915,6 +1929,13 @@ func (x *SignManagedKeyResponse) GetSignature() []byte {
 		return x.Signature
 	}
 	return nil
+}
+
+func (x *SignManagedKeyResponse) GetReplayed() bool {
+	if x != nil {
+		return x.Replayed
+	}
+	return false
 }
 
 type HealthRequest struct {
@@ -4752,7 +4773,7 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\n" +
 	"public_key\x18\x04 \x01(\fR\tpublicKey\x12\x14\n" +
 	"\x05state\x18\x05 \x01(\tR\x05state\x12\x1a\n" +
-	"\breplayed\x18\x06 \x01(\bR\breplayed\"\x85\x04\n" +
+	"\breplayed\x18\x06 \x01(\bR\breplayed\"\xa8\x04\n" +
 	"\x15SignManagedKeyRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x1a\n" +
 	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x15\n" +
@@ -4766,9 +4787,11 @@ const file_internal_signing_proto_signer_proto_rawDesc = "" +
 	"\x1aauthorization_expires_unix\x18\t \x01(\x03R\x18authorizationExpiresUnix\x12/\n" +
 	"\x13authorization_nonce\x18\n" +
 	" \x01(\fR\x12authorizationNonce\x12/\n" +
-	"\x13authorization_token\x18\v \x01(\fR\x12authorizationToken\"6\n" +
+	"\x13authorization_token\x18\v \x01(\fR\x12authorizationToken\x12!\n" +
+	"\foperation_id\x18\f \x01(\tR\voperationId\"R\n" +
 	"\x16SignManagedKeyResponse\x12\x1c\n" +
-	"\tsignature\x18\x01 \x01(\fR\tsignature\"\x0f\n" +
+	"\tsignature\x18\x01 \x01(\fR\tsignature\x12\x1a\n" +
+	"\breplayed\x18\x02 \x01(\bR\breplayed\"\x0f\n" +
 	"\rHealthRequest\"\xb6\x01\n" +
 	"\x0eHealthResponse\x12A\n" +
 	"\x06status\x18\x01 \x01(\x0e2).trstctl.signing.v1.HealthResponse.StatusR\x06status\"a\n" +
