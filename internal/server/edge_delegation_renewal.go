@@ -70,7 +70,10 @@ type edgeMint struct {
 	provider                          string
 	custody                           edgeCustodyEvidence
 	attestation                       deviceattest.EdgeCAAttestation
-	renewedFrom                       string
+	// token is the PKCS#11 token's verified attestation, when one made the
+	// custody hardware-attested (A175).
+	token       *deviceattest.TokenAttestation
+	renewedFrom string
 }
 
 // mintAndRecord signs the delegated CA under the parent CA with the
@@ -124,7 +127,8 @@ func (s *edgeDelegationService) mintAndRecord(ctx context.Context, tenantID stri
 		KeyExportable:         m.custody.exportable,
 		CustodyAssurance:      m.custody.assurance,
 		NotBefore:             info.NotBefore, NotAfter: info.NotAfter,
-		RenewedFrom: m.renewedFrom,
+		RenewedFrom:      m.renewedFrom,
+		TokenAttestation: edgeTokenAttestationRecord(m.token),
 	}); err != nil {
 		return store.EdgeDelegation{}, err
 	}

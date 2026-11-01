@@ -64,6 +64,11 @@ type edgeCAOptions struct {
 	pkcs11Token             string
 	pkcs11PINFile           string
 	pkcs11KeyLabelPrefix    string
+	// pkcs11AttestationLabels names the token's certificate objects that
+	// attest the edge key, leaf first (A175); tokenAttestationOut is where
+	// edge-csr writes that chain.
+	pkcs11AttestationLabels string
+	tokenAttestationOut     string
 
 	issueMode  bool
 	caCert     string
@@ -228,6 +233,17 @@ func runEdgeCSR(opts edgeCAOptions) error {
 		}
 		csrDER = generatedCSR
 		fmt.Printf("edge CA key generated NON-EXTRACTABLY in %s; opaque public handle written to %s\n", providerName, opts.keyHandleOut)
+		if providerName == "pkcs11" && strings.TrimSpace(opts.pkcs11AttestationLabels) != "" {
+			chain, err := readEdgeTokenAttestation(opts, csrDER)
+			if err != nil {
+				return fmt.Errorf("read the token's attestation of the edge key: %w", err)
+			}
+			if err := writeEdgeTokenAttestation(opts.tokenAttestationOut, chain); err != nil {
+				return fmt.Errorf("write the token attestation chain: %w", err)
+			}
+			fmt.Printf("the token's attestation of this key (%d certificates, leaf first) written to %s; send it as pkcs11_attestation_chain_der in the mint body\n",
+				len(chain), opts.tokenAttestationOut)
+		}
 	default:
 		return fmt.Errorf("unknown --edge-key-provider %q (want tpm2, pkcs11, or software)", opts.keyProvider)
 	}

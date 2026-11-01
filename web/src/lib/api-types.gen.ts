@@ -4238,6 +4238,7 @@ export interface EdgeDelegation {
   segment_id: string;
   serial: string;
   status: "active" | "revoked" | "expired";
+  token_attestation?: { pin_policy?: string; root_sha256: string; serial?: string; touch_policy?: string };
 }
 
 export interface EdgeDelegationDetail {
@@ -4257,6 +4258,7 @@ export interface EdgeDelegationMintInput {
   csr_der: string;
   host: string;
   key_provider?: "tpm2" | "pkcs11" | "software";
+  pkcs11_attestation_chain_der?: string[];
   segment_id: string;
   ttl_seconds?: number;
 }
@@ -4296,8 +4298,10 @@ export interface EdgeSegmentPolicy {
   enabled: boolean;
   excluded_dns_domains?: string[];
   permitted_dns_domains?: string[];
+  pkcs11_attestation_roots: number;
   renewal_enabled: boolean;
   renewal_window_days: number;
+  require_pkcs11_attestation: boolean;
   segment_id: string;
   segment_name?: string;
   updated_at: string;
@@ -4309,8 +4313,10 @@ export interface EdgeSegmentPolicyInput {
   enabled: boolean;
   excluded_dns_domains?: string[];
   permitted_dns_domains?: string[];
+  pkcs11_attestation_roots_pem?: string[];
   renewal_enabled?: boolean;
   renewal_window_days?: number;
+  require_pkcs11_attestation?: boolean;
   segment_id?: string;
 }
 

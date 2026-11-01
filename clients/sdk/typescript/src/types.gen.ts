@@ -13887,6 +13887,12 @@ export interface components {
             serial: string;
             /** @enum {string} */
             status: "active" | "revoked" | "expired";
+            token_attestation?: {
+                pin_policy?: string;
+                root_sha256: string;
+                serial?: string;
+                touch_policy?: string;
+            };
         };
         EdgeDelegationDetail: {
             delegation: components["schemas"]["EdgeDelegation"];
@@ -13906,6 +13912,8 @@ export interface components {
             host: string;
             /** @enum {string} */
             key_provider?: "tpm2" | "pkcs11" | "software";
+            /** @description the PKCS#11 token's attestation of the CSR's key, leaf first */
+            pkcs11_attestation_chain_der?: string[];
             segment_id: string;
             ttl_seconds?: number;
         };
@@ -13944,10 +13952,14 @@ export interface components {
             enabled: boolean;
             excluded_dns_domains?: string[];
             permitted_dns_domains?: string[];
+            /** @description how many PKCS#11 token vendor attestation roots the segment pins */
+            pkcs11_attestation_roots: number;
             /** @description hosts may renew a delegation over the agent channel with fresh attestation */
             renewal_enabled: boolean;
             /** @description how many days before expiry a renewal opens */
             renewal_window_days: number;
+            /** @description a PKCS#11 request without the token's attestation is refused */
+            require_pkcs11_attestation: boolean;
             segment_id: string;
             segment_name?: string;
             /** Format: date-time */
@@ -13959,10 +13971,14 @@ export interface components {
             enabled: boolean;
             excluded_dns_domains?: string[];
             permitted_dns_domains?: string[];
+            /** @description PKCS#11 token vendor attestation roots; a token attestation that reaches one makes a PKCS#11 key hardware-attested */
+            pkcs11_attestation_roots_pem?: string[];
             /** @description let hosts renew a delegation over the agent channel with fresh attestation (off by default) */
             renewal_enabled?: boolean;
             /** @description days before expiry a renewal opens, 1-29; 0 takes the 7-day default */
             renewal_window_days?: number;
+            /** @description refuse a PKCS#11 request without the token's attestation (needs a pinned vendor root) */
+            require_pkcs11_attestation?: boolean;
             segment_id?: string;
         };
         EdgeSegmentPolicyList: {

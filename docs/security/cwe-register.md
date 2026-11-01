@@ -566,7 +566,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:552` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:555` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -681,10 +681,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6608` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6625` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6638` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6672` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6628` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6645` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6658` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6692` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1008,7 +1008,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4182` | closed test table list above |
+| `internal/store/migration_content_test.go:4183` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 
@@ -1121,7 +1121,7 @@ not this file.
 | `internal/kmip/independent_verifier_test.go:119` | python is LookPath-resolved and module is a fixed repository verifier path (CWE-78). |
 | `internal/kmip/pykmip_client_test.go:49` | fixed docker subcommands with test-owned arguments (CWE-78) |
 | `internal/kmip/pykmip_tenants_test.go:46` | fixed docker subcommands with test-owned arguments (CWE-78) |
-| `internal/kms/pkcs11/softhsm_container_test.go:184` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
+| `internal/kms/pkcs11/softhsm_container_test.go:187` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/tpm/swtpm_container_test.go:105` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:165` | the repository's own signer (CWE-78) |
 | `internal/kms/wrapadapter/localstack_signer_test.go:181` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1345,7 +1345,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:676` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:679` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1400,13 +1400,13 @@ not this file.
 | `clients/terraform/internal/terraformprovider/client.go:94` | operator-selected public trust bundle (CWE-22) |
 | `cmd/trstctl-agent/cosign_attach.go:208` | operator-configured local path from the agent's own config (CWE-22) |
 | `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:119` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:131` | explicit operator file path |
-| `cmd/trstctl-agent/edgeca.go:256` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:280` | operator-configured local path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:290` | operator-configured local handle path from the agent's own flags (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:371` | operator-configured journal path on the agent's own host (CWE-22) |
-| `cmd/trstctl-agent/edgeca.go:414` | directory of the operator-selected output, synced after an atomic rename |
+| `cmd/trstctl-agent/edgeca.go:124` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:136` | explicit operator file path |
+| `cmd/trstctl-agent/edgeca.go:272` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:296` | operator-configured local path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:306` | operator-configured local handle path from the agent's own flags (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:387` | operator-configured journal path on the agent's own host (CWE-22) |
+| `cmd/trstctl-agent/edgeca.go:430` | directory of the operator-selected output, synced after an atomic rename |
 | `cmd/trstctl-agent/edgeca_provider.go:70` | explicit operator-owned device secret path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:61` | t.TempDir path (CWE-22) |
 | `cmd/trstctl-agent/edgeca_test.go:122` | t.TempDir path (CWE-22) |
@@ -1422,8 +1422,8 @@ not this file.
 | `cmd/trstctl-agent/edgerenew_test.go:104` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/edgerenew_test.go:133` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
-| `cmd/trstctl-agent/main.go:1290` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1951` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1293` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1954` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:350` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:377` | operator-supplied public issuer certificate (CWE-22) |
@@ -2146,7 +2146,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:856` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:859` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |

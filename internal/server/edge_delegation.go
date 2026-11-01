@@ -12,7 +12,6 @@ import (
 
 	"trstctl.com/trstctl/internal/api"
 	"trstctl.com/trstctl/internal/crypto"
-	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/deviceattest"
 	"trstctl.com/trstctl/internal/orchestrator"
 	"trstctl.com/trstctl/internal/projections"
@@ -86,16 +85,8 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 				"%w: enabling edge delegation requires at least one TPM attestation root; "+
 					"without one, any key that asks would be vouched for", api.ErrEdgeDelegationInvalid)
 		}
-		for i, root := range req.AttestationRootsPEM {
-			block, _ := pem.Decode([]byte(root))
-			if block == nil || block.Type != "CERTIFICATE" {
-				return api.EdgeSegmentPolicy{}, fmt.Errorf(
-					"%w: attestation root %d is not a PEM certificate", api.ErrEdgeDelegationInvalid, i)
-			}
-			if _, err := certinfo.Inspect(block.Bytes); err != nil {
-				return api.EdgeSegmentPolicy{}, fmt.Errorf(
-					"%w: attestation root %d: %v", api.ErrEdgeDelegationInvalid, i, err)
-			}
+		if err := validateEdgePEMRoots("attestation root", req.AttestationRootsPEM); err != nil {
+			return api.EdgeSegmentPolicy{}, err
 		}
 		if len(req.PermittedDNSDomains) == 0 {
 			return api.EdgeSegmentPolicy{}, fmt.Errorf(
@@ -103,19 +94,28 @@ func (s *edgeDelegationService) SetSegmentPolicy(ctx context.Context, tenantID s
 					"they become the name constraints of every delegation minted for it", api.ErrEdgeDelegationInvalid)
 		}
 	}
+	if err := validateEdgePEMRoots("pkcs11_attestation_roots_pem", req.PKCS11AttestationRootsPEM); err != nil {
+		return api.EdgeSegmentPolicy{}, err
+	}
+	if req.RequirePKCS11Attestation && len(req.PKCS11AttestationRootsPEM) == 0 {
+		return api.EdgeSegmentPolicy{}, fmt.Errorf("%w: require_pkcs11_attestation needs at least one pkcs11_attestation_roots_pem vendor root",
+			api.ErrEdgeDelegationInvalid)
+	}
 	if req.RenewalWindowDays < 0 || req.RenewalWindowDays > maxEdgeRenewalWindowDays {
 		return api.EdgeSegmentPolicy{}, fmt.Errorf("%w: renewal_window_days must be between 1 and %d (0 takes the %d-day default)",
 			api.ErrEdgeDelegationInvalid, maxEdgeRenewalWindowDays, defaultEdgeRenewalWindowDays)
 	}
 	if err := s.orch.SetEdgeSegmentPolicy(ctx, tenantID, projections.EdgeSegmentPolicySet{
-		SegmentID:           segmentID,
-		Enabled:             req.Enabled,
-		AttestationRootsPEM: req.AttestationRootsPEM,
-		PermittedDNSDomains: req.PermittedDNSDomains,
-		ExcludedDNSDomains:  req.ExcludedDNSDomains,
-		AllowedKeyProviders: allowedProviders,
-		RenewalEnabled:      req.RenewalEnabled,
-		RenewalWindowDays:   req.RenewalWindowDays,
+		SegmentID:                 segmentID,
+		Enabled:                   req.Enabled,
+		AttestationRootsPEM:       req.AttestationRootsPEM,
+		PermittedDNSDomains:       req.PermittedDNSDomains,
+		ExcludedDNSDomains:        req.ExcludedDNSDomains,
+		AllowedKeyProviders:       allowedProviders,
+		RenewalEnabled:            req.RenewalEnabled,
+		RenewalWindowDays:         req.RenewalWindowDays,
+		PKCS11AttestationRootsPEM: req.PKCS11AttestationRootsPEM,
+		RequirePKCS11Attestation:  req.RequirePKCS11Attestation,
 	}); err != nil {
 		return api.EdgeSegmentPolicy{}, err
 	}
@@ -179,10 +179,14 @@ func (s *edgeDelegationService) MintDelegation(ctx context.Context, tenantID str
 	if err != nil {
 		return api.EdgeDelegation{}, edgeAttestationRefusal(err)
 	}
+	token, custody, err := edgeTokenCustody(provider, custody, policy, req.PKCS11AttestationChainDER, req.CSRDER, time.Now().UTC())
+	if err != nil {
+		return api.EdgeDelegation{}, err
+	}
 	delegation, err := s.mintAndRecord(ctx, tenantID, edgeMint{
 		segmentID: segmentID, caID: caID, host: host, commonName: strings.TrimSpace(req.CommonName),
 		ttl: time.Duration(req.TTLSeconds) * time.Second, csrDER: req.CSRDER, policy: policy,
-		provider: provider, custody: custody, attestation: attestation,
+		provider: provider, custody: custody, attestation: attestation, token: token,
 	})
 	if err != nil {
 		return api.EdgeDelegation{}, err
@@ -399,16 +403,18 @@ func (s *edgeDelegationService) Reconcile(ctx context.Context, tenantID, id stri
 func (s *edgeDelegationService) policyView(ctx context.Context, tenantID string, p store.EdgeSegmentPolicy) api.EdgeSegmentPolicy {
 	name, _ := s.segmentName(ctx, tenantID, p.SegmentID)
 	return api.EdgeSegmentPolicy{
-		SegmentID:           p.SegmentID,
-		SegmentName:         name,
-		Enabled:             p.Enabled,
-		AttestationRoots:    len(p.AttestationRootsPEM),
-		PermittedDNSDomains: p.PermittedDNSDomains,
-		ExcludedDNSDomains:  p.ExcludedDNSDomains,
-		AllowedKeyProviders: edgeProvidersOrDefault(p.AllowedKeyProviders),
-		RenewalEnabled:      p.RenewalEnabled,
-		RenewalWindowDays:   int(edgeRenewalWindow(p) / (24 * time.Hour)),
-		UpdatedAt:           p.UpdatedAt,
+		SegmentID:                p.SegmentID,
+		SegmentName:              name,
+		Enabled:                  p.Enabled,
+		AttestationRoots:         len(p.AttestationRootsPEM),
+		PermittedDNSDomains:      p.PermittedDNSDomains,
+		ExcludedDNSDomains:       p.ExcludedDNSDomains,
+		AllowedKeyProviders:      edgeProvidersOrDefault(p.AllowedKeyProviders),
+		RenewalEnabled:           p.RenewalEnabled,
+		RenewalWindowDays:        int(edgeRenewalWindow(p) / (24 * time.Hour)),
+		PKCS11AttestationRoots:   len(p.PKCS11AttestationRootsPEM),
+		RequirePKCS11Attestation: p.RequirePKCS11Attestation,
+		UpdatedAt:                p.UpdatedAt,
 	}
 }
 
@@ -469,6 +475,7 @@ func edgeDelegationView(d store.EdgeDelegation, now time.Time) api.EdgeDelegatio
 		KeyStorage:          d.KeyStorage,
 		KeyExportable:       d.KeyExportable,
 		CustodyAssurance:    d.CustodyAssurance,
+		TokenAttestation:    edgeTokenAttestationView(d),
 		Status:              status,
 		NotBefore:           d.NotBefore, NotAfter: d.NotAfter,
 		RevokedAt: d.RevokedAt, RevokeReason: d.RevokeReason,

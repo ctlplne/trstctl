@@ -18185,6 +18185,26 @@
               "expired"
             ],
             "type": "string"
+          },
+          "token_attestation": {
+            "properties": {
+              "pin_policy": {
+                "type": "string"
+              },
+              "root_sha256": {
+                "type": "string"
+              },
+              "serial": {
+                "type": "string"
+              },
+              "touch_policy": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "root_sha256"
+            ],
+            "type": "object"
           }
         },
         "required": [
@@ -18267,6 +18287,14 @@
               "software"
             ],
             "type": "string"
+          },
+          "pkcs11_attestation_chain_der": {
+            "description": "the PKCS#11 token's attestation of the CSR's key, leaf first",
+            "items": {
+              "format": "byte",
+              "type": "string"
+            },
+            "type": "array"
           },
           "segment_id": {
             "type": "string"
@@ -18414,6 +18442,10 @@
             },
             "type": "array"
           },
+          "pkcs11_attestation_roots": {
+            "description": "how many PKCS#11 token vendor attestation roots the segment pins",
+            "type": "integer"
+          },
           "renewal_enabled": {
             "description": "hosts may renew a delegation over the agent channel with fresh attestation",
             "type": "boolean"
@@ -18421,6 +18453,10 @@
           "renewal_window_days": {
             "description": "how many days before expiry a renewal opens",
             "type": "integer"
+          },
+          "require_pkcs11_attestation": {
+            "description": "a PKCS#11 request without the token's attestation is refused",
+            "type": "boolean"
           },
           "segment_id": {
             "type": "string"
@@ -18440,6 +18476,8 @@
           "allowed_key_providers",
           "renewal_enabled",
           "renewal_window_days",
+          "pkcs11_attestation_roots",
+          "require_pkcs11_attestation",
           "updated_at"
         ],
         "type": "object"
@@ -18478,6 +18516,13 @@
             },
             "type": "array"
           },
+          "pkcs11_attestation_roots_pem": {
+            "description": "PKCS#11 token vendor attestation roots; a token attestation that reaches one makes a PKCS#11 key hardware-attested",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "renewal_enabled": {
             "description": "let hosts renew a delegation over the agent channel with fresh attestation (off by default)",
             "type": "boolean"
@@ -18485,6 +18530,10 @@
           "renewal_window_days": {
             "description": "days before expiry a renewal opens, 1-29; 0 takes the 7-day default",
             "type": "integer"
+          },
+          "require_pkcs11_attestation": {
+            "description": "refuse a PKCS#11 request without the token's attestation (needs a pinned vendor root)",
+            "type": "boolean"
           },
           "segment_id": {
             "type": "string"

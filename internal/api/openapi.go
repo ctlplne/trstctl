@@ -6016,24 +6016,28 @@ func componentSchemas() map[string]*Schema {
 	}, "items", "guidance")
 	edgeSegmentPolicySchema := object(map[string]*Schema{
 		"segment_id": str(), "segment_name": str(),
-		"enabled":               {Type: "boolean"},
-		"attestation_roots":     {Type: "integer"},
-		"permitted_dns_domains": {Type: "array", Items: str()},
-		"excluded_dns_domains":  {Type: "array", Items: str()},
-		"allowed_key_providers": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
-		"renewal_enabled":       {Type: "boolean", Description: "hosts may renew a delegation over the agent channel with fresh attestation"},
-		"renewal_window_days":   {Type: "integer", Description: "how many days before expiry a renewal opens"},
-		"updated_at":            {Type: "string", Format: "date-time"},
-	}, "segment_id", "enabled", "attestation_roots", "allowed_key_providers", "renewal_enabled", "renewal_window_days", "updated_at")
+		"enabled":                    {Type: "boolean"},
+		"attestation_roots":          {Type: "integer"},
+		"permitted_dns_domains":      {Type: "array", Items: str()},
+		"excluded_dns_domains":       {Type: "array", Items: str()},
+		"allowed_key_providers":      {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
+		"renewal_enabled":            {Type: "boolean", Description: "hosts may renew a delegation over the agent channel with fresh attestation"},
+		"renewal_window_days":        {Type: "integer", Description: "how many days before expiry a renewal opens"},
+		"pkcs11_attestation_roots":   {Type: "integer", Description: "how many PKCS#11 token vendor attestation roots the segment pins"},
+		"require_pkcs11_attestation": {Type: "boolean", Description: "a PKCS#11 request without the token's attestation is refused"},
+		"updated_at":                 {Type: "string", Format: "date-time"},
+	}, "segment_id", "enabled", "attestation_roots", "allowed_key_providers", "renewal_enabled", "renewal_window_days", "pkcs11_attestation_roots", "require_pkcs11_attestation", "updated_at")
 	edgeSegmentPolicyInput := object(map[string]*Schema{
-		"segment_id":            str(),
-		"enabled":               {Type: "boolean"},
-		"attestation_roots_pem": {Type: "array", Items: str()},
-		"permitted_dns_domains": {Type: "array", Items: str()},
-		"excluded_dns_domains":  {Type: "array", Items: str()},
-		"allowed_key_providers": {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
-		"renewal_enabled":       {Type: "boolean", Description: "let hosts renew a delegation over the agent channel with fresh attestation (off by default)"},
-		"renewal_window_days":   {Type: "integer", Description: "days before expiry a renewal opens, 1-29; 0 takes the 7-day default"},
+		"segment_id":                   str(),
+		"enabled":                      {Type: "boolean"},
+		"attestation_roots_pem":        {Type: "array", Items: str()},
+		"permitted_dns_domains":        {Type: "array", Items: str()},
+		"excluded_dns_domains":         {Type: "array", Items: str()},
+		"allowed_key_providers":        {Type: "array", Items: &Schema{Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}}},
+		"renewal_enabled":              {Type: "boolean", Description: "let hosts renew a delegation over the agent channel with fresh attestation (off by default)"},
+		"renewal_window_days":          {Type: "integer", Description: "days before expiry a renewal opens, 1-29; 0 takes the 7-day default"},
+		"pkcs11_attestation_roots_pem": {Type: "array", Items: str(), Description: "PKCS#11 token vendor attestation roots; a token attestation that reaches one makes a PKCS#11 key hardware-attested"},
+		"require_pkcs11_attestation":   {Type: "boolean", Description: "refuse a PKCS#11 request without the token's attestation (needs a pinned vendor root)"},
 	}, "enabled")
 	edgeDelegationSchema := object(map[string]*Schema{
 		"id": str(), "segment_id": str(), "ca_id": str(), "host": str(),
@@ -6053,6 +6057,9 @@ func componentSchemas() map[string]*Schema {
 		"revoke_reason":         str(),
 		"renewed_from":          {Type: "string", Description: "the delegation this one renewed"},
 		"renewed_by":            {Type: "string", Description: "the delegation that renewed this one"},
+		"token_attestation": object(map[string]*Schema{
+			"root_sha256": str(), "serial": str(), "pin_policy": str(), "touch_policy": str(),
+		}, "root_sha256"),
 	}, "id", "segment_id", "ca_id", "host", "common_name", "serial", "permitted_dns_domains", "csr_key_sha256", "key_provider", "key_storage", "key_exportable", "custody_assurance", "status", "not_before", "not_after")
 	edgeDelegationMintInput := object(map[string]*Schema{
 		"segment_id": str(), "ca_id": str(), "host": str(), "common_name": str(),
@@ -6060,6 +6067,8 @@ func componentSchemas() map[string]*Schema {
 		"csr_der":                     {Type: "string", Format: "byte"},
 		"attestation_credential_json": {Type: "string", Format: "byte"},
 		"key_provider":                {Type: "string", Enum: []string{"tpm2", "pkcs11", "software"}},
+		"pkcs11_attestation_chain_der": {Type: "array", Items: &Schema{Type: "string", Format: "byte"},
+			Description: "the PKCS#11 token's attestation of the CSR's key, leaf first"},
 	}, "segment_id", "ca_id", "host", "csr_der", "attestation_credential_json")
 	edgeIssuanceSchema := object(map[string]*Schema{
 		"serial": str(), "subject": str(),

@@ -863,6 +863,10 @@ type EdgeSegmentPolicySet struct {
 	RenewalEnabled    bool   `json:"renewal_enabled,omitempty"`
 	RenewalWindowDays int    `json:"renewal_window_days,omitempty"`
 	SetBy             string `json:"set_by,omitempty"`
+	// PKCS11AttestationRootsPEM and RequirePKCS11Attestation (A175) pin token
+	// vendor roots; absent on older events, which therefore pin none.
+	PKCS11AttestationRootsPEM []string `json:"pkcs11_attestation_roots_pem,omitempty"`
+	RequirePKCS11Attestation  bool     `json:"require_pkcs11_attestation,omitempty"`
 }
 
 type edgeSegmentPolicySetV1 struct {
@@ -897,6 +901,17 @@ type EdgeDelegationIssued struct {
 	// RenewedFrom is the delegation a host renewed over the agent channel with
 	// fresh attestation (A220); empty for a mint.
 	RenewedFrom string `json:"renewed_from,omitempty"`
+	// TokenAttestation is the PKCS#11 token's verified attestation of the
+	// delegated key (A175); absent otherwise.
+	TokenAttestation *EdgeTokenAttestation `json:"token_attestation,omitempty"`
+}
+
+// EdgeTokenAttestation is what a verified PKCS#11 token attestation named.
+type EdgeTokenAttestation struct {
+	RootSHA256  string `json:"root_sha256"`
+	Serial      string `json:"serial,omitempty"`
+	PINPolicy   string `json:"pin_policy,omitempty"`
+	TouchPolicy string `json:"touch_policy,omitempty"`
 }
 
 type edgeDelegationIssuedV1 struct {
@@ -5447,6 +5462,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			ExcludedDNSDomains:  pl.ExcludedDNSDomains,
 			AllowedKeyProviders: pl.AllowedKeyProviders,
 			RenewalEnabled:      pl.RenewalEnabled, RenewalWindowDays: pl.RenewalWindowDays,
+			PKCS11AttestationRootsPEM: pl.PKCS11AttestationRootsPEM, RequirePKCS11Attestation: pl.RequirePKCS11Attestation,
 			UpdatedAt: e.Time,
 		}, e.Sequence)
 	case EventEdgeDelegationIssued:
@@ -5464,6 +5480,10 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			CSRKeySHA256: pl.CSRKeySHA256, KeyProvider: pl.KeyProvider, KeyStorage: pl.KeyStorage,
 			KeyExportable: pl.KeyExportable, CustodyAssurance: pl.CustodyAssurance,
 			NotBefore: pl.NotBefore, NotAfter: pl.NotAfter, RenewedFrom: pl.RenewedFrom, CreatedAt: e.Time,
+			TokenAttestationRootSHA256:  tokenAttestationField(pl.TokenAttestation, func(t *EdgeTokenAttestation) string { return t.RootSHA256 }),
+			TokenAttestationSerial:      tokenAttestationField(pl.TokenAttestation, func(t *EdgeTokenAttestation) string { return t.Serial }),
+			TokenAttestationPINPolicy:   tokenAttestationField(pl.TokenAttestation, func(t *EdgeTokenAttestation) string { return t.PINPolicy }),
+			TokenAttestationTouchPolicy: tokenAttestationField(pl.TokenAttestation, func(t *EdgeTokenAttestation) string { return t.TouchPolicy }),
 		}, e.Sequence); err != nil {
 			return err
 		}
@@ -10192,4 +10212,11 @@ func projectionADCSWorstSeverity(findings []adcsdiscovery.Finding) string {
 type TicketIntakeDeleted struct {
 	System string `json:"system"`
 	Name   string `json:"name"`
+}
+
+func tokenAttestationField(t *EdgeTokenAttestation, field func(*EdgeTokenAttestation) string) string {
+	if t == nil {
+		return ""
+	}
+	return field(t)
 }

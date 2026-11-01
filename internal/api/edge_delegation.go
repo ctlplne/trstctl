@@ -62,6 +62,13 @@ type EdgeSegmentPolicyRequest struct {
 	// expiry (0 takes the 7-day default). Off unless set.
 	RenewalEnabled    bool `json:"renewal_enabled,omitempty"`
 	RenewalWindowDays int  `json:"renewal_window_days,omitempty"`
+	// PKCS11AttestationRootsPEM are the PKCS#11 token vendors' attestation
+	// roots (A175): a PKCS#11 edge key whose token's attestation chains to one
+	// and certifies the CSR's key is recorded as hardware-attested.
+	PKCS11AttestationRootsPEM []string `json:"pkcs11_attestation_roots_pem,omitempty"`
+	// RequirePKCS11Attestation refuses a PKCS#11 request without that token
+	// attestation. It needs at least one pinned vendor root.
+	RequirePKCS11Attestation bool `json:"require_pkcs11_attestation,omitempty"`
 }
 
 type EdgeSegmentPolicy struct {
@@ -76,8 +83,11 @@ type EdgeSegmentPolicy struct {
 	AllowedKeyProviders []string `json:"allowed_key_providers"`
 	RenewalEnabled      bool     `json:"renewal_enabled"`
 	// RenewalWindowDays is the effective window, the default when unset.
-	RenewalWindowDays int       `json:"renewal_window_days"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	RenewalWindowDays int `json:"renewal_window_days"`
+	// PKCS11AttestationRoots is a COUNT of pinned token vendor roots (A175).
+	PKCS11AttestationRoots   int       `json:"pkcs11_attestation_roots"`
+	RequirePKCS11Attestation bool      `json:"require_pkcs11_attestation"`
+	UpdatedAt                time.Time `json:"updated_at"`
 }
 
 type EdgeSegmentPolicyList struct {
@@ -103,29 +113,46 @@ type EdgeDelegationMintRequest struct {
 	// tpm2 (default), pkcs11, or software. The server derives storage and
 	// exportability from this closed value and the segment must allow it.
 	KeyProvider string `json:"key_provider,omitempty"`
+	// PKCS11AttestationChainDER is the PKCS#11 token's own attestation of the
+	// CSR's key, leaf first (A175). It makes a PKCS#11 key hardware-attested
+	// when it reaches a vendor root the segment pinned.
+	PKCS11AttestationChainDER [][]byte `json:"pkcs11_attestation_chain_der,omitempty"`
+}
+
+// EdgeTokenAttestation is what a verified PKCS#11 token attestation named
+// (A175): the vendor root it verified to and, when the token says so, the
+// device serial and the key's PIN and touch policies.
+type EdgeTokenAttestation struct {
+	RootSHA256  string `json:"root_sha256"`
+	Serial      string `json:"serial,omitempty"`
+	PINPolicy   string `json:"pin_policy,omitempty"`
+	TouchPolicy string `json:"touch_policy,omitempty"`
 }
 
 type EdgeDelegation struct {
-	ID                  string     `json:"id"`
-	SegmentID           string     `json:"segment_id"`
-	CAID                string     `json:"ca_id"`
-	Host                string     `json:"host"`
-	CommonName          string     `json:"common_name"`
-	Serial              string     `json:"serial"`
-	CertificatePEM      string     `json:"certificate_pem,omitempty"`
-	PermittedDNSDomains []string   `json:"permitted_dns_domains"`
-	ExcludedDNSDomains  []string   `json:"excluded_dns_domains,omitempty"`
-	AttestedKeySHA256   string     `json:"attested_key_sha256,omitempty"`
-	CSRKeySHA256        string     `json:"csr_key_sha256"`
-	KeyProvider         string     `json:"key_provider"`
-	KeyStorage          string     `json:"key_storage"`
-	KeyExportable       bool       `json:"key_exportable"`
-	CustodyAssurance    string     `json:"custody_assurance"`
-	Status              string     `json:"status"`
-	NotBefore           time.Time  `json:"not_before"`
-	NotAfter            time.Time  `json:"not_after"`
-	RevokedAt           *time.Time `json:"revoked_at,omitempty"`
-	RevokeReason        string     `json:"revoke_reason,omitempty"`
+	ID                  string   `json:"id"`
+	SegmentID           string   `json:"segment_id"`
+	CAID                string   `json:"ca_id"`
+	Host                string   `json:"host"`
+	CommonName          string   `json:"common_name"`
+	Serial              string   `json:"serial"`
+	CertificatePEM      string   `json:"certificate_pem,omitempty"`
+	PermittedDNSDomains []string `json:"permitted_dns_domains"`
+	ExcludedDNSDomains  []string `json:"excluded_dns_domains,omitempty"`
+	AttestedKeySHA256   string   `json:"attested_key_sha256,omitempty"`
+	CSRKeySHA256        string   `json:"csr_key_sha256"`
+	KeyProvider         string   `json:"key_provider"`
+	KeyStorage          string   `json:"key_storage"`
+	KeyExportable       bool     `json:"key_exportable"`
+	CustodyAssurance    string   `json:"custody_assurance"`
+	// TokenAttestation is set when a PKCS#11 token's own attestation made
+	// the custody hardware-attested (A175).
+	TokenAttestation *EdgeTokenAttestation `json:"token_attestation,omitempty"`
+	Status           string                `json:"status"`
+	NotBefore        time.Time             `json:"not_before"`
+	NotAfter         time.Time             `json:"not_after"`
+	RevokedAt        *time.Time            `json:"revoked_at,omitempty"`
+	RevokeReason     string                `json:"revoke_reason,omitempty"`
 	// RenewedFrom is the delegation this one renewed; RenewedBy the one that
 	// renewed this (A220).
 	RenewedFrom string `json:"renewed_from,omitempty"`

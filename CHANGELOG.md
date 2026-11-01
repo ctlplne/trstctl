@@ -2,6 +2,10 @@
 
 ### Added
 
+- Hardware attestation for PKCS#11 edge CA keys: a token's own attestation of the key (read by the
+  agent from the token's certificate objects) that reaches a vendor root the segment pins records
+  the delegation as hardware-key attested, with the device serial and key policies; a segment can
+  require it.
 - Annotate a leaked credential where it was seen: a third-party scan finding from a Slack export,
   a Jira export, a CI log or a container image can be written back as a thread reply, an issue
   comment, a commit status at GitHub or GitLab, or an OCI referrer on the image, by an operator or

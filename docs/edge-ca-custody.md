@@ -186,10 +186,31 @@ Build the agent with CGO enabled on the token host so it can load the vendor's
 native PKCS#11 module; a static artifact never substitutes software custody.
 
 The host TPM attestation still authenticates the host and binds the request to
-the CSR, but it cannot attest a different PKCS#11 object. Evidence therefore
-says `host_attested_operator_claim`. It does not claim that the TPM proved token
-custody. Independent token inspection is the deployment proof that the object
-is non-extractable.
+the CSR, but it cannot attest a different PKCS#11 object. Without more, evidence
+therefore says `host_attested_operator_claim`. It does not claim that the TPM
+proved token custody.
+
+### Token attestation (A175)
+
+A token that certifies the keys it generates (a YubiKey's PIV attestation is
+the common case) can prove the key itself. Its PKCS#11 module exposes that
+attestation as certificate objects; name them, leaf first, with
+`--edge-pkcs11-attestation-labels` when you run `--edge-csr` (for a YubiKey:
+`"X.509 Certificate for PIV Attestation 9c,X.509 Certificate for PIV
+Attestation"`). The agent reads them, checks the leaf certifies exactly the CSR's
+key, and writes the chain to `--edge-token-attestation-out` (PEM, leaf first).
+Send it in the mint body as `pkcs11_attestation_chain_der` (base64 DER, leaf
+first).
+
+The segment pins the vendor's attestation root in `pkcs11_attestation_roots_pem`.
+A chain that reaches a pinned root and certifies the CSR's key makes the custody
+`hardware_key_attested`, and the delegation records the root's SHA-256 and, when
+the token names them, the device serial and the key's PIN and touch policies
+(`token_attestation`). A chain for another key or from an unpinned vendor is
+refused. With `require_pkcs11_attestation`, a PKCS#11 request without a chain is
+refused; without it, such a request keeps `host_attested_operator_claim`. The
+local proof uses SoftHSM holding a stand-in vendor chain (SoftHSM has no
+attestation of its own); proof with a real token is a separate hardware step.
 
 ## Exportable software exception
 
@@ -243,6 +264,9 @@ only its public root certificate.
 
 Omitting `allowed_key_providers` means exactly `["tpm2"]`. Unknown providers,
 duplicate values, and unapproved PKCS#11/software mint requests fail closed.
+`pkcs11_attestation_roots_pem` and `require_pkcs11_attestation` (see Token
+attestation above) are optional; requiring attestation needs at least one pinned
+vendor root.
 
 ## Attested renewal
 
