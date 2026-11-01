@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/ee/billing"
+	"trstctl.com/trstctl/ee/governance/misuse"
 	"trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/ee/silo"
 	"trstctl.com/trstctl/internal/agentid/delegation"
@@ -651,6 +652,11 @@ var licensedProductionPrivacyEventCatalog = func() []licensedPrivacyEventPolicy 
 
 		entry(silo.LaneProbeEventType, 1,
 			rejectingTypedLicensedPrivacyPolicy[licensedSiloLaneProbe]()),
+
+		entry(misuse.EventFindingDetected, 1,
+			typedLicensedPrivacyPolicy[misuse.FindingDetected](
+				licensedPrivacyRule("/principal", events.PrivacyFieldIdentityExact),
+			)),
 
 		entry(delegation.TypeDelegationRecorded, delegation.DelegationRecordedSchemaV1,
 			rejectingTypedLicensedPrivacyPolicy[delegation.DelegationRecordedV1]()),

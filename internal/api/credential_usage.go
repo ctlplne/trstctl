@@ -4,8 +4,6 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +15,7 @@ import (
 
 	googleuuid "github.com/google/uuid"
 
+	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/projections"
 	"trstctl.com/trstctl/internal/store"
 )
@@ -182,8 +181,8 @@ func (r *credentialUsageRecorder) drain(ctx context.Context, sink credentialUsag
 // credentialUseEventID names a note by its token, network, action, window and
 // count, so replicas that note the same use record one event.
 func credentialUseEventID(n credentialUseNote) string {
-	sum := sha256.Sum256([]byte(n.used.CredentialID + "\x00" + n.used.Source + "\x00" + n.used.Action))
-	return googleuuid.NewSHA1(credentialUsageNamespace, []byte(n.tenant+"\x00"+hex.EncodeToString(sum[:])+"\x00"+
+	digest := crypto.SHA256Hex([]byte(n.used.CredentialID + "\x00" + n.used.Source + "\x00" + n.used.Action))
+	return googleuuid.NewSHA1(credentialUsageNamespace, []byte(n.tenant+"\x00"+digest+"\x00"+
 		n.used.WindowStart.Format(time.RFC3339)+"\x00"+strconv.Itoa(n.used.Count))).String()
 }
 

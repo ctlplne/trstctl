@@ -91,6 +91,9 @@ func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
 	if deps.GovernanceFactory != nil || deps.GovernancePolicySource != nil {
 		t.Fatal("community attach must not mount governance seams")
 	}
+	if hasBackgroundWorker(deps, "misuse_detector") {
+		t.Fatal("community attach must not mount misuse detection (M2)")
+	}
 
 	deps = &server.Deps{}
 	if err := attachEE(context.Background(), &config.Config{}, nil, enterpriseLicense(t), deps); err != nil {
@@ -101,6 +104,9 @@ func TestAttachEEGovernanceRequiresEnterpriseLicense(t *testing.T) {
 	}
 	if deps.GovernancePolicySource == nil {
 		t.Fatal("enterprise governance feature did not mount policy source")
+	}
+	if !hasBackgroundWorker(deps, "misuse_detector") || len(deps.LicensedProjectionOptions) == 0 {
+		t.Fatal("enterprise governance feature did not mount misuse detection and its findings projection (M2)")
 	}
 }
 

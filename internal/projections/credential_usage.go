@@ -73,6 +73,7 @@ func (p *Projector) applyCredentialUsageTx(ctx context.Context, tx pgx.Tx, e eve
 		return true, p.store.ApplyCredentialUseTx(ctx, tx, store.CredentialUse{
 			TenantID: e.TenantID, Kind: pl.Kind, CredentialID: pl.CredentialID, Principal: pl.Principal,
 			SourceKind: pl.SourceKind, Source: pl.Source, UsedAt: pl.UsedAt,
+			Action: pl.Action, WindowStart: pl.WindowStart, Count: pl.Count,
 		}, e.Sequence)
 	case EventCredentialUsageGap:
 		var pl CredentialUsageGap

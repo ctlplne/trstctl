@@ -835,6 +835,8 @@ var ReadModelTables = []string{"owners", "ownership_assignments", "issuers", "id
 	// M1: projected from credential.used, credential.usage_gap and
 	// secrets.session.started.
 	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
+	// M1's hourly usage windows, projected from credential.used.
+	"credential_usage_windows",
 	// I4: projected from enrollment.diagnostic.observed. Counts and retention
 	// rebuild from the immutable observation stream.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",

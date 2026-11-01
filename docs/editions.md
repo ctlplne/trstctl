@@ -213,7 +213,7 @@ of runtime licensed features.
 | `fips` | Enterprise | Assurance: FIPS-capable distribution posture and evidence. |
 | `ha_support` | Enterprise | Scale: served enterprise support posture, SLA target catalog, 24x7 production tier, and professional-services packages. |
 | `byok` | Enterprise | Assurance: bring-your-own-key / external custody operations. |
-| `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls. |
+| `governance` | Enterprise | Governance: advanced approvals, policy, and audit controls, and misuse detection over trstctl's own usage record. |
 | `enterprise_sso` | Enterprise | Tenant SAML and LDAP sign-in, plus tenant SCIM provisioning. OIDC remains core. |
 | `audit_compliance` | Enterprise | Audit timestamp anchoring, retention, and compliance packaging. Plain signed history export stays core. |
 | `provider_plane` | Provider | Managed-provider control plane features, gated by per-customer delegation (see below). |

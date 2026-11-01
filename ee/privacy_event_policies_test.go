@@ -9,6 +9,7 @@ import (
 	"time"
 
 	enterprise "trstctl.com/trstctl/ee"
+	"trstctl.com/trstctl/ee/governance/misuse"
 	"trstctl.com/trstctl/ee/provider"
 	"trstctl.com/trstctl/ee/silo"
 	"trstctl.com/trstctl/internal/agentid/delegation"
@@ -168,6 +169,7 @@ func fullBinaryProducerPrivacyCoordinates() []events.ProductionPrivacyEventSchem
 		{EventType: "kmip.object.activated", SchemaVersion: 1},
 		{EventType: "kmip.object.attributes_changed", SchemaVersion: 1},
 		{EventType: silo.LaneProbeEventType, SchemaVersion: 1},
+		{EventType: misuse.EventFindingDetected, SchemaVersion: 1},
 		{EventType: delegation.TypeDelegationRecorded, SchemaVersion: delegation.DelegationRecordedSchemaV1},
 		{EventType: delegation.TypeIssuanceRecorded, SchemaVersion: delegation.IssuanceRecordedSchemaV1},
 		{EventType: delegation.TypeRefusalRecorded, SchemaVersion: delegation.RefusalRecordedSchemaV1},

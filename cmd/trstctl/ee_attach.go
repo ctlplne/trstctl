@@ -22,6 +22,7 @@ import (
 	eeenterpriseauth "trstctl.com/trstctl/ee/enterpriseauth"
 	eefederation "trstctl.com/trstctl/ee/federation"
 	eegovernance "trstctl.com/trstctl/ee/governance"
+	eemisuse "trstctl.com/trstctl/ee/governance/misuse"
 	eemanagedkeys "trstctl.com/trstctl/ee/managedkeys"
 	eeprovider "trstctl.com/trstctl/ee/provider"
 	eesilo "trstctl.com/trstctl/ee/silo"
@@ -163,6 +164,11 @@ func attachEEProviderGovernance(log *slog.Logger, lic *license.Manager, deps *se
 		return
 	}
 	deps.GovernancePolicySource = eegovernance.NewPolicySource(nil)
+	// M2: misuse detection over trstctl's own usage record; the leader detects,
+	// the findings read model rebuilds from the event log.
+	detector, findings := eemisuse.NewDetector(eemisuse.Options{Store: deps.Store, Log: deps.Log, Logger: log})
+	deps.LicensedProjectionOptions = append(deps.LicensedProjectionOptions, projections.WithEventProjection(findings))
+	deps.LicensedBackgroundWorkers = append(deps.LicensedBackgroundWorkers, detector)
 	if log != nil {
 		log.Info("Enterprise governance support attached", slog.String("feature", string(license.FeatureGovernance)))
 	}

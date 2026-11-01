@@ -214,7 +214,10 @@ import (
 // Version 70 carries M1's credential usage, its sources and recording gaps; an
 // older snapshot has none, so a restore would read every token as never used
 // while its covered offset skipped the uses.
-const SnapshotFormatVersion = 70
+// Version 71 carries M1's hourly usage windows; an older snapshot has none, so a
+// restore would forget every recent hour's counts while its covered offset
+// skipped the uses.
+const SnapshotFormatVersion = 71
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -279,6 +282,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"dynamic_secret_lease_access",
 	// Format 70: M1's credential usage, its sources and recording gaps.
 	"credential_usage", "credential_usage_sources", "credential_usage_gaps",
+	// Format 71: M1's hourly usage windows.
+	"credential_usage_windows",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -603,6 +608,7 @@ SELECT jsonb_build_object(
   'credential_usage', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage t),
   'credential_usage_sources', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_sources t),
   'credential_usage_gaps', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_gaps t),
+  'credential_usage_windows', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM credential_usage_windows t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

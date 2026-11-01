@@ -22,7 +22,9 @@ const (
 	CredentialUsageSourceAttestation = "attestation"
 )
 
-// CredentialUse is one recorded use, as the projection folds it.
+// CredentialUse is one recorded use, as the projection folds it. Action,
+// WindowStart and Count are set for API-token uses; they feed the hourly
+// usage windows.
 type CredentialUse struct {
 	TenantID     string
 	Kind         string
@@ -31,7 +33,14 @@ type CredentialUse struct {
 	SourceKind   string
 	Source       string
 	UsedAt       time.Time
+	Action       string
+	WindowStart  time.Time
+	Count        int
 }
+
+// usageWindowRetention is how far back, before a credential's newest window,
+// its hourly windows are kept.
+const usageWindowRetention = 30 * 24 * time.Hour
 
 // CredentialUsage is a credential's first and last recorded use.
 type CredentialUsage struct {
@@ -94,7 +103,7 @@ func (s *Store) ApplyCredentialUseTx(ctx context.Context, tx pgx.Tx, u Credentia
 		u.TenantID, u.Kind, u.CredentialID, u.Principal, usedAt, u.Source, seq); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO credential_usage_sources
 		    (tenant_id, kind, credential_id, source_kind, source, first_seen_at, last_seen_at, days_seen, last_day, event_sequence)
 		VALUES ($1, $2, $3, $4, $5, $6, $6, 1, ($6 AT TIME ZONE 'UTC')::date, $7)
@@ -106,8 +115,152 @@ func (s *Store) ApplyCredentialUseTx(ctx context.Context, tx pgx.Tx, u Credentia
 		    last_day = greatest(credential_usage_sources.last_day, EXCLUDED.last_day),
 		    event_sequence = EXCLUDED.event_sequence
 		 WHERE credential_usage_sources.event_sequence < EXCLUDED.event_sequence`,
-		u.TenantID, u.Kind, u.CredentialID, u.SourceKind, u.Source, usedAt, seq)
+		u.TenantID, u.Kind, u.CredentialID, u.SourceKind, u.Source, usedAt, seq); err != nil {
+		return err
+	}
+	if u.Action == "" || u.WindowStart.IsZero() || u.Count < 1 {
+		return nil
+	}
+	window := u.WindowStart.UTC()
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO credential_usage_windows (tenant_id, kind, credential_id, source, action, window_start, max_count, event_sequence)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (tenant_id, kind, credential_id, source, action, window_start) DO UPDATE SET
+		    max_count = greatest(credential_usage_windows.max_count, EXCLUDED.max_count),
+		    event_sequence = EXCLUDED.event_sequence
+		 WHERE credential_usage_windows.event_sequence < EXCLUDED.event_sequence`,
+		u.TenantID, u.Kind, u.CredentialID, u.Source, u.Action, window, u.Count, seq); err != nil {
+		return err
+	}
+	// Pruned relative to the event's own window, so a rebuild prunes exactly as
+	// the live projection did.
+	_, err = tx.Exec(ctx, `DELETE FROM credential_usage_windows
+		WHERE tenant_id = $1 AND kind = $2 AND credential_id = $3 AND window_start < $4`,
+		u.TenantID, u.Kind, u.CredentialID, window.Add(-usageWindowRetention))
 	return err
+}
+
+// NewSourceUse is a use, in one hour, from a source the credential has not yet
+// used on normalDays different days, by a credential that has a source it has.
+type NewSourceUse struct {
+	CredentialID  string
+	Principal     string
+	Source        string
+	WindowStart   time.Time
+	Count         int
+	DaysSeen      int
+	NormalSources []string
+}
+
+// NewSourceUses returns the action's uses since since from not-yet-normal
+// sources of credentials that also have a normal source (M1's new_source rule,
+// per hour). Feature-neutral: misuse detection reads it.
+func (s *Store) NewSourceUses(ctx context.Context, tenantID, action string, since time.Time, normalDays, limit int) ([]NewSourceUse, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("store: NewSourceUses requires a tenant id (AN-1)")
+	}
+	var out []NewSourceUse
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT w.credential_id, coalesce(u.principal, ''), w.source, w.window_start, w.max_count, src.days_seen,
+			       array(SELECT o.source FROM credential_usage_sources o
+			              WHERE o.tenant_id = w.tenant_id AND o.kind = w.kind AND o.credential_id = w.credential_id
+			                AND o.days_seen >= $4 ORDER BY o.source)
+			  FROM credential_usage_windows w
+			  JOIN credential_usage_sources src ON src.tenant_id = w.tenant_id AND src.kind = w.kind
+			   AND src.credential_id = w.credential_id AND src.source_kind = 'network' AND src.source = w.source
+			  LEFT JOIN credential_usage u ON u.tenant_id = w.tenant_id AND u.kind = w.kind AND u.credential_id = w.credential_id
+			 WHERE w.tenant_id = $1 AND w.kind = 'api_token' AND w.action = $2 AND w.window_start >= $3
+			   AND src.days_seen < $4
+			   AND EXISTS (SELECT 1 FROM credential_usage_sources o
+			                WHERE o.tenant_id = w.tenant_id AND o.kind = w.kind AND o.credential_id = w.credential_id
+			                  AND o.source <> w.source AND o.days_seen >= $4)
+			 ORDER BY w.window_start, w.credential_id, w.source
+			 LIMIT $5`, tenantID, action, since, normalDays, limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var u NewSourceUse
+			if err := rows.Scan(&u.CredentialID, &u.Principal, &u.Source, &u.WindowStart, &u.Count, &u.DaysSeen, &u.NormalSources); err != nil {
+				return err
+			}
+			out = append(out, u)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// UsageBurst is an hour in which a credential's count for an action reached
+// at least floor and factor times its largest earlier hour in the lookback.
+type UsageBurst struct {
+	CredentialID string
+	Principal    string
+	Source       string
+	WindowStart  time.Time
+	Count        int
+	Baseline     int
+}
+
+// UsageBursts returns the action's hours since since whose count reached
+// greatest(floor, factor × the credential's largest count for the action in
+// the lookback before that hour). Feature-neutral: misuse detection reads it.
+func (s *Store) UsageBursts(ctx context.Context, tenantID, action string, since time.Time, floor, factor int, lookback time.Duration, limit int) ([]UsageBurst, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("store: UsageBursts requires a tenant id (AN-1)")
+	}
+	var out []UsageBurst
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `
+			SELECT credential_id, principal, source, window_start, max_count, baseline FROM (
+			    SELECT w.credential_id, coalesce(u.principal, '') AS principal, w.source, w.window_start, w.max_count,
+			           coalesce((SELECT max(p.max_count) FROM credential_usage_windows p
+			                      WHERE p.tenant_id = w.tenant_id AND p.kind = w.kind AND p.credential_id = w.credential_id
+			                        AND p.action = w.action AND p.window_start < w.window_start
+			                        AND p.window_start >= w.window_start - $6::double precision * interval '1 second'), 0) AS baseline
+			      FROM credential_usage_windows w
+			      LEFT JOIN credential_usage u ON u.tenant_id = w.tenant_id AND u.kind = w.kind AND u.credential_id = w.credential_id
+			     WHERE w.tenant_id = $1 AND w.kind = 'api_token' AND w.action = $2 AND w.window_start >= $3) c
+			 WHERE max_count >= greatest($4::integer, $5::integer * baseline)
+			 ORDER BY window_start, credential_id, source
+			 LIMIT $7`, tenantID, action, since, floor, factor, lookback.Seconds(), limit)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var b UsageBurst
+			if err := rows.Scan(&b.CredentialID, &b.Principal, &b.Source, &b.WindowStart, &b.Count, &b.Baseline); err != nil {
+				return err
+			}
+			out = append(out, b)
+		}
+		return rows.Err()
+	})
+	return out, err
+}
+
+// TenantsWithUsageWindowsSince lists the tenants with an API-token usage
+// window since since, for the leader's misuse detector.
+func (s *Store) TenantsWithUsageWindowsSince(ctx context.Context, since time.Time) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants used an API token recently so the leader-only misuse detector can visit each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM credential_usage_windows WHERE window_start >= $1 ORDER BY 1`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		out = append(out, tenantID)
+	}
+	return out, rows.Err()
 }
 
 // ApplyCredentialUsageGapTx records a window in which uses were lost.

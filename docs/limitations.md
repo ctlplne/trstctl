@@ -1310,6 +1310,15 @@ never live in the API process. What you can do end to end against the running bi
   also folds earlier machine logins, and the rebuilt usage read model is identical.
   Behind a load balancer every request has the balancer's address, so new-network
   detection needs clients that reach trstctl directly.
+- Misuse detection (M2, Enterprise `governance`): every minute the leader checks the last
+  two hours of M1's usage record and flags a dynamic-secret lease requested from a client
+  network the token has not used on three different days (while it has one it has) and
+  an hour of secret reads at least 64 and four times the token's largest earlier hour in
+  14 days. One finding per token, rule and day (repeats fold in), one alert each on
+  `notification.risk` with the evidence, at most 20 alerts per tenant per hour (later
+  findings recorded unalerted); findings rebuild from the event log without re-alerting.
+  Rules and thresholds are fixed today; findings are not yet listed in the API or console
+  (the alert carries them), and a finding does not open an incident on its own.
 - Access graph, step 2 (G2): what a dynamic-secret lease reaches is read from the
   target itself. The leader reads each active lease within a minute of issue and
   every six hours after, through the provider's own credentials, and changes

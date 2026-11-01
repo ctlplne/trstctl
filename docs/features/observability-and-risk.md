@@ -107,6 +107,20 @@ idle, and a window in which uses could not be recorded (a full recorder queue or
 unavailable event log, recorded as `credential.usage_gap`) suspends the verdict. The
 graph shows each token's `last_used_at` and `last_used_source`. Usage is recorded from
 the release that adds it; a full read-model rebuild also folds earlier machine logins.
+Each token's hourly counts per network and action are kept for 30 days.
+
+**Misuse detection (Enterprise governance, M2).** With the `governance` license feature,
+the leader checks the last two hours of that usage every minute and raises two kinds of
+finding: an API token requesting a dynamic-secret lease from a client network it has
+not used on three different days while it has a network it has (`new_source_lease`),
+and an hour in which a token's secret reads reach at least 64 and four times its largest
+earlier hour in the last 14 days (`secret_read_burst`). Each finding is recorded as a
+`misuse.finding.detected` event — one per token, rule and day, so repeats fold into it —
+and raises one alert on the `notification.risk` route with its evidence (the token and
+its subject, the network, the counts and the token's normal networks or baseline). A
+tenant gets at most 20 such alerts an hour; findings beyond that are still recorded,
+marked not alerted. The findings read model rebuilds from the event log, and a rebuild
+never alerts again.
 
 What the exposure posture reads from metadata can be checked live:
 `POST /api/v1/nhi/posture/exposure/probe` (`trstctl-cli nhi posture exposure probe`,

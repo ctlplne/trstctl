@@ -2,6 +2,11 @@
 
 ### Added
 
+- Misuse detection (Enterprise governance): from trstctl's own usage record, a dynamic-secret lease requested from a
+  client network the token has not used on three days, and an hour of secret reads well above the token's baseline,
+  each raise one finding and one alert with evidence on the risk notification route; repeats fold into the day's
+  finding and alerts are capped per tenant per hour.
+
 - Usage-based posture from trstctl's own activity: API-token requests are recorded with their client network and
   action (bounded: one event per token, network, action and hour plus doubling counts), machine logins count as
   uses of their login method by the attested workload, and `GET /api/v1/nhi/posture/stale?unused_days=N` (CLI
