@@ -4155,6 +4155,40 @@ export const messages = {
   },
   "secrets.tasks.honeytokens.action": { defaultMessage: "Open decoy credentials", description: "Open honeytoken workflow." },
   "secrets.honeytokens.heading": { defaultMessage: "Decoy credentials", description: "Honeytoken workflow heading." },
+  "secrets.decoys.heading": { defaultMessage: "Decoy secrets", description: "Decoy secret workflow heading." },
+  "secrets.decoys.description": {
+    defaultMessage:
+      "Plant a stored secret as bait. Every read of its value through the API or the Vault-compatible API raises one critical alert per reader, naming who read it. Listing names, reading metadata and trstctl's own scans never read the value and never alert. Only people who can plant decoys see this list.",
+    description: "Explains decoy secrets.",
+  },
+  "secrets.decoys.secretName": { defaultMessage: "Secret path", description: "Decoy secret path field." },
+  "secrets.decoys.secretNameHelp": {
+    defaultMessage:
+      "A new path that looks like a real secret, for example prod/payments/db-password. A realistic value is generated and stored like any other secret.",
+    description: "Help for the decoy secret path.",
+  },
+  "secrets.decoys.valueKind": { defaultMessage: "Value shape", description: "Decoy value shape field." },
+  "secrets.decoys.kind.password": { defaultMessage: "Password", description: "Decoy value shape option." },
+  "secrets.decoys.kind.apiKey": { defaultMessage: "API key", description: "Decoy value shape option." },
+  "secrets.decoys.kind.connectionString": { defaultMessage: "Database connection string", description: "Decoy value shape option." },
+  "secrets.decoys.name": { defaultMessage: "Label", description: "Decoy label field." },
+  "secrets.decoys.placement": { defaultMessage: "Where you plant it", description: "Decoy placement field." },
+  "secrets.decoys.placementHelp": {
+    defaultMessage: "Where the path is advertised, so an alert says where the thief found it.",
+    description: "Help for the decoy placement field.",
+  },
+  "secrets.decoys.plant": { defaultMessage: "Plant decoy secret", description: "Button that plants a decoy secret." },
+  "secrets.decoys.empty": { defaultMessage: "No decoy secrets planted.", description: "Empty decoy secret list." },
+  "secrets.decoys.firstRead": { defaultMessage: "First read by {reader} at {at}", description: "Who first read a decoy secret." },
+  "secrets.decoys.retire": { defaultMessage: "Stop watching", description: "Button that retires a decoy secret." },
+  "secrets.decoys.error": { defaultMessage: "Decoy secrets", description: "Decoy secret error title." },
+  "secrets.decoys.readFailed": { defaultMessage: "Could not read decoy secrets", description: "Decoy list failure." },
+  "secrets.decoys.plantFailed": { defaultMessage: "Could not plant the decoy secret", description: "Decoy plant failure." },
+  "secrets.decoys.retireFailed": { defaultMessage: "Could not retire the decoy secret", description: "Decoy retire failure." },
+  "secrets.decoys.exists": {
+    defaultMessage: "A secret with this path already exists. Choose a new path; a decoy never replaces a real secret.",
+    description: "Shown when the decoy path is taken.",
+  },
   "secrets.honeytokens.description": {
     defaultMessage:
       "Plant an inert trstctl API bearer in a place where no real credential belongs. Any use is refused and creates a critical alert. The bearer is shown once; record its intended placement.",

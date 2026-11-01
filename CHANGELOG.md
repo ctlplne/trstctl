@@ -2,6 +2,11 @@
 
 ### Added
 
+- Decoy secrets: register a stored secret as bait (console, `trstctl-cli secrets honeytokens secrets`,
+  `/api/v1/secrets/honeytokens/secrets`). Every read of its value through the API, its history, a
+  resolved reference or the Vault-compatible API raises one critical alert per reader, naming who read
+  it; listing names, metadata, previews, inventory and the graph never alert. Only people who can plant
+  decoys see which secrets are bait.
 - Who can reach a database, host or API: the credential graph now holds people (tenant members),
   their roles and AI agents (from agent-broker issuance), with the credentials they hold (API
   tokens, machine sessions, PAM sessions, dynamic-secret leases) and the approvals behind them.

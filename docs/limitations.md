@@ -5119,6 +5119,14 @@ when off, requiring a KEK when on):
   monitoring outage; it must be investigated and requeued before asserting
   coverage. The AWS key is deliberately longer lived bait with explicit deny,
   unlike the short-lived STS credentials in ordinary dynamic-secret leases.
+- Decoy secrets (Q6): a stored secret registered as bait
+  (`/api/v1/secrets/honeytokens/secrets`, `secrets:write` for the registry too)
+  raises one critical alert per distinct reader, naming the reader, on every
+  value read served to a caller (native, history, resolved references,
+  Vault-compatible KV); names, metadata, the access preview, inventory, the
+  graph and internal reads never alert, and a rebuild adds no alert. A reader
+  who repeats a read after the delivered alert has left the outbox (retention)
+  alerts again. Decoy database logins are the next step of Q6.
 - Secret rotation (F37) backs `POST /api/v1/secrets/rotations` for worker-queued
   `connector:<target>` secret-sync handoffs and for durable static-provider
   commands: a configured PostgreSQL, MySQL or AWS IAM dynamic-secret provider with

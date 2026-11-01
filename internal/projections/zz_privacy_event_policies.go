@@ -671,11 +671,11 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 	)
 	honeyTokenCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", clear),
-		privacyRule("/placement", clear), privacyRule("/token_hash", opaque),
+		privacyRule("/placement", clear), privacyRule("/token_hash", opaque), privacyRule("/secret_name", opaque),
 	)
 	honeyTokenTriggered := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/method", opaque),
-		privacyRule("/path", clear),
+		privacyRule("/path", clear), privacyRule("/reader", exact),
 	)
 	honeyTokenRevoked := privacyRules(privacyRule("/id", opaque))
 	awsHoneyTokenCreated := privacyRules(

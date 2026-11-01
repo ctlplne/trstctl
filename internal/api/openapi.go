@@ -4540,6 +4540,18 @@ func componentSchemas() map[string]*Schema {
 		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(), "revoked_at": timestamp(),
 	}, "id", "kind", "name", "placement", "state", "created_at")
 	honeyTokenCreateReq := object(map[string]*Schema{"name": str(), "placement": str()}, "name", "placement")
+	// Q6: a stored application secret registered as a decoy.
+	decoySecret := object(map[string]*Schema{
+		"id": uuid(), "kind": {Type: "string", Enum: []string{"secret"}}, "name": str(), "placement": str(),
+		"secret_name": str(), "state": {Type: "string", Enum: []string{"active", "triggered", "revoked"}},
+		"created_at": timestamp(), "triggered_at": timestamp(), "trigger_method": str(), "trigger_path": str(),
+		"trigger_subject": {Type: "string", Description: "the first principal that read the decoy's value"},
+		"revoked_at":      timestamp(),
+	}, "id", "kind", "name", "placement", "secret_name", "state", "created_at")
+	decoySecretRegisterReq := object(map[string]*Schema{
+		"secret_name": {Type: "string", Description: "an existing application secret, written through the normal create path"},
+		"name":        str(), "placement": str(),
+	}, "secret_name", "name", "placement")
 	honeyTokenCreateResp := object(map[string]*Schema{
 		"id": uuid(), "kind": str(), "name": str(), "placement": str(), "state": str(), "created_at": timestamp(), "token": str(),
 	}, "id", "kind", "name", "placement", "state", "created_at", "token")
@@ -8319,6 +8331,9 @@ func componentSchemas() map[string]*Schema {
 		"APITokenRevokeRequest":                    apiTokenRevokeReq,
 		"HoneyToken":                               honeyToken,
 		"HoneyTokenList":                           list("HoneyToken"),
+		"DecoySecret":                              decoySecret,
+		"DecoySecretList":                          list("DecoySecret"),
+		"DecoySecretRegisterRequest":               decoySecretRegisterReq,
 		"HoneyTokenCreateRequest":                  honeyTokenCreateReq,
 		"HoneyTokenCreateResponse":                 honeyTokenCreateResp,
 		"AWSHoneyAccount":                          awsHoneyAccount,

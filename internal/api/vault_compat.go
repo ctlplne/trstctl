@@ -724,6 +724,10 @@ func (a *API) vaultKVRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer secret.Wipe(value)
+	if err := a.observeDecoySecretRead(r, tenantID, name); err != nil {
+		writeVaultError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	a.writeVaultKVRead(w, rec, value)
 }
 

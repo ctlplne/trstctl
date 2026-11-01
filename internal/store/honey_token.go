@@ -33,20 +33,26 @@ type HoneyToken struct {
 	TriggerMethod          string     `json:"trigger_method,omitempty"`
 	TriggerPath            string     `json:"trigger_path,omitempty"`
 	RevokedAt              *time.Time `json:"revoked_at,omitempty"`
+	// SecretName is the stored application secret a secret decoy watches (Q6).
+	SecretName string `json:"secret_name,omitempty"`
+	// TriggerSubject is the first principal that read a secret decoy's value.
+	TriggerSubject string `json:"trigger_subject,omitempty"`
 }
 
 // #nosec G101 -- SQL column names only; this string contains no credential material.
 const honeyTokenColumns = `id::text, tenant_id::text, kind, name, placement, token_hash,
     COALESCE(aws_account_config_id, ''), COALESCE(aws_account_id, ''), COALESCE(aws_access_key_id, ''),
     COALESCE(aws_lease_id, ''), aws_regions, COALESCE(aws_poll_interval_seconds, 0), alarm_generation, state,
-    created_at, triggered_at, COALESCE(trigger_method, ''), COALESCE(trigger_path, ''), revoked_at`
+    created_at, triggered_at, COALESCE(trigger_method, ''), COALESCE(trigger_path, ''), revoked_at,
+    COALESCE(secret_name, ''), COALESCE(trigger_subject, '')`
 
 func scanHoneyToken(row pgx.Row) (HoneyToken, error) {
 	var h HoneyToken
 	err := row.Scan(&h.ID, &h.TenantID, &h.Kind, &h.Name, &h.Placement, &h.TokenHash,
 		&h.AWSAccountConfigID, &h.AWSAccountID, &h.AWSAccessKeyID, &h.AWSLeaseID,
 		&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
-		&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt)
+		&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
+		&h.SecretName, &h.TriggerSubject)
 	return h, err
 }
 
@@ -84,7 +90,8 @@ func (s *Store) ListHoneyTokensPage(ctx context.Context, tenantID, afterID strin
 			if err := rows.Scan(&h.ID, &h.TenantID, &h.Kind, &h.Name, &h.Placement, &h.TokenHash,
 				&h.AWSAccountConfigID, &h.AWSAccountID, &h.AWSAccessKeyID, &h.AWSLeaseID,
 				&h.AWSRegions, &h.AWSPollIntervalSeconds, &h.AlarmGeneration,
-				&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt); err != nil {
+				&h.State, &h.CreatedAt, &h.TriggeredAt, &h.TriggerMethod, &h.TriggerPath, &h.RevokedAt,
+				&h.SecretName, &h.TriggerSubject); err != nil {
 				return err
 			}
 			out = append(out, h)
@@ -98,11 +105,17 @@ func (s *Store) ApplyHoneyTokenCreatedTx(ctx context.Context, tx pgx.Tx, h Honey
 	if err := lockUpsertArbiterTx(ctx, tx, "honey_tokens", h.TenantID, h.ID); err != nil {
 		return err
 	}
+	kind, secretName := "native", any(nil)
+	if h.SecretName != "" {
+		// A secret decoy has no bearer. Its lookup key can never equal a bearer
+		// hash, which is hex.
+		kind, secretName, h.TokenHash = "secret", h.SecretName, "secret-decoy:"+h.ID
+	}
 	_, err := tx.Exec(ctx,
-		`INSERT INTO honey_tokens (id, tenant_id, kind, name, placement, token_hash, state, created_at)
-		 VALUES ($1, $2, 'native', $3, $4, $5, 'active', $6)
+		`INSERT INTO honey_tokens (id, tenant_id, kind, name, placement, token_hash, state, created_at, secret_name)
+		 VALUES ($1, $2, $7, $3, $4, $5, 'active', $6, $8)
 		 ON CONFLICT (id) DO NOTHING`,
-		h.ID, h.TenantID, h.Name, h.Placement, h.TokenHash, h.CreatedAt)
+		h.ID, h.TenantID, h.Name, h.Placement, h.TokenHash, h.CreatedAt, kind, secretName)
 	return err
 }
 

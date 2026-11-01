@@ -492,7 +492,7 @@ not this file.
 | `internal/store/api_token_revocation_commands.go:60` | SQL column names for an opaque command fence, not a credential. |
 | `internal/store/approved_target_fences.go:229` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/dynamic_secret_lease.go:644` | sealed_credential is a SQL column name, not a hardcoded credential (CWE-798). |
-| `internal/store/honey_token.go:38` | SQL column names only; this string contains no credential material. |
+| `internal/store/honey_token.go:42` | SQL column names only; this string contains no credential material. |
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
 | `internal/store/privacy_erasure_preparation.go:177` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
@@ -681,10 +681,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6631` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6648` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6661` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6695` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6636` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6653` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6666` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6700` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -1008,7 +1008,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `internal/store/migration_content_test.go:4183` | closed test table list above |
+| `internal/store/migration_content_test.go:4184` | closed test table list above |
 
 ### G203 — CWE-? (unmapped rule) (3 sites)
 

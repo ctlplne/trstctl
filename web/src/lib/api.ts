@@ -25,6 +25,7 @@ export {
 } from "./apiTransport";
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
+import * as decoy from "./decoyApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
 import * as verificationAddress from "./verificationSuggestionsApi";
 import * as certificateBytes from "./certificateBytesApi";
@@ -351,6 +352,9 @@ import type {
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
+  DecoySecret,
+  DecoySecretList,
+  DecoySecretRegisterRequest,
   GraphPath,
   GraphQueryResult,
   GraphReachable,
@@ -763,6 +767,7 @@ export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, Cry
 export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.gen";
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
+export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
 export type {
   ValidityReadinessCertificate,
   ValidityReadinessExport,
@@ -2577,6 +2582,9 @@ export interface Api {
   rearmAWSHoneyToken(id: string): Promise<AWSHoneyTokenDetail>;
   getHoneyToken(id: string): Promise<HoneyToken>;
   revokeHoneyToken(id: string): Promise<HoneyToken>;
+  registerDecoySecret(input: DecoySecretRegisterRequest, idempotencyKey?: string): Promise<DecoySecret>;
+  listDecoySecrets(cursor?: string): Promise<DecoySecretList>;
+  retireDecoySecret(id: string): Promise<DecoySecret>;
   previewEphemeralAPIKey(input: EphemeralAPIKeyRequest): Promise<EphemeralAPIKeyPreview>;
   issueEphemeralAPIKey(input: EphemeralAPIKeyRequest, idempotencyKey?: string): Promise<EphemeralAPIKey>;
   /** Prove the reveal-once bearer works on one access:read route without using
@@ -3440,6 +3448,9 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   listHoneyTokens: (cursor) => req<HoneyTokenList>(`/api/v1/secrets/honeytokens${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
   getHoneyToken: (id) => req<HoneyToken>(`/api/v1/secrets/honeytokens/${encodeURIComponent(id)}`),
   revokeHoneyToken: (id) => mutate<HoneyToken>("POST", `/api/v1/secrets/honeytokens/${encodeURIComponent(id)}/revoke`),
+  registerDecoySecret: decoy.registerDecoySecret,
+  listDecoySecrets: decoy.listDecoySecrets,
+  retireDecoySecret: decoy.retireDecoySecret,
   listAWSHoneyAccounts: () => req<AWSHoneyAccountCatalog>("/api/v1/secrets/honeytokens/aws/accounts"),
   previewAWSHoneyToken: (input) => postRead<AWSHoneyTokenPreview>("/api/v1/secrets/honeytokens/aws/preview", input),
   createAWSHoneyToken: (input, idempotencyKey) => mutate<AWSHoneyTokenCreateResponse>("POST", "/api/v1/secrets/honeytokens/aws", input, idempotencyKey),

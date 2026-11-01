@@ -78,6 +78,7 @@ const SecretSharingWorkflow = lazy(() => import("./secrets/SecretSharingWorkflow
 const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWorkflow"));
 const HoneyTokenWorkflow = lazy(() => import("./secrets/HoneyTokenWorkflow").then((module) => ({ default: module.HoneyTokenWorkflow })));
 const AWSHoneyTokenWorkflow = lazy(() => import("./secrets/AWSHoneyTokenWorkflow").then((module) => ({ default: module.AWSHoneyTokenWorkflow })));
+const DecoySecretWorkflow = lazy(() => import("./secrets/DecoySecretWorkflow").then((module) => ({ default: module.DecoySecretWorkflow })));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
 const SecretSyncWorkflow = lazy(() => import("./secrets/SecretSyncWorkflow").then((module) => ({ default: module.SecretSyncWorkflow })));
 
@@ -2649,6 +2650,7 @@ export function Secrets() {
           {engineTask === "honeytokens" && (
             <Suspense fallback={<SecretsWorkflowFallback />}>
               <HoneyTokenWorkflow />
+              <DecoySecretWorkflow />
               <AWSHoneyTokenWorkflow />
             </Suspense>
           )}

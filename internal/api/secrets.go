@@ -676,9 +676,15 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("name")
 	if r.URL.Query().Get("resolve") == "true" {
-		value, version, err := a.resolveSecretValue(r.Context(), tenantID, name, nil)
+		resolveCtx, opened := withDecoyReadCollector(r.Context())
+		value, version, err := a.resolveSecretValue(resolveCtx, tenantID, name, nil)
 		if err != nil {
 			a.writeSecretReferenceError(w, err)
+			return
+		}
+		if err := a.observeDecoySecretRead(r, tenantID, *opened...); err != nil {
+			secret.Wipe(value)
+			a.writeError(w, err)
 			return
 		}
 		resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}
@@ -697,6 +703,11 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 			a.writeProblem(w, problem.New(http.StatusNotFound, "no such secret"))
 			return
 		}
+		a.writeError(w, err)
+		return
+	}
+	if err := a.observeDecoySecretRead(r, tenantID, name); err != nil {
+		secret.Wipe(value)
 		a.writeError(w, err)
 		return
 	}
@@ -739,6 +750,11 @@ func (a *API) getSecretVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	value, err := a.secrets.open(r.Context(), tenantID, rec.Sealed, sealAAD(tenantID, name))
 	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	if err := a.observeDecoySecretRead(r, tenantID, name); err != nil {
+		secret.Wipe(value)
 		a.writeError(w, err)
 		return
 	}
@@ -1545,6 +1561,7 @@ func (a *API) resolveSecretValue(ctx context.Context, tenantID, name string, sta
 		return nil, 0, err
 	}
 	defer secret.Wipe(plain)
+	collectDecoyRead(ctx, name)
 	resolved, err := a.expandSecretReferences(ctx, tenantID, plain, append(stack, name))
 	if err != nil {
 		return nil, 0, err

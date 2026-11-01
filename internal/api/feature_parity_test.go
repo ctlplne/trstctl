@@ -348,8 +348,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A170/A171 add revoking an OAuth grant and blocking its app at the provider.
 	// Q3 adds the signed CycloneDX CBOM export.
 	// G1 adds the graph path and who-can-reach queries.
-	if len(out) != 607 {
-		t.Fatalf("OpenAPI operationIds = %d, want 607", len(out))
+	// Q6 adds registering, listing, reading and retiring decoy secrets.
+	if len(out) != 611 {
+		t.Fatalf("OpenAPI operationIds = %d, want 611", len(out))
 	}
 	return out
 }

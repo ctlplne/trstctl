@@ -3659,6 +3659,32 @@ export interface DRPosture {
   verified: boolean;
 }
 
+export interface DecoySecret {
+  created_at: string;
+  id: string;
+  kind: "secret";
+  name: string;
+  placement: string;
+  revoked_at?: string;
+  secret_name: string;
+  state: "active" | "triggered" | "revoked";
+  trigger_method?: string;
+  trigger_path?: string;
+  trigger_subject?: string;
+  triggered_at?: string;
+}
+
+export interface DecoySecretList {
+  items: DecoySecret[];
+  next_cursor?: string;
+}
+
+export interface DecoySecretRegisterRequest {
+  name: string;
+  placement: string;
+  secret_name: string;
+}
+
 export interface DeploymentEntitlementInfo {
   bundled_non_production_deployments: number;
   deployment_id?: string;

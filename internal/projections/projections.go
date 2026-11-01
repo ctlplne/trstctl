@@ -4204,12 +4204,17 @@ type HoneyTokenCreated struct {
 	Name      string `json:"name"`
 	Placement string `json:"placement"`
 	TokenHash string `json:"token_hash"`
+	// SecretName makes the decoy a secret decoy watching that stored secret (Q6).
+	SecretName string `json:"secret_name,omitempty"`
 }
 
 type HoneyTokenTriggered struct {
 	ID     string `json:"id"`
 	Method string `json:"method"`
 	Path   string `json:"path"`
+	// Reader is the authenticated principal that read a secret decoy's value
+	// (Q6); a bearer decoy's use has no authenticated reader.
+	Reader string `json:"reader,omitempty"`
 }
 
 type HoneyTokenRevoked struct {
@@ -8051,7 +8056,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		return p.store.ApplyHoneyTokenCreatedTx(ctx, tx, store.HoneyToken{
 			ID: pl.ID, TenantID: e.TenantID, Name: pl.Name, Placement: pl.Placement,
-			TokenHash: pl.TokenHash, CreatedAt: e.Time,
+			TokenHash: pl.TokenHash, CreatedAt: e.Time, SecretName: pl.SecretName,
 		})
 	case EventHoneyTokenTriggered:
 		var pl HoneyTokenTriggered
@@ -8060,6 +8065,9 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 		}
 		if pl.ID == "" {
 			return fmt.Errorf("projections: incomplete %s", e.Type)
+		}
+		if pl.Reader != "" {
+			return p.store.ApplyDecoySecretReadTx(ctx, tx, e.TenantID, pl.ID, pl.Reader, pl.Method, pl.Path, e.Time)
 		}
 		return p.store.ApplyHoneyTokenTriggeredTx(ctx, tx, e.TenantID, pl.ID, pl.Method, pl.Path, e.Time)
 	case EventHoneyTokenRevoked:

@@ -1115,6 +1115,43 @@ notification inbox and delivery receipts show retry or failure. Refresh the
 decoy list to investigate, then retire it. A retired value remains unusable.
 To replace exposed bait, retire the old record and plant a new one.
 
+#### Decoy secrets
+
+A decoy secret is an ordinary stored secret registered as bait. trstctl is in the
+read path, so every read of its value names the reader. In the console,
+**Secrets → Automatic secret sources → Plant a decoy credential → Decoy secrets**
+takes a path that looks real (for example `prod/payments/db-password`), a value
+shape (password, API key or database connection string), a label and where you
+advertise the path. It writes a generated value through the normal create path, so
+the stored secret is indistinguishable from any other, and then registers it. From
+the CLI, create the secret yourself and register it:
+
+```bash
+trstctl-cli secrets store create -f bait.json
+trstctl-cli secrets honeytokens secrets register -f decoy.json
+```
+
+where `decoy.json` is `{"secret_name": "prod/payments/db-password", "name":
+"payments db password bait", "placement": "payments repo .env.example"}`. Registering
+needs `secrets:write`; a path with no stored secret is refused (404) and a path that
+is already a decoy returns 409. The registry (`GET /api/v1/secrets/honeytokens/secrets`) also needs `secrets:write`: a caller who can only
+read secrets is exactly who must not learn which secrets are bait, and the bearer
+decoy list never shows secret decoys.
+
+Every value read served to a caller is observed: the native read
+(`GET /api/v1/secrets/store/{name}`), a historical version, a `${secret.path}`
+reference resolved with `?resolve=true`, and the Vault-compatible
+`GET /v1/secret/data/{path}`. The reader gets the value, and the read appends
+`honeytoken.triggered` with the authenticated reader. The first read moves the decoy
+to `triggered` and keeps that reader, method and route; every distinct reader queues
+exactly one critical `notification.honeytoken` alert naming them, so a second reader is
+not hidden behind the first and a reader repeating the read is not re-alerted. Listing
+names, reading metadata (native or Vault), the access preview, a template read without
+`resolve`, the NHI inventory, the credential graph, secret sync and trstctl's other
+internal reads never serve the value to a caller and never alert. A full read-model
+rebuild keeps the decoy's state and adds no alert. `retire` stops watching; the
+secret stays in place until you delete it.
+
 #### AWS IAM decoy keys
 
 **Secrets → Automatic secret sources → Plant a decoy credential** also has an

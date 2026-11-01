@@ -15661,7 +15661,11 @@
                 "createHoneyToken",
                 "listHoneyTokens",
                 "getHoneyToken",
-                "revokeHoneyToken"
+                "revokeHoneyToken",
+                "registerDecoySecret",
+                "listDecoySecrets",
+                "getDecoySecret",
+                "retireDecoySecret"
             ],
             "api_na": "",
             "cli_surface": [
@@ -15676,7 +15680,11 @@
                 "secrets honeytokens plant",
                 "secrets honeytokens list",
                 "secrets honeytokens get",
-                "secrets honeytokens revoke"
+                "secrets honeytokens revoke",
+                "secrets honeytokens secrets register",
+                "secrets honeytokens secrets list",
+                "secrets honeytokens secrets get",
+                "secrets honeytokens secrets retire"
             ],
             "cli_na": "",
             "facet_evidence": {

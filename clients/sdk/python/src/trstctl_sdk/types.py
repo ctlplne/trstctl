@@ -5093,6 +5093,44 @@ DRPosture = TypedDict(
     total=False,
 )
 
+DecoySecret = TypedDict(
+    'DecoySecret',
+    {
+        'created_at': str,
+        'id': str,
+        'kind': str,
+        'name': str,
+        'placement': str,
+        'revoked_at': str,
+        'secret_name': str,
+        'state': str,
+        'trigger_method': str,
+        'trigger_path': str,
+        'trigger_subject': str,
+        'triggered_at': str,
+    },
+    total=False,
+)
+
+DecoySecretList = TypedDict(
+    'DecoySecretList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+DecoySecretRegisterRequest = TypedDict(
+    'DecoySecretRegisterRequest',
+    {
+        'name': str,
+        'placement': str,
+        'secret_name': str,
+    },
+    total=False,
+)
+
 DeploymentEntitlementInfo = TypedDict(
     'DeploymentEntitlementInfo',
     {
