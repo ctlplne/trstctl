@@ -27841,11 +27841,17 @@
             "format": "uuid",
             "type": "string"
           },
+          "observed_traffic_window_seconds": {
+            "type": "integer"
+          },
           "pause_reason": {
             "type": "string"
           },
           "plan_id": {
             "type": "string"
+          },
+          "require_observed_traffic": {
+            "type": "boolean"
           },
           "rollback_attempt": {
             "type": "integer"
@@ -27916,6 +27922,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "live_verified_at": {
+            "format": "date-time",
+            "type": "string"
+          },
           "rollback_successor_verdict": {
             "type": "string"
           },
@@ -27923,6 +27933,9 @@
             "type": "string"
           },
           "successor_verdict": {
+            "type": "string"
+          },
+          "traffic_verdict": {
             "type": "string"
           },
           "trust_verdict": {
@@ -27995,8 +28008,16 @@
             "format": "uuid",
             "type": "string"
           },
+          "observed_traffic_window_seconds": {
+            "description": "pause the run when a live member has no observed traffic this long after going live (default 3600, at most 604800)",
+            "type": "integer"
+          },
           "plan_id": {
             "type": "string"
+          },
+          "require_observed_traffic": {
+            "description": "hold each wave until an observer agent also saw new connections at every member's endpoint (X3)",
+            "type": "boolean"
           },
           "waves": {
             "items": {

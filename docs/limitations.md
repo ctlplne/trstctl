@@ -1282,6 +1282,12 @@ never live in the API process. What you can do end to end against the running bi
   OCSP and the agent key set follow, so relying parties refuse the next use;
   one batch revocation event names who revoked. Relying parties that cache the CRL
   or OCSP answer see it at their own refresh.
+- Closed-loop crypto verification (X3): a migration run that requires observed
+  traffic advances a wave only when the live receipt and an observer's new connections
+  agree for every member, pauses when the wire proof is late, and marks the
+  observer's finding for the predecessor remediated with both proofs. Observer
+  evidence is matched by the member's verify address or server name and port; the
+  gate is opt-in per run and covers migration runs, not plain renewals.
 - Passive network crypto observer (X1): an agent with the observer role reports
   TLS versions, suites and key-exchange groups, TLS 1.2 certificates, SSH key
   exchange and plaintext HTTP/LDAP from a watched Linux interface, never payload;

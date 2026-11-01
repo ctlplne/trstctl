@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -73,6 +74,11 @@ const (
 	StageRevocation        ObservationStage = "revocation"
 	StageRollbackSuccessor ObservationStage = "rollback_successor"
 	StageRollbackTrust     ObservationStage = "rollback_trust"
+	// StageObservedTraffic is wire evidence (X3): an observer saw new
+	// connections at the member's endpoint after its successor went live. A
+	// run that requires it completes a wave only with this and the live
+	// receipt; its absence pauses the run, it never fails a member.
+	StageObservedTraffic ObservationStage = "observed_traffic"
 )
 
 // ActionKind is work the command side must publish through an outbox.
@@ -125,6 +131,9 @@ type Observation struct {
 	Stage                ObservationStage `json:"stage"`
 	Verdict              Verdict          `json:"verdict"`
 	SuccessorFingerprint string           `json:"successor_fingerprint,omitempty"`
+	// At is when the receipt landed; a verified live receipt records it as
+	// the member's LiveVerifiedAt, the start of its observed-traffic window.
+	At time.Time `json:"at,omitempty"`
 }
 
 // RecordSuccessorIssued binds the one idempotently minted successor to its run
@@ -244,6 +253,10 @@ type RunMember struct {
 	RevocationVerdict        Verdict       `json:"revocation_verdict,omitempty"`
 	RollbackSuccessorVerdict Verdict       `json:"rollback_successor_verdict,omitempty"`
 	RollbackTrustVerdict     Verdict       `json:"rollback_trust_verdict,omitempty"`
+	// TrafficVerdict is the observed-traffic gate (X3); LiveVerifiedAt is
+	// when the live receipt for the successor landed.
+	TrafficVerdict Verdict    `json:"traffic_verdict,omitempty"`
+	LiveVerifiedAt *time.Time `json:"live_verified_at,omitempty"`
 }
 
 type RunWave struct {
@@ -269,6 +282,12 @@ type Run struct {
 	RollbackStage   ObservationStage `json:"rollback_stage,omitempty"`
 	RollbackAttempt int              `json:"rollback_attempt,omitempty"`
 	PauseReason     string           `json:"pause_reason,omitempty"`
+	// RequireObservedTraffic holds each wave's live gate until an observer
+	// has also seen new connections at every member's endpoint (X3); a member
+	// still unobserved ObservedTrafficWindowSeconds after going live pauses
+	// the run instead of letting it advance.
+	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
+	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
 	// Approval is the exact single-use operation approval that authorized the
 	// start when a member issues under an approval-required profile (A40). It
 	// mirrors the store's approval-use wire shape so the aggregate stays
@@ -381,6 +400,9 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 	if obs.Stage == StageRevocation && obs.Verdict != VerdictVerified {
 		return in, nil, errors.New("migration: incident revocation accepts only a verified control-plane receipt")
 	}
+	if obs.Stage == StageObservedTraffic && (obs.Verdict != VerdictVerified || !in.RequireObservedTraffic) {
+		return in, nil, errors.New("migration: observed traffic is verified wire evidence for a run that requires it; its absence pauses the run")
+	}
 	member := &out.Waves[waveIndex].Members[memberIndex]
 	verdict := verdictForStage(member, obs.Stage)
 	if verdict == nil {
@@ -424,6 +446,10 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		if fingerprint != "" {
 			member.Binding.SuccessorFingerprint = fingerprint
 		}
+		if !obs.At.IsZero() {
+			at := obs.At.UTC()
+			member.LiveVerifiedAt = &at
+		}
 	}
 	wave := &out.Waves[waveIndex]
 	if obs.Verdict == VerdictFailed {
@@ -438,7 +464,11 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		wave.HaltReason = reason
 		return beginRollback(out, reason)
 	}
-	if !allVerified(*wave, obs.Stage) {
+	gate := obs.Stage
+	if gate == StageObservedTraffic {
+		gate = StageSuccessor // wire evidence completes the same live gate
+	}
+	if !allVerified(*wave, obs.Stage) || (gate == StageSuccessor && !liveGatePassed(out, *wave)) {
 		return out, nil, nil
 	}
 	// A pause cannot recall a job already leased to an agent. Retain its signed
@@ -448,7 +478,7 @@ func Observe(in Run, obs Observation) (Run, []Action, error) {
 		return out, nil, nil
 	}
 
-	switch obs.Stage {
+	switch gate {
 	case StageTrust:
 		wave.Phase = PhaseVerifyingLive
 		return out, actionsFor(*wave, ActionIssueSuccessor), nil
@@ -507,7 +537,7 @@ func ResumeRun(in Run) (Run, []Action, error) {
 		case wave.Phase == PhaseVerifyingTrust && allVerified(*wave, StageTrust):
 			wave.Phase = PhaseVerifyingLive
 			return out, actionsFor(*wave, ActionIssueSuccessor), nil
-		case wave.Phase == PhaseVerifyingLive && allVerified(*wave, StageSuccessor):
+		case wave.Phase == PhaseVerifyingLive && liveGatePassed(out, *wave):
 			if out.Incident != nil {
 				wave.Phase = PhaseRevokingPredecessor
 				return out, actionsFor(*wave, ActionRevokePredecessor), nil
@@ -614,6 +644,10 @@ func beginRollback(out Run, reason string) (Run, []Action, error) {
 func validateRun(run Run) error {
 	if strings.TrimSpace(run.ID) == "" || len(run.Waves) == 0 || len(run.Waves) > 100 {
 		return errors.New("migration: run id and at least one wave are required")
+	}
+	if run.ObservedTrafficWindowSeconds < 0 || run.ObservedTrafficWindowSeconds > 7*24*3600 ||
+		(run.ObservedTrafficWindowSeconds > 0 && !run.RequireObservedTraffic) {
+		return errors.New("migration: observed_traffic_window_seconds needs require_observed_traffic and is at most seven days")
 	}
 	ordinals := map[int]bool{}
 	members := map[string]bool{}
@@ -904,9 +938,52 @@ func verdictForStage(member *RunMember, stage ObservationStage) *Verdict {
 		return &member.RollbackSuccessorVerdict
 	case StageRollbackTrust:
 		return &member.RollbackTrustVerdict
+	case StageObservedTraffic:
+		return &member.TrafficVerdict
 	default:
 		return nil
 	}
+}
+
+// liveGatePassed is the live gate: every successor verified live and, when
+// the run requires it, every member's new connections observed on the wire.
+func liveGatePassed(run Run, wave RunWave) bool {
+	return allVerified(wave, StageSuccessor) && (!run.RequireObservedTraffic || allVerified(wave, StageObservedTraffic))
+}
+
+// AwaitingObservedTraffic lists the members of the run's verifying-live waves
+// whose successor is verified live but whose traffic is not yet observed.
+func AwaitingObservedTraffic(run Run) []RunMemberRef {
+	if !run.RequireObservedTraffic {
+		return nil
+	}
+	var out []RunMemberRef
+	for _, wave := range run.Waves {
+		if wave.Phase != PhaseVerifyingLive || !wave.Started {
+			continue
+		}
+		for _, member := range wave.Members {
+			if member.SuccessorVerdict == VerdictVerified && member.TrafficVerdict == "" {
+				out = append(out, RunMemberRef{WaveID: wave.ID, Member: member})
+			}
+		}
+	}
+	return out
+}
+
+// RunMemberRef names one member with its wave.
+type RunMemberRef struct {
+	WaveID string
+	Member RunMember
+}
+
+// ObservedTrafficWindow is how long a live member may wait for wire evidence
+// before the run pauses: the run's setting, one hour by default.
+func ObservedTrafficWindow(run Run) time.Duration {
+	if run.ObservedTrafficWindowSeconds > 0 {
+		return time.Duration(run.ObservedTrafficWindowSeconds) * time.Second
+	}
+	return time.Hour
 }
 
 func requireObservationPhase(run Run, waveIndex int, stage ObservationStage) error {
@@ -916,7 +993,7 @@ func requireObservationPhase(run Run, waveIndex int, stage ObservationStage) err
 		if (run.Status == RunRunning || run.Status == RunPaused) && wave.Phase == PhaseVerifyingTrust {
 			return nil
 		}
-	case StageSuccessor:
+	case StageSuccessor, StageObservedTraffic:
 		if (run.Status == RunRunning || run.Status == RunPaused) && wave.Phase == PhaseVerifyingLive {
 			return nil
 		}

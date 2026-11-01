@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
@@ -47,7 +48,7 @@ func (s *Server) recordMigrationResult(
 	}
 	obs := migration.Observation{
 		WaveID: claim.waveID, IdentityID: claim.identityID, Stage: claim.stage,
-		Verdict: migration.VerdictFailed,
+		Verdict: migration.VerdictFailed, At: time.Now().UTC(),
 	}
 	if outcome != transport.JobOutcomeFailed && outcome != transport.JobOutcomeVerifyFailed {
 		if err := validateVerifiedMigrationReport(claim, outcome, report, evidenceDigest, &obs); err != nil {

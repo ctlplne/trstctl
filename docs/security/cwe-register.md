@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2110 annotated sites across 29 rules. Each row is
+2111 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -545,7 +545,7 @@ not this file.
 | `internal/server/license_entitlement_test.go:70` | fixed localhost-only assembled-test server (CWE-918) |
 | `internal/server/mcp_authorization_keycloak_test.go:272` | the lab container's own loopback URL (CWE-88) |
 
-### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (17 sites)
+### G112 — CWE-400 Uncontrolled resource consumption (slowloris) (18 sites)
 
 | Location | Reason |
 |---|---|
@@ -557,6 +557,7 @@ not this file.
 | `internal/crypto/mtls/server_test.go:152` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:215` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/crypto/mtls/server_test.go:288` | local test listener owned and torn down by the test (CWE-400) |
+| `internal/server/closed_loop_served_test.go:73` | loopback fixture closed below (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
 | `internal/server/evaluate_served_test.go:65` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
@@ -1862,7 +1863,7 @@ not this file.
 | `internal/server/run.go:585` | operator-configured public recovery kit (CWE-22) |
 | `internal/server/run.go:1200` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run.go:1384` | operator-configured local file path from deployment config (CWE-22) |
-| `internal/server/run.go:1813` | operator-configured local file path from deployment config (CWE-22) |
+| `internal/server/run.go:1815` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:43` | test fixture under t.TempDir (CWE-22) |

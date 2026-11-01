@@ -476,6 +476,19 @@ uses fresh outbox identities rather than replaying a terminal job.
 Starting and resuming require both `keys:write` and `certs:issue`, because either
 operation can release a successor mint. Pause and rollback require `keys:write`.
 
+**Closed-loop proof (X3).** A run started with `"require_observed_traffic": true`
+holds each wave at its live gate until two proofs agree for every member: the signed
+live receipt that the endpoint serves the successor (the probe, which also reads the
+chain a wire sensor cannot see on TLS 1.3), and an observer agent's report of new
+connections at the member's verify address (or its server name on that port) after
+the successor went live — presenting the successor on TLS 1.2. The leader checks every
+30 seconds. A member still unobserved `observed_traffic_window_seconds` (default 3600,
+at most 604800) after going live pauses the run with the reason; the run never
+advances on the probe alone, and a resume releases the gate only once the wire evidence
+is there. Missing wire evidence is never recorded as a failed member. When a member has
+both proofs, the observer's findings for its predecessor certificate at that endpoint
+are marked remediated, naming the live receipt and the observed connections.
+
 ```sh
 trstctl migrations start -f run.json
 trstctl migrations list

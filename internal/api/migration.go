@@ -52,6 +52,10 @@ type migrationStartRequest struct {
 	PlanID         string               `json:"plan_id"`
 	NewAuthorityID string               `json:"new_authority_id"`
 	Waves          []migrationStartWave `json:"waves"`
+	// X3: hold each wave until an observer also saw new connections at every
+	// member's endpoint; pause when that proof is late.
+	RequireObservedTraffic       bool `json:"require_observed_traffic,omitempty"`
+	ObservedTrafficWindowSeconds int  `json:"observed_traffic_window_seconds,omitempty"`
 }
 
 type migrationStartWave struct {
@@ -365,7 +369,8 @@ func (a *API) buildMigrationRun(ctx context.Context, tenantID, idempotencyKey st
 	if err != nil || !anchor.IsCA {
 		return migration.Run{}, nil, errors.New("new_authority_id has no parseable CA certificate")
 	}
-	run := migration.Run{ID: orchestrator.MigrationRunID(tenantID, idempotencyKey), PlanID: req.PlanID}
+	run := migration.Run{ID: orchestrator.MigrationRunID(tenantID, idempotencyKey), PlanID: req.PlanID,
+		RequireObservedTraffic: req.RequireObservedTraffic, ObservedTrafficWindowSeconds: req.ObservedTrafficWindowSeconds}
 	var gated []migrationGatedMember
 	for _, requestedWave := range req.Waves {
 		wave := migration.RunWave{ID: strings.TrimSpace(requestedWave.ID), Ordinal: requestedWave.Ordinal}

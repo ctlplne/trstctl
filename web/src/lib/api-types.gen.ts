@@ -6537,8 +6537,10 @@ export interface MigrationRun {
   approval?: MigrationApprovalUse;
   halt_reason?: string;
   id: string;
+  observed_traffic_window_seconds?: number;
   pause_reason?: string;
   plan_id?: string;
+  require_observed_traffic?: boolean;
   rollback_attempt?: number;
   rollback_stage?: string;
   rollback_wave_id?: string;
@@ -6558,9 +6560,11 @@ export interface MigrationRunList {
 export interface MigrationRunMember {
   binding: MigrationMemberBinding;
   identity_id: string;
+  live_verified_at?: string;
   rollback_successor_verdict?: string;
   rollback_trust_verdict?: string;
   successor_verdict?: string;
+  traffic_verdict?: string;
   trust_verdict?: string;
 }
 
@@ -6581,7 +6585,9 @@ export interface MigrationRunStartPending {
 
 export interface MigrationRunStartRequest {
   new_authority_id: string;
+  observed_traffic_window_seconds?: number;
   plan_id: string;
+  require_observed_traffic?: boolean;
   waves: MigrationRunStartWave[];
 }
 

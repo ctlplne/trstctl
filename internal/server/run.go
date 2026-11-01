@@ -1522,6 +1522,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunDecoyLoginWatch),
 			// Q1: access review revoke decisions finish and close on evidence.
 			startRuntimeWorker(workCtx, srv.RunNHIReviewReconcile),
+			// X3: migration waves that require observed traffic advance on wire evidence or pause.
+			startRuntimeWorker(workCtx, srv.RunMigrationTrafficGate),
 			startRuntimeWorker(workCtx, srv.RunCRLScheduler),
 			startRuntimeWorker(workCtx, srv.RunLifecycleScheduler),
 			startRuntimeWorker(workCtx, srv.RunHostRotationRecovery),

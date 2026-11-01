@@ -2,6 +2,9 @@
 
 ### Added
 
+- Closed-loop verification for migrations: a run started with `require_observed_traffic` advances each wave only
+  when the live receipt and an observer agent's new connections at every endpoint agree, pauses when the wire proof
+  is late, and then marks the observer's finding for the old certificate remediated naming both proofs.
 - Passive network crypto observer: an agent granted the new observer role and started with
   `--observe-interface` reports, from the handshakes it sees, each endpoint's TLS version, cipher suite and
   key-exchange group (X25519MLKEM768 by name), TLS 1.2 certificates, SSH key exchange and plaintext

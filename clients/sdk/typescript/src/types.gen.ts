@@ -16666,8 +16666,10 @@ export interface components {
             halt_reason?: string;
             /** Format: uuid */
             id: string;
+            observed_traffic_window_seconds?: number;
             pause_reason?: string;
             plan_id?: string;
+            require_observed_traffic?: boolean;
             rollback_attempt?: number;
             rollback_stage?: string;
             rollback_wave_id?: string;
@@ -16686,9 +16688,12 @@ export interface components {
             binding: components["schemas"]["MigrationMemberBinding"];
             /** Format: uuid */
             identity_id: string;
+            /** Format: date-time */
+            live_verified_at?: string;
             rollback_successor_verdict?: string;
             rollback_trust_verdict?: string;
             successor_verdict?: string;
+            traffic_verdict?: string;
             trust_verdict?: string;
         };
         MigrationRunStartMember: {
@@ -16711,7 +16716,11 @@ export interface components {
         MigrationRunStartRequest: {
             /** Format: uuid */
             new_authority_id: string;
+            /** @description pause the run when a live member has no observed traffic this long after going live (default 3600, at most 604800) */
+            observed_traffic_window_seconds?: number;
             plan_id: string;
+            /** @description hold each wave until an observer agent also saw new connections at every member's endpoint (X3) */
+            require_observed_traffic?: boolean;
             waves: components["schemas"]["MigrationRunStartWave"][];
         };
         MigrationRunStartWave: {

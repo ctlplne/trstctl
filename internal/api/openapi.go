@@ -5853,7 +5853,9 @@ func componentSchemas() map[string]*Schema {
 	}, "id", "ordinal", "members")
 	migrationRunStartRequest := object(map[string]*Schema{
 		"plan_id": str(), "new_authority_id": uuid(),
-		"waves": {Type: "array", Items: ref("MigrationRunStartWave")},
+		"waves":                           {Type: "array", Items: ref("MigrationRunStartWave")},
+		"require_observed_traffic":        {Type: "boolean", Description: "hold each wave until an observer agent also saw new connections at every member's endpoint (X3)"},
+		"observed_traffic_window_seconds": {Type: "integer", Description: "pause the run when a live member has no observed traffic this long after going live (default 3600, at most 604800)"},
 	}, "plan_id", "new_authority_id", "waves")
 	migrationMemberBinding := object(map[string]*Schema{
 		"issuing_authority_source": {Type: "string", Enum: []string{endpointIssuerPlatform, endpointIssuerPrivate, endpointIssuerExternal}},
@@ -5876,6 +5878,7 @@ func componentSchemas() map[string]*Schema {
 		"identity_id": uuid(), "binding": ref("MigrationMemberBinding"),
 		"trust_verdict": str(), "successor_verdict": str(),
 		"rollback_successor_verdict": str(), "rollback_trust_verdict": str(),
+		"traffic_verdict": str(), "live_verified_at": timestamp(),
 	}, "identity_id", "binding")
 	migrationRunWave := object(map[string]*Schema{
 		"id": str(), "ordinal": {Type: "integer"}, "phase": str(), "started": {Type: "boolean"}, "halt_reason": str(),
@@ -5887,7 +5890,9 @@ func componentSchemas() map[string]*Schema {
 		}},
 		"waves":       {Type: "array", Items: ref("MigrationRunWave")},
 		"halt_reason": str(), "rollback_wave_id": str(), "rollback_stage": str(), "rollback_attempt": {Type: "integer"}, "pause_reason": str(),
-		"approval": ref("MigrationApprovalUse"),
+		"approval":                        ref("MigrationApprovalUse"),
+		"require_observed_traffic":        {Type: "boolean"},
+		"observed_traffic_window_seconds": {Type: "integer"},
 	}, "id", "status", "waves")
 	migrationApprovalUse := object(map[string]*Schema{
 		"request_id": uuid(), "intent_digest": str(), "requester": str(), "resource_kind": str(), "resource_id": str(),
