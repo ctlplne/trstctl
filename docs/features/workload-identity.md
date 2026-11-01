@@ -553,8 +553,18 @@ credential via the ephemeral issuer; (3) records the agent and its credential in
 graph so you can ask **blast radius** ("everything this agent can reach") *before*
 trusting it. The source now includes tenant-wide durable broker history and guided
 preview, issuance and retry. Installed-product qualification remains pending as
-described below. Revocation uses the shared certificate control plane; there is no
-separate broker-specific one-call revocation action.
+described below. One call revokes an agent's identity:
+`POST /api/v1/broker/agent-identities/{id}/revoke` with an RFC 5280 `reason`
+(`certs:issue`, `Idempotency-Key`; CLI `broker agent-identities revoke <id> -f`,
+console **Revoke identity** in the broker record). It runs the same exact certificate
+revocation as the revocation center for that one broker certificate (any other
+certificate returns 404): the issuing CA's ledger records it, the signed CRL lists it,
+OCSP answers revoked and the agent key set drops its key, so a relying party refuses
+the agent's next use. The batch revocation event names who revoked it; an exact retry
+replays the result and revokes nothing twice. Each broker issuance also records who
+asked for it (`issuance.requested_by`), so the credential graph shows the person or
+workload that delegated to the agent, the agent, its certificate and the tools its
+scopes name.
 
 Served when the agent broker is configured, at `POST /api/v1/broker/agent-identities`:
 the operator supplies the trust domain, Rego policy module, and signer-backed
@@ -669,8 +679,8 @@ locked. Starting a different request requires acknowledging that a certificate
 may already exist. Clearing the form does not cancel or revoke an issuance.
 Successful issuance clears proof and task input; the public certificate is only
 copied on an explicit action. A page reload loses retry inputs, so inspect the
-inventory and audit trail before starting again. The shared revocation center is
-linked; a broker-specific one-call revoke is not claimed.
+inventory and audit trail before starting again. The broker record offers the
+one-call revoke; the shared revocation center stays linked for bulk work.
 
 The source now contains this API/CLI/console workflow. Release qualification still
 requires its fresh-image, browser, restart and negative-security receipts; focused

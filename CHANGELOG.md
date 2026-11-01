@@ -7,6 +7,11 @@
   resolved reference or the Vault-compatible API raises one critical alert per reader, naming who read
   it; listing names, metadata, previews, inventory and the graph never alert. Only people who can plant
   decoys see which secrets are bait.
+- One-call revoke of an AI agent identity: `POST /api/v1/broker/agent-identities/{id}/revoke`,
+  `trstctl-cli broker agent-identities revoke` and a console action in the broker record revoke that one
+  broker certificate exactly like the revocation center (CA ledger, signed CRL, OCSP, agent key set), naming
+  who revoked it. Broker issuance now records who asked for each identity, so the credential graph shows
+  person → agent → credential → the tools its scopes name.
 - Decoy database logins: a PostgreSQL dynamic-secret provider that lists the role `decoy` mints a login
   that reaches only its own empty database and looks like any generated login (console,
   `trstctl-cli secrets honeytokens databases`, `/api/v1/secrets/honeytokens/databases`). trstctl never

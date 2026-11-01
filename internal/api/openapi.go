@@ -1080,6 +1080,10 @@ func componentSchemas() map[string]*Schema {
 		"profile_refusal":            {Type: "string", Description: "The profile's own reason when profile_refused is true."},
 	}, "capability", "ready", "identity_id", "identity_name", "identity_kind", "owner_id", "from", "to", "expected_version", "event_type", "side_effect", "request_fingerprint", "required_permission", "prerequisites", "preview_writes", "preview_external_effects", "execution_writes", "execution_external_effects", "verification_steps", "warnings", "guidance")
 	revocationReasons := []string{"unspecified", "keyCompromise", "caCompromise", "affiliationChanged", "superseded", "cessationOfOperation", "certificateHold", "removeFromCRL", "privilegeWithdrawn", "aaCompromise"}
+	// Q4: revoke one AI agent's broker identity in one call.
+	brokerAgentIdentityRevokeReq := object(map[string]*Schema{
+		"reason": {Type: "string", Description: "an RFC 5280 revocation reason such as keyCompromise or cessationOfOperation"},
+	}, "reason")
 	bulkRevokeReq := object(map[string]*Schema{
 		"ids":          {Type: "array", Items: uuid()},
 		"identity_ids": {Type: "array", Items: uuid()},
@@ -5554,6 +5558,7 @@ func componentSchemas() map[string]*Schema {
 		"agent_id": str(), "subject": str(), "method": str(), "owner_id": uuid(),
 		"scopes": {Type: "array", Items: str()}, "task_envelope_digest": str(),
 		"requested_ttl_seconds": {Type: "integer"}, "effective_ttl_seconds": {Type: "integer"},
+		"requested_by": {Type: "string", Description: "the authenticated principal that asked for this identity (Q4); absent on older issuances"},
 	}, "agent_id", "subject", "method", "owner_id", "scopes", "requested_ttl_seconds", "effective_ttl_seconds")
 	brokerProjectionState := &Schema{Type: "string", Enum: []string{"current", "catching_up", "blocked", "unknown"}, Description: "Coarse projection freshness; no cross-tenant counts or error details are disclosed."}
 	brokerIdentityHistory := object(map[string]*Schema{
@@ -8361,6 +8366,7 @@ func componentSchemas() map[string]*Schema {
 		"DatabaseDecoyList":                        list("DatabaseDecoy"),
 		"DatabaseDecoyCreateRequest":               databaseDecoyCreateReq,
 		"DatabaseDecoyCreateResponse":              databaseDecoyCreateResp,
+		"BrokerAgentIdentityRevokeRequest":         brokerAgentIdentityRevokeReq,
 		"HoneyTokenCreateRequest":                  honeyTokenCreateReq,
 		"HoneyTokenCreateResponse":                 honeyTokenCreateResp,
 		"AWSHoneyAccount":                          awsHoneyAccount,

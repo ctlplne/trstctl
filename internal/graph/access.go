@@ -63,7 +63,7 @@ func Coverage() AccessCoverage {
 			"API tokens and machine sessions (access to the trstctl API)",
 			"PAM sessions to databases and hosts, with the approvals they consumed",
 			"dynamic-secret leases",
-			"AI agents issued identities by the agent broker",
+			"AI agents issued identities by the agent broker, who asked for each identity, and the tools its scopes name",
 			"certificate issuance requests and who approved them",
 			"the certificate, SSH key, deployment and discovery inventory",
 		},

@@ -8363,6 +8363,18 @@
         ],
         "type": "object"
       },
+      "BrokerAgentIdentityRevokeRequest": {
+        "properties": {
+          "reason": {
+            "description": "an RFC 5280 revocation reason such as keyCompromise or cessationOfOperation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "type": "object"
+      },
       "BrokerIssuanceFacts": {
         "properties": {
           "agent_id": {
@@ -8376,6 +8388,10 @@
           },
           "owner_id": {
             "format": "uuid",
+            "type": "string"
+          },
+          "requested_by": {
+            "description": "the authenticated principal that asked for this identity (Q4); absent on older issuances",
             "type": "string"
           },
           "requested_ttl_seconds": {
@@ -51998,6 +52014,83 @@
         ],
         "summary": "Read one broker certificate's original issuance facts and shared lifecycle state",
         "x-trstctl-permission": "certs:read"
+      }
+    },
+    "/api/v1/broker/agent-identities/{id}/revoke": {
+      "post": {
+        "operationId": "revokeBrokerAgentIdentity",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrokerAgentIdentityRevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRevokeResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke one AI agent's broker identity in one call; relying parties refuse its next use",
+        "x-trstctl-permission": "certs:issue"
       }
     },
     "/api/v1/ca/authorities": {

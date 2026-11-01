@@ -217,7 +217,7 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 	if err := s.validate(tenantID, idempotencyKey, req); err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
-	binding, err := brokerCommandBinding(ctx, tenantID, req)
+	binding, requester, err := brokerCommandBinding(ctx, tenantID, req)
 	if err != nil {
 		return api.BrokerAgentIdentity{}, err
 	}
@@ -328,6 +328,7 @@ func (s *agentBrokerService) IssueBrokerAgentIdentity(ctx context.Context, tenan
 			OwnerID: owner.ID, Scopes: append([]string(nil), identity.Scopes...),
 			TaskEnvelopeDigest: hex.EncodeToString(taskDigest), RequestedTTLSeconds: req.TTLSeconds,
 			EffectiveTTLSeconds: int64(s.ttl(req.TTLSeconds) / time.Second),
+			RequestedBy:         requester,
 		},
 		// The agent supplied only its public key. Do not invent a storage,
 		// exportability, or hardware-security claim for the unseen private key.
@@ -376,10 +377,12 @@ func (s *agentBrokerService) reverifyRecoveredBrokerIdentity(ctx context.Context
 // Only public command dimensions and one-way proof digests are serialized.
 // The authenticated principal comes from the server context, never JSON input.
 // This supplements (does not replace) the HTTP recorder's exact-body binding.
-func brokerCommandBinding(ctx context.Context, tenantID string, req api.BrokerAgentIdentityRequest) (string, error) {
+// The principal is returned too: it is the person or workload that delegated to
+// the agent, recorded as the issuance's requester (Q4).
+func brokerCommandBinding(ctx context.Context, tenantID string, req api.BrokerAgentIdentityRequest) (string, string, error) {
 	principal, err := api.AuthenticatedPrincipalSubject(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	canonical, err := json.Marshal(struct {
 		Purpose            string   `json:"purpose"`
@@ -399,9 +402,9 @@ func brokerCommandBinding(ctx context.Context, tenantID string, req api.BrokerAg
 		TaskEnvelopeSHA256: crypto.SHA256Hex(req.TaskEnvelope),
 	})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return crypto.SHA256Hex(canonical), nil
+	return crypto.SHA256Hex(canonical), principal, nil
 }
 
 func (s *agentBrokerService) validate(tenantID, idempotencyKey string, req api.BrokerAgentIdentityRequest) error {

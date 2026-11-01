@@ -351,7 +351,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/broker_issuance/scopes/*", token),
 		privacyRule("/broker_issuance/task_envelope_digest", opaque),
 		privacyRule("/broker_issuance/requested_ttl_seconds", opaque),
-		privacyRule("/broker_issuance/effective_ttl_seconds", opaque),
+		privacyRule("/broker_issuance/effective_ttl_seconds", opaque), privacyRule("/broker_issuance/requested_by", exact),
 	)
 	anchoredCertificate := certificateRecorded
 	anchoredCertificate.Rules = append(append([]events.PrivacyFieldRule{}, certificateRecorded.Rules...), privacyRule("/validity_anchor", opaque))

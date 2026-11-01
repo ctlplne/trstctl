@@ -1273,7 +1273,15 @@ never live in the API process. What you can do end to end against the running bi
   sees only trstctl's own records: permissions inside the target system are G2,
   a dynamic-secret lease does not record who requested it, access granted
   outside trstctl is invisible, and PAM sessions started before this release do
-  not record their approval. The person who delegated to an AI agent is Q4.
+  not record their approval. Since Q4 the person who asked the agent broker for an
+  identity DELEGATED to the agent, and a live agent credential reaches the tools
+  its scopes name; issuances recorded before Q4 name no requester.
+- One-call revoke of an AI agent identity (Q4):
+  `POST /api/v1/broker/agent-identities/{id}/revoke` (CLI and console) runs the
+  exact certificate revocation for that broker certificate: CA ledger, signed CRL,
+  OCSP and the agent key set follow, so relying parties refuse the next use;
+  one batch revocation event names who revoked. Relying parties that cache the CRL
+  or OCSP answer see it at their own refresh.
 - Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
   exact trust scope, trust-before-leaf ordering, or signed live health before

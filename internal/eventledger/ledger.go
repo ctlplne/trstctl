@@ -40,6 +40,7 @@ const (
 	EventCertificateCustodyAttested               = "certificate.custody.attested"
 	EventCertificateCustodyDeviceAttested         = "certificate.custody.device_attested"
 	EventCertificateRevoked                       = "certificate.revoked"
+	EventCertificateRevocationBatchApplied        = "certificate.revocation.batch.applied"
 	EventCertificateSubjectKeyCompromised         = "certificate.subject_key.compromised"
 	EventCertificateSuperseded                    = "certificate.superseded"
 	EventCACeremonyStarted                        = "ca.ceremony.started"
@@ -363,6 +364,7 @@ var ledger = []FeatureEvent{
 	{"F39", "Honeytoken exposure detection", "create_database_decoy", "createDatabaseDecoy", []string{EventHoneyTokenCreated}},
 	{"F39", "Honeytoken exposure detection", "retire_database_decoy", "retireDatabaseDecoy", []string{EventHoneyTokenRevoked}},
 	{"F39", "Honeytoken exposure detection", "observe_decoy_login", "watchDecoyLoginsOnce", []string{EventHoneyTokenTriggered}},
+	{"F61", "AI-agent / NHI identity broker", "revoke_agent_identity", "revokeBrokerAgentIdentity", []string{EventCertificateRevocationBatchApplied}},
 
 	// F40 — per-tenant cryptographic custody. The migration operation reports
 	// resumable progress/failure through the same served command, while seal and

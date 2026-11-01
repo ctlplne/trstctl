@@ -1513,6 +1513,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/broker/agent-identities/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke one AI agent's broker identity in one call; relying parties refuse its next use */
+        post: operations["revokeBrokerAgentIdentity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ca/authorities": {
         parameters: {
             query?: never;
@@ -11340,12 +11357,18 @@ export interface components {
             task_envelope_base64?: string;
             ttl_seconds?: number;
         };
+        BrokerAgentIdentityRevokeRequest: {
+            /** @description an RFC 5280 revocation reason such as keyCompromise or cessationOfOperation */
+            reason: string;
+        };
         BrokerIssuanceFacts: {
             agent_id: string;
             effective_ttl_seconds: number;
             method: string;
             /** Format: uuid */
             owner_id: string;
+            /** @description the authenticated principal that asked for this identity (Q4); absent on older issuances */
+            requested_by?: string;
             requested_ttl_seconds: number;
             scopes: string[];
             subject: string;
@@ -25737,6 +25760,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrokerAgentIdentityHistory"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeBrokerAgentIdentity: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrokerAgentIdentityRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkRevokeResult"];
                 };
             };
             /** @description client error */

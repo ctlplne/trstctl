@@ -350,8 +350,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// G1 adds the graph path and who-can-reach queries.
 	// Q6 adds registering, listing, reading and retiring decoy secrets, and
 	// planting, listing and retiring decoy database logins.
-	if len(out) != 614 {
-		t.Fatalf("OpenAPI operationIds = %d, want 614", len(out))
+	// Q4 adds the one-call revoke of an agent identity.
+	if len(out) != 615 {
+		t.Fatalf("OpenAPI operationIds = %d, want 615", len(out))
 	}
 	return out
 }

@@ -2819,6 +2819,14 @@ BrokerAgentIdentityRequest = TypedDict(
     total=False,
 )
 
+BrokerAgentIdentityRevokeRequest = TypedDict(
+    'BrokerAgentIdentityRevokeRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
 BrokerIssuanceFacts = TypedDict(
     'BrokerIssuanceFacts',
     {
@@ -2826,6 +2834,7 @@ BrokerIssuanceFacts = TypedDict(
         'effective_ttl_seconds': int,
         'method': str,
         'owner_id': str,
+        'requested_by': str,
         'requested_ttl_seconds': int,
         'scopes': list[str],
         'subject': str,

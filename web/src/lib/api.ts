@@ -26,6 +26,7 @@ export {
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as decoy from "./decoyApi";
+import * as agentIdentity from "./agentIdentityApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
 import * as verificationAddress from "./verificationSuggestionsApi";
 import * as certificateBytes from "./certificateBytesApi";
@@ -352,6 +353,7 @@ import type {
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
+  BrokerAgentIdentityRevokeRequest,
   DatabaseDecoy,
   DatabaseDecoyCreateRequest,
   DatabaseDecoyCreateResponse,
@@ -779,6 +781,7 @@ export type {
   DatabaseDecoyList,
   DynamicSecretConfiguredProvider,
 } from "./api-types.gen";
+export type { BrokerAgentIdentityRevokeRequest } from "./api-types.gen";
 export type {
   ValidityReadinessCertificate,
   ValidityReadinessExport,
@@ -2500,6 +2503,7 @@ export interface Api {
   issueBrokerAgentIdentity(input: BrokerAgentIdentityRequest, idempotencyKey?: string): Promise<BrokerAgentIdentity>;
   brokerAgentIdentities(options?: BrokerHistoryQuery, signal?: AbortSignal): Promise<BrokerAgentIdentityHistoryList>;
   brokerAgentIdentity(id: string, signal?: AbortSignal): Promise<BrokerAgentIdentityHistory>;
+  revokeBrokerAgentIdentity(id: string, input: BrokerAgentIdentityRevokeRequest, idempotencyKey?: string): Promise<BulkRevokeResult>;
   workloadAttesterTrustSources(): Promise<WorkloadAttesterTrustSourceList>;
   createWorkloadAttesterTrustSource(input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
   updateWorkloadAttesterTrustSource(id: string, input: WorkloadAttesterTrustSourceRequest): Promise<WorkloadAttesterTrustSource>;
@@ -3359,6 +3363,7 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   brokerAgentIdentities: (options, signal) =>
     req<BrokerAgentIdentityHistoryList>(`/api/v1/broker/agent-identities${brokerHistoryQueryString(options)}`, { signal }),
   brokerAgentIdentity: (id, signal) => req<BrokerAgentIdentityHistory>(`/api/v1/broker/agent-identities/${encodeURIComponent(id)}`, { signal }),
+  revokeBrokerAgentIdentity: agentIdentity.revokeBrokerAgentIdentity,
   workloadAttesterTrustSources: () => req<WorkloadAttesterTrustSourceList>("/api/v1/workloads/attester-trust-sources"),
   createWorkloadAttesterTrustSource: (input) => mutate<WorkloadAttesterTrustSource>("POST", "/api/v1/workloads/attester-trust-sources", input),
   updateWorkloadAttesterTrustSource: (id, input) =>

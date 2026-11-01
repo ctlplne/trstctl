@@ -391,8 +391,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// G1 adds `graph who-can-reach` and `graph path`.
 	// Q6 adds `secrets honeytokens secrets register|list|get|retire` and
 	// `secrets honeytokens databases plant|list|retire`.
-	if len(out) != 677 {
-		t.Fatalf("CLI commands = %d, want 677", len(out))
+	// Q4 adds `broker agent-identities revoke`.
+	if len(out) != 678 {
+		t.Fatalf("CLI commands = %d, want 678", len(out))
 	}
 	return out
 }

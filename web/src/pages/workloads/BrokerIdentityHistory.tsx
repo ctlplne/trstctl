@@ -15,6 +15,7 @@ import type { MessageKey } from "@/i18n/messages";
 import { api, type BrokerAgentIdentityHistory, type BrokerHistoryQuery } from "@/lib/api";
 import { useCapabilityExecution } from "@/lib/capabilities";
 import { useApiQuery } from "@/lib/query";
+import { BrokerRevokeAction } from "./BrokerRevokeAction";
 import { BrokerFact } from "./BrokerPlanReview";
 
 const stateLabels: Record<BrokerAgentIdentityHistory["state"], MessageKey> = {
@@ -239,11 +240,21 @@ export function BrokerIdentityHistory({ scope }: { scope: string }) {
                   <BrokerFact label={t("workloads.ephemeral.effectiveTTL")}>
                     {t("workloads.ephemeral.seconds", { count: row.issuance.effective_ttl_seconds })}
                   </BrokerFact>
+                  {row.issuance.requested_by ? <BrokerFact label={t("broker.requestedBy")}>{row.issuance.requested_by}</BrokerFact> : null}
                 </dl>
               </>
             ) : (
               <p className="border-s-2 border-status-warning ps-3 text-sm">{t("broker.metadataMissingBody")}</p>
             )}
+            {row.state === "valid" ? (
+              <BrokerRevokeAction
+                certificateId={row.certificate_id}
+                onRevoked={() => {
+                  detail.refetch();
+                  list.refetch();
+                }}
+              />
+            ) : null}
             <WorkloadIdentityHandoff key={row.certificate_id} spiffeID={row.spiffe_id} />
             <details>
               <summary className="cursor-pointer text-sm font-medium">{t("workloads.attested.exactEvidence")}</summary>

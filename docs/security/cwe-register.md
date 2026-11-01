@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2091 annotated sites across 29 rules. Each row is
+2093 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (444 sites)
+### G101 — CWE-798 Use of hardcoded credentials (446 sites)
 
 | Location | Reason |
 |---|---|
@@ -292,6 +292,8 @@ not this file.
 | `internal/dns/ns1/ns1.go:47` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/dns/ns1/ns1_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/dns/ultradns/ultradns_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
+| `internal/dynsecret/postgres_decoy_test.go:19` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mcpserver/mcpserver_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mdm/entra_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |

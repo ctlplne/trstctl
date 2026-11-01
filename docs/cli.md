@@ -332,7 +332,7 @@ exhaustive subcommand list:
 | `archives`                        | Archive objects' S3 legal holds, set in the bucket and read back (`legal-holds place` · `legal-holds release` · `legal-holds list`) |
 | `audit`                           | Query/export the signed audit log, pin public verification keys, verify every saved format offline, and configure native collector feeds (`events` · `export` · `verification-keys` · `anchors` · `verify` · `feeds set` · `feeds list`)                                                                                        |
 | `breakglass`                      | Effect-free emergency-request preview, ceremony-gated online issuance, rotation, cross-signing, and offline-bundle reconciliation (`issue-preview` · `issue-ceremony` · `issue` · `rotation-ceremony` · `rotate` · `cross-sign-ceremony` · `cross-sign` · `reconcile`)                                                                        |
-| `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity (`issue`)                                                                                                                                                                                                                                                                |
+| `broker agent-identities`         | Issue a policy-gated AI/MCP agent identity and revoke one in one call (`issue` · `revoke`) |
 | `ca ceremonies`                   | Effect-free review, start, inspect, approve, and reasoned cancellation of m-of-n CA key ceremonies (`preview` · `start` · `get` · `approve` · `cancel`)                                                                                                                                                                                                  |
 | `ca authorities`                  | Private CA authority lifecycle — create/import roots and intermediates, preview/activate rotation, rekey, cross-sign, issue leaf certs (`list` · `create-root` · `import-offline-root` · `import-existing` · `create-intermediate` · `rotate-preview` · `rotate` · `rekey` · `cross-sign` · `issue`)                |
 | `ca keys`                         | Read retirement dependencies, record a successor and host route for a certificate (`reprotect plan`), queue re-protection jobs (`reprotect`), and request irreversible signer-gated retirement (`retirement` · `retire`). A plan or enqueue receipt is not evidence that a credential was reissued or deployed. |
@@ -1180,6 +1180,9 @@ cat > broker-agent.json <<'JSON'
 {"agent_id":"agent-7","method":"k8s_sat","payload_base64":"<proof-base64>","public_key_pem":"-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n","scopes":["mcp:graph.read","tool:inventory.read"],"ttl_seconds":600}
 JSON
 trstctl-cli --idempotency-key agent-7-issue-1 broker agent-identities issue -f broker-agent.json
+# Revoke it in one call; relying parties refuse its next use (OCSP, CRL, agent key set).
+echo '{"reason":"keyCompromise"}' > revoke.json
+trstctl-cli --idempotency-key agent-7-revoke-1 broker agent-identities revoke <certificate-id> -f revoke.json
 
 # Open an attestation-gated JIT credential request, approve it, then mint it.
 cat > ephemeral-jit.json <<'JSON'

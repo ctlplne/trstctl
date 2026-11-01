@@ -16,7 +16,9 @@ import (
 // pages. A link is "authoritative" when the record names both ends exactly.
 //
 //   - tenant members        → person nodes, HAS_ROLE → role nodes
-//   - agent-broker issuance → ai-agent nodes, HOLDS → their certificates
+//   - agent-broker issuance → ai-agent nodes, HOLDS → their certificates; the
+//     requester DELEGATED → the agent; a live certificate GRANTS_ACCESS → the
+//     tools its scopes name
 //   - API tokens, machine
 //     sessions              → credentials HOLDS'd by their subject, GRANTS_ACCESS → the trstctl API
 //   - PAM sessions          → credentials HOLDS'd by the requester and the attested
@@ -52,7 +54,7 @@ func addAccessSources(ctx context.Context, st *store.Store, tenantID string, g *
 	if err := addPeopleAndRoles(ctx, st, tenantID, g, principals); err != nil {
 		return err
 	}
-	addAIAgents(g, certs, principals)
+	addAIAgents(g, certs, principals, now)
 	for _, add := range []func(context.Context, *store.Store, string, *Graph, principalIndex, time.Time) error{
 		addAPITokens, addMachineSessions, addPAMAccess, addDynamicSecretLeases, addIssuanceApprovals,
 	} {
@@ -93,7 +95,11 @@ func addPeopleAndRoles(ctx context.Context, st *store.Store, tenantID string, g 
 // addAIAgents names the agent behind every broker-issued certificate. The
 // broker records the agent ID and the attested subject it verified, so either
 // one presented later as an authenticated subject resolves to the same agent.
-func addAIAgents(g *Graph, certs []store.Certificate, principals principalIndex) {
+// Every agent is registered before any edge is drawn, so a requester that is
+// itself an agent resolves to that agent. The principal who asked for the
+// identity DELEGATED to the agent (Q4), and a live credential reaches the
+// resources its scopes name.
+func addAIAgents(g *Graph, certs []store.Certificate, principals principalIndex, now time.Time) {
 	for _, c := range certs {
 		issuance := c.BrokerIssuance
 		if issuance == nil || issuance.AgentID == "" {
@@ -106,13 +112,47 @@ func addAIAgents(g *Graph, certs []store.Certificate, principals principalIndex)
 				"attestation_method": issuance.Method, "owner_id": issuance.OwnerID,
 			}})
 		}
-		g.AddEdge(Edge{From: id, To: credentialID("cert", c.ID), Type: EdgeHolds, Source: "agent broker issuance", Confidence: confidenceAuthority})
 		for _, subject := range []string{issuance.AgentID, issuance.Subject} {
 			if _, taken := principals[subject]; subject != "" && !taken {
 				principals[subject] = id
 			}
 		}
 	}
+	for _, c := range certs {
+		issuance := c.BrokerIssuance
+		if issuance == nil || issuance.AgentID == "" {
+			continue
+		}
+		id, cert := "aiagent:"+issuance.AgentID, credentialID("cert", c.ID)
+		g.AddEdge(Edge{From: id, To: cert, Type: EdgeHolds, Source: "agent broker issuance", Confidence: confidenceAuthority})
+		if issuance.RequestedBy != "" {
+			if from := principals.node(g, issuance.RequestedBy); from != id {
+				g.AddEdge(Edge{From: from, To: id, Type: EdgeDelegated, Source: "agent broker issuance requester", Confidence: confidenceAuthority})
+			}
+		}
+		if c.Status != "active" || (c.NotAfter != nil && !c.NotAfter.After(now)) {
+			continue
+		}
+		for _, scope := range issuance.Scopes {
+			resource := agentScopeResource(g, scope)
+			g.AddEdge(Edge{From: cert, To: resource, Type: EdgeGrantsAccess, Source: "agent broker scope", Confidence: confidenceAuthority})
+		}
+	}
+}
+
+// agentScopeResource is the resource a broker scope names: "tool:inventory.read"
+// reaches the tool "tool:inventory" (the action stays an attribute of the
+// scope). A scope without an action names itself.
+func agentScopeResource(g *Graph, scope string) string {
+	target := scope
+	if dot := strings.LastIndexByte(scope, '.'); dot > strings.IndexByte(scope, ':') && dot > 0 {
+		target = scope[:dot]
+	}
+	id := resourceID("agent-scope:" + target)
+	if _, ok := g.Node(id); !ok {
+		g.AddNode(Node{ID: id, Kind: KindResource, Name: target, Attrs: map[string]string{"resource_kind": "agent_scope"}})
+	}
+	return id
 }
 
 func ensureTrstctlAPI(g *Graph) {

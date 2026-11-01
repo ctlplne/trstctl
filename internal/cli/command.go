@@ -316,6 +316,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"broker", "agent-identities", "list"}, Method: "GET", Path: "/api/v1/broker/agent-identities", Query: []string{"limit", "cursor", "q", "method", "state"}, Summary: "Read durable broker certificate history with server-owned expiry and lifecycle states"},
 	{Name: []string{"broker", "agent-identities", "get"}, Method: "GET", Path: "/api/v1/broker/agent-identities/{id}", Summary: "Read original issuance facts and current lifecycle state for one broker certificate"},
 	{Name: []string{"broker", "agent-identities", "issue"}, Method: "POST", Path: "/api/v1/broker/agent-identities", Body: bodyFile, Summary: "Issue a policy-gated AI/MCP agent identity"},
+	{Name: []string{"broker", "agent-identities", "revoke"}, Method: "POST", Path: "/api/v1/broker/agent-identities/{id}/revoke", Body: bodyFile, Summary: "Revoke one agent identity in one call; relying parties refuse its next use"},
 	{Name: []string{"ephemeral", "preview"}, Method: "POST", Path: "/api/v1/ephemeral/preview", Body: bodyFile, ReadOnly: true, Summary: "Preview an exact approval-gated JIT credential request without side effects"},
 	{Name: []string{"ephemeral", "issue"}, Method: "POST", Path: "/api/v1/ephemeral", Body: bodyFile, Summary: "Open or complete an approval-gated JIT credential request"},
 	{Name: []string{"ephemeral", "api-keys", "preview"}, Method: "POST", Path: "/api/v1/ephemeral/api-keys/preview", Body: bodyFile, ReadOnly: true, Summary: "Review an exact short-TTL API key without minting a bearer"},

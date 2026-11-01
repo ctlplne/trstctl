@@ -71,14 +71,17 @@ name; no email is copied into the graph), **role** (`role:<name>`), and **AI age
 (`aiagent:<agent id>`, an agent the agent broker issued an identity to). Four edges link
 them: `HAS_ROLE` (person → role), `HOLDS` (person, workload or AI agent → the credential it
 holds), `APPROVED` (person → the credential whose issuance or activation they approved)
-and `DELEGATED` (→ an AI agent; recorded delegations populate it).
+and `DELEGATED` (the person or workload that asked the agent broker for an identity → the
+AI agent). A live broker certificate `GRANTS_ACCESS` to each tool its scopes name
+(`tool:inventory.read` reaches `res:agent-scope:tool:inventory`), so the graph shows
+person → agent → credential → resource; revoking the identity ends that path.
 
 The sources, each read in tenant-scoped pages:
 
 | Record | What the graph gets |
 |---|---|
 | Tenant members | Person nodes and their roles |
-| Agent-broker issuance | The AI agent behind each broker-issued certificate, `HOLDS` that certificate |
+| Agent-broker issuance | The AI agent behind each broker-issued certificate, `HOLDS` that certificate; the requester `DELEGATED` to it; the tools its scopes name |
 | API tokens, machine sessions | A credential `HOLDS`'d by its subject that `GRANTS_ACCESS` to the trstctl API |
 | PAM sessions | A credential `GRANTS_ACCESS` to the database or host, `HOLDS`'d by the requester and the attested workload, `APPROVED` by each person who approved the activation |
 | PAM targets | The database or host (`res:pam:<type>:<id>`); a PostgreSQL target `CONNECTS_TO` its dynamic-secret backend |

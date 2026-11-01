@@ -981,6 +981,17 @@ export const messages = {
     description: "F61 guided broker issuance and durable inventory: record.loading.",
   },
   "broker.openRevocation": { defaultMessage: "Open revocation center", description: "F61 guided broker issuance and durable inventory: openRevocation." },
+  "broker.requestedBy": { defaultMessage: "Requested by", description: "Who asked the broker for this agent identity (Q4)." },
+  "broker.revoke.heading": { defaultMessage: "Revoke this agent identity", description: "One-call agent identity revoke heading (Q4)." },
+  "broker.revoke.help": {
+    defaultMessage:
+      "One call revokes this identity at its CA: OCSP and the revocation list answer revoked and the agent key set drops its key, so relying parties refuse its next use.",
+    description: "Explains the one-call agent identity revoke.",
+  },
+  "broker.revoke.reason": { defaultMessage: "Reason", description: "Revocation reason field." },
+  "broker.revoke.action": { defaultMessage: "Revoke identity", description: "Button that revokes an agent identity." },
+  "broker.revoke.done": { defaultMessage: "Revoked. Relying parties refuse its next use.", description: "Notice after an agent identity is revoked." },
+  "broker.revoke.failed": { defaultMessage: "Could not revoke the agent identity", description: "Agent identity revoke failure." },
   "broker.validFrom": { defaultMessage: "Valid from", description: "F61 guided broker issuance and durable inventory: validFrom." },
   "broker.originalFacts": { defaultMessage: "Facts recorded at issuance", description: "F61 guided broker issuance and durable inventory: originalFacts." },
   "broker.originalOwner": { defaultMessage: "Owner at issuance", description: "F61 guided broker issuance and durable inventory: originalOwner." },

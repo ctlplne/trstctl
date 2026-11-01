@@ -25,6 +25,10 @@ type BrokerIssuance struct {
 	TaskEnvelopeDigest  string   `json:"task_envelope_digest,omitempty"`
 	RequestedTTLSeconds int64    `json:"requested_ttl_seconds"`
 	EffectiveTTLSeconds int64    `json:"effective_ttl_seconds"`
+	// RequestedBy is the authenticated principal that asked for the identity:
+	// the person or workload that delegated to the agent (Q4). Issuances
+	// recorded before it existed carry none.
+	RequestedBy string `json:"requested_by,omitempty"`
 }
 
 func validateBrokerIssuance(c Certificate) error {

@@ -2021,11 +2021,16 @@ export interface BrokerAgentIdentityRequest {
   ttl_seconds?: number;
 }
 
+export interface BrokerAgentIdentityRevokeRequest {
+  reason: string;
+}
+
 export interface BrokerIssuanceFacts {
   agent_id: string;
   effective_ttl_seconds: number;
   method: string;
   owner_id: string;
+  requested_by?: string;
   requested_ttl_seconds: number;
   scopes: string[];
   subject: string;
