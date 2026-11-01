@@ -137,7 +137,7 @@ var items = []Capability{
 	},
 	structured("api_key", "API keys and tokens", "observations", "Inventory metadata and references for API keys and non-human tokens; raw token values are rejected."),
 	structured("nhi_cross_surface", "Cross-system identities", "observations", "Correlate the same non-human identity across identity providers, cloud, SaaS, code, and CI without collecting credential values."),
-	structured("oauth_grant", "OAuth grants", "grants", "Inventory OAuth application grants, scopes, owners, and consent risk without collecting client secrets or access tokens."),
+	oauthGrantCapability(),
 	structured("service_account", "Service accounts", "accounts", "Inventory Active Directory and cloud service-account metadata and credential references without collecting passwords or private keys."),
 	structured("nhi_behavior", "Identity behavior", "events", "Analyze bounded, sanitized use metadata for machine identities; credential material is rejected."),
 	structured("credential_compromise", "Compromise signals", "signals", "Ingest sanitized detector evidence and credential references; stolen credential values are rejected."),
@@ -268,6 +268,21 @@ func structured(kind, label, payload, handling string) Capability {
 		Permission: "discovery:write", Edition: "core", Execution: "control plane", Configuration: []Field{field(payload, "Observations", "record_list", true, false, false, "One or more validated metadata-only observations.")},
 		Lifecycle: standardLifecycle, ConsoleStages: standardStages, DocumentationRef: "docs/features/discovery-and-inventory.md#metadata-sources",
 	}
+}
+
+// oauthGrantCapability is the OAuth grant source: metadata observations, plus
+// the optional provider admin connections an operator acts through on an
+// abusive grant it finds (A170, A171).
+func oauthGrantCapability() Capability {
+	c := structured("oauth_grant", "OAuth grants", "grants", "Inventory OAuth application grants, scopes, owners, and consent risk without collecting client secrets or access tokens. Optional provider connections hold an admin token reference used only when an operator revokes a grant or blocks an app.")
+	c.Configuration = append(c.Configuration,
+		field("providers[].provider", "Provider", "string", false, false, true, "okta, microsoft or google: the provider an operator revokes grants or blocks apps at."),
+		field("providers[].base_url", "Admin API URL", "url", false, false, true, "The provider's admin API base URL (your Okta org URL, https://graph.microsoft.com, https://admin.googleapis.com)."),
+		field("providers[].token_ref", "Admin token reference", "credential_ref", false, true, true, "Reference only (env:NAME) to a token allowed to revoke grants and deactivate apps; the value never enters source configuration."),
+		field("providers[].allow_private_endpoint", "Allow approved private endpoint", "boolean", false, false, true, "Requires private-egress authorization and explicit CIDRs."),
+		field("providers[].private_egress_cidrs", "Approved private endpoint CIDRs", "cidr_list", false, false, true, "Private destinations allowed for this connection; metadata and loopback remain blocked."),
+	)
+	return c
 }
 
 func field(path, label, kind string, required, secretRef, advanced bool, description string) Field {

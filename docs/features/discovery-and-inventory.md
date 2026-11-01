@@ -550,6 +550,23 @@ URI additionally emits an `oauth_grant_abuse` finding tagged `capability=CAP-ITD
 Ordinary high-risk-but-owned grant inventory stays `oauth_grant` only, so trstctl does
 not count inventory as detection.
 
+An `oauth_grant` source may also name admin connections, one per provider (A170,
+A171):
+
+```json
+"providers": [
+  {"provider": "okta", "base_url": "https://example.okta.com", "token_ref": "env:OKTA_ADMIN_TOKEN"},
+  {"provider": "microsoft", "base_url": "https://graph.microsoft.com", "token_ref": "env:GRAPH_ADMIN_TOKEN"}
+]
+```
+
+From a grant finding, **Revoke grant at provider** (or `trstctl-cli discovery findings
+revoke-oauth-grant ID`) removes every grant and refresh token that user gave the
+application, and **Block app at provider** (`... block-oauth-app ID`) deactivates the
+Okta app or disables the Entra service principal. Google Workspace grants can be
+revoked; its apps are blocked in its own admin console. The finding then shows what
+the provider confirmed.
+
 ### Cloud network paths
 
 A `cloud_network_path` source (A167) holds one AWS account's read-only network

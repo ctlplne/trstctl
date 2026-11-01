@@ -1390,6 +1390,11 @@ trstctl-agent --enroll-url https://localhost:8443 \
   --inventory-private-key-roots /etc/ssl/private,/etc/ssh
 trstctl-cli discovery findings list
 
+# Revoke at the identity provider the OAuth grant a finding names, or block its
+# app there, through the source's admin connection (Okta, Entra, Google).
+trstctl-cli discovery findings revoke-oauth-grant FINDING_ID --force
+trstctl-cli discovery findings block-oauth-app FINDING_ID --force
+
 # --enroll-url is the control-plane base URL, not /enroll/bootstrap. Plain HTTP
 # remains blocked except with --allow-insecure-loopback-enrollment on loopback.
 

@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2072 annotated sites across 29 rules. Each row is
+2074 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (431 sites)
+### G101 — CWE-798 Use of hardcoded credentials (433 sites)
 
 | Location | Reason |
 |---|---|
@@ -298,6 +298,7 @@ not this file.
 | `internal/mdm/entra_test.go:99` | malformed stand-in token responses, no credential value (CWE-798) |
 | `internal/notify/notify.go:89` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/notify/webhook/webhook_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/oauthrevoke/oauthrevoke_test.go:14` | fabricated fixture credential (CWE-798) |
 | `internal/operator/client.go:39` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/operator/networking_test.go:61` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/operator/networking_test.go:189` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -322,7 +323,7 @@ not this file.
 | `internal/perf/perf_test.go:242` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/apitoken_test.go:59` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/projections/cli_api_test.go:90` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/projections/projections.go:315` | an event type name, not a credential (CWE-798) |
+| `internal/projections/projections.go:319` | an event type name, not a credential (CWE-798) |
 | `internal/projections/secret_integrations.go:226` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_integrations.go:228` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
@@ -432,6 +433,7 @@ not this file.
 | `internal/server/nhi_posture_served_test.go:584` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/notification_tenant_channel_families_served_test.go:87` | fabricated fixture credential; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/notification_tenant_channel_families_served_test.go:88` | fabricated fixture credential (CWE-798) |
+| `internal/server/oauth_provider_action_served_test.go:34` | fabricated fixture credential (CWE-798) |
 | `internal/server/protocols_certbot_aud73_test.go:18` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:59` | fabricated test-only webhook credential (CWE-798) |
 | `internal/server/protocols_served_stock_clients_test.go:188` | fabricated secret reference, never raw credential material (CWE-798) |
@@ -668,10 +670,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6587` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6604` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6617` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6651` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6605` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6622` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6635` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6669` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |

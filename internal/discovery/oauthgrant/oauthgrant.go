@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"trstctl.com/trstctl/internal/netsec"
+	"trstctl.com/trstctl/internal/oauthrevoke"
 )
 
 const (
@@ -32,6 +33,57 @@ const (
 // Grants are metadata-only references exported from IdPs and SaaS admin APIs.
 type Config struct {
 	Grants []Grant `json:"grants"`
+	// Providers are the admin connections an operator may act through on a
+	// grant this source found (A170, A171): the provider's API base URL and a
+	// token reference, never a token value.
+	Providers []ProviderConnection `json:"providers,omitempty"`
+}
+
+// ProviderConnection is one provider admin API an operator acts through.
+type ProviderConnection struct {
+	Provider             string   `json:"provider"`
+	BaseURL              string   `json:"base_url"`
+	TokenRef             string   `json:"token_ref"`
+	AllowPrivateEndpoint bool     `json:"allow_private_endpoint,omitempty"`
+	PrivateEgressCIDRs   []string `json:"private_egress_cidrs,omitempty"`
+}
+
+// Connection returns the source's admin connection for a provider name as a
+// grant names it, normalized the way the actions are.
+func Connection(raw json.RawMessage, provider string) (ProviderConnection, bool, error) {
+	var cfg Config
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return ProviderConnection{}, false, fmt.Errorf("decode OAuth grant discovery config: %w", err)
+	}
+	want := oauthrevoke.NormalizeProvider(provider)
+	for _, c := range cfg.Providers {
+		if want != "" && oauthrevoke.NormalizeProvider(c.Provider) == want {
+			return c, true, nil
+		}
+	}
+	return ProviderConnection{}, false, nil
+}
+
+func validateConnections(connections []ProviderConnection) error {
+	seen := map[string]bool{}
+	for i, c := range connections {
+		name := oauthrevoke.NormalizeProvider(c.Provider)
+		if name == "" {
+			return fmt.Errorf("providers[%d].provider %q is not served; use okta, microsoft or google", i, c.Provider)
+		}
+		if seen[name] {
+			return fmt.Errorf("providers[%d]: one connection per provider (%s appears twice)", i, name)
+		}
+		seen[name] = true
+		u, err := url.Parse(strings.TrimSpace(c.BaseURL))
+		if err != nil || u.Host == "" || (u.Scheme != "https" && (u.Scheme != "http" || !c.AllowPrivateEndpoint)) {
+			return fmt.Errorf("providers[%d].base_url must be the provider's https API URL", i)
+		}
+		if ref := strings.TrimSpace(c.TokenRef); !strings.HasPrefix(ref, "env:") || strings.TrimSpace(strings.TrimPrefix(ref, "env:")) == "" {
+			return fmt.Errorf("providers[%d].token_ref must be a credential reference (env:NAME), never a token", i)
+		}
+	}
+	return nil
 }
 
 // Grant is one OAuth app authorization. AppID and Resource are public
@@ -131,6 +183,9 @@ func decodeConfig(raw json.RawMessage) (Config, error) {
 	}
 	if len(cfg.Grants) > MaxGrants {
 		return Config{}, fmt.Errorf("OAuth grant discovery source has %d grants; maximum is %d", len(cfg.Grants), MaxGrants)
+	}
+	if err := validateConnections(cfg.Providers); err != nil {
+		return Config{}, err
 	}
 	return cfg, nil
 }

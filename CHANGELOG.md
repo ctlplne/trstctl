@@ -2,6 +2,9 @@
 
 ### Added
 
+- Act at the identity provider on an abusive OAuth grant: an OAuth grant finding can revoke the
+  user's grant at Okta, Microsoft Entra or Google Workspace, and block the app at Okta or Entra,
+  through an admin connection the discovery source names by token reference.
 - Workload identity for the Azure managed-key signer: `managed_keys.azure.workload_identity` exchanges
   the platform's projected federated token for short-lived Entra tokens, replacing the static bearer
   token file.

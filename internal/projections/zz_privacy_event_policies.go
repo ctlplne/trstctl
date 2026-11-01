@@ -660,20 +660,6 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/configuration_dn", token), privacyRule("/bind_dn", token),
 		privacyRule("/password_ref", token), privacyRule("/insecure_skip_verify", opaque),
 	)
-	discoveryFinding := privacyRules(
-		privacyRule("/id", opaque), privacyRule("/run_id", opaque),
-		privacyRule("/source_id", opaque), privacyRule("/kind", opaque),
-		privacyRule("/ref", opaque), privacyRule("/provenance", opaque),
-		privacyRule("/fingerprint", opaque), privacyRule("/risk_score", opaque),
-		privacyRule("/metadata", jsonID),
-	)
-	discoveryTriage := privacyRules(
-		privacyRule("/id", opaque), privacyRule("/status", opaque),
-		privacyRule("/managed_identity_id", opaque), privacyRule("/actor", exact),
-		privacyRule("/reason", clear), privacyRule("/metadata_patch", jsonID),
-		privacyRule("/assignee", exact), privacyRule("/due_at", opaque),
-		privacyRule("/evidence_ref", clear), privacyRule("/risk_accepted_until", opaque),
-	)
 	apiTokenCreated := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/token_hash", opaque),
 		privacyRule("/subject", exact), privacyRule("/scopes", opaque),
@@ -1040,8 +1026,9 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		{EventRevocationProbeQueued, 1}:                                                      revocationProbe,
 		{EventRevocationHealthObserved, 1}:                                                   revocationObserved,
 		{EventMigrationRunRecorded, 1}:                                                       migrationRunPrivacyPolicy(),
-		{EventDiscoveryFindingRecorded, 1}:                                                   discoveryFinding,
-		{EventDiscoveryFindingTriageChanged, 1}:                                              discoveryTriage,
+		{EventDiscoveryFindingRecorded, 1}:                                                   discoveryFindingPrivacyPolicy(),
+		{EventDiscoveryFindingTriageChanged, 1}:                                              discoveryTriagePrivacyPolicy(),
+		{EventDiscoveryFindingProviderAction, 1}:                                             discoveryProviderActionPrivacyPolicy(),
 		{EventComplianceReportScheduleUpserted, 1}:                                           complianceSchedule,
 		{EventComplianceReportRunRecorded, 1}:                                                complianceRun,
 		{EventSecretRotationScheduleRan, 1}:                                                  secretRotationRunV1,
@@ -1590,6 +1577,7 @@ func exactProjectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.Priva
 		{EventMigrationRunRecorded, 1}:                                                       privacyPayloadShape[MigrationRunRecorded](),
 		{EventDiscoveryFindingRecorded, 1}:                                                   privacyPayloadShape[DiscoveryFindingRecorded](),
 		{EventDiscoveryFindingTriageChanged, 1}:                                              privacyPayloadShape[DiscoveryFindingTriageChanged](),
+		{EventDiscoveryFindingProviderAction, 1}:                                             privacyPayloadShape[DiscoveryFindingProviderAction](),
 		{EventComplianceReportScheduleUpserted, 1}:                                           privacyPayloadShape[ComplianceReportScheduleUpserted](),
 		{EventComplianceReportRunRecorded, 1}:                                                privacyPayloadShape[ComplianceReportRunRecorded](),
 		{EventSecretRotationScheduleRan, 1}:                                                  privacyPayloadShape[privacySecretRotationRunV1](),

@@ -7283,6 +7283,20 @@ export interface NotificationRoutingPreview {
   resolution_order: string[];
 }
 
+export interface OAuthProviderActionRequest {
+  reason?: string;
+}
+
+export interface OAuthProviderActionResult {
+  action: "revoke_grant" | "block_app";
+  app_id: string;
+  finding_id: string;
+  principal?: string;
+  provider: "okta" | "microsoft" | "google";
+  request_id: string;
+  status: "queued";
+}
+
 export interface OIDCMappingStatus {
   allow_default_tenant: boolean;
   claim_is_tenant: boolean;

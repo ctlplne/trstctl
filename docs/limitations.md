@@ -4802,8 +4802,27 @@ findings and, when the export contains concrete abuse evidence, additional
 `oauth_grant_abuse` findings tagged `CAP-ITDR-03`. The detector stores
 provider threat signals, reason codes, evidence refs, and source event ids
 only; OAuth client secrets, access tokens, and refresh tokens are rejected.
-Live IdP/SaaS grant revocation and provider-side enforcement remain
-connector/remediation work rather than being hidden inside discovery.
+Acting at the provider on such a grant is served (A170, A171) for Okta, Microsoft
+Entra (Graph) and Google Workspace. An `oauth_grant` source may name one admin
+connection per provider under `providers[]` — the admin API URL and a token
+reference (`env:NAME`), never a token. `POST
+/api/v1/discovery/findings/{id}/oauth-grant/revoke` (`trstctl-cli discovery
+findings revoke-oauth-grant`) revokes, at the provider, every grant and refresh
+token the finding's user gave its application: Okta's user client grants and
+tokens, Graph's delegated permission grants for that user and service
+principal, Google's user token for that client. `POST
+/api/v1/discovery/findings/{id}/oauth-grant/block` (`... block-oauth-app`)
+deactivates the Okta application or disables the Entra service principal so no
+one can sign in to it or grant it again; Google Workspace exposes app access
+control only in its admin console, so a block there is refused with that
+reason. Both take `connectors:write`, are idempotent, and run from a
+control-plane outbox row; the finding records the request as queued and then
+what the provider confirmed (`metadata.provider_actions`: confirmed, already
+absent, or failed with the provider's status). A provider that is unreachable,
+throttles or fails on its side is retried; a token it refuses fails once,
+visibly. The Discovery finding panel has **Revoke grant at provider** and
+**Block app at provider**. Proven against in-repository stand-ins of the three
+admin APIs; live tenants are Track B.
 
 ### AI, RCA, and MCP surface
 

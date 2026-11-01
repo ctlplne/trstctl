@@ -411,6 +411,8 @@ import type {
   NHIExposureProbeResult,
   NHIAttackPathRequest,
   NHIAttackPathResult,
+  OAuthProviderActionRequest,
+  OAuthProviderActionResult,
   NHIExposureAttackPath,
   NHIPostureAutomation,
   NHIInventory,
@@ -1331,6 +1333,8 @@ export type {
   NHIExposureProbeResult,
   NHIAttackPathRequest,
   NHIAttackPathResult,
+  OAuthProviderActionRequest,
+  OAuthProviderActionResult,
   NHIExposureAttackPath,
   NHIPostureAutomation,
   NHIInventory,
@@ -2175,6 +2179,8 @@ export interface Api {
   /** A106: investigate, record remediated, accept the risk until a time, or reopen. */
   resolveDiscoveryFinding(id: string, input: DiscoveryFindingResolutionRequest): Promise<DiscoveryFinding>;
   removeDistrustedRoot(id: string, input: DistrustedRootRemovalRequest): Promise<ConnectorDelivery>;
+  revokeOAuthGrantAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
+  blockOAuthAppAtProvider(id: string, input: OAuthProviderActionRequest): Promise<OAuthProviderActionResult>;
   connectorCatalog(options?: { limit?: number; cursor?: string }): Promise<ConnectorCatalog>;
   connectorTargets(): Promise<DeploymentTargetList>;
   createConnectorTarget(input: DeploymentTargetRequest): Promise<DeploymentTarget>;
@@ -2985,6 +2991,10 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   dismissDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/dismiss`, input),
   resolveDiscoveryFinding: (id, input) => mutate<DiscoveryFinding>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/resolution`, input),
   removeDistrustedRoot: (id, input) => mutate<ConnectorDelivery>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/remove-distrusted-root`, input),
+  revokeOAuthGrantAtProvider: (id, input) =>
+    mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/revoke`, input),
+  blockOAuthAppAtProvider: (id, input) =>
+    mutate<OAuthProviderActionResult>("POST", `/api/v1/discovery/findings/${encodeURIComponent(id)}/oauth-grant/block`, input),
   connectorCatalog: (options) => req<ConnectorCatalog>("/api/v1/connectors/catalog" + pageQueryString(options)),
   connectorTargets: () => req<DeploymentTargetList>("/api/v1/connectors/targets"),
   createConnectorTarget: (input) => mutate<DeploymentTarget>("POST", "/api/v1/connectors/targets", input),

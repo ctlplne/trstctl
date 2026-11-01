@@ -10045,6 +10045,28 @@ NotificationRoutingPreview = TypedDict(
     total=False,
 )
 
+OAuthProviderActionRequest = TypedDict(
+    'OAuthProviderActionRequest',
+    {
+        'reason': str,
+    },
+    total=False,
+)
+
+OAuthProviderActionResult = TypedDict(
+    'OAuthProviderActionResult',
+    {
+        'action': str,
+        'app_id': str,
+        'finding_id': str,
+        'principal': str,
+        'provider': str,
+        'request_id': str,
+        'status': str,
+    },
+    total=False,
+)
+
 OIDCMappingStatus = TypedDict(
     'OIDCMappingStatus',
     {

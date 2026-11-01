@@ -1412,7 +1412,7 @@
       "kind": "oauth_grant",
       "label": "OAuth grants",
       "purpose": "OAuth grants discovery from bounded, sanitized observations.",
-      "data_handling": "Inventory OAuth application grants, scopes, owners, and consent risk without collecting client secrets or access tokens.",
+      "data_handling": "Inventory OAuth application grants, scopes, owners, and consent risk without collecting client secrets or access tokens. Optional provider connections hold an admin token reference used only when an operator revokes a grant or blocks an app.",
       "tool": "Discover",
       "route": "/discovery?tab=sources\u0026kind=oauth_grant",
       "setup_surface": "source_wizard",
@@ -1426,6 +1426,47 @@
           "type": "record_list",
           "required": true,
           "description": "One or more validated metadata-only observations."
+        },
+        {
+          "path": "providers[].provider",
+          "label": "Provider",
+          "type": "string",
+          "required": false,
+          "advanced": true,
+          "description": "okta, microsoft or google: the provider an operator revokes grants or blocks apps at."
+        },
+        {
+          "path": "providers[].base_url",
+          "label": "Admin API URL",
+          "type": "url",
+          "required": false,
+          "advanced": true,
+          "description": "The provider's admin API base URL (your Okta org URL, https://graph.microsoft.com, https://admin.googleapis.com)."
+        },
+        {
+          "path": "providers[].token_ref",
+          "label": "Admin token reference",
+          "type": "credential_ref",
+          "required": false,
+          "secret_ref": true,
+          "advanced": true,
+          "description": "Reference only (env:NAME) to a token allowed to revoke grants and deactivate apps; the value never enters source configuration."
+        },
+        {
+          "path": "providers[].allow_private_endpoint",
+          "label": "Allow approved private endpoint",
+          "type": "boolean",
+          "required": false,
+          "advanced": true,
+          "description": "Requires private-egress authorization and explicit CIDRs."
+        },
+        {
+          "path": "providers[].private_egress_cidrs",
+          "label": "Approved private endpoint CIDRs",
+          "type": "cidr_list",
+          "required": false,
+          "advanced": true,
+          "description": "Private destinations allowed for this connection; metadata and loopback remain blocked."
         }
       ],
       "lifecycle": [

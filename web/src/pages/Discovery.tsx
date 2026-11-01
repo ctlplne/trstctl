@@ -10,6 +10,7 @@ import { SourceActivityCell, SourceFindingsCell, sourceActivityByID, type Source
 import { ADCSSourceFields, parseADCSEnrollmentEndpoints, parseADCSPrivateEgressCIDRs } from "./discovery/ADCSSourceFields";
 import { KubernetesDeliveryFields, emptyKubernetesDelivery, kubernetesDeliveryConfig, type KubernetesDelivery } from "./discovery/KubernetesDeliveryFields";
 import { DiscoveryRunScopeNotice } from "./discovery/DiscoveryRunScopeNotice";
+import { OAuthGrantProviderActions, type OAuthProviderAction } from "./discovery/OAuthGrantProviderActions";
 import { CoverageCandidatesPanel } from "./discovery/CoverageCandidatesPanel";
 import { DiscoveryScheduleTable } from "./discovery/DiscoveryScheduleTableParts";
 import { RunTable } from "./discovery/DiscoveryRunTableParts";
@@ -2243,6 +2244,19 @@ function FindingTable({
     }
   }
 
+  async function actAtOAuthProvider(finding: DiscoveryFinding, action: OAuthProviderAction) {
+    setActionBusy(true);
+    onNotice(null);
+    try {
+      const queued = action === "revoke" ? await api.revokeOAuthGrantAtProvider(finding.id, {}) : await api.blockOAuthAppAtProvider(finding.id, {});
+      onNotice({ kind: "success", message: t("discovery.findings.oauthProvider.queued", { provider: queued.provider, request: queued.request_id }) });
+    } catch (err) {
+      onNotice(noticeForError(err, t("discovery.findings.oauthProvider.error")));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   async function removeDistrustedRootFromHost(finding: DiscoveryFinding, removal: DistrustedRootRemoval) {
     setActionBusy(true);
     onNotice(null);
@@ -2479,6 +2493,8 @@ function FindingTable({
             <Tag className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <TagList tags={findingTags(selected)} />
           </div>
+
+          <OAuthGrantProviderActions finding={selected} busy={actionBusy} onAction={(action) => actAtOAuthProvider(selected, action)} />
 
           {(() => {
             const removal = distrustedRootRemoval(selected);

@@ -373,6 +373,8 @@
                 "dismissDiscoveryFinding",
                 "resolveDiscoveryFinding",
                 "removeDistrustedRoot",
+                "revokeOAuthGrantAtProvider",
+                "blockOAuthAppAtProvider",
                 "getADCSPosture",
                 "getADCSTemplateDrift",
                 "getDiscoveryCoverage",
@@ -430,7 +432,9 @@
                 "adcs ca-database list",
                 "adcs ca-database collect",
                 "posture adcs modernize-preview",
-                "posture adcs modernize"
+                "posture adcs modernize",
+                "discovery findings revoke-oauth-grant",
+                "discovery findings block-oauth-app"
             ],
             "cli_na": "",
             "facet_evidence": {

@@ -46,11 +46,14 @@ type attackPathReader interface {
 }
 
 // deliverControlPlaneEffect routes the control-plane-only rows that carry a
-// run's own work: an appliance or cloud-store successor's issuance (A33, A166)
-// and an attack-path validation (A167).
+// run's own work: an appliance or cloud-store successor's issuance (A33, A166),
+// an attack-path validation (A167) and an OAuth provider action (A170, A171).
 func (d *issuanceDispatcher) deliverControlPlaneEffect(ctx context.Context, m orchestrator.Message) error {
-	if m.Destination == orchestrator.DestinationAttackPathValidate {
+	switch m.Destination {
+	case orchestrator.DestinationAttackPathValidate:
 		return d.handleAttackPathValidate(ctx, m)
+	case orchestrator.DestinationOAuthProviderAction:
+		return d.handleOAuthProviderAction(ctx, m)
 	}
 	return d.handleMigrationApplianceIssue(ctx, m)
 }

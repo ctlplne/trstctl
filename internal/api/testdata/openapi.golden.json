@@ -30833,6 +30833,62 @@
         ],
         "type": "object"
       },
+      "OAuthProviderActionRequest": {
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OAuthProviderActionResult": {
+        "properties": {
+          "action": {
+            "enum": [
+              "revoke_grant",
+              "block_app"
+            ],
+            "type": "string"
+          },
+          "app_id": {
+            "type": "string"
+          },
+          "finding_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "principal": {
+            "type": "string"
+          },
+          "provider": {
+            "enum": [
+              "okta",
+              "microsoft",
+              "google"
+            ],
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "finding_id",
+          "action",
+          "provider",
+          "app_id",
+          "status"
+        ],
+        "type": "object"
+      },
       "OIDCMappingStatus": {
         "properties": {
           "allow_default_tenant": {
@@ -57649,6 +57705,158 @@
         ],
         "summary": "Dismiss a discovery finding",
         "x-trstctl-permission": "discovery:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/oauth-grant/block": {
+      "post": {
+        "operationId": "blockOAuthAppAtProvider",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthProviderActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthProviderActionResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Block at the identity or SaaS provider the application a discovery finding's OAuth grant names",
+        "x-trstctl-permission": "connectors:write"
+      }
+    },
+    "/api/v1/discovery/findings/{id}/oauth-grant/revoke": {
+      "post": {
+        "operationId": "revokeOAuthGrantAtProvider",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthProviderActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthProviderActionResult"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Revoke at the identity or SaaS provider the OAuth grant a discovery finding names",
+        "x-trstctl-permission": "connectors:write"
       }
     },
     "/api/v1/discovery/findings/{id}/remove-distrusted-root": {

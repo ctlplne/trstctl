@@ -13647,6 +13647,48 @@ export const messages = {
     defaultMessage: "Choose a host agent",
     description: "Empty migration agent option.",
   },
+  "discovery.findings.oauthProvider.heading": {
+    defaultMessage: "Act at {provider}",
+    description: "Heading of the OAuth grant finding section that revokes the grant or blocks the app at the provider.",
+  },
+  "discovery.findings.oauthProvider.help": {
+    defaultMessage:
+      "Revoke the grant {user} gave {app}, or block {app} so no one can grant it again. trstctl acts through the admin connection the source names.",
+    description: "Explanation of the OAuth grant provider actions; names the user and application.",
+  },
+  "discovery.findings.oauthProvider.revokeLabel": { defaultMessage: "Grant revocation", description: "Label of the revoke action in its status line." },
+  "discovery.findings.oauthProvider.blockLabel": { defaultMessage: "App block", description: "Label of the block action in its status line." },
+  "discovery.findings.oauthProvider.state": {
+    defaultMessage: "{action}: {status}. {detail}",
+    description: "Status line of one provider action: queued, confirmed, already absent or failed, with the provider's detail.",
+  },
+  "discovery.findings.oauthProvider.revoke": {
+    defaultMessage: "Revoke grant at provider",
+    description: "Button that starts revoking the OAuth grant at the provider.",
+  },
+  "discovery.findings.oauthProvider.block": {
+    defaultMessage: "Block app at provider",
+    description: "Button that starts blocking the OAuth application at the provider.",
+  },
+  "discovery.findings.oauthProvider.blockUnsupported": {
+    defaultMessage: "This provider's API cannot block an app; block it in the provider's admin console.",
+    description: "Shown instead of the block button for a provider whose API cannot block an application.",
+  },
+  "discovery.findings.oauthProvider.revokeConfirm": {
+    defaultMessage: "Revoke at the provider every grant and refresh token {user} gave {app}?",
+    description: "Confirmation before revoking an OAuth grant at the provider.",
+  },
+  "discovery.findings.oauthProvider.blockConfirm": {
+    defaultMessage: "Block {app} at the provider? No user will be able to sign in to it or grant it access until an administrator re-enables it there.",
+    description: "Confirmation before blocking an OAuth application at the provider.",
+  },
+  "discovery.findings.oauthProvider.confirm": { defaultMessage: "Confirm", description: "Confirms the provider action." },
+  "discovery.findings.oauthProvider.cancel": { defaultMessage: "Cancel", description: "Cancels the provider action." },
+  "discovery.findings.oauthProvider.queued": {
+    defaultMessage: "Queued at {provider} (request {request}). The finding shows what the provider confirms.",
+    description: "Notice after a provider action is queued.",
+  },
+  "discovery.findings.oauthProvider.error": { defaultMessage: "Could not queue the provider action.", description: "Fallback error for a provider action." },
   "discovery.sourceKind.cloudNetworkPath": {
     defaultMessage: "Cloud network paths",
     description: "Discovery source kind label: read-only cloud network configuration used to validate exposed endpoints.",

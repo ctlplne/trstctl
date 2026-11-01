@@ -205,40 +205,44 @@ const (
 	EventCAAuthorityRekeyed                  = caevent.EventCAAuthorityRekeyed
 	// EventCAAuthorityRevoked records the administrative revocation of a
 	// signer-backed CA authority's key (A128).
-	EventCAAuthorityRevoked                  = "ca.authority.revoked"
-	EventCAAuthorityHorizonAlerted           = "ca.authority.horizon_alerted"
-	EventCAIntermediateCreated               = caevent.EventCAIntermediateCreated
-	EventCAIntermediateCSRSignRequested      = "ca.intermediate_csr.sign_requested"
-	EventCAIntermediateCSRIssued             = caevent.EventCAIntermediateCSRIssued
-	EventCAEndEntityIssued                   = caevent.EventCAEndEntityIssued
-	EventCACrossSigned                       = caevent.EventCACrossSigned
-	EventBreakglassIssued                    = "breakglass.issued"
-	EventBreakglassCARotated                 = "breakglass.ca.rotated"
-	EventBreakglassCACrossSigned             = "breakglass.ca.cross_signed"
-	EventCRLPublished                        = "ca.crl.published"
-	EventOCSPResponderRotated                = "ca.ocsp_responder.rotated"
-	EventAgentHeartbeat                      = "agent.heartbeat"
-	EventAgentCertRenewed                    = "agent.cert.renewed"
-	EventAgentCertRevoked                    = "agent.cert.revoked"
-	EventAgentOffboarded                     = "agent.offboarded"
-	EventAgentRolesGranted                   = "agent.roles.granted"           // A191; signed by agent.cert.renewed schema 2
-	EventKMIPClientRegistered                = "kmip.client.registered"        // A197
-	EventKMIPClientEnrollmentIssued          = "kmip.client.enrollment_issued" // A197
-	EventKMIPClientEnrolled                  = "kmip.client.enrolled"          // A197
-	EventKMIPClientRemoved                   = "kmip.client.removed"           // A197
-	EventProfileCreated                      = "profile.created"
-	EventProfileUpdated                      = "profile.updated"
-	EventDiscoverySegmentUpserted            = "discovery.segment.upserted"
-	EventDiscoverySourceUpserted             = "discovery.source.upserted"
-	EventDiscoveryScheduleUpserted           = "discovery.schedule.upserted"
-	EventDiscoverySchedulePaused             = "discovery.schedule.paused"
-	EventDiscoveryScheduleResumed            = "discovery.schedule.resumed"
-	EventDiscoveryScheduleRetired            = "discovery.schedule.retired"
-	EventSSHTrustCollectionQueued            = "ssh.trust_collection.queued"
-	EventDiscoveryRunQueued                  = "discovery.run.queued"
-	EventDiscoveryRunStarted                 = "discovery.run.started"
-	EventDiscoveryFindingRecorded            = "discovery.finding.recorded"
-	EventDiscoveryFindingTriageChanged       = "discovery.finding.triage_changed"
+	EventCAAuthorityRevoked             = "ca.authority.revoked"
+	EventCAAuthorityHorizonAlerted      = "ca.authority.horizon_alerted"
+	EventCAIntermediateCreated          = caevent.EventCAIntermediateCreated
+	EventCAIntermediateCSRSignRequested = "ca.intermediate_csr.sign_requested"
+	EventCAIntermediateCSRIssued        = caevent.EventCAIntermediateCSRIssued
+	EventCAEndEntityIssued              = caevent.EventCAEndEntityIssued
+	EventCACrossSigned                  = caevent.EventCACrossSigned
+	EventBreakglassIssued               = "breakglass.issued"
+	EventBreakglassCARotated            = "breakglass.ca.rotated"
+	EventBreakglassCACrossSigned        = "breakglass.ca.cross_signed"
+	EventCRLPublished                   = "ca.crl.published"
+	EventOCSPResponderRotated           = "ca.ocsp_responder.rotated"
+	EventAgentHeartbeat                 = "agent.heartbeat"
+	EventAgentCertRenewed               = "agent.cert.renewed"
+	EventAgentCertRevoked               = "agent.cert.revoked"
+	EventAgentOffboarded                = "agent.offboarded"
+	EventAgentRolesGranted              = "agent.roles.granted"           // A191; signed by agent.cert.renewed schema 2
+	EventKMIPClientRegistered           = "kmip.client.registered"        // A197
+	EventKMIPClientEnrollmentIssued     = "kmip.client.enrollment_issued" // A197
+	EventKMIPClientEnrolled             = "kmip.client.enrolled"          // A197
+	EventKMIPClientRemoved              = "kmip.client.removed"           // A197
+	EventProfileCreated                 = "profile.created"
+	EventProfileUpdated                 = "profile.updated"
+	EventDiscoverySegmentUpserted       = "discovery.segment.upserted"
+	EventDiscoverySourceUpserted        = "discovery.source.upserted"
+	EventDiscoveryScheduleUpserted      = "discovery.schedule.upserted"
+	EventDiscoverySchedulePaused        = "discovery.schedule.paused"
+	EventDiscoveryScheduleResumed       = "discovery.schedule.resumed"
+	EventDiscoveryScheduleRetired       = "discovery.schedule.retired"
+	EventSSHTrustCollectionQueued       = "ssh.trust_collection.queued"
+	EventDiscoveryRunQueued             = "discovery.run.queued"
+	EventDiscoveryRunStarted            = "discovery.run.started"
+	EventDiscoveryFindingRecorded       = "discovery.finding.recorded"
+	EventDiscoveryFindingTriageChanged  = "discovery.finding.triage_changed"
+	// EventDiscoveryFindingProviderAction records one step of an action taken at
+	// the provider on what a finding names: revoking an OAuth grant or blocking
+	// its application (A170, A171).
+	EventDiscoveryFindingProviderAction      = "discovery.finding.provider_action"
 	EventDiscoveryRunCompleted               = "discovery.run.completed"
 	EventADCSInventoryObserved               = "adcs.template.inventory.observed"
 	EventADCSTemplateDriftObserved           = "adcs.template.drift"
@@ -2822,6 +2826,19 @@ type DiscoveryFindingRecorded struct {
 	Metadata    json.RawMessage `json:"metadata"`
 }
 
+// DiscoveryFindingProviderAction is the payload of
+// discovery.finding.provider_action (A170, A171).
+type DiscoveryFindingProviderAction struct {
+	FindingID string `json:"finding_id"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
+	Provider  string `json:"provider"`
+	Detail    string `json:"detail,omitempty"`
+	RequestID string `json:"request_id"`
+	Reason    string `json:"reason,omitempty"`
+	Actor     string `json:"actor,omitempty"`
+}
+
 // DiscoveryFindingTriageChanged is the payload of discovery.finding.triage_changed.
 type DiscoveryFindingTriageChanged struct {
 	ID                string          `json:"id"`
@@ -4789,6 +4806,7 @@ var knownSchemaVersions = map[string]map[int]bool{
 	EventDiscoveryRunStarted:                      {1: true},
 	EventDiscoveryFindingRecorded:                 {1: true},
 	EventDiscoveryFindingTriageChanged:            {1: true},
+	EventDiscoveryFindingProviderAction:           {1: true},
 	EventDiscoveryRunCompleted:                    {1: true, DiscoveryTargetResultsEventSchemaVersion: true},
 	EventADCSInventoryObserved:                    {1: true, 2: true, adcsdiscovery.InventoryMembershipSchemaVersion: true, adcsdiscovery.InventoryEventSchemaVersion: true},
 	EventADCSTemplateDriftObserved:                {1: true, ADCSTemplateDriftEventSchemaVersion: true},
@@ -6682,6 +6700,15 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Location: meta.Location, StandingAccess: discoveryMetadataBool(meta.StandingAccess),
 			Orphaned:  discoveryMetadataBool(meta.Orphaned),
 			CreatedAt: e.Time,
+		})
+	case EventDiscoveryFindingProviderAction:
+		var pl DiscoveryFindingProviderAction
+		if err := decode(e, &pl); err != nil {
+			return err
+		}
+		return p.store.ApplyDiscoveryFindingProviderActionTx(ctx, tx, store.DiscoveryFindingProviderAction{
+			TenantID: e.TenantID, FindingID: pl.FindingID, Action: pl.Action, Status: pl.Status,
+			Provider: pl.Provider, Detail: pl.Detail, RequestID: pl.RequestID, At: e.Time,
 		})
 	case EventDiscoveryFindingTriageChanged:
 		var pl DiscoveryFindingTriageChanged

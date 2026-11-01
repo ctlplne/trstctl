@@ -547,6 +547,14 @@ func componentSchemas() map[string]*Schema {
 	caCreateRootReq := object(map[string]*Schema{
 		"ceremony_id": uuid(), "spec": ref("CASpec"),
 	}, "ceremony_id", "spec")
+	oauthProviderActionReq := object(map[string]*Schema{"reason": str()})
+	oauthProviderActionResult := object(map[string]*Schema{
+		"request_id": uuid(), "finding_id": uuid(),
+		"action":   {Type: "string", Enum: []string{"revoke_grant", "block_app"}},
+		"provider": {Type: "string", Enum: []string{"okta", "microsoft", "google"}},
+		"app_id":   str(), "principal": str(),
+		"status": {Type: "string", Enum: []string{"queued"}},
+	}, "request_id", "finding_id", "action", "provider", "app_id", "status")
 	distrustedRootRemovalReq := object(map[string]*Schema{
 		"fingerprint": {Type: "string", Description: "The finding's certificate SHA-256 fingerprint, as reviewed."},
 		"anchor_path": {Type: "string", Description: "The trust-store file the finding names, as reviewed."},
@@ -8556,6 +8564,8 @@ func componentSchemas() map[string]*Schema {
 		"CACreateRootRequest":                   caCreateRootReq,
 		"CAImportOfflineRootRequest":            caImportOfflineRootReq,
 		"DistrustedRootRemovalRequest":          distrustedRootRemovalReq,
+		"OAuthProviderActionRequest":            oauthProviderActionReq,
+		"OAuthProviderActionResult":             oauthProviderActionResult,
 		"CAImportExistingRequest":               caImportExistingReq,
 		"CAPrepareExistingImportCSRRequest":     caPrepareExistingImportCSRReq,
 		"CAExistingImportCSR":                   caExistingImportCSR,

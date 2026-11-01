@@ -345,8 +345,9 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A162 adds the relay certutil read of a CA database.
 	// A163 adds revoking a rogue certificate at its issuer.
 	// A167 adds validating exposed endpoints against the cloud's network paths.
-	if len(out) != 601 {
-		t.Fatalf("OpenAPI operationIds = %d, want 601", len(out))
+	// A170/A171 add revoking an OAuth grant and blocking its app at the provider.
+	if len(out) != 603 {
+		t.Fatalf("OpenAPI operationIds = %d, want 603", len(out))
 	}
 	return out
 }
