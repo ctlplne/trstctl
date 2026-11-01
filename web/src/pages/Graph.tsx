@@ -12,9 +12,10 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { EdgeEvidenceTable, GraphLegend, GraphQuery, NodeDetail, NodeInventory, ReachablePanel, RelationshipPaths } from "@/pages/GraphExpert";
+import { PathFinder, WhoCanReach } from "@/pages/GraphAccess";
 
 type Notice = { kind: "permission" | "error"; message: string };
-type Disclosure = "map" | "evidence" | "inventory";
+type Disclosure = "map" | "access" | "evidence" | "inventory";
 
 export function Graph() {
   const { t } = useTranslation();
@@ -41,7 +42,7 @@ export function Graph() {
   const [reachableError, setReachableError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"analysis" | "query" | null>(null);
-  const [open, setOpen] = useState<Record<Disclosure, boolean>>({ map: false, evidence: false, inventory: false });
+  const [open, setOpen] = useState<Record<Disclosure, boolean>>({ map: false, access: false, evidence: false, inventory: false });
   const resultRef = useRef<HTMLDivElement>(null);
   const { data, loading, error } = graph;
 
@@ -303,6 +304,17 @@ export function Graph() {
                 />
               </div>
             )}
+          </DecisionDisclosure>
+
+          <DecisionDisclosure
+            title={t("graph.design.disclosure.access")}
+            open={open.access}
+            onToggle={(value) => setOpen((current) => ({ ...current, access: value }))}
+          >
+            <div className="grid gap-6">
+              <WhoCanReach nodes={data.nodes} />
+              <PathFinder nodes={data.nodes} />
+            </div>
           </DecisionDisclosure>
 
           <DecisionDisclosure

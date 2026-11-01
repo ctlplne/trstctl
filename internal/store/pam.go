@@ -47,6 +47,9 @@ type PAMSession struct {
 	RevocationIdempotencyKey string
 	RevocationFailure        string
 	RevocationFailedAt       *time.Time
+	// ApprovalRequestID is the operation approval the activation consumed (G1).
+	// Sessions projected before migration 0355 read "".
+	ApprovalRequestID string
 }
 
 // ApplyPAMSessionStartedTx projects a pam.session.started event. Replays are
@@ -59,10 +62,12 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		`INSERT INTO pam_sessions
 		        (tenant_id, id, target_type, target_id, role, status, subject,
 		         requested_by, reason, attestation_id, backend_ref, ssh_key_id,
-		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at)
+		         ssh_serial, idempotency_key, audit, attestation, started_at, expires_at, ended_at,
+		         approval_request_id)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7,
 		         $8, $9, $10, $11, $12,
-		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19)
+		         $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19,
+		         $20)
 		 ON CONFLICT (tenant_id, id) DO UPDATE
 		    SET target_type = EXCLUDED.target_type,
 		        target_id = EXCLUDED.target_id,
@@ -80,10 +85,12 @@ func (s *Store) ApplyPAMSessionStartedTx(ctx context.Context, tx pgx.Tx, p PAMSe
 		        attestation = EXCLUDED.attestation,
 		        started_at = EXCLUDED.started_at,
 		        expires_at = EXCLUDED.expires_at,
-		        ended_at = EXCLUDED.ended_at`,
+		        ended_at = EXCLUDED.ended_at,
+		        approval_request_id = EXCLUDED.approval_request_id`,
 		p.TenantID, p.ID, p.TargetType, p.TargetID, p.Role, p.Status, p.Subject,
 		p.RequestedBy, p.Reason, p.AttestationID, p.BackendRef, p.SSHKeyID,
-		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
+		int64(p.SSHSerial), p.IdempotencyKey, jsonbOrEmpty(p.Audit), p.Attestation, p.StartedAt, p.ExpiresAt, p.EndedAt,
+		p.ApprovalRequestID) // #nosec G115 -- event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190)
 	return err
 }
 

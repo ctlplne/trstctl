@@ -8010,7 +8010,9 @@ export const canonicalCapabilities = [
             "CLI command: graph crypto-readiness",
             "CLI command: graph crypto-readiness actions create",
             "CLI command: graph crypto-readiness export",
-            "CLI command: graph query"
+            "CLI command: graph query",
+            "CLI command: graph who-can-reach",
+            "CLI command: graph path"
           ]
         }
       },

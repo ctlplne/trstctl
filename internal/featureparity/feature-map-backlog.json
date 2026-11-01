@@ -22586,7 +22586,9 @@
             ],
             "source_backend": [
                 "/api/v1/graph",
-                "/api/v1/graph/blast-radius/{id}"
+                "/api/v1/graph/blast-radius/{id}",
+                "/api/v1/graph/reachers/{id}",
+                "/api/v1/graph/path"
             ],
             "source_frontend": [
                 "web/src/pages/Graph.tsx",
@@ -22598,7 +22600,9 @@
                 "getGraph",
                 "graphReachable",
                 "graphBlastRadius",
-                "graphQuery"
+                "graphQuery",
+                "graphReachers",
+                "graphPath"
             ],
             "api_na": "",
             "cli_surface": [
@@ -22608,7 +22612,9 @@
                 "graph crypto-readiness",
                 "graph crypto-readiness actions create",
                 "graph crypto-readiness export",
-                "graph query"
+                "graph query",
+                "graph who-can-reach",
+                "graph path"
             ],
             "cli_na": "",
             "facet_evidence": {
@@ -22641,7 +22647,9 @@
                         "CLI command: graph crypto-readiness",
                         "CLI command: graph crypto-readiness actions create",
                         "CLI command: graph crypto-readiness export",
-                        "CLI command: graph query"
+                        "CLI command: graph query",
+                        "CLI command: graph who-can-reach",
+                        "CLI command: graph path"
                     ],
                     "refs": [
                         "internal/cli/command.go",
@@ -22653,7 +22661,9 @@
                         "OpenAPI operationId: getGraph",
                         "OpenAPI operationId: graphReachable",
                         "OpenAPI operationId: graphBlastRadius",
-                        "OpenAPI operationId: graphQuery"
+                        "OpenAPI operationId: graphQuery",
+                        "OpenAPI operationId: graphReachers",
+                        "OpenAPI operationId: graphPath"
                     ],
                     "refs": [
                         "internal/api/testdata/openapi.golden.json",
@@ -22808,7 +22818,9 @@
                             "CLI command: graph crypto-readiness",
                             "CLI command: graph crypto-readiness actions create",
                             "CLI command: graph crypto-readiness export",
-                            "CLI command: graph query"
+                            "CLI command: graph query",
+                        "CLI command: graph who-can-reach",
+                        "CLI command: graph path"
                         ]
                     }
                 },

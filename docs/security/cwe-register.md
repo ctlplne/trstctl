@@ -681,10 +681,10 @@ not this file.
 | `internal/projections/certificate_sct.go:88` | a log timestamp in milliseconds fits int64 (CWE-190) |
 | `internal/projections/discovery_declaration_convergence_test.go:432` | migration 0199 constrains the sequence to non-negative bigint values |
 | `internal/projections/full_dr_test.go:634` | bounded fixture/corpus value packing inside a test (CWE-190) |
-| `internal/projections/projections.go:6628` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6645` | sequence was checked against MaxInt64 before conversion. |
-| `internal/projections/projections.go:6658` | checked against MaxInt64 above. |
-| `internal/projections/projections.go:6692` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
+| `internal/projections/projections.go:6631` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6648` | sequence was checked against MaxInt64 before conversion. |
+| `internal/projections/projections.go:6661` | checked against MaxInt64 above. |
+| `internal/projections/projections.go:6695` | event log sequences are stored as PostgreSQL bigint throughout the projection spine (CWE-190) |
 | `internal/projections/projections_test.go:45` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/projections/secret_integrations.go:239` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
 | `internal/projections/secret_integrations.go:246` | the explicit bound above proves this event sequence fits PostgreSQL bigint. |
@@ -830,7 +830,7 @@ not this file.
 | `internal/store/ownership_readiness.go:226` | event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:254` | persisted event sequences fit PostgreSQL bigint |
 | `internal/store/ownership_readiness.go:312` | database constraint/event writer keeps sequence non-negative |
-| `internal/store/pam.go:86` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/pam.go:93` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:734` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:796` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:960` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |

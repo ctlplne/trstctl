@@ -2,6 +2,14 @@
 
 ### Added
 
+- Who can reach a database, host or API: the credential graph now holds people (tenant members),
+  their roles and AI agents (from agent-broker issuance), with the credentials they hold (API
+  tokens, machine sessions, PAM sessions, dynamic-secret leases) and the approvals behind them.
+  `GET /api/v1/graph/reachers/{id}` (`trstctl-cli graph who-can-reach`) names each credential that
+  reaches a node, who holds it and who approved it, every link with its record and confidence, and
+  states what it cannot see; `GET /api/v1/graph/path` (`trstctl-cli graph path`) returns the path
+  from one node to another. A PAM session now records the approval it consumed. The Graph page
+  shows the new node kinds and both questions.
 - CycloneDX 1.6 CBOM export of the crypto inventory: one cryptographic-asset component per asset
   with algorithm, key size, quantum security level, protocol and where it was observed, a coverage
   statement, signed with the audit evidence key and verifiable offline with

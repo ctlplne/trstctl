@@ -7044,6 +7044,27 @@ FleetReissuanceRunList = TypedDict(
     total=False,
 )
 
+GraphAccessGrant = TypedDict(
+    'GraphAccessGrant',
+    {
+        'approvers': list[dict[str, Any]],
+        'credential': dict[str, Any],
+        'grant': dict[str, Any],
+        'holders': list[dict[str, Any]],
+        'path': dict[str, Any],
+    },
+    total=False,
+)
+
+GraphAccessLink = TypedDict(
+    'GraphAccessLink',
+    {
+        'edge': dict[str, Any],
+        'node': dict[str, Any],
+    },
+    total=False,
+)
+
 GraphEdge = TypedDict(
     'GraphEdge',
     {
@@ -7088,6 +7109,16 @@ GraphNode = TypedDict(
     total=False,
 )
 
+GraphPath = TypedDict(
+    'GraphPath',
+    {
+        'from': str,
+        'path': dict[str, Any],
+        'to': str,
+    },
+    total=False,
+)
+
 GraphQueryRequest = TypedDict(
     'GraphQueryRequest',
     {
@@ -7110,6 +7141,19 @@ GraphReachable = TypedDict(
         'from': str,
         'nodes': list[dict[str, Any]],
         'paths': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+GraphReachers = TypedDict(
+    'GraphReachers',
+    {
+        'access': list[dict[str, Any]],
+        'by_kind': dict[str, Any],
+        'coverage': dict[str, Any],
+        'paths': list[dict[str, Any]],
+        'reachers': list[dict[str, Any]],
+        'target': dict[str, Any],
     },
     total=False,
 )

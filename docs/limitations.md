@@ -1261,6 +1261,19 @@ never live in the API process. What you can do end to end against the running bi
   offline against the separately pinned keys. The console's test suite validates
   the encoder's output against the official CycloneDX 1.6 schema with an
   independent validator. Importing other scanners' CBOMs is X6.
+- Access graph, step 1 (G1): the credential graph holds people (tenant
+  members), their roles and AI agents (from agent-broker issuance), with the
+  credentials they hold (API tokens, machine sessions, PAM sessions,
+  dynamic-secret leases) and who approved them (PAM activation approvals,
+  issuance request decisions). `GET /api/v1/graph/reachers/{id}` answers who can
+  reach a database, host or the trstctl API: each credential, its holders and
+  approvers, every link with its record and confidence, and a coverage
+  statement; `GET /api/v1/graph/path` returns the path between two nodes.
+  Answers are identical after a restart and a full read-model rebuild. Step 1
+  sees only trstctl's own records: permissions inside the target system are G2,
+  a dynamic-secret lease does not record who requested it, access granted
+  outside trstctl is invisible, and PAM sessions started before this release do
+  not record their approval. The person who delegated to an AI agent is Q4.
 - Credential-compromise incident execution is part of Core: the old `POST /api/v1/incidents/executions` single-identity
   mutation refuses with conflict and points to the H2 fleet route; it cannot prove
   exact trust scope, trust-before-leaf ordering, or signed live health before

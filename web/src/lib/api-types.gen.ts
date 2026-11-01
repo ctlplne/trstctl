@@ -5098,6 +5098,19 @@ export interface FleetReissuanceRunList {
   next_cursor?: string;
 }
 
+export interface GraphAccessGrant {
+  approvers: GraphAccessLink[];
+  credential: GraphNode;
+  grant: GraphEdge;
+  holders: GraphAccessLink[];
+  path: GraphEvidencePath;
+}
+
+export interface GraphAccessLink {
+  edge: GraphEdge;
+  node: GraphNode;
+}
+
 export interface GraphEdge {
   confidence?: string;
   from: string;
@@ -5126,6 +5139,12 @@ export interface GraphNode {
   name: string;
 }
 
+export interface GraphPath {
+  from: string;
+  path: GraphEvidencePath;
+  to: string;
+}
+
 export interface GraphQueryRequest {
   query: string;
 }
@@ -5138,6 +5157,15 @@ export interface GraphReachable {
   from: string;
   nodes: GraphNode[];
   paths: GraphEvidencePath[];
+}
+
+export interface GraphReachers {
+  access: GraphAccessGrant[];
+  by_kind: Record<string, unknown>;
+  coverage: { not_covered: string[]; note: string; sources: string[] };
+  paths: GraphEvidencePath[];
+  reachers: GraphNode[];
+  target: GraphNode;
 }
 
 export interface GraphResponse {

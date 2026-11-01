@@ -351,7 +351,7 @@ exhaustive subcommand list:
 | `endpoints`                       | Read live endpoint identity and key-custody evidence, including one exact signed verification (`verifications` · `verifications get` · `key-custody`)                                                                                                                                                               |
 | `enrollment diagnostics`          | Read exact tenant refusal evidence, export aggregate-only support counts, and queue signed proof after a successful retry (`list` · `support-addendum` · `prove-fixed`)                                                                                                                                             |
 | `external-cas`                    | List and issue through configured upstream CA integrations (`list` · `issue`)                                                                                                                                                                                                                                       |
-| `graph`                           | Query the credential graph and operate its canonical crypto-readiness workflow (`nodes` · `reachable` · `blast-radius` · `crypto-readiness` · `crypto-readiness actions create` · `crypto-readiness export` · `query`)                                                                                              |
+| `graph`                           | Query the credential graph, who can reach a node and the path between two nodes, and operate its canonical crypto-readiness workflow (`nodes` · `reachable` · `blast-radius` · `who-can-reach` · `path` · `crypto-readiness` · `crypto-readiness actions create` · `crypto-readiness export` · `query`) |
 | `identities`                      | Identity lifecycle: create, list, review an exact transition plan, execute it, approve dual-control actions, or bulk-revoke (`create` · `list` · `get` · `issuance-result` · `issuance-retry` · `deployment-evidence` · `transition-preview` · `transition` · `compromise-preview` · `compromise` · `compromise-status` · `compromise-retry` · `approve` · `approve issue` · `approve rotate` · `approve revoke` · `bulk-revoke`)                                   |
 | `issuance-requests`               | Preview and open a certificate request with an explicit CA, list requester-visible issuers, then track independent approval and signer-backed completion (`issuers` · `preview` · `open` · `list` · `approve` · `deny` · `cancel` · `prepare` · `complete`) |
 | `incidents executions`            | Execute credential-compromise remediation and inspect evidence packs (`execute` · `list` · `get`)                                                                                                                                                                                                                   |
@@ -1427,6 +1427,12 @@ trstctl-cli graph crypto-readiness export > crypto-readiness-evidence.json
 # comma-separated list) to cover other namespaces from the same agent; "all"
 # needs the opt-in read-only grant in deploy/kubernetes/rbac-inventory-namespaces.yaml,
 # and a namespace the agent cannot list is reported as an error, not as empty.
+
+# Who can reach a database: each credential that reaches it, who holds it and
+# who approved it, every link with its record and confidence. Then the path one
+# person takes to it (404 when trstctl's records hold none).
+trstctl-cli graph who-can-reach res:pam:postgres:pg-main
+trstctl-cli graph path --from person:alice@example.com --to res:pam:postgres:pg-main
 
 # Run a graph query.
 trstctl-cli graph query "MATCH (c:Certificate)-[:SIGNED_BY]->(i:Issuer) RETURN c,i"

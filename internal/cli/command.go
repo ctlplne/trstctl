@@ -526,6 +526,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"graph", "nodes"}, Method: "GET", Path: "/api/v1/graph", Summary: "Get the credential graph"},
 	{Name: []string{"graph", "reachable"}, Method: "GET", Path: "/api/v1/graph/reachable/{id}", Summary: "Nodes reachable from a node"},
 	{Name: []string{"graph", "blast-radius"}, Method: "GET", Path: "/api/v1/graph/blast-radius/{id}", Summary: "Blast radius of a node"},
+	{Name: []string{"graph", "who-can-reach"}, Method: "GET", Path: "/api/v1/graph/reachers/{id}", Summary: "Who can reach a node: the credentials, their holders and approvers, with evidence"},
+	{Name: []string{"graph", "path"}, Method: "GET", Path: "/api/v1/graph/path", Query: []string{"from", "to"}, RequiredQuery: []string{"from", "to"}, Summary: "The shortest evidence path from one graph node to another"},
 	{Name: []string{"owners", "import"}, Method: "POST", Path: "/api/v1/owners/import", Body: bodyFile, ContentType: "text/csv", ExampleFile: "ownership.csv", Summary: "Import ownership from CSV; fills in what is unrecorded and refuses to overwrite what a human attested"},
 	{Name: []string{"owners", "ownership-conflicts"}, Method: "GET", Path: "/api/v1/owners/ownership-conflicts", Summary: "List unresolved ownership disagreements between recorded owners and an external source"},
 	{Name: []string{"owners", "resolve-conflict"}, Method: "POST", Path: "/api/v1/owners/ownership-conflicts/{id}/resolve", Body: bodyFile, Summary: "Close an ownership disagreement with the reason it was decided"},

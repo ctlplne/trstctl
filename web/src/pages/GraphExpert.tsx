@@ -453,6 +453,14 @@ function edgeExplanation(type: string): string {
       return "The subject matched, but exact public identity was not verified.";
     case "HOSTS":
       return "The resource hosts this trust store.";
+    case "HAS_ROLE":
+      return "The person holds this tenant role.";
+    case "HOLDS":
+      return "The person, workload or AI agent holds the target credential.";
+    case "APPROVED":
+      return "The person approved issuing or activating the target credential.";
+    case "DELEGATED":
+      return "The source delegated authority to the target AI agent.";
     default:
       return "Served graph relationship from the backend.";
   }

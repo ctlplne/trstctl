@@ -21833,6 +21833,56 @@
         ],
         "type": "object"
       },
+      "GraphAccessGrant": {
+        "properties": {
+          "approvers": {
+            "description": "people who approved it",
+            "items": {
+              "$ref": "#/components/schemas/GraphAccessLink"
+            },
+            "type": "array"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/GraphNode"
+          },
+          "grant": {
+            "$ref": "#/components/schemas/GraphEdge"
+          },
+          "holders": {
+            "description": "principals holding the credential",
+            "items": {
+              "$ref": "#/components/schemas/GraphAccessLink"
+            },
+            "type": "array"
+          },
+          "path": {
+            "$ref": "#/components/schemas/GraphEvidencePath"
+          }
+        },
+        "required": [
+          "credential",
+          "grant",
+          "path",
+          "holders",
+          "approvers"
+        ],
+        "type": "object"
+      },
+      "GraphAccessLink": {
+        "properties": {
+          "edge": {
+            "$ref": "#/components/schemas/GraphEdge"
+          },
+          "node": {
+            "$ref": "#/components/schemas/GraphNode"
+          }
+        },
+        "required": [
+          "node",
+          "edge"
+        ],
+        "type": "object"
+      },
       "GraphEdge": {
         "properties": {
           "confidence": {
@@ -21934,6 +21984,25 @@
         ],
         "type": "object"
       },
+      "GraphPath": {
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "path": {
+            "$ref": "#/components/schemas/GraphEvidencePath"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "path"
+        ],
+        "type": "object"
+      },
       "GraphQueryRequest": {
         "properties": {
           "query": {
@@ -21983,6 +22052,77 @@
           "from",
           "nodes",
           "paths"
+        ],
+        "type": "object"
+      },
+      "GraphReachers": {
+        "properties": {
+          "access": {
+            "description": "credentials reaching the target through an access grant, with holders and approvers",
+            "items": {
+              "$ref": "#/components/schemas/GraphAccessGrant"
+            },
+            "type": "array"
+          },
+          "by_kind": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/GraphNode"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "coverage": {
+            "properties": {
+              "not_covered": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "note": {
+                "type": "string"
+              },
+              "sources": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "sources",
+              "not_covered",
+              "note"
+            ],
+            "type": "object"
+          },
+          "paths": {
+            "description": "one shortest path per reacher, starting at the reacher",
+            "items": {
+              "$ref": "#/components/schemas/GraphEvidencePath"
+            },
+            "type": "array"
+          },
+          "reachers": {
+            "description": "every node whose compromise reaches the target: the reverse of blast radius",
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/GraphNode"
+          }
+        },
+        "required": [
+          "target",
+          "reachers",
+          "by_kind",
+          "paths",
+          "access",
+          "coverage"
         ],
         "type": "object"
       },
@@ -60859,6 +60999,73 @@
         "x-trstctl-permission": "audit:read"
       }
     },
+    "/api/v1/graph/path": {
+      "get": {
+        "operationId": "graphPath",
+        "parameters": [
+          {
+            "description": "Starting graph node id, for example person:\u003csubject\u003e",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target graph node id, for example res:pam:postgres:\u003ctarget\u003e",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphPath"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "The shortest evidence path from one graph node to another",
+        "x-trstctl-permission": "graph:read"
+      }
+    },
     "/api/v1/graph/query": {
       "post": {
         "operationId": "graphQuery",
@@ -60972,6 +61179,64 @@
           }
         ],
         "summary": "Nodes reachable from a node (reachability query)",
+        "x-trstctl-permission": "graph:read"
+      }
+    },
+    "/api/v1/graph/reachers/{id}": {
+      "get": {
+        "operationId": "graphReachers",
+        "parameters": [
+          {
+            "description": "credential graph node id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphReachers"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Who can reach a node: holders, credentials and approvers, each with its evidence",
         "x-trstctl-permission": "graph:read"
       }
     },

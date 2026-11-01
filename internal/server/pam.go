@@ -1085,7 +1085,7 @@ func (s *pamService) startedPayload(tenantID, idempotencyKey, requester, id stri
 		Status: api.PAMSessionStatusActive, Subject: att.Subject, RequestedBy: requester,
 		Reason: req.Reason, AttestationID: att.ID, Attestation: &att, BackendRef: backendRef, SSHKeyID: sshKeyID,
 		SSHSerial: sshSerial, IdempotencyKey: idempotencyKey, Audit: audit,
-		StartedAt: now, ExpiresAt: expiresAt,
+		StartedAt: now, ExpiresAt: expiresAt, ApprovalRequestID: req.ApprovalRequestID,
 	}
 }
 

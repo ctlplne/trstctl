@@ -351,8 +351,10 @@ import type {
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
+  GraphPath,
   GraphQueryResult,
   GraphReachable,
+  GraphReachers,
   GraphResponse,
   Identity as GenIdentity,
   IdentityList,
@@ -760,6 +762,7 @@ export type { DRPosture, DRDrill } from "./api-types.gen";
 export type { CryptoReadiness, CryptoReadinessAction, CryptoReadinessExport, CryptoReadinessRow, CryptoDependent } from "./api-types.gen";
 export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.gen";
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
+export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type {
   ValidityReadinessCertificate,
   ValidityReadinessExport,
@@ -1287,8 +1290,10 @@ export type {
   UnownedQueue,
   RetirementChecklist,
   GraphNode,
+  GraphPath,
   GraphQueryResult,
   GraphReachable,
+  GraphReachers,
   GraphResponse,
   IdentityConnectorTargetRequest,
   IncidentExecution,
@@ -2372,6 +2377,8 @@ export interface Api {
   caKeyReprotectionPlan(keyId: string, jobId: string): Promise<CAReprotectionPlan>;
   startCAKeyReprotection(keyId: string): Promise<CAReprotectionStartReceipt>;
   graphReachable(id: string): Promise<GraphReachable>;
+  graphReachers(id: string): Promise<GraphReachers>;
+  graphPath(from: string, to: string): Promise<GraphPath>;
   coverageCandidates(): Promise<CoverageCandidates>;
   graphQuery(query: string): Promise<GraphQueryResult>;
   // CLI parity (S3.3): console flows for every remaining core API operation.
@@ -3188,6 +3195,8 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   policyDryRun: (input) => mutate<PolicyDryRun>("POST", "/api/v1/policy/dry-run", input),
   graph: () => req<GraphResponse>("/api/v1/graph"),
   graphReachable: estate.graphReachable,
+  graphReachers: estate.graphReachers,
+  graphPath: estate.graphPath,
   coverageCandidates: estate.coverageCandidates,
   graphBlastRadius: estate.graphBlastRadius,
   graphTrustStores: estate.graphTrustStores,

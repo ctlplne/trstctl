@@ -25,6 +25,14 @@ const (
 	// single answer, and modeling the store as a property of the host would
 	// force one.
 	KindTrustStore NodeKind = "trust-store"
+	// KindPerson is a tenant member: a human who holds credentials, holds roles
+	// and approves access (G1). Its ID is the member's subject.
+	KindPerson NodeKind = "person"
+	// KindRole is a tenant role a person holds (G1).
+	KindRole NodeKind = "role"
+	// KindAIAgent is an AI agent that trstctl's agent broker issued an
+	// identity to (G1).
+	KindAIAgent NodeKind = "ai-agent"
 )
 
 // EdgeType names a directed relationship. Direction is oriented so that impact
@@ -60,6 +68,19 @@ const (
 	// trust store would float free of the machine that has it, and the answer to
 	// "where do I go to fix this" would be missing.
 	EdgeHosts EdgeType = "HOSTS"
+	// EdgeHasRole is person → role the person holds (G1).
+	EdgeHasRole EdgeType = "HAS_ROLE"
+	// EdgeHolds is person, workload or AI agent → credential it holds: the
+	// principal that received or was bound to the credential (G1).
+	EdgeHolds EdgeType = "HOLDS"
+	// EdgeApproved is person → credential whose issuance or activation the
+	// person approved (G1). It is evidence, not impact: compromising an
+	// approver does not compromise access already granted, so default traversal
+	// and blast radius leave it out, as they do unverified trust candidates.
+	EdgeApproved EdgeType = "APPROVED"
+	// EdgeDelegated is person, workload or AI agent → AI agent it delegated
+	// authority to (G1; populated from recorded delegations).
+	EdgeDelegated EdgeType = "DELEGATED"
 )
 
 // Node is a vertex in the credential graph. ID is the stable, unique key;
@@ -163,12 +184,13 @@ func (g *Graph) Edges() []Edge {
 }
 
 // allows reports whether an edge of type t is permitted by the (possibly empty)
-// type filter. An empty filter permits every authoritative type; an unverified
-// candidate must be requested explicitly so default blast-radius traversal cannot
-// turn a display-name similarity into an automation input.
+// type filter. An empty filter permits every authoritative impact type; an
+// unverified candidate must be requested explicitly so default blast-radius
+// traversal cannot turn a display-name similarity into an automation input, and
+// an approval is evidence about a credential, not a path an attacker travels.
 func allows(types []EdgeType, t EdgeType) bool {
 	if len(types) == 0 {
-		return t != EdgeTrustCandidate
+		return t != EdgeTrustCandidate && t != EdgeApproved
 	}
 	for _, want := range types {
 		if want == t {

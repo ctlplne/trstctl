@@ -3786,6 +3786,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/graph/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The shortest evidence path from one graph node to another */
+        get: operations["graphPath"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/graph/query": {
         parameters: {
             query?: never;
@@ -3812,6 +3829,23 @@ export interface paths {
         };
         /** Nodes reachable from a node (reachability query) */
         get: operations["graphReachable"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/graph/reachers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who can reach a node: holders, credentials and approvers, each with its evidence */
+        get: operations["graphReachers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -14861,6 +14895,19 @@ export interface components {
             items: components["schemas"]["FleetReissuanceRun"][];
             next_cursor?: string;
         };
+        GraphAccessGrant: {
+            /** @description people who approved it */
+            approvers: components["schemas"]["GraphAccessLink"][];
+            credential: components["schemas"]["GraphNode"];
+            grant: components["schemas"]["GraphEdge"];
+            /** @description principals holding the credential */
+            holders: components["schemas"]["GraphAccessLink"][];
+            path: components["schemas"]["GraphEvidencePath"];
+        };
+        GraphAccessLink: {
+            edge: components["schemas"]["GraphEdge"];
+            node: components["schemas"]["GraphNode"];
+        };
         GraphEdge: {
             confidence?: string;
             from: string;
@@ -14885,6 +14932,11 @@ export interface components {
             kind: string;
             name: string;
         };
+        GraphPath: {
+            from: string;
+            path: components["schemas"]["GraphEvidencePath"];
+            to: string;
+        };
         GraphQueryRequest: {
             /** @description Read-only Cypher-style MATCH path, optional WHERE equality predicates, and RETURN variables or fields. This is a minimal grammar, not full Cypher; LIMIT is not supported. */
             query: string;
@@ -14896,6 +14948,23 @@ export interface components {
             from: string;
             nodes: components["schemas"]["GraphNode"][];
             paths: components["schemas"]["GraphEvidencePath"][];
+        };
+        GraphReachers: {
+            /** @description credentials reaching the target through an access grant, with holders and approvers */
+            access: components["schemas"]["GraphAccessGrant"][];
+            by_kind: {
+                [key: string]: components["schemas"]["GraphNode"][];
+            };
+            coverage: {
+                not_covered: string[];
+                note: string;
+                sources: string[];
+            };
+            /** @description one shortest path per reacher, starting at the reacher */
+            paths: components["schemas"]["GraphEvidencePath"][];
+            /** @description every node whose compromise reaches the target: the reverse of blast radius */
+            reachers: components["schemas"]["GraphNode"][];
+            target: components["schemas"]["GraphNode"];
         };
         GraphResponse: {
             edges: components["schemas"]["GraphEdge"][];
@@ -31759,6 +31828,49 @@ export interface operations {
             };
         };
     };
+    graphPath: {
+        parameters: {
+            query: {
+                /** @description Starting graph node id, for example person:<subject> */
+                from: string;
+                /** @description Target graph node id, for example res:pam:postgres:<target> */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphPath"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     graphQuery: {
         parameters: {
             query?: never;
@@ -31820,6 +31932,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphReachable"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    graphReachers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description credential graph node id */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphReachers"];
                 };
             };
             /** @description client error */

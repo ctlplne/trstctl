@@ -4256,6 +4256,9 @@ type PAMSessionStarted struct {
 	Audit          json.RawMessage     `json:"audit,omitempty"`
 	StartedAt      time.Time           `json:"started_at"`
 	ExpiresAt      time.Time           `json:"expires_at"`
+	// ApprovalRequestID names the approval the activation consumed (G1); events
+	// recorded before it existed carry none.
+	ApprovalRequestID string `json:"approval_request_id,omitempty"`
 }
 
 // PAMSessionActivationRequested consumes one exact approval before any target
@@ -8194,7 +8197,7 @@ func (p *Projector) applyCoreEventTx(ctx context.Context, tx pgx.Tx, e events.Ev
 			Role: pl.Role, Status: pl.Status, Subject: pl.Subject, RequestedBy: pl.RequestedBy,
 			Reason: pl.Reason, AttestationID: pl.AttestationID, Attestation: attestation, BackendRef: pl.BackendRef,
 			SSHKeyID: pl.SSHKeyID, SSHSerial: pl.SSHSerial, IdempotencyKey: pl.IdempotencyKey,
-			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt,
+			Audit: pl.Audit, StartedAt: startedAt, ExpiresAt: pl.ExpiresAt, ApprovalRequestID: pl.ApprovalRequestID,
 		})
 	case EventPAMSessionExpired:
 		var pl PAMSessionExpired

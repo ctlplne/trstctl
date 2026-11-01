@@ -2,7 +2,9 @@ import { mutate, req } from "./apiTransport";
 import type {
   CoverageCandidates,
   GraphImpact,
+  GraphPath,
   GraphReachable,
+  GraphReachers,
   GraphTrustStores,
   MigrationAssessment,
   MigrationRun,
@@ -36,6 +38,12 @@ export const coverageCandidates = () => req<CoverageCandidates>("/api/v1/discove
 
 /** Reachability from a node — what a credential can reach. */
 export const graphReachable = (id: string) => req<GraphReachable>(`/api/v1/graph/reachable/${encodeURIComponent(id)}`);
+
+/** G1: who can reach a node — the credentials, their holders and approvers. */
+export const graphReachers = (id: string) => req<GraphReachers>(`/api/v1/graph/reachers/${encodeURIComponent(id)}`);
+
+/** G1: the shortest evidence path from one node to another. */
+export const graphPath = (from: string, to: string) => req<GraphPath>(`/api/v1/graph/path?${new URLSearchParams({ from, to }).toString()}`);
 
 /** Blast radius — what breaks if a node is compromised. */
 export const graphBlastRadius = (id: string) => req<GraphImpact>(`/api/v1/graph/blast-radius/${encodeURIComponent(id)}`);

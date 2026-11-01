@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"trstctl.com/trstctl/internal/dependencyobs"
 	"trstctl.com/trstctl/internal/store"
@@ -271,6 +272,9 @@ func Build(ctx context.Context, st *store.Store, tenantID string) (*Graph, error
 		}
 	}
 
+	if err := addAccessSources(ctx, st, tenantID, g, certs, time.Now().UTC()); err != nil {
+		return nil, err
+	}
 	return g, nil
 }
 

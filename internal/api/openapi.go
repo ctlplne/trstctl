@@ -5707,6 +5707,26 @@ func componentSchemas() map[string]*Schema {
 		"nodes": {Type: "array", Items: ref("GraphNode")},
 		"paths": {Type: "array", Items: ref("GraphEvidencePath")},
 	}, "from", "nodes", "paths")
+	// G1: "how does this reach that?" and "who can reach this?".
+	graphPath := object(map[string]*Schema{
+		"from": str(), "to": str(), "path": ref("GraphEvidencePath"),
+	}, "from", "to", "path")
+	graphAccessLink := object(map[string]*Schema{"node": ref("GraphNode"), "edge": ref("GraphEdge")}, "node", "edge")
+	graphAccessGrant := object(map[string]*Schema{
+		"credential": ref("GraphNode"), "grant": ref("GraphEdge"), "path": ref("GraphEvidencePath"),
+		"holders":   {Type: "array", Items: ref("GraphAccessLink"), Description: "principals holding the credential"},
+		"approvers": {Type: "array", Items: ref("GraphAccessLink"), Description: "people who approved it"},
+	}, "credential", "grant", "path", "holders", "approvers")
+	graphReachers := object(map[string]*Schema{
+		"target":   ref("GraphNode"),
+		"reachers": {Type: "array", Items: ref("GraphNode"), Description: "every node whose compromise reaches the target: the reverse of blast radius"},
+		"by_kind":  {Type: "object", AdditionalProperties: &Schema{Type: "array", Items: ref("GraphNode")}},
+		"paths":    {Type: "array", Items: ref("GraphEvidencePath"), Description: "one shortest path per reacher, starting at the reacher"},
+		"access":   {Type: "array", Items: ref("GraphAccessGrant"), Description: "credentials reaching the target through an access grant, with holders and approvers"},
+		"coverage": object(map[string]*Schema{
+			"sources": {Type: "array", Items: str()}, "not_covered": {Type: "array", Items: str()}, "note": str(),
+		}, "sources", "not_covered", "note"),
+	}, "target", "reachers", "by_kind", "paths", "access", "coverage")
 	// I1: managed identities whose ownership cannot answer an incident question.
 	unownedIdentity := object(map[string]*Schema{
 		"identity_id": str(), "name": str(), "status": str(),
@@ -8444,6 +8464,10 @@ func componentSchemas() map[string]*Schema {
 		"GraphEvidencePath":                     graphEvidencePath,
 		"GraphResponse":                         graphResponse,
 		"GraphReachable":                        graphReachable,
+		"GraphPath":                             graphPath,
+		"GraphAccessLink":                       graphAccessLink,
+		"GraphAccessGrant":                      graphAccessGrant,
+		"GraphReachers":                         graphReachers,
 		"GraphImpact":                           graphImpact,
 		"OwnershipCSV":                          {Type: "string", Description: "UTF-8 CSV with owner header and optional email, application_id, service, business_unit, environment, and source_ref columns; at most 8 MiB"},
 		"OwnershipImportResult":                 ownershipImportResult,

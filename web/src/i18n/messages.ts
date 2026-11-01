@@ -13520,6 +13520,46 @@ export const messages = {
     defaultMessage: "Relationship map and filters",
     description: "Progressive disclosure for the visual graph.",
   },
+  "graph.design.disclosure.access": {
+    defaultMessage: "Who can reach a database, host or API, and how",
+    description: "Progressive disclosure for the access questions on the graph.",
+  },
+  "graph.kind.person": { defaultMessage: "Person", description: "Graph node kind: a tenant member." },
+  "graph.kind.role": { defaultMessage: "Role", description: "Graph node kind: a tenant role." },
+  "graph.kind.aiAgent": { defaultMessage: "AI agent", description: "Graph node kind: an AI agent issued an identity by the agent broker." },
+  "graph.access.heading": { defaultMessage: "Who can reach this?", description: "Heading of the who-can-reach panel." },
+  "graph.access.help": {
+    defaultMessage:
+      "Pick a database, host or other node. The answer lists each credential that reaches it, who holds it and who approved it, with the record behind each link.",
+    description: "Explains the who-can-reach panel.",
+  },
+  "graph.access.target": { defaultMessage: "Database, host or node", description: "Label of the who-can-reach target picker." },
+  "graph.access.choose": { defaultMessage: "Choose a node", description: "Empty option of a graph node picker." },
+  "graph.access.run": { defaultMessage: "Show who can reach it", description: "Button that runs the who-can-reach query." },
+  "graph.access.failed": { defaultMessage: "Could not compute who can reach this node", description: "Fallback error for the who-can-reach query." },
+  "graph.access.result": {
+    defaultMessage:
+      "{count, plural, =0 {No access grant in trstctl's records reaches {name}} one {1 credential reaches {name}} other {# credentials reach {name}}}",
+    description: "Headline of the who-can-reach answer.",
+  },
+  "graph.access.credential": { defaultMessage: "Credential: {name}", description: "The credential that reaches the target." },
+  "graph.access.evidence": {
+    defaultMessage: "{relation} · {source} · {confidence}",
+    description: "One graph link's relationship, the record that produced it and its confidence.",
+  },
+  "graph.access.holders": { defaultMessage: "Held by", description: "Heading of a credential's holders." },
+  "graph.access.noHolder": {
+    defaultMessage: "Holder not recorded by trstctl",
+    description: "Shown when trstctl's records do not name who holds the credential.",
+  },
+  "graph.access.approvers": { defaultMessage: "Approved by", description: "Heading of a credential's approvers." },
+  "graph.access.noApproval": { defaultMessage: "No approval recorded", description: "Shown when no approval is linked to the credential." },
+  "graph.access.notCovered": { defaultMessage: "Not covered: {items}", description: "What the access answer cannot see." },
+  "graph.path.heading": { defaultMessage: "How does one node reach another?", description: "Heading of the graph path finder." },
+  "graph.path.from": { defaultMessage: "From", description: "Path finder start node." },
+  "graph.path.to": { defaultMessage: "To", description: "Path finder target node." },
+  "graph.path.run": { defaultMessage: "Show the path", description: "Button that runs the path query." },
+  "graph.path.failed": { defaultMessage: "Could not find a path", description: "Fallback error for the path query." },
   "graph.design.disclosure.evidence": {
     defaultMessage: "Graph edges, sources, confidence, and blast-radius export",
     description: "Progressive disclosure for exact graph evidence.",

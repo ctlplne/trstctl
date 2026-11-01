@@ -711,7 +711,7 @@ func exactProjectorPrivacyPolicies() map[privacyEventPolicyKey]events.PrivacyEve
 		privacyRule("/attestation", clear),
 		privacyRule("/ssh_key_id", opaque), privacyRule("/ssh_serial", opaque),
 		privacyRule("/idempotency_key", opaque), privacyRule("/audit", clear),
-		privacyRule("/started_at", opaque), privacyRule("/expires_at", opaque),
+		privacyRule("/started_at", opaque), privacyRule("/expires_at", opaque), privacyRule("/approval_request_id", opaque),
 	)
 	pamSessionActivationRequested := privacyRules(
 		privacyRule("/id", opaque), privacyRule("/request_id", opaque),

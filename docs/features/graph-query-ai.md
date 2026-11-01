@@ -63,8 +63,59 @@ graph unavailable instead of turning missing topology into a reassuring zero. Th
 observed dependency truth, not passive traffic inference: unreported connections remain
 unknown.
 
+### Who can reach what: the access graph (step 1)
+
+The same graph answers "who can reach this database?" from trstctl's own records. It
+adds three node kinds: **person** (a tenant member, `person:<subject>`, named by display
+name; no email is copied into the graph), **role** (`role:<name>`), and **AI agent**
+(`aiagent:<agent id>`, an agent the agent broker issued an identity to). Four edges link
+them: `HAS_ROLE` (person → role), `HOLDS` (person, workload or AI agent → the credential it
+holds), `APPROVED` (person → the credential whose issuance or activation they approved)
+and `DELEGATED` (→ an AI agent; recorded delegations populate it).
+
+The sources, each read in tenant-scoped pages:
+
+| Record | What the graph gets |
+|---|---|
+| Tenant members | Person nodes and their roles |
+| Agent-broker issuance | The AI agent behind each broker-issued certificate, `HOLDS` that certificate |
+| API tokens, machine sessions | A credential `HOLDS`'d by its subject that `GRANTS_ACCESS` to the trstctl API |
+| PAM sessions | A credential `GRANTS_ACCESS` to the database or host, `HOLDS`'d by the requester and the attested workload, `APPROVED` by each person who approved the activation |
+| PAM targets | The database or host (`res:pam:<type>:<id>`); a PostgreSQL target `CONNECTS_TO` its dynamic-secret backend |
+| Dynamic-secret leases | A credential `GRANTS_ACCESS` to its backend (`res:dynamic-secret:<provider>`) |
+| Issuance requests | `APPROVED` from the person who approved the request to the identity it issued |
+
+A subject that is neither a member nor an AI agent becomes a workload node
+`principal:<subject>`, so a token or session never appears without a holder. Every
+link carries the record that produced it and how strongly that record establishes it;
+links from these records are `authoritative`. Only live access is in the graph: a revoked
+or expired token, session or lease is left out. A PAM session whose provider removal
+failed stays in, because its grant may still exist at the target.
+
+`APPROVED` is evidence, not impact: compromising an approver does not compromise access
+already granted. Default traversal and blast radius leave it out, as they do unverified
+trust candidates; the who-can-reach answer reports approvers beside each credential.
+
+`GET /api/v1/graph/reachers/{id}` (CLI `graph who-can-reach <id>`) answers "who can reach
+this?". `reachers` lists every node whose compromise reaches the target (the reverse of
+blast radius), each with a shortest path that starts at the reacher. `access` lists each
+credential whose path starts with an access grant, with its `holders` and `approvers`,
+each a node plus the edge (relationship, source, confidence) that ties it. `coverage`
+names the sources and what the answer cannot see. `GET /api/v1/graph/path?from=&to=`
+(CLI `graph path --from <id> --to <id>`) returns the shortest evidence path between two
+nodes, or 404 when trstctl's records hold none. In the console, open **Who can reach a
+database, host or API, and how** on the Graph page.
+
+What step 1 does not see: what a role can do once connected (permissions inside the
+target system; step 2 resolves them for brokered systems), who requested a dynamic-secret
+lease (a lease records only a non-reversible binding digest), and access granted outside
+trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
+started before this release do not record their approval, so their approvers read as
+"No approval recorded".
+
 **Served** — `GET /api/v1/graph`, `/graph/reachable/{id}`, `/graph/blast-radius/{id}`,
-`POST /api/v1/graph/query`, plus the `graph` CLI group.
+`/graph/reachers/{id}`, `/graph/path`, `POST /api/v1/graph/query`, plus the `graph` CLI
+group.
 
 ### The unified semantic query layer (F75)
 
@@ -329,7 +380,7 @@ curl -sS -X POST \
 
 | Capability | Status today |
 |---|---|
-| Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI |
+| Credential graph (F21) | **Served** — `/api/v1/graph*`, `graph` CLI, including who can reach a node and the path between two nodes |
 | Semantic query layer (F75) | **Served** through `/api/v1/ai/query`, `/api/v1/ai/rca`, `/api/v1/graph/query`; saved prompts remain roadmap residuals |
 | AI model adapter (F76) | **Served optional adapter**; no model configured by default, cloud/local egress opt-in; self-service model settings editor remains a roadmap residual |
 | Grounded RCA / NL query (F77) | **Served** — `POST /api/v1/ai/rca`, read-only and cited |
@@ -343,8 +394,10 @@ answer. See [Current limitations](../limitations.md).
 ## Reference
 
 - **Graph (served):** `GET /api/v1/graph`, `/graph/reachable/{id}`,
-  `/graph/blast-radius/{id}`, `POST /api/v1/graph/query`; CLI `graph`.
-- **Node kinds:** workload, credential, issuer, resource, crypto-asset, attestation.
+  `/graph/blast-radius/{id}`, `/graph/reachers/{id}`, `/graph/path?from=&to=`,
+  `POST /api/v1/graph/query`; CLI `graph` (including `graph who-can-reach` and `graph path`).
+- **Node kinds:** workload, credential, issuer, resource, crypto-asset, attestation,
+  trust-store, person, role, ai-agent.
 - **Query surfaces:** log, graph, certificates, owners, CBOM (tenant-then-RBAC,
   allow-listed fields/operators, no raw SQL/Cypher).
 - **AI:** model adapter (cloud or local Ollama/vLLM) with boundary redaction; RCA returns

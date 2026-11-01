@@ -32,6 +32,9 @@ const nodeKindTokens: Record<string, { label: string; fill: string; stroke: stri
   issuer: { label: translateNow("source.issuer.39e02c46a0"), fill: "hsl(var(--status-info) / 0.14)", stroke: "hsl(var(--status-info))" },
   "crypto-asset": { label: translateNow("source.crypto.asset.230cdababb"), fill: "hsl(var(--disclose) / 0.14)", stroke: "hsl(var(--disclose))" },
   attestation: { label: translateNow("source.attestation.e52a82c98b"), fill: "hsl(var(--status-success) / 0.14)", stroke: "hsl(var(--status-success))" },
+  person: { label: translateNow("graph.kind.person"), fill: "hsl(var(--brand-accent) / 0.14)", stroke: "hsl(var(--brand-accent))" },
+  role: { label: translateNow("graph.kind.role"), fill: "hsl(var(--status-neutral) / 0.14)", stroke: "hsl(var(--status-neutral))" },
+  "ai-agent": { label: translateNow("graph.kind.aiAgent"), fill: "hsl(var(--primary) / 0.14)", stroke: "hsl(var(--primary))" },
 };
 
 const edgeLabels: Record<string, string> = {
@@ -41,10 +44,25 @@ const edgeLabels: Record<string, string> = {
   GRANTS_ACCESS: "Grants access",
   CONNECTS_TO: "Connects to",
   EXHIBITS: "Exhibits",
+  HAS_ROLE: "Has role",
+  HOLDS: "Holds",
+  APPROVED: "Approved",
+  DELEGATED: "Delegated to",
 };
 
-export const canonicalGraphNodeKinds = ["workload", "credential", "resource", "issuer", "crypto-asset", "attestation"];
-export const canonicalGraphEdgeTypes = ["ISSUED", "OWNS", "DEPLOYED_TO", "GRANTS_ACCESS", "CONNECTS_TO", "EXHIBITS"];
+export const canonicalGraphNodeKinds = ["person", "ai-agent", "workload", "role", "credential", "resource", "issuer", "crypto-asset", "attestation"];
+export const canonicalGraphEdgeTypes = [
+  "HAS_ROLE",
+  "HOLDS",
+  "APPROVED",
+  "DELEGATED",
+  "ISSUED",
+  "OWNS",
+  "DEPLOYED_TO",
+  "GRANTS_ACCESS",
+  "CONNECTS_TO",
+  "EXHIBITS",
+];
 
 export function graphNodeKindLabel(kind: string): string {
   return nodeKindTokens[kind]?.label ?? humanize(kind);
