@@ -28,8 +28,10 @@ const (
 	AssetImportedLibrary     AssetKind = "imported-library"
 )
 
-// MaxImportComponents bounds one import.
-const MaxImportComponents = 5000
+// MaxImportComponents bounds one import. A real image scan is large: the
+// operating system's CA bundle in a small Alpine image alone gives a scanner
+// about 8,000 components (each certificate, its key and its algorithms).
+const MaxImportComponents = 50000
 
 // ImportedBOM is what an import read from the document.
 type ImportedBOM struct {

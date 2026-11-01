@@ -5,6 +5,8 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -35,8 +37,10 @@ type CBOMImporter interface {
 	Import(ctx context.Context, tenantID, source string, bom cbom.ImportedBOM, digest string) (CBOMImportResponse, error)
 }
 
-// maxCBOMImportBytes bounds one imported document.
-const maxCBOMImportBytes = 8 << 20
+// maxCBOMImportBytes bounds one imported document. The import reads its own
+// body under this limit: the shared mutation recorder's 1 MiB cap would refuse
+// an ordinary image scan's CBOM (a small Alpine image's is about 6 MiB).
+const maxCBOMImportBytes = 32 << 20
 
 func (a *API) cbomImportRoutes() []route {
 	return []route{
@@ -50,14 +54,32 @@ func (a *API) cbomImportRoutes() []route {
 //trstctl:mutation
 func (a *API) importCBOM(w http.ResponseWriter, r *http.Request) {
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	a.mutate(w, r, idempotencyKey, func(ctx context.Context, tenantID string) (int, any, error) {
+	principal, err := requestPrincipalSubject(r.Context())
+	if err != nil {
+		a.writeError(w, err)
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxCBOMImportBytes+1))
+	_ = r.Body.Close()
+	if err != nil {
+		a.writeError(w, errStatus(http.StatusBadRequest, "failed to read the CBOM"))
+		return
+	}
+	if len(raw) > maxCBOMImportBytes {
+		a.writeError(w, errStatus(http.StatusRequestEntityTooLarge, fmt.Sprintf("a CBOM import is at most %d bytes", maxCBOMImportBytes)))
+		return
+	}
+	// The binding replaces the recorder's own, so its 1 MiB cap does not apply:
+	// the key binds this caller, this source and this exact document.
+	binding := "cbom-import:v1:" + crypto.SHA256Hex([]byte(principal)) + ":" + crypto.SHA256Hex([]byte(r.URL.Query().Get("source"))) + ":" + crypto.SHA256Hex(raw)
+	a.mutateBound(w, r, idempotencyKey, binding, func(ctx context.Context, tenantID string) (int, any, error) {
 		importer, ok := a.cbom.(CBOMImporter)
 		if a.cbom == nil || !ok {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, "CBOM import is not configured")
 		}
 		var doc json.RawMessage
-		if err := decodeJSONWithLimit(r, &doc, maxCBOMImportBytes); err != nil {
-			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			return 0, nil, errStatus(http.StatusBadRequest, "the CBOM is not a JSON document")
 		}
 		source := strings.TrimSpace(r.URL.Query().Get("source"))
 		if !strings.HasPrefix(source, "vendor:") && !strings.HasPrefix(source, "source:") && !strings.HasPrefix(source, "image:") {

@@ -1272,10 +1272,14 @@ never live in the API process. What you can do end to end against the running bi
   shows vendor, source-code and container-image crypto as observed while an
   import is recent, and vendor-embedded crypto is no longer listed as
   unobservable. Proven with a vendor CBOM, a sample repository and an image
-  scanner's CBOM; the wrapper is proven against a stand-in scanner, and the run
-  against the real cbomkit-theia waits for the owner's approval to fetch a
-  pinned release (outside input). Imported rows are the BOM's statements; the
-  source scan recognizes direct API calls, not every indirect path.
+  scanner's CBOM, and against the real cbomkit-theia 1.1.2 (built from its
+  release tag): `cbom scan-image` over an archive of nginx:1.27-alpine writes
+  8,048 components — the OS CA bundle's 1,341 certificates, their keys and
+  algorithms — and `cbom import` adds them under the image's source. One import
+  holds up to 50,000 components and 32 MiB; an image scan of that size takes
+  seconds to tens of seconds to import, because each finding is recorded as its
+  own event. Imported rows are the BOM's statements; the source scan recognizes
+  direct API calls, not every indirect path.
 - Access graph, step 1 (G1): the credential graph holds people (tenant
   members), their roles and AI agents (from agent-broker issuance), with the
   credentials they hold (API tokens, machine sessions, PAM sessions,

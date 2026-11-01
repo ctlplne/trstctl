@@ -913,6 +913,10 @@
 
 ### Fixed
 
+- CBOM import refused ordinary image scans: the shared 1 MiB mutation body limit applied before the import's
+  own limit, and an import held at most 5,000 components, while the real cbomkit-theia's CBOM for a small Alpine
+  image is about 6 MiB and 8,000 components. An import now reads its own body (up to 32 MiB) and holds up to
+  50,000 components.
 - The code-signing approval docs described the legacy identities approval route and a new Idempotency-Key;
   the served flow is `POST /api/v1/approval-requests/{id}/approvals` (or `/denials`) and repeating the same
   request with the same key, which consumes the approval once.
