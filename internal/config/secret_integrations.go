@@ -86,6 +86,11 @@ type DynamicSecretProviderConfig struct {
 	DB                       int    `json:"db,omitempty"`
 	UsernamePrefix           string `json:"username_prefix,omitempty"`
 
+	// IAMEndpoint is where an aws-iam or aws-sts provider reads the policies
+	// of the roles its leases assume (G2). Empty means AWS IAM for the
+	// region's partition.
+	IAMEndpoint string `json:"iam_endpoint,omitempty"`
+
 	PasswordRef             string   `json:"password_ref,omitempty"`
 	SecretAccessRef         string   `json:"secret_access_key_ref,omitempty"`
 	SessionTokenRef         string   `json:"session_token_ref,omitempty"`
@@ -485,6 +490,13 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		require(c.ApplicationClient, "application_client_id")
 		require(c.AzureTenant, "azure_tenant_id")
 		ref(c.BearerTokenRef, "bearer_token_ref", false)
+	}
+	if c.IAMEndpoint != "" {
+		if c.Type != "aws-iam" && c.Type != "aws-sts" {
+			errs = append(errs, fmt.Errorf("%s iam_endpoint is only valid for aws-iam and aws-sts", where))
+		} else if err := validateSecretIntegrationEndpoint(c.IAMEndpoint, c.AllowInsecureLoopback); err != nil {
+			errs = append(errs, fmt.Errorf("%s iam_endpoint: %w", where, err))
+		}
 	}
 	if c.Endpoint != "" {
 		if err := validateSecretIntegrationEndpoint(c.Endpoint, c.AllowInsecureLoopback); err != nil {

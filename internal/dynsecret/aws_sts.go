@@ -37,10 +37,16 @@ type AWSSTSConfig struct {
 	SessionToken    []byte
 	SessionPrefix   string
 	RoleARNs        map[string]string
+	// IAMEndpoint is where ResolveAccess lists an assumed role's policies
+	// (G2); empty means AWS IAM for the region's partition. IAMHTTPClient
+	// reaches it (HTTPClient when nil).
+	IAMEndpoint   string
+	IAMHTTPClient HTTPDoer
 }
 
 type AWSSTSBackend struct {
 	query    *AWSIAMBackend
+	iam      *AWSIAMBackend
 	roleARNs map[string]string
 }
 
@@ -75,7 +81,21 @@ func NewAWSSTSBackend(cfg AWSSTSConfig) (*AWSSTSBackend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dynsecret aws-sts: initialize signed query client: %w", err)
 	}
-	return &AWSSTSBackend{query: query, roleARNs: cloneStringMap(cfg.RoleARNs)}, nil
+	iamEndpoint, iamRegion := AWSIAMEndpointFor(cfg.Region, cfg.IAMEndpoint)
+	iamClient := cfg.IAMHTTPClient
+	if iamClient == nil {
+		iamClient = cfg.HTTPClient
+	}
+	iam, err := NewAWSIAMBackend(AWSIAMConfig{
+		Endpoint: iamEndpoint, HTTPClient: iamClient, Region: iamRegion,
+		AccessKeyID: cfg.AccessKeyID, SecretAccessKey: cfg.SecretAccessKey,
+		SessionToken: cfg.SessionToken, UsernamePrefix: cfg.SessionPrefix,
+	})
+	if err != nil {
+		query.Close()
+		return nil, fmt.Errorf("dynsecret aws-sts: initialize IAM read client: %w", err)
+	}
+	return &AWSSTSBackend{query: query, iam: iam, roleARNs: cloneStringMap(cfg.RoleARNs)}, nil
 }
 
 func (b *AWSSTSBackend) Create(context.Context, string) (string, []byte, error) {
@@ -182,4 +202,9 @@ func AWSSTSExpiration(ref string) (time.Time, bool) {
 	return issued.Expiration, true
 }
 
-func (b *AWSSTSBackend) Close() { b.query.Close() }
+func (b *AWSSTSBackend) Close() {
+	b.query.Close()
+	if b.iam != nil {
+		b.iam.Close()
+	}
+}

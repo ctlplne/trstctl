@@ -1289,12 +1289,29 @@ never live in the API process. What you can do end to end against the running bi
   approvers, every link with its record and confidence, and a coverage
   statement; `GET /api/v1/graph/path` returns the path between two nodes.
   Answers are identical after a restart and a full read-model rebuild. Step 1
-  sees only trstctl's own records: permissions inside the target system are G2,
-  a dynamic-secret lease does not record who requested it, access granted
+  sees only trstctl's own records: permissions inside the target system come from
+  G2 for PostgreSQL and AWS STS leases (below), a dynamic-secret lease does not
+  record who requested it, access granted
   outside trstctl is invisible, and PAM sessions started before this release do
   not record their approval. Since Q4 the person who asked the agent broker for an
   identity DELEGATED to the agent, and a live agent credential reaches the tools
   its scopes name; issuances recorded before Q4 name no requester.
+- Access graph, step 2 (G2): what a dynamic-secret lease reaches is read from the
+  target itself. The leader reads each active lease within a minute of issue and
+  every six hours after, through the provider's own credentials, and changes
+  nothing upstream. A PostgreSQL lease `GRANTS_ACCESS` to its database
+  (`res:postgresql_database:postgresql://<host>:<port>/<database>`) and shows its
+  login role with the grants PostgreSQL reports for it (CONNECT, schema USAGE,
+  table privileges, role memberships). An AWS STS lease `GRANTS_ACCESS` to the
+  IAM role it assumed (`res:aws_iam_role:<arn>`) and shows the role's attached and
+  inline policies, read from IAM (`iam_endpoint`; the provider's credentials need
+  `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies`). A target that
+  cannot be read shows the grants as `unknown` with a reason
+  (`target_unreachable`, `access_denied`, `login_missing`, `timeout`) and is read
+  again five minutes later; it never reads as "no grants". Policies are listed by
+  name, not evaluated statement by statement. MySQL, MongoDB, Redis, Kubernetes,
+  GCP and Azure leases are `unsupported` and keep only their backend link. Proven
+  against PostgreSQL 16, an AWS stand-in and LocalStack's IAM.
 - One-call revoke of an AI agent identity (Q4):
   `POST /api/v1/broker/agent-identities/{id}/revoke` (CLI and console) runs the
   exact certificate revocation for that broker certificate: CA ledger, signed CRL,

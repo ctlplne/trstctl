@@ -2,6 +2,12 @@
 
 ### Added
 
+- Access graph, step 2: a dynamic-secret lease now shows what its login reaches, read from the target. A
+  PostgreSQL lease links to its database with the login role and the grants PostgreSQL reports for it; an AWS
+  STS lease links to the IAM role it assumed with the role's attached and inline policies from IAM
+  (`dynamic_providers[].iam_endpoint`, default the partition's IAM). The leader reads new leases within a minute
+  and every lease every six hours, changing nothing upstream; a target it cannot read shows the grants as
+  `unknown` with a reason and is retried, never shown as having none.
 - Code-signing keys in an HSM or cloud KMS: `code_signing.keys[].managed_key_provider` and `managed_key_id`
   bind a code-signing key to an Enterprise managed key instead of a signer handle; startup checks it is active
   and of the configured algorithm. Every signature runs in the provider through the isolated signer, which now

@@ -1520,6 +1520,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunPAMSessionExpiry),
 			// Q6: decoy database logins are checked for use on the leader.
 			startRuntimeWorker(workCtx, srv.RunDecoyLoginWatch),
+			// G2: what each dynamic-secret lease reaches is read from its target.
+			startRuntimeWorker(workCtx, srv.RunDynamicSecretAccessWatch),
 			// Q1: access review revoke decisions finish and close on evidence.
 			startRuntimeWorker(workCtx, srv.RunNHIReviewReconcile),
 			// X3: migration waves that require observed traffic advance on wire evidence or pause.

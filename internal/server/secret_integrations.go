@@ -176,6 +176,11 @@ func dynamicSecretProvidersFromConfig(
 				return nil, fmt.Errorf("server: dynamic-secret provider %s/%s endpoint: %w", entry.TenantID, entry.ID, err)
 			}
 		}
+		if strings.TrimSpace(entry.IAMEndpoint) != "" {
+			if _, err := secretIntegrationHTTPClient(entry.IAMEndpoint, entry.AllowPrivate, entry.AllowInsecureLoopback, entry.PrivateEgressCIDRs, guard); err != nil {
+				return nil, fmt.Errorf("server: dynamic-secret provider %s/%s iam_endpoint: %w", entry.TenantID, entry.ID, err)
+			}
+		}
 		allowed := make(map[string]bool, len(entry.AllowedRoles))
 		for _, role := range entry.AllowedRoles {
 			role = strings.TrimSpace(role)
@@ -548,10 +553,16 @@ func openConfiguredCloudBackend(o *configuredDynamicBackendOpener) (requestDynam
 		if err != nil {
 			return o.fail(err)
 		}
+		iamEndpoint, _ := dynsecret.AWSIAMEndpointFor(cfg.Region, cfg.IAMEndpoint)
+		iamClient, err := secretIntegrationHTTPClient(iamEndpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+		if err != nil {
+			return o.fail(err)
+		}
 		backend, err := dynsecret.NewAWSSTSBackend(dynsecret.AWSSTSConfig{
 			Endpoint: cfg.Endpoint, HTTPClient: client, Region: cfg.Region,
 			AccessKeyID: cfg.AccessKeyID, SecretAccessKey: secretKey, SessionToken: session,
 			SessionPrefix: cfg.UsernamePrefix, RoleARNs: cfg.RoleBindings,
+			IAMEndpoint: iamEndpoint, IAMHTTPClient: iamClient,
 		})
 		if err != nil {
 			return o.fail(err)

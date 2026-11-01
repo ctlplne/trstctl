@@ -250,6 +250,8 @@ var TenantScopedTables = []string{
 	// A163: rogue certificates revoked at their issuers, per finding and
 	// authority; no foreign keys.
 	"rogue_certificate_revocations",
+	// G2: what each dynamic-secret lease reaches; no foreign keys.
+	"dynamic_secret_lease_access",
 	// Asset overrides reference owners through a composite tenant FK.
 	"ownership_assignments",
 	"owners",

@@ -223,6 +223,7 @@ const (
 	EventDynamicSecretLeaseRevocationFailed         = "dynsecret.lease.revocation_failed"
 	EventDynamicSecretOperationRequested            = "dynsecret.operation.requested"
 	EventDynamicSecretOperationCompleted            = "dynsecret.operation.completed"
+	EventDynamicSecretLeaseAccessObserved           = "dynsecret.lease.access_observed"
 	EventSecretSyncQueued                           = "secret.sync.queued" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretSyncDelivered                        = "secret.sync.delivered"
 	EventSecretSyncReceiverSettled                  = "secret.sync.receiver_settled" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
@@ -572,6 +573,8 @@ func (p *Projector) applySecretIntegrationTx(ctx context.Context, tx pgx.Tx, e e
 		return true, fmt.Errorf("projections: %s event timestamp is empty", e.Type)
 	}
 	switch e.Type {
+	case EventDynamicSecretLeaseAccessObserved:
+		return true, p.applyDynamicSecretLeaseAccessObservedTx(ctx, tx, e)
 	case EventDynamicSecretLeasePending:
 		var payload DynamicSecretLeasePending
 		if err := decode(e, &payload); err != nil {

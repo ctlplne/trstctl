@@ -208,7 +208,10 @@ import (
 // Version 68 carries A163's rogue certificate revocations at their issuers; an
 // older snapshot has none, and restoring it would truncate them while its
 // covered offset skipped the events that recorded them.
-const SnapshotFormatVersion = 68
+// Version 69 carries G2's observed access of each dynamic-secret lease; an
+// older snapshot has none, and restoring it would show every lease's grants as
+// unread while its covered offset skipped the observations.
+const SnapshotFormatVersion = 69
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -269,6 +272,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"adcs_ca_databases",
 	// Format 68: A163's rogue certificate revocations at their issuers.
 	"rogue_certificate_revocations",
+	// Format 69: G2's observed access of each dynamic-secret lease.
+	"dynamic_secret_lease_access",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -589,6 +594,7 @@ SELECT jsonb_build_object(
   'agent_role_grants', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM agent_role_grants t),
   'kmip_clients', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM kmip_clients t),
   'rogue_certificate_revocations', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM rogue_certificate_revocations t),
+  'dynamic_secret_lease_access', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM dynamic_secret_lease_access t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

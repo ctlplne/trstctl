@@ -4,6 +4,8 @@ package graph
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +26,8 @@ import (
 //   - PAM sessions          → credentials HOLDS'd by the requester and the attested
 //     workload, GRANTS_ACCESS → the database or host, APPROVED by each approver
 //   - dynamic-secret leases → credentials GRANTS_ACCESS → the provider's backend
+//     and → the database or IAM role the lease's login reaches, with the
+//     login's grants or policies as the target reported them (G2)
 //   - issuance requests     → APPROVED from the decider to the issued identity
 //
 // A subject that is neither a member nor an AI agent becomes a workload node
@@ -300,9 +304,21 @@ func ensureDynamicSecretBackend(g *Graph, provider string) {
 // addDynamicSecretLeases adds each active lease and the backend it reaches. A
 // lease does not record who requested it (only a non-reversible binding
 // digest), so it carries holder_recorded=false rather than a guessed holder.
+// Where the leader has read the lease's access (G2), the lease also reaches
+// the target itself — the database or the IAM role — and carries the login it
+// holds there with that login's grants; grants the target could not report
+// read "unknown", never empty.
 func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID string, g *Graph, _ principalIndex, now time.Time) error {
 	for after := ""; ; {
 		page, err := st.ListDynamicSecretLeasesPage(ctx, tenantID, "", store.DynamicSecretLeaseActive, after, pageSize)
+		if err != nil {
+			return err
+		}
+		ids := make([]string, 0, len(page))
+		for _, l := range page {
+			ids = append(ids, l.ID)
+		}
+		access, err := st.DynamicSecretLeaseAccessFor(ctx, tenantID, ids)
 		if err != nil {
 			return err
 		}
@@ -313,17 +329,79 @@ func addDynamicSecretLeases(ctx context.Context, st *store.Store, tenantID strin
 				continue
 			}
 			id := credentialID("lease", l.ID)
-			g.AddNode(Node{ID: id, Kind: KindCredential, Name: l.Role + "@" + l.Provider, Attrs: map[string]string{
+			attrs := map[string]string{
 				"credential_kind": "dynamic_secret_lease", "provider": l.Provider, "role": l.Role,
 				"expires_at": l.ExpiresAt.UTC().Format(time.RFC3339), "holder_recorded": "false",
-			}})
+				"access_status": "not_read",
+			}
+			a, read := access[l.ID]
+			if read {
+				addLeaseAccessAttrs(attrs, a)
+			}
+			g.AddNode(Node{ID: id, Kind: KindCredential, Name: l.Role + "@" + l.Provider, Attrs: attrs})
 			ensureDynamicSecretBackend(g, l.Provider)
 			g.AddEdge(Edge{From: id, To: resourceID("dynamic-secret:" + l.Provider), Type: EdgeGrantsAccess, Source: "dynamic-secret lease", Confidence: confidenceAuthority})
+			if read && a.TargetKind != "" && a.TargetRef != "" {
+				target := ensureLeaseTarget(g, l.Provider, a)
+				g.AddEdge(Edge{From: id, To: target, Type: EdgeGrantsAccess, Source: leaseTargetSource(a), Confidence: confidenceAuthority})
+			}
 		}
 		if len(page) < pageSize {
 			return nil
 		}
 		after = page[len(page)-1].ID
+	}
+}
+
+func addLeaseAccessAttrs(attrs map[string]string, a store.DynamicSecretLeaseAccess) {
+	attrs["access_status"] = a.Status
+	attrs["access_checked_at"] = a.CheckedAt.UTC().Format(time.RFC3339)
+	if a.Login != "" {
+		attrs["login"] = a.Login
+	}
+	if a.TargetRef != "" {
+		attrs["target"] = a.TargetRef
+	}
+	switch a.Status {
+	case store.DynamicSecretAccessResolved:
+		grants := strings.Join(a.Grants, "; ")
+		if a.Truncated > 0 {
+			grants += fmt.Sprintf("; and %d more", a.Truncated)
+		}
+		attrs["grants"] = grants
+		attrs["grant_count"] = strconv.Itoa(len(a.Grants) + a.Truncated)
+	default:
+		attrs["grants"] = "unknown"
+		attrs["access_reason"] = a.Reason
+	}
+}
+
+// ensureLeaseTarget adds the system a lease's login reaches — a PostgreSQL
+// database or an AWS IAM role — and links the provider's backend to it.
+func ensureLeaseTarget(g *Graph, provider string, a store.DynamicSecretLeaseAccess) string {
+	id := resourceID(a.TargetKind + ":" + a.TargetRef)
+	if _, ok := g.Node(id); !ok {
+		kind := a.TargetKind
+		switch a.TargetKind {
+		case "postgresql_database":
+			kind = "database"
+		}
+		g.AddNode(Node{ID: id, Kind: KindResource, Name: a.TargetRef, Attrs: map[string]string{
+			"resource_kind": kind, "target_kind": a.TargetKind, "target": a.TargetRef,
+		}})
+	}
+	g.AddEdge(Edge{From: resourceID("dynamic-secret:" + provider), To: id, Type: EdgeConnectsTo, Source: "dynamic-secret provider target", Confidence: confidenceAuthority})
+	return id
+}
+
+func leaseTargetSource(a store.DynamicSecretLeaseAccess) string {
+	switch {
+	case a.TargetKind == "aws_iam_role":
+		return "assumed IAM role"
+	case a.Status == store.DynamicSecretAccessResolved:
+		return "login grants read from the database"
+	default:
+		return "lease login on the target"
 	}
 }
 

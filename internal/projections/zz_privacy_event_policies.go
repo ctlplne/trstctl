@@ -1904,6 +1904,7 @@ func projectorPrivacyPayloadShapes() map[privacyEventPolicyKey]events.PrivacyPay
 		{EventDynamicSecretOperationRequested, DynamicSecretEventSchemaVersion}:            privacyPayloadShape[privacyDynamicSecretOperationRequestedV2](),
 		{EventDynamicSecretOperationCompleted, 1}:                                          privacyPayloadShape[privacyDynamicSecretOperationCompletedV1](),
 		{EventDynamicSecretOperationCompleted, DynamicSecretEventSchemaVersion}:            privacyPayloadShape[privacyDynamicSecretOperationCompletedV2](),
+		{EventDynamicSecretLeaseAccessObserved, 1}:                                         privacyPayloadShape[DynamicSecretLeaseAccessObserved](),
 		{EventSecretSyncQueued, 1}:                                                         privacyPayloadShape[privacySecretSyncQueuedV1](),
 		{EventSecretSyncQueued, SecretSyncEventSchemaVersion}:                              privacyPayloadShape[privacySecretSyncQueuedV2](),
 		{EventSecretSyncDelivered, 1}:                                                      privacyPayloadShape[privacySecretSyncDeliveredV1](),

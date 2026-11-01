@@ -2063,6 +2063,14 @@ bindings, endpoint scheme, private-egress CIDRs, and credential-reference form b
 accepting traffic. An absent tenant target or provider fails its served mutation
 closed; it never falls back to another tenant or to a test registry.
 
+The access graph (G2) reads what each lease reaches through the provider's own
+credentials. A `postgresql` provider's admin login reads each lease role's grants
+from the database catalogs. An `aws-iam` provider reads the policies of the roles its
+`role_bindings` name from IAM at `iam_endpoint` (optional; default the region
+partition's IAM, `https://iam.amazonaws.com`, signed for `us-east-1`), so its
+credentials need `iam:ListAttachedRolePolicies` and `iam:ListRolePolicies` on those
+roles; without them a lease's policies read `unknown`.
+
 #### Signed webhook, Parameter Store and Netlify targets
 
 A `webhook` target POSTs JSON to `endpoint` and signs every delivery with the HMAC

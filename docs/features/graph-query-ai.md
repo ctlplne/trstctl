@@ -85,7 +85,7 @@ The sources, each read in tenant-scoped pages:
 | API tokens, machine sessions | A credential `HOLDS`'d by its subject that `GRANTS_ACCESS` to the trstctl API |
 | PAM sessions | A credential `GRANTS_ACCESS` to the database or host, `HOLDS`'d by the requester and the attested workload, `APPROVED` by each person who approved the activation |
 | PAM targets | The database or host (`res:pam:<type>:<id>`); a PostgreSQL target `CONNECTS_TO` its dynamic-secret backend |
-| Dynamic-secret leases | A credential `GRANTS_ACCESS` to its backend (`res:dynamic-secret:<provider>`) |
+| Dynamic-secret leases | A credential `GRANTS_ACCESS` to its backend (`res:dynamic-secret:<provider>`) and, once the leader has read it (G2), to the database or IAM role its login reaches, with the login and its grants or policies |
 | Issuance requests | `APPROVED` from the person who approved the request to the identity it issued |
 
 A subject that is neither a member nor an AI agent becomes a workload node
@@ -109,10 +109,23 @@ names the sources and what the answer cannot see. `GET /api/v1/graph/path?from=&
 nodes, or 404 when trstctl's records hold none. In the console, open **Who can reach a
 database, host or API, and how** on the Graph page.
 
-What step 1 does not see: what a role can do once connected (permissions inside the
-target system; step 2 resolves them for brokered systems), who requested a dynamic-secret
-lease (a lease records only a non-reversible binding digest), and access granted outside
-trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
+Step 2 (G2) reads what a dynamic-secret lease can do once connected, from the target
+itself. The leader reads each active lease within a minute of issue and every six hours
+after, through the provider's own credentials, changing nothing upstream. A PostgreSQL
+lease links to `res:postgresql_database:postgresql://<host>:<port>/<database>`; its node
+carries `login` (the role the lease created), `grants` (CONNECT, schema USAGE, table
+privileges and role memberships, as PostgreSQL reports them), `grant_count` and
+`access_checked_at`. An AWS STS lease links to `res:aws_iam_role:<arn>`, the role it
+assumed, with the role's attached managed and inline policies from IAM in `grants`.
+`access_status` is `resolved`, `unknown` (the target could not be read; `access_reason`
+says why, and the lease is read again five minutes later), `unsupported` (MySQL,
+MongoDB, Redis, Kubernetes, GCP and Azure providers), or `not_read` before the first
+read. `unknown` never means "no grants".
+
+What the graph does not see: permissions inside systems other than PostgreSQL and AWS
+IAM, what a policy's statements allow (policies are listed by name), who requested a
+dynamic-secret lease (a lease records only a non-reversible binding digest), and access
+granted outside trstctl. An empty answer is therefore not proof that nobody has access. PAM sessions
 started before this release do not record their approval, so their approvers read as
 "No approval recorded".
 
