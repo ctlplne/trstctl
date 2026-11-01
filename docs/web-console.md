@@ -472,7 +472,7 @@ For fleet-wide crypto hygiene (drift, PQC readiness), see Posture. Backed by
 
 The Secrets space gives each workspace its own route in the sidebar (S-C2);
 historical `/secrets?tab=` deep links redirect permanently. `/secrets` is the
-store — an Infisical-style workspace: a folder tree over the served key-value
+store workspace: a folder tree over the served key-value
 store, a reference resolver that expands `${secret.path}` chains, an environment
 diff, a version-history selector, and an explicit disabled bulk-import disclosure
 (the server route returns `501` until atomic event-sourced batch commands exist). See

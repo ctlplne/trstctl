@@ -47,12 +47,12 @@ func TestAllDiscoveryConnectorsConform(t *testing.T) {
 	ml := memLister{findings: []Finding{{Ref: "r1", Kind: "api-key", Provenance: "src"}}}
 	sources := []Source{
 		NewVaultSource(ml), NewAWSSecretsManagerSource(ml), NewAzureKeyVaultSource(ml),
-		NewGCPSecretManagerSource(ml), NewKubernetesSecretsSource(ml), NewInfisicalSource(ml),
+		NewGCPSecretManagerSource(ml), NewKubernetesSecretsSource(ml),
 		NewAWSIAMKeySource(ml), NewGCPSAKeySource(ml), NewAzureSPSecretSource(ml),
 		NewGitHubActionsSecretSource(ml), NewCICDStoreSource(ml),
 	}
-	if len(sources) != 11 {
-		t.Fatalf("expected 11 connectors (6 stores + 5 key/token), have %d", len(sources))
+	if len(sources) != 10 {
+		t.Fatalf("expected 10 connectors (5 stores + 5 key/token), have %d", len(sources))
 	}
 	names := map[string]bool{}
 	for _, s := range sources {

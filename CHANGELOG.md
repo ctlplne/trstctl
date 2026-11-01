@@ -1450,7 +1450,7 @@ entries below are the train's own log.
   `cloud_secret` (aws-secrets-manager, gcp-secret-manager, azure-key-vault,
   hashicorp-vault — the kinds share the providers config shape), instead of
   dead-ending in the generic "no server-side connector" fallback. Providers
-  outside the served set (infisical, kubernetes-secrets, cicd-store) fail
+  outside the served set (kubernetes-secrets, cicd-store) fail
   with the connector's specific "unsupported provider" refusal; building
   those listers stays demand-driven P-track work. Empty-provider errors are
   now kind-aware.

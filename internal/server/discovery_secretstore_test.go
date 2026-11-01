@@ -23,12 +23,12 @@ func TestSecretStoreKindRoutesThroughServedSecretManagerConnectors(t *testing.T)
 	// An unserved provider reaches the connector factory and gets its clear
 	// refusal — proof the kind routed to the executor, not the fallback.
 	src := store.DiscoverySource{ID: "src-1", TenantID: "t-1", Kind: "secret_store",
-		Config: []byte(`{"providers":[{"provider":"infisical"}]}`)}
+		Config: []byte(`{"providers":[{"provider":"unlisted-store"}]}`)}
 	_, status, msg, err := d.executeDiscoveryRun(ctx, "t-1", src, projections.DiscoveryRunQueued{ID: "run-1"})
 	if err != nil {
 		t.Fatalf("executeDiscoveryRun: %v", err)
 	}
-	if status != "failed" || !strings.Contains(msg, `unsupported cloud secret-manager provider "infisical"`) {
+	if status != "failed" || !strings.Contains(msg, `unsupported cloud secret-manager provider "unlisted-store"`) {
 		t.Fatalf("status=%q msg=%q, want the connector's unsupported-provider refusal, not the no-connector fallback", status, msg)
 	}
 

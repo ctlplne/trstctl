@@ -360,7 +360,7 @@ export function moduleLabelKey(moduleId: string): MessageKey | undefined {
  * Edition gating in trstctl is per-sub-feature, quarantined to Platform →
  * Editions (S-A3). The seam exists so a future fully-commercial module (e.g. a
  * Provider-only module) surfaces exactly one graceful upsell row rather than
- * scattered locked panels (the Infisical OSS-billing lesson, 03 §1). */
+ * scattered locked panels (the open-core upsell lesson, 03 §1). */
 export const moduleRequiredFeature: Partial<Record<ModuleId, string>> = {};
 
 /** lockedModuleIds returns the modules that should render as an upsell row: a

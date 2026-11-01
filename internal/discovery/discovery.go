@@ -139,9 +139,6 @@ func NewGCPSecretManagerSource(l Lister) Source { return genericSource{"gcp-secr
 // NewKubernetesSecretsSource discovers Kubernetes Secrets.
 func NewKubernetesSecretsSource(l Lister) Source { return genericSource{"kubernetes-secrets", l} }
 
-// NewInfisicalSource discovers secrets in Infisical (migration-assessment path).
-func NewInfisicalSource(l Lister) Source { return genericSource{"infisical", l} }
-
 // API key / token discovery sources (S20.2), all strictly read-only.
 
 // NewAWSIAMKeySource discovers AWS IAM access keys.
