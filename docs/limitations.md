@@ -1677,8 +1677,10 @@ never live in the API process. What you can do end to end against the running bi
   syslog-over-TLS (RFC 5424/5425) or Elasticsearch bulk batches through the
   durable outbox (P5: the same records in the same order to every collector; a
   redelivered batch adds nothing to an index; a stalled receiver holds only its
-  own queue). Proven against stand-ins and against a stock rsyslog receiver over
-  TLS and a local search engine that speaks the Elasticsearch bulk API. It persists exact record lag, cursor,
+  own queue). Proven against stand-ins, a stock rsyslog receiver over TLS, a local
+  search engine that speaks the Elasticsearch bulk API, and Elasticsearch 9.5.5
+  itself with security on (the feed's API key scoped to the audit index), each
+  receiving the same records in order with no gap across a receiver restart. It persists exact record lag, cursor,
   retries, safe terminal error codes, and collector request IDs; it does not store
   credential values or remote response bodies. This native feed is separate from
   the metadata-only OTLP log exporter and from incident-response SIEM dispatch.
@@ -5883,9 +5885,11 @@ This is a deliberate, documented trust boundary, not an accident.
     command, proven with SoftHSM standing in for the HSM (an RSA-2048 key generated in
     the token, never extractable; a certificate request and code signatures made inside
     it; a repeated command answered from the journal; another tenant refused). The
-    PKCS#11 provider generates RSA-2048 keys; EC keys in an HSM are what comes next. A run of the stock `notation`
-    CLI against a registry, real HSM and cloud KMS accounts, and the Windows signing
-    adapter (a KSP for signtool) are what comes next.
+    PKCS#11 provider generates RSA-2048 keys; EC keys in an HSM are what comes next.
+    Stock Notation 1.3.2 signs an image in a local registry through the plugin and
+    verifies it under a strict trust policy rooted at the issuing CA, and a principal
+    without `keys:write` is refused. Real HSM and cloud KMS accounts, and the Windows
+    signing adapter (a KSP for signtool), are what comes next.
 
   Each protocol surface is gated by `protocols.<name>.enabled` and binds a tenant via
   `protocols.<name>.tenant_id`. All protocol toggles default off until an operator

@@ -22,7 +22,9 @@ import (
 // P5 against stock receivers: a stock rsyslog over TLS and a local search
 // engine with the Elasticsearch bulk API get the same audit records as a
 // Splunk HEC collector, in order, with no gap across a restart of the syslog
-// receiver. Run by runners/p5-lab-proof.sh, which starts both; skipped
+// receiver. Run by runners/p5-lab-proof.sh (OpenSearch) or
+// runners/p5-es-lab-proof.sh (Elasticsearch with security on: the feed and the
+// read-back queries use the API key in TRSTCTL_P5_LAB_ES_KEY); skipped
 // otherwise.
 func TestAuditFeedsReachRsyslogAndASearchEngineP5(t *testing.T) {
 	syslogURL, caFile, outFile, esURL, container := os.Getenv("TRSTCTL_P5_LAB_SYSLOG"), os.Getenv("TRSTCTL_P5_LAB_CA_FILE"),
@@ -38,8 +40,25 @@ func TestAuditFeedsReachRsyslogAndASearchEngineP5(t *testing.T) {
 	h := newOperatingServedHarness(t, config.Protocols{}, func(d *Deps) {
 		d.OutboundEnvCredentialRefs = []string{"env:TRSTCTL_P5_HEC_TOKEN", "env:TRSTCTL_P5_ES_KEY", "env:TRSTCTL_P5_SYSLOG_CA"}
 	})
+	esKey := os.Getenv("TRSTCTL_P5_LAB_ES_KEY")
 	t.Setenv("TRSTCTL_P5_HEC_TOKEN", "p5-hec-token")
-	t.Setenv("TRSTCTL_P5_ES_KEY", "p5-lab-key")
+	if esKey == "" {
+		t.Setenv("TRSTCTL_P5_ES_KEY", "p5-lab-key")
+	} else {
+		t.Setenv("TRSTCTL_P5_ES_KEY", esKey)
+	}
+	// esGet reads the search engine the way an analyst would, with the same API
+	// key the feed writes with when the engine enforces one.
+	esGet := func(method, path string) (*http.Response, error) {
+		req, err := http.NewRequest(method, esURL+path, nil) // #nosec G704 -- the runner's own lab search engine (CWE-918)
+		if err != nil {
+			return nil, err
+		}
+		if esKey != "" {
+			req.Header.Set("Authorization", "ApiKey "+esKey)
+		}
+		return (&http.Client{Timeout: 30 * time.Second}).Do(req) // #nosec G704 -- the runner's own lab search engine (CWE-918)
+	}
 	t.Setenv("TRSTCTL_P5_SYSLOG_CA", string(caPEM))
 	token := seedServedAPIToken(t, t.Context(), h.store, h.tenant, "p5-lab-operator", []string{
 		string(authz.AuditRead), string(authz.AuditWrite), string(authz.OwnersWrite), string(authz.PrivateEgress),
@@ -106,11 +125,10 @@ func TestAuditFeedsReachRsyslogAndASearchEngineP5(t *testing.T) {
 	}
 	esSeqs := func() []uint64 {
 		t.Helper()
-		client := &http.Client{Timeout: 30 * time.Second}
-		if resp, err := client.Post(esURL+"/trstctl-audit/_refresh", "application/json", nil); err == nil { // #nosec G704 -- the runner's own lab search engine (CWE-918)
+		if resp, err := esGet(http.MethodPost, "/trstctl-audit/_refresh"); err == nil {
 			_ = resp.Body.Close()
 		}
-		resp, err := client.Get(esURL + "/trstctl-audit/_search?size=500&sort=event.sequence:asc&q=event.sequence:*") // #nosec G704 -- the runner's own lab search engine (CWE-918)
+		resp, err := esGet(http.MethodGet, "/trstctl-audit/_search?size=500&sort=event.sequence:asc&q=event.sequence:*")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,7 +178,7 @@ func TestAuditFeedsReachRsyslogAndASearchEngineP5(t *testing.T) {
 	}
 	esTrailers := func() []p5Trailer {
 		t.Helper()
-		resp, err := (&http.Client{Timeout: 30 * time.Second}).Get(esURL + `/trstctl-audit/_search?size=200&sort=@timestamp:asc&q=event.action:%22trstctl.audit.chain_trailer%22`) // #nosec G704 -- the runner's own lab search engine (CWE-918)
+		resp, err := esGet(http.MethodGet, `/trstctl-audit/_search?size=200&sort=@timestamp:asc&q=event.action:%22trstctl.audit.chain_trailer%22`)
 		if err != nil {
 			t.Fatal(err)
 		}
