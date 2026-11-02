@@ -1508,10 +1508,14 @@ func scopedNameWithSuffix(prefix, role, suffix string, max int, sep string) (str
 // anything else, so a foreign principal that merely shares the prefix - an
 // administrator named trstctl_admin, say - is never deleted. The comparison
 // ignores case for systems that upper-case unquoted names.
-func issuedPrincipalName(prefix, ref string) bool {
+func issuedPrincipalName(prefix, ref string) bool { return issuedPrincipalNameWith(prefix, ref, '_') }
+
+// issuedPrincipalNameWith is issuedPrincipalName for names issued with
+// separator sep (AWS cache user IDs take only hyphens).
+func issuedPrincipalNameWith(prefix, ref string, sep byte) bool {
 	lower := strings.ToLower(ref)
-	start := sanitizeFragment(prefix, defaultDynsecretPrefix) + "_"
-	if !strings.HasPrefix(lower, start) || len(lower) < len(start)+10 || lower[len(lower)-11] != '_' {
+	start := sanitizeFragment(prefix, defaultDynsecretPrefix) + string(sep)
+	if !strings.HasPrefix(lower, start) || len(lower) < len(start)+10 || lower[len(lower)-11] != sep {
 		return false
 	}
 	for _, c := range lower[len(lower)-10:] {

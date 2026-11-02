@@ -550,6 +550,47 @@ func TestValidateSnowflakeProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateAWSCacheProvidersA239(t *testing.T) {
+	for _, providerType := range []string{"aws-elasticache", "aws-memorydb"} {
+		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "cache", Type: providerType,
+			Region: "us-east-1", AccessKeyID: "AKIAEXAMPLE", SecretAccessRef: "file:/run/secrets/aws-secret", UserGroup: "orders-group",
+			AllowedRoles: []string{"reader"}, MaxTTL: "1h",
+			RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"orders:"}, Commands: []string{"get"}}}}
+		check := func(c DynamicSecretProviderConfig) error {
+			t.Helper()
+			return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+		}
+		if err := check(base); err != nil {
+			t.Fatalf("%s: %v", providerType, err)
+		}
+		for name, tc := range map[string]struct {
+			mutate func(*DynamicSecretProviderConfig)
+			want   string
+		}{
+			"no region": {func(c *DynamicSecretProviderConfig) { c.Region = "" }, "region and access_key_id are required"},
+			"no secret": {func(c *DynamicSecretProviderConfig) { c.SecretAccessRef = "" }, "secret_access_key_ref"},
+			"no group":  {func(c *DynamicSecretProviderConfig) { c.UserGroup = "" }, "user_group (the ElastiCache user group or MemoryDB ACL) is required"},
+			"no policy": {func(c *DynamicSecretProviderConfig) { c.RedisACLRoles = nil }, `redis_acl_roles["reader"] is required for ` + providerType},
+			"unsafe command": {func(c *DynamicSecretProviderConfig) {
+				c.RedisACLRoles = map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"orders:"}, Commands: []string{"flushall"}}}
+			}, "outside the safe command set"},
+		} {
+			c := base
+			tc.mutate(&c)
+			if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("%s %s: %v, want %q", providerType, name, err, tc.want)
+			}
+		}
+	}
+	memory := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "cache", Type: "aws-memorydb",
+		Region: "us-east-1", AccessKeyID: "AKIAEXAMPLE", SecretAccessRef: "file:/run/secrets/aws-secret", UserGroup: "orders-acl", Engine: "valkey",
+		AllowedRoles: []string{"reader"}, MaxTTL: "1h",
+		RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"orders:"}, Commands: []string{"get"}}}}
+	if err := ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{memory}}, true); err == nil || !strings.Contains(err.Error(), "engine is only valid for aws-elasticache") {
+		t.Fatalf("engine on MemoryDB: %v", err)
+	}
+}
+
 func TestValidateTailscaleProviderA239(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "tailnet", Type: "tailscale",
 		BearerTokenRef: "file:/run/secrets/tailscale-api", AllowedRoles: []string{"ci"},

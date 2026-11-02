@@ -5242,7 +5242,8 @@ when off, requiring a KEK when on):
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
-  `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `mssql`, and `azure-sql` (A239). Issuance is
+  `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`, `aws-elasticache`, `aws-memorydb`,
+  `mssql`, and `azure-sql` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5306,6 +5307,9 @@ when off, requiring a KEK when on):
   installation. Snowflake service users (A239) are built against a stand-in of the
   SQL API only (the leased key pair logs in, revocation disables and drops the
   user and its key is then refused); a live Snowflake proof needs an account.
+  ElastiCache and MemoryDB RBAC users (A239) are built against stand-ins of their
+  APIs only (the user joins its group once settled, a retry replaces its password,
+  revocation deletes it and AUTH then fails); a live proof needs an AWS account.
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.

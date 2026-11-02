@@ -18671,6 +18671,8 @@
               "milvus",
               "github-app",
               "snowflake",
+              "aws-elasticache",
+              "aws-memorydb",
               "mssql",
               "azure-sql"
             ],

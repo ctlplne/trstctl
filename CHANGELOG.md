@@ -2,6 +2,13 @@
 
 ### Added
 
+- ElastiCache and MemoryDB dynamic secrets (`type: aws-elasticache`, `type: aws-memorydb`): each lease is an RBAC user
+  with a generated password and the role's access string, compiled from literal key prefixes and explicit safe commands
+  exactly as for the Redis provider (`redis_acl_roles`; raw ACL rules and categories are refused), added to one
+  ElastiCache user group or MemoryDB ACL (`user_group`) once AWS reports the user settled. Revocation deletes the user,
+  which AWS removes from every group and cluster. Requests are SigV4-signed with the configured access key. Built
+  against stand-ins of the ElastiCache Query API and the MemoryDB JSON API.
+
 - Snowflake dynamic secrets (`type: snowflake`): each lease is a Snowflake service user (`TYPE = SERVICE`) that
   authenticates with a key pair the provider generates (the lease returns the private key; no password exists, so none
   reaches SQL text or query history), granted only its role's roles and set to expire in Snowflake after the

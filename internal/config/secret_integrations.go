@@ -132,6 +132,11 @@ type DynamicSecretProviderConfig struct {
 	// <accountname>); its administrator is admin_user with the key pair whose
 	// private key is private_key_ref (A239).
 	Account string `json:"account,omitempty"`
+	// UserGroup is the ElastiCache user group, or the MemoryDB ACL, that an
+	// aws-elasticache or aws-memorydb lease's user joins; Engine is
+	// ElastiCache's user engine, redis (default) or valkey (A239).
+	UserGroup string `json:"user_group,omitempty"`
+	Engine    string `json:"engine,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
@@ -246,7 +251,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
-	"github-app": {}, "snowflake": {},
+	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -428,7 +433,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
-	"snowflake": validateSnowflakeProvider,
+	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -817,8 +822,14 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.AllowWildcardAccountHost && c.Type != "mysql" {
 		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
 	}
-	if len(c.RedisACLRoles) > 0 && c.Type != "redis" {
-		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis", where))
+	if len(c.RedisACLRoles) > 0 && c.Type != "redis" && c.Type != "aws-elasticache" && c.Type != "aws-memorydb" {
+		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis, aws-elasticache and aws-memorydb", where))
+	}
+	if c.Type != "aws-elasticache" && c.Type != "aws-memorydb" && c.UserGroup != "" {
+		errs = append(errs, fmt.Errorf("%s user_group is only valid for aws-elasticache and aws-memorydb", where))
+	}
+	if c.Type != "aws-elasticache" && c.Engine != "" {
+		errs = append(errs, fmt.Errorf("%s engine is only valid for aws-elasticache", where))
 	}
 	if c.Type != "redis" && (c.RedisTLSCARef != "" || c.RedisTLSServerName != "" || c.AllowPlaintextRedis) {
 		errs = append(errs, fmt.Errorf("%s Redis transport settings are only valid for redis", where))
@@ -971,6 +982,53 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var awsCacheGroupName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]{0,39}$`)
+
+// validateAWSCacheProvider checks an ElastiCache (aws-elasticache) or MemoryDB
+// (aws-memorydb) provider (A239): region and the AWS access key
+// (access_key_id, secret_access_key_ref, optional session_token_ref) of a
+// principal allowed to manage RBAC users and the group, user_group the
+// ElastiCache user group or MemoryDB ACL, and each allowed role a
+// redis_acl_roles policy of literal key prefixes and explicit commands.
+func validateAWSCacheProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Region) == "" || strings.TrimSpace(c.AccessKeyID) == "" {
+		errs = append(errs, fmt.Errorf("%s region and access_key_id are required for %s", where, c.Type))
+	}
+	if err := validateCredentialRef(c.SecretAccessRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s secret_access_key_ref: %w", where, err))
+	}
+	if strings.TrimSpace(c.SessionTokenRef) != "" {
+		if err := validateCredentialRef(c.SessionTokenRef); err != nil {
+			errs = append(errs, fmt.Errorf("%s session_token_ref: %w", where, err))
+		}
+	}
+	if !awsCacheGroupName.MatchString(c.UserGroup) {
+		errs = append(errs, fmt.Errorf("%s user_group (the ElastiCache user group or MemoryDB ACL) is required for %s", where, c.Type))
+	}
+	if c.Engine != "" && c.Engine != "redis" && c.Engine != "valkey" {
+		errs = append(errs, fmt.Errorf("%s engine must be redis or valkey", where))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		policy, found := c.RedisACLRoles[role]
+		if !found {
+			errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q] is required for %s", where, role, c.Type))
+			continue
+		}
+		if _, err := redisacl.Compile(policy); err != nil {
+			errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q]: %w", where, role, err))
+		}
+	}
+	for role := range c.RedisACLRoles {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
 }
 
 var (

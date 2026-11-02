@@ -304,6 +304,23 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it and the lease digest suffix the provider gives them.", false),
 			roles(`Each allowed role maps to Snowflake roles, comma separated, for example "ANALYST"; the first is the user's default role.`),
 		)},
+		{Type: "aws-elasticache", Label: "ElastiCache RBAC users", Purpose: "Creates an ElastiCache (Redis OSS or Valkey) RBAC user with a generated password and the role's literal key prefixes and explicit commands, adds it to the configured user group, and deletes it at revocation, which removes it from every group and cluster. Built against a stand-in of the ElastiCache API; no AWS proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("region", "Region", "The AWS region of the user group.", true),
+			value("access_key_id", "Access key ID", "An AWS access key allowed to create, modify and delete users and modify the user group.", true),
+			credential("secret_access_key_ref", "Secret access key reference", "The access key's secret.", true),
+			credential("session_token_ref", "Session token reference", "Optional session token for temporary credentials.", false),
+			value("user_group", "User group", "The ElastiCache user group, attached to the cluster, that leased users join.", true),
+			value("engine", "Engine", "redis (default) or valkey, matching the user group.", false),
+			value("redis_acl_roles", "Role policies", "For every allowed role, literal key_prefixes and explicit safe commands, as for the Redis provider; raw ACL rules and categories are refused.", true),
+		)},
+		{Type: "aws-memorydb", Label: "MemoryDB RBAC users", Purpose: "Creates a MemoryDB RBAC user with a generated password and the role's literal key prefixes and explicit commands, adds it to the configured ACL, and deletes it at revocation, which removes it from every ACL and cluster. Built against a stand-in of the MemoryDB API; no AWS proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("region", "Region", "The AWS region of the ACL.", true),
+			value("access_key_id", "Access key ID", "An AWS access key allowed to create, update and delete users and update the ACL.", true),
+			credential("secret_access_key_ref", "Secret access key reference", "The access key's secret.", true),
+			credential("session_token_ref", "Session token reference", "Optional session token for temporary credentials.", false),
+			value("user_group", "ACL", "The MemoryDB ACL, attached to the cluster, that leased users join.", true),
+			value("redis_acl_roles", "Role policies", "For every allowed role, literal key_prefixes and explicit safe commands, as for the Redis provider; raw ACL rules and categories are refused.", true),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -370,6 +387,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's repository permissions on the named repositories, through an installation token ended at revocation or by GitHub an hour after minting", "confirmed"
 	case "snowflake":
 		return "the role's Snowflake roles, through a key-pair service user disabled and dropped at revocation, or expired by Snowflake after the maximum lifetime in whole days", "confirmed"
+	case "aws-elasticache", "aws-memorydb":
+		return "the role's literal key prefixes and explicit commands, through an RBAC user in one user group or ACL, until the user is deleted", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

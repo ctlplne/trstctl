@@ -2349,6 +2349,29 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For ElastiCache (A239, `aws-elasticache`) or MemoryDB (`aws-memorydb`), set `region`,
+`access_key_id`, `secret_access_key_ref` (and `session_token_ref` for temporary
+credentials) to an AWS principal allowed to create, modify and delete users and to
+modify the user group or ACL, `user_group` to the ElastiCache user group or MemoryDB ACL
+attached to the cluster, optionally `engine` (ElastiCache only: `redis` or `valkey`), and
+`redis_acl_roles` per allowed role exactly as for the Redis provider: literal
+`key_prefixes` and explicit safe `commands`. `endpoint` defaults to the region's API.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "orders-cache",
+  "type": "aws-elasticache",
+  "region": "us-east-1",
+  "access_key_id": "AKIAEXAMPLE",
+  "secret_access_key_ref": "file:/run/secrets/aws-cache-admin",
+  "user_group": "orders-group",
+  "allowed_roles": ["reader"],
+  "redis_acl_roles": {"reader": {"key_prefixes": ["orders:"], "commands": ["get", "hget"]}},
+  "max_ttl": "8h"
+}
+```
+
 For Snowflake (A239, `snowflake`), set `endpoint` to the account URL,
 `account` to the account identifier (`<orgname>-<accountname>`), `admin_user` and
 `private_key_ref` to a user allowed to create, alter and drop users and grant the bound
