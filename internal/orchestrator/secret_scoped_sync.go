@@ -26,6 +26,16 @@ func (o *Orchestrator) RemoveSecretScopedSync(ctx context.Context, tenantID stri
 	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretScopedSyncRemoved, removed)
 }
 
+// SetSecretScopedSyncMode switches a definition between manual and auto.
+func (o *Orchestrator) SetSecretScopedSyncMode(ctx context.Context, tenantID string, set projections.SecretScopedSyncModeSet) error {
+	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretScopedSyncModeSet, set)
+}
+
+// RecordSecretScopedSyncReconciled records what the reconciler did.
+func (o *Orchestrator) RecordSecretScopedSyncReconciled(ctx context.Context, tenantID string, reconciled projections.SecretScopedSyncReconciled) error {
+	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretScopedSyncReconciled, reconciled)
+}
+
 // RecordSecretScopedSyncApplied records an applied plan under its stable event
 // ID, so a retried apply finds the plan it already fixed instead of making a
 // new one. A different payload under the same ID is an idempotency conflict.

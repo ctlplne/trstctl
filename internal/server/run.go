@@ -1525,6 +1525,8 @@ func leaderRuntimeWork(srv *Server) func(context.Context) {
 			startRuntimeWorker(workCtx, srv.RunDynamicSecretAccessWatch),
 			// P6: moved leaked-secret findings close on rotation, read and scan evidence.
 			startRuntimeWorker(workCtx, srv.RunSecretMoveClosure),
+			// A237: auto scoped secret syncs apply when their sources change.
+			startRuntimeWorker(workCtx, srv.RunScopedSyncReconciler),
 			// Q1: access review revoke decisions finish and close on evidence.
 			startRuntimeWorker(workCtx, srv.RunNHIReviewReconcile),
 			// X3: migration waves that require observed traffic advance on wire evidence or pause.

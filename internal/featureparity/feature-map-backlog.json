@@ -17623,6 +17623,7 @@
                 "removeSecretScopedSync",
                 "previewSecretScopedSync",
                 "applySecretScopedSync",
+                "setSecretScopedSyncMode",
                 "getKubernetesSecretOperator",
                 "getSecretWorkloadInjection",
                 "getUnvaultedSecretPosture"
@@ -17641,6 +17642,7 @@
                 "secrets scoped-syncs remove",
                 "secrets scoped-syncs preview",
                 "secrets scoped-syncs apply",
+                "secrets scoped-syncs mode",
                 "secrets syncs workload-identities create",
                 "secrets syncs workload-identities list",
                 "secrets syncs workload-identities get",

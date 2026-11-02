@@ -750,6 +750,7 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "scoped-syncs", "list"}, Method: "GET", Path: "/api/v1/secrets/scoped-syncs", Summary: "List scoped syncs"},
 	{Name: []string{"secrets", "scoped-syncs", "show"}, Method: "GET", Path: "/api/v1/secrets/scoped-syncs/{id}", Summary: "Show a scoped sync with the destination keys it manages and their delivery status"},
 	{Name: []string{"secrets", "scoped-syncs", "remove"}, Method: "DELETE", Path: "/api/v1/secrets/scoped-syncs/{id}", Summary: "Remove a scoped sync; the destination keys it wrote stay"},
+	{Name: []string{"secrets", "scoped-syncs", "mode"}, Method: "PUT", Path: "/api/v1/secrets/scoped-syncs/{id}/mode", Body: bodyFile, Summary: "Switch a scoped sync between manual and auto (applied when its sources change and nothing is blocked)"},
 	{Name: []string{"secrets", "scoped-syncs", "preview"}, Method: "POST", Path: "/api/v1/secrets/scoped-syncs/{id}/preview", ReadOnly: true, Summary: "Preview a scoped sync: a value-free plan per destination key and its digest"},
 	{Name: []string{"secrets", "scoped-syncs", "apply"}, Method: "POST", Path: "/api/v1/secrets/scoped-syncs/{id}/apply", Body: bodyFile, Summary: "Apply a reviewed scoped sync plan by its plan_digest; a changed source or destination makes it stale"},
 	{Name: []string{"secrets", "syncs", "workload-identities", "create"}, Method: "POST", Path: "/api/v1/secrets/syncs/workload-identity-sources", Body: bodyFile, Summary: "Create a cloud workload-identity source for bounded secret-sync delivery"},

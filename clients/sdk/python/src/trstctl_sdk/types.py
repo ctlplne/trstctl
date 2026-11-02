@@ -13932,7 +13932,11 @@ SecretScopedSync = TypedDict(
         'keys': list[dict[str, Any]],
         'last_applied_at': str,
         'last_plan_digest': str,
+        'last_reconcile_at': str,
+        'mode': str,
         'name': str,
+        'reconcile_reason': str,
+        'reconcile_status': str,
         'source_prefix': str,
         'target': str,
         'updated_at': str,
@@ -13953,6 +13957,14 @@ SecretScopedSyncList = TypedDict(
     {
         'items': list[dict[str, Any]],
         'next_cursor': str,
+    },
+    total=False,
+)
+
+SecretScopedSyncModeRequest = TypedDict(
+    'SecretScopedSyncModeRequest',
+    {
+        'mode': str,
     },
     total=False,
 )
@@ -13989,6 +14001,7 @@ SecretScopedSyncRequest = TypedDict(
         'delete_scope': str,
         'destination_prefix': str,
         'key_transform': str,
+        'mode': str,
         'name': str,
         'source_prefix': str,
         'target': str,

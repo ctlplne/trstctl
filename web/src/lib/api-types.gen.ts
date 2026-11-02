@@ -10080,7 +10080,11 @@ export interface SecretScopedSync {
   keys?: ({ job_id?: string; job_status?: string; key: string; source_name?: string; source_version?: number; state: "synced" | "delete_queued" })[];
   last_applied_at?: string;
   last_plan_digest?: string;
+  last_reconcile_at?: string;
+  mode: "manual" | "auto";
   name: string;
+  reconcile_reason?: string;
+  reconcile_status?: "applied" | "unchanged" | "blocked" | "failed";
   source_prefix: string;
   target: string;
   updated_at: string;
@@ -10093,6 +10097,10 @@ export interface SecretScopedSyncApplyRequest {
 export interface SecretScopedSyncList {
   items: SecretScopedSync[];
   next_cursor?: string;
+}
+
+export interface SecretScopedSyncModeRequest {
+  mode: "manual" | "auto";
 }
 
 export interface SecretScopedSyncPlan {
@@ -10117,6 +10125,7 @@ export interface SecretScopedSyncRequest {
   delete_scope?: "none" | "managed" | "prefix";
   destination_prefix?: string;
   key_transform?: "path" | "env";
+  mode?: "manual" | "auto";
   name: string;
   source_prefix: string;
   target: string;

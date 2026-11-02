@@ -27,6 +27,7 @@ export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as decoy from "./decoyApi";
 import * as secretProjects from "./secretProjectsApi";
+import * as scopedSyncs from "./scopedSyncsApi";
 import * as agentIdentity from "./agentIdentityApi";
 import * as accessReview from "./accessReviewApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
@@ -373,6 +374,13 @@ import type {
   SecretRestorePlan,
   SecretRestoreRequest,
   SecretVersionBatchReceipt,
+  SecretScopedSync,
+  SecretScopedSyncApplyRequest,
+  SecretScopedSyncList,
+  SecretScopedSyncModeRequest,
+  SecretScopedSyncPlan,
+  SecretScopedSyncReceipt,
+  SecretScopedSyncRequest,
   GraphPath,
   GraphQueryResult,
   GraphReachable,
@@ -797,6 +805,13 @@ export type {
   SecretRestorePlan,
   SecretRestoreRequest,
   SecretVersionBatchReceipt,
+  SecretScopedSync,
+  SecretScopedSyncApplyRequest,
+  SecretScopedSyncList,
+  SecretScopedSyncModeRequest,
+  SecretScopedSyncPlan,
+  SecretScopedSyncReceipt,
+  SecretScopedSyncRequest,
 } from "./api-types.gen";
 export type {
   DatabaseDecoy,
@@ -2633,6 +2648,12 @@ export interface Api {
   applySecretPromotion(project: string, input: SecretPromotionRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
   previewSecretRestore(project: string, input: SecretRestoreRequest): Promise<SecretRestorePlan>;
   applySecretRestore(project: string, input: SecretRestoreRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
+  listSecretScopedSyncs(): Promise<SecretScopedSyncList>;
+  getSecretScopedSync(id: string): Promise<SecretScopedSync>;
+  defineSecretScopedSync(input: SecretScopedSyncRequest, idempotencyKey?: string): Promise<SecretScopedSync>;
+  setSecretScopedSyncMode(id: string, input: SecretScopedSyncModeRequest, idempotencyKey?: string): Promise<SecretScopedSync>;
+  previewSecretScopedSync(id: string): Promise<SecretScopedSyncPlan>;
+  applySecretScopedSync(id: string, input: SecretScopedSyncApplyRequest, idempotencyKey?: string): Promise<SecretScopedSyncReceipt>;
   listDecoySecrets(cursor?: string): Promise<DecoySecretList>;
   retireDecoySecret(id: string): Promise<DecoySecret>;
   createDatabaseDecoy(input: DatabaseDecoyCreateRequest, idempotencyKey?: string): Promise<DatabaseDecoyCreateResponse>;
@@ -3515,6 +3536,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   applySecretPromotion: secretProjects.applySecretPromotion,
   previewSecretRestore: (project, input) => postRead<SecretRestorePlan>(`/api/v1/secrets/projects/${encodeURIComponent(project)}/restores/preview`, input),
   applySecretRestore: secretProjects.applySecretRestore,
+  listSecretScopedSyncs: scopedSyncs.listSecretScopedSyncs,
+  getSecretScopedSync: scopedSyncs.getSecretScopedSync,
+  defineSecretScopedSync: scopedSyncs.defineSecretScopedSync,
+  setSecretScopedSyncMode: scopedSyncs.setSecretScopedSyncMode,
+  previewSecretScopedSync: (id) => postRead<SecretScopedSyncPlan>(`/api/v1/secrets/scoped-syncs/${encodeURIComponent(id)}/preview`),
+  applySecretScopedSync: scopedSyncs.applySecretScopedSync,
   listDecoySecrets: decoy.listDecoySecrets,
   retireDecoySecret: decoy.retireDecoySecret,
   createDatabaseDecoy: decoy.createDatabaseDecoy,

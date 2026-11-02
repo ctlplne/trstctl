@@ -83,6 +83,7 @@ const SecretProjectsWorkflow = lazy(() => import("./secrets/SecretProjectsWorkfl
 const DecoyDatabaseWorkflow = lazy(() => import("./secrets/DecoyDatabaseWorkflow").then((module) => ({ default: module.DecoyDatabaseWorkflow })));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
 const SecretSyncWorkflow = lazy(() => import("./secrets/SecretSyncWorkflow").then((module) => ({ default: module.SecretSyncWorkflow })));
+const ScopedSyncsWorkflow = lazy(() => import("./secrets/ScopedSyncsWorkflow").then((module) => ({ default: module.ScopedSyncsWorkflow })));
 
 function SecretsWorkflowFallback() {
   return <div className="min-h-24 animate-pulse rounded-md bg-muted" aria-hidden="true" />;
@@ -2949,6 +2950,9 @@ export function Secrets() {
             </details>
             <Suspense fallback={<SecretsWorkflowFallback />}>
               <SecretSyncWorkflow catalog={syncCatalog} initialName={selectedMeta?.name ?? ""} loadBlocked={Boolean(loadError)} />
+            </Suspense>
+            <Suspense fallback={<SecretsWorkflowFallback />}>
+              <ScopedSyncsWorkflow targets={syncCatalog?.configured_targets ?? []} />
             </Suspense>
           </section>
         </div>

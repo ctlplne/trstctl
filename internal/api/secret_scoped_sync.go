@@ -39,6 +39,8 @@ import (
 const (
 	scopedSyncSourceLimit      = 500
 	scopedSyncDestinationLimit = 1000
+
+	scopedSyncReconcilerSubject = "system:scoped-sync-reconciler"
 )
 
 var scopedSyncNamespace = googleuuid.MustParse("d98c96a4-b0ce-58d4-9771-9c85e2aca8e0")
@@ -51,6 +53,11 @@ type secretScopedSyncRequest struct {
 	KeyTransform      string `json:"key_transform,omitempty"`
 	DeleteScope       string `json:"delete_scope,omitempty"`
 	AdoptExisting     bool   `json:"adopt_existing,omitempty"`
+	Mode              string `json:"mode,omitempty"`
+}
+
+type secretScopedSyncModeRequest struct {
+	Mode string `json:"mode"`
 }
 
 type secretScopedSyncApplyRequest struct {
@@ -80,6 +87,10 @@ type secretScopedSyncResponse struct {
 	UpdatedAt         time.Time                     `json:"updated_at"`
 	LastPlanDigest    string                        `json:"last_plan_digest,omitempty"`
 	LastAppliedAt     *time.Time                    `json:"last_applied_at,omitempty"`
+	Mode              string                        `json:"mode"`
+	LastReconcileAt   *time.Time                    `json:"last_reconcile_at,omitempty"`
+	ReconcileStatus   string                        `json:"reconcile_status,omitempty"`
+	ReconcileReason   string                        `json:"reconcile_reason,omitempty"`
 	Keys              []secretScopedSyncKeyResponse `json:"keys,omitempty"`
 }
 
@@ -131,6 +142,10 @@ func (a *API) secretScopedSyncRoutes() []route {
 		{method: "DELETE", path: "/api/v1/secrets/scoped-syncs/{id}", opID: "removeSecretScopedSync",
 			summary: "Remove a scoped sync; the destination keys it wrote stay", handler: a.removeSecretScopedSync,
 			pathParams: id, successCode: "204", mutation: true, perm: authz.SecretsWrite},
+		{method: "PUT", path: "/api/v1/secrets/scoped-syncs/{id}/mode", opID: "setSecretScopedSyncMode",
+			summary: "Switch a scoped sync between manual (a reviewed apply) and auto (applied when its sources change and nothing is blocked)",
+			handler: a.setSecretScopedSyncMode, pathParams: id, reqSchema: "SecretScopedSyncModeRequest", resSchema: "SecretScopedSync",
+			successCode: "200", mutation: true, perm: authz.SecretsWrite},
 		{method: "POST", path: "/api/v1/secrets/scoped-syncs/{id}/preview", opID: "previewSecretScopedSync",
 			summary: "Preview a scoped sync: a value-free plan per destination key and its digest",
 			handler: a.previewSecretScopedSync, pathParams: id, resSchema: "SecretScopedSyncPlan", successCode: "200", perm: authz.SecretsRead},
@@ -154,13 +169,19 @@ func secretScopedSyncSchemas() map[string]*Schema {
 			"key_transform":  {Type: "string", Enum: []string{"path", "env"}},
 			"delete_scope":   {Type: "string", Enum: []string{"none", "managed", "prefix"}},
 			"adopt_existing": {Type: "boolean"},
+			"mode":           {Type: "string", Enum: []string{"manual", "auto"}},
 		}, "name", "source_prefix", "target"),
+		"SecretScopedSyncModeRequest": object(map[string]*Schema{
+			"mode": {Type: "string", Enum: []string{"manual", "auto"}},
+		}, "mode"),
 		"SecretScopedSync": object(map[string]*Schema{
 			"id": str(), "name": str(), "source_prefix": str(), "target": str(), "destination_prefix": str(),
 			"key_transform": str(), "delete_scope": str(), "adopt_existing": {Type: "boolean"}, "defined_by": str(),
 			"created_at": timestamp(), "updated_at": timestamp(), "last_plan_digest": str(), "last_applied_at": timestamp(),
+			"mode": {Type: "string", Enum: []string{"manual", "auto"}}, "last_reconcile_at": timestamp(),
+			"reconcile_status": {Type: "string", Enum: []string{"applied", "unchanged", "blocked", "failed"}}, "reconcile_reason": str(),
 			"keys": {Type: "array", Items: key},
-		}, "id", "name", "source_prefix", "target", "key_transform", "delete_scope", "adopt_existing", "created_at", "updated_at"),
+		}, "id", "name", "source_prefix", "target", "key_transform", "delete_scope", "adopt_existing", "mode", "created_at", "updated_at"),
 		"SecretScopedSyncList": object(map[string]*Schema{
 			"items": {Type: "array", Items: ref("SecretScopedSync")}, "next_cursor": str(),
 		}, "items"),
@@ -186,6 +207,7 @@ func scopedSyncView(d store.SecretScopedSync) secretScopedSyncResponse {
 		ID: d.ID, Name: d.Name, SourcePrefix: d.SourcePrefix, Target: d.Target, DestinationPrefix: d.DestinationPrefix,
 		KeyTransform: d.KeyTransform, DeleteScope: d.DeleteScope, AdoptExisting: d.AdoptExisting, DefinedBy: d.DefinedBy,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt, LastPlanDigest: d.LastPlanDigest, LastAppliedAt: d.LastAppliedAt,
+		Mode: d.Mode, LastReconcileAt: d.LastReconcileAt, ReconcileStatus: d.LastReconcileStatus, ReconcileReason: d.LastReconcileReason,
 	}
 }
 
@@ -231,6 +253,8 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, errStatus(http.StatusBadRequest, "destination_prefix is a relative path without empty or dot segments")
 		case transform != "path" && transform != "env":
 			return 0, nil, errStatus(http.StatusBadRequest, "key_transform is path or env")
+		case req.Mode != "" && req.Mode != "manual" && req.Mode != "auto":
+			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual or auto")
 		case scope != "none" && scope != "managed" && scope != "prefix":
 			return 0, nil, errStatus(http.StatusBadRequest, "delete_scope is none, managed (keys this sync wrote) or prefix (every key under the destination prefix)")
 		}
@@ -260,7 +284,7 @@ func (a *API) defineSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 		id := googleuuid.NewString()
 		if err := a.orch.DefineSecretScopedSync(ctx, tenantID, projections.SecretScopedSyncDefined{
 			ID: id, Name: req.Name, SourcePrefix: source + "/", Target: req.Target, DestinationPrefix: dest,
-			KeyTransform: transform, DeleteScope: scope, AdoptExisting: req.AdoptExisting, DefinedBy: subject,
+			KeyTransform: transform, DeleteScope: scope, AdoptExisting: req.AdoptExisting, DefinedBy: subject, Mode: req.Mode,
 		}); err != nil {
 			return 0, nil, err
 		}
@@ -356,6 +380,40 @@ func (a *API) removeSecretScopedSync(w http.ResponseWriter, r *http.Request) {
 			return 0, nil, err
 		}
 		return http.StatusNoContent, nil, nil
+	})
+}
+
+//trstctl:mutation
+func (a *API) setSecretScopedSyncMode(w http.ResponseWriter, r *http.Request) {
+	if a.secrets == nil || a.store == nil {
+		a.writeProblem(w, secretsDisabledProblem())
+		return
+	}
+	a.mutate(w, r, r.Header.Get("Idempotency-Key"), func(ctx context.Context, tenantID string) (int, any, error) {
+		var req secretScopedSyncModeRequest
+		if err := decodeJSON(r, &req); err != nil {
+			return 0, nil, errWithStatus(http.StatusBadRequest, err)
+		}
+		if req.Mode != "manual" && req.Mode != "auto" {
+			return 0, nil, errStatus(http.StatusBadRequest, "mode is manual or auto")
+		}
+		d, err := a.loadScopedSync(ctx, tenantID, r.PathValue("id"))
+		if err != nil {
+			return 0, nil, err
+		}
+		subject, err := requestPrincipalSubject(ctx)
+		if err != nil {
+			return 0, nil, err
+		}
+		if d.Mode != req.Mode {
+			if err := a.orch.SetSecretScopedSyncMode(ctx, tenantID, projections.SecretScopedSyncModeSet{ID: d.ID, Mode: req.Mode, SetBy: subject}); err != nil {
+				return 0, nil, err
+			}
+			if d, err = a.loadScopedSync(ctx, tenantID, d.ID); err != nil {
+				return 0, nil, err
+			}
+		}
+		return http.StatusOK, scopedSyncView(d), nil
 	})
 }
 
@@ -635,9 +693,11 @@ func (a *API) executeSecretScopedSync(ctx context.Context, tenantID string, d st
 			return receipt, &apiError{status: http.StatusConflict, detail: "the plan has blocked items; nothing was synced",
 				ext: map[string]any{"code": "plan_blocked", "plan": plan}}
 		}
+		// The reconciler applies an auto definition's plan with no request
+		// principal; its applies name it.
 		subject, err := requestPrincipalSubject(ctx)
 		if err != nil {
-			return receipt, err
+			subject = scopedSyncReconcilerSubject
 		}
 		applied = projections.SecretScopedSyncApplied{TenantEpoch: epoch, ID: d.ID, Target: d.Target, PlanDigest: planDigest,
 			AppliedBy: subject, Items: []projections.SecretScopedSyncAppliedItem{}}
@@ -696,4 +756,80 @@ func (a *API) queueScopedSyncWrite(ctx context.Context, tenantID string, d store
 		return errStatus(http.StatusConflict, "a different sync job holds this plan's write")
 	}
 	return err
+}
+
+// ScopedSyncReconcileState is the reconciler's memory between ticks: for each
+// tenant/definition, the source set and time of its last full plan.
+type ScopedSyncReconcileState map[string]ScopedSyncSeen
+
+// ScopedSyncSeen is one definition's last full plan.
+type ScopedSyncSeen struct {
+	SourceDigest string
+	PlannedAt    time.Time
+}
+
+// ReconcileScopedSecretSyncs runs one pass over the given tenants' auto scoped
+// syncs (A237 continuous mode). A definition is re-planned when its source set
+// changed or its drift check is due; a plan with changes and nothing blocked is
+// applied exactly as a reviewed apply would be, under the reconciler's name. A
+// blocked or failed plan is recorded on the definition and nothing is written.
+// It returns how many plans it applied.
+func (a *API) ReconcileScopedSecretSyncs(ctx context.Context, tenants []string, state ScopedSyncReconcileState, now time.Time, driftEvery time.Duration) (int, error) {
+	if a.secrets == nil || a.store == nil {
+		return 0, nil
+	}
+	applied := 0
+	var firstErr error
+	for _, tenantID := range tenants {
+		defs, err := a.store.ListSecretScopedSyncs(ctx, tenantID)
+		if err != nil {
+			firstErr = errors.Join(firstErr, err)
+			continue
+		}
+		for _, d := range defs {
+			if d.Mode != "auto" {
+				continue
+			}
+			digest, err := a.store.SecretScopedSyncSourceDigest(ctx, tenantID, d.SourcePrefix)
+			if err != nil {
+				firstErr = errors.Join(firstErr, err)
+				continue
+			}
+			key := tenantID + "/" + d.ID
+			if seen, ok := state[key]; ok && seen.SourceDigest == digest && now.Sub(seen.PlannedAt) < driftEvery {
+				continue
+			}
+			state[key] = ScopedSyncSeen{SourceDigest: digest, PlannedAt: now}
+			status, reason, planDigest := a.reconcileScopedSync(ctx, tenantID, d)
+			if status == "applied" {
+				applied++
+			}
+			if status == "applied" || status != d.LastReconcileStatus || reason != d.LastReconcileReason || digest != d.SourceDigest {
+				if err := a.orch.RecordSecretScopedSyncReconciled(ctx, tenantID, projections.SecretScopedSyncReconciled{
+					ID: d.ID, Status: status, Reason: reason, PlanDigest: planDigest, SourceDigest: digest,
+				}); err != nil {
+					firstErr = errors.Join(firstErr, err)
+				}
+			}
+		}
+	}
+	return applied, firstErr
+}
+
+// reconcileScopedSync plans one auto definition and applies the plan when it
+// has changes and nothing blocked. Reasons are a closed set (no target text).
+func (a *API) reconcileScopedSync(ctx context.Context, tenantID string, d store.SecretScopedSync) (status, reason, planDigest string) {
+	plan, err := a.planSecretScopedSync(ctx, tenantID, d)
+	switch {
+	case err != nil:
+		return "failed", "the plan could not be made; preview it to see why", ""
+	case plan.Blocked > 0:
+		return "blocked", strconv.Itoa(plan.Blocked) + " blocked items; review the plan and apply it yourself", plan.PlanDigest
+	case plan.Changes == 0:
+		return "unchanged", "", plan.PlanDigest
+	}
+	if _, err := a.executeSecretScopedSync(ctx, tenantID, d, plan.PlanDigest); err != nil {
+		return "failed", "the plan could not be applied; preview it to see why", plan.PlanDigest
+	}
+	return "applied", strconv.Itoa(plan.Changes) + " changes applied", plan.PlanDigest
 }

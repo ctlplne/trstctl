@@ -822,6 +822,9 @@ describe("exported API surface census", () => {
       // separate apply commands are the idempotent mutations.
       "/api/v1/secrets/projects/item%2Fid/promotions/preview",
       "/api/v1/secrets/projects/item%2Fid/restores/preview",
+      // A237: the scoped sync preview is value-free and writes nothing; apply
+      // is the separate idempotent mutation.
+      "/api/v1/secrets/scoped-syncs/item%2Fid/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);

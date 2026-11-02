@@ -3974,6 +3974,191 @@ export const messages = {
     defaultMessage: "new",
     description: "Target version label for a secret the promotion creates.",
   },
+  "secrets.scopedSyncs.heading": {
+    defaultMessage: "Scoped syncs",
+    description: "Heading of the scoped secret sync panel.",
+  },
+  "secrets.scopedSyncs.description": {
+    defaultMessage:
+      "Keep every secret under a source prefix in step with a KV v2 destination. Plans show keys and actions, never values; keys a sync didn't write are left alone unless its delete scope covers them.",
+    description: "Scoped sync explanation.",
+  },
+  "secrets.scopedSyncs.readFailed": {
+    defaultMessage: "Scoped syncs could not be read.",
+    description: "Read failure fallback.",
+  },
+  "secrets.scopedSyncs.defineFailed": {
+    defaultMessage: "The scoped sync could not be defined.",
+    description: "Define failure fallback.",
+  },
+  "secrets.scopedSyncs.previewFailed": {
+    defaultMessage: "The plan could not be computed.",
+    description: "Preview failure fallback.",
+  },
+  "secrets.scopedSyncs.applyFailed": {
+    defaultMessage: "Nothing was synced. The plan was previewed again.",
+    description: "Apply failure fallback.",
+  },
+  "secrets.scopedSyncs.modeFailed": {
+    defaultMessage: "The mode could not be changed.",
+    description: "Mode switch failure fallback.",
+  },
+  "secrets.scopedSyncs.error": {
+    defaultMessage: "Scoped sync failed",
+    description: "Error title.",
+  },
+  "secrets.scopedSyncs.empty": {
+    defaultMessage: "No scoped syncs yet.",
+    description: "Empty list.",
+  },
+  "secrets.scopedSyncs.listLabel": {
+    defaultMessage: "Scoped syncs",
+    description: "Accessible list label.",
+  },
+  "secrets.scopedSyncs.route": {
+    defaultMessage: "{source} \u2192 {target}:{destination}",
+    description: "Source prefix to target and destination prefix.",
+  },
+  "secrets.scopedSyncs.open": {
+    defaultMessage: "Open",
+    description: "Button: open a scoped sync.",
+  },
+  "secrets.scopedSyncs.mode.auto": {
+    defaultMessage: "Auto",
+    description: "Mode: applied when sources change.",
+  },
+  "secrets.scopedSyncs.mode.manual": {
+    defaultMessage: "Manual",
+    description: "Mode: waits for a reviewed apply.",
+  },
+  "secrets.scopedSyncs.modeIs": {
+    defaultMessage: "Mode: {mode}",
+    description: "The definition's mode.",
+  },
+  "secrets.scopedSyncs.lastReconcile": {
+    defaultMessage: "Last automatic run: {status} {reason} {at}",
+    description: "The reconciler's last result.",
+  },
+  "secrets.scopedSyncs.keysLabel": {
+    defaultMessage: "Keys this sync manages",
+    description: "Accessible list label.",
+  },
+  "secrets.scopedSyncs.noKeys": {
+    defaultMessage: "This sync manages no keys yet.",
+    description: "No managed keys.",
+  },
+  "secrets.scopedSyncs.preview": {
+    defaultMessage: "Preview the plan",
+    description: "Button: compute the value-free plan.",
+  },
+  "secrets.scopedSyncs.toAuto": {
+    defaultMessage: "Switch to auto",
+    description: "Button: make the sync automatic.",
+  },
+  "secrets.scopedSyncs.toManual": {
+    defaultMessage: "Switch to manual",
+    description: "Button: make the sync wait for review.",
+  },
+  "secrets.scopedSyncs.summary": {
+    defaultMessage: "{changes} keys would change; {blocked} are blocked.",
+    description: "Plan summary.",
+  },
+  "secrets.scopedSyncs.planLabel": {
+    defaultMessage: "Plan",
+    description: "Accessible plan label.",
+  },
+  "secrets.scopedSyncs.apply": {
+    defaultMessage: "Apply this plan",
+    description: "Button: apply the reviewed plan.",
+  },
+  "secrets.scopedSyncs.applied": {
+    defaultMessage: "{writes} writes and {deletes} deletes queued.",
+    description: "Apply result.",
+  },
+  "secrets.scopedSyncs.defineLabel": {
+    defaultMessage: "Define a scoped sync",
+    description: "Accessible form label.",
+  },
+  "secrets.scopedSyncs.name": {
+    defaultMessage: "Name",
+    description: "Field: name.",
+  },
+  "secrets.scopedSyncs.source": {
+    defaultMessage: "Source prefix",
+    description: "Field: source prefix.",
+  },
+  "secrets.scopedSyncs.sourceHelp": {
+    defaultMessage: "For example payments/prod/ \u2014 every secret under it is synced.",
+    description: "Help for the source prefix.",
+  },
+  "secrets.scopedSyncs.target": {
+    defaultMessage: "Target",
+    description: "Field: configured target.",
+  },
+  "secrets.scopedSyncs.destination": {
+    defaultMessage: "Destination prefix (optional)",
+    description: "Field: destination prefix.",
+  },
+  "secrets.scopedSyncs.deleteScope": {
+    defaultMessage: "Delete scope",
+    description: "Field: delete scope.",
+  },
+  "secrets.scopedSyncs.deleteScopeHelp": {
+    defaultMessage: "What a plan may delete when a source is gone.",
+    description: "Help for the delete scope.",
+  },
+  "secrets.scopedSyncs.scope.none": {
+    defaultMessage: "Nothing (keep orphaned keys)",
+    description: "Delete scope none.",
+  },
+  "secrets.scopedSyncs.scope.managed": {
+    defaultMessage: "Keys this sync wrote",
+    description: "Delete scope managed.",
+  },
+  "secrets.scopedSyncs.scope.prefix": {
+    defaultMessage: "Every key under the destination prefix",
+    description: "Delete scope prefix.",
+  },
+  "secrets.scopedSyncs.autoLabel": {
+    defaultMessage: "Apply automatically when sources change (nothing blocked)",
+    description: "Checkbox: auto mode.",
+  },
+  "secrets.scopedSyncs.define": {
+    defaultMessage: "Define scoped sync",
+    description: "Button: define.",
+  },
+  "secrets.scopedSyncs.action.create": {
+    defaultMessage: "Create",
+    description: "Plan action.",
+  },
+  "secrets.scopedSyncs.action.update": {
+    defaultMessage: "Update",
+    description: "Plan action.",
+  },
+  "secrets.scopedSyncs.action.unchanged": {
+    defaultMessage: "Unchanged",
+    description: "Plan action.",
+  },
+  "secrets.scopedSyncs.action.delete": {
+    defaultMessage: "Delete",
+    description: "Plan action.",
+  },
+  "secrets.scopedSyncs.action.deleting": {
+    defaultMessage: "Deleting",
+    description: "Plan action: a delete is queued.",
+  },
+  "secrets.scopedSyncs.action.orphaned": {
+    defaultMessage: "Orphaned \u2014 kept",
+    description: "Plan action: source gone, kept.",
+  },
+  "secrets.scopedSyncs.action.unmanaged": {
+    defaultMessage: "Not ours \u2014 left alone",
+    description: "Plan action: a key the sync didn't write.",
+  },
+  "secrets.scopedSyncs.action.blocked": {
+    defaultMessage: "Blocked",
+    description: "Plan action: refused, reason beside it.",
+  },
   "secrets.transfers.version": {
     defaultMessage: "v{version}",
     description: "A secret version number.",

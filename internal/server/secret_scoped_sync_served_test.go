@@ -464,3 +464,155 @@ func TestServedScopedSecretSyncKeepsUnmanagedKeysAndResumesA237(t *testing.T) {
 	}
 	t.Logf("A237_SCOPED_SYNC_OK")
 }
+
+func (e *scopedKVEmulator) raw(path string) (string, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	v, ok := e.data[path]
+	return v, ok
+}
+
+// A237 continuous mode: the leader's reconciler applies an auto definition's
+// plan when its sources change, leaves a manual one alone, writes nothing when
+// nothing changed, and records a blocked plan without writing.
+func TestServedScopedSecretSyncReconcilesAutoDefinitionsA237(t *testing.T) {
+	const token = "a237-reconcile-token" // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+	emulator := newScopedKVEmulator(t, token)
+	pusher, err := secretsync.NewVaultKVV2Pusher(secretsync.VaultKVV2Config{
+		Endpoint: emulator.server.URL, HTTPClient: emulator.server.Client(), Token: []byte(token), Mount: "kv", PathPrefix: "apps",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pusher.Close)
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
+		d.TenantSecretSyncTargets = SecretSyncTargetRegistry{servedTestTenant: {"kv": secretsync.NewTarget("kv", pusher)}}
+	})
+	registerServedTenant(t, h, "A237 reconcile tenant")
+	tok := seedScopedTokenSubject(t, h.store, h.tenant, "a237-reconcile-operator", "secrets:read", "secrets:write")
+	write := func(method, name, value string) {
+		t.Helper()
+		path, body, want := "/api/v1/secrets/store", map[string]any{"name": name, "value": value}, http.StatusCreated
+		if method == http.MethodPut {
+			path, body, want = "/api/v1/secrets/store/"+name, map[string]any{"value": value}, http.StatusOK
+		}
+		if status, raw := secretsReqKey(t, h, method, path, tok, "a237r-"+method+"-"+name+"-"+value, body); status != want {
+			t.Fatalf("%s %s: HTTP %d %s", method, name, status, raw)
+		}
+	}
+	drain := func() {
+		t.Helper()
+		for range 3 {
+			head, err := h.log.LastSequence(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.store.SystemPool().Exec(t.Context(),
+				`UPDATE projection_checkpoint SET applied_seq = GREATEST(applied_seq, $1), updated_at = now() WHERE id = 1`, head); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := h.store.SystemPool().Exec(t.Context(),
+				`UPDATE outbox SET next_attempt_at = now() - interval '1 second' WHERE tenant_id = $1 AND status = 'pending'`, h.tenant); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			_ = h.srv.Drain(ctx)
+			cancel()
+		}
+	}
+	define := func(key string, body map[string]any) string {
+		t.Helper()
+		status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/scoped-syncs", tok, key, body)
+		var out struct {
+			ID   string `json:"id"`
+			Mode string `json:"mode"`
+		}
+		if status != http.StatusCreated || json.Unmarshal(raw, &out) != nil {
+			t.Fatalf("define: HTTP %d %s", status, raw)
+		}
+		return out.ID
+	}
+	type defView struct {
+		Mode            string `json:"mode"`
+		ReconcileStatus string `json:"reconcile_status"`
+		ReconcileReason string `json:"reconcile_reason"`
+	}
+	show := func(id string) defView {
+		t.Helper()
+		status, raw := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/scoped-syncs/"+id, tok, nil)
+		var v defView
+		if status != http.StatusOK || json.Unmarshal(raw, &v) != nil {
+			t.Fatalf("show: HTTP %d %s", status, raw)
+		}
+		return v
+	}
+	reconcile := func() int {
+		t.Helper()
+		n, err := h.srv.ReconcileScopedSyncsOnce(t.Context())
+		if err != nil {
+			t.Fatalf("reconcile: %v", err)
+		}
+		return n
+	}
+
+	write(http.MethodPost, "rec237/prod/a", "a-one")
+	write(http.MethodPost, "rec237/prod/b", "b-one")
+	manual := define("a237r-define-manual", map[string]any{"name": "rec237-manual", "source_prefix": "rec237/prod/", "target": "kv", "destination_prefix": "rec237m"})
+	auto := define("a237r-define-auto", map[string]any{"name": "rec237-auto", "source_prefix": "rec237/prod/", "target": "kv", "destination_prefix": "rec237a", "mode": "auto"})
+
+	if n := reconcile(); n != 1 {
+		t.Fatalf("the first pass applied %d plans, want the auto one", n)
+	}
+	drain()
+	if v, _ := emulator.raw("rec237a/a"); v != "a-one" {
+		t.Fatalf("auto destination a = %q", v)
+	}
+	if _, ok := emulator.raw("rec237m/a"); ok {
+		t.Fatal("a manual definition was applied by the reconciler")
+	}
+	if v := show(auto); v.Mode != "auto" || v.ReconcileStatus != "applied" {
+		t.Fatalf("auto definition after apply: %+v", v)
+	}
+	if n := reconcile(); n != 0 {
+		t.Fatalf("an unchanged scope applied %d plans", n)
+	}
+
+	// A rotated source is applied on the next pass, without anyone applying.
+	write(http.MethodPut, "rec237/prod/a", "a-two")
+	if n := reconcile(); n != 1 {
+		t.Fatalf("a source change applied %d plans", n)
+	}
+	drain()
+	if v, _ := emulator.raw("rec237a/a"); v != "a-two" {
+		t.Fatalf("auto destination a after rotation = %q", v)
+	}
+
+	// A blocked plan is recorded and nothing is written.
+	emulator.mu.Lock()
+	emulator.data["rec237a/c"], emulator.vers["rec237a/c"] = "not-ours", 1
+	emulator.mu.Unlock()
+	write(http.MethodPost, "rec237/prod/c", "c-one")
+	if n := reconcile(); n != 0 {
+		t.Fatalf("a blocked plan was applied (%d)", n)
+	}
+	if v := show(auto); v.ReconcileStatus != "blocked" || !strings.Contains(v.ReconcileReason, "blocked items") {
+		t.Fatalf("blocked reconcile was not recorded: %+v", v)
+	}
+	if v, _ := emulator.raw("rec237a/c"); v != "not-ours" {
+		t.Fatalf("a blocked plan touched the destination: %q", v)
+	}
+
+	// Switching to manual stops the reconciler; the CLI switches it back.
+	if status, raw := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/scoped-syncs/"+auto+"/mode", tok, "a237r-mode-manual",
+		map[string]any{"mode": "manual"}); status != http.StatusOK || !strings.Contains(string(raw), `"mode":"manual"`) {
+		t.Fatalf("mode manual: HTTP %d %s", status, raw)
+	}
+	write(http.MethodPut, "rec237/prod/b", "b-two")
+	if n := reconcile(); n != 0 {
+		t.Fatalf("a manual definition was reconciled (%d)", n)
+	}
+	if v := show(manual); v.Mode != "manual" || v.ReconcileStatus != "" {
+		t.Fatalf("the manual definition was touched: %+v", v)
+	}
+	t.Logf("A237_RECONCILE_OK")
+}

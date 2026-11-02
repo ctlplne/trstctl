@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"trstctl.com/trstctl/internal/crypto"
 )
 
 // Scoped secret sync (A237): definitions, the destination keys each one
@@ -46,6 +48,13 @@ type SecretScopedSync struct {
 	UpdatedAt         time.Time
 	LastPlanDigest    string
 	LastAppliedAt     *time.Time
+	// Mode is manual (a reviewed apply) or auto (the reconciler applies a plan
+	// with nothing blocked when the sources change or the drift check is due).
+	Mode                string
+	SourceDigest        string
+	LastReconcileAt     *time.Time
+	LastReconcileStatus string
+	LastReconcileReason string
 }
 
 // SecretScopedSyncKey is one destination key a definition manages.
@@ -95,19 +104,86 @@ func (s *Store) ApplySecretScopedSyncDefinedTx(ctx context.Context, tx pgx.Tx, t
 	if err != nil {
 		return err
 	}
+	mode := d.Mode
+	if mode == "" {
+		mode = "manual"
+	}
 	_, err = tx.Exec(ctx, `
 		INSERT INTO secret_scoped_syncs (tenant_id, id, name, source_prefix, target, destination_prefix, key_transform,
-		                                 delete_scope, adopt_existing, defined_by, created_at, updated_at, event_sequence)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12)
+		                                 delete_scope, adopt_existing, defined_by, created_at, updated_at, event_sequence, mode)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13)
 		ON CONFLICT (tenant_id, id) DO UPDATE
 		   SET name = excluded.name, source_prefix = excluded.source_prefix, target = excluded.target,
 		       destination_prefix = excluded.destination_prefix, key_transform = excluded.key_transform,
 		       delete_scope = excluded.delete_scope, adopt_existing = excluded.adopt_existing,
-		       defined_by = excluded.defined_by, updated_at = excluded.updated_at, event_sequence = excluded.event_sequence
+		       defined_by = excluded.defined_by, updated_at = excluded.updated_at, event_sequence = excluded.event_sequence,
+		       mode = excluded.mode
 		 WHERE secret_scoped_syncs.event_sequence < excluded.event_sequence`,
 		tenantID, d.ID, d.Name, d.SourcePrefix, d.Target, d.DestinationPrefix, d.KeyTransform, d.DeleteScope,
-		d.AdoptExisting, d.DefinedBy, d.UpdatedAt.UTC(), seq)
+		d.AdoptExisting, d.DefinedBy, d.UpdatedAt.UTC(), seq, mode)
 	return err
+}
+
+// ApplySecretScopedSyncModeSetTx switches a definition between manual and auto.
+func (s *Store) ApplySecretScopedSyncModeSetTx(ctx context.Context, tx pgx.Tx, tenantID, id, mode string, at time.Time, sequence uint64) error {
+	seq, err := secretProjectSequence(sequence)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE secret_scoped_syncs SET mode = $3, updated_at = $4, event_sequence = $5
+		 WHERE tenant_id = $1 AND id::text = $2 AND event_sequence < $5`, tenantID, id, mode, at.UTC(), seq)
+	return err
+}
+
+// ApplySecretScopedSyncReconciledTx records what the reconciler last did with a
+// definition and the source set it saw.
+func (s *Store) ApplySecretScopedSyncReconciledTx(ctx context.Context, tx pgx.Tx, tenantID, id, status, reason, sourceDigest string, at time.Time, sequence uint64) error {
+	seq, err := secretProjectSequence(sequence)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE secret_scoped_syncs
+		   SET last_reconcile_at = $3, last_reconcile_status = $4, last_reconcile_reason = $5, source_digest = $6,
+		       event_sequence = $7
+		 WHERE tenant_id = $1 AND id::text = $2 AND event_sequence < $7`, tenantID, id, at.UTC(), status, reason, sourceDigest, seq)
+	return err
+}
+
+// SecretScopedSyncSourceDigest fingerprints the names and versions under a
+// source prefix, so the reconciler re-plans only when they changed.
+func (s *Store) SecretScopedSyncSourceDigest(ctx context.Context, tenantID, prefix string) (string, error) {
+	var listing string
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `
+			SELECT coalesce(string_agg(name || ':' || version::text, ',' ORDER BY name), '')
+			  FROM secret_store WHERE tenant_id = $1 AND left(name, char_length($2)) = $2`, tenantID, prefix).Scan(&listing)
+	})
+	if err != nil {
+		return "", err
+	}
+	return crypto.SHA256Hex([]byte(prefix + "\x00" + listing)), nil
+}
+
+// TenantsWithAutoScopedSyncs lists tenants holding an auto scoped sync.
+func (s *Store) TenantsWithAutoScopedSyncs(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx,
+		//trstctl:system-query — cross-tenant by design: enumerates which tenants hold an auto scoped sync so the leader-only reconciler can visit each tenant under its own RLS context (AN-1 exemption).
+		`SELECT DISTINCT tenant_id::text FROM secret_scoped_syncs WHERE mode = 'auto' ORDER BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var tenantID string
+		if err := rows.Scan(&tenantID); err != nil {
+			return nil, err
+		}
+		out = append(out, tenantID)
+	}
+	return out, rows.Err()
 }
 
 // ApplySecretScopedSyncRemovedTx removes a definition and its key records; the
@@ -227,12 +303,14 @@ func (s *Store) ApplySecretScopedSyncDeleteFailedTx(ctx context.Context, tx pgx.
 
 // #nosec G101 -- SQL column list, no credential (CWE-798)
 const secretScopedSyncColumns = `id::text, name, source_prefix, target, destination_prefix, key_transform, delete_scope,
-	adopt_existing, defined_by, created_at, updated_at, last_plan_digest, last_applied_at`
+	adopt_existing, defined_by, created_at, updated_at, last_plan_digest, last_applied_at, mode, source_digest,
+	last_reconcile_at, last_reconcile_status, last_reconcile_reason`
 
 func scanSecretScopedSync(row pgx.Row) (SecretScopedSync, error) {
 	var d SecretScopedSync
 	err := row.Scan(&d.ID, &d.Name, &d.SourcePrefix, &d.Target, &d.DestinationPrefix, &d.KeyTransform, &d.DeleteScope,
-		&d.AdoptExisting, &d.DefinedBy, &d.CreatedAt, &d.UpdatedAt, &d.LastPlanDigest, &d.LastAppliedAt)
+		&d.AdoptExisting, &d.DefinedBy, &d.CreatedAt, &d.UpdatedAt, &d.LastPlanDigest, &d.LastAppliedAt, &d.Mode,
+		&d.SourceDigest, &d.LastReconcileAt, &d.LastReconcileStatus, &d.LastReconcileReason)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ErrSecretScopedSyncNotFound
 	}

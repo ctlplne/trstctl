@@ -20,6 +20,8 @@ const (
 	EventSecretScopedSyncApplied      = "secret.scoped_sync.applied"       // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretScopedSyncKeyDeleted   = "secret.scoped_sync.key_deleted"   // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 	EventSecretScopedSyncDeleteFailed = "secret.scoped_sync.delete_failed" // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	EventSecretScopedSyncModeSet      = "secret.scoped_sync.mode_set"      // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
+	EventSecretScopedSyncReconciled   = "secret.scoped_sync.reconciled"    // #nosec G101 -- identifier/constant matching the secret-name heuristic; no credential value present (CWE-798)
 )
 
 // SecretScopedSyncDefined is the payload of secret.scoped_sync.defined.
@@ -33,6 +35,8 @@ type SecretScopedSyncDefined struct {
 	DeleteScope       string `json:"delete_scope"`
 	AdoptExisting     bool   `json:"adopt_existing,omitempty"`
 	DefinedBy         string `json:"defined_by"`
+	// Mode is manual or auto (A237 part b); absent reads as manual.
+	Mode string `json:"mode,omitempty"`
 }
 
 // SecretScopedSyncRemoved is the payload of secret.scoped_sync.removed.
@@ -61,6 +65,24 @@ type SecretScopedSyncApplied struct {
 	Items       []SecretScopedSyncAppliedItem `json:"items"`
 }
 
+// SecretScopedSyncModeSet is the payload of secret.scoped_sync.mode_set.
+type SecretScopedSyncModeSet struct {
+	ID    string `json:"id"`
+	Mode  string `json:"mode"`
+	SetBy string `json:"set_by"`
+}
+
+// SecretScopedSyncReconciled is the payload of secret.scoped_sync.reconciled:
+// what the reconciler last did with an auto definition (applied, unchanged,
+// blocked or failed, with a closed-set reason) and the source set it saw.
+type SecretScopedSyncReconciled struct {
+	ID           string `json:"id"`
+	Status       string `json:"status"`
+	Reason       string `json:"reason,omitempty"`
+	PlanDigest   string `json:"plan_digest,omitempty"`
+	SourceDigest string `json:"source_digest"`
+}
+
 // SecretScopedSyncKeyDeleted is the payload of secret.scoped_sync.key_deleted.
 type SecretScopedSyncKeyDeleted struct {
 	TenantEpoch string `json:"tenant_epoch"`
@@ -77,7 +99,8 @@ type SecretScopedSyncDeleteFailed struct {
 
 func init() {
 	for _, typ := range []string{EventSecretScopedSyncDefined, EventSecretScopedSyncRemoved, EventSecretScopedSyncApplied,
-		EventSecretScopedSyncKeyDeleted, EventSecretScopedSyncDeleteFailed} {
+		EventSecretScopedSyncKeyDeleted, EventSecretScopedSyncDeleteFailed, EventSecretScopedSyncModeSet,
+		EventSecretScopedSyncReconciled} {
 		knownSchemaVersions[typ] = map[int]bool{1: true}
 	}
 }
@@ -96,8 +119,26 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 		return true, p.store.ApplySecretScopedSyncDefinedTx(ctx, tx, e.TenantID, store.SecretScopedSync{
 			ID: pl.ID, Name: pl.Name, SourcePrefix: pl.SourcePrefix, Target: pl.Target,
 			DestinationPrefix: pl.DestinationPrefix, KeyTransform: pl.KeyTransform, DeleteScope: pl.DeleteScope,
-			AdoptExisting: pl.AdoptExisting, DefinedBy: pl.DefinedBy, UpdatedAt: e.Time,
+			AdoptExisting: pl.AdoptExisting, DefinedBy: pl.DefinedBy, UpdatedAt: e.Time, Mode: pl.Mode,
 		}, e.Sequence)
+	case EventSecretScopedSyncModeSet:
+		var pl SecretScopedSyncModeSet
+		if err := decode(e, &pl); err != nil {
+			return true, err
+		}
+		if pl.ID == "" || (pl.Mode != "manual" && pl.Mode != "auto") || e.Time.IsZero() {
+			return incomplete()
+		}
+		return true, p.store.ApplySecretScopedSyncModeSetTx(ctx, tx, e.TenantID, pl.ID, pl.Mode, e.Time, e.Sequence)
+	case EventSecretScopedSyncReconciled:
+		var pl SecretScopedSyncReconciled
+		if err := decode(e, &pl); err != nil {
+			return true, err
+		}
+		if pl.ID == "" || pl.Status == "" || e.Time.IsZero() {
+			return incomplete()
+		}
+		return true, p.store.ApplySecretScopedSyncReconciledTx(ctx, tx, e.TenantID, pl.ID, pl.Status, pl.Reason, pl.SourceDigest, e.Time, e.Sequence)
 	case EventSecretScopedSyncRemoved:
 		var pl SecretScopedSyncRemoved
 		if err := decode(e, &pl); err != nil {
@@ -157,7 +198,13 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 	policies[privacyEventPolicyKey{EventSecretScopedSyncDefined, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/name", opaque), privacyRule("/source_prefix", opaque),
 		privacyRule("/target", opaque), privacyRule("/destination_prefix", opaque), privacyRule("/key_transform", opaque),
-		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/defined_by", exact))
+		privacyRule("/delete_scope", opaque), privacyRule("/adopt_existing", opaque), privacyRule("/defined_by", exact),
+		privacyRule("/mode", opaque))
+	policies[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyRules(
+		privacyRule("/id", opaque), privacyRule("/mode", opaque), privacyRule("/set_by", exact))
+	policies[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyRules(
+		privacyRule("/id", opaque), privacyRule("/status", opaque), privacyRule("/reason", opaque),
+		privacyRule("/plan_digest", opaque), privacyRule("/source_digest", opaque))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncRemoved, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/removed_by", exact))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncApplied, 1}] = privacyRules(
@@ -179,4 +226,6 @@ func addSecretScopedSyncPrivacyShapes(shapes map[privacyEventPolicyKey]events.Pr
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncApplied, 1}] = privacyPayloadShape[SecretScopedSyncApplied]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncKeyDeleted, 1}] = privacyPayloadShape[SecretScopedSyncKeyDeleted]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncDeleteFailed, 1}] = privacyPayloadShape[SecretScopedSyncDeleteFailed]()
+	shapes[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyPayloadShape[SecretScopedSyncModeSet]()
+	shapes[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyPayloadShape[SecretScopedSyncReconciled]()
 }

@@ -1101,8 +1101,18 @@ per delete. A source or destination that changed since the preview makes the pla
 stale (`409`, code `plan_stale`). A crash after a remote write is settled on retry by
 reading the destination back, so the value isn't written twice. `scoped-syncs show`
 lists the keys a sync manages with each delivery's status. Removing a definition leaves
-its destination keys where they are. Continuous reconciliation and the console view
-are A237's second part.
+its destination keys where they are.
+
+A definition is `manual` (it waits for a reviewed apply) or `auto`
+(`trstctl secrets scoped-syncs mode <id> -f mode.json` with `{"mode":"auto"}`, or
+`"mode":"auto"` at definition). On the leader, the control plane checks auto syncs every
+30 seconds. When a sync's source names or versions changed, or every 15 minutes for
+drift, it plans the sync again. A plan with changes and nothing blocked is applied exactly
+as a reviewed apply would be, and the receipt names the reconciler. A blocked or failed
+plan is recorded on the definition (`reconcile_status`, `reconcile_reason`) and writes
+nothing until someone reviews it. In the console, **Secrets → Sync** lists the scoped
+syncs. It defines new ones, previews and applies plans for `secrets:write` holders, and
+switches a sync between manual and auto.
 
 ### The auth-method framework (F58)
 

@@ -981,6 +981,7 @@ public final class OpenApiSchemas {
       "SecretScopedSync",
       "SecretScopedSyncApplyRequest",
       "SecretScopedSyncList",
+      "SecretScopedSyncModeRequest",
       "SecretScopedSyncPlan",
       "SecretScopedSyncReceipt",
       "SecretScopedSyncRequest",

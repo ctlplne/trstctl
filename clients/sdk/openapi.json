@@ -42679,7 +42679,30 @@
           "last_plan_digest": {
             "type": "string"
           },
+          "last_reconcile_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "type": "string"
+          },
           "name": {
+            "type": "string"
+          },
+          "reconcile_reason": {
+            "type": "string"
+          },
+          "reconcile_status": {
+            "enum": [
+              "applied",
+              "unchanged",
+              "blocked",
+              "failed"
+            ],
             "type": "string"
           },
           "source_prefix": {
@@ -42701,6 +42724,7 @@
           "key_transform",
           "delete_scope",
           "adopt_existing",
+          "mode",
           "created_at",
           "updated_at"
         ],
@@ -42731,6 +42755,21 @@
         },
         "required": [
           "items"
+        ],
+        "type": "object"
+      },
+      "SecretScopedSyncModeRequest": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
         ],
         "type": "object"
       },
@@ -42880,6 +42919,13 @@
             "enum": [
               "path",
               "env"
+            ],
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "manual",
+              "auto"
             ],
             "type": "string"
           },
@@ -82495,6 +82541,83 @@
           }
         ],
         "summary": "Apply a reviewed scoped sync plan by its digest; a changed source or destination makes it stale",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scoped-syncs/{id}/mode": {
+      "put": {
+        "operationId": "setSecretScopedSyncMode",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "scoped sync ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretScopedSyncModeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScopedSync"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Switch a scoped sync between manual (a reviewed apply) and auto (applied when its sources change and nothing is blocked)",
         "x-trstctl-permission": "secrets:write"
       }
     },

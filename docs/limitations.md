@@ -5405,8 +5405,12 @@ update (drift named), delete within a reviewed scope (managed keys, or every key
 the prefix), unmanaged keys never touched otherwise, nested-key and two-source
 collisions blocked, a stale plan refused, and a crash after the remote write settled by
 readback without a second write — proven against OpenBao 2.0.0. Only KV v2 targets list
-their keys, so other targets can't take a scoped sync. Continuous reconciliation and
-the console view are part b; approval-gated convergence is not served.
+their keys, so other targets can't take a scoped sync. Continuous mode (A237 part b):
+an `auto` definition is re-planned on the leader when its source set changes (checked
+every 30 seconds) or its 15-minute drift check is due, and applied when nothing is
+blocked; a blocked or failed plan is recorded on the definition and writes nothing. The
+console's Secrets → Sync page defines, previews, applies and switches scoped syncs.
+Approval-gated convergence is not served.
 
 AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
 of their static target credential. The matching
