@@ -441,6 +441,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredClickHouseBackend(opener)
 	case "elasticsearch":
 		return openConfiguredElasticsearchBackend(opener)
+	case "rabbitmq":
+		return openConfiguredRabbitMQBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}
@@ -576,6 +578,29 @@ func openConfiguredElasticsearchBackend(o *configuredDynamicBackendOpener) (requ
 	backend, err := dynsecret.NewElasticsearchBackend(dynsecret.ElasticsearchConfig{
 		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
 		MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredRabbitMQBackend reads the administrator password into a backend
+// that keeps its own sealed copy and calls the management API through the
+// SSRF-guarded client (A239).
+func openConfiguredRabbitMQBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewRabbitMQBackend(dynsecret.RabbitMQConfig{
+		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
+		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)

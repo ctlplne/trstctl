@@ -236,7 +236,7 @@ func TestValidateClickHouseProviderA239(t *testing.T) {
 	}
 	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
 		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
-	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse and elasticsearch") {
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse, elasticsearch and rabbitmq") {
 		t.Fatalf("an admin_user on another provider type = %v", err)
 	}
 }
@@ -267,6 +267,41 @@ func TestValidateElasticsearchProviderA239(t *testing.T) {
 	} {
 		c := base
 		c.RoleBindings = map[string]string{"reader": "read,view_index_metadata on logs-*"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
+func TestValidateRabbitMQProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "broker", Type: "rabbitmq",
+		Endpoint: "https://rabbit.internal:15671", AdminUser: "trstctl_admin", PasswordRef: "file:/run/secrets/rabbit-admin",
+		AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "read on orders,orders.dlq in /"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint":    {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the management API) is required for rabbitmq"},
+		"plain http":     {func(c *DynamicSecretProviderConfig) { c.Endpoint = "http://rabbit.internal:15672" }, "endpoint:"},
+		"no admin":       {func(c *DynamicSecretProviderConfig) { c.AdminUser = "" }, "admin_user is required for rabbitmq"},
+		"no password":    {func(c *DynamicSecretProviderConfig) { c.PasswordRef = "" }, "password_ref"},
+		"no grant":       {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `must be "<permissions> on <resources> in <vhost>"`},
+		"regex resource": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"reader": "read on .* in /"} }, "is not a literal queue or exchange name"},
+		"bad permission": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": "admin on orders in /"}
+		}, "is not configure, write or read"},
+		"binding without role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings["admin"] = "write on x in /" }, `role_bindings["admin"] has no matching allowed role`},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "read on orders,orders.dlq in /"}
 		tc.mutate(&c)
 		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", name, err, tc.want)

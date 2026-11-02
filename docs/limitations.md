@@ -5241,7 +5241,7 @@ when off, requiring a KEK when on):
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
-  `oauth-client-credentials`, `clickhouse`, and `elasticsearch` (A239). Issuance is
+  `oauth-client-credentials`, `clickhouse`, `elasticsearch`, and `rabbitmq` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5266,8 +5266,12 @@ when off, requiring a KEK when on):
   left. Elasticsearch API keys (A239) are proven against stock Elasticsearch
   9.5.5: stock curl searches the bound indices with a leased key and is refused
   a write, a renewal stays within the maximum lifetime, and after revocation the
-  key is refused (401) and no live key is left. The provider catalog states each
-  adapter's authority and whether its revocation is confirmed or TTL-only. The rest of A239's provider library is
+  key is refused (401) and no live key is left. RabbitMQ users (A239) are proven
+  against RabbitMQ 3.10.8 from Debian: the stock AMQP client consumes the bound
+  queue as a leased user and is refused a publish, a renewal stays within the
+  maximum lifetime, and after revocation the login is refused and no leased user
+  is left. The provider catalog states each adapter's authority and whether its
+  revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,

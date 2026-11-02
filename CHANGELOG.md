@@ -2,6 +2,11 @@
 
 ### Added
 
+- RabbitMQ dynamic secrets (`type: rabbitmq`): each lease is a RabbitMQ user with a generated password and its
+  role's permissions in one virtual host (`"<permissions> on <queues or exchanges> in <vhost>"`, names matched
+  exactly), created through the management API as `admin_user`; revocation deletes the user and closes its open
+  connections.
+
 - Elasticsearch dynamic secrets (`type: elasticsearch`): each lease is an API key, created by `admin_user`, that
   expires with the provider's maximum lifetime and holds only the index privileges its role is bound to
   (`"<privileges> on <index patterns>"`); revocation invalidates it, and a retry first invalidates any key an

@@ -18662,7 +18662,8 @@
               "totp",
               "oauth-client-credentials",
               "clickhouse",
-              "elasticsearch"
+              "elasticsearch",
+              "rabbitmq"
             ],
             "type": "string"
           }

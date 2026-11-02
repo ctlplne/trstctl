@@ -243,6 +243,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
 			roles(`Each allowed role maps to "<index privileges> on <index patterns>", for example "read on logs-*".`),
 		)},
+		{Type: "rabbitmq", Label: "RabbitMQ users", Purpose: "Creates a RabbitMQ user with a generated password and its role's permissions in one virtual host through the management API, and at revocation deletes it and closes its open connections; RabbitMQ then refuses its login.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Management API", "HTTPS URL of the RabbitMQ management API.", true),
+			value("admin_user", "Administrator", "A user tagged administrator in the management API, allowed to create and delete users and set permissions.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
+			roles(`Each allowed role maps to "<permissions> on <queues or exchanges> in <vhost>", for example "read on orders in /"; names match exactly.`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -281,6 +288,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the grants of the ClickHouse role the lease role is bound to, until the user is dropped or its VALID UNTIL passes", "confirmed"
 	case "elasticsearch":
 		return "the role's index privileges on its index patterns, through an API key invalidated at revocation or expiring with the provider's maximum lifetime", "confirmed"
+	case "rabbitmq":
+		return "the role's configure, write and read permissions on the named queues and exchanges in one virtual host, until the user is deleted and its connections closed", "confirmed"
 	}
 	return "", ""
 }

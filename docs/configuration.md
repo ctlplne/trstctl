@@ -2336,6 +2336,27 @@ holds at least the bound index privileges, and `role_bindings` to
 key holding only that grant and expiring `max_ttl` after its creation; revocation
 invalidates it.
 
+For RabbitMQ (A239, `rabbitmq`), set `endpoint` to the management API's HTTPS URL,
+`admin_user` and `password_ref` to a user tagged administrator, and `role_bindings`
+to `"<permissions> on <queues or exchanges> in <vhost>"` per allowed role, where the
+permissions are any of configure, write and read and the names match exactly. Each
+lease is a user (named from `username_prefix`, default `trstctl`) with only those
+permissions; revocation deletes it and closes its connections.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "broker",
+  "type": "rabbitmq",
+  "endpoint": "https://rabbit.internal:15671",
+  "admin_user": "trstctl_admin",
+  "password_ref": "file:/run/secrets/rabbit-admin",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "read on orders in /"},
+  "max_ttl": "8h"
+}
+```
+
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",

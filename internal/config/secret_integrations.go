@@ -123,9 +123,9 @@ type DynamicSecretProviderConfig struct {
 	ClientID           string `json:"client_id,omitempty"`
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
-	// AdminUser is the administrator a clickhouse provider creates and drops
-	// leased users as, or an elasticsearch provider creates and invalidates API
-	// keys as (its password is password_ref, A239).
+	// AdminUser is the administrator a clickhouse or rabbitmq provider creates
+	// and deletes leased users as, or an elasticsearch provider creates and
+	// invalidates API keys as (its password is password_ref, A239).
 	AdminUser    string   `json:"admin_user,omitempty"`
 	AllowedRoles []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
@@ -231,7 +231,7 @@ type SecretSyncTargetConfig struct {
 var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
-	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {},
+	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -477,6 +477,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		errs = append(errs, validateClickHouseProvider(where, c)...)
 	case "elasticsearch":
 		errs = append(errs, validateElasticsearchProvider(where, c)...)
+	case "rabbitmq":
+		errs = append(errs, validateRabbitMQProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -816,8 +818,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && (c.ClientID != "" || c.ClientSecretRef != "" || c.RevocationEndpoint != "") {
 		errs = append(errs, fmt.Errorf("%s client_id, client_secret_ref and revocation_endpoint are only valid for oauth-client-credentials", where))
 	}
-	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse and elasticsearch", where))
+	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.Type != "rabbitmq" && c.AdminUser != "" {
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch and rabbitmq", where))
 	}
 	return errs
 }
@@ -870,6 +872,64 @@ func validElasticsearchIndexGrant(binding string) error {
 	for _, n := range strings.Split(names, ",") {
 		if !elasticsearchPattern.MatchString(strings.TrimSpace(n)) {
 			return fmt.Errorf("index pattern %q is not an index name or pattern", strings.TrimSpace(n))
+		}
+	}
+	return nil
+}
+
+var (
+	rabbitmqPermission = regexp.MustCompile(`^(configure|write|read)$`)
+	rabbitmqResource   = regexp.MustCompile(`^[A-Za-z0-9._-]{1,255}$`)
+	rabbitmqVHost      = regexp.MustCompile(`^[A-Za-z0-9._/-]{1,255}$`)
+)
+
+// validateRabbitMQProvider checks a RabbitMQ provider (A239): endpoint is the
+// management API's HTTPS URL, admin_user and password_ref an administrator that
+// creates and deletes users, and each allowed role is bound to
+// "<permissions> on <resources> in <vhost>", for example "read on orders in /".
+func validateRabbitMQProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the management API) is required for rabbitmq", where))
+	}
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for rabbitmq", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		if err := validRabbitMQGrant(c.RoleBindings[role]); err != nil {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %w", where, role, err))
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
+}
+
+func validRabbitMQGrant(binding string) error {
+	perms, rest, ok := strings.Cut(strings.TrimSpace(binding), " on ")
+	names, vhost, ok2 := strings.Cut(rest, " in ")
+	if !ok || !ok2 {
+		return errors.New(`must be "<permissions> on <resources> in <vhost>", for example "read on orders in /"`)
+	}
+	if !rabbitmqVHost.MatchString(strings.TrimSpace(vhost)) {
+		return fmt.Errorf("virtual host %q is not a plain name", strings.TrimSpace(vhost))
+	}
+	for _, p := range strings.Split(perms, ",") {
+		if !rabbitmqPermission.MatchString(strings.TrimSpace(p)) {
+			return fmt.Errorf("permission %q is not configure, write or read", strings.TrimSpace(p))
+		}
+	}
+	for _, n := range strings.Split(names, ",") {
+		if !rabbitmqResource.MatchString(strings.TrimSpace(n)) {
+			return fmt.Errorf("resource %q is not a literal queue or exchange name", strings.TrimSpace(n))
 		}
 	}
 	return nil
