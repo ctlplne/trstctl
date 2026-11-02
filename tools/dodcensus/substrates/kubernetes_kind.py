@@ -211,7 +211,9 @@ def wait_crd(api: KubernetesAPI, name: str) -> None:
         status, raw = api.request("GET", path)
         if status == 200:
             value = json.loads(raw)
-            conditions = value.get("status", {}).get("conditions", [])
+            # A fresh CRD serializes "conditions": null until the API server
+            # sets them (the field has no omitempty): not yet, rather than a crash.
+            conditions = value.get("status", {}).get("conditions") or []
             if any(item.get("type") == "Established" and item.get("status") == "True" for item in conditions):
                 return
         time.sleep(0.25)
@@ -412,7 +414,7 @@ class State:
         certificate = base64.b64decode(csr.get("status", {}).get("certificate", ""), validate=True)
         if b"BEGIN CERTIFICATE" not in certificate:
             raise RuntimeError("real-kind CSR has no signed certificate status")
-        csr_conditions = csr.get("status", {}).get("conditions", [])
+        csr_conditions = csr.get("status", {}).get("conditions") or []
         if not any(item.get("type") == "Approved" and item.get("status") == "True" for item in csr_conditions):
             raise RuntimeError("real-kind CSR lost its Approved condition")
         if any(item.get("type") == "Ready" for item in csr_conditions):
@@ -426,7 +428,7 @@ class State:
         if hashlib.sha256(installed.encode()).hexdigest() != self.bundle_hash:
             raise RuntimeError("real-kind ConfigMap readback does not match TrustBundle")
         issuer = self.api.json("GET", "/apis/trstctl.com/v1alpha1/clusterissuers/" + ISSUER_NAME)
-        if not any(item.get("type") == "Ready" and item.get("status") == "True" for item in issuer.get("status", {}).get("conditions", [])):
+        if not any(item.get("type") == "Ready" and item.get("status") == "True" for item in issuer.get("status", {}).get("conditions") or []):
             raise RuntimeError("real-kind ClusterIssuer was not reconciled Ready")
         return {
             "csr": {
