@@ -42,6 +42,7 @@ const (
 	staticRotationRetryExhaustedDetail      = "external delivery exhausted its retry budget"
 	staticRotationRetireExhaustedDetail     = "successor is live; predecessor retirement exhausted its retry budget"
 	staticRotationUnresolvedDetail          = "the previous static rotation could not restore its predecessor; resolve that command before scheduling another"
+	staticRotationTwoUserOldRefDetail       = "a two-user rotation's old_ref must name the account its consumers use now: %s or %s"
 	// staticRotationVerifyAttempts is how many worker attempts a failing
 	// verification gets before the command rolls back: a transient provider
 	// outage should not undo a good cutover on its first flap.
@@ -76,6 +77,27 @@ func (a *API) staticRotationProvider(tenantID, providerID, role string) (dynsecr
 	return nil, nil, errStatus(http.StatusServiceUnavailable, staticRotationProviderUnavailableDetail)
 }
 
+// staticRotationTwoUserAccounts returns role's account pair when its provider
+// rotates it between two fixed accounts (A240).
+func staticRotationTwoUserAccounts(provider dynsecret.Provider, role string) ([2]string, bool) {
+	twoUser, ok := provider.(dynsecret.TwoUserRotationProvider)
+	if !ok {
+		return [2]string{}, false
+	}
+	return twoUser.RotationAccounts(role)
+}
+
+// checkStaticRotationPredecessor refuses a two-user rotation whose old_ref is
+// not one of the role's accounts: the rotation stages the other account, so
+// old_ref must name the one consumers use now, never "none" or a guess.
+func checkStaticRotationPredecessor(provider dynsecret.Provider, role, oldRef string) error {
+	pair, ok := staticRotationTwoUserAccounts(provider, role)
+	if !ok || oldRef == pair[0] || oldRef == pair[1] {
+		return nil
+	}
+	return errStatus(http.StatusBadRequest, fmt.Sprintf(staticRotationTwoUserOldRefDetail, pair[0], pair[1]))
+}
+
 func staticRotationAAD(tenantID, commandID, part string) []byte {
 	return []byte(tenantID + "/" + staticRotationSurface + "/" + commandID + "/" + part)
 }
@@ -93,7 +115,11 @@ func (a *API) queueStaticSecretRotation(
 	tenantID, idempotencyKey, requestBinding, scheduleID string,
 	req secretRotationRequest,
 ) (store.SecretStaticRotationCommand, error) {
-	if _, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err != nil {
+	provider, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key)
+	if err != nil {
+		return store.SecretStaticRotationCommand{}, err
+	}
+	if err := checkStaticRotationPredecessor(provider, req.Key, req.OldRef); err != nil {
 		return store.SecretStaticRotationCommand{}, err
 	}
 	epoch, err := a.applicationSecretTenantEpoch(ctx, tenantID)
@@ -252,9 +278,10 @@ func (a *API) FailStaticSecretRotation(ctx context.Context, tenantID, commandID 
 
 // stageStaticRotation mints the successor. LeaseID pins the provider-side
 // identity to the command, so a retry after a crash between the provider call
-// and the staged event replaces the same principal instead of leaking one.
+// and the staged event replaces the same principal instead of leaking one. A
+// two-user role stages the account its predecessor does not name instead.
 func (a *API) stageStaticRotation(ctx context.Context, cmd store.SecretStaticRotationCommand, provider dynsecret.Provider) error {
-	cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true})
+	cred, err := provider.Generate(ctx, dynsecret.GenerateRequest{Role: cmd.Key, LeaseID: cmd.ID, Static: true, Predecessor: cmd.OldRef})
 	if err != nil {
 		return fmt.Errorf("api: static rotation stage: %w", err)
 	}

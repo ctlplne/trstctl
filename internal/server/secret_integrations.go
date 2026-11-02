@@ -536,6 +536,7 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 		}
 		backend, err := dynsecret.NewPostgresBackend(dynsecret.PostgresConfig{
 			DSN: dsn, Database: cfg.Database, Schema: cfg.Schema, UsernamePrefix: cfg.UsernamePrefix,
+			RotationAccounts: o.provider.rotationAccountPairs(),
 		})
 		if err != nil {
 			return o.fail(err)
@@ -1632,6 +1633,28 @@ func secretIntegrationHTTPClientWithTLSAndBoundary(endpoint string, allowPrivate
 // opted this provider in and the role is one it may mint for.
 func (p *configuredDynamicProvider) AllowsStaticRotation(role string) bool {
 	return p != nil && p.cfg.AllowStaticRotation && config.StaticRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] && p.allowedRoles[role]
+}
+
+// RotationAccounts implements dynsecret.TwoUserRotationProvider: a role with
+// rotation_accounts on a provider that allows its static rotation alternates
+// between those two accounts (A240).
+func (p *configuredDynamicProvider) RotationAccounts(role string) ([2]string, bool) {
+	accounts := p.cfg.RotationAccounts[role]
+	if !p.AllowsStaticRotation(role) || !config.TwoUserRotationProviderTypes[strings.TrimSpace(p.cfg.Type)] || len(accounts) != 2 {
+		return [2]string{}, false
+	}
+	return [2]string{accounts[0], accounts[1]}, true
+}
+
+// rotationAccountPairs returns every role's two-user pair for the backend.
+func (p *configuredDynamicProvider) rotationAccountPairs() map[string][2]string {
+	pairs := map[string][2]string{}
+	for role := range p.cfg.RotationAccounts {
+		if pair, ok := p.RotationAccounts(role); ok {
+			pairs[role] = pair
+		}
+	}
+	return pairs
 }
 
 // VerifyLeaseCredential implements dynsecret.LeaseCredentialVerifier for

@@ -260,10 +260,10 @@ not this file.
 | `internal/config/scim_writeback_test.go:20` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/scim_writeback_test.go:28` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/secret_integrations_test.go:52` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:892` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:896` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:900` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:904` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:934` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:938` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:942` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:946` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -515,7 +515,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1312` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1313` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -725,8 +725,8 @@ not this file.
 | `internal/dns/rfc2136/rfc2136.go:323` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:348` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
 | `internal/dns/rfc2136/rfc2136.go:352` | DNS wire encoding of protocol-bounded fields (labels <=63, RDATA <=uint16) (CWE-190) |
-| `internal/dynsecret/drivers.go:238` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
-| `internal/dynsecret/drivers.go:246` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:275` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
+| `internal/dynsecret/drivers.go:283` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:688` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/events/backup_history_test.go:227` | bounded fixture/corpus value packing inside a test (CWE-190) |
@@ -1015,7 +1015,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:184` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mssql.go:199` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1386` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1478` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/snowflake.go:205` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |

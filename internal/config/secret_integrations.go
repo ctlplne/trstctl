@@ -164,16 +164,27 @@ type DynamicSecretProviderConfig struct {
 	// credentials with no native expiry through this provider (postgresql,
 	// mysql, aws-iam) for roles in allowed_roles. Off by default: a dynamic
 	// provider that only ever issues bounded leases keeps that guarantee.
-	AllowStaticRotation   bool     `json:"allow_static_rotation,omitempty"`
-	AllowPrivate          bool     `json:"allow_private_endpoint,omitempty"`
-	AllowInsecureLoopback bool     `json:"allow_insecure_loopback,omitempty"`
-	PrivateEgressCIDRs    []string `json:"private_egress_cidrs,omitempty"`
+	AllowStaticRotation bool `json:"allow_static_rotation,omitempty"`
+	// RotationAccounts makes a role's static rotation two-user (A240): the role
+	// alternates between these two existing accounts, which the database's
+	// owner provisions with the role's grants. A rotation sets a new password
+	// on the account consumers are not using, publishes it, and then retires
+	// the other by replacing its password; no account is created or dropped,
+	// so the grants persist. Needs allow_static_rotation (postgresql).
+	RotationAccounts      map[string][]string `json:"rotation_accounts,omitempty"`
+	AllowPrivate          bool                `json:"allow_private_endpoint,omitempty"`
+	AllowInsecureLoopback bool                `json:"allow_insecure_loopback,omitempty"`
+	PrivateEgressCIDRs    []string            `json:"private_egress_cidrs,omitempty"`
 }
 
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
 var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true}
+
+// TwoUserRotationProviderTypes are the static-rotation types whose roles may
+// alternate between two fixed accounts (rotation_accounts, A240).
+var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true}
 
 // MaxTTLDuration is the hard validity ceiling for a generated credential. A
 // shorter requested lease can be renewed only up to this bound.
@@ -312,6 +323,7 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 		if ttl, err := item.MaxTTLDuration(); err != nil || ttl <= 0 {
 			errs = append(errs, fmt.Errorf("%s max_ttl must be a positive duration", where))
 		}
+		errs = append(errs, validateRotationAccounts(where, item)...)
 		errs = append(errs, validateDynamicProvider(where, item)...)
 		errs = append(errs, validatePrivateEgress(where, item.AllowPrivate, item.PrivateEgressCIDRs)...)
 	}
@@ -438,6 +450,50 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 	"ibm-api-connect": validateAPIConnectProvider,
+}
+
+// validateRotationAccounts checks a provider's two-user pairs (A240): each
+// names an allowed role and two distinct accounts, and no account serves two
+// roles, because a rotation of one would retire the other's live credential.
+func validateRotationAccounts(where string, c DynamicSecretProviderConfig) []error {
+	if len(c.RotationAccounts) == 0 {
+		return nil
+	}
+	var errs []error
+	if !TwoUserRotationProviderTypes[c.Type] || !c.AllowStaticRotation {
+		errs = append(errs, fmt.Errorf("%s rotation_accounts needs allow_static_rotation on a postgresql provider", where))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+	}
+	owner := map[string]string{}
+	roles := make([]string, 0, len(c.RotationAccounts))
+	for role := range c.RotationAccounts {
+		roles = append(roles, role)
+	}
+	sort.Strings(roles)
+	for _, role := range roles {
+		accounts := c.RotationAccounts[role]
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s rotation_accounts role %q is not in allowed_roles", where, role))
+		}
+		if len(accounts) != 2 || accounts[0] != strings.TrimSpace(accounts[0]) || accounts[1] != strings.TrimSpace(accounts[1]) ||
+			accounts[0] == "" || accounts[1] == "" || accounts[0] == accounts[1] {
+			errs = append(errs, fmt.Errorf("%s rotation_accounts role %q needs two distinct account names", where, role))
+			continue
+		}
+		for _, account := range accounts {
+			if len(account) > 63 || strings.ContainsRune(account, 0) {
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q is not a PostgreSQL role name", where, account))
+			}
+			if other, taken := owner[account]; taken {
+				errs = append(errs, fmt.Errorf("%s rotation_accounts account %q serves roles %q and %q", where, account, other, role))
+			}
+			owner[account] = role
+		}
+	}
+	return errs
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {

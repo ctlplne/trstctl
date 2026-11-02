@@ -436,6 +436,48 @@ func TestValidateMilvusProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateRotationAccountsA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "orders", Type: "postgresql",
+		AdminDSNRef: "file:/run/secrets/orders-admin-dsn", AllowedRoles: []string{"db/orders", "db/reports"}, MaxTTL: "1h",
+		AllowStaticRotation: true}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	pairs := func() map[string][]string {
+		return map[string][]string{"db/orders": {"orders_app_a", "orders_app_b"}, "db/reports": {"reports_a", "reports_b"}}
+	}
+	ok := base
+	ok.RotationAccounts = pairs()
+	if err := check(ok); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"not opted in":   {func(c *DynamicSecretProviderConfig) { c.AllowStaticRotation = false }, "rotation_accounts needs allow_static_rotation on a postgresql provider"},
+		"wrong type":     {func(c *DynamicSecretProviderConfig) { c.Type = "mysql" }, "rotation_accounts needs allow_static_rotation on a postgresql provider"},
+		"unknown role":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/other"] = []string{"x_a", "x_b"} }, `role "db/other" is not in allowed_roles`},
+		"one account":    {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"orders_app_a"} }, "needs two distinct account names"},
+		"same account":   {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{"a", "a"} }, "needs two distinct account names"},
+		"padded account": {func(c *DynamicSecretProviderConfig) { c.RotationAccounts["db/orders"] = []string{" a", "b"} }, "needs two distinct account names"},
+		"long account": {func(c *DynamicSecretProviderConfig) {
+			c.RotationAccounts["db/orders"] = []string{strings.Repeat("a", 64), "b"}
+		}, "is not a PostgreSQL role name"},
+		"shared account": {func(c *DynamicSecretProviderConfig) {
+			c.RotationAccounts["db/reports"] = []string{"orders_app_b", "reports_b"}
+		}, `account "orders_app_b" serves roles`},
+	} {
+		c := base
+		c.RotationAccounts = pairs()
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+}
+
 func TestValidateMSSQLProvidersA239(t *testing.T) {
 	for _, providerType := range []string{"mssql", "azure-sql"} {
 		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "sql", Type: providerType,

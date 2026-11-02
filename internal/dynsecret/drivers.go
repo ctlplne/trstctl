@@ -66,6 +66,43 @@ $trstctl$`
 	return nil
 }
 
+// setPostgresRolePassword gives an existing login role a new password, valid
+// with no native expiry, keeping the password out of the statement text the
+// way createPostgresRole does. It refuses a role that does not exist: a
+// two-user account is provisioned, with its grants, by the database's owner.
+func setPostgresRolePassword(ctx context.Context, conn *pgx.Conn, role string, password []byte) error {
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		return errPostgresRolePassword
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname=$1 AND rolcanlogin)`, role).Scan(&exists); err != nil || !exists {
+		return fmt.Errorf("dynsecret postgres: two-user account %s is not a login role; provision it with the role's grants first", role)
+	}
+	if _, err := tx.Exec(ctx,
+		`SELECT set_config('trstctl.dynamic_secret_password', convert_from($1::bytea, 'UTF8'), true)`,
+		password); err != nil {
+		return errPostgresRolePassword
+	}
+	statement := `DO $trstctl$
+BEGIN
+  EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L VALID UNTIL %L', ` +
+		pgQuoteLiteral(role) + `, current_setting('trstctl.dynamic_secret_password'), 'infinity');
+END
+$trstctl$`
+	if _, err := tx.Exec(ctx, statement); err != nil {
+		return errPostgresRolePassword
+	}
+	if _, err := tx.Exec(ctx, `SELECT set_config('trstctl.dynamic_secret_password', '', true)`); err != nil {
+		return errPostgresRolePassword
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errPostgresRolePassword
+	}
+	return nil
+}
+
 // OpenMySQLExecutor opens and verifies an official go-sql-driver/mysql client.
 // Callers close the returned pool immediately after one create/revoke operation;
 // this keeps the authority-bearing admin DSN out of long-lived process state.

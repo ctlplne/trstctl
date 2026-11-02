@@ -142,8 +142,22 @@ func (a *API) previewStaticSecretRotation(w http.ResponseWriter, r *http.Request
 		if req.TTLSeconds != nil {
 			plan.Blockers = append(plan.Blockers, "ttl_seconds is unsupported for static rotation")
 		}
-		if _, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err != nil {
+		if provider, _, err := a.staticRotationProvider(tenantID, req.Provider, req.Key); err != nil {
 			plan.Blockers = append(plan.Blockers, staticRotationProviderUnavailableDetail)
+		} else if pair, twoUser := staticRotationTwoUserAccounts(provider, req.Key); twoUser {
+			// A240: a two-user role never mints or drops an account.
+			next := pair[0]
+			if req.OldRef == pair[0] {
+				next = pair[1]
+			}
+			plan.ExecuteExternalEffects = []string{
+				"set a new password on account " + next + " of role " + req.Key + " at provider " + req.Provider + "; its grants stay",
+				"verify the staged credential at provider " + req.Provider + " before retiring anything",
+				"retire account " + req.OldRef + " at provider " + req.Provider + " after verification by replacing its password and ending its sessions; its grants stay",
+			}
+			if err := checkStaticRotationPredecessor(provider, req.Key, req.OldRef); err != nil {
+				plan.Blockers = append(plan.Blockers, fmt.Sprintf(staticRotationTwoUserOldRefDetail, pair[0], pair[1]))
+			}
 		}
 		current, getErr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, req.Key)
 		switch {

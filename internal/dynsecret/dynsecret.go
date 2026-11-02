@@ -31,6 +31,10 @@ type GenerateRequest struct {
 	// static-rotation worker retires it explicitly after its successor is live.
 	// Providers refuse Static unless the operator opted the provider in.
 	Static bool
+	// Predecessor is the reference of the credential a static rotation
+	// replaces (empty or "none" for the first). A two-user rotation stages the
+	// other account of the role's pair (A240).
+	Predecessor string
 }
 
 // StaticRotationProvider is the optional contract a provider implements when
@@ -43,6 +47,15 @@ type StaticRotationProvider interface {
 	// (a connection, a signed call). It returns the closed verification mode it
 	// used ("connected", "not_available") and an error when the proof failed.
 	VerifyStaticCredential(ctx context.Context, backendRef string, credential []byte) (string, error)
+}
+
+// TwoUserRotationProvider is a StaticRotationProvider whose roles may
+// alternate between two fixed accounts instead of minting a principal per
+// rotation (A240): a rotation stages the account its predecessor does not
+// name, and retirement replaces the predecessor's password, so grants persist.
+type TwoUserRotationProvider interface {
+	// RotationAccounts returns role's account pair, if it has one.
+	RotationAccounts(role string) ([2]string, bool)
 }
 
 // LeaseCredentialVerifier proves a lease credential works at its provider:

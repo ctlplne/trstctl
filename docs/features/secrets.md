@@ -717,6 +717,21 @@ that exhausts the outbox budget leaves the successor live as `retire_pending`.
 (CLI `secrets rotations get` / `list`) follow a command to its terminal phase; no
 response carries the credential.
 
+A PostgreSQL role can instead rotate between two accounts its database owner
+provisioned with the role's grants (A240): set `rotation_accounts`
+(`{"<role>": ["<account a>", "<account b>"]}`, each role in `allowed_roles`, no
+account in two roles) on the provider. **Stage** then sets a new password on the
+account `old_ref` does not name, **retire** replaces the `old_ref` account's password
+with one nobody holds and ends its sessions, and nothing is ever created or dropped,
+so both accounts keep every grant, default privilege and object they own; until
+retirement both credentials work. `old_ref` must name the account consumers use now
+(`400` otherwise, including `none`), and the preview names the account it will set
+and the one it will retire. A rollback replaces the refused successor's password the
+same way, leaving the predecessor live. The served proof runs scheduled cycles
+against a real PostgreSQL target while an application keeps writing with the
+credential it last read, through a target that blocks retirement past the delivery
+deadline, a server restart mid-cycle and a successor the target refuses.
+
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
 configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
 provider role, `old_ref` is the lease id the secret publishes now (or `none`), and

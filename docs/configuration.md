@@ -2053,6 +2053,11 @@ the connection value and creating a workload credential.
 }
 ```
 
+`rotation_accounts` (PostgreSQL, with `allow_static_rotation: true`) maps an
+allowed role to the two existing accounts its static rotation alternates between,
+for example `{"reader": ["orders_app_a", "orders_app_b"]}`; the owner provisions both
+with the role's grants, and rotation only ever changes their passwords.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
 `azure-entra`, `kubernetes`, and `redis`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,

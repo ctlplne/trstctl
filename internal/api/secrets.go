@@ -1190,9 +1190,11 @@ func (a *API) createSecretRotationSchedule(w http.ResponseWriter, r *http.Reques
 			}
 		} else if strings.HasPrefix(provider, secretDynamicLeaseRotationPrefix) {
 			return 0, nil, errStatus(http.StatusServiceUnavailable, dynamicLeaseRotationUnavailableDetail)
-		} else if _, _, err := a.staticRotationProvider(tenantID, provider, key); err != nil {
+		} else if staticProvider, _, err := a.staticRotationProvider(tenantID, provider, key); err != nil {
 			// A15: static providers are scheduled when a configured provider may
 			// mint static credentials for the secret's role; otherwise fail closed.
+			return 0, nil, err
+		} else if err := checkStaticRotationPredecessor(staticProvider, key, oldRef); err != nil {
 			return 0, nil, err
 		}
 		enabled := true

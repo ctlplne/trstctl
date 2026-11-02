@@ -40,10 +40,13 @@ var (
 	errAWSIAMAlreadyExists = errors.New("dynsecret aws-iam: entity already exists")
 	errAWSIAMMissing       = errors.New("dynsecret aws-iam: entity not found")
 	errPostgresRoleCreate  = errors.New("dynsecret postgres: create role failed")
-	errMySQLUserCreate     = errors.New("dynsecret mysql: create user failed")
-	errMongoUserCreate     = errors.New("dynsecret mongodb: create user failed")
-	errRedisRejected       = errors.New("dynsecret redis: server rejected command")
-	errRedisProtocol       = errors.New("dynsecret redis: invalid server response")
+	// errPostgresRolePassword never carries driver text: it can quote the
+	// statement, and the statement carries the password.
+	errPostgresRolePassword = errors.New("dynsecret postgres: set the account password failed")
+	errMySQLUserCreate      = errors.New("dynsecret mysql: create user failed")
+	errMongoUserCreate      = errors.New("dynsecret mongodb: create user failed")
+	errRedisRejected        = errors.New("dynsecret redis: server rejected command")
+	errRedisProtocol        = errors.New("dynsecret redis: invalid server response")
 )
 
 // HTTPDoer is the minimal HTTP client seam used by cloud dynamic-secret backends.
@@ -75,14 +78,20 @@ type PostgresConfig struct {
 	Database       string
 	Schema         string
 	UsernamePrefix string
+	// RotationAccounts names, per role, the two login roles a two-user static
+	// rotation alternates between (A240). The database's owner provisions
+	// both with the role's grants; rotation only ever sets their passwords, so
+	// the grants persist and both stay valid while consumers move over.
+	RotationAccounts map[string][2]string
 }
 
 // PostgresBackend creates scoped PostgreSQL login roles and revokes them.
 type PostgresBackend struct {
-	dsn            *secret.Buffer
-	database       string
-	schema         string
-	usernamePrefix string
+	dsn              *secret.Buffer
+	database         string
+	schema           string
+	usernamePrefix   string
+	rotationAccounts map[string][2]string
 }
 
 // NewPostgresBackend builds a PostgreSQL dynamic-secret backend.
@@ -110,12 +119,88 @@ func NewPostgresBackend(cfg PostgresConfig) (*PostgresBackend, error) {
 	if err != nil {
 		return nil, fmt.Errorf("dynsecret postgres: lock DSN: %w", err)
 	}
+	for role, accounts := range cfg.RotationAccounts {
+		if accounts[0] == "" || accounts[1] == "" || accounts[0] == accounts[1] {
+			dsn.Destroy()
+			return nil, fmt.Errorf("dynsecret postgres: role %q needs two distinct rotation accounts", role)
+		}
+	}
 	return &PostgresBackend{
-		dsn:            dsn,
-		database:       cfg.Database,
-		schema:         cfg.Schema,
-		usernamePrefix: cfg.UsernamePrefix,
+		dsn:              dsn,
+		database:         cfg.Database,
+		schema:           cfg.Schema,
+		usernamePrefix:   cfg.UsernamePrefix,
+		rotationAccounts: cfg.RotationAccounts,
 	}, nil
+}
+
+// TwoUserAccount picks the account a two-user rotation stages: the one of the
+// role's pair that predecessor does not name (the first when there is none).
+// ok is false when the role has no pair.
+func TwoUserAccount(accounts map[string][2]string, role, predecessor string) (string, bool) {
+	pair, ok := accounts[role]
+	if !ok {
+		return "", false
+	}
+	if predecessor == pair[0] {
+		return pair[1], true
+	}
+	return pair[0], true
+}
+
+// isRotationAccount reports whether ref is one account of a two-user pair.
+func isRotationAccount(accounts map[string][2]string, ref string) bool {
+	for _, pair := range accounts {
+		if ref == pair[0] || ref == pair[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// stageTwoUser sets a new password on the role's inactive account and returns
+// its DSN (A240). A retry sets the same account's password again, so an
+// uncertain attempt leaves no second credential; the predecessor is untouched.
+func (b *PostgresBackend) stageTwoUser(ctx context.Context, account string) (string, []byte, error) {
+	password, err := randomSecretHex(24)
+	if err != nil {
+		return "", nil, err
+	}
+	defer secret.Wipe(password)
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	if err != nil {
+		return "", nil, err
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if err := setPostgresRolePassword(ctx, conn, account, password); err != nil {
+		return "", nil, err
+	}
+	secretDSN, err := postgresCredentialDSN(b.dsn.Bytes(), account, password)
+	if err != nil {
+		return "", nil, err
+	}
+	return account, secretDSN, nil
+}
+
+// retireTwoUser retires one account of a pair without touching its grants: its
+// password becomes one nobody holds and its sessions end, and the next
+// rotation that stages it gives it a password again.
+func (b *PostgresBackend) retireTwoUser(ctx context.Context, account string) error {
+	scrambled, err := randomSecretHex(32)
+	if err != nil {
+		return err
+	}
+	defer secret.Wipe(scrambled)
+	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	if err := setPostgresRolePassword(ctx, conn, account, scrambled); err != nil {
+		return err
+	}
+	_, _ = conn.Exec(ctx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE usename=$1`, account)
+	return nil
 }
 
 // Create implements Backend.
@@ -131,6 +216,9 @@ func (b *PostgresBackend) CreateCredential(ctx context.Context, req GenerateRequ
 	// is not read-only becomes read-write below.
 	if req.Role == DecoyRole {
 		return b.createDecoyCredential(ctx, req)
+	}
+	if account, ok := TwoUserAccount(b.rotationAccounts, req.Role, req.Predecessor); ok && req.Static {
+		return b.stageTwoUser(ctx, account)
 	}
 	user, err := scopedNameForRequest(b.usernamePrefix, req, 63, "_")
 	if err != nil {
@@ -203,6 +291,10 @@ func (b *PostgresBackend) Close() {
 func (b *PostgresBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
+	}
+	if isRotationAccount(b.rotationAccounts, ref) {
+		// A two-user account is retired, never dropped: its grants persist.
+		return b.retireTwoUser(ctx, ref)
 	}
 	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
 	if err != nil {
