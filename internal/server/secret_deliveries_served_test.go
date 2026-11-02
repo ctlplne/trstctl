@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
+	"time"
 
 	"trstctl.com/trstctl/internal/config"
 )
@@ -82,5 +84,68 @@ func TestServedSecretDeleteClearsDeliveryEvidenceA240(t *testing.T) {
 	}
 	if _, states := consumers(); len(states) != 1 || states[0].VerifiedVersion != 2 {
 		t.Fatalf("fresh evidence for the recreated secret: %+v", states)
+	}
+}
+
+// A240: a read returns the version its value came from. A consumer reports
+// the version it read as adopted, and the retirement gate trusts that report;
+// a read that paired version N with N-1's value let the gate retire the
+// credential the consumer was still using (the two-user rotation test, CI
+// 41533216865). Reads racing back-to-back rotations always pair each value
+// with its own version.
+func TestServedSecretReadPairsValueWithItsVersionA240(t *testing.T) {
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil))
+	registerServedTenant(t, h, "A240 read consistency tenant")
+	tok := seedScopedTokenSubject(t, h.store, h.tenant, "orders-operator", "secrets:read", "secrets:write")
+	const name = "orders/api-token"
+	if status, body := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store", tok, "token-1", map[string]any{"name": name, "value": "value-1"}); status != http.StatusCreated && status != http.StatusOK {
+		t.Fatalf("create: %d %s", status, body)
+	}
+	done, stop := make(chan struct{}), make(chan struct{})
+	var writer sync.WaitGroup
+	writer.Add(1)
+	go func() {
+		defer writer.Done()
+		defer close(done)
+		for version := 2; version <= 40; version++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if status, body := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/"+name, tok, fmt.Sprintf("token-%d", version),
+				map[string]any{"value": fmt.Sprintf("value-%d", version)}); status != http.StatusOK {
+				t.Errorf("rotate to version %d: %d %s", version, status, body)
+				return
+			}
+		}
+	}()
+	// A failed read ends the test; the writer stops first.
+	defer func() { close(stop); writer.Wait() }()
+	reads, newest := 0, 0
+	for deadline := time.Now().Add(2 * time.Minute); ; reads++ {
+		select {
+		case <-done:
+			if reads < 20 || newest < 2 {
+				t.Fatalf("%d reads saw versions up to %d; the race was not exercised", reads, newest)
+			}
+			return
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the rotations did not finish")
+		}
+		status, body := secretsReq(t, h, http.MethodGet, "/api/v1/secrets/store/"+name, tok, nil)
+		var read struct {
+			Value   string `json:"value"`
+			Version int    `json:"version"`
+		}
+		if status != http.StatusOK || json.Unmarshal(body, &read) != nil {
+			t.Fatalf("read: %d %s", status, body)
+		}
+		if read.Value != fmt.Sprintf("value-%d", read.Version) {
+			t.Fatalf("read %d returned version %d with value %q", reads, read.Version, read.Value)
+		}
+		newest = max(newest, read.Version)
 	}
 }

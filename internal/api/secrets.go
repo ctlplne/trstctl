@@ -718,7 +718,14 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 	// Read through the secretsdk client (F64): the Fetcher unseals the stored blob for
 	// THIS tenant; the SDK caches/auto-refreshes and fails safe. Closed after the read
 	// so no secret lingers (AN-8).
-	client := secretsdk.New(a.secrets.secretFetcher(tenantID), secretsdk.WithTenant(tenantID))
+	//
+	// The version is the one the returned value was unsealed from. Reading it
+	// again raced a rotation's cutover and paired version N with N-1's value,
+	// which a consumer then reported as adopted, and the retirement gate
+	// retired the credential it was still using (A240). A fresh client fetches
+	// exactly once.
+	version := 0
+	client := secretsdk.New(a.secrets.secretFetcher(tenantID, func(fetched int) { version = fetched }), secretsdk.WithTenant(tenantID))
 	defer client.Close()
 	value, err := client.Get(r.Context(), name)
 	if err != nil {
@@ -733,10 +740,6 @@ func (a *API) getSecret(w http.ResponseWriter, r *http.Request) {
 		secret.Wipe(value)
 		a.writeError(w, err)
 		return
-	}
-	version := 0
-	if rec, gerr := a.secrets.be.Store.GetSecret(r.Context(), tenantID, name); gerr == nil {
-		version = rec.Version
 	}
 	a.observeMovedSecretRead(r, tenantID, name, version)
 	resp := secretValueResponse{Name: name, Value: secretJSONBytes(value), Version: version}

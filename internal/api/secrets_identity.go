@@ -1047,7 +1047,7 @@ func (a *API) enableMachineAuthMethod(w http.ResponseWriter, r *http.Request) {
 // by name. It is the SDK's tenant-scoped lease engine for the served read (F64): a
 // revoked/absent secret surfaces as an error here, which the SDK turns into a
 // fail-safe miss.
-func (s *secretsService) secretFetcher(tenantID string) secretsdk.Fetcher {
+func (s *secretsService) secretFetcher(tenantID string, observe ...func(version int)) secretsdk.Fetcher {
 	return fetcherFunc(func(ctx context.Context, path string) ([]byte, time.Time, error) {
 		rec, err := s.be.Store.GetSecret(ctx, tenantID, path)
 		if err != nil {
@@ -1056,6 +1056,11 @@ func (s *secretsService) secretFetcher(tenantID string) secretsdk.Fetcher {
 		plain, err := s.open(ctx, tenantID, rec.Sealed, sealAAD(tenantID, path))
 		if err != nil {
 			return nil, time.Time{}, err
+		}
+		// A reader that returns the version gets the one this value was
+		// unsealed from, never a second read's (A240).
+		for _, record := range observe {
+			record(rec.Version)
 		}
 		// A stored application secret has no intrinsic expiry; give the SDK a short
 		// freshness window so it re-fetches (and re-checks existence) promptly.

@@ -155,6 +155,11 @@ type twoUserOrdersApp struct {
 	failures  []string
 	lastWrite time.Time
 	maxGap    time.Duration
+	// readErrors counts failed reads of the secret, which the application
+	// otherwise ignores (it keeps writing with what it has); lastReadError
+	// says why, so a stalled switch explains itself.
+	readErrors    int
+	lastReadError string
 }
 
 func (app *twoUserOrdersApp) run(ctx context.Context, done chan<- struct{}) {
@@ -175,7 +180,14 @@ func (app *twoUserOrdersApp) run(ctx context.Context, done chan<- struct{}) {
 }
 
 func (app *twoUserOrdersApp) tick(ctx context.Context) {
-	if value, version, err := app.read(ctx); err == nil && version != app.version {
+	value, version, err := app.read(ctx)
+	if err != nil && ctx.Err() == nil {
+		app.mu.Lock()
+		app.readErrors++
+		app.lastReadError = err.Error()
+		app.mu.Unlock()
+	}
+	if err == nil && version != app.version {
 		conn, err := pgx.Connect(ctx, value)
 		if err != nil {
 			app.fail(fmt.Sprintf("connect with version %d: %v", version, err))
@@ -384,7 +396,11 @@ func TestServedTwoUserStaticRotationKeepsGrantsA240(t *testing.T) {
 				return
 			}
 			if time.Now().After(deadline) {
-				t.Fatalf("the application wrote nothing as %s: writes=%v failures=%v", account, writes, failures)
+				app.mu.Lock()
+				readErrors, lastReadError := app.readErrors, app.lastReadError
+				app.mu.Unlock()
+				t.Fatalf("the application wrote nothing as %s: writes=%v failures=%v, %d failed reads (last: %s)",
+					account, writes, failures, readErrors, lastReadError)
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
