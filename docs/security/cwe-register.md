@@ -1323,9 +1323,9 @@ not this file.
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:45` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:75` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_move_served_test.go:104` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_scan_hooks_served_test.go:45` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_scan_hooks_served_test.go:53` | test executes a fixed local tool or fixture it built itself (CWE-78) |
-| `internal/server/secret_scan_hooks_served_test.go:57` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_scan_hooks_served_test.go:51` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_scan_hooks_served_test.go:59` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_scan_hooks_served_test.go:63` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_sync_signed_targets_served_test.go:135` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/signer_token_command.go:61` | operator-configured token-helper command (CWE-78) |
 | `internal/server/spire_jwt_authorities_container_test.go:50` | test executes a fixed local tool or fixture it built itself (CWE-78) |

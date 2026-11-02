@@ -119,9 +119,15 @@ func TestServedRepositorySecretScanWebhookQueuesAndExecutesCAPSCAN01(t *testing.
 type fakeSecretRepoScanner struct {
 	report secretscan.Report
 	called chan string
+	// inspect, when set, runs inside Scan while the scanned checkout exists:
+	// the server removes a temporary clone as soon as Scan returns.
+	inspect func(path string)
 }
 
 func (f *fakeSecretRepoScanner) Scan(_ context.Context, path string) (secretscan.Report, error) {
+	if f.inspect != nil {
+		f.inspect(path)
+	}
 	f.called <- path
 	return f.report, nil
 }

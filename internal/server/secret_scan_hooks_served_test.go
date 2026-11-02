@@ -26,8 +26,14 @@ import (
 // secret scan; a missing or wrong signature is refused and starts nothing; a
 // redelivery starts nothing new; the normalized route and polling stay.
 func TestServedGitHubSecretScanHookVerifiesSignaturesP6(t *testing.T) {
+	// The scan's checkout is checked inside Scan: the server deletes a temporary
+	// clone as soon as Scan returns, so a check after the scan races its cleanup.
+	cloned := make(chan error, 4)
 	fake := &fakeSecretRepoScanner{called: make(chan string, 4), report: secretscan.Report{
 		Scanner: "gitleaks", EngineVersion: secretscan.GitleaksPinnedVersion, RulesActive: secretscan.GitleaksDefaultRulesActive,
+	}, inspect: func(path string) {
+		_, err := os.Stat(filepath.Join(path, "README.md"))
+		cloned <- err
 	}}
 	h := newOperatingServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), func(d *Deps) {
 		d.SecretScanner = fake
@@ -132,7 +138,7 @@ func TestServedGitHubSecretScanHookVerifiesSignaturesP6(t *testing.T) {
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
-	if _, err := os.Stat(filepath.Join(target, "README.md")); err != nil {
+	if err := <-cloned; err != nil {
 		t.Fatalf("scanned %q, which is not a clone of the pushed repository (%v)", target, err)
 	}
 	// GitHub redelivers with the same delivery ID: the recorded answer, no new scan.
