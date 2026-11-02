@@ -190,6 +190,12 @@ func serveProductionSigner(t *testing.T) *signing.Client {
 	sock := filepath.Join(dir, "s.sock")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	// The signer warms its weak-key tables when it starts serving, and its
+	// first EC key check waits for them: about 3 s a curve under the race
+	// detector (0.4 s without), more on a loaded CI runner, which ran out the
+	// client's 10 s per-call deadline (CI-L12). Build them before the signer
+	// serves, outside any call's deadline.
+	crypto.WarmWeakKeyChecks()
 	go func() {
 		_ = signing.ServeServerWithOptions(ctx, sock, svc, signing.ServeOptions{AllowInsecureDevNonLinux: runtime.GOOS != "linux"})
 	}()
