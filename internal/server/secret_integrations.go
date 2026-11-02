@@ -383,7 +383,7 @@ func (p *configuredDynamicProvider) openBackend(ctx context.Context) (requestDyn
 func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvider) (requestDynamicBackend, func(), error) {
 	opener := &configuredDynamicBackendOpener{ctx: ctx, provider: p}
 	switch p.cfg.Type {
-	case "postgresql", "mysql", "mongodb", "redis":
+	case "postgresql", "mysql", "mongodb", "redis", "ldap":
 		return openConfiguredDatabaseBackend(opener)
 	case "kubernetes", "aws-iam", "aws-sts", "gcp-iam", "azure-entra":
 		return openConfiguredCloudBackend(opener)
@@ -503,6 +503,24 @@ func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDy
 			Addr: cfg.Addr, Password: password, DB: cfg.DB, UsernamePrefix: cfg.UsernamePrefix,
 			RolePolicies: cfg.RedisACLRoles, TLSCAPEM: caPEM,
 			TLSServerName: cfg.RedisTLSServerName, AllowPlaintext: cfg.AllowPlaintextRedis,
+		})
+		if err != nil {
+			return o.fail(err)
+		}
+		return backend, o.closeWith(backend, nil), nil
+	case "ldap":
+		password, err := o.resolve(cfg.PasswordRef)
+		if err != nil {
+			return o.fail(err)
+		}
+		caPEM, err := o.resolve(cfg.TLSCARef)
+		if err != nil {
+			return o.fail(err)
+		}
+		backend, err := dynsecret.NewLDAPBackend(dynsecret.LDAPConfig{
+			Addr: cfg.Addr, TLSServerName: cfg.TLSServerName, TLSCAPEM: caPEM, AllowPlaintext: cfg.AllowPlaintext,
+			BindDN: cfg.BindDN, BindPassword: password, UsersDN: cfg.UsersDN, RoleGroups: cfg.RoleBindings,
+			UsernamePrefix: cfg.UsernamePrefix,
 		})
 		if err != nil {
 			return o.fail(err)

@@ -7006,10 +7006,11 @@ func componentSchemas() map[string]*Schema {
 		"required": {Type: "boolean"}, "description": str(),
 	}, "key", "label", "kind", "required", "description")
 	dynamicSecretSupportedProvider := object(map[string]*Schema{
-		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis"}},
-		"label": str(), "purpose": str(),
+		"type":  {Type: "string", Enum: []string{"postgresql", "mysql", "mongodb", "aws-iam", "aws-sts", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap"}},
+		"label": str(), "purpose": str(), "authority": str(),
+		"revocation":   {Type: "string", Enum: []string{"confirmed", "ttl_only"}},
 		"requirements": {Type: "array", Items: ref("DynamicSecretProviderRequirement")},
-	}, "type", "label", "purpose", "requirements")
+	}, "type", "label", "purpose", "authority", "revocation", "requirements")
 	dynamicSecretConfiguredProvider := object(map[string]*Schema{
 		"id": str(), "type": str(), "label": str(),
 		"allowed_roles": {Type: "array", Items: str()}, "maximum_ttl_seconds": {Type: "integer"},

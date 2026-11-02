@@ -49,6 +49,8 @@ type servedDynamicProviderCatalog struct {
 	SecretDelivery              string `json:"secret_delivery"`
 	SupportedProviders          []struct {
 		Type         string `json:"type"`
+		Authority    string `json:"authority"`
+		Revocation   string `json:"revocation"`
 		Requirements []struct {
 			Key      string `json:"key"`
 			Kind     string `json:"kind"`
@@ -124,13 +126,23 @@ func TestServedDynamicSecretCatalogAndPreviewBindTheExactRuntimeConfiguration(t 
 		!catalog.ConfigurationChangesRestart || catalog.SecretDelivery != "file_or_secret_reference" {
 		t.Fatalf("catalog configuration contract = %+v", catalog)
 	}
-	if len(catalog.SupportedProviders) != 9 {
-		t.Fatalf("supported provider count = %d, want eight backends plus the aws-iam compatibility alias", len(catalog.SupportedProviders))
+	if len(catalog.SupportedProviders) != 10 {
+		t.Fatalf("supported provider count = %d, want nine backends plus the aws-iam compatibility alias", len(catalog.SupportedProviders))
 	}
-	wantTypes := []string{"postgresql", "mysql", "mongodb", "aws-sts", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis"}
+	wantTypes := []string{"postgresql", "mysql", "mongodb", "aws-sts", "aws-iam", "gcp-iam", "azure-entra", "kubernetes", "redis", "ldap"}
 	for i, want := range wantTypes {
 		if catalog.SupportedProviders[i].Type != want || len(catalog.SupportedProviders[i].Requirements) == 0 {
 			t.Fatalf("supported provider %d = %+v, want %s with structured requirements", i, catalog.SupportedProviders[i], want)
+		}
+		// A239: each adapter states what a leased credential may do and
+		// whether it can be ended before its native expiry.
+		wantRevocation := "confirmed"
+		if want == "aws-sts" || want == "aws-iam" {
+			wantRevocation = "ttl_only"
+		}
+		if catalog.SupportedProviders[i].Authority == "" || catalog.SupportedProviders[i].Revocation != wantRevocation {
+			t.Fatalf("supported provider %s authority %q revocation %q, want %s", want,
+				catalog.SupportedProviders[i].Authority, catalog.SupportedProviders[i].Revocation, wantRevocation)
 		}
 	}
 	if len(catalog.ConfiguredProviders) != 1 {

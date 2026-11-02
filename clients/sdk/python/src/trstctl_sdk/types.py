@@ -6023,9 +6023,11 @@ DynamicSecretProviderRequirement = TypedDict(
 DynamicSecretSupportedProvider = TypedDict(
     'DynamicSecretSupportedProvider',
     {
+        'authority': str,
         'label': str,
         'purpose': str,
         'requirements': list[dict[str, Any]],
+        'revocation': str,
         'type': str,
     },
     total=False,

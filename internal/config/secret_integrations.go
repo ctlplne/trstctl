@@ -91,14 +91,24 @@ type DynamicSecretProviderConfig struct {
 	// region's partition.
 	IAMEndpoint string `json:"iam_endpoint,omitempty"`
 
-	PasswordRef             string   `json:"password_ref,omitempty"`
-	SecretAccessRef         string   `json:"secret_access_key_ref,omitempty"`
-	SessionTokenRef         string   `json:"session_token_ref,omitempty"`
-	BearerTokenRef          string   `json:"bearer_token_ref,omitempty"`
-	KubernetesAudience      string   `json:"kubernetes_audience,omitempty"`
-	KubernetesTLSCARef      string   `json:"kubernetes_tls_ca_ref,omitempty"`
-	KubernetesTLSServerName string   `json:"kubernetes_tls_server_name,omitempty"`
-	AllowedRoles            []string `json:"allowed_roles"`
+	PasswordRef             string `json:"password_ref,omitempty"`
+	SecretAccessRef         string `json:"secret_access_key_ref,omitempty"`
+	SessionTokenRef         string `json:"session_token_ref,omitempty"`
+	BearerTokenRef          string `json:"bearer_token_ref,omitempty"`
+	KubernetesAudience      string `json:"kubernetes_audience,omitempty"`
+	KubernetesTLSCARef      string `json:"kubernetes_tls_ca_ref,omitempty"`
+	KubernetesTLSServerName string `json:"kubernetes_tls_server_name,omitempty"`
+	// BindDN and UsersDN are the LDAP provider's administrator and the
+	// container its leased entries are created in (A239).
+	BindDN  string `json:"bind_dn,omitempty"`
+	UsersDN string `json:"users_dn,omitempty"`
+	// TLSCARef pins a private CA and TLSServerName names the certificate the
+	// A239 providers verify; AllowPlaintext permits an unencrypted connection
+	// to a literal loopback or private IP only.
+	TLSCARef       string   `json:"tls_ca_ref,omitempty"`
+	TLSServerName  string   `json:"tls_server_name,omitempty"`
+	AllowPlaintext bool     `json:"allow_plaintext,omitempty"`
+	AllowedRoles   []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
@@ -201,8 +211,12 @@ type SecretSyncTargetConfig struct {
 
 var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
-	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {},
+	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 }
+
+// tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
+// allow_plaintext settings (A239).
+var tlsProviderTypes = map[string]bool{"ldap": true}
 
 var dynamicAWSRoleARN = regexp.MustCompile(`^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$`)
 
@@ -369,19 +383,7 @@ func mapValues(values map[string]string) []string {
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
-	var errs []error
-	if c.AllowWildcardAccountHost && c.Type != "mysql" {
-		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
-	}
-	if len(c.RedisACLRoles) > 0 && c.Type != "redis" {
-		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis", where))
-	}
-	if c.Type != "redis" && (c.RedisTLSCARef != "" || c.RedisTLSServerName != "" || c.AllowPlaintextRedis) {
-		errs = append(errs, fmt.Errorf("%s Redis transport settings are only valid for redis", where))
-	}
-	if c.Type != "kubernetes" && (c.KubernetesAudience != "" || c.KubernetesTLSCARef != "" || c.KubernetesTLSServerName != "") {
-		errs = append(errs, fmt.Errorf("%s Kubernetes audience and TLS settings are only valid for kubernetes", where))
-	}
+	errs := validateProviderFieldScopes(where, c)
 	require := func(value, name string) {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
@@ -445,6 +447,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 				errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q] has no matching allowed role", where, role))
 			}
 		}
+	case "ldap":
+		errs = append(errs, validateLDAPProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -754,4 +758,92 @@ func normalizedStrings(values []string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// validateProviderFieldScopes refuses a type-specific setting on a provider of
+// another type.
+func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if c.AllowWildcardAccountHost && c.Type != "mysql" {
+		errs = append(errs, fmt.Errorf("%s allow_wildcard_account_host is only valid for mysql", where))
+	}
+	if len(c.RedisACLRoles) > 0 && c.Type != "redis" {
+		errs = append(errs, fmt.Errorf("%s redis_acl_roles is only valid for redis", where))
+	}
+	if c.Type != "redis" && (c.RedisTLSCARef != "" || c.RedisTLSServerName != "" || c.AllowPlaintextRedis) {
+		errs = append(errs, fmt.Errorf("%s Redis transport settings are only valid for redis", where))
+	}
+	if c.Type != "kubernetes" && (c.KubernetesAudience != "" || c.KubernetesTLSCARef != "" || c.KubernetesTLSServerName != "") {
+		errs = append(errs, fmt.Errorf("%s Kubernetes audience and TLS settings are only valid for kubernetes", where))
+	}
+	if !tlsProviderTypes[c.Type] && (c.TLSCARef != "" || c.TLSServerName != "" || c.AllowPlaintext) {
+		errs = append(errs, fmt.Errorf("%s tls_ca_ref, tls_server_name and allow_plaintext are not valid for %s", where, c.Type))
+	}
+	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "") {
+		errs = append(errs, fmt.Errorf("%s bind_dn and users_dn are only valid for ldap", where))
+	}
+	return errs
+}
+
+// validateLDAPProvider checks an LDAP provider's directory, administrator and
+// role groups (A239).
+func validateLDAPProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	for name, value := range map[string]string{"addr": c.Addr, "bind_dn": c.BindDN, "users_dn": c.UsersDN} {
+		if strings.TrimSpace(value) == "" {
+			errs = append(errs, fmt.Errorf("%s %s is required for ldap", where, name))
+		}
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	if strings.TrimSpace(c.TLSCARef) != "" {
+		if err := validateCredentialRef(c.TLSCARef); err != nil {
+			errs = append(errs, fmt.Errorf("%s tls_ca_ref: %w", where, err))
+		}
+	}
+	errs = append(errs, validateProviderTransport(where, c)...)
+	return append(errs, validateRoleBindingsCoverRoles(where, c)...)
+}
+
+// validateProviderTransport keeps an A239 provider's connection on verified
+// TLS unless the operator allowed plaintext to a literal loopback or private IP.
+func validateProviderTransport(where string, c DynamicSecretProviderConfig) []error {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(c.Addr))
+	if err != nil || host == "" {
+		return []error{fmt.Errorf("%s addr must be host:port", where)}
+	}
+	address := net.ParseIP(host)
+	if !c.AllowPlaintext {
+		if address != nil && c.TLSServerName == "" {
+			return []error{fmt.Errorf("%s tls_server_name is required when addr is an IP address", where)}
+		}
+		return nil
+	}
+	if c.TLSCARef != "" || c.TLSServerName != "" {
+		return []error{fmt.Errorf("%s allow_plaintext forbids TLS settings", where)}
+	}
+	if address == nil || (!address.IsLoopback() && !address.IsPrivate()) {
+		return []error{fmt.Errorf("%s allow_plaintext requires a literal loopback or private IP addr", where)}
+	}
+	return nil
+}
+
+// validateRoleBindingsCoverRoles requires exactly one binding per allowed
+// role, and none for a role that isn't allowed.
+func validateRoleBindingsCoverRoles(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		if strings.TrimSpace(c.RoleBindings[role]) == "" {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] is required for %s", where, role, c.Type))
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
 }

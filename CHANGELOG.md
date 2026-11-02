@@ -2,6 +2,11 @@
 
 ### Added
 
+- LDAP dynamic secrets (`type: ldap`): each lease is a directory entry with a password the directory sets and hashes,
+  in the group its role is bound to, deleted at revocation, over LDAPS verified against the configured server name.
+  The dynamic-secret provider catalog now states each adapter's authority and whether its revocation is confirmed or
+  TTL-only.
+
 - Secret rendering for host applications: `trstctl-agent --secret-render-config` keeps `{{ secret "name" }}`
   templates rendered into files with atomic writes and the file's mode, runs the application's reload hook, and
   asks the application to prove it uses the new value. Delivery reports (`trstctl-cli secrets deliveries

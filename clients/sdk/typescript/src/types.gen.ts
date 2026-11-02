@@ -14523,11 +14523,14 @@ export interface components {
             required: boolean;
         };
         DynamicSecretSupportedProvider: {
+            authority: string;
             label: string;
             purpose: string;
             requirements: components["schemas"]["DynamicSecretProviderRequirement"][];
             /** @enum {string} */
-            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
+            revocation: "confirmed" | "ttl_only";
+            /** @enum {string} */
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;

@@ -2258,6 +2258,38 @@ administrator password belongs in a mode-0600 `file:` reference or tenant
 loopback or private IP address. It cannot be combined with TLS settings and
 returns a `redis://` lease. Do not use it across an untrusted network.
 
+For LDAP (A239), set `addr` (the directory's LDAPS `host:port`), `bind_dn` and
+`password_ref` (an administrator allowed to add and delete entries under
+`users_dn` and to change the role groups' members), `users_dn` (the container
+leased entries are created in), and one `role_bindings` group DN per allowed
+role. Each lease is an `inetOrgPerson` entry whose password the directory sets
+and hashes itself (the Password Modify extended operation, RFC 3062), added to
+the role's `groupOfNames` group; revocation removes it from the group and
+deletes it, after which the directory refuses its bind. A `groupOfNames` can't
+be empty, so keep one permanent member in each role group. The connection is
+LDAPS verified against `tls_server_name` (required when `addr` is an IP address,
+else `addr`'s host) and, optionally, a private CA from `tls_ca_ref` (a mode-0600
+`file:` or tenant `secret://` reference). `allow_plaintext: true` permits plain
+LDAP only to a literal loopback or private IP and forbids the TLS settings. A
+lease's entry name derives from its lease ID, so a retry after an uncertain issue
+replaces that one entry instead of leaving another.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "directory-leases",
+  "type": "ldap",
+  "addr": "ldap.internal.example:636",
+  "bind_dn": "cn=trstctl-leases,ou=services,dc=example,dc=org",
+  "password_ref": "file:/run/secrets/ldap-admin-password",
+  "users_dn": "ou=leases,dc=example,dc=org",
+  "tls_ca_ref": "file:/run/secrets/ldap-ca.pem",
+  "allowed_roles": ["readonly"],
+  "role_bindings": {"readonly": "cn=readers,ou=groups,dc=example,dc=org"},
+  "max_ttl": "8h"
+}
+```
+
 AWS, GCP, and Azure sync targets can explicitly replace their static target
 credential with tenant-owned workload identity. Set exactly the provider switch
 (`aws_workload_identity`, `gcp_workload_identity`, or

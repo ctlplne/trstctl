@@ -18617,6 +18617,9 @@
       },
       "DynamicSecretSupportedProvider": {
         "properties": {
+          "authority": {
+            "type": "string"
+          },
           "label": {
             "type": "string"
           },
@@ -18629,6 +18632,13 @@
             },
             "type": "array"
           },
+          "revocation": {
+            "enum": [
+              "confirmed",
+              "ttl_only"
+            ],
+            "type": "string"
+          },
           "type": {
             "enum": [
               "postgresql",
@@ -18639,7 +18649,8 @@
               "gcp-iam",
               "azure-entra",
               "kubernetes",
-              "redis"
+              "redis",
+              "ldap"
             ],
             "type": "string"
           }
@@ -18648,6 +18659,8 @@
           "type",
           "label",
           "purpose",
+          "authority",
+          "revocation",
           "requirements"
         ],
         "type": "object"

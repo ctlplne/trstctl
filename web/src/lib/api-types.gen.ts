@@ -4335,10 +4335,12 @@ export interface DynamicSecretProviderRequirement {
 }
 
 export interface DynamicSecretSupportedProvider {
+  authority: string;
   label: string;
   purpose: string;
   requirements: DynamicSecretProviderRequirement[];
-  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis";
+  revocation: "confirmed" | "ttl_only";
+  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap";
 }
 
 export interface EdgeDelegation {

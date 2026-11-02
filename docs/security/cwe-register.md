@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2235 annotated sites across 29 rules. Each row is
+2245 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -493,7 +493,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1188` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1206` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -968,12 +968,13 @@ not this file.
 | `tools/dodcensus/substrate_broker.go:426` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 | `tools/dodcensus/substrate_broker.go:456` | bounded value packing in a developer tool, not a served binary (CWE-190) |
 
-### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (5 sites)
+### G117 — CWE-200 Exposure of sensitive information (marshaled secret field) (6 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
 | `internal/dynsecret/aws_sts.go:163` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
+| `internal/dynsecret/ldap.go:214` | the reveal-once LDAP lease credential; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/providers_real.go:1386` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/server/secret_integrations_outbox.go:567` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
@@ -1083,7 +1084,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (280 sites)
+### G204 — CWE-78 OS command injection (287 sites)
 
 | Location | Reason |
 |---|---|
@@ -1270,6 +1271,13 @@ not this file.
 | `internal/server/docker_fixture_command_test.go:20` | fixed Docker test-harness operations bounded by a context deadline (CWE-78) |
 | `internal/server/dod_signer_binary_test.go:105` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_access_served_test.go:327` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:38` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:76` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:84` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:90` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:94` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:97` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_ldap_container_test.go:133` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1480,7 +1488,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (619 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (620 sites)
 
 | Location | Reason |
 |---|---|
@@ -1927,6 +1935,7 @@ not this file.
 | `internal/server/distrust_removal_served_test.go:184` | the test's own temporary file (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:76` | parent-created public CA fixture (CWE-22) |
 | `internal/server/dynamic_secret_failure_epoch_guard_test.go:22` | closed sibling-source fixture list. |
+| `internal/server/dynamic_secret_ldap_container_test.go:57` | the test's own temp file (CWE-22) |
 | `internal/server/est_mtls_reenroll_served_test.go:150` | test reads its own tempdir path (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:23` | exact artifact in this test's owned fixture (CWE-22) |
 | `internal/server/event_protection_backup_missing_custody_test.go:33` | exact artifact in this test's owned fixture (CWE-22) |
@@ -2104,7 +2113,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (120 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (121 sites)
 
 | Location | Reason |
 |---|---|
@@ -2192,6 +2201,7 @@ not this file.
 | `internal/server/codesign_cosign_lab_p9_test.go:58` | a public payload, signature and keys the cosign container reads (CWE-22) |
 | `internal/server/codesign_pkcs11_lab_p9_test.go:40` | public lab inputs the tool containers read (CWE-22) |
 | `internal/server/dod_connector_runtime_test.go:817` | public CA fixture (CWE-276) |
+| `internal/server/dynamic_secret_ldap_container_test.go:87` | the container's directory server reads it; the key is a throwaway lab key (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:390` | public CA certificate fixture (CWE-276) |
 | `internal/server/host_agent_remote_served_test.go:613` | public CA fixture (CWE-276) |
 | `internal/server/mcp_authorization_keycloak_test.go:248` | public realm configuration the container reads (CWE-276) |

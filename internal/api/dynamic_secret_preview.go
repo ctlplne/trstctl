@@ -27,9 +27,14 @@ type dynamicSecretProviderRequirement struct {
 }
 
 type dynamicSecretSupportedProvider struct {
-	Type         string                             `json:"type"`
-	Label        string                             `json:"label"`
-	Purpose      string                             `json:"purpose"`
+	Type    string `json:"type"`
+	Label   string `json:"label"`
+	Purpose string `json:"purpose"`
+	// Authority is what a leased credential may do; Revocation is "confirmed"
+	// when the provider deletes or denies the credential before its expiry and
+	// "ttl_only" when it lapses only at its native expiry (A239).
+	Authority    string                             `json:"authority"`
+	Revocation   string                             `json:"revocation"`
 	Requirements []dynamicSecretProviderRequirement `json:"requirements"`
 }
 
@@ -132,7 +137,7 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 	roles := func(description string) dynamicSecretProviderRequirement {
 		return dynamicSecretRequirement("role_bindings", "Role bindings", "role_binding", description, true)
 	}
-	return []dynamicSecretSupportedProvider{
+	providers := []dynamicSecretSupportedProvider{
 		{Type: "postgresql", Label: "PostgreSQL", Purpose: "Creates and drops a scoped PostgreSQL login role.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Admin DSN reference", "Credential reference containing the least-privilege administrative DSN.", true),
 			value("database", "Database", "Optional database placed in the generated connection result.", false),
@@ -196,7 +201,48 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_plaintext_redis", "Local plaintext exception", "Explicitly permit plain Redis only at a literal loopback or private IP address. The returned URI is redis://; use only in a protected local lab.", false),
 			value("db", "Database number", "Only database 0 is supported. Leased users cannot run SELECT because Redis ACLs cannot constrain its database argument.", false),
 		)},
+		{Type: "ldap", Label: "LDAP directory", Purpose: "Creates a directory entry whose password the directory sets and hashes, in the role's group, and deletes it at revocation; the directory then refuses its bind.", Requirements: dynamicSecretProviderRequirements(
+			value("addr", "Directory address", "host:port of the directory's LDAPS listener, verified against tls_server_name; plain LDAP only at a literal loopback or private IP with allow_plaintext.", true),
+			value("bind_dn", "Administrator DN", "Directory account allowed to add and delete entries under users_dn and change the role groups' members.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's bind password.", true),
+			value("users_dn", "Leased entries container", "DN of the container leased entries are created in.", true),
+			credential("tls_ca_ref", "Directory TLS CA reference", "Optional private CA of the directory's certificate; system roots when omitted.", false),
+			value("tls_server_name", "Directory TLS name", "Certificate name to verify; required when addr is an IP address, else addr's host.", false),
+			value("allow_plaintext", "Local plaintext exception", "Explicitly permit ldap:// to a literal loopback or private IP only; use only in a protected lab.", false),
+			roles("Each allowed role maps to the DN of one groupOfNames group; keep one permanent member in it, since a groupOfNames can't be empty."),
+		)},
 	}
+	for i := range providers {
+		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
+	}
+	return providers
+}
+
+// dynamicSecretProviderAuthority states what a provider's leased credential may
+// do, and whether the provider can end it before its native expiry
+// ("confirmed") or it lapses only then ("ttl_only") (A239).
+func dynamicSecretProviderAuthority(providerType string) (authority, revocation string) {
+	switch providerType {
+	case "postgresql":
+		return "CONNECT on the configured database and USAGE on its schema, with SELECT on its tables for a role whose name contains \"read\", else SELECT, INSERT, UPDATE and DELETE", "confirmed"
+	case "mysql":
+		return "SELECT on the configured database for a role whose name contains \"read\", else SELECT, INSERT, UPDATE and DELETE, from the configured account host only", "confirmed"
+	case "mongodb":
+		return "read on the configured database for a role whose name contains \"read\", else readWrite", "confirmed"
+	case "aws-sts", "aws-iam":
+		return "the assumed IAM role's policies for the session's lifetime", "ttl_only"
+	case "gcp-iam":
+		return "the service account's IAM bindings, through a key deleted at revocation", "confirmed"
+	case "azure-entra":
+		return "the application's permissions, through a client secret removed at revocation; access tokens already issued last until their own expiry", "confirmed"
+	case "kubernetes":
+		return "the Role or ClusterRole bound to a temporary ServiceAccount, through a token that stops working when its Secret is deleted", "confirmed"
+	case "redis":
+		return "the role's literal key prefixes and explicitly listed commands", "confirmed"
+	case "ldap":
+		return "membership of the role's directory group", "confirmed"
+	}
+	return "", ""
 }
 
 func dynamicSecretProviderLabel(providerType string) string {
