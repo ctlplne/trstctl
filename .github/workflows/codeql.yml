@@ -22,6 +22,12 @@ concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
+# Every actions/setup-go step sets GOTOOLCHAIN=local for itself only: setup-go
+# installs go.mod's `go` version, and with the default GOTOOLCHAIN=auto its own
+# `go env` fetched the `toolchain` line's newer Go into the module cache before
+# the cache restore, which then failed on those files ("Cannot open: File
+# exists"), so no job restored a cache. Later steps still switch to the toolchain
+# line's version (docs/ci_test_lanes_test.go keeps every setup-go step this way).
 jobs:
   analyze:
     name: analyze (${{ matrix.language }})
@@ -42,6 +48,8 @@ jobs:
       - name: Set up Go
         if: matrix.language == 'go'
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true

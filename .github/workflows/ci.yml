@@ -24,6 +24,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Every actions/setup-go step sets GOTOOLCHAIN=local for itself only: setup-go
+# installs go.mod's `go` version, and with the default GOTOOLCHAIN=auto its own
+# `go env` fetched the `toolchain` line's newer Go into the module cache before
+# the cache restore, which then failed on those files ("Cannot open: File
+# exists"), so no job restored a cache. Later steps still switch to the toolchain
+# line's version (docs/ci_test_lanes_test.go keeps every setup-go step this way).
 jobs:
   # The Go tests run as parallel lanes (owner decision 2026-11-02: split the Go
   # test jobs so each finishes well inside its limit and a CI run takes about
@@ -52,6 +58,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -99,6 +107,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -130,6 +140,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -161,6 +173,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -251,6 +265,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -305,6 +321,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -343,6 +361,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -373,6 +393,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -417,6 +439,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -459,6 +483,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -491,6 +517,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -516,6 +544,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -566,6 +596,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -598,6 +630,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -646,6 +680,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -707,6 +743,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -733,6 +771,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -766,6 +806,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -786,6 +828,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -813,6 +857,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -868,6 +914,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -973,6 +1021,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -1006,6 +1056,8 @@ jobs:
       # freshness check below (the bundle the binary embeds is in this repo).
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -1124,6 +1176,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1155,6 +1209,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -1201,6 +1257,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1332,6 +1390,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1476,6 +1536,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1511,6 +1573,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1548,6 +1612,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1588,6 +1654,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1623,6 +1691,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1658,6 +1728,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1698,6 +1770,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1733,6 +1807,8 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           cache: true
@@ -1833,6 +1909,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -1865,6 +1943,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -1920,6 +2000,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -2011,6 +2093,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -2121,6 +2205,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true
@@ -2167,6 +2253,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
         with:
           go-version-file: go.mod
           check-latest: true

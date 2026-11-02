@@ -216,3 +216,33 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 		last = i
 	}
 }
+
+// TestEverySetupGoStepRestoresItsCacheBeforeAToolchainSwitch keeps the fix for a
+// cache restore that failed on every job: setup-go installs go.mod's `go`
+// version, and with GOTOOLCHAIN=auto its own `go env` fetched the newer
+// `toolchain` version into the module cache first, so restoring the cache
+// collided with those files. release.yml is left out on purpose: tag builds
+// compile from scratch, which a release does not mind.
+func TestEverySetupGoStepRestoresItsCacheBeforeAToolchainSwitch(t *testing.T) {
+	for _, name := range []string{"ci.yml", "security.yml", "codeql.yml", "trust-audit.yml", "github-action-conformance.yml"} {
+		var wf ciWorkflow
+		if err := yaml.Unmarshal([]byte(read(t, "../.github/workflows/"+name)), &wf); err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		steps := 0
+		for id, job := range wf.Jobs {
+			for _, step := range job.Steps {
+				if !strings.HasPrefix(step.Uses, "actions/setup-go@") {
+					continue
+				}
+				steps++
+				if step.Env["GOTOOLCHAIN"] != "local" {
+					t.Errorf("%s job %s: its setup-go step must set GOTOOLCHAIN: local so the cache restores before any toolchain download", name, id)
+				}
+			}
+		}
+		if steps == 0 {
+			t.Errorf("%s has no setup-go step; revisit this guard", name)
+		}
+	}
+}
