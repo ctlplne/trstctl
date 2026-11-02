@@ -5398,6 +5398,15 @@ a later version never waits forever behind it: a target without readable state h
 the lane until an operator records what they saw through `POST
 /api/v1/secrets/syncs/{id}/reconcile`; `GET /api/v1/secrets/syncs/{id}` names that
 blocking predecessor.
+Scoped sync (A237 part a): `POST /api/v1/secrets/scoped-syncs` and its preview/apply
+(`trstctl secrets scoped-syncs`) sync every secret under a source prefix to a KV v2
+target under a destination prefix from a value-free plan applied by its digest: create,
+update (drift named), delete within a reviewed scope (managed keys, or every key under
+the prefix), unmanaged keys never touched otherwise, nested-key and two-source
+collisions blocked, a stale plan refused, and a crash after the remote write settled by
+readback without a second write — proven against OpenBao 2.0.0. Only KV v2 targets list
+their keys, so other targets can't take a scoped sync. Continuous reconciliation and
+the console view are part b; approval-gated convergence is not served.
 
 AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
 of their static target credential. The matching

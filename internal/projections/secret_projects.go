@@ -120,7 +120,8 @@ func (p *Projector) applySecretProjectTx(ctx context.Context, tx pgx.Tx, e event
 		}
 		return true, p.store.ApplySecretProjectMemberRevokedTx(ctx, tx, e.TenantID, pl.Project, pl.Subject, e.Sequence)
 	default:
-		return false, nil
+		// A237's scoped syncs are part of the same secrets workspace family.
+		return p.applySecretScopedSyncTx(ctx, tx, e)
 	}
 }
 
@@ -149,6 +150,7 @@ func addSecretProjectPrivacyPolicies(policies map[privacyEventPolicyKey]events.P
 		privacyRule("/environments/*", opaque), privacyRule("/granted_by", exact))
 	policies[privacyEventPolicyKey{EventSecretProjectMemberRevoked, 1}] = privacyRules(
 		privacyRule("/project", opaque), privacyRule("/subject", exact), privacyRule("/revoked_by", exact))
+	addSecretScopedSyncPrivacyPolicies(policies)
 }
 
 // addSecretProjectPrivacyShapes registers the workspace events' payload shapes.
@@ -157,4 +159,5 @@ func addSecretProjectPrivacyShapes(shapes map[privacyEventPolicyKey]events.Priva
 	shapes[privacyEventPolicyKey{EventSecretProjectEnvironmentAdded, 1}] = privacyPayloadShape[SecretProjectEnvironmentAdded]()
 	shapes[privacyEventPolicyKey{EventSecretProjectMemberGranted, 1}] = privacyPayloadShape[SecretProjectMemberGranted]()
 	shapes[privacyEventPolicyKey{EventSecretProjectMemberRevoked, 1}] = privacyPayloadShape[SecretProjectMemberRevoked]()
+	addSecretScopedSyncPrivacyShapes(shapes)
 }

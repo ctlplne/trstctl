@@ -287,6 +287,11 @@ func (e *vaultKVV2Emulator) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "permission denied", http.StatusForbidden)
 		return
 	}
+	// A237: metadata LIST and DELETE, enough for a scoped sync's key walk.
+	if dir, ok := strings.CutPrefix(r.URL.Path, "/v1/team-secrets/metadata/apps"); ok {
+		e.serveMetadata(w, r, strings.TrimPrefix(dir, "/"))
+		return
+	}
 	const prefix = "/v1/team-secrets/data/apps/"
 	if !strings.HasPrefix(r.URL.Path, prefix) {
 		http.NotFound(w, r)
@@ -362,6 +367,47 @@ func (e *vaultKVV2Emulator) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	default:
 		http.Error(w, "unsupported KV operation", http.StatusMethodNotAllowed)
+	}
+}
+
+func (e *vaultKVV2Emulator) serveMetadata(w http.ResponseWriter, r *http.Request, dir string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	switch {
+	case r.Method == http.MethodGet && r.URL.Query().Get("list") == "true":
+		seen := map[string]bool{}
+		var keys []string
+		for path := range e.paths {
+			rel := path
+			if dir != "" {
+				var ok bool
+				if rel, ok = strings.CutPrefix(path, dir+"/"); !ok {
+					continue
+				}
+			}
+			entry := rel
+			if head, _, nested := strings.Cut(rel, "/"); nested {
+				entry = head + "/"
+			}
+			if !seen[entry] {
+				seen[entry] = true
+				keys = append(keys, entry)
+			}
+		}
+		if len(keys) == 0 {
+			http.Error(w, "missing", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"keys": keys}})
+	case r.Method == http.MethodDelete:
+		if current, ok := e.paths[dir]; ok {
+			wipeByteMap(current.data)
+			delete(e.paths, dir)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		http.Error(w, "unsupported metadata operation", http.StatusMethodNotAllowed)
 	}
 }
 

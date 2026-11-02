@@ -13919,6 +13919,83 @@ SecretScanRequest = TypedDict(
     total=False,
 )
 
+SecretScopedSync = TypedDict(
+    'SecretScopedSync',
+    {
+        'adopt_existing': bool,
+        'created_at': str,
+        'defined_by': str,
+        'delete_scope': str,
+        'destination_prefix': str,
+        'id': str,
+        'key_transform': str,
+        'keys': list[dict[str, Any]],
+        'last_applied_at': str,
+        'last_plan_digest': str,
+        'name': str,
+        'source_prefix': str,
+        'target': str,
+        'updated_at': str,
+    },
+    total=False,
+)
+
+SecretScopedSyncApplyRequest = TypedDict(
+    'SecretScopedSyncApplyRequest',
+    {
+        'plan_digest': str,
+    },
+    total=False,
+)
+
+SecretScopedSyncList = TypedDict(
+    'SecretScopedSyncList',
+    {
+        'items': list[dict[str, Any]],
+        'next_cursor': str,
+    },
+    total=False,
+)
+
+SecretScopedSyncPlan = TypedDict(
+    'SecretScopedSyncPlan',
+    {
+        'blocked': int,
+        'changes': int,
+        'items': list[dict[str, Any]],
+        'name': str,
+        'plan_digest': str,
+        'sync_id': str,
+        'target': str,
+    },
+    total=False,
+)
+
+SecretScopedSyncReceipt = TypedDict(
+    'SecretScopedSyncReceipt',
+    {
+        'deletes': list[dict[str, Any]],
+        'plan_digest': str,
+        'sync_id': str,
+        'writes': list[dict[str, Any]],
+    },
+    total=False,
+)
+
+SecretScopedSyncRequest = TypedDict(
+    'SecretScopedSyncRequest',
+    {
+        'adopt_existing': bool,
+        'delete_scope': str,
+        'destination_prefix': str,
+        'key_transform': str,
+        'name': str,
+        'source_prefix': str,
+        'target': str,
+    },
+    total=False,
+)
+
 SecretStaticRotation = TypedDict(
     'SecretStaticRotation',
     {

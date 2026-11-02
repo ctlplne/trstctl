@@ -2,6 +2,12 @@
 
 ### Added
 
+- Scoped secret sync: `trstctl secrets scoped-syncs define|preview|apply` keeps every secret under a source prefix
+  in step with a KV v2 destination under a prefix. The value-free plan lists create, update (with drift named),
+  delete within the reviewed scope, and keys the sync didn't write, which it never touches; nested-key and
+  two-source collisions are blocked, a changed source or destination makes the plan stale, and a crash after a
+  remote write settles by reading the destination back.
+
 - Folder restore for secrets projects: `trstctl secrets projects restore preview|apply` puts an environment or a
   folder back to a point in time as new versions in one batch, keeps secrets created since, and refuses a version
   whose credential a rotation retired, revoked or let expire. The console's project page offers Promote or restore.

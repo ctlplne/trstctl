@@ -42614,6 +42614,292 @@
         ],
         "type": "object"
       },
+      "SecretScopedSync": {
+        "properties": {
+          "adopt_existing": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "defined_by": {
+            "type": "string"
+          },
+          "delete_scope": {
+            "type": "string"
+          },
+          "destination_prefix": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "key_transform": {
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "properties": {
+                "job_id": {
+                  "type": "string"
+                },
+                "job_status": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "source_name": {
+                  "type": "string"
+                },
+                "source_version": {
+                  "type": "integer"
+                },
+                "state": {
+                  "enum": [
+                    "synced",
+                    "delete_queued"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "state"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "last_applied_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_plan_digest": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source_prefix": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_prefix",
+          "target",
+          "key_transform",
+          "delete_scope",
+          "adopt_existing",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "SecretScopedSyncApplyRequest": {
+        "properties": {
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_digest"
+        ],
+        "type": "object"
+      },
+      "SecretScopedSyncList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretScopedSync"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "SecretScopedSyncPlan": {
+        "properties": {
+          "blocked": {
+            "type": "integer"
+          },
+          "changes": {
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "action": {
+                  "enum": [
+                    "create",
+                    "update",
+                    "unchanged",
+                    "delete",
+                    "orphaned",
+                    "unmanaged",
+                    "deleting",
+                    "blocked"
+                  ],
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "source_name": {
+                  "type": "string"
+                },
+                "source_version": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "key",
+                "action"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "name": {
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "sync_id": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sync_id",
+          "name",
+          "target",
+          "plan_digest",
+          "items",
+          "changes",
+          "blocked"
+        ],
+        "type": "object"
+      },
+      "SecretScopedSyncReceipt": {
+        "properties": {
+          "deletes": {
+            "items": {
+              "properties": {
+                "delete_id": {
+                  "type": "string"
+                },
+                "job_id": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "sync_id": {
+            "type": "string"
+          },
+          "writes": {
+            "items": {
+              "properties": {
+                "delete_id": {
+                  "type": "string"
+                },
+                "job_id": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sync_id",
+          "plan_digest",
+          "writes",
+          "deletes"
+        ],
+        "type": "object"
+      },
+      "SecretScopedSyncRequest": {
+        "properties": {
+          "adopt_existing": {
+            "type": "boolean"
+          },
+          "delete_scope": {
+            "enum": [
+              "none",
+              "managed",
+              "prefix"
+            ],
+            "type": "string"
+          },
+          "destination_prefix": {
+            "type": "string"
+          },
+          "key_transform": {
+            "enum": [
+              "path",
+              "env"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source_prefix": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_prefix",
+          "target"
+        ],
+        "type": "object"
+      },
       "SecretStaticRotation": {
         "properties": {
           "created_at": {
@@ -81904,6 +82190,370 @@
         ],
         "summary": "Queue a third-party artifact secret scan",
         "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scoped-syncs": {
+      "get": {
+        "operationId": "listSecretScopedSyncs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScopedSyncList"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List scoped syncs",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "defineSecretScopedSync",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretScopedSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScopedSync"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Define a scoped sync: every secret under a source prefix to a configured target under a destination prefix",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scoped-syncs/{id}": {
+      "delete": {
+        "operationId": "removeSecretScopedSync",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "scoped sync ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Remove a scoped sync; the destination keys it wrote stay",
+        "x-trstctl-permission": "secrets:write"
+      },
+      "get": {
+        "operationId": "getSecretScopedSync",
+        "parameters": [
+          {
+            "description": "scoped sync ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScopedSync"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Show a scoped sync with the destination keys it manages and their delivery status",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/scoped-syncs/{id}/apply": {
+      "post": {
+        "operationId": "applySecretScopedSync",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "scoped sync ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretScopedSyncApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScopedSyncReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply a reviewed scoped sync plan by its digest; a changed source or destination makes it stale",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/scoped-syncs/{id}/preview": {
+      "post": {
+        "operationId": "previewSecretScopedSync",
+        "parameters": [
+          {
+            "description": "scoped sync ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretScopedSyncPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview a scoped sync: a value-free plan per destination key and its digest",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/sessions": {

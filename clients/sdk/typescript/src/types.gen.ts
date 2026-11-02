@@ -8373,6 +8373,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/scoped-syncs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scoped syncs */
+        get: operations["listSecretScopedSyncs"];
+        put?: never;
+        /** Define a scoped sync: every secret under a source prefix to a configured target under a destination prefix */
+        post: operations["defineSecretScopedSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/scoped-syncs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Show a scoped sync with the destination keys it manages and their delivery status */
+        get: operations["getSecretScopedSync"];
+        put?: never;
+        post?: never;
+        /** Remove a scoped sync; the destination keys it wrote stay */
+        delete: operations["removeSecretScopedSync"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/scoped-syncs/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a reviewed scoped sync plan by its digest; a changed source or destination makes it stale */
+        post: operations["applySecretScopedSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/scoped-syncs/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview a scoped sync: a value-free plan per destination key and its digest */
+        post: operations["previewSecretScopedSync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/sessions": {
         parameters: {
             query?: never;
@@ -20874,6 +20944,81 @@ export interface components {
             path: string;
             /** @description Optional server-keyed fingerprint returned by SecretScanPreview. When supplied, execution fails closed if tenant, caller, target, mode, custom rules, or scanner capabilities changed. */
             preview_fingerprint?: string;
+        };
+        SecretScopedSync: {
+            adopt_existing: boolean;
+            /** Format: date-time */
+            created_at: string;
+            defined_by?: string;
+            delete_scope: string;
+            destination_prefix?: string;
+            id: string;
+            key_transform: string;
+            keys?: {
+                job_id?: string;
+                job_status?: string;
+                key: string;
+                source_name?: string;
+                source_version?: number;
+                /** @enum {string} */
+                state: "synced" | "delete_queued";
+            }[];
+            /** Format: date-time */
+            last_applied_at?: string;
+            last_plan_digest?: string;
+            name: string;
+            source_prefix: string;
+            target: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        SecretScopedSyncApplyRequest: {
+            plan_digest: string;
+        };
+        SecretScopedSyncList: {
+            items: components["schemas"]["SecretScopedSync"][];
+            next_cursor?: string;
+        };
+        SecretScopedSyncPlan: {
+            blocked: number;
+            changes: number;
+            items: {
+                /** @enum {string} */
+                action: "create" | "update" | "unchanged" | "delete" | "orphaned" | "unmanaged" | "deleting" | "blocked";
+                key: string;
+                reason?: string;
+                source_name?: string;
+                source_version?: number;
+            }[];
+            name: string;
+            plan_digest: string;
+            sync_id: string;
+            target: string;
+        };
+        SecretScopedSyncReceipt: {
+            deletes: {
+                delete_id?: string;
+                job_id?: string;
+                key: string;
+            }[];
+            plan_digest: string;
+            sync_id: string;
+            writes: {
+                delete_id?: string;
+                job_id?: string;
+                key: string;
+            }[];
+        };
+        SecretScopedSyncRequest: {
+            adopt_existing?: boolean;
+            /** @enum {string} */
+            delete_scope?: "none" | "managed" | "prefix";
+            destination_prefix?: string;
+            /** @enum {string} */
+            key_transform?: "path" | "env";
+            name: string;
+            source_prefix: string;
+            target: string;
         };
         SecretStaticRotation: {
             /** Format: date-time */
@@ -46033,6 +46178,261 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThirdPartySecretScanReceipt"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSecretScopedSyncs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScopedSyncList"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    defineSecretScopedSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretScopedSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScopedSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSecretScopedSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description scoped sync ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScopedSync"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeSecretScopedSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description scoped sync ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applySecretScopedSync: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description scoped sync ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretScopedSyncApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScopedSyncReceipt"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretScopedSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description scoped sync ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretScopedSyncPlan"];
                 };
             };
             /** @description client error */

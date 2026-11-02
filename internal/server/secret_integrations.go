@@ -809,6 +809,50 @@ func (p *configuredSyncPusher) ReconcileOperation(ctx context.Context, key strin
 	return state, nil
 }
 
+// ScopedKeys reports whether this target's receiver lists, reads back and
+// deletes keys for a scoped sync (A237): only KV v2 exposes its key tree.
+func (p *configuredSyncPusher) ScopedKeys() bool { return p.cfg.Type == "vault-kv-v2" }
+
+// ListKeys, ReadDigest and Delete resolve the target's credential for one call
+// and delegate to the concrete pusher, like a delivery.
+func (p *configuredSyncPusher) ListKeys(ctx context.Context, prefix string, limit int) ([]string, error) {
+	var keys []string
+	err := p.withScoped(ctx, prefix, func(scoped secretsync.ScopedTarget) error {
+		var err error
+		keys, err = scoped.ListKeys(ctx, prefix, limit)
+		return err
+	})
+	return keys, err
+}
+
+func (p *configuredSyncPusher) ReadDigest(ctx context.Context, key string) (bool, string, error) {
+	var exists bool
+	var digest string
+	err := p.withScoped(ctx, key, func(scoped secretsync.ScopedTarget) error {
+		var err error
+		exists, digest, err = scoped.ReadDigest(ctx, key)
+		return err
+	})
+	return exists, digest, err
+}
+
+func (p *configuredSyncPusher) Delete(ctx context.Context, key string) error {
+	return p.withScoped(ctx, key, func(scoped secretsync.ScopedTarget) error { return scoped.Delete(ctx, key) })
+}
+
+func (p *configuredSyncPusher) withScoped(ctx context.Context, key string, use func(secretsync.ScopedTarget) error) error {
+	if !p.ScopedKeys() {
+		return errors.New("server: this secret-sync target does not support scoped sync")
+	}
+	return withConfiguredSecretSyncPusher(ctx, p, key, func(concrete secretsync.Pusher) error {
+		scoped, ok := concrete.(secretsync.ScopedTarget)
+		if !ok {
+			return errors.New("server: this secret-sync target does not support scoped sync")
+		}
+		return use(scoped)
+	})
+}
+
 func withConfiguredSecretSyncPusher(ctx context.Context, p *configuredSyncPusher, key string, use func(secretsync.Pusher) error) error {
 	var values []*secret.Buffer
 	destroy := func() {

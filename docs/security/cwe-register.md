@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2184 annotated sites across 29 rules. Each row is
+2192 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (472 sites)
+### G101 — CWE-798 Use of hardcoded credentials (480 sites)
 
 | Location | Reason |
 |---|---|
@@ -172,7 +172,7 @@ not this file.
 | `internal/api/notifications.go:901` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications.go:1270` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/notifications_helpers_test.go:91` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/api/openapi.go:200` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/api/openapi.go:203` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1086` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_posture.go:1234` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/api/secrets_scanning.go:40` | public MAC domain label, not a credential |
@@ -342,6 +342,11 @@ not this file.
 | `internal/projections/secret_projects.go:18` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/projections/secret_projects.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_scoped_sync.go:18` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_scoped_sync.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_scoped_sync.go:20` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_scoped_sync.go:21` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/projections/secret_scoped_sync.go:22` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/protocols/acme/eab.go:265` | an event type name, not credential material (CWE-798) |
 | `internal/protocols/acme/eab_rotation_test.go:34` | fabricated fixture reference, not secret material (CWE-798) |
 | `internal/protocols/acme/email_reply_test.go:23` | RFC 8823 test token and digest, not a credential (CWE-798) |
@@ -481,7 +486,8 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1144` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1188` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:104` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:106` | credential references to fabricated fixture values (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:107` | credential references to fabricated fixture values (CWE-798) |
@@ -524,6 +530,8 @@ not this file.
 | `internal/store/privacy_erasure_preparation.go:28` | this is a bounded privacy evidence label, not a credential. |
 | `internal/store/privacy_erasure_preparation.go:177` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_rotation_schedule_privacy.go:694` | SQL authority columns are names, not embedded credentials (CWE-798). |
+| `internal/store/secret_scoped_sync.go:19` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/store/secret_scoped_sync.go:228` | SQL column list, no credential (CWE-798) |
 | `internal/store/secret_static_rotation.go:226` | SQL column list, no credential (CWE-798) */ `tenant_id::text, id::text, tenant_epoch, provider, provider_type, secret_key, old_ref, new_ref, |
 | `internal/store/secret_store.go:325` | SQL column identifiers only; this constant contains no credential material. |
 | `internal/store/secret_sync_workload_identity.go:203` | SQL column list matching the secret-name heuristic; a query, not a credential (CWE-798) |
@@ -764,8 +772,8 @@ not this file.
 | `internal/server/recovery_projection_factory_test.go:173` | event test sequence is PostgreSQL bigint-bounded. |
 | `internal/server/revocation.go:446` | value reduced modulo the shard count before conversion (CWE-190) |
 | `internal/server/run.go:253` | bounded small ints from config (CWE-190) |
-| `internal/server/secret_integrations_outbox.go:1051` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_integrations_outbox.go:1055` | positive int64 is exactly representable as uint64. |
+| `internal/server/secret_integrations_outbox.go:1059` | positive int64 is exactly representable as uint64. |
 | `internal/server/secret_sync_source_sequence_test.go:56` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:67` | this fixture appends exactly two events. |
 | `internal/server/secret_sync_source_sequence_test.go:72` | this fixture appends exactly two events. |
@@ -879,8 +887,8 @@ not this file.
 | `internal/store/pam.go:93` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:734` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection.go:796` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:972` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
-| `internal/store/projection.go:986` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:974` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/projection.go:988` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:191` | event sequence fits the PostgreSQL bigint used by the event log (CWE-190) |
 | `internal/store/projection_checkpoint.go:247` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/projection_checkpoint.go:276` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
@@ -898,8 +906,8 @@ not this file.
 | `internal/store/secret_rotation_schedule.go:288` | checked against MaxInt64 above (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:384` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
 | `internal/store/secret_rotation_schedule.go:408` | validateBoundSecretRotationScheduleRun rejects values above MaxInt64 (CWE-190). |
-| `internal/store/snapshot.go:636` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
-| `internal/store/snapshot.go:656` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
+| `internal/store/snapshot.go:644` | the projection sequence is stored in a PostgreSQL bigint throughout this file (CWE-190) |
+| `internal/store/snapshot.go:664` | event sequence/count fits int64 by construction; the column is a Postgres bigint (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:49` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:64` | event sequences fit int64 (CWE-190) |
 | `internal/store/spiffe_upstream_jwt_key.go:79` | non-negative by constraint (CWE-190) |
@@ -958,7 +966,7 @@ not this file.
 | `internal/dynsecret/aws_honeytoken.go:165` | one-time decoy reveal; caller seals or writes and wipes this []byte (CWE-200) |
 | `internal/dynsecret/aws_sts.go:163` | this is the reveal-once AWS STS credential payload; the caller seals it before storage (CWE-200) |
 | `internal/dynsecret/providers_real.go:1386` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
-| `internal/server/secret_integrations_outbox.go:563` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
+| `internal/server/secret_integrations_outbox.go:567` | the result is sealed by DoAtMostOnceEffect and plaintext is wiped after issue (CWE-200) |
 | `internal/server/token_exchange.go:72` | the token endpoint's response is the issued token, returned once to the caller that proved the subject token (CWE-200) |
 
 ### G118 — CWE-664 Improper lifetime control (goroutine context) (3 sites)

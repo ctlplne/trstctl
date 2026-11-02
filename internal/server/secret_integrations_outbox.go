@@ -202,6 +202,8 @@ func (d *secretIntegrationOutboxDispatcher) Deliver(ctx context.Context, m orche
 		return true, d.staticRotation(ctx, m.TenantID, command.ID, m.Attempts)
 	case m.Destination == store.AWSHoneyScanDestination:
 		return true, d.scanAWSHoneyToken(ctx, m)
+	case m.Destination == store.SecretScopedSyncDeleteDestination:
+		return true, d.deleteScopedSyncKey(ctx, m)
 	case strings.HasPrefix(m.Destination, secretSyncDestinationPrefix):
 		return true, d.deliverSecretSync(ctx, m)
 	case strings.HasPrefix(m.Destination, "dynsecret.") || strings.HasPrefix(m.Destination, "secret.sync"):
@@ -226,6 +228,8 @@ func (d *secretIntegrationOutboxDispatcher) dynamicProvidersForTenant(tenantID s
 func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.Context, m orchestrator.Message, cause error) (handled bool, err error) {
 	const terminal = "external delivery exhausted its retry budget"
 	switch {
+	case m.Destination == store.SecretScopedSyncDeleteDestination:
+		return true, d.failScopedSyncDelete(ctx, m, terminal)
 	case m.Destination == store.SecretStaticRotationDestination:
 		if d.staticRotationFailure == nil {
 			return true, errors.New("server: static rotation worker is not configured")

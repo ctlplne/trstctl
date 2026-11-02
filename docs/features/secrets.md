@@ -1073,6 +1073,37 @@ discovery across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and
 HashiCorp Vault KV, and configured AWS/GCP/Azure sync targets — read-only and
 metadata-only.
 
+#### Scoped sync (A237)
+
+A **scoped sync** keeps a whole scope in step with a destination: every secret under a
+source prefix (a project environment such as `payments/prod/`, a folder, any name
+prefix) goes to a configured KV v2 target under a destination prefix. Define it once,
+then preview and apply:
+
+```
+trstctl secrets scoped-syncs define -f sync.json   # {"name":"payments-prod","source_prefix":"payments/prod/","target":"vault","destination_prefix":"payments","delete_scope":"managed"}
+trstctl secrets scoped-syncs preview <id>
+trstctl secrets scoped-syncs apply <id> -f apply.json   # {"plan_digest":"…"}
+```
+
+The plan is value-free and lists every destination key with its action: `create`,
+`update` (named drift when the destination changed outside the sync), `unchanged`,
+`delete`, `orphaned`, `unmanaged` or `blocked`. A key the sync didn't write is never
+touched: it's listed as `unmanaged`, and if a source maps onto it the item is blocked
+until the definition sets `adopt_existing`. Deletes follow the reviewed delete scope:
+`none` keeps a managed key whose source is gone (`orphaned`), `managed` deletes it,
+and `prefix` deletes every key under the destination prefix, including keys the sync
+didn't write. Two secrets on one key (`key_transform: env` maps `db-password` and
+`db_password` both to `DB_PASSWORD`), and a key that would also be a folder (`db` beside
+`db/password`), are blocked. Applying by the plan's digest fixes the plan in one event.
+It then queues the durable per-secret sync jobs for the writes and one outbox command
+per delete. A source or destination that changed since the preview makes the plan
+stale (`409`, code `plan_stale`). A crash after a remote write is settled on retry by
+reading the destination back, so the value isn't written twice. `scoped-syncs show`
+lists the keys a sync manages with each delivery's status. Removing a definition leaves
+its destination keys where they are. Continuous reconciliation and the console view
+are A237's second part.
+
 ### The auth-method framework (F58)
 
 Before reading a secret, a workload must authenticate _to_ trstctl via the auth-method

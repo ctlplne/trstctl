@@ -359,9 +359,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// A235 adds the secrets workspace: creating, listing and showing projects,
 	// adding environments, and granting and revoking members (627).
 	// A236 adds previewing and applying an environment promotion (629) and a
-	// folder restore (631).
-	if len(out) != 631 {
-		t.Fatalf("OpenAPI operationIds = %d, want 631", len(out))
+	// folder restore (631). A237 adds scoped syncs: define, list, show, remove,
+	// preview and apply (637).
+	if len(out) != 637 {
+		t.Fatalf("OpenAPI operationIds = %d, want 637", len(out))
 	}
 	return out
 }

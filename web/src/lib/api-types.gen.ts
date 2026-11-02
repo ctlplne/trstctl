@@ -10069,6 +10069,59 @@ export interface SecretScanRequest {
   preview_fingerprint?: string;
 }
 
+export interface SecretScopedSync {
+  adopt_existing: boolean;
+  created_at: string;
+  defined_by?: string;
+  delete_scope: string;
+  destination_prefix?: string;
+  id: string;
+  key_transform: string;
+  keys?: ({ job_id?: string; job_status?: string; key: string; source_name?: string; source_version?: number; state: "synced" | "delete_queued" })[];
+  last_applied_at?: string;
+  last_plan_digest?: string;
+  name: string;
+  source_prefix: string;
+  target: string;
+  updated_at: string;
+}
+
+export interface SecretScopedSyncApplyRequest {
+  plan_digest: string;
+}
+
+export interface SecretScopedSyncList {
+  items: SecretScopedSync[];
+  next_cursor?: string;
+}
+
+export interface SecretScopedSyncPlan {
+  blocked: number;
+  changes: number;
+  items: ({ action: "create" | "update" | "unchanged" | "delete" | "orphaned" | "unmanaged" | "deleting" | "blocked"; key: string; reason?: string; source_name?: string; source_version?: number })[];
+  name: string;
+  plan_digest: string;
+  sync_id: string;
+  target: string;
+}
+
+export interface SecretScopedSyncReceipt {
+  deletes: { delete_id?: string; job_id?: string; key: string }[];
+  plan_digest: string;
+  sync_id: string;
+  writes: { delete_id?: string; job_id?: string; key: string }[];
+}
+
+export interface SecretScopedSyncRequest {
+  adopt_existing?: boolean;
+  delete_scope?: "none" | "managed" | "prefix";
+  destination_prefix?: string;
+  key_transform?: "path" | "env";
+  name: string;
+  source_prefix: string;
+  target: string;
+}
+
 export interface SecretStaticRotation {
   created_at: string;
   error?: string;
