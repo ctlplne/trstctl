@@ -52,7 +52,6 @@ export function writeGridPreferences(key: string, preferences: GridPreferences) 
   };
   // Only sanitized view labels, column identifiers, sort state, and primitive
   // display metadata reach storage; SEC-005 proves credentials are dropped.
-  // codeql[js/clear-text-storage-of-sensitive-data]
   localStorage.setItem(gridStorageName(key), JSON.stringify(safe));
 }
 

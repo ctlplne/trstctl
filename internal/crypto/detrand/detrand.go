@@ -39,7 +39,6 @@ func New(parts ...[]byte) io.Reader {
 		h.Write(n[:])
 		// This is deterministic stream-domain separation for public keystore
 		// salts/IVs, not password verification.
-		// codeql[go/weak-sensitive-data-hashing]
 		h.Write(p)
 	}
 	r := &reader{}

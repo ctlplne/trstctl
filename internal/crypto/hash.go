@@ -80,7 +80,6 @@ func NewSHA256HMACDigest(key []byte) *SHA256HMACDigest {
 func (d *SHA256HMACDigest) Write(p []byte) (int, error) {
 	// This computes an artifact checksum and optional HMAC; it is not a
 	// password-storage or password-verifier path.
-	// codeql[go/weak-sensitive-data-hashing]
 	if _, err := d.sum.Write(p); err != nil {
 		return 0, err
 	}

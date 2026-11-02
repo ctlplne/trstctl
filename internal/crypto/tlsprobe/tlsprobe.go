@@ -200,12 +200,10 @@ func Probe(ctx context.Context, addr string, opts ...Option) (Result, error) {
 	tlsConfig := &tls.Config{
 		// An inventory probe must capture the presented certificate even when it
 		// is expired/untrusted and sends no data.
-		// codeql[go/disabled-certificate-check]
 		InsecureSkipVerify: true, // #nosec G402 -- discovery inventories whatever cert is served; the connection is never trusted and never carries data (CWE-295)
 		ServerName:         host,
 		// Detecting legacy TLS 1.0 is the purpose of this read-only inventory
 		// probe; application clients still require TLS 1.2+.
-		// codeql[go/insecure-tls]
 		MinVersion: tls.VersionTLS10,
 		MaxVersion: cfg.maxVersion,
 		NextProtos: cfg.alpn,
