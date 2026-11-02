@@ -1015,7 +1015,7 @@ not this file.
 | `internal/dynsecret/mongodb_atlas.go:184` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/mssql.go:199` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/oauth_client_credentials.go:206` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
-| `internal/dynsecret/providers_real.go:1478` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
+| `internal/dynsecret/providers_real.go:1494` | the dynamic-secret provider's minted credential payload; returning it is the API (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:150` | the new user's password goes to the management API over the guarded client and is not kept (CWE-200) |
 | `internal/dynsecret/rabbitmq.go:177` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
 | `internal/dynsecret/snowflake.go:205` | the lease credential is this provider's output: the outbox seals it and only the authorized issue response opens it (CWE-200) |
@@ -1510,7 +1510,7 @@ not this file.
 | `internal/server/bundled_pg_start_test.go:33` | restore the private directory's required execute bit (CWE-732) |
 | `internal/server/compliance_report_dispatch_served_test.go:40` | owner execute is required to traverse this private test directory. |
 | `internal/server/compliance_report_worker_test.go:67` | owner execute is required to traverse this private test directory. |
-| `internal/server/compliance_report_worker_test.go:221` | owner execute is required to traverse this private test directory. |
+| `internal/server/compliance_report_worker_test.go:223` | owner execute is required to traverse this private test directory. |
 | `internal/server/crypto_risk_report_served_test.go:39` | owner execute is required to traverse this private test directory. |
 | `internal/server/customer_assurance_report_served_test.go:59` | owner execute is required to traverse this private test directory. |
 | `internal/server/external_ca_config_test.go:189` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |

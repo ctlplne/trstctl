@@ -296,6 +296,10 @@ func (b *PostgresBackend) Revoke(ctx context.Context, ref string) error {
 		// A two-user account is retired, never dropped: its grants persist.
 		return b.retireTwoUser(ctx, ref)
 	}
+	if !issuedPrincipalName(b.usernamePrefix, ref) {
+		// DROP OWNED would take every object the role owns with it.
+		return fmt.Errorf("dynsecret postgres: refusing to drop %q, which this provider did not create", ref)
+	}
 	conn, err := connectPostgresAdmin(ctx, b.dsn.Bytes())
 	if err != nil {
 		return err
@@ -419,6 +423,9 @@ func (b *MySQLBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
 	}
+	if !issuedPrincipalName(b.usernamePrefix, ref) {
+		return fmt.Errorf("dynsecret mysql: refusing to drop %q, which this provider did not create", ref)
+	}
 	if _, err := b.exec.ExecContext(ctx, "DROP USER IF EXISTS "+mysqlAccount(ref, b.accountHost)); err != nil {
 		return fmt.Errorf("dynsecret mysql: drop user: %w", err)
 	}
@@ -512,6 +519,9 @@ func (b *MongoBackend) Close() {
 func (b *MongoBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
+	}
+	if !issuedPrincipalName(b.usernamePrefix, ref) {
+		return fmt.Errorf("dynsecret mongodb: refusing to drop %q, which this provider did not create", ref)
 	}
 	if err := b.admin.DropUser(ctx, b.database, ref); err != nil && !looksMissing(err) {
 		return fmt.Errorf("dynsecret mongodb: drop user: %w", err)
@@ -654,6 +664,9 @@ func (b *RedisBackend) Close() {
 func (b *RedisBackend) Revoke(ctx context.Context, ref string) error {
 	if ref == "" {
 		return nil
+	}
+	if !issuedPrincipalName(b.usernamePrefix, ref) {
+		return fmt.Errorf("dynsecret redis: refusing to delete %q, which this provider did not create", ref)
 	}
 	if err := b.redisCommands(ctx, [][]byte{[]byte("ACL"), []byte("DELUSER"), []byte(ref)}); err != nil {
 		return err
@@ -1147,6 +1160,9 @@ func (b *AWSIAMBackend) Revoke(ctx context.Context, ref string) error {
 		return nil
 	}
 	user, accessKey, policyARN := splitAWSIAMRef(ref)
+	if !issuedPrincipalName(b.usernamePrefix, user) {
+		return fmt.Errorf("dynsecret aws-iam: refusing to delete %q, which this provider did not create", user)
+	}
 	if accessKey != "" {
 		_, err := b.call(ctx, map[string]string{"Action": "DeleteAccessKey", "UserName": user, "AccessKeyId": accessKey, "Version": "2010-05-08"})
 		if err != nil && !looksMissing(err) {

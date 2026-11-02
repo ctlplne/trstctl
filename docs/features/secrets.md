@@ -707,7 +707,10 @@ leaking one; **cutover** publishes it as the next secret version through the sam
 fenced `secret.rotated` mutation every write uses and keeps the predecessor value
 sealed; **verify** opens a session with the staged credential (PostgreSQL, MySQL;
 AWS IAM has no side-effect-free proof and records `verify_mode: not_available`);
-**retire** revokes `old_ref` at the provider, or skips when `old_ref` is `none`.
+**retire** revokes `old_ref` at the provider, or skips when `old_ref` is `none`; a
+provider deletes only principals it issued, so an `old_ref` naming an account someone
+else provisioned is refused and the command ends `retire_pending` with the successor
+live (use `rotation_accounts` to rotate accounts you provision).
 The staged credential and the predecessor value stay sealed under the tenant key
 domain between phases (AN-8). A verification that still fails on its third worker
 attempt rolls back: the predecessor is restored as a new version and the successor
