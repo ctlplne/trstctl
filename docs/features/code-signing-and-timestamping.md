@@ -216,7 +216,7 @@ trstctl-cli code-signing keys certificate release-key
 
 Startup refuses a chain whose leaf does not carry the key's public key or lacks the
 `codeSigning` usage. Each certificate request is recorded as `codesign.csr_signed`.
-The signing clients in [`clients/signing`](../../clients/signing/README.md) (MPL-2.0,
+The signing clients in [`clients/signing`](https://github.com/ctlplne/trstctl/tree/main/clients/signing) (MPL-2.0,
 standard library only) hash locally, have trstctl sign the digest, and return the
 signature with the chain; permissions, policy and approvals apply to every signature.
 
@@ -254,7 +254,7 @@ records each signature in Rekor through the outbox as described above.
   extractable; the module signs with ECDSA P-256 and RSA keys
   (`CKM_ECDSA`, `CKM_ECDSA_SHA256`, `CKM_RSA_PKCS`, `CKM_SHA256_RSA_PKCS`) and
   does nothing else. jarsigner loads it through SunPKCS11 and osslsigncode through
-  the OpenSSL pkcs11 engine; see [`clients/signing`](../../clients/signing/README.md)
+  the OpenSSL pkcs11 engine; see [`clients/signing`](https://github.com/ctlplne/trstctl/tree/main/clients/signing)
   for both command lines.
 
 While a signing approval is pending, the Notation plugin and the PKCS #11 module hold

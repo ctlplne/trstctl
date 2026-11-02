@@ -115,7 +115,7 @@ the extracted server bundle. The archive includes no API token or CA trust
 file; supply those separately when connecting.
 
 For a disconnected Compose evaluation, use the exact transferred image in the
-[one-shot backup worker](../deploy/docker/README.md#back-up-the-evaluation-stack).
+[one-shot backup worker](https://github.com/ctlplne/trstctl/blob/main/deploy/docker/README.md#back-up-the-evaluation-stack).
 It attaches the live signer custody volume only while writing the encrypted full
 artifact, uses the same internal-only Docker network as the running stack, and
 pulls no image. Keep the backup encryption key in separate local custody and

@@ -213,7 +213,7 @@ intentionally absent from both artifacts and are captured by a later backup.
 
 In the Docker Compose evaluation topology, the serving control plane deliberately
 does not mount signer custody. Run the [dedicated one-shot backup
-worker](../deploy/docker/README.md#back-up-the-evaluation-stack) with the exact
+worker](https://github.com/ctlplne/trstctl/blob/main/deploy/docker/README.md#back-up-the-evaluation-stack) with the exact
 image and a read-only signer-key volume. The command checks for the issuing-CA
 and audit-export sealed handles before exporting the event and PostgreSQL state;
 a directory that merely exists at the expected path is insufficient. A successful
