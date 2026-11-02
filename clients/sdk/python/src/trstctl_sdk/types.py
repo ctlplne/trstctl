@@ -13525,6 +13525,49 @@ SecretProjectMemberRequest = TypedDict(
     total=False,
 )
 
+SecretPromotionItem = TypedDict(
+    'SecretPromotionItem',
+    {
+        'action': str,
+        'key': str,
+        'reason': str,
+        'references': list[str],
+        'rewritten_references': int,
+        'source_name': str,
+        'source_version': int,
+        'target_name': str,
+        'target_version': int,
+    },
+    total=False,
+)
+
+SecretPromotionPlan = TypedDict(
+    'SecretPromotionPlan',
+    {
+        'blocked': int,
+        'changes': int,
+        'folder': str,
+        'from': str,
+        'items': list[dict[str, Any]],
+        'kept': list[str],
+        'plan_digest': str,
+        'project': str,
+        'to': str,
+    },
+    total=False,
+)
+
+SecretPromotionRequest = TypedDict(
+    'SecretPromotionRequest',
+    {
+        'folder': str,
+        'from': str,
+        'plan_digest': str,
+        'to': str,
+    },
+    total=False,
+)
+
 SecretRecoverRequest = TypedDict(
     'SecretRecoverRequest',
     {
@@ -14085,6 +14128,17 @@ SecretValue = TypedDict(
         'name': str,
         'value': str,
         'version': int,
+    },
+    total=False,
+)
+
+SecretVersionBatchReceipt = TypedDict(
+    'SecretVersionBatchReceipt',
+    {
+        'batch_id': str,
+        'items': list[dict[str, Any]],
+        'operation': str,
+        'plan_digest': str,
     },
     total=False,
 )

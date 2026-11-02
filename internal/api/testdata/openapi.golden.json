@@ -41443,6 +41443,124 @@
         ],
         "type": "object"
       },
+      "SecretPromotionItem": {
+        "properties": {
+          "action": {
+            "enum": [
+              "create",
+              "update",
+              "unchanged",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "rewritten_references": {
+            "type": "integer"
+          },
+          "source_name": {
+            "type": "string"
+          },
+          "source_version": {
+            "type": "integer"
+          },
+          "target_name": {
+            "type": "string"
+          },
+          "target_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "source_name",
+          "source_version",
+          "target_name",
+          "target_version",
+          "action"
+        ],
+        "type": "object"
+      },
+      "SecretPromotionPlan": {
+        "properties": {
+          "blocked": {
+            "type": "integer"
+          },
+          "changes": {
+            "type": "integer"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretPromotionItem"
+            },
+            "type": "array"
+          },
+          "kept": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "from",
+          "to",
+          "plan_digest",
+          "items",
+          "kept",
+          "changes",
+          "blocked"
+        ],
+        "type": "object"
+      },
+      "SecretPromotionRequest": {
+        "properties": {
+          "folder": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
       "SecretRecoverRequest": {
         "properties": {
           "at": {
@@ -43210,6 +43328,52 @@
         "required": [
           "name",
           "value"
+        ],
+        "type": "object"
+      },
+      "SecretVersionBatchReceipt": {
+        "properties": {
+          "batch_id": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "updated_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "version",
+                "updated_at"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "operation": {
+            "enum": [
+              "promotion",
+              "restore"
+            ],
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation",
+          "plan_digest",
+          "items"
         ],
         "type": "object"
       },
@@ -80204,6 +80368,151 @@
         ],
         "summary": "Grant a subject a role in a secrets project, optionally for listed environments only",
         "x-trstctl-permission": "access:write"
+      }
+    },
+    "/api/v1/secrets/projects/{project}/promotions": {
+      "post": {
+        "operationId": "applySecretPromotion",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretPromotionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretVersionBatchReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply a reviewed promotion plan by its digest as one batch of new versions; a secret changed since the preview makes it stale",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/projects/{project}/promotions/preview": {
+      "post": {
+        "operationId": "previewSecretPromotion",
+        "parameters": [
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretPromotionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretPromotionPlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview promoting an environment's secrets (or one folder of them) into another environment: a value-free plan and its digest",
+        "x-trstctl-permission": "secrets:read"
       }
     },
     "/api/v1/secrets/rotation-schedules": {

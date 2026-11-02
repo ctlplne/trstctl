@@ -983,11 +983,11 @@ func (s *Store) prepareApplicationSecretImportRecoveryFencesTx(
 	ctx context.Context, tx pgx.Tx, tenantID, subject, subjectRef string,
 ) ([]PrivacyRecoveryFenceDisposition, error) {
 	type pendingBatch struct {
-		eventID, digest, actorRef string
-		payload, actor            []byte
+		eventID, digest, actorRef, operation string
+		payload, actor                       []byte
 	}
 	rows, err := tx.Query(ctx, `SELECT event_id::text, command_payload,
-		payload_sha256, actor, actor_subject_ref
+		payload_sha256, actor, actor_subject_ref, operation
 		FROM application_secret_import_batches
 		WHERE tenant_id = $1 ORDER BY event_id FOR UPDATE`, tenantID)
 	if err != nil {
@@ -997,7 +997,7 @@ func (s *Store) prepareApplicationSecretImportRecoveryFencesTx(
 	for rows.Next() {
 		var batch pendingBatch
 		if err := rows.Scan(&batch.eventID, &batch.payload, &batch.digest,
-			&batch.actor, &batch.actorRef); err != nil {
+			&batch.actor, &batch.actorRef, &batch.operation); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -1048,8 +1048,14 @@ func (s *Store) prepareApplicationSecretImportRecoveryFencesTx(
 		if len(names) == 0 || !slices.Equal(names, payloadNames) {
 			return nil, fmt.Errorf("%w: application-secret import recovery names differ", ErrIdempotencyConflict)
 		}
+		// A pending promotion or restore (A236) is the same reservation with
+		// its own event wire.
+		eventType := "secret.batch_imported"
+		if batch.operation != ApplicationSecretBatchImport {
+			eventType = "secret.batch_versioned"
+		}
 		rewritten, version, dataChanged, err := events.PseudonymizeEventDataForSubjectVersioned(
-			batch.payload, tenantID, subject, "secret.batch_imported", 1)
+			batch.payload, tenantID, subject, eventType, 1)
 		if err != nil {
 			return nil, err
 		}

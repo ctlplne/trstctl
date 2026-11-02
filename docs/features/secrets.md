@@ -166,6 +166,35 @@ of each with its health (ok, expiring within 30 days, expired), so an applicatio
 certificates, workload identities and secrets read as one inventory. With no owner,
 the page says to set one instead of guessing.
 
+### Promoting between environments (A236)
+
+A **promotion** copies one environment's secrets, or one folder of them, into another
+environment of the same project as new versions, all in one batch. Preview first: the
+plan is value-free and lists each key's source and target versions and its action
+(`create`, `update`, `unchanged` or `blocked`), the target secrets the promotion leaves
+alone (`kept`), and a `plan_digest`. Apply the plan by that digest:
+
+```
+trstctl secrets projects promote preview payments -f promote.json   # {"from":"dev","to":"stage","folder":"db"}
+trstctl secrets projects promote apply payments -f apply.json       # the same body plus "plan_digest"
+```
+
+A reference into the source environment (`${secret.payments/dev/db/password}`) is
+pointed at the same key in the target (`${secret.payments/stage/db/password}`); any
+other reference is kept as written. Every reference of a changed secret must resolve in
+the target as you may read it, hop by hop and without a cycle. An item whose reference
+cycles, reaches a restricted environment you aren't granted, names a secret that exists
+only in another tenant, or doesn't resolve is `blocked`, with the reason. A source
+version whose credential a rotation retired, revoked or let expire is blocked too. A
+blocked item blocks the whole promotion (`409`, code `plan_blocked`), and nothing is
+written. The apply recomputes the plan, so a secret changed since the preview answers
+`409` with code `plan_stale` and the new plan. The batch then reserves every name at its
+planned version, so no other write can land between that check and the write. Target
+secrets with no source are never touched or deleted. A plan with nothing to change answers
+`200` without a batch, and an exact retry with the same `Idempotency-Key` returns the
+first receipt. You need read access to the source environment and write access to the
+target. Every new version is audited like a single write.
+
 ### Vault/OpenBao-compatible common API
 
 Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl — a

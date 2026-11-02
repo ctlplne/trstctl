@@ -9779,6 +9779,37 @@ export interface SecretProjectMemberRequest {
   role: "viewer" | "developer" | "admin";
 }
 
+export interface SecretPromotionItem {
+  action: "create" | "update" | "unchanged" | "blocked";
+  key: string;
+  reason?: string;
+  references?: string[];
+  rewritten_references?: number;
+  source_name: string;
+  source_version: number;
+  target_name: string;
+  target_version: number;
+}
+
+export interface SecretPromotionPlan {
+  blocked: number;
+  changes: number;
+  folder?: string;
+  from: string;
+  items: SecretPromotionItem[];
+  kept: string[];
+  plan_digest: string;
+  project: string;
+  to: string;
+}
+
+export interface SecretPromotionRequest {
+  folder?: string;
+  from: string;
+  plan_digest?: string;
+  to: string;
+}
+
 export interface SecretRecoverRequest {
   at: string;
 }
@@ -10201,6 +10232,13 @@ export interface SecretValue {
   name: string;
   value: string;
   version?: number;
+}
+
+export interface SecretVersionBatchReceipt {
+  batch_id?: string;
+  items: { name: string; updated_at: string; version: number }[];
+  operation: "promotion" | "restore";
+  plan_digest: string;
 }
 
 export interface SecretWorkloadInjection {

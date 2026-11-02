@@ -691,6 +691,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "projects", "environments", "add"}, Method: "POST", Path: "/api/v1/secrets/projects/{project}/environments", Body: bodyFile, Summary: "Add an environment to a secrets project"},
 	{Name: []string{"secrets", "projects", "members", "grant"}, Method: "PUT", Path: "/api/v1/secrets/projects/{project}/members/{subject}", Body: bodyFile, Summary: "Grant a subject a role in a secrets project (optionally for listed environments)"},
 	{Name: []string{"secrets", "projects", "members", "revoke"}, Method: "DELETE", Path: "/api/v1/secrets/projects/{project}/members/{subject}", Summary: "Revoke a subject's access to a secrets project"},
+	{Name: []string{"secrets", "projects", "promote", "preview"}, Method: "POST", Path: "/api/v1/secrets/projects/{project}/promotions/preview", Body: bodyFile, Summary: "Preview promoting an environment's secrets (or a folder) into another environment: a value-free plan and its digest"},
+	{Name: []string{"secrets", "projects", "promote", "apply"}, Method: "POST", Path: "/api/v1/secrets/projects/{project}/promotions", Body: bodyFile, Summary: "Apply a reviewed promotion plan by its plan_digest; a secret changed since the preview makes the plan stale"},
 	{Name: []string{"secrets", "store", "list"}, Method: "GET", Path: "/api/v1/secrets/store", Query: []string{"limit", "cursor"}, Summary: "List stored secrets"},
 	{Name: []string{"secrets", "store", "get"}, Method: "GET", Path: "/api/v1/secrets/store/{name}", Query: []string{"resolve"}, Summary: "Get a stored secret"},
 	{Name: []string{"secrets", "store", "history"}, Method: "GET", Path: "/api/v1/secrets/store/history/{name}", Query: []string{"version"}, Summary: "Get a historical stored-secret version"},

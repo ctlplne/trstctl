@@ -131,6 +131,12 @@ func TestRejectProjectorPrivacyPayloadShapesCoverEveryVersionCoordinate(t *testi
 			EventType: EventApplicationSecretBatchImported, Version: version,
 		}] = struct{}{}
 	}
+	for _, version := range []int{ApplicationSecretBatchVersionSchemaVersion,
+		ApplicationSecretBatchVersionPrivacyTombstoneSchemaVersion} {
+		externallyRegistered[privacyEventPolicyKey{
+			EventType: EventApplicationSecretBatchVersioned, Version: version,
+		}] = struct{}{}
+	}
 
 	for eventType, versions := range knownSchemaVersions {
 		for version := range versions {
@@ -273,6 +279,26 @@ func TestShortSubjectDoesNotCollideWithOpaqueKnownSchemaValues(t *testing.T) {
 					}))
 				default:
 					t.Fatalf("application-secret event %s has no opaque fixture for schema v%d", eventType, version)
+				}
+			}
+			if eventType == EventApplicationSecretBatchVersioned {
+				versioned := ApplicationSecretBatchVersion{
+					TenantEpoch: "epoch", IdempotencyKeyDigest: "opaque",
+					RequestBinding: "opaque", CommandEvidence: "opaque", Surface: "native",
+					Operation: "promotion", PlanDigest: "opaque",
+					Items: []ApplicationSecretBatchVersionItem{{Name: "secret", ExpectedVersion: 1, ResultVersion: 2,
+						Sealed: []byte("cipher"), SourceName: "source", SourceVersion: 1}},
+				}
+				switch version {
+				case ApplicationSecretBatchVersionSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, versioned))
+				case ApplicationSecretBatchVersionPrivacyTombstoneSchemaVersion:
+					data = []byte(mustPrivacyFixtureJSON(t, ApplicationSecretBatchVersionPrivacyPruned{
+						ApplicationSecretBatchVersion: versioned,
+						PrivacyDisposition:            "name_items_pruned",
+						PrivacySubjectRef:             "opaque", PrivacySourceSchemaVersion: 1,
+						PrivacyRemovedCount: 1,
+					}))
 				}
 			}
 			if eventType == EventApplicationSecretBatchImported {

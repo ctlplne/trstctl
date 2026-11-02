@@ -362,12 +362,20 @@ func (a *API) reconcileApplicationSecretImportBatches(ctx context.Context, tenan
 				return completed, err
 			}
 			for _, batch := range batches {
+				// A promotion or restore (A236) is the same reservation with its
+				// own event wire.
+				eventType, schemaVersion := projections.EventApplicationSecretBatchImported,
+					projections.ApplicationSecretBatchImportSchemaVersion
+				if batch.Operation != store.ApplicationSecretBatchImport {
+					eventType, schemaVersion = projections.EventApplicationSecretBatchVersioned,
+						projections.ApplicationSecretBatchVersionSchemaVersion
+				}
 				err := a.secrets.be.Store.WithApplicationSecretMutationPrivacyBarrier(
 					ctx, tenant.TenantID, func(barrierCtx context.Context) error {
 						event, err := a.appendApplicationSecretImportEvent(barrierCtx, events.Event{
-							ID: batch.EventID, Type: projections.EventApplicationSecretBatchImported,
+							ID: batch.EventID, Type: eventType,
 							TenantID: tenant.TenantID, Time: batch.EventTime,
-							SchemaVersion: projections.ApplicationSecretBatchImportSchemaVersion,
+							SchemaVersion: schemaVersion,
 							Data:          batch.Payload, Actor: batch.Actor,
 						})
 						if err != nil {

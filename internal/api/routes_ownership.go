@@ -127,5 +127,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.certificateDERRecoveryRoutes()...)
 	out = append(out, a.nhiReviewGenerateRoutes()...)
 	out = append(out, a.cbomImportRoutes()...)
+	out = append(out, a.secretPromotionRoutes()...) // see secret_promotion.go
 	return out
 }

@@ -398,8 +398,9 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// P6 adds `secrets scans hooks test` and `secrets scans move`.
 	// A235 adds `secrets projects create|list|show`, `secrets projects
 	// environments add` and `secrets projects members grant|revoke`.
-	if len(out) != 692 {
-		t.Fatalf("CLI commands = %d, want 692", len(out))
+	// A236 adds `secrets projects promote preview|apply`.
+	if len(out) != 694 {
+		t.Fatalf("CLI commands = %d, want 694", len(out))
 	}
 	return out
 }

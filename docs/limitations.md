@@ -1322,8 +1322,16 @@ never live in the API process. What you can do end to end against the running bi
   members on every read/write surface (native API, references, previews, imports, syncs,
   rotations, Vault-compatible KV), membership under `access:write`, and a project view
   naming unknown ownership; the console Projects view (`/secrets/projects`) with the
-  application view of the owner's certificates and identities. Promotion between
-  environments, folder snapshots and scoped overrides are A236.
+  application view of the owner's certificates and identities.
+- Environment promotion (A236 part a): `POST /api/v1/secrets/projects/{project}/promotions/preview`
+  and `.../promotions` (`trstctl secrets projects promote preview|apply`) promote an
+  environment or folder into another as one reserved batch of new versions after a
+  value-free plan applied by its digest; references into the source environment are
+  rewritten to the target; a reference that cycles, crosses into an ungranted restricted
+  environment, exists only in another tenant or doesn't resolve blocks the plan, as does a
+  retired, revoked or expired source credential; a concurrent edit makes the plan stale;
+  target-only secrets are kept. Folder restore to a point in time is part b. Four-eyes
+  approval for promotions into restricted environments is not served.
 - Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
   redacted repository finding's value in the operator's checkout with the pinned
   gitleaks, stores it as a native secret and links the finding

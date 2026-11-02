@@ -30,6 +30,9 @@ type ApplicationSecretImportBatch struct {
 	Actor          *events.Actor
 	EventTime      time.Time
 	Names          []string
+	// Operation is "import" for a batch import, or a versioned batch's
+	// "promotion" or "restore" (A236); empty reads as "import".
+	Operation string
 }
 
 type ApplicationSecretImportItem struct {
@@ -121,8 +124,8 @@ func (s *Store) claimApplicationSecretImportBatchUnbarriered(
 		var err error
 		canonical, err = getApplicationSecretImportBatchTx(ctx, tx, batch.TenantID, batch.EventID)
 		if err == nil {
-			if canonical.RequestBinding != batch.RequestBinding || canonical.PayloadDigest != batch.PayloadDigest ||
-				!slices.Equal(canonical.Names, batch.Names) {
+			if canonical.Operation != ApplicationSecretBatchImport || canonical.RequestBinding != batch.RequestBinding ||
+				canonical.PayloadDigest != batch.PayloadDigest || !slices.Equal(canonical.Names, batch.Names) {
 				return ErrIdempotencyConflict
 			}
 			return nil
@@ -189,11 +192,11 @@ func getApplicationSecretImportBatchTx(ctx context.Context, tx pgx.Tx, tenantID,
 	var actor []byte
 	err := tx.QueryRow(ctx, `
 		SELECT tenant_id::text, event_id::text, tenant_epoch::text, request_binding,
-		       payload_sha256, command_payload, actor, event_time
+		       payload_sha256, command_payload, actor, event_time, operation
 		  FROM application_secret_import_batches
 		 WHERE tenant_id = $1 AND event_id = $2`, tenantID, eventID).
 		Scan(&batch.TenantID, &batch.EventID, &batch.TenantEpoch, &batch.RequestBinding,
-			&batch.PayloadDigest, &batch.Payload, &actor, &batch.EventTime)
+			&batch.PayloadDigest, &batch.Payload, &actor, &batch.EventTime, &batch.Operation)
 	if err != nil {
 		return batch, err
 	}
@@ -335,7 +338,8 @@ func (s *Store) ApplyApplicationSecretImportTx(
 		if err != nil {
 			return err
 		}
-		if canonical.TenantEpoch != batch.TenantEpoch || canonical.RequestBinding != batch.RequestBinding ||
+		if canonical.Operation != ApplicationSecretBatchImport || canonical.TenantEpoch != batch.TenantEpoch ||
+			canonical.RequestBinding != batch.RequestBinding ||
 			canonical.PayloadDigest != batch.PayloadDigest || !slices.Equal(canonical.Names, batch.Names) ||
 			!canonical.EventTime.Equal(batch.EventTime.UTC().Truncate(time.Microsecond)) {
 			return ErrIdempotencyConflict

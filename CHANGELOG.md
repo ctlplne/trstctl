@@ -2,6 +2,13 @@
 
 ### Added
 
+- Environment promotion for secrets projects: `trstctl secrets projects promote preview` returns a value-free plan
+  (per key: create, update, unchanged or blocked, plus the target secrets left alone) and its digest, and
+  `promote apply` writes the plan as one batch of new versions when the digest still matches. References into the
+  source environment are pointed at the target. A reference cycle, an ungranted restricted hop, a reference that
+  exists only in another tenant, an unresolvable reference or a retired source credential blocks the promotion,
+  and a secret changed after the preview makes the plan stale.
+
 - Secrets projects and environments: `trstctl secrets projects create|show` and `members grant|revoke` group an
   application's secrets by environment (by name, `<project>/<environment>/…`) in the same native store. A restricted
   environment is readable and writable only by members granted it, on every surface including references and the

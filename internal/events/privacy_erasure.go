@@ -21,6 +21,7 @@ import (
 
 const privacyCodeSigningCommandedEvent = "codesign.commanded"
 const privacyApplicationSecretBatchImportedEvent = "secret.batch_imported"
+const privacyApplicationSecretBatchVersionedEvent = "secret.batch_versioned"
 
 const (
 	// ApplicationSecretPrivacyDispositionSchemaVersion is a privacy-only event
@@ -549,6 +550,9 @@ func PseudonymizeEventDataForSubjectVersioned(
 	if eventType == privacyApplicationSecretBatchImportedEvent {
 		return pseudonymizeApplicationSecretBatchImportData(data, tenantID, subject, schemaVersion)
 	}
+	if eventType == privacyApplicationSecretBatchVersionedEvent {
+		return pseudonymizeApplicationSecretBatchVersionedData(data, tenantID, subject, schemaVersion)
+	}
 	if eventType == "tenant.member.upserted" {
 		next, changed, err = pseudonymizeTenantMemberUpsertData(data, tenantID, subject, schemaVersion)
 		return next, schemaVersion, changed, err
@@ -659,6 +663,82 @@ func pseudonymizeApplicationSecretBatchImportData(data []byte, tenantID, subject
 	}
 	next, changed, err := applyRegisteredPrivacyEventPolicy(data, tenantID, subject,
 		privacyApplicationSecretBatchImportedEvent, schemaVersion)
+	return next, schemaVersion, changed, err
+}
+
+// A promotion or restore (A236) prunes exactly like a batch import: an item
+// whose name or source name holds the subject is removed, because both names
+// are ciphertext AAD or its provenance and cannot be renamed.
+func pseudonymizeApplicationSecretBatchVersionedData(data []byte, tenantID, subject string, schemaVersion int) ([]byte, int, bool, error) {
+	const tombstoneVersion = 2
+	if schemaVersion != DefaultSchemaVersion && schemaVersion != tombstoneVersion {
+		return nil, schemaVersion, false, errors.New("events: unsupported versioned secret batch privacy schema")
+	}
+	if err := validatePrivacyJSONUniqueKeys(data); err != nil {
+		return nil, schemaVersion, false, err
+	}
+	if err := validateRegisteredPrivacyEventPayload(data, privacyApplicationSecretBatchVersionedEvent, schemaVersion); err != nil {
+		return nil, schemaVersion, false, err
+	}
+	var coordinates struct {
+		TenantEpoch          string `json:"tenant_epoch"`
+		IdempotencyKeyDigest string `json:"idempotency_key_sha256"`
+		RequestBinding       string `json:"request_binding_hmac_sha256"`
+		CommandEvidence      string `json:"command_evidence"`
+		Surface              string `json:"surface"`
+		Operation            string `json:"operation"`
+		PlanDigest           string `json:"plan_digest"`
+		Items                []struct {
+			Name            string `json:"name"`
+			ExpectedVersion int    `json:"expected_version"`
+			ResultVersion   int    `json:"result_version"`
+			Sealed          []byte `json:"sealed"`
+			SourceName      string `json:"source_name"`
+			SourceVersion   int    `json:"source_version"`
+		} `json:"items"`
+		PrivacyDisposition         string `json:"privacy_disposition,omitempty"`
+		PrivacySubjectRef          string `json:"privacy_subject_ref,omitempty"`
+		PrivacySourceSchemaVersion int    `json:"privacy_source_schema_version,omitempty"`
+		PrivacyRemovedCount        int    `json:"privacy_removed_count,omitempty"`
+	}
+	if err := json.Unmarshal(data, &coordinates); err != nil {
+		return nil, schemaVersion, false, err
+	}
+	if len(coordinates.Items) == 0 && schemaVersion == DefaultSchemaVersion {
+		return nil, schemaVersion, false, errors.New("events: versioned secret batch has no names")
+	}
+	retained := coordinates.Items[:0]
+	removed := 0
+	for _, item := range coordinates.Items {
+		if item.Name == "" || item.SourceName == "" {
+			return nil, schemaVersion, false, errors.New("events: versioned secret batch has an empty name")
+		}
+		_, inName := replaceSubjectTokens(item.Name, subject, "")
+		_, inSource := replaceSubjectTokens(item.SourceName, subject, "")
+		if inName || inSource {
+			removed++
+			continue
+		}
+		retained = append(retained, item)
+	}
+	if removed > 0 {
+		coordinates.Items = retained
+		coordinates.PrivacyDisposition = "name_items_pruned"
+		coordinates.PrivacySubjectRef = privacyref.SubjectRef(tenantID, subject)
+		coordinates.PrivacySourceSchemaVersion = DefaultSchemaVersion
+		coordinates.PrivacyRemovedCount += removed
+		next, err := json.Marshal(coordinates)
+		if err != nil {
+			return nil, schemaVersion, false, err
+		}
+		if err := validateRegisteredPrivacyEventPayload(next,
+			privacyApplicationSecretBatchVersionedEvent, tombstoneVersion); err != nil {
+			return nil, schemaVersion, false, err
+		}
+		return next, tombstoneVersion, true, nil
+	}
+	next, changed, err := applyRegisteredPrivacyEventPolicy(data, tenantID, subject,
+		privacyApplicationSecretBatchVersionedEvent, schemaVersion)
 	return next, schemaVersion, changed, err
 }
 

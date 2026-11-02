@@ -8031,6 +8031,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/projects/{project}/promotions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a reviewed promotion plan by its digest as one batch of new versions; a secret changed since the preview makes it stale */
+        post: operations["applySecretPromotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/projects/{project}/promotions/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview promoting an environment's secrets (or one folder of them) into another environment: a value-free plan and its digest */
+        post: operations["previewSecretPromotion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/rotation-schedules": {
         parameters: {
             query?: never;
@@ -20489,6 +20523,35 @@ export interface components {
             /** @enum {string} */
             role: "viewer" | "developer" | "admin";
         };
+        SecretPromotionItem: {
+            /** @enum {string} */
+            action: "create" | "update" | "unchanged" | "blocked";
+            key: string;
+            reason?: string;
+            references?: string[];
+            rewritten_references?: number;
+            source_name: string;
+            source_version: number;
+            target_name: string;
+            target_version: number;
+        };
+        SecretPromotionPlan: {
+            blocked: number;
+            changes: number;
+            folder?: string;
+            from: string;
+            items: components["schemas"]["SecretPromotionItem"][];
+            kept: string[];
+            plan_digest: string;
+            project: string;
+            to: string;
+        };
+        SecretPromotionRequest: {
+            folder?: string;
+            from: string;
+            plan_digest?: string;
+            to: string;
+        };
         SecretRecoverRequest: {
             /** Format: date-time */
             at: string;
@@ -20971,6 +21034,18 @@ export interface components {
             name: string;
             value: string;
             version?: number;
+        };
+        SecretVersionBatchReceipt: {
+            batch_id?: string;
+            items: {
+                name: string;
+                /** Format: date-time */
+                updated_at: string;
+                version: number;
+            }[];
+            /** @enum {string} */
+            operation: "promotion" | "restore";
+            plan_digest: string;
         };
         SecretWorkloadInjection: {
             annotations: string[];
@@ -44922,6 +44997,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretProject"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applySecretPromotion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretPromotionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretVersionBatchReceipt"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretPromotion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretPromotionRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretPromotionPlan"];
                 };
             };
             /** @description client error */
