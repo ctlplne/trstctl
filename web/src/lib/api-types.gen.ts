@@ -9873,6 +9873,32 @@ export interface SecretRepositoryWebhookRequest {
   repository: string;
 }
 
+export interface SecretRestoreItem {
+  action: "restore" | "unchanged" | "created_since" | "blocked";
+  current_version: number;
+  name: string;
+  reason?: string;
+  restore_version?: number;
+}
+
+export interface SecretRestorePlan {
+  at: string;
+  blocked: number;
+  changes: number;
+  environment: string;
+  folder?: string;
+  items: SecretRestoreItem[];
+  plan_digest: string;
+  project: string;
+}
+
+export interface SecretRestoreRequest {
+  at: string;
+  environment: string;
+  folder?: string;
+  plan_digest?: string;
+}
+
 export interface SecretRotateRequest {
   value: string;
 }

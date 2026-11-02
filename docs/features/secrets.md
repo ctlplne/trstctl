@@ -195,6 +195,27 @@ secrets with no source are never touched or deleted. A plan with nothing to chan
 first receipt. You need read access to the source environment and write access to the
 target. Every new version is audited like a single write.
 
+### Restoring a folder to a point in time (A236)
+
+A **restore** puts an environment, or one folder of it, back to how it stood at a point in
+time. Each secret that changed since then gets a new version holding the value it had,
+and the new version names the version it restored. Secrets created since are listed as
+`created_since` and kept; nothing is deleted, and no secret outside the folder changes.
+Like a promotion, the plan is value-free and applied by its digest, the whole folder
+changes in one batch or not at all, and a change after the preview makes the plan stale:
+
+```
+trstctl secrets projects restore preview payments -f restore.json   # {"environment":"stage","folder":"db","at":"2026-11-01T10:00:00Z"}
+trstctl secrets projects restore apply payments -f apply.json       # the same body plus "plan_digest"
+```
+
+A restore never brings back a dead credential silently. A version whose credential a
+rotation retired at its provider, is retiring, revoked by rolling back, or whose lease
+has expired is `blocked` with the rotation named, and a blocked item blocks the restore.
+Every restored value's references must still resolve, as for a promotion. A deleted
+secret can't be restored, because deleting a secret removes its history. The console
+offers both on a project's page (**Promote or restore**) for `secrets:write` holders.
+
 ### Vault/OpenBao-compatible common API
 
 Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl — a

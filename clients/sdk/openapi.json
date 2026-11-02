@@ -41810,6 +41810,101 @@
         ],
         "type": "object"
       },
+      "SecretRestoreItem": {
+        "properties": {
+          "action": {
+            "enum": [
+              "restore",
+              "unchanged",
+              "created_since",
+              "blocked"
+            ],
+            "type": "string"
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "restore_version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "current_version",
+          "action"
+        ],
+        "type": "object"
+      },
+      "SecretRestorePlan": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "blocked": {
+            "type": "integer"
+          },
+          "changes": {
+            "type": "integer"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecretRestoreItem"
+            },
+            "type": "array"
+          },
+          "plan_digest": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "environment",
+          "at",
+          "plan_digest",
+          "items",
+          "changes",
+          "blocked"
+        ],
+        "type": "object"
+      },
+      "SecretRestoreRequest": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "plan_digest": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment",
+          "at"
+        ],
+        "type": "object"
+      },
       "SecretRotateRequest": {
         "properties": {
           "value": {
@@ -80513,6 +80608,151 @@
         ],
         "summary": "Preview promoting an environment's secrets (or one folder of them) into another environment: a value-free plan and its digest",
         "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/projects/{project}/restores": {
+      "post": {
+        "operationId": "applySecretRestore",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretVersionBatchReceipt"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Apply a reviewed restore plan by its digest as one batch of new versions; nothing outside the folder changes",
+        "x-trstctl-permission": "secrets:write"
+      }
+    },
+    "/api/v1/secrets/projects/{project}/restores/preview": {
+      "post": {
+        "operationId": "previewSecretRestore",
+        "parameters": [
+          {
+            "description": "secrets project slug",
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretRestorePlan"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Preview restoring an environment (or one folder) to a point in time: a value-free plan and its digest",
+        "x-trstctl-permission": "secrets:write"
       }
     },
     "/api/v1/secrets/rotation-schedules": {

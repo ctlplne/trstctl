@@ -9,6 +9,7 @@ import { formatDateTime } from "@/i18n/format";
 import { useTranslation } from "@/i18n/I18nProvider";
 import { api, type SecretProject } from "@/lib/api";
 import { apiProblemMessage } from "@/lib/apiProblem";
+import { SecretProjectTransfers } from "./SecretProjectTransfers";
 
 // A235: the secrets workspace. A project groups an application's secrets by
 // environment over the same native store (a secret belongs to it by its name,
@@ -30,6 +31,7 @@ function slugs(value: string): string[] {
 export function SecretProjectsWorkflow() {
   const { t } = useTranslation();
   const canManage = useCan("access:write");
+  const canWrite = useCan("secrets:write");
   const [projects, setProjects] = useState<SecretProject[]>([]);
   const [selected, setSelected] = useState<SecretProject | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -261,6 +263,7 @@ export function SecretProjectsWorkflow() {
               </form>
             ) : null}
           </div>
+          {canWrite ? <SecretProjectTransfers project={selected} onApplied={() => void open(selected.slug)} /> : null}
         </article>
       ) : null}
 

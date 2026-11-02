@@ -13655,6 +13655,44 @@ SecretRepositoryWebhookRequest = TypedDict(
     total=False,
 )
 
+SecretRestoreItem = TypedDict(
+    'SecretRestoreItem',
+    {
+        'action': str,
+        'current_version': int,
+        'name': str,
+        'reason': str,
+        'restore_version': int,
+    },
+    total=False,
+)
+
+SecretRestorePlan = TypedDict(
+    'SecretRestorePlan',
+    {
+        'at': str,
+        'blocked': int,
+        'changes': int,
+        'environment': str,
+        'folder': str,
+        'items': list[dict[str, Any]],
+        'plan_digest': str,
+        'project': str,
+    },
+    total=False,
+)
+
+SecretRestoreRequest = TypedDict(
+    'SecretRestoreRequest',
+    {
+        'at': str,
+        'environment': str,
+        'folder': str,
+        'plan_digest': str,
+    },
+    total=False,
+)
+
 SecretRotateRequest = TypedDict(
     'SecretRotateRequest',
     {

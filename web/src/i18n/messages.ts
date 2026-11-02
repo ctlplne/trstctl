@@ -3898,6 +3898,130 @@ export const messages = {
   "secrets.projects.health.ok": { defaultMessage: "OK", description: "Resource health: valid and not expiring soon." },
   "secrets.projects.health.expiring": { defaultMessage: "Expiring within 30 days", description: "Resource health: expiring soon." },
   "secrets.projects.health.expired": { defaultMessage: "Expired", description: "Resource health: expired." },
+  "secrets.transfers.heading": {
+    defaultMessage: "Promote or restore",
+    description: "Heading of the project's promote/restore panel.",
+  },
+  "secrets.transfers.modeLabel": {
+    defaultMessage: "Promote or restore",
+    description: "Label of the promote/restore mode switch.",
+  },
+  "secrets.transfers.mode.promote": {
+    defaultMessage: "Promote",
+    description: "Mode: copy an environment into another.",
+  },
+  "secrets.transfers.mode.restore": {
+    defaultMessage: "Restore",
+    description: "Mode: put an environment back to a point in time.",
+  },
+  "secrets.transfers.from": {
+    defaultMessage: "From environment",
+    description: "Promotion source environment.",
+  },
+  "secrets.transfers.to": {
+    defaultMessage: "To environment",
+    description: "Promotion target environment.",
+  },
+  "secrets.transfers.environment": {
+    defaultMessage: "Environment",
+    description: "Environment to restore.",
+  },
+  "secrets.transfers.at": {
+    defaultMessage: "Restore to",
+    description: "Point in time to restore to.",
+  },
+  "secrets.transfers.atHelp": {
+    defaultMessage: "Secrets that changed since then get a new version holding the value they had; secrets created since are kept.",
+    description: "Help for the restore time.",
+  },
+  "secrets.transfers.folder": {
+    defaultMessage: "Folder (optional)",
+    description: "Folder path inside the environment.",
+  },
+  "secrets.transfers.folderHelp": {
+    defaultMessage: "Limit it to one folder, for example db.",
+    description: "Help for the folder field.",
+  },
+  "secrets.transfers.preview": {
+    defaultMessage: "Preview the plan",
+    description: "Button: compute the value-free plan.",
+  },
+  "secrets.transfers.previewFailed": {
+    defaultMessage: "The plan could not be computed.",
+    description: "Preview failure fallback.",
+  },
+  "secrets.transfers.applyFailed": {
+    defaultMessage: "Nothing was changed. The plan was previewed again.",
+    description: "Apply failure fallback.",
+  },
+  "secrets.transfers.applied": {
+    defaultMessage: "{count} secrets got a new version.",
+    description: "Applied result.",
+  },
+  "secrets.transfers.error": {
+    defaultMessage: "Promote or restore failed",
+    description: "Error title.",
+  },
+  "secrets.transfers.summary": {
+    defaultMessage: "{changes} secrets would change; {blocked} are blocked.",
+    description: "Plan summary.",
+  },
+  "secrets.transfers.planLabel": {
+    defaultMessage: "Plan",
+    description: "Accessible label of the plan list.",
+  },
+  "secrets.transfers.new": {
+    defaultMessage: "new",
+    description: "Target version label for a secret the promotion creates.",
+  },
+  "secrets.transfers.version": {
+    defaultMessage: "v{version}",
+    description: "A secret version number.",
+  },
+  "secrets.transfers.promoteVersions": {
+    defaultMessage: "v{source} \u2192 {target}",
+    description: "Promotion: the source version and the target version it replaces (or new).",
+  },
+  "secrets.transfers.restoreVersions": {
+    defaultMessage: "v{current} \u2190 v{restore}",
+    description: "Restore: the current version and the earlier version it brings back.",
+  },
+  "secrets.transfers.kept": {
+    defaultMessage: "Left alone in the target: {names}",
+    description: "Target secrets the promotion does not touch.",
+  },
+  "secrets.transfers.applyPromote": {
+    defaultMessage: "Promote these secrets",
+    description: "Button: apply the reviewed promotion plan.",
+  },
+  "secrets.transfers.applyRestore": {
+    defaultMessage: "Restore these secrets",
+    description: "Button: apply the reviewed restore plan.",
+  },
+  "secrets.transfers.action.create": {
+    defaultMessage: "Create",
+    description: "Plan action: a new secret in the target.",
+  },
+  "secrets.transfers.action.update": {
+    defaultMessage: "Update",
+    description: "Plan action: a new version in the target.",
+  },
+  "secrets.transfers.action.restore": {
+    defaultMessage: "Restore",
+    description: "Plan action: a new version with the earlier value.",
+  },
+  "secrets.transfers.action.unchanged": {
+    defaultMessage: "Unchanged",
+    description: "Plan action: nothing to do.",
+  },
+  "secrets.transfers.action.createdSince": {
+    defaultMessage: "Created since \u2014 kept",
+    description: "Plan action: created after the restore point, left alone.",
+  },
+  "secrets.transfers.action.blocked": {
+    defaultMessage: "Blocked",
+    description: "Plan action: refused, with the reason beside it.",
+  },
   "secrets.projects.access.open": { defaultMessage: "Open", description: "Environment access: unrestricted." },
   "secrets.projects.access.member": {
     defaultMessage: "Restricted \u2014 you are a member",

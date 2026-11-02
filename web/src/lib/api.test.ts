@@ -818,6 +818,10 @@ describe("exported API surface census", () => {
       // fields, the custody it needs and what changes) without writing state;
       // the opt-in itself is the separate idempotent command.
       "/api/v1/privacy/event-protection/preview",
+      // A236: both previews return a value-free plan and its digest; the
+      // separate apply commands are the idempotent mutations.
+      "/api/v1/secrets/projects/item%2Fid/promotions/preview",
+      "/api/v1/secrets/projects/item%2Fid/restores/preview",
     ]);
     for (const [target, init] of transport.mock.calls) {
       const url = String(target);

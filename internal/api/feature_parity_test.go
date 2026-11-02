@@ -358,9 +358,10 @@ func openAPIOperationIDs(t *testing.T, doc map[string]any) map[string]bool {
 	// secret into the store to 621.
 	// A235 adds the secrets workspace: creating, listing and showing projects,
 	// adding environments, and granting and revoking members (627).
-	// A236 adds previewing and applying an environment promotion (629).
-	if len(out) != 629 {
-		t.Fatalf("OpenAPI operationIds = %d, want 629", len(out))
+	// A236 adds previewing and applying an environment promotion (629) and a
+	// folder restore (631).
+	if len(out) != 631 {
+		t.Fatalf("OpenAPI operationIds = %d, want 631", len(out))
 	}
 	return out
 }

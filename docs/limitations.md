@@ -1330,8 +1330,14 @@ never live in the API process. What you can do end to end against the running bi
   rewritten to the target; a reference that cycles, crosses into an ungranted restricted
   environment, exists only in another tenant or doesn't resolve blocks the plan, as does a
   retired, revoked or expired source credential; a concurrent edit makes the plan stale;
-  target-only secrets are kept. Folder restore to a point in time is part b. Four-eyes
-  approval for promotions into restricted environments is not served.
+  target-only secrets are kept. Four-eyes approval for promotions into restricted
+  environments is not served.
+- Folder restore (A236 part b): `POST /api/v1/secrets/projects/{project}/restores/preview`
+  and `.../restores` (`trstctl secrets projects restore preview|apply`, console Promote or
+  restore) put an environment or folder back to a point in time as one reserved batch of
+  new versions naming the restored version; secrets created since are kept and nothing
+  outside the folder changes; a version whose credential a rotation retired, revoked or let
+  expire is refused by name; a deleted secret can't be restored (delete removes history).
 - Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
   redacted repository finding's value in the operator's checkout with the pinned
   gitleaks, stores it as a native secret and links the finding

@@ -1,5 +1,14 @@
 import { mutate, req } from "./apiTransport";
-import type { SecretProject, SecretProjectCreateRequest, SecretProjectEnvironmentRequest, SecretProjectList, SecretProjectMemberRequest } from "./api";
+import type {
+  SecretProject,
+  SecretProjectCreateRequest,
+  SecretProjectEnvironmentRequest,
+  SecretProjectList,
+  SecretProjectMemberRequest,
+  SecretPromotionRequest,
+  SecretRestoreRequest,
+  SecretVersionBatchReceipt,
+} from "./api";
 
 // A235: the secrets workspace. A project groups an application's secrets by
 // environment over the same native store; a restricted environment is open
@@ -21,3 +30,11 @@ export const putSecretProjectMember = (project: string, subject: string, input: 
 
 export const deleteSecretProjectMember = (project: string, subject: string) =>
   mutate<SecretProject>("DELETE", `/api/v1/secrets/projects/${encodeURIComponent(project)}/members/${encodeURIComponent(subject)}`);
+
+// A236: promotion and restore apply a reviewed plan by its digest as one
+// batch of new versions. Their previews are read-only POSTs (api.ts).
+export const applySecretPromotion = (project: string, input: SecretPromotionRequest, idempotencyKey?: string) =>
+  mutate<SecretVersionBatchReceipt>("POST", `/api/v1/secrets/projects/${encodeURIComponent(project)}/promotions`, input, idempotencyKey);
+
+export const applySecretRestore = (project: string, input: SecretRestoreRequest, idempotencyKey?: string) =>
+  mutate<SecretVersionBatchReceipt>("POST", `/api/v1/secrets/projects/${encodeURIComponent(project)}/restores`, input, idempotencyKey);

@@ -8065,6 +8065,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/projects/{project}/restores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply a reviewed restore plan by its digest as one batch of new versions; nothing outside the folder changes */
+        post: operations["applySecretRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/secrets/projects/{project}/restores/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview restoring an environment (or one folder) to a point in time: a value-free plan and its digest */
+        post: operations["previewSecretRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/rotation-schedules": {
         parameters: {
             query?: never;
@@ -20611,6 +20645,32 @@ export interface components {
             event?: string;
             ref?: string;
             repository: string;
+        };
+        SecretRestoreItem: {
+            /** @enum {string} */
+            action: "restore" | "unchanged" | "created_since" | "blocked";
+            current_version: number;
+            name: string;
+            reason?: string;
+            restore_version?: number;
+        };
+        SecretRestorePlan: {
+            /** Format: date-time */
+            at: string;
+            blocked: number;
+            changes: number;
+            environment: string;
+            folder?: string;
+            items: components["schemas"]["SecretRestoreItem"][];
+            plan_digest: string;
+            project: string;
+        };
+        SecretRestoreRequest: {
+            /** Format: date-time */
+            at: string;
+            environment: string;
+            folder?: string;
+            plan_digest?: string;
         };
         SecretRotateRequest: {
             value: string;
@@ -45090,6 +45150,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretPromotionPlan"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    applySecretRestore: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretVersionBatchReceipt"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewSecretRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description secrets project slug */
+                project: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRestoreRequest"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretRestorePlan"];
                 };
             };
             /** @description client error */

@@ -2,6 +2,10 @@
 
 ### Added
 
+- Folder restore for secrets projects: `trstctl secrets projects restore preview|apply` puts an environment or a
+  folder back to a point in time as new versions in one batch, keeps secrets created since, and refuses a version
+  whose credential a rotation retired, revoked or let expire. The console's project page offers Promote or restore.
+
 - Environment promotion for secrets projects: `trstctl secrets projects promote preview` returns a value-free plan
   (per key: create, update, unchanged or blocked, plus the target secrets left alone) and its digest, and
   `promote apply` writes the plan as one batch of new versions when the digest still matches. References into the

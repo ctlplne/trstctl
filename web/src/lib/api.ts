@@ -368,6 +368,11 @@ import type {
   SecretProjectEnvironmentRequest,
   SecretProjectList,
   SecretProjectMemberRequest,
+  SecretPromotionPlan,
+  SecretPromotionRequest,
+  SecretRestorePlan,
+  SecretRestoreRequest,
+  SecretVersionBatchReceipt,
   GraphPath,
   GraphQueryResult,
   GraphReachable,
@@ -787,6 +792,11 @@ export type {
   SecretProjectEnvironmentRequest,
   SecretProjectList,
   SecretProjectMemberRequest,
+  SecretPromotionPlan,
+  SecretPromotionRequest,
+  SecretRestorePlan,
+  SecretRestoreRequest,
+  SecretVersionBatchReceipt,
 } from "./api-types.gen";
 export type {
   DatabaseDecoy,
@@ -2619,6 +2629,10 @@ export interface Api {
   addSecretProjectEnvironment(project: string, input: SecretProjectEnvironmentRequest, idempotencyKey?: string): Promise<SecretProject>;
   putSecretProjectMember(project: string, subject: string, input: SecretProjectMemberRequest, idempotencyKey?: string): Promise<SecretProject>;
   deleteSecretProjectMember(project: string, subject: string): Promise<SecretProject>;
+  previewSecretPromotion(project: string, input: SecretPromotionRequest): Promise<SecretPromotionPlan>;
+  applySecretPromotion(project: string, input: SecretPromotionRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
+  previewSecretRestore(project: string, input: SecretRestoreRequest): Promise<SecretRestorePlan>;
+  applySecretRestore(project: string, input: SecretRestoreRequest, idempotencyKey?: string): Promise<SecretVersionBatchReceipt>;
   listDecoySecrets(cursor?: string): Promise<DecoySecretList>;
   retireDecoySecret(id: string): Promise<DecoySecret>;
   createDatabaseDecoy(input: DatabaseDecoyCreateRequest, idempotencyKey?: string): Promise<DatabaseDecoyCreateResponse>;
@@ -3496,6 +3510,11 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   addSecretProjectEnvironment: secretProjects.addSecretProjectEnvironment,
   putSecretProjectMember: secretProjects.putSecretProjectMember,
   deleteSecretProjectMember: secretProjects.deleteSecretProjectMember,
+  previewSecretPromotion: (project, input) =>
+    postRead<SecretPromotionPlan>(`/api/v1/secrets/projects/${encodeURIComponent(project)}/promotions/preview`, input),
+  applySecretPromotion: secretProjects.applySecretPromotion,
+  previewSecretRestore: (project, input) => postRead<SecretRestorePlan>(`/api/v1/secrets/projects/${encodeURIComponent(project)}/restores/preview`, input),
+  applySecretRestore: secretProjects.applySecretRestore,
   listDecoySecrets: decoy.listDecoySecrets,
   retireDecoySecret: decoy.retireDecoySecret,
   createDatabaseDecoy: decoy.createDatabaseDecoy,
