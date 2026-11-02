@@ -761,6 +761,25 @@ jobs:
       - name: Prefetch dependencies for the offline census
         run: scripts/ci/go-mod-download.sh
 
+      # The stock-client PQC rows (pqc_end_to_end.*) drive a stock OpenSSL with
+      # ML-DSA-65; the runner's OpenSSL 3.0 has none, so the census installs the
+      # same checksum-pinned build the package and pqc jobs use.
+      - name: Key the pinned OpenSSL build by runner image
+        id: openssl-pqc-key
+        env:
+          INSTALLER_HASH: ${{ hashFiles('scripts/ci/install-openssl-pqc.sh') }}
+        run: echo "key=openssl-pqc-${ImageOS}-${RUNNER_ARCH}-${INSTALLER_HASH}" >> "$GITHUB_OUTPUT"
+      - name: Restore the pinned OpenSSL build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/openssl-pqc
+          key: ${{ steps.openssl-pqc-key.outputs.key }}
+      - name: Install checksum-pinned ML-DSA-capable OpenSSL
+        env:
+          TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
+          TRSTCTL_OPENSSL_ACCEPT_CACHED: "1"
+        run: scripts/ci/install-openssl-pqc.sh
+
       - name: Run this shard of the shipped-binary Definition-of-Done census
         run: make dod-census-shard DOD_SHARD=${{ matrix.shard }} DOD_SHARDS=3
 
@@ -2453,6 +2472,14 @@ jobs:
           GOFIPS140: v1.0.0
         run: go test ./internal/crypto/ -run 'TestPowerOnSelfTest|TestSelfTestKAT|TestFIPSStatus' -count=1 -v
 
+      # make fips-image runs make docker-context-check first, whose audit
+      # (scripts/ci/docker-context-audit.sh) needs ripgrep; ubuntu-latest has none.
+      - name: Install ripgrep for the Docker build-context audit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ripgrep
+          rg --version
+
       - name: FIPS-capable release image (control plane and signer)
         run: |
           make fips-image VERSION=ci
@@ -2727,6 +2754,12 @@ jobs:
             echo "::error::runner OpenSSL lacks ML-DSA-65; the PQC census proofs need OpenSSL >= 3.5. Pin a capable runner image or build OpenSSL 3.5 in this job."
             exit 1
           fi
+
+      # make dod-gate runs the census self-tests, which list the shipped
+      # dependency closure with GOPROXY=off; warm the module cache first so the
+      # offline proof checks product wiring rather than an empty runner cache.
+      - name: Prefetch dependencies for the offline census
+        run: scripts/ci/go-mod-download.sh
 
       - name: PQC census proofs against the shipped artifact
         run: |
