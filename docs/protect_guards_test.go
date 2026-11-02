@@ -3586,7 +3586,7 @@ func TestSupplyChainStrengthGuardsStayRequired(t *testing.T) {
 		"sha_re='[0-9a-f]{40}'",
 		"offending_uses()",
 		"Pin each offending action by its commit SHA",
-		"Keep Dependabot (github-actions ecosystem) to bump the SHA pins",
+		"Bump a SHA pin, with its # vX.Y.Z comment, in a commit on main",
 	)
 	actionsSelftest := read(t, "../scripts/ci/check-actions-pinned_selftest.sh")
 	check("scripts/ci/check-actions-pinned_selftest.sh", actionsSelftest,

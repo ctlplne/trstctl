@@ -122,7 +122,7 @@ A row that newly falls behind gets a `behind_since` of the date it was observed
 behind; a row that has caught up moves to `status: current` and clears `behind_since`.
 Major upgrades must name an owner and a reason. An accepted deferral is allowed only
 when it has an explicit `deferral_until` date and explains the compatibility work that
-keeps the upgrade from being a safe automatic Dependabot merge.
+keeps the upgrade from being a safe routine commit.
 
 The checker validates the report offline against `go.mod` and `web/package-lock.json`.
 That means CI can prove the owner queue is current without relying on live registry

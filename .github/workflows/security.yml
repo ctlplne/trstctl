@@ -3,7 +3,8 @@ name: Security scans
 # Secret scanning (gitleaks) and container-image vulnerability scanning (Trivy),
 # wired as required checks so a planted secret or a vulnerable base image cannot
 # merge (SF.1). Dependency scanning is covered by the govulncheck job in ci.yml
-# and by Dependabot (.github/dependabot.yml); SAST by codeql.yml.
+# and by Dependabot alerts (version-update PRs are off in .github/dependabot.yml);
+# SAST by codeql.yml.
 on:
   push:
     branches: [main]

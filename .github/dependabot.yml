@@ -1,13 +1,16 @@
 version: 2
-# Automated dependency-update PRs so known-vulnerable dependencies are surfaced
-# and patched continuously, complementing the govulncheck gate in ci.yml (SF.1).
+# Every dependency surface keeps an entry here, so the dependency graph and its
+# Dependabot alerts cover it (SF.1, beside the govulncheck gate in ci.yml), but
+# version-update PRs are off: `open-pull-requests-limit: 0` on every ecosystem is
+# how GitHub disables them (owner decision 2026-11-02: no PRs or branches; every
+# upgrade lands as a reviewed commit on main).
 updates:
   # Go modules (control plane, signer, agent, linter).
   - package-ecosystem: gomod
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     groups:
       go-minor-and-patch:
         update-types: [minor, patch]
@@ -16,12 +19,13 @@ updates:
 
   # GitHub Actions used by the workflows. Every third-party action is pinned by a
   # 40-hex commit SHA (SUPPLY-002, enforced by scripts/ci/check-actions-pinned.sh);
-  # Dependabot bumps those SHA pins in place (and updates the `# vX.Y.Z` comment),
-  # so the pins stay current without ever reverting to a mutable tag.
+  # A pin bump lands as a commit on main that updates the SHA and its `# vX.Y.Z`
+  # comment together, so a pin never reverts to a mutable tag.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(actions)"
 
@@ -30,7 +34,7 @@ updates:
     directory: "/web"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
@@ -42,7 +46,7 @@ updates:
     directory: "/clients/sdk/typescript"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     groups:
       sdk-typescript-minor-and-patch:
         update-types: [minor, patch]
@@ -57,7 +61,7 @@ updates:
     directory: "/deploy/iac/pulumi/trstctl-resources"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     groups:
       pulumi-iac-minor-and-patch:
         update-types: [minor, patch]
@@ -69,19 +73,21 @@ updates:
     directory: "/deploy/docker"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(docker)"
 
   # Container images in the live-demo stack (docker-compose.yml + Dockerfile.seed).
   # Every image there is digest-pinned (SUPPLY-008, enforced by
-  # scripts/ci/check-compose-images-pinned.sh); Dependabot bumps those digest pins
-  # in place, so a pin stays current without ever reverting to a mutable tag.
+  # scripts/ci/check-compose-images-pinned.sh); a digest bump lands as a commit on
+  # main, so a pin never reverts to a mutable tag.
   # The demo stack had no docker updater at all, and its non-Postgres/NATS images
-  # were authored with floating tags rather than pins; this entry keeps the new
-  # digest pins current.
+  # were authored with floating tags rather than pins; this entry keeps them in
+  # the dependency graph.
   - package-ecosystem: docker
     directory: "/deploy/demo"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps(docker)"

@@ -79,7 +79,7 @@ main() {
 		echo
 		echo "Pin each offending action by its commit SHA with a version comment, e.g.:"
 		echo "    uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1"
-		echo "Keep Dependabot (github-actions ecosystem) to bump the SHA pins."
+		echo "Bump a SHA pin, with its # vX.Y.Z comment, in a commit on main."
 	fi
 	return "$rc"
 }

@@ -267,8 +267,9 @@ merely reports:
   pinned one finding at a time in `.gitleaksignore` by exact
   commit/path/rule/line fingerprint, so any other hardcoded secret fails CI.
 - **Dependency vulnerabilities**: the pinned `govulncheck` job (above) plus
-  Dependabot raising update PRs for Go modules, npm, GitHub Actions, and the
-  Docker base.
+  Dependabot alerts for Go modules, npm, GitHub Actions, and the Docker base.
+  Dependabot's version-update PRs are off (`open-pull-requests-limit: 0` on every
+  ecosystem): upgrades land as reviewed commits on `main`.
 - **Container image scanning — Trivy**: builds the runtime image from
   digest-pinned builder and runtime bases (never floating tags) and fails
   on any fixable HIGH/CRITICAL vulnerability. `scripts/ci/check-base-pinned.sh`
@@ -280,10 +281,9 @@ merely reports:
   the IaC job manifests — failing CI on any `image:` or `FROM` that names a tag
   without an `@sha256:` digest (SUPPLY-008). Locally-built `*:local` refs,
   build-arg indirection, Helm-templated refs, and intra-Dockerfile stage
-  references are the only exemptions. Dependabot's docker updater covers the
-  compose and Dockerfile directories it can parse (`/deploy/docker`,
-  `/deploy/demo`) and bumps those digest pins in place; the `deploy/iac/` pins
-  are not reachable by that updater and are refreshed by hand.
+  references are the only exemptions. Digest pins, including the `deploy/iac/`
+  ones, are refreshed by hand in commits on `main`; the `/deploy/docker` and
+  `/deploy/demo` Dependabot entries keep those images in the dependency graph.
 - **Critical-package coverage gate**: beyond the repo-wide coverage floor,
   each security-critical package (crypto boundary, issuance, outbox, RLS
   store, signing, revocation) must independently meet

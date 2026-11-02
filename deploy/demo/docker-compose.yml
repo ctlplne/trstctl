@@ -11,8 +11,8 @@
 # Every third-party image below is pinned by @sha256 digest, not a floating tag,
 # so the demo is reproducible and cannot silently inherit a changed/ vulnerable
 # image (SUPPLY-008). The human-readable tag is kept in the ref. Enforced by
-# scripts/ci/check-compose-images-pinned.sh; Dependabot's docker updater
-# (directory /deploy/demo) bumps the digests in place.
+# scripts/ci/check-compose-images-pinned.sh; digest bumps land as commits on
+# main.
 
 name: trstctl-demo
 

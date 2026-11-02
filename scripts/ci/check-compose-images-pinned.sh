@@ -119,7 +119,7 @@ main() {
 		echo "Resolve each ref to its digest and pin it, keeping the tag for humans:"
 		echo "    docker buildx imagetools inspect <name>:<tag> --format '{{.Manifest.Digest}}'"
 		echo "    image: <name>:<tag>@sha256:<digest>"
-		echo "Keep Dependabot (docker ecosystem, one entry per deploy/ directory) to bump the digest pins."
+		echo "Bump a digest pin in a commit on main; keep one Dependabot docker entry per deploy/ directory for alerts."
 		return 1
 	fi
 
