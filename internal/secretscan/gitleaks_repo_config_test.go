@@ -124,6 +124,47 @@ func TestGitleaksHistoricalGeneratedIdentifierPinsAreExact(t *testing.T) {
 	}
 }
 
+// TestGitleaksBuildRunFixturePinsAreExact guards the pins from the build run's
+// full-history review (2026-11-02): every match was inspected at its
+// introducing commit and is a test fixture, a canary, an identifier or a
+// pattern string, never a credential. Each pin names one commit, path, rule and
+// line, so a new match anywhere stays red.
+func TestGitleaksBuildRunFixturePinsAreExact(t *testing.T) {
+	root := filepath.Clean(filepath.Join("..", ".."))
+	ignore := readRepoFile(t, root, ".gitleaksignore")
+	for _, fingerprint := range []string{
+		"076186fe8114ad816c5932ae852b722645ef9584:internal/server/rollback_predecessor_adoption_served_test.go:generic-api-key:399",
+		"0f6466c4047010a4c8301a27eed3efda0d608d59:internal/eventprivacy/delivery_message_fuzz_test.go:generic-api-key:16",
+		"0f6466c4047010a4c8301a27eed3efda0d608d59:internal/server/event_protection_delivery_test.go:generic-api-key:19",
+		"1f5b4e5e3c422082911a00c26b8fc92846cd8759:internal/server/scan_annotation_served_test.go:generic-api-key:120",
+		"22802e29277e61eedaf9304786b3f9fbb2f6ebe0:internal/server/appliance_rollback_projection_test.go:generic-api-key:20",
+		"3ae164efd15b06b90cef30c0a83fe2a933027dc6:internal/server/vault_compat_served_test.go:generic-api-key:182",
+		"4675123a8e42cad2712d90d31ac3df75be062004:internal/server/certificate_der_recovery_served_test.go:generic-api-key:217",
+		"4ad6244c9d584100035981300676be9b1f21d6d5:internal/server/ssh_trust_fleet_served_test.go:generic-api-key:102",
+		"5089c5cca41c0cf7a7d459ddfb5f20100aad421e:internal/server/codesign_cosign_lab_p9_test.go:generic-api-key:83",
+		"540eb7856a23032e3e309561b730ee16ab5fb6ef:internal/agent/observe/capture_linux_test.go:generic-api-key:68",
+		"5b334623e75c56ce8891a15649147676b37675dc:internal/server/ssh_agentless_collection_served_test.go:generic-api-key:60",
+		"65c9043417cf6d0aa6af4360c1b69acfa36871f6:internal/cbom/sourcescan/sourcescan.go:generic-api-key:226",
+		"70dd0f31e56683f9f442bd3578944a67ce91b04b:internal/server/pqc_network_posture_served_test.go:generic-api-key:156",
+		"908b96973a114ad19efc26995163867445a7df03:internal/agent/relay/deploy_failure_log_keep_test.go:generic-api-key:35",
+		"908b96973a114ad19efc26995163867445a7df03:internal/agent/relay/deploy_failure_scrub_internal_test.go:private-key:18",
+		"a1f75583ca69b644dd86b65d2ddbd19a3d8154e8:internal/reconcile/awskmssource_test.go:generic-api-key:19",
+		"af59fa933a1570b3d13fa8bbdabd3300849150c8:docs/limitations.md:generic-api-key:3126",
+		"b00aa6f36262c4b400ff6453ec1f8182d76b0cab:internal/server/external_ca_revoke_served_test.go:generic-api-key:159",
+		"bb27034c5c4db646fdaec42c705d7fe54522ee4f:docs/limitations.md:generic-api-key:654",
+		"c1102121a7988b098945ee11557e35c826b973fb:internal/protocols/acme/email_reply_test.go:generic-api-key:23",
+		"d660e567d75ff385aa15996daa8d92f849400fc4:internal/server/adcs_revoke_relay_served_test.go:generic-api-key:238",
+		"d660e567d75ff385aa15996daa8d92f849400fc4:internal/server/adcs_revoke_relay_served_test.go:generic-api-key:322",
+		"db4b127a3545f3e3cdaf67097e9bd02b847ee5e4:internal/discovery/cloudsecret/apikeys_test.go:private-key:45",
+		"ee2924e848d831294bb8d8bf2e311d0a6ee8efb4:internal/mdm/entra_test.go:generic-api-key:22",
+		"fd80632089317f695643c85ef05b402c08db371e:internal/kms/pkcs11/attestation_softhsm_real_test.go:generic-api-key:34",
+	} {
+		if got := strings.Count(ignore, fingerprint); got != 1 {
+			t.Errorf("inspected build-run fixture fingerprint %q occurs %d times, want exactly once", fingerprint, got)
+		}
+	}
+}
+
 // TestServedGitleaksScanDetectsPlantedSecretInTestSource is the BEHAVIORAL SF.1
 // acceptance for test sources, and the direct counterpart of
 // TestServedGitleaksScanDetectsPlantedSecret (internal/server), which proves the
