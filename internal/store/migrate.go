@@ -281,8 +281,12 @@ func (s *Store) WithExtraMigrations(fsys fs.FS) *Store {
 
 // ExtraMigrations returns the registered extension migration sources, so a
 // recovery that migrates another database (the restore drill's throwaway
-// target) applies the same schema this store did.
+// target) applies the same schema this store did. A nil store (deps built
+// without a database) has none.
 func (s *Store) ExtraMigrations() []fs.FS {
+	if s == nil {
+		return nil
+	}
 	return append([]fs.FS(nil), s.extraMigrations...)
 }
 
