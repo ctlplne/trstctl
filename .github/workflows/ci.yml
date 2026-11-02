@@ -272,6 +272,18 @@ jobs:
       - name: Install lint tooling
         run: make tools
 
+      # golangci-lint keeps its analysis results between runs, keyed by file
+      # content, so a package that did not change is not analyzed again; every
+      # package is still linted. Each run on main saves its own entry and the
+      # next restores the newest (CI 41426772095's cold lint took 601 s).
+      - name: Restore the golangci-lint analysis cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/golangci-lint
+          key: golangci-lint-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}-${{ github.sha }}
+          restore-keys: |
+            golangci-lint-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}-
+
       # `make lint` fails closed if golangci-lint/actionlint are absent rather
       # than silently skipping them (CODE-005). Since `make tools` just installed
       # the pinned tools, this proves the full lint actually ran in CI.
