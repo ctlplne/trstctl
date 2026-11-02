@@ -34,11 +34,23 @@ suffix_out="$(mktemp)"
 ambiguous_suffix_profile="$(mktemp)"
 ambiguous_suffix_out="$(mktemp)"
 trap 'rm -f "$duplicate_profile" "$normalized_profile" "$bad_profile" "$bad_out" "$repaired_profile" "$repaired_out" "$orphan_profile" "$orphan_out" "$numeric_orphan_profile" "$numeric_orphan_out" "$path_orphan_profile" "$path_orphan_out" "$suffix_profile" "$suffix_out" "$ambiguous_suffix_profile" "$ambiguous_suffix_out"' EXIT
-covered_block="trstctl.com/trstctl/cmd/trstctl-cli/main.go:13.13,17.16"
-uncovered_block="trstctl.com/trstctl/cmd/trstctl/connector.go:39.2,40.16"
 if [[ -z "${GOCACHE:-}" ]]; then
 	export GOCACHE="${TMPDIR:-/tmp}/trstctl-cover-normalize-selftest-gocache"
 	mkdir -p "$GOCACHE"
+fi
+# Two real statement blocks of this module, read from a real coverage profile of
+# a small package: go tool cover maps a block to its function by source position,
+# and fixed positions went stale when the files they named changed (the old
+# cmd/trstctl-cli/main.go:13.13 block came to sit in the import list, so the
+# coverage check read 0.0%).
+real_profile="$(mktemp)"
+(cd "${here}/../.." && go test -count=1 -run '^$' -coverprofile="$real_profile" ./internal/secrettext >/dev/null)
+covered_block="$(awk 'NR > 1 {print $1}' "$real_profile" | sort -u | sed -n 1p)"
+uncovered_block="$(awk 'NR > 1 {print $1}' "$real_profile" | sort -u | sed -n 2p)"
+rm -f "$real_profile"
+if [[ -z "$covered_block" || -z "$uncovered_block" || "$covered_block" == "$uncovered_block" ]]; then
+	echo "FAIL: could not read two statement blocks from a real coverage profile"
+	exit 1
 fi
 
 cat >"$duplicate_profile" <<EOF
