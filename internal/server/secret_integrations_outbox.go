@@ -363,19 +363,26 @@ func (d *secretIntegrationOutboxDispatcher) DeliverTerminalFailure(ctx context.C
 	}
 }
 
+// awsSTSIndeterminateIssue is the terminal text of an AWS STS issuance whose
+// outcome is unknown.
+const awsSTSIndeterminateIssue = "AWS STS AssumeRole outcome is indeterminate; an external session may exist. Reconcile this lease in CloudTrail before issuing another credential"
+
 func (d *secretIntegrationOutboxDispatcher) dynamicSecretTerminalIssueFailure(tenantID, providerID string, cause error) string {
 	const exhausted = "external delivery exhausted its retry budget"
 	if !errors.Is(cause, orchestrator.ErrEffectIndeterminate) {
 		return exhausted
 	}
 	for _, provider := range d.dynamicProvidersForTenant(tenantID) {
-		guarded, ok := provider.(interface {
-			DynamicSecretNeedsAtMostOnceEffect() bool
-			DynamicSecretIndeterminateIssue() string
-		})
-		if provider.Name() == providerID && ok && guarded.DynamicSecretNeedsAtMostOnceEffect() {
-			return guarded.DynamicSecretIndeterminateIssue()
+		guarded, ok := provider.(interface{ DynamicSecretNeedsAtMostOnceEffect() bool })
+		if provider.Name() != providerID || !ok || !guarded.DynamicSecretNeedsAtMostOnceEffect() {
+			continue
 		}
+		// A provider that states what may exist upstream says it; AWS STS, the
+		// first at-most-once provider, keeps its CloudTrail reconciliation text.
+		if stated, ok := provider.(interface{ DynamicSecretIndeterminateIssue() string }); ok {
+			return stated.DynamicSecretIndeterminateIssue()
+		}
+		return awsSTSIndeterminateIssue
 	}
 	return exhausted
 }

@@ -1193,8 +1193,9 @@ func TestSecretSyncJobProjectionTracksOutboxWithoutSecretMaterial(t *testing.T) 
 	}
 
 	// The only bytea columns are the explicitly envelope-sealed worker preparation
-	// and credential result; no plaintext secret/value column becomes queryable
-	// status data.
+	// and credential result, and that credential kept for a revocation that
+	// presents it (an OAuth access token, migration 0371); no plaintext
+	// secret/value column becomes queryable status data.
 	var secretByteColumns []string
 	if err := s.SystemPool().QueryRow(ctx,
 		`SELECT array_agg(column_name ORDER BY column_name)
@@ -1204,7 +1205,7 @@ func TestSecretSyncJobProjectionTracksOutboxWithoutSecretMaterial(t *testing.T) 
 		    AND data_type = 'bytea'`).Scan(&secretByteColumns); err != nil {
 		t.Fatalf("inspect projection columns: %v", err)
 	}
-	if got := strings.Join(secretByteColumns, ","); got != "sealed_credential,sealed_preparation" {
+	if got := strings.Join(secretByteColumns, ","); got != "revocation_sealed_credential,sealed_credential,sealed_preparation" {
 		t.Fatalf("secret integration bytea columns = %q, want only sealed credential/preparation ciphertext", got)
 	}
 }

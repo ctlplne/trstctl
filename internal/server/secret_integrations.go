@@ -252,7 +252,7 @@ func (p *configuredDynamicProvider) DynamicSecretIndeterminateIssue() string {
 	if p.cfg.Type == "oauth-client-credentials" {
 		return fmt.Sprintf("OAuth token request outcome is indeterminate; an access token for client %q may exist for at most %s from the request. Revoke it at the authorization server or let it expire before issuing another credential", p.cfg.ClientID, p.maxTTL)
 	}
-	return "AWS STS AssumeRole outcome is indeterminate; an external session may exist. Reconcile this lease in CloudTrail before issuing another credential"
+	return awsSTSIndeterminateIssue
 }
 
 // DynamicSecretRevocation is "confirmed" when revoking a lease ends its
