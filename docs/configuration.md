@@ -2321,6 +2321,28 @@ or a lifetime past `max_ttl` or shorter than the lease. Set `revocation_endpoint
 (RFC 7009) so revoking a lease revokes its token; without it the token stays valid
 until it expires and the revocation waits for that. Tokens can't be extended.
 
+For ClickHouse (A239, `clickhouse`), set `endpoint` to ClickHouse's HTTPS HTTP
+interface, `admin_user` and `password_ref` to a user with access management that
+may create and drop users and grant the bound roles, and `role_bindings` to an
+existing ClickHouse role per allowed role (create the roles and their grants in
+ClickHouse first). Each lease is a user named from `username_prefix` (default
+`trstctl`) holding only that role, valid until `max_ttl` from its creation;
+revocation drops it.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "warehouse",
+  "type": "clickhouse",
+  "endpoint": "https://clickhouse.internal:8443",
+  "admin_user": "trstctl_admin",
+  "password_ref": "file:/run/secrets/clickhouse-admin",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "orders_reader"},
+  "max_ttl": "8h"
+}
+```
+
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",

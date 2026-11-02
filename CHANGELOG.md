@@ -2,6 +2,10 @@
 
 ### Added
 
+- ClickHouse dynamic secrets (`type: clickhouse`): each lease is a ClickHouse user with a generated password,
+  valid until the provider's maximum lifetime and holding the ClickHouse role its lease role is bound to, created
+  through the HTTP interface as `admin_user`; revocation drops the user, and a retry replaces the same user.
+
 - OAuth 2.0 access-token dynamic secrets (`type: oauth-client-credentials`): each lease is a new token from an
   authorization server's token endpoint (client credentials grant) carrying only the scopes its role is bound to;
   a token with other scopes, another type or a lifetime outside the lease and `max_ttl` is refused (and revoked

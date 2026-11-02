@@ -5240,8 +5240,8 @@ when off, requiring a KEK when on):
   closes it; the leaseworker expires leases through an
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
-  `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`, and
-  `oauth-client-credentials` (A239). Issuance is
+  `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
+  `oauth-client-credentials`, and `clickhouse` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5259,9 +5259,13 @@ when off, requiring a KEK when on):
   its role's scope, stock curl reads the realm through Keycloak's admin API with
   it, a renewal is refused, and after the lease is revoked (RFC 7009, through the
   outbox) curl is refused with 401; a provider without a revocation endpoint
-  keeps the revocation pending until the token's expiry. The provider catalog
-  states each adapter's authority and whether its revocation is confirmed or
-  TTL-only. The rest of A239's provider library is still being built.
+  keeps the revocation pending until the token's expiry. ClickHouse users (A239)
+  are proven against stock ClickHouse 24.8: stock curl reads the bound database
+  with a leased user and is refused a write, a renewal stays within the maximum
+  lifetime, and after revocation the login is refused and no leased user is
+  left. The provider catalog states each adapter's authority and whether its
+  revocation is confirmed or TTL-only. The rest of A239's provider library is
+  still being built.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,
   CloudTrail reconciliation, or rejection after native expiry. The local query

@@ -201,6 +201,46 @@ func TestValidateOAuthClientCredentialsProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateClickHouseProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "warehouse", Type: "clickhouse",
+		Endpoint: "https://clickhouse.internal:8443", AdminUser: "trstctl_admin", PasswordRef: "file:/run/secrets/clickhouse-admin",
+		AllowedRoles: []string{"reader"}, RoleBindings: map[string]string{"reader": "orders_reader"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint":          {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the HTTP interface) is required"},
+		"plain http":           {func(c *DynamicSecretProviderConfig) { c.Endpoint = "http://clickhouse.internal:8123" }, "endpoint:"},
+		"no admin":             {func(c *DynamicSecretProviderConfig) { c.AdminUser = "" }, "admin_user is required for clickhouse"},
+		"quoted admin":         {func(c *DynamicSecretProviderConfig) { c.AdminUser = "admin`x" }, "admin_user is required for clickhouse"},
+		"no password":          {func(c *DynamicSecretProviderConfig) { c.PasswordRef = "" }, "password_ref"},
+		"role without binding": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["reader"] must name an existing ClickHouse role`},
+		"injected binding": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"reader": "r TO x; DROP USER y"}
+		}, "must name an existing ClickHouse role"},
+		"binding without role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings["admin"] = "admin_role" }, `role_bindings["admin"] has no matching allowed role`},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"reader": "orders_reader"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
+		AllowedRoles: []string{"operator"}, MaxTTL: "30s", AdminUser: "trstctl_admin"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "admin_user is only valid for clickhouse") {
+		t.Fatalf("an admin_user on another provider type = %v", err)
+	}
+}
+
 func TestValidateRedisACLRequiresExplicitScopedRoles(t *testing.T) {
 	base := DynamicSecretProviderConfig{
 		TenantID: "11111111-1111-1111-1111-111111111111", ID: "redis", Type: "redis",

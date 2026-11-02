@@ -18660,7 +18660,8 @@
               "redis",
               "ldap",
               "totp",
-              "oauth-client-credentials"
+              "oauth-client-credentials",
+              "clickhouse"
             ],
             "type": "string"
           }

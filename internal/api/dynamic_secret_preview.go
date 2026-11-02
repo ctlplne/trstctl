@@ -230,6 +230,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("max_ttl", "Maximum token lifetime", "The longest lifetime the authorization server gives this client's tokens; a longer-lived token is refused (and revoked when possible).", true),
 			roles("Each allowed role maps to its space-separated scopes; a token granted any other scope is refused."),
 		)},
+		{Type: "clickhouse", Label: "ClickHouse users", Purpose: "Creates a ClickHouse user with a generated password, valid until the provider's maximum lifetime and holding the ClickHouse role its lease role is bound to, and drops it at revocation; ClickHouse then refuses its login.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "HTTP interface", "HTTPS URL of ClickHouse's HTTP interface.", true),
+			value("admin_user", "Administrator", "A ClickHouse user with access management, allowed to create and drop users and to grant the bound roles.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
+			roles("Each allowed role maps to an existing ClickHouse role that holds its grants, for example SELECT on one database."),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -264,6 +271,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the configured seed's current one-time code, accepted until the end of its time step (and through any skew window the verifier allows)", "ttl_only"
 	case "oauth-client-credentials":
 		return "an access token carrying only the role's scopes, accepted by resource servers until it is revoked at the authorization server or expires", "confirmed"
+	case "clickhouse":
+		return "the grants of the ClickHouse role the lease role is bound to, until the user is dropped or its VALID UNTIL passes", "confirmed"
 	}
 	return "", ""
 }

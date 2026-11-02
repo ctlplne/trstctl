@@ -120,10 +120,13 @@ type DynamicSecretProviderConfig struct {
 	// confidential client at the authorization server whose token endpoint is
 	// Endpoint; RevocationEndpoint (RFC 7009) is optional, and without it
 	// revocation waits for each token's expiry (A239).
-	ClientID           string   `json:"client_id,omitempty"`
-	ClientSecretRef    string   `json:"client_secret_ref,omitempty"`
-	RevocationEndpoint string   `json:"revocation_endpoint,omitempty"`
-	AllowedRoles       []string `json:"allowed_roles"`
+	ClientID           string `json:"client_id,omitempty"`
+	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
+	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
+	// AdminUser is the administrator a clickhouse provider creates and drops
+	// leased users as (its password is password_ref, A239).
+	AdminUser    string   `json:"admin_user,omitempty"`
+	AllowedRoles []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
@@ -227,7 +230,7 @@ type SecretSyncTargetConfig struct {
 var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
-	"totp": {}, "oauth-client-credentials": {},
+	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -469,6 +472,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		errs = append(errs, validateTOTPProvider(where, c)...)
 	case "oauth-client-credentials":
 		errs = append(errs, validateOAuthClientCredentialsProvider(where, c)...)
+	case "clickhouse":
+		errs = append(errs, validateClickHouseProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -807,6 +812,43 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	}
 	if c.Type != "oauth-client-credentials" && (c.ClientID != "" || c.ClientSecretRef != "" || c.RevocationEndpoint != "") {
 		errs = append(errs, fmt.Errorf("%s client_id, client_secret_ref and revocation_endpoint are only valid for oauth-client-credentials", where))
+	}
+	if c.Type != "clickhouse" && c.AdminUser != "" {
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse", where))
+	}
+	return errs
+}
+
+// clickHouseIdentifier is a ClickHouse user or role name the provider accepts:
+// one that needs no quoting.
+var clickHouseIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+
+// validateClickHouseProvider checks a ClickHouse provider (A239): endpoint is
+// the HTTP interface, admin_user and password_ref the administrator that
+// creates and drops leased users, and each allowed role is bound to an existing
+// ClickHouse role that holds its grants.
+func validateClickHouseProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the HTTP interface) is required for clickhouse", where))
+	}
+	if !clickHouseIdentifier.MatchString(c.AdminUser) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for clickhouse and must be a plain ClickHouse user name", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		if !clickHouseIdentifier.MatchString(c.RoleBindings[role]) {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must name an existing ClickHouse role", where, role))
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
 	}
 	return errs
 }
