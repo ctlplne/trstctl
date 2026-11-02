@@ -1081,6 +1081,38 @@ func dodConnectorCreateOwner(t *testing.T, srv *Server, token string) string {
 	return owner.ID
 }
 
+// dodConnectorAssignAgent names the enrolled proof agent as the machine that
+// serves a target: a host destination (and a relay-executed one) must carry
+// its executor's agent UUID in required_agent_id before any work is queued.
+func dodConnectorAssignAgent(t *testing.T, srv *Server, runtime *dodConnectorAgentRuntime, config json.RawMessage) json.RawMessage {
+	t.Helper()
+	fields := map[string]any{}
+	if len(config) > 0 {
+		if err := json.Unmarshal(config, &fields); err != nil {
+			t.Fatalf("decode connector target config: %v", err)
+		}
+	}
+	if _, set := fields["required_agent_id"]; set {
+		return config
+	}
+	agents, err := srv.store.ListAgentsPage(context.Background(), dodConnectorTenant, nil, "", 100)
+	if err != nil {
+		t.Fatalf("list enrolled connector agents: %v", err)
+	}
+	for _, enrolled := range agents {
+		if enrolled.Name == runtime.commonName {
+			fields["required_agent_id"] = enrolled.ID
+			out, err := json.Marshal(fields)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return out
+		}
+	}
+	t.Fatalf("connector proof agent %s is not enrolled in the tenant", runtime.commonName)
+	return nil
+}
+
 func dodRunConnector(t *testing.T, entryID, connectorName string, external *proof.ExternalSubstrate, srv *Server, token, ownerID string, targetConfig json.RawMessage, target, readbackPath string, runtimes ...*dodConnectorAgentRuntime) {
 	t.Helper()
 	if len(runtimes) > 1 {
@@ -1093,6 +1125,9 @@ func dodRunConnector(t *testing.T, entryID, connectorName string, external *proo
 		agentRuntime, _ = value.(*dodConnectorAgentRuntime)
 	}
 	stem := strings.ReplaceAll(entryID, ".", "-")
+	if agentRuntime != nil {
+		targetConfig = dodConnectorAssignAgent(t, srv, agentRuntime, targetConfig)
+	}
 	targetBody := dodConnectorRequest(t, srv, token, http.MethodPost, "/api/v1/connectors/targets", "dod-target-"+stem, map[string]any{
 		"name": target, "connector": connectorName, "config": targetConfig,
 	}, http.StatusCreated)

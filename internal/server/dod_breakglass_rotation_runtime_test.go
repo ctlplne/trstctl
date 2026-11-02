@@ -139,6 +139,18 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Every ceremony's CSR names its subject: the product refuses a CSR whose
+	// common name is not the emergency certificate's subject.
+	csrFor := func(subject string) []byte {
+		t.Helper()
+		der, err := crypto.CreateCertificateRequest(crypto.CertificateRequestTemplate{
+			CommonName: subject, DNSNames: []string{subject},
+		}, workload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return der
+	}
 	issueIntent := map[string]any{
 		"request_id": "dod-breakglass-issue-1", "subject": "recovery.dod-breakglass.test",
 		"csr_der": csr, "reason": "restore production while the primary issuer is isolated", "ttl_seconds": 900,
@@ -157,7 +169,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 
 	unauthorizedIntent := map[string]any{
 		"request_id": "dod-breakglass-unauthorized-roster", "subject": "roster.dod-breakglass.test",
-		"csr_der": csr, "reason": "prove an authenticated non-roster actor has no signing authority", "ttl_seconds": 300,
+		"csr_der": csrFor("roster.dod-breakglass.test"), "reason": "prove an authenticated non-roster actor has no signing authority", "ttl_seconds": 300,
 	}
 	_, unauthorizedCeremonyBody := dodBreakglassRequest(t, srv, commander, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", "dod-bg-roster-ceremony", unauthorizedIntent, http.StatusCreated)
 	unauthorizedCeremony := dodBreakglassCeremonyID(t, unauthorizedCeremonyBody)
@@ -175,7 +187,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 	_, rotation := dodBreakglassRequest(t, srv, commander, http.MethodPost, "/api/v1/breakglass/rotate", "dod-bg-rotate", rotationRequest, http.StatusCreated)
 
 	status, crossTenant := dodBreakglassRequest(t, srv, otherTenant, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", "dod-bg-other-tenant", map[string]any{
-		"request_id": "cross-tenant", "subject": "cross-tenant.test", "csr_der": csr, "reason": "must fail", "ttl_seconds": 60,
+		"request_id": "cross-tenant", "subject": "cross-tenant.test", "csr_der": csrFor("cross-tenant.test"), "reason": "must fail", "ttl_seconds": 60,
 	}, http.StatusInternalServerError)
 	if status != http.StatusInternalServerError || !bytes.Contains(crossTenant, []byte(`"code":"problem.internal.error"`)) ||
 		bytes.Contains(crossTenant, []byte(dodBreakglassTenant)) || bytes.Contains(crossTenant, []byte(dodBreakglassOther)) ||
@@ -196,7 +208,7 @@ func TestDODBreakglassRotationProductionAssembly(t *testing.T) {
 
 	restartIntent := map[string]any{
 		"request_id": "dod-breakglass-issue-after-restart", "subject": "restart.dod-breakglass.test",
-		"csr_der": csr, "reason": "prove rotated signer replay after restart", "ttl_seconds": 600,
+		"csr_der": csrFor("restart.dod-breakglass.test"), "reason": "prove rotated signer replay after restart", "ttl_seconds": 600,
 	}
 	_, restartCeremonyBody := dodBreakglassRequest(t, srv, commander, http.MethodPost, "/api/v1/breakglass/issue-ceremonies", "dod-bg-restart-ceremony", restartIntent, http.StatusCreated)
 	restartCeremony := dodBreakglassCeremonyID(t, restartCeremonyBody)
