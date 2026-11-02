@@ -373,6 +373,26 @@ TRSTCTL_AGENT_DAEMONSET_TEMPLATE=deploy/kubernetes/csi-trust.yaml \
   | kubectl apply -f -
 ```
 
+### Secrets as inline CSI volumes
+
+`deploy/kubernetes/csi-secrets.yaml` installs a second, separate node plugin
+(CSI driver `secrets.csi.trstctl.com`) that hands a pod its secrets as an inline
+volume in a memory filesystem, read with the pod's own service-account token,
+with no Kubernetes Secret object. The control plane needs a `kubernetes`
+machine-login method for this cluster's service-account issuer and the
+`trstctl` audience. Put the server, its CA and the tenant in the
+`trstctl-secrets-csi` ConfigMap, then render the image digest and apply:
+
+```sh
+TRSTCTL_AGENT_DAEMONSET_TEMPLATE=deploy/kubernetes/csi-secrets.yaml \
+  scripts/release/render-kubernetes-agent-daemonset.sh ghcr.io/<owner>/trstctl@sha256:<digest> \
+  | kubectl apply -f -
+```
+
+Unlike the trust plugin it is privileged, because it mounts a tmpfs for each
+volume. Its volume attributes and its trust boundary are in
+[secrets](../features/secrets.md#secret-volumes-for-pods-with-no-kubernetes-secret-a238).
+
 ## Rolling a TrustBundle out to several clusters
 
 Instead of applying the same TrustBundle in each cluster, roll it out from the

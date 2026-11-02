@@ -133,6 +133,8 @@ func main() {
 	k8sResync := flag.Duration("k8s-resync", 10*time.Minute, "how often the Kubernetes controller re-checks every object, beyond what its watches report")
 	k8sTrustRollouts := flag.Bool("k8s-trust-rollouts", true, "apply the TrustBundles the control plane rolls out to this cluster (public CA certificates only)")
 	csiTrustSocket := flag.String("csi-trust-socket", "", "serve trstctl TrustBundles to pods as inline CSI volumes (driver trust.csi.trstctl.com) on this Unix socket; needs only the in-cluster service account, no enrollment")
+	csiSecretsSocket := flag.String("csi-secrets-socket", "", "serve trstctl secrets to pods as inline CSI volumes (driver secrets.csi.trstctl.com) on this Unix socket, read with each pod's own service-account token into a memory filesystem; needs --csi-secrets-config, no enrollment")
+	csiSecretsConfig := flag.String("csi-secrets-config", "", "the CSI secrets driver's YAML configuration (control-plane server, ca_file, tenant, login method, state_dir)")
 	secretRenderConfig := flag.String("secret-render-config", "", "keep the secret templates in this YAML file rendered into files for an application (atomic writes, reload hook, verify probe, freshness bound); needs an API token, no enrollment")
 	prepareIdentityDirPath := flag.String("prepare-identity-dir", "", "prepare a Kubernetes hostPath identity directory, then exit")
 	prepareIdentityUID := flag.Int("prepare-identity-uid", 65532, "uid that should own --prepare-identity-dir")
@@ -383,6 +385,19 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 		if err := runCSITrust(ctx, *csiTrustSocket); err != nil && !errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// The CSI secrets driver (A238) is a node plugin of its own: each volume is
+	// read with its pod's service-account token, never with a credential of
+	// the plugin's.
+	if *csiSecretsSocket != "" {
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := runCSISecrets(ctx, *csiSecretsSocket, *csiSecretsConfig); err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Fprintln(os.Stderr, "trstctl-agent:", err)
 			os.Exit(1)
 		}

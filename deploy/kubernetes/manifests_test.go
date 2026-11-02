@@ -1001,6 +1001,77 @@ func TestCSITrustDriverManifestIsEphemeralReadOnlyAndUnprivileged(t *testing.T) 
 	}
 }
 
+// A238: the opt-in CSI secrets driver serves only inline ephemeral volumes that
+// the kubelet republishes, gets each pod's own token in the request's secrets,
+// holds no Kubernetes API access of its own, is privileged only for its mounts
+// (whose propagation reaches the kubelet), keeps the registrar unprivileged
+// and pinned, and renders its image from the release digest like the agent.
+func TestCSISecretsDriverManifestUsesThePodsIdentityAndAMemoryFilesystem(t *testing.T) {
+	driver := namedDoc(t, "CSIDriver", "secrets.csi.trstctl.com")
+	spec := driver["spec"].(map[string]any)
+	requests := asMaps(spec["tokenRequests"])
+	if spec["attachRequired"] != false || spec["requiresRepublish"] != true || spec["podInfoOnMount"] != true ||
+		spec["fsGroupPolicy"] != "File" || spec["serviceAccountTokenInSecrets"] != true ||
+		strings.Join(asStringSlice(spec["volumeLifecycleModes"]), ",") != "Ephemeral" ||
+		len(requests) != 1 || requests[0]["audience"] != "trstctl" {
+		t.Fatalf("CSIDriver spec = %v", spec)
+	}
+	if account := namedDoc(t, "ServiceAccount", "trstctl-secrets-csi"); account["automountServiceAccountToken"] != false {
+		t.Fatal("the CSI secrets driver's service account must not mount a token")
+	}
+	for _, d := range docs(t) {
+		for _, subject := range asMaps(d["subjects"]) {
+			if subject["name"] == "trstctl-secrets-csi" {
+				t.Fatalf("the CSI secrets driver must hold no Kubernetes RBAC: %v", d["metadata"])
+			}
+		}
+	}
+	ds := namedDoc(t, "DaemonSet", "trstctl-secrets-csi")
+	podSpec := ds["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+	if podSpec["serviceAccountName"] != "trstctl-secrets-csi" || podSpec["automountServiceAccountToken"] != false || podSpec["hostNetwork"] == true {
+		t.Fatalf("CSI secrets driver pod spec = %v", podSpec)
+	}
+	containers := asMaps(podSpec["containers"])
+	if len(containers) != 2 {
+		t.Fatalf("CSI secrets driver containers = %d, want the driver and its registrar", len(containers))
+	}
+	plugin, _ := containers[0]["securityContext"].(map[string]any)
+	if plugin["privileged"] != true || plugin["readOnlyRootFilesystem"] != true {
+		t.Fatalf("driver security = %v", plugin)
+	}
+	propagated := false
+	for _, mount := range asMaps(containers[0]["volumeMounts"]) {
+		propagated = propagated || (mount["mountPath"] == "/var/lib/kubelet/pods" && mount["mountPropagation"] == "Bidirectional")
+	}
+	if !propagated {
+		t.Fatal("the driver's pod-directory mount must propagate its memory filesystems back to the kubelet")
+	}
+	registrar, _ := containers[1]["securityContext"].(map[string]any)
+	caps, _ := registrar["capabilities"].(map[string]any)
+	if registrar["privileged"] == true || registrar["allowPrivilegeEscalation"] != false ||
+		strings.Join(asStringSlice(caps["drop"]), ",") != "ALL" || registrar["readOnlyRootFilesystem"] != true {
+		t.Fatalf("registrar security = %v", registrar)
+	}
+	if image, _ := containers[0]["image"].(string); image != "ghcr.io/ctlplne/trstctl@sha256:RELEASE_DIGEST_REQUIRED" ||
+		!contains(asStringSlice(containers[0]["args"]), "--csi-secrets-socket=/csi/csi.sock") ||
+		!contains(asStringSlice(containers[0]["args"]), "--csi-secrets-config=/etc/trstctl-secrets-csi/config.yaml") {
+		t.Fatalf("CSI secrets driver container = %v", containers[0])
+	}
+	if image, _ := containers[1]["image"].(string); !regexp.MustCompile(`^registry\.k8s\.io/sig-storage/csi-node-driver-registrar@sha256:[0-9a-f]{64}$`).MatchString(image) {
+		t.Fatalf("registrar image %q is not pinned by digest", image)
+	}
+	raw, err := kubernetes.Manifests.ReadFile("csi-secrets.yaml")
+	if err != nil || !bytes.Contains(raw, []byte("TRSTCTL_AGENT_DAEMONSET_TEMPLATE=deploy/kubernetes/csi-secrets.yaml")) {
+		t.Fatalf("csi-secrets.yaml must say how to render its image digest (err=%v)", err)
+	}
+	flags := agentBinaryFlags(t)
+	for _, flag := range []string{"csi-secrets-socket", "csi-secrets-config"} {
+		if !flags[flag] {
+			t.Fatalf("the agent binary has no --%s flag", flag)
+		}
+	}
+}
+
 // A139: Secret targets need cluster-wide Secret writes, which the agent's own
 // ClusterRole never carries; the grant ships separately and opt-in.
 func TestTrustSecretRBACIsOptInAndWriteOnlyWhereNeeded(t *testing.T) {

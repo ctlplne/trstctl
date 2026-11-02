@@ -5421,8 +5421,14 @@ two rotations with no unanswered requests. Lease templates (`{{ lease "provider/
 "field" }}`) renew in place or are replaced, with the old lease revoked only after the
 application verifies the new credential (proven against a database stand-in's create
 and revoke order); issue keys are persisted, so a lost answer never leaves an untracked
-lease. A CSI volume for pods that never stores plaintext in a Kubernetes Secret is the
-remaining part; on Windows the reload is a command (no signals).
+lease. Secret volumes for pods (`deploy/kubernetes/csi-secrets.yaml`, CSI driver
+`secrets.csi.trstctl.com`) are read with each pod's own service-account token into a tmpfs
+the plugin mounts, with no Kubernetes Secret object, the pod's fsGroup on 0440 files, new
+versions on the kubelet's republish reported as `injected`, the freshness bound across
+plugin restarts, and a file removed once its pod may no longer read it; proven on kind
+against a restricted environment. The plugin is privileged (it mounts) and its node can
+read the volumes on it; a volume reports `injected` only; the kind proof is a lab run, not
+a CI job yet; on Windows the reload is a command (no signals).
 
 AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
 of their static target credential. The matching

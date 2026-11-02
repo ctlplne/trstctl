@@ -9,6 +9,10 @@
   its freshness bound, across agent restarts. Templates can use dynamic leases (`{{ lease "provider/role" "field" }}`):
   a lease is renewed in place or replaced, and the replaced lease is revoked only after the application verifies the
   new credential.
+- Secret volumes for pods (`deploy/kubernetes/csi-secrets.yaml`, CSI driver `secrets.csi.trstctl.com`): a pod names
+  its secrets in an inline CSI volume, and the node plugin reads them with the pod's own service-account token into a
+  memory filesystem it mounts, with no Kubernetes Secret object. Republishes deliver new versions (reported as
+  injected), remove a file the pod may no longer read, and apply a freshness bound while the control plane is away.
 
 - Scoped secret sync: `trstctl secrets scoped-syncs define|preview|apply` keeps every secret under a source prefix
   in step with a KV v2 destination under a prefix. The value-free plan lists create, update (with drift named),

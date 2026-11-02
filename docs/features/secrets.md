@@ -1119,8 +1119,57 @@ application, and only then is the replaced lease revoked: replacement before rev
 If the application doesn't verify, the old lease stays valid until it does. Each issue
 uses a key saved before the call, so a retry after a lost answer gets the same lease back
 instead of leaving an untracked one. Without the control plane, a file holding a lease
-credential goes at the lease's own expiry if that comes before the freshness bound. A CSI
-volume for pods is A238's last part.
+credential goes at the lease's own expiry if that comes before the freshness bound.
+
+#### Secret volumes for pods, with no Kubernetes Secret (A238)
+
+`deploy/kubernetes/csi-secrets.yaml` installs a node plugin (CSI driver
+`secrets.csi.trstctl.com`) that hands a pod its secrets as an inline volume. Nothing is
+stored in a Kubernetes Secret object, etcd or the node's disk:
+
+```yaml
+spec:
+  serviceAccountName: api
+  securityContext:
+    fsGroup: 2000                  # the files are 0440, owned by root and this group
+  volumes:
+    - name: secrets
+      csi:
+        driver: secrets.csi.trstctl.com
+        readOnly: true
+        volumeAttributes:
+          secrets: "password=payments/prod/db-password,api-key=payments/prod/api-key"
+          freshness: 1h            # optional: serve the last values at most this long without the control plane
+          onStale: remove          # optional: remove (the default) or keep
+```
+
+Each `file=secret-name` pair becomes one file. When the kubelet publishes the volume, the
+plugin gets the pod's own service-account token, minted for the `trstctl` audience and
+passed in the request's secrets (`serviceAccountTokenInSecrets`), which keeps it out of the
+kubelet's logs. The plugin exchanges the token at `POST /api/v1/secrets/login` through the
+`kubernetes` machine-login method, so the volume holds only what that pod's service account
+may read. A restricted environment is open only to the members granted it (the member
+subject is `system:serviceaccount:<namespace>:<name>`). A pod that may not read a secret
+gets no volume, and the file of a secret the pod loses access to is removed at the next
+republish. The values go into a memory filesystem (tmpfs: no devices, no set-id, nothing
+executable, 8 MiB) the plugin mounts at the volume, and they leave the node when the pod
+does. The kubelet republishes every volume periodically (`requiresRepublish`). A
+republish writes a changed version atomically and reports it as `injected` for the
+consumer `pod:<namespace>/<name>` (`secrets deliveries list`). An application can't
+report `verified` through the volume; the agent's render templates can. When the control
+plane can't be reached, the last files keep serving until `freshness` runs out. Then
+they're removed, unless the volume says `onStale: keep`. The fetch time is kept in a
+value-free state file, so the bound holds across a plugin restart.
+
+Trust boundary. The plugin holds no credential of its own and no Kubernetes API access:
+its service account mounts no token and has no RBAC. A pod's token is used only for the
+login, and the session it buys lives in the plugin's memory until it nears expiry or the
+volume goes. Mounting needs `CAP_SYS_ADMIN` and bidirectional mount propagation, so the
+plugin's container is privileged. Whoever controls that container, or the node, can read
+the volumes of the pods on that node, as with any node-local secret delivery. The kubelet
+reaches the plugin over a node-local Unix socket, as with every CSI driver. The control
+plane needs a `kubernetes` machine-login method that trusts the cluster's service-account
+issuer, with the `trstctl` audience; the plugin pins the control plane's CA (`ca_file`).
 
 `GET /api/v1/secrets/unvaulted` / `trstctl-cli secrets unvaulted`: repository and
 third-party scanning sources, redacted `leaked_secret` finding counts, cloud-secret

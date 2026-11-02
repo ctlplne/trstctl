@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2224 annotated sites across 29 rules. Each row is
+2234 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (486 sites)
+### G101 — CWE-798 Use of hardcoded credentials (488 sites)
 
 | Location | Reason |
 |---|---|
@@ -101,6 +101,8 @@ not this file.
 | `ee/provider/scim_bulk_test.go:27` | deterministic non-deployable test bearer (CWE-798). |
 | `ee/provider/scim_fuzz_test.go:30` | deterministic non-deployable fuzz authenticator (CWE-798). |
 | `ee/provider/scim_groups_test.go:36` | deterministic non-deployable test bearer exercises hashing/authentication (CWE-798). |
+| `internal/agent/csisecrets/driver.go:64` | the kubelet's request key name, not a credential (CWE-798) |
+| `internal/agent/csisecrets/driver_test.go:419` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/discovery/keystore.go:36` | the published Java keystore default, tried as a default; not a credential of this deployment (CWE-798) |
 | `internal/agent/discovery/kubernetes.go:90` | metadata key naming the Kubernetes Secret a public certificate was found in; no credential value present (CWE-798) |
 | `internal/agent/k8s/client.go:31` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -610,7 +612,7 @@ not this file.
 
 | Location | Reason |
 |---|---|
-| `cmd/trstctl-agent/main.go:566` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
+| `cmd/trstctl-agent/main.go:581` | the MaxUint32 check above proves the narrowing is exact (CWE-190). |
 | `cmd/trstctl-signer/offline_pcas.go:158` | Count equals len(Records) above: nonnegative and bounded by the 4 MiB input (CWE-190). |
 | `deploy/helm/helm_test.go:1778` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `ee/auditcompliance/retention.go:279` | event sequence/count fits int64 by construction; bounded by the log (CWE-190) |
@@ -1080,7 +1082,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (277 sites)
+### G204 — CWE-78 OS command injection (280 sites)
 
 | Location | Reason |
 |---|---|
@@ -1296,6 +1298,9 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:73` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/python_sdk_served_test.go:82` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/revocation_openssl_test.go:184` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
+| `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |
+| `internal/server/secret_csi_lab_a238_test.go:174` | the runner's own lab cluster (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:30` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/secret_dynamic_lease_rotation_container_test.go:36` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1427,7 +1432,7 @@ not this file.
 | Location | Reason |
 |---|---|
 | `cmd/trstctl-agent/cosign_listener_mtls_test.go:114` | deliberately loose, to prove it is tightened (CWE-276) |
-| `cmd/trstctl-agent/main.go:690` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
+| `cmd/trstctl-agent/main.go:705` | 0700 on a directory: the execute bit is required to traverse it (CWE-276) |
 | `cmd/trstctl-agent/tomcat_reload_test.go:80` | deliberately public disposable password fixture must be rejected before any request (CWE-276). |
 | `cmd/trstctl-license/main_test.go:147` | regression fixture deliberately starts with an insecure mode to prove signing repairs it (CWE-276) |
 | `cmd/trstctl/ssh_request_file_test.go:49` | deliberately public test fixture must be rejected by the private-file gate |
@@ -1474,7 +1479,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (614 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (619 sites)
 
 | Location | Reason |
 |---|---|
@@ -1483,6 +1488,8 @@ not this file.
 | `clients/signing/trstctlsign/client.go:97` | the operator names the CA bundle |
 | `clients/terraform/internal/terraformprovider/client.go:94` | operator-selected public trust bundle (CWE-22) |
 | `cmd/trstctl-agent/cosign_attach.go:208` | operator-configured local path from the agent's own config (CWE-22) |
+| `cmd/trstctl-agent/csisecrets.go:30` | the operator's --csi-secrets-config (CWE-22) |
+| `cmd/trstctl-agent/csisecrets.go:45` | operator-configured CA bundle (CWE-22) |
 | `cmd/trstctl-agent/distrust.go:23` | operator-supplied agent flag naming a local distrust list (CWE-22) |
 | `cmd/trstctl-agent/edgeca.go:124` | explicit operator file path |
 | `cmd/trstctl-agent/edgeca.go:136` | explicit operator file path |
@@ -1507,8 +1514,8 @@ not this file.
 | `cmd/trstctl-agent/edgerenew_test.go:133` | the test's own temp file (CWE-22) |
 | `cmd/trstctl-agent/found_inventory_posture_test.go:17` | a fixed test fixture, named by the test itself (CWE-22) |
 | `cmd/trstctl-agent/inventory_hostcrypto.go:76` | operator-configured keystore password file (CWE-22) |
-| `cmd/trstctl-agent/main.go:1307` | operator-supplied PIN file path, read at their instruction (CWE-22) |
-| `cmd/trstctl-agent/main.go:1968` | operator-named key file (CWE-22) |
+| `cmd/trstctl-agent/main.go:1322` | operator-supplied PIN file path, read at their instruction (CWE-22) |
+| `cmd/trstctl-agent/main.go:1983` | operator-named key file (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:90` | operator-supplied trust key path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:350` | operator-supplied runtime configuration path (CWE-22) |
 | `cmd/trstctl-agent/pluginruntime.go:377` | operator-supplied public issuer certificate (CWE-22) |
@@ -1614,6 +1621,9 @@ not this file.
 | `ee/billing/evidence_test.go:150` | test reads repo source files it names itself (CWE-22) |
 | `ee/managedkeys/signerwiring/tenantkek.go:37` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
 | `ee/managedkeys/signerwiring/wiring.go:130` | path is the signer operator's explicit local configuration file, never remote input (CWE-22). |
+| `internal/agent/csisecrets/driver_test.go:220` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:249` | the test's own temp file (CWE-22) |
+| `internal/agent/csisecrets/driver_test.go:386` | the test's own temp file (CWE-22) |
 | `internal/agent/csitrust/driver.go:151` | path is the kubelet's target directory joined with a validated file name (CWE-22) |
 | `internal/agent/csitrust/driver_test.go:114` | the file the driver wrote under this test's temp dir (CWE-22) |
 | `internal/agent/destination/destination_test.go:49` | test reads its own fixture/tempdir path (CWE-22) |
@@ -1673,7 +1683,7 @@ not this file.
 | `internal/agent/secretrender/secretrender.go:572` | operator-configured pid file (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:663` | a fresh random name beside the configured destination (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:691` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:714` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:738` | operator-configured token file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:82` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:141` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:147` | the test's own temp file (CWE-22) |
@@ -2271,7 +2281,7 @@ not this file.
 | `cmd/trstctl-agent/bootstrap_token_test.go:406` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:412` | test jitter/shuffle, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/bootstrap_token_test.go:420` | test jitter/shuffle, not a security decision (CWE-338) |
-| `cmd/trstctl-agent/main.go:870` | reconnect jitter, not a security decision (CWE-338) |
+| `cmd/trstctl-agent/main.go:885` | reconnect jitter, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:28` | jitter spread, not a security decision (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:61` | jitter spread (CWE-338) |
 | `cmd/trstctl-agent/rotation_schedule_test.go:77` | jitter spread (CWE-338) |
@@ -2319,7 +2329,7 @@ not this file.
 | `internal/server/issuance_dispatcher_test.go:1481` | fixed-shape test data; the index is in range by construction (CWE-118) |
 | `tools/dodcensus/managed_key_closure.go:733` | fixed-shape data inside a developer tool (CWE-118) |
 
-### G702 — CWE-78 OS command injection (taint) (20 sites)
+### G702 — CWE-78 OS command injection (taint) (23 sites)
 
 | Location | Reason |
 |---|---|
@@ -2337,6 +2347,9 @@ not this file.
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/protocols_served_stock_clients_test.go:302` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/secret_csi_lab_a238_test.go:44` | the runner's own lab cluster and node (CWE-78) |
+| `internal/server/secret_csi_lab_a238_test.go:131` | the runner's own lab cluster (CWE-78) |
+| `internal/server/secret_csi_lab_a238_test.go:174` | the runner's own lab cluster (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:36` | the runner's own lab cluster (CWE-78) |
 | `internal/server/token_exchange_lab_m4_test.go:70` | the runner's own lab cluster (CWE-78) |
 | `tools/dodcensus/proof/proof_test.go:1132` | test executes a fixed local tool or fixture it built itself (CWE-78) |

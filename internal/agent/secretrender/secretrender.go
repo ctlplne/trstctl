@@ -695,6 +695,30 @@ func writeAtomic(path string, content []byte, mode os.FileMode) error {
 	return nil
 }
 
+// ErrRefused is the control plane refusing a read (403 or 404): the caller may
+// not read the secret, or it doesn't exist. ErrUnauthenticated is a 401: the
+// control plane no longer accepts the caller's token.
+var (
+	ErrRefused         = errors.New("secretrender: the control plane refused the read")
+	ErrUnauthenticated = errors.New("secretrender: the control plane did not accept the token")
+)
+
+type refusedError struct {
+	status int
+	name   string
+}
+
+func (e refusedError) Error() string {
+	return fmt.Sprintf("the control plane answered %d for %s", e.status, e.name)
+}
+
+func (e refusedError) Is(target error) bool {
+	if e.status == http.StatusUnauthorized {
+		return target == ErrUnauthenticated
+	}
+	return target == ErrRefused
+}
+
 // HTTPClient reads secrets and sends reports to a control plane with an API
 // token. The token is held as bytes and turned into a header per request.
 type HTTPClient struct {
@@ -722,6 +746,21 @@ func NewHTTPClient(server, tenant, tokenFile string, client *http.Client) (*HTTP
 	return &HTTPClient{server: strings.TrimRight(server, "/"), tenant: tenant, token: token, client: client}, nil
 }
 
+// NewSessionHTTPClient builds a control-plane client over a session token the
+// caller obtained (a machine login); the client keeps token and Wipe clears it.
+func NewSessionHTTPClient(server, tenant string, token []byte, client *http.Client) (*HTTPClient, error) {
+	if client == nil || len(token) == 0 {
+		return nil, errors.New("secretrender: a control-plane client and a session token are required")
+	}
+	return &HTTPClient{server: strings.TrimRight(server, "/"), tenant: tenant, token: token, client: client}, nil
+}
+
+// Wipe clears the client's token; the client can't be used afterwards.
+func (c *HTTPClient) Wipe() {
+	secret.Wipe(c.token)
+	c.token = nil
+}
+
 func (c *HTTPClient) do(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+secrettext.String(c.token))
 	if c.tenant != "" {
@@ -745,7 +784,11 @@ func (c *HTTPClient) Fetch(ctx context.Context, name string) ([]byte, int, error
 		return nil, 0, errors.New("the control plane could not be reached")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+		return nil, 0, refusedError{resp.StatusCode, name}
+	default:
 		return nil, 0, fmt.Errorf("the control plane answered %d for %s", resp.StatusCode, name)
 	}
 	var body struct {
