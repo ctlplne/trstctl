@@ -355,11 +355,11 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Twelve backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Thirteen backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
-Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, and ClickHouse
-users (A239).
+Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
+users, and Elasticsearch API keys (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -411,12 +411,20 @@ lease, so a retry after an uncertain attempt replaces the same user, and revocat
 only ever drops users with the provider's prefix. Server errors are reported by
 their ClickHouse error code only, since their text can echo the statement.
 
+The Elasticsearch backend creates one API key per lease through the security API,
+as `admin_user`: it expires with the provider's maximum lifetime and its role
+descriptor grants only the index privileges the lease role is bound to
+(`"read on logs-*"`), so it never exceeds that grant (nor the administrator's own
+privileges). Revocation invalidates the key and Elasticsearch then refuses it. The
+key's name derives from the lease, and a retry first invalidates any key an
+uncertain earlier attempt left under it, so a lease never has two live keys.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns thirteen safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns fourteen safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

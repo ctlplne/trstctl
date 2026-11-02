@@ -237,6 +237,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
 			roles("Each allowed role maps to an existing ClickHouse role that holds its grants, for example SELECT on one database."),
 		)},
+		{Type: "elasticsearch", Label: "Elasticsearch API keys", Purpose: "Creates an Elasticsearch API key that expires with the provider's maximum lifetime and holds only the index privileges its role is bound to, and invalidates it at revocation; Elasticsearch then refuses it.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Cluster URL", "HTTPS URL of the Elasticsearch cluster.", true),
+			value("admin_user", "Administrator", "A user allowed to manage API keys (manage_api_key) who holds at least the bound index privileges; keys never exceed it.", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			roles(`Each allowed role maps to "<index privileges> on <index patterns>", for example "read on logs-*".`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -273,6 +279,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "an access token carrying only the role's scopes, accepted by resource servers until it is revoked at the authorization server or expires", "confirmed"
 	case "clickhouse":
 		return "the grants of the ClickHouse role the lease role is bound to, until the user is dropped or its VALID UNTIL passes", "confirmed"
+	case "elasticsearch":
+		return "the role's index privileges on its index patterns, through an API key invalidated at revocation or expiring with the provider's maximum lifetime", "confirmed"
 	}
 	return "", ""
 }

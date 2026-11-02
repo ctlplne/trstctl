@@ -124,7 +124,8 @@ type DynamicSecretProviderConfig struct {
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
 	// AdminUser is the administrator a clickhouse provider creates and drops
-	// leased users as (its password is password_ref, A239).
+	// leased users as, or an elasticsearch provider creates and invalidates API
+	// keys as (its password is password_ref, A239).
 	AdminUser    string   `json:"admin_user,omitempty"`
 	AllowedRoles []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
@@ -230,7 +231,7 @@ type SecretSyncTargetConfig struct {
 var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
-	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {},
+	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -474,6 +475,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		errs = append(errs, validateOAuthClientCredentialsProvider(where, c)...)
 	case "clickhouse":
 		errs = append(errs, validateClickHouseProvider(where, c)...)
+	case "elasticsearch":
+		errs = append(errs, validateElasticsearchProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -813,10 +816,63 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && (c.ClientID != "" || c.ClientSecretRef != "" || c.RevocationEndpoint != "") {
 		errs = append(errs, fmt.Errorf("%s client_id, client_secret_ref and revocation_endpoint are only valid for oauth-client-credentials", where))
 	}
-	if c.Type != "clickhouse" && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse", where))
+	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.AdminUser != "" {
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse and elasticsearch", where))
 	}
 	return errs
+}
+
+var (
+	elasticsearchPrivilege = regexp.MustCompile(`^[a-z_]{1,64}$`)
+	elasticsearchPattern   = regexp.MustCompile(`^[A-Za-z0-9._*-]{1,255}$`)
+)
+
+// validateElasticsearchProvider checks an Elasticsearch provider (A239):
+// endpoint is the cluster's HTTPS URL, admin_user and password_ref the user
+// that creates and invalidates API keys, and each allowed role is bound to
+// "<index privileges> on <index patterns>", for example "read on logs-*".
+func validateElasticsearchProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint is required for elasticsearch", where))
+	}
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for elasticsearch", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		if err := validElasticsearchIndexGrant(c.RoleBindings[role]); err != nil {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %w", where, role, err))
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
+}
+
+func validElasticsearchIndexGrant(binding string) error {
+	privileges, names, ok := strings.Cut(strings.TrimSpace(binding), " on ")
+	if !ok {
+		return errors.New(`must be "<index privileges> on <index patterns>", for example "read on logs-*"`)
+	}
+	for _, p := range strings.Split(privileges, ",") {
+		if !elasticsearchPrivilege.MatchString(strings.TrimSpace(p)) {
+			return fmt.Errorf("index privilege %q is not a privilege name", strings.TrimSpace(p))
+		}
+	}
+	for _, n := range strings.Split(names, ",") {
+		if !elasticsearchPattern.MatchString(strings.TrimSpace(n)) {
+			return fmt.Errorf("index pattern %q is not an index name or pattern", strings.TrimSpace(n))
+		}
+	}
+	return nil
 }
 
 // clickHouseIdentifier is a ClickHouse user or role name the provider accepts:

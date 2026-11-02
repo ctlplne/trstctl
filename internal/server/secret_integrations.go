@@ -439,6 +439,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredOAuthBackend(opener)
 	case "clickhouse":
 		return openConfiguredClickHouseBackend(opener)
+	case "elasticsearch":
+		return openConfiguredElasticsearchBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}
@@ -551,6 +553,29 @@ func openConfiguredClickHouseBackend(o *configuredDynamicBackendOpener) (request
 		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
 		UsernamePrefix: cfg.UsernamePrefix, MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback,
 		HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredElasticsearchBackend reads the administrator password into a
+// backend that keeps its own sealed copy and calls the security API through the
+// SSRF-guarded client (A239).
+func openConfiguredElasticsearchBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewElasticsearchBackend(dynsecret.ElasticsearchConfig{
+		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
+		MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)

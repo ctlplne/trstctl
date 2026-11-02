@@ -2,6 +2,11 @@
 
 ### Added
 
+- Elasticsearch dynamic secrets (`type: elasticsearch`): each lease is an API key, created by `admin_user`, that
+  expires with the provider's maximum lifetime and holds only the index privileges its role is bound to
+  (`"<privileges> on <index patterns>"`); revocation invalidates it, and a retry first invalidates any key an
+  uncertain attempt left for the lease.
+
 - ClickHouse dynamic secrets (`type: clickhouse`): each lease is a ClickHouse user with a generated password,
   valid until the provider's maximum lifetime and holding the ClickHouse role its lease role is bound to, created
   through the HTTP interface as `admin_user`; revocation drops the user, and a retry replaces the same user.

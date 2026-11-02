@@ -2329,6 +2329,27 @@ ClickHouse first). Each lease is a user named from `username_prefix` (default
 `trstctl`) holding only that role, valid until `max_ttl` from its creation;
 revocation drops it.
 
+For Elasticsearch (A239, `elasticsearch`), set `endpoint` to the cluster's HTTPS
+URL, `admin_user` and `password_ref` to a user allowed to manage API keys who
+holds at least the bound index privileges, and `role_bindings` to
+`"<index privileges> on <index patterns>"` per allowed role. Each lease is an API
+key holding only that grant and expiring `max_ttl` after its creation; revocation
+invalidates it.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "logs",
+  "type": "elasticsearch",
+  "endpoint": "https://es.internal:9200",
+  "admin_user": "trstctl_keys",
+  "password_ref": "file:/run/secrets/es-admin",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "read on logs-*"},
+  "max_ttl": "8h"
+}
+```
+
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",
