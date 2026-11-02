@@ -166,8 +166,14 @@ func requireDockerForAgentSoftHSM(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker is required for the PKCS#11 container tests: %v", err)
 	}
-	if out, err := agentSoftHSMDockerOutput(t, agentSoftHSMDockerProbeTimeout, "version", "--format", "{{.Server.Version}}"); err != nil {
+	out, err := agentSoftHSMDockerOutput(t, agentSoftHSMDockerProbeTimeout, "version", "--format", "{{.Server.Os}}")
+	if err != nil {
 		t.Skipf("docker daemon is required for the PKCS#11 container tests: %v\n%s", err, out)
+	}
+	// These tests build Linux images. A Windows runner's engine runs Windows
+	// containers and can't; the Linux jobs run them.
+	if engine := strings.TrimSpace(string(out)); engine != "linux" {
+		t.Skipf("the PKCS#11 container tests build Linux images; this Docker engine runs %s containers", engine)
 	}
 }
 
