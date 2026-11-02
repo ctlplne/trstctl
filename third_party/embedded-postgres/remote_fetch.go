@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	boundarycrypto "trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/netsec"
@@ -43,19 +45,62 @@ func defaultRemoteFetchStrategy(host string, versionStrategy VersionStrategy, ca
 	}
 }
 
-func fetchBoundedResponse(client *http.Client, url string, maximum int64) (data []byte, err error) {
+// fetchRetryDelays bounds how a rate-limited or failing mirror is retried: one
+// attempt per delay after the first, each waiting the server's Retry-After
+// (capped at maxRetryAfter) or the delay. Many hosts starting at once (a CI run's
+// parallel jobs) otherwise turn one HTTP 429 into a failed start.
+var (
+	fetchRetryDelays = []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 30 * time.Second}
+	maxRetryAfter    = time.Minute
+	fetchSleep       = time.Sleep
+)
+
+func fetchBoundedResponse(client *http.Client, url string, maximum int64) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		data, retryAfter, err := fetchBoundedOnce(client, url, maximum)
+		if err == nil || retryAfter < 0 || attempt >= len(fetchRetryDelays) {
+			return data, err
+		}
+		delay := fetchRetryDelays[attempt]
+		if retryAfter > 0 {
+			delay = min(retryAfter, maxRetryAfter)
+		}
+		fetchSleep(delay)
+	}
+}
+
+// fetchBoundedOnce makes one attempt. retryAfter is -1 when the failure is not
+// worth retrying, 0 to use the backoff, and the server's Retry-After otherwise.
+func fetchBoundedOnce(client *http.Client, url string, maximum int64) (data []byte, retryAfter time.Duration, err error) {
 	response, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("download postgres archive: %w", err)
+		// A refused or unreachable network is not retried: an offline host fails fast.
+		return nil, -1, fmt.Errorf("download postgres archive: %w", err)
 	}
-	defer func() { err = errors.Join(err, response.Body.Close()) }()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download %s: HTTP %d", url, response.StatusCode)
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			err, retryAfter = errors.Join(err, closeErr), -1
+		}
+	}()
+	switch response.StatusCode {
+	case http.StatusOK:
+	case http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		retryAfter = 0
+		if seconds, convErr := strconv.Atoi(strings.TrimSpace(response.Header.Get("Retry-After"))); convErr == nil && seconds > 0 {
+			retryAfter = time.Duration(seconds) * time.Second
+		}
+		return nil, retryAfter, fmt.Errorf("download %s: HTTP %d", url, response.StatusCode)
+	default:
+		return nil, -1, fmt.Errorf("download %s: HTTP %d", url, response.StatusCode)
 	}
 	if response.ContentLength > maximum {
-		return nil, errors.New("postgres response exceeds byte limit")
+		return nil, -1, errors.New("postgres response exceeds byte limit")
 	}
-	return readBounded(response.Body, maximum)
+	data, err = readBounded(response.Body, maximum)
+	if err != nil {
+		return nil, -1, err
+	}
+	return data, 0, nil
 }
 
 func decompressResponse(body []byte, _ int64, cacheLocator CacheLocator, downloadURL string, expectedName ...string) error {

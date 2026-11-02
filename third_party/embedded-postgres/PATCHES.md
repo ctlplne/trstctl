@@ -49,3 +49,10 @@ new archive. Keep this patch while upstream still imports `lib/pq`, and retain
 separate checksum, official advisory and Trivy gates for the actual archive.
 
 The served wrapper additionally holds an `OpenVerifiedCache` namespace through acquisition/startup. The operator-selected temporary anchor must be private, or root/current-user-owned and sticky; rooted child creation rejects links, foreign ownership and shared write access. Generic legacy `NewDatabase` cache behavior remains a separate finding. Actual wrapper regressions check ancestor rejection before acquisition, invalid port rejection, and native Stop errors.
+
+Archive downloads retry what the server asks to retry: HTTP 429 and 500/502/503/504
+get up to five more attempts, each after the server's `Retry-After` (capped at one
+minute) or a 2/4/8/16/30-second backoff. Other statuses, oversized responses and
+transport errors (a refused or unreachable network) fail at once, so an offline
+host still fails fast. Many hosts starting together, such as a CI run's parallel
+jobs, otherwise turned one rate-limited response from the mirror into a failed start.

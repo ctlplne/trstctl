@@ -5,8 +5,10 @@ package embeddedpostgres
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type checksumRoundTripper struct {
@@ -50,5 +52,51 @@ func TestRemoteFetchRequiresValidChecksumSidecar(t *testing.T) {
 				t.Fatalf("fetch error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A rate-limited or failing mirror is retried with bounded backoff, honoring
+// Retry-After (capped); other statuses and transport errors fail at once.
+func TestFetchRetriesRateLimitedMirrorWithBoundedBackoff(t *testing.T) {
+	var slept []time.Duration
+	restoreDelays, restoreSleep, restoreCap := fetchRetryDelays, fetchSleep, maxRetryAfter
+	fetchRetryDelays = []time.Duration{time.Millisecond, 2 * time.Millisecond, 3 * time.Millisecond}
+	fetchSleep = func(d time.Duration) { slept = append(slept, d) }
+	maxRetryAfter = 5 * time.Second
+	t.Cleanup(func() { fetchRetryDelays, fetchSleep, maxRetryAfter = restoreDelays, restoreSleep, restoreCap })
+
+	statuses := []int{http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusOK}
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		status := statuses[min(requests, len(statuses)-1)]
+		requests++
+		if status == http.StatusTooManyRequests {
+			w.Header().Set("Retry-After", "120")
+		}
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte("archive"))
+	}))
+	t.Cleanup(server.Close)
+	data, err := fetchBoundedResponse(server.Client(), server.URL, 1024)
+	if err != nil || string(data) != "archive" || requests != 3 {
+		t.Fatalf("data %q err %v after %d requests", data, err, requests)
+	}
+	// Retry-After 120 s is capped at 5 s; the 503 without one takes the backoff.
+	if len(slept) != 2 || slept[0] != 5*time.Second || slept[1] != 2*time.Millisecond {
+		t.Fatalf("slept %v", slept)
+	}
+
+	statuses, requests, slept = []int{http.StatusTooManyRequests}, 0, nil
+	if _, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err == nil || !strings.Contains(err.Error(), "HTTP 429") || requests != 4 {
+		t.Fatalf("persistent 429: err %v after %d requests", err, requests)
+	}
+	statuses, requests = []int{http.StatusNotFound}, 0
+	if _, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err == nil || requests != 1 {
+		t.Fatalf("404: err %v after %d requests", err, requests)
+	}
+	server.Close()
+	requests = 0
+	if _, err := fetchBoundedResponse(server.Client(), server.URL, 1024); err == nil || requests != 0 {
+		t.Fatalf("an unreachable mirror: err %v after %d requests", err, requests)
 	}
 }
