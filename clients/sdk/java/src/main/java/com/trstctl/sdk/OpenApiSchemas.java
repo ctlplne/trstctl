@@ -943,6 +943,8 @@ public final class OpenApiSchemas {
       "SecretApproval",
       "SecretApprovalRequest",
       "SecretCreateRequest",
+      "SecretDeliveries",
+      "SecretDeliveryReport",
       "SecretImportRequest",
       "SecretImportResponse",
       "SecretMeta",

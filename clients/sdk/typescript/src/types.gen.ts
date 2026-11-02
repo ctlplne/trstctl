@@ -7532,6 +7532,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/secrets/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List, per consumer, the injected and verified versions of one secret against its current version */
+        get: operations["listSecretDeliveries"];
+        put?: never;
+        /** Report the secret versions a consumer wrote (injected) or its application proved it uses (verified) */
+        post: operations["reportSecretDelivery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/secrets/honeytokens": {
         parameters: {
             query?: never;
@@ -20536,6 +20554,30 @@ export interface components {
             /** Format: uuid */
             owner_id?: string;
             value: string;
+        };
+        SecretDeliveries: {
+            consumers: {
+                consumer: string;
+                /** Format: date-time */
+                injected_at?: string;
+                injected_version: number;
+                /** @enum {string} */
+                state: "verified" | "injected" | "behind";
+                /** Format: date-time */
+                verified_at?: string;
+                verified_version: number;
+            }[];
+            current_version: number;
+            name: string;
+        };
+        SecretDeliveryReport: {
+            consumer: string;
+            secrets: {
+                name: string;
+                version: number;
+            }[];
+            /** @enum {string} */
+            state: "injected" | "verified";
         };
         SecretImportRequest: {
             prefix?: string;
@@ -43727,6 +43769,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloudSecretManagerIntegration"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listSecretDeliveries: {
+        parameters: {
+            query: {
+                /** @description secret name */
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretDeliveries"];
+                };
+            };
+            /** @description client error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description server error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reportSecretDelivery: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Caller-supplied idempotency key; replays return the original mutation result. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretDeliveryReport"];
+            };
+        };
+        responses: {
+            /** @description success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretDeliveryReport"];
                 };
             };
             /** @description client error */

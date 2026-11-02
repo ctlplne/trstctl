@@ -5411,6 +5411,15 @@ every 30 seconds) or its 15-minute drift check is due, and applied when nothing 
 blocked; a blocked or failed plan is recorded on the definition and writes nothing. The
 console's Secrets → Sync page defines, previews, applies and switches scoped syncs.
 Approval-gated convergence is not served.
+Secret rendering (A238 part a): `trstctl-agent --secret-render-config` renders
+`{{ secret "name" }}` templates into files for a host application. Writes are atomic
+with the template's mode (never readable by others), followed by a reload hook (argv or
+signal) and an HTTP verify probe. Delivery reports keep `injected` apart from `verified`
+(`POST/GET /api/v1/secrets/deliveries`). Freshness is bounded through a control-plane
+outage and an agent restart (remove or keep on stale). Proven with a real nginx through
+two rotations with no unanswered requests. Dynamic leases in templates (replacement
+before revocation) and a CSI volume for pods that never stores plaintext in a Kubernetes
+Secret are part b; on Windows the reload is a command (no signals).
 
 AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
 of their static target credential. The matching

@@ -108,7 +108,8 @@ func (a *API) runtimeRouteAvailability(r route) (bool, string) {
 		"revokeMachineSession", "disableMachineAuthMethod", "enableMachineAuthMethod",
 		"createSecretProject", "listSecretProjects", "getSecretProject", "addSecretProjectEnvironment", "putSecretProjectMember", "deleteSecretProjectMember",
 		"previewSecretPromotion", "applySecretPromotion", "previewSecretRestore", "applySecretRestore",
-		"defineSecretScopedSync", "listSecretScopedSyncs", "getSecretScopedSync", "removeSecretScopedSync", "previewSecretScopedSync", "applySecretScopedSync", "setSecretScopedSyncMode":
+		"defineSecretScopedSync", "listSecretScopedSyncs", "getSecretScopedSync", "removeSecretScopedSync", "previewSecretScopedSync", "applySecretScopedSync", "setSecretScopedSyncMode",
+		"reportSecretDelivery", "listSecretDeliveries":
 		return runtimeDependency(a.secrets != nil,
 			"The native secret store is turned off in this deployment. Enable it before storing, revealing, rotating, sharing, or leasing application secrets.")
 

@@ -243,3 +243,10 @@ func TestReviewedExecAllowlistPinsSecretMoveLocate(t *testing.T) {
 		t.Fatalf("internal/secretscan/move.go reviewed exec allowlist = %#v, want %#v", got, want)
 	}
 }
+
+func TestReviewedExecAllowlistPinsSecretRenderHook(t *testing.T) {
+	want := map[string]bool{"runHook": true}
+	if got := reviewedExecUses["internal/agent/secretrender/secretrender.go"]; !reflect.DeepEqual(got, want) {
+		t.Fatalf("internal/agent/secretrender/secretrender.go reviewed exec allowlist = %#v, want %#v", got, want)
+	}
+}

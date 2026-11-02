@@ -186,6 +186,9 @@ func buildSpec(routes []route, extraSchemas map[string]*Schema) *Document {
 	for name, schema := range secretScopedSyncSchemas() {
 		schemas[name] = schema
 	}
+	for name, schema := range secretDeliverySchemas() {
+		schemas[name] = schema
+	}
 	for name, schema := range extraSchemas {
 		schemas[name] = schema
 	}

@@ -130,5 +130,6 @@ func (a *API) extractedRouteGroups() []route {
 	out = append(out, a.secretPromotionRoutes()...)  // see secret_promotion.go
 	out = append(out, a.secretRestoreRoutes()...)    // see secret_restore.go
 	out = append(out, a.secretScopedSyncRoutes()...) // see secret_scoped_sync.go
+	out = append(out, a.secretDeliveryRoutes()...)   // see secret_deliveries.go
 	return out
 }

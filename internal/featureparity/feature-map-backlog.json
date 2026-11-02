@@ -17624,6 +17624,8 @@
                 "previewSecretScopedSync",
                 "applySecretScopedSync",
                 "setSecretScopedSyncMode",
+                "reportSecretDelivery",
+                "listSecretDeliveries",
                 "getKubernetesSecretOperator",
                 "getSecretWorkloadInjection",
                 "getUnvaultedSecretPosture"
@@ -17643,6 +17645,8 @@
                 "secrets scoped-syncs preview",
                 "secrets scoped-syncs apply",
                 "secrets scoped-syncs mode",
+                "secrets deliveries report",
+                "secrets deliveries list",
                 "secrets syncs workload-identities create",
                 "secrets syncs workload-identities list",
                 "secrets syncs workload-identities get",

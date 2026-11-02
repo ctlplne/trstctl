@@ -400,9 +400,10 @@ func cliCommandSet(t *testing.T) map[string]bool {
 	// environments add` and `secrets projects members grant|revoke`.
 	// A236 adds `secrets projects promote preview|apply` and
 	// `secrets projects restore preview|apply`. A237 adds `secrets scoped-syncs
-	// define|list|show|remove|preview|apply|mode`.
-	if len(out) != 703 {
-		t.Fatalf("CLI commands = %d, want 703", len(out))
+	// define|list|show|remove|preview|apply|mode`. A238 adds `secrets deliveries
+	// report|list`.
+	if len(out) != 705 {
+		t.Fatalf("CLI commands = %d, want 705", len(out))
 	}
 	return out
 }

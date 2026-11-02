@@ -13430,6 +13430,26 @@ SecretCreateRequest = TypedDict(
     total=False,
 )
 
+SecretDeliveries = TypedDict(
+    'SecretDeliveries',
+    {
+        'consumers': list[dict[str, Any]],
+        'current_version': int,
+        'name': str,
+    },
+    total=False,
+)
+
+SecretDeliveryReport = TypedDict(
+    'SecretDeliveryReport',
+    {
+        'consumer': str,
+        'secrets': list[dict[str, Any]],
+        'state': str,
+    },
+    total=False,
+)
+
 SecretImportRequest = TypedDict(
     'SecretImportRequest',
     {

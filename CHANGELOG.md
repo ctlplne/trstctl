@@ -2,6 +2,12 @@
 
 ### Added
 
+- Secret rendering for host applications: `trstctl-agent --secret-render-config` keeps `{{ secret "name" }}`
+  templates rendered into files with atomic writes and the file's mode, runs the application's reload hook, and
+  asks the application to prove it uses the new value. Delivery reports (`trstctl-cli secrets deliveries
+  report|list`) keep "injected" apart from "verified", and a control-plane outage keeps the last file only until
+  its freshness bound, across agent restarts.
+
 - Scoped secret sync: `trstctl secrets scoped-syncs define|preview|apply` keeps every secret under a source prefix
   in step with a KV v2 destination under a prefix. The value-free plan lists create, update (with drift named),
   delete within the reviewed scope, and keys the sync didn't write, which it never touches; nested-key and

@@ -746,6 +746,8 @@ var coreCommandTable = []Command{
 	{Name: []string{"secrets", "syncs", "status"}, Method: "GET", Path: "/api/v1/secrets/syncs/{id}", Summary: "Read the durable delivery status of one secret-sync job"},
 	{Name: []string{"secrets", "syncs", "reconcile"}, Method: "POST", Path: "/api/v1/secrets/syncs/{id}/reconcile", Body: bodyFile, Summary: "Resolve a sync command whose receiver outcome is unproven: read the destination back, or record what you saw there"},
 	{Name: []string{"secrets", "syncs", "targets"}, Method: "GET", Path: "/api/v1/secrets/syncs/targets", Summary: "List supported and configured external secret-sync targets"},
+	{Name: []string{"secrets", "deliveries", "report"}, Method: "POST", Path: "/api/v1/secrets/deliveries", Body: bodyFile, Summary: "Report the secret versions a consumer wrote (injected) or its application proved it uses (verified)"},
+	{Name: []string{"secrets", "deliveries", "list"}, Method: "GET", Path: "/api/v1/secrets/deliveries", Query: []string{"name"}, RequiredQuery: []string{"name"}, Summary: "List each consumer's injected and verified versions of one secret against its current version"},
 	{Name: []string{"secrets", "scoped-syncs", "define"}, Method: "POST", Path: "/api/v1/secrets/scoped-syncs", Body: bodyFile, Summary: "Define a scoped sync: every secret under a source prefix to a KV v2 target under a destination prefix"},
 	{Name: []string{"secrets", "scoped-syncs", "list"}, Method: "GET", Path: "/api/v1/secrets/scoped-syncs", Summary: "List scoped syncs"},
 	{Name: []string{"secrets", "scoped-syncs", "show"}, Method: "GET", Path: "/api/v1/secrets/scoped-syncs/{id}", Summary: "Show a scoped sync with the destination keys it manages and their delivery status"},

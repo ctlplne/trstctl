@@ -226,7 +226,10 @@ import (
 // Version 74 carries A237's scoped secret syncs; an older snapshot has none, so
 // a restore would forget which destination keys each sync manages (and its
 // queued deletes) while its covered offset skipped the applies.
-const SnapshotFormatVersion = 74
+// Version 75 carries A238's secret delivery reports; an older snapshot has none,
+// so a restore would show every consumer as never having received a version
+// while its covered offset skipped the reports.
+const SnapshotFormatVersion = 75
 
 const snapshotSetPayloadKey = "_trstctl_snapshot_set"
 
@@ -299,6 +302,8 @@ var snapshotTables = []string{"tenants", "owners", "ownership_assignments", "iss
 	"secret_projects", "secret_project_environments", "secret_project_members",
 	// Format 74: A237's scoped secret syncs.
 	"secret_scoped_syncs", "secret_scoped_sync_keys", "secret_scoped_sync_deletes",
+	// Format 75: A238's secret delivery reports.
+	"secret_deliveries",
 	// Format 18: I4's tenant-scoped diagnostic projection.
 	"enrollment_diagnostic_observations", "enrollment_diagnostics",
 	// Format 23: normalized AD CS template/ACL posture is now rebuilt from the
@@ -631,6 +636,7 @@ SELECT jsonb_build_object(
   'secret_scoped_syncs', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_scoped_syncs t),
   'secret_scoped_sync_keys', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_scoped_sync_keys t),
   'secret_scoped_sync_deletes', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_scoped_sync_deletes t),
+  'secret_deliveries', (SELECT coalesce(jsonb_agg(to_jsonb(t.*)), '[]'::jsonb) FROM secret_deliveries t),
   '_trstctl_snapshot_set', jsonb_build_object(
     'id', $1::text,
     'covered_seq', $2::bigint,

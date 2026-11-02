@@ -1067,6 +1067,49 @@ and wipes buffers. A missing requested key sets the CR to `Error` before a
 workload rollout. `Ready` reports a successful template patch; check workload
 pod readiness separately for sidecar runtime failures.
 
+#### Rendering secrets into files for an application (A238)
+
+`trstctl-agent --secret-render-config render.yaml` keeps files current for an
+application on the host, with no Kubernetes Secret in the path. It reads secrets with an
+API token (`secrets:read`) and needs no enrollment:
+
+```yaml
+server: https://trstctl.example:8443
+ca_file: /etc/trstctl/ca.pem
+token_file: /etc/trstctl/render.token
+consumer: web-1/nginx          # the name its delivery reports use
+interval: 30s
+freshness: 1h                  # serve the last values at most this long without the control plane
+state_dir: /var/lib/trstctl/render
+templates:
+  - name: htpasswd
+    destination: /etc/nginx/auth/htpasswd
+    mode: "0440"
+    template: |
+      app:{PLAIN}{{ secret "web/prod/password" }}
+    reload: { command: ["nginx", "-s", "reload"] }   # or { signal: HUP, pid_file: /run/nginx.pid }
+    verify: { url: "http://127.0.0.1/", username: app, password_secret: web/prod/password }
+    on_stale: remove           # or keep
+```
+
+A template is literal text with `{{ secret "name" }}` placeholders and nothing else, so it
+can't run code. It's rendered over bytes: a value is never turned into a string, never
+logged, and wiped once written. A changed version is written atomically: a private
+temporary file in the same directory is written, flushed and given its mode (never
+readable by others), then renamed over the old file, so a reader sees the old file or the
+new one, never part of either. Then the reload hook runs (an argv with no shell, or a
+signal to the process in a pid file), and the verify probe asks the application to prove it
+uses the new value. The control plane hears `injected` when the file is written and
+`verified` only when the probe passes. `trstctl-cli secrets deliveries list --name
+web/prod/password` shows each consumer as `verified` on the current version, `injected`
+only, or `behind`. A consumer can report only secrets it may read, at versions that
+exist (`trstctl-cli secrets deliveries report`). When the control plane can't be reached
+the last file keeps serving until `freshness` runs out. Then it's removed and the
+application reloaded, or kept if the template says `on_stale: keep`. The fetch time lives
+in a state file with no values, so the bound holds across an agent restart. Replacing a
+dynamic lease before revoking the old one, and a CSI volume for pods, are A238's second
+part.
+
 `GET /api/v1/secrets/unvaulted` / `trstctl-cli secrets unvaulted`: repository and
 third-party scanning sources, redacted `leaked_secret` finding counts, cloud-secret
 discovery across AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, and

@@ -262,6 +262,8 @@ var TenantScopedTables = []string{
 	"secret_projects", "secret_project_environments", "secret_project_members",
 	// A237: scoped syncs; keys reference their definition, so they go first.
 	"secret_scoped_sync_keys", "secret_scoped_sync_deletes", "secret_scoped_syncs",
+	// A238: secret delivery reports; no foreign keys.
+	"secret_deliveries",
 	// M4: single-use records of machine login tokens.
 	"machine_credential_replays",
 	// Asset overrides reference owners through a composite tenant FK.

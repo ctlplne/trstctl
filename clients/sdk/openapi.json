@@ -41041,6 +41041,99 @@
         ],
         "type": "object"
       },
+      "SecretDeliveries": {
+        "properties": {
+          "consumers": {
+            "items": {
+              "properties": {
+                "consumer": {
+                  "type": "string"
+                },
+                "injected_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "injected_version": {
+                  "type": "integer"
+                },
+                "state": {
+                  "enum": [
+                    "verified",
+                    "injected",
+                    "behind"
+                  ],
+                  "type": "string"
+                },
+                "verified_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "verified_version": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "consumer",
+                "injected_version",
+                "verified_version",
+                "state"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "current_version": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "current_version",
+          "consumers"
+        ],
+        "type": "object"
+      },
+      "SecretDeliveryReport": {
+        "properties": {
+          "consumer": {
+            "type": "string"
+          },
+          "secrets": {
+            "items": {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "version"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "state": {
+            "enum": [
+              "injected",
+              "verified"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "consumer",
+          "state",
+          "secrets"
+        ],
+        "type": "object"
+      },
       "SecretImportRequest": {
         "properties": {
           "prefix": {
@@ -78580,6 +78673,130 @@
           }
         ],
         "summary": "Report cloud secret-manager discovery and sync integration coverage",
+        "x-trstctl-permission": "secrets:read"
+      }
+    },
+    "/api/v1/secrets/deliveries": {
+      "get": {
+        "operationId": "listSecretDeliveries",
+        "parameters": [
+          {
+            "description": "secret name",
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDeliveries"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "List, per consumer, the injected and verified versions of one secret against its current version",
+        "x-trstctl-permission": "secrets:read"
+      },
+      "post": {
+        "operationId": "reportSecretDelivery",
+        "parameters": [
+          {
+            "description": "Caller-supplied idempotency key; replays return the original mutation result.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SecretDeliveryReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretDeliveryReport"
+                }
+              }
+            },
+            "description": "success"
+          },
+          "4XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "client error"
+          },
+          "5XX": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "SessionCookie": []
+          }
+        ],
+        "summary": "Report the secret versions a consumer wrote (injected) or its application proved it uses (verified)",
         "x-trstctl-permission": "secrets:read"
       }
     },

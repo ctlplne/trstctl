@@ -182,6 +182,14 @@ var reviewedExecUses = map[string]map[string]bool{
 		"readCertutilCSV": true,
 		"runCertutil":     true,
 	},
+	// A238's secret renderer runs the reload argv the operator put in the
+	// renderer's own configuration file, after it atomically rewrote a file for
+	// the application. The argv comes only from that file (never from the
+	// control plane or a secret), runs with no shell, a 30-second deadline and
+	// discarded output. Pinned by TestReviewedExecAllowlistPinsSecretRenderHook.
+	"internal/agent/secretrender/secretrender.go": {
+		"runHook": true,
+	},
 	"internal/ca/shellca/shellca.go": {
 		"run": true,
 	},

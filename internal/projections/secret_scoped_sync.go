@@ -184,7 +184,8 @@ func (p *Projector) applySecretScopedSyncTx(ctx context.Context, tx pgx.Tx, e ev
 		}
 		return true, p.store.ApplySecretScopedSyncDeleteFailedTx(ctx, tx, e.TenantID, pl.DeleteID, pl.Error, e.Time, e.Sequence)
 	default:
-		return false, nil
+		// A238's delivery reports join the same secrets workspace family.
+		return p.applySecretDeliveryTx(ctx, tx, e)
 	}
 }
 
@@ -205,6 +206,7 @@ func addSecretScopedSyncPrivacyPolicies(policies map[privacyEventPolicyKey]event
 	policies[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/status", opaque), privacyRule("/reason", opaque),
 		privacyRule("/plan_digest", opaque), privacyRule("/source_digest", opaque))
+	addSecretDeliveryPrivacyPolicies(policies)
 	policies[privacyEventPolicyKey{EventSecretScopedSyncRemoved, 1}] = privacyRules(
 		privacyRule("/id", opaque), privacyRule("/removed_by", exact))
 	policies[privacyEventPolicyKey{EventSecretScopedSyncApplied, 1}] = privacyRules(
@@ -228,4 +230,5 @@ func addSecretScopedSyncPrivacyShapes(shapes map[privacyEventPolicyKey]events.Pr
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncDeleteFailed, 1}] = privacyPayloadShape[SecretScopedSyncDeleteFailed]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncModeSet, 1}] = privacyPayloadShape[SecretScopedSyncModeSet]()
 	shapes[privacyEventPolicyKey{EventSecretScopedSyncReconciled, 1}] = privacyPayloadShape[SecretScopedSyncReconciled]()
+	addSecretDeliveryPrivacyShapes(shapes)
 }

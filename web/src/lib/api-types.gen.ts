@@ -9720,6 +9720,18 @@ export interface SecretCreateRequest {
   value: string;
 }
 
+export interface SecretDeliveries {
+  consumers: ({ consumer: string; injected_at?: string; injected_version: number; state: "verified" | "injected" | "behind"; verified_at?: string; verified_version: number })[];
+  current_version: number;
+  name: string;
+}
+
+export interface SecretDeliveryReport {
+  consumer: string;
+  secrets: { name: string; version: number }[];
+  state: "injected" | "verified";
+}
+
 export interface SecretImportRequest {
   prefix?: string;
   values: Record<string, unknown>;

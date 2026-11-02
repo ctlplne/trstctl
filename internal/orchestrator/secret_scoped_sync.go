@@ -36,6 +36,11 @@ func (o *Orchestrator) RecordSecretScopedSyncReconciled(ctx context.Context, ten
 	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretScopedSyncReconciled, reconciled)
 }
 
+// ReportSecretDelivery records a consumer's delivery report (A238).
+func (o *Orchestrator) ReportSecretDelivery(ctx context.Context, tenantID string, reported projections.SecretDeliveryReported) error {
+	return o.emitSecretProjectEvent(ctx, tenantID, projections.EventSecretDeliveryReported, reported)
+}
+
 // RecordSecretScopedSyncApplied records an applied plan under its stable event
 // ID, so a retried apply finds the plan it already fixed instead of making a
 // new one. A different payload under the same ID is an idempotency conflict.
