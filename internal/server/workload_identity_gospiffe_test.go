@@ -52,13 +52,16 @@ func runStockIdentityChecks(t *testing.T, ids []string, certificates []stockIden
 	cmd.Dir = filepath.Join("testdata", "gospiffe-client")
 	cmd.Env = append(os.Environ(), "GOFLAGS=")
 	cmd.Stdin = bytes.NewReader(input)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("stock public-identity verification failed: %v\n%s", err, out)
+	// Only stdout is the verifier's answer: on a runner without the fixture's
+	// modules cached, go run first reports "go: downloading ..." on stderr.
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("stock public-identity verification failed: %v\n%s%s", err, stdout.Bytes(), stderr.Bytes())
 	}
 	var result stockIdentityResults
-	if err := json.Unmarshal(out, &result); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("stock verifier output: %v\n%s", err, stdout.Bytes())
 	}
 	if len(result.IDs) != len(ids) || len(result.Certificates) != len(certificates) {
 		t.Fatal("stock verifier omitted results")
