@@ -142,6 +142,12 @@ func TestRendererWritesAtomicallyReloadsAndReportsInjectedThenVerifiedA238(t *te
 			if raw, err := os.ReadFile(file); err == nil && !strings.HasPrefix(string(raw), "app:{PLAIN}pw-") { // #nosec G304 -- the test's own temp file (CWE-22)
 				torn.Add(1)
 			}
+			if runtime.GOOS == "windows" {
+				// Windows can't replace a file while it is open, so a reader that
+				// never lets go would starve any writer; this one pauses between
+				// reads, as an application reading its file does.
+				time.Sleep(time.Millisecond)
+			}
 		}
 	}()
 	r.Once(t.Context())
@@ -167,7 +173,7 @@ func TestRendererWritesAtomicallyReloadsAndReportsInjectedThenVerifiedA238(t *te
 		src.set("web/prod/password", pw)
 		r.Once(t.Context())
 		if raw, _ := os.ReadFile(file); string(raw) != "app:{PLAIN}"+pw+"\n" { // #nosec G304 -- the test's own temp file (CWE-22)
-			t.Fatalf("after rotation, file %q", raw)
+			t.Fatalf("after rotation, file %q; renderer log:\n%s", raw, logs.String())
 		}
 	}
 	close(stop)

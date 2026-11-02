@@ -54,7 +54,7 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2245 annotated sites across 29 rules. Each row is
+2248 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
@@ -1436,7 +1436,7 @@ not this file.
 | `tools/trstctllint/eventsource/eventsource_test.go:98` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/trstctllint/idempotency/idempotency_test.go:238` | fixture tree in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G302 — CWE-276 Incorrect default permissions (chmod) (47 sites)
+### G302 — CWE-276 Incorrect default permissions (chmod) (48 sites)
 
 | Location | Reason |
 |---|---|
@@ -1451,6 +1451,7 @@ not this file.
 | `internal/agent/drift/drift_unix_test.go:28` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/drift/drift_unix_test.go:53` | deliberately loosens the fixture key's mode; detecting exactly this is what the test proves (CWE-276) |
 | `internal/agent/relay/selfupgrade.go:224` | the file IS the executable being installed; 0755 is its required mode (CWE-276) |
+| `internal/agent/secretrender/replace_windows_test.go:41` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/workloadapi/attest.go:145` | a DIRECTORY, not a file. 0700 is the tightest mode that |
 | `internal/crypto/mtls/custody_other_test.go:36` | deliberate over-permissive negative fixture (CWE-276) |
 | `internal/crypto/samltest/material_test.go:50` | deliberately unsafe test fixture must be refused |
@@ -1488,7 +1489,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (620 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (621 sites)
 
 | Location | Reason |
 |---|---|
@@ -1688,17 +1689,18 @@ not this file.
 | `internal/agent/secretinject/secretinject_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/secretrender/lease_test.go:106` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/lease_test.go:130` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/replace_windows_test.go:49` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:313` | the renderer's own state directory and a validated template name (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:572` | operator-configured pid file (CWE-22) |
 | `internal/agent/secretrender/secretrender.go:663` | a fresh random name beside the configured destination (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:695` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:742` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:691` | the destination's own directory (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:738` | operator-configured token file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:83` | the test's own temp file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:142` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:148` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:169` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:224` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:252` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:154` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:175` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:230` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:258` | the test's own temp file (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:60` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:79` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
@@ -2113,7 +2115,7 @@ not this file.
 | `tools/trstctllint/upsertarbiter/upsertarbiter.go:287` | migration files under the repository store package (CWE-22) |
 | `tools/trstctllint/upsertarbiter/upsertarbiter_test.go:66` | test-only baseline dump to a path the operator chose via UPSERTARBITER_BASELINE_OUT (CWE-22) |
 
-### G306 — CWE-276 Incorrect default permissions (file write) (121 sites)
+### G306 — CWE-276 Incorrect default permissions (file write) (122 sites)
 
 | Location | Reason |
 |---|---|
@@ -2153,6 +2155,7 @@ not this file.
 | `internal/agent/relay/adcsrevoke_test.go:46` | a test-owned executable stand-in (CWE-276). |
 | `internal/agent/relay/recovery_check_test.go:25` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
 | `internal/agent/relay/selfupgrade_test.go:35` | the fixture IS an executable; 0755 is its required mode (CWE-276) |
+| `internal/agent/secretrender/replace_windows_test.go:26` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshdiscovery/sshdiscovery_test.go:29` | fixture file in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `internal/agent/sshkrl/install_test.go:62` | public KRL fixture checks that mode is preserved |
 | `internal/agent/sshkrl/install_test.go:74` | a public KRL fixture (committed testdata bytes) written under t.TempDir; sshd lists are world-readable |

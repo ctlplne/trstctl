@@ -4,5 +4,8 @@
 
 package secretrender
 
-// allowReplace is a no-op where a rename replaces a file whatever its mode.
-func allowReplace(string) error { return nil }
+import "os"
+
+// replaceFile renames tmp over path; a rename replaces a file whatever its
+// mode, and readers holding the old file keep reading it.
+func replaceFile(tmp, path string, _ os.FileMode) error { return os.Rename(tmp, path) }

@@ -5434,8 +5434,10 @@ versions on the kubelet's republish reported as `injected`, the freshness bound 
 plugin restarts, and a file removed once its pod may no longer read it; proven on kind
 against a restricted environment. The plugin is privileged (it mounts) and its node can
 read the volumes on it; a volume reports `injected` only; the kind proof is a lab run, not
-a CI job yet; on Windows the reload is a command (no signals), and a rendered file's mode is
-its read-only attribute: who may read it follows the directory's access control list.
+a CI job yet; on Windows the reload is a command (no signals), a rendered file's mode is
+its read-only attribute (who may read it follows the directory's access control list), and a
+file an application keeps open can't be replaced: the renderer retries for two seconds, then
+on its next pass.
 
 AWS, GCP, and Azure targets independently opt into OIDC workload identity instead
 of their static target credential. The matching
