@@ -17,6 +17,7 @@ import (
 	agentrelay "trstctl.com/trstctl/internal/agent/relay"
 	"trstctl.com/trstctl/internal/agent/transport"
 	"trstctl.com/trstctl/internal/cli/evaluate"
+	connectorwasm "trstctl.com/trstctl/internal/connector/wasm/host"
 	"trstctl.com/trstctl/internal/crypto"
 	"trstctl.com/trstctl/internal/crypto/certinfo"
 	"trstctl.com/trstctl/internal/crypto/jose"
@@ -107,6 +108,16 @@ func TestServedEvaluationJourneyA188(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// A host agent compiles its connector sandbox when it starts
+	// (cmd/trstctl-agent applyConnectorIsolation), before it claims any job;
+	// this in-process agent does the same, and the journey starts once the
+	// sandbox is ready. Under the race detector the one-time compile takes
+	// most of a 4-vCPU runner's issuance budget (36 s measured, 27 s of it
+	// compiling); a running agent never charges it to a journey.
+	if _, err := connectorwasm.Builtin(); err != nil {
+		t.Fatalf("connector sandbox: %v", err)
+	}
+
 	// The control plane's workers and the host agent run as they would in a
 	// deployment, until the test ends.
 	pumpCtx, stopPump := context.WithCancel(context.Background())
@@ -136,6 +147,9 @@ func TestServedEvaluationJourneyA188(t *testing.T) {
 	steps := map[string]evaluate.Step{}
 	for _, s := range pack.Steps {
 		steps[s.Name] = s
+		// Each step's wall time, so a slow runner shows where the journey
+		// spends its 45 s budget.
+		t.Logf("step %s = %s in %s", s.Name, s.Status, s.FinishedAt.Sub(s.StartedAt).Round(time.Millisecond))
 		if s.Status != evaluate.StatusPass {
 			t.Errorf("%s = %s: %s", s.Name, s.Status, s.Detail)
 		}

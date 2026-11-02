@@ -623,7 +623,7 @@ not this file.
 | `internal/server/ca_switch_served_test.go:77` | loopback fixture closed by its stop func (CWE-400) |
 | `internal/server/closed_loop_served_test.go:73` | loopback fixture closed below (CWE-400) |
 | `internal/server/dod_parent_substrate_bridge_runtime_test.go:183` | local test listener owned and torn down by the test (CWE-400) |
-| `internal/server/evaluate_served_test.go:65` | loopback fixture is closed below (CWE-400) |
+| `internal/server/evaluate_served_test.go:66` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:295` | loopback fixture is closed below (CWE-400) |
 | `internal/server/host_agent_remote_served_test.go:533` | loopback fixture closed below (CWE-400) |
 | `internal/server/incident_fleet_reissuance_served_test.go:443` | loopback test fixture is explicitly closed (CWE-400) |
