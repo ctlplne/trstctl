@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2252 annotated sites across 29 rules. Each row is
+2258 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (489 sites)
+### G101 — CWE-798 Use of hardcoded credentials (491 sites)
 
 | Location | Reason |
 |---|---|
@@ -259,11 +259,11 @@ not this file.
 | `internal/config/scim_writeback_test.go:19` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/scim_writeback_test.go:20` | fixture file paths, not credential values (CWE-798) |
 | `internal/config/scim_writeback_test.go:28` | fixture file paths, not credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:50` | test-only file reference paths, no credential values (CWE-798) |
-| `internal/config/secret_integrations_test.go:308` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:312` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:316` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
-| `internal/config/secret_integrations_test.go:320` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:52` | test-only file reference paths, no credential values (CWE-798) |
+| `internal/config/secret_integrations_test.go:352` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:356` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:360` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/config/secret_integrations_test.go:364` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:23` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:42` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/config/secrets_config_test.go:65` | fabricated fixture path/identifiers; no credential value is present (CWE-798) |
@@ -303,6 +303,7 @@ not this file.
 | `internal/dynsecret/access_test.go:142` | test fixture DSNs with a dummy password; the test asserts it never reaches the target ref (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:15` | placeholder test DSNs, not credentials (CWE-798) |
 | `internal/dynsecret/postgres_decoy_test.go:19` | placeholder test DSNs, not credentials (CWE-798) |
+| `internal/dynsecret/totp_test.go:13` | the RFC 6238 test-vector seed, not a credential (CWE-798) |
 | `internal/kms/gcpkms/gcpkms_test.go:22` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mcpserver/mcpserver_test.go:82` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/mdm/entra_test.go:21` | a stand-in fixture value, not a credential (CWE-798) |
@@ -435,6 +436,7 @@ not this file.
 | `internal/server/discovery_served_test.go:2739` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:2751` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/discovery_served_test.go:2762` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/server/dynamic_secret_totp_lab_test.go:38` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/endpoint_replacement_served_test.go:29` | fabricated test-only credential (CWE-798) |
 | `internal/server/external_observer_served_test.go:62` | fabricated fixture credential (CWE-798) |
 | `internal/server/gcp_workload_identity_served_test.go:27` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -493,7 +495,7 @@ not this file.
 | `internal/server/scan_annotation_served_test.go:81` | fabricated fixture credential (CWE-798) |
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
-| `internal/server/secret_integrations.go:1206` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_integrations.go:1229` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
 | `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
@@ -609,7 +611,7 @@ not this file.
 | `internal/server/migration_run_served_test.go:467` | loopback fixture is closed below (CWE-400) |
 | `internal/server/serve_test.go:21` | local test listener owned and torn down by the test (CWE-400) |
 
-### G115 — CWE-190 Integer overflow or wraparound (355 sites)
+### G115 — CWE-190 Integer overflow or wraparound (356 sites)
 
 | Location | Reason |
 |---|---|
@@ -705,6 +707,7 @@ not this file.
 | `internal/dynsecret/drivers.go:238` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/drivers.go:246` | SQL Server TDS prelogin framing of short bounded fields (CWE-190) |
 | `internal/dynsecret/providers_real_test.go:688` | bounded fixture/corpus value packing inside a test (CWE-190) |
+| `internal/dynsecret/totp.go:127` | step = now / period with now checked non-negative above (CWE-190) |
 | `internal/events/backup_history_test.go:227` | bounded fixture/corpus value packing inside a test (CWE-190) |
 | `internal/events/backup_restore_floor_test.go:598` | tiny fixed test sequence |
 | `internal/events/event_id_index_test.go:148` | the fixture index is bounded to one or two. |
@@ -1085,7 +1088,7 @@ not this file.
 | `ee/whitelabel/email.go:116` | raster image data URI with a decodable base64 payload (CWE-79) |
 | `internal/assurance/customer_render.go:167` | the logo matched logoDataURI: a base64 PNG, JPEG, GIF or WebP data URI, never script-capable SVG or another scheme (CWE-79). |
 
-### G204 — CWE-78 OS command injection (287 sites)
+### G204 — CWE-78 OS command injection (289 sites)
 
 | Location | Reason |
 |---|---|
@@ -1279,6 +1282,8 @@ not this file.
 | `internal/server/dynamic_secret_ldap_container_test.go:94` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_ldap_container_test.go:97` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/dynamic_secret_ldap_container_test.go:133` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_totp_lab_test.go:35` | test executes a fixed local tool or fixture it built itself (CWE-78) |
+| `internal/server/dynamic_secret_totp_lab_test.go:82` | fixed lab image, arguments built by the test (CWE-78) |
 | `internal/server/enrollment_relay_served_test.go:107` | fixed current test binary and fixed test selector (CWE-78) |
 | `internal/server/est_libest_served_tls_policy_test.go:71` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/server/est_mtls_reenroll_served_test.go:143` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -2321,13 +2326,14 @@ not this file.
 | `internal/query/adversarial_test.go:223` | test jitter/shuffle, not a security decision (CWE-338) |
 | `internal/query/filter_test.go:150` | test shuffle, not a security decision (CWE-338) |
 
-### G505 — CWE-328 Weak hash import (SHA-1) (10 sites)
+### G505 — CWE-328 Weak hash import (SHA-1) (11 sites)
 
 | Location | Reason |
 |---|---|
 | `internal/crypto/certinfo/certinfo.go:15` | SHA-1 only for the conventional certificate fingerprint identifier, never integrity (CWE-328) |
 | `internal/crypto/leafca.go:7` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
 | `internal/crypto/opaque_x509.go:14` | SHA-1 only for RFC 5280 4.2.1.2 method-1 Subject Key Identifier derivation (CWE-328) |
+| `internal/crypto/otp.go:7` | RFC 6238 TOTP's default HMAC hash, used as an HMAC, not a collision-resistant digest (CWE-327) |
 | `internal/crypto/pqc_x509.go:6` | RFC 5280 4.2.1.2 method-1 key identifiers only (CWE-328) |
 | `internal/crypto/thumbprint.go:6` | a certificate's SHA-1 thumbprint is the identifier some CA APIs address it by; it proves nothing (CWE-328) |
 | `internal/crypto/tsa.go:20` | RFC 5816 ESSCertIDv1 is defined over SHA-1; identifier only, v2 uses SHA-256 (CWE-328) |

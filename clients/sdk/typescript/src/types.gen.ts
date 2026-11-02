@@ -14530,7 +14530,7 @@ export interface components {
             /** @enum {string} */
             revocation: "confirmed" | "ttl_only";
             /** @enum {string} */
-            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap";
+            type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp";
         };
         EdgeDelegation: {
             attested_key_sha256?: string;

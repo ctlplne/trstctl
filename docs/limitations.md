@@ -5240,7 +5240,7 @@ when off, requiring a KEK when on):
   closes it; the leaseworker expires leases through an
   outbox-backed backend revocation queue. `buildRunDeps` constructs a
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
-  `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, and `ldap` (A239). Issuance is
+  `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, and `totp` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5250,9 +5250,12 @@ when off, requiring a KEK when on):
   LDAP (A239) is proven on OpenLDAP over verified LDAPS: the directory's own
   `ldapwhoami` accepts a leased entry in its role's group only, a replayed issue
   keeps one entry, renewal stays within the maximum TTL, and after revocation the
-  bind is refused (invalid credentials). The provider catalog states each
-  adapter's authority and whether its revocation is confirmed or TTL-only. The
-  rest of A239's provider library is still being built.
+  bind is refused (invalid credentials). TOTP (A239) is proven with stock
+  oathtool: it computes the leased code for the lease's time step, accepts it
+  there and rejects it one step later; a renewal is refused, and revocation only
+  closes the lease (the code lapses at `valid_until`). The provider catalog states
+  each adapter's authority and whether its revocation is confirmed or TTL-only.
+  The rest of A239's provider library is still being built.
   AWS STS is a contract-tested adapter, not a completed cloud journey: no AWS
   account is available in this local-only run for stock-client authentication,
   CloudTrail reconciliation, or rejection after native expiry. The local query

@@ -443,6 +443,8 @@ func dynamicLeaseError(err error) error {
 		return errStatus(http.StatusUnprocessableEntity, "Kubernetes rotating renewal needs at least 600 seconds of remaining lifetime")
 	case errors.Is(err, dynsecret.ErrAWSSTSMinimumTTL):
 		return errStatus(http.StatusUnprocessableEntity, "AWS STS rotating renewal needs at least 900 seconds of remaining lifetime")
+	case errors.Is(err, dynsecret.ErrLeaseNotRenewable):
+		return errStatus(http.StatusUnprocessableEntity, "a one-time code can't be renewed; issue a new lease for the next code")
 	case errors.Is(err, store.ErrIdempotencyConflict):
 		return errStatus(http.StatusConflict, "Idempotency-Key was already used for a different dynamic secret request")
 	case errors.Is(err, context.DeadlineExceeded):

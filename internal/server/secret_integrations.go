@@ -387,6 +387,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredDatabaseBackend(opener)
 	case "kubernetes", "aws-iam", "aws-sts", "gcp-iam", "azure-entra":
 		return openConfiguredCloudBackend(opener)
+	case "totp":
+		return openConfiguredTOTPBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}
@@ -435,6 +437,27 @@ func (o *configuredDynamicBackendOpener) closeWith(backend any, extra func()) fu
 func (o *configuredDynamicBackendOpener) fail(err error) (requestDynamicBackend, func(), error) {
 	o.destroyCredentials()
 	return nil, func() {}, err
+}
+
+// openConfiguredTOTPBackend reads the seed into a code generator that keeps
+// its own sealed copy; nothing leaves the control plane but codes (A239).
+func openConfiguredTOTPBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	seed, err := o.resolve(cfg.SeedRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	period := 30 * time.Second
+	if value := strings.TrimSpace(cfg.Period); value != "" {
+		if period, err = time.ParseDuration(value); err != nil {
+			return o.fail(fmt.Errorf("server: totp period: %w", err))
+		}
+	}
+	backend, err := dynsecret.NewTOTPBackend(dynsecret.TOTPConfig{SeedBase32: seed, Digits: cfg.Digits, Period: period, Algorithm: cfg.Algorithm})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
 }
 
 func openConfiguredDatabaseBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {

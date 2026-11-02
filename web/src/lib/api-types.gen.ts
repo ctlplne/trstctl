@@ -4340,7 +4340,7 @@ export interface DynamicSecretSupportedProvider {
   purpose: string;
   requirements: DynamicSecretProviderRequirement[];
   revocation: "confirmed" | "ttl_only";
-  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap";
+  type: "postgresql" | "mysql" | "mongodb" | "aws-iam" | "aws-sts" | "gcp-iam" | "azure-entra" | "kubernetes" | "redis" | "ldap" | "totp";
 }
 
 export interface EdgeDelegation {

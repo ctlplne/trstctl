@@ -211,6 +211,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_plaintext", "Local plaintext exception", "Explicitly permit ldap:// to a literal loopback or private IP only; use only in a protected lab.", false),
 			roles("Each allowed role maps to the DN of one groupOfNames group; keep one permanent member in it, since a groupOfNames can't be empty."),
 		)},
+		{Type: "totp", Label: "TOTP codes", Purpose: "Issues the current RFC 6238 one-time code of a configured seed with the instant it stops being valid; a code can't be withdrawn or renewed, so it lapses at the end of its time step.", Requirements: dynamicSecretProviderRequirements(
+			credential("seed_ref", "Seed reference", "The shared secret in base32, as an authenticator app enrolls it.", true),
+			value("digits", "Digits", "6 (the default), 7 or 8.", false),
+			value("period", "Period", "30s (the default) or 60s; max_ttl is required and must not exceed it.", false),
+			value("algorithm", "Algorithm", "SHA1 (the default), SHA256 or SHA512.", false),
+			roles("Every allowed role reads the same seed's codes; role_bindings are not used."),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -241,6 +248,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's literal key prefixes and explicitly listed commands", "confirmed"
 	case "ldap":
 		return "membership of the role's directory group", "confirmed"
+	case "totp":
+		return "the configured seed's current one-time code, accepted until the end of its time step (and through any skew window the verifier allows)", "ttl_only"
 	}
 	return "", ""
 }

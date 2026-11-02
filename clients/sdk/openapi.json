@@ -18650,7 +18650,8 @@
               "azure-entra",
               "kubernetes",
               "redis",
-              "ldap"
+              "ldap",
+              "totp"
             ],
             "type": "string"
           }

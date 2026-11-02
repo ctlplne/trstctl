@@ -349,6 +349,8 @@ func (l *durableDynamicSecretLifecycle) RenewBound(ctx context.Context, leaseID 
 	if typed, ok := l.providers[record.Provider].(interface{ DynamicSecretProviderType() string }); ok &&
 		(typed.DynamicSecretProviderType() == "kubernetes" || typed.DynamicSecretProviderType() == "aws-iam" || typed.DynamicSecretProviderType() == "aws-sts") {
 		return dynsecret.Lease{}, errors.New("dynsecret: immutable provider credential renewal must rotate the credential")
+	} else if ok && typed.DynamicSecretProviderType() == "totp" {
+		return dynsecret.Lease{}, dynsecret.ErrLeaseNotRenewable
 	}
 	if record.State != store.DynamicSecretLeaseActive {
 		return dynsecret.Lease{}, fmt.Errorf("%w %q", dynsecret.ErrLeaseNotActive, leaseID)

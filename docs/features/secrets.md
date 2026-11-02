@@ -355,10 +355,10 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Nine backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Ten backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
-Redis ACL users, and LDAP directory accounts (A239).
+Redis ACL users, LDAP directory accounts, and TOTP codes (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -380,17 +380,25 @@ It speaks LDAPS verified against the configured server name (plain LDAP only to 
 private address with an explicit opt-in), and a retry after an uncertain issue
 replaces the same entry. See [configuration](../configuration.md) for its fields.
 
+The TOTP backend hands out the current RFC 6238 code of a seed the control plane
+holds (the base32 secret an authenticator app enrolls) with `valid_until`, the end
+of its time step. Nothing else leaves the control plane, and a code can't be
+withdrawn or renewed: revocation only closes the lease, and the code lapses at
+`valid_until` (or after any skew window the verifier allows), so the catalog marks
+it `ttl_only`. `max_ttl` is required and no longer than the period, so a lease
+never outlasts its code by more than one period.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns ten safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns eleven safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches
   `completed` only once it has), or `ttl_only` when the credential lapses only at that
-  expiry, as an AWS STS session does. The response also returns
+  expiry, as an AWS STS session or a TOTP code does. The response also returns
   this tenant's real configured provider IDs, allowed roles, maximum TTLs, and
   runtime configuration revisions. It never returns endpoints, native bindings,
   credential references, or provider credential values. Configuration remains a

@@ -2290,6 +2290,27 @@ replaces that one entry instead of leaving another.
 }
 ```
 
+For TOTP (A239), set `seed_ref` to the shared secret in base32, as an
+authenticator app enrolls it (a mode-0600 `file:` or tenant `secret://`
+reference), and optionally `digits` (6, the default, 7 or 8), `period` (`30s`,
+the default, or `60s`) and `algorithm` (`SHA1`, the default, `SHA256` or
+`SHA512`). Each lease carries the current code and `valid_until`, the end of its
+time step. `max_ttl` is required and must not exceed the period, and every
+allowed role reads the same seed's codes, so `role_bindings` is not used. A code
+can't be withdrawn or renewed; revoking the lease closes it, and the code lapses
+at `valid_until`.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "ops-totp",
+  "type": "totp",
+  "seed_ref": "file:/run/secrets/ops-totp-seed",
+  "allowed_roles": ["operator"],
+  "max_ttl": "30s"
+}
+```
+
 AWS, GCP, and Azure sync targets can explicitly replace their static target
 credential with tenant-owned workload identity. Set exactly the provider switch
 (`aws_workload_identity`, `gcp_workload_identity`, or

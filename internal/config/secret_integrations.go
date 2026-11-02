@@ -105,10 +105,17 @@ type DynamicSecretProviderConfig struct {
 	// TLSCARef pins a private CA and TLSServerName names the certificate the
 	// A239 providers verify; AllowPlaintext permits an unencrypted connection
 	// to a literal loopback or private IP only.
-	TLSCARef       string   `json:"tls_ca_ref,omitempty"`
-	TLSServerName  string   `json:"tls_server_name,omitempty"`
-	AllowPlaintext bool     `json:"allow_plaintext,omitempty"`
-	AllowedRoles   []string `json:"allowed_roles"`
+	TLSCARef       string `json:"tls_ca_ref,omitempty"`
+	TLSServerName  string `json:"tls_server_name,omitempty"`
+	AllowPlaintext bool   `json:"allow_plaintext,omitempty"`
+	// SeedRef is a TOTP provider's shared secret (base32, as an authenticator
+	// enrolls it); Digits (6, 7 or 8), Period (30s or 60s) and Algorithm
+	// (SHA1, SHA256 or SHA512) default to 6, 30s and SHA1 (A239).
+	SeedRef      string   `json:"seed_ref,omitempty"`
+	Digits       int      `json:"digits,omitempty"`
+	Period       string   `json:"period,omitempty"`
+	Algorithm    string   `json:"algorithm,omitempty"`
+	AllowedRoles []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
 	// ClusterRole/name. Fixed-authority providers may omit it.
@@ -212,6 +219,7 @@ type SecretSyncTargetConfig struct {
 var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
+	"totp": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -449,6 +457,8 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 		}
 	case "ldap":
 		errs = append(errs, validateLDAPProvider(where, c)...)
+	case "totp":
+		errs = append(errs, validateTOTPProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -781,6 +791,44 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	}
 	if c.Type != "ldap" && (c.BindDN != "" || c.UsersDN != "") {
 		errs = append(errs, fmt.Errorf("%s bind_dn and users_dn are only valid for ldap", where))
+	}
+	if c.Type != "totp" && (c.SeedRef != "" || c.Digits != 0 || c.Period != "" || c.Algorithm != "") {
+		errs = append(errs, fmt.Errorf("%s seed_ref, digits, period and algorithm are only valid for totp", where))
+	}
+	return errs
+}
+
+// validateTOTPProvider checks a TOTP provider's seed reference and code
+// parameters. A code lasts one period, so max_ttl must be set and no longer
+// than the period: a lease can't outlast its code by more than one period (A239).
+func validateTOTPProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if err := validateCredentialRef(c.SeedRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s seed_ref: %w", where, err))
+	}
+	if c.Digits != 0 && (c.Digits < 6 || c.Digits > 8) {
+		errs = append(errs, fmt.Errorf("%s digits must be 6, 7 or 8", where))
+	}
+	period := 30 * time.Second
+	switch strings.TrimSpace(c.Period) {
+	case "", "30s":
+	case "60s", "1m":
+		period = 60 * time.Second
+	default:
+		errs = append(errs, fmt.Errorf("%s period must be 30s or 60s", where))
+	}
+	switch strings.ToUpper(strings.TrimSpace(c.Algorithm)) {
+	case "", "SHA1", "SHA256", "SHA512":
+	default:
+		errs = append(errs, fmt.Errorf("%s algorithm must be SHA1, SHA256 or SHA512", where))
+	}
+	if strings.TrimSpace(c.MaxTTL) == "" {
+		errs = append(errs, fmt.Errorf("%s max_ttl is required for totp and must not exceed the period", where))
+	} else if ttl, err := c.MaxTTLDuration(); err == nil && ttl > period {
+		errs = append(errs, fmt.Errorf("%s max_ttl %s exceeds the %s period a code lasts", where, ttl, period))
+	}
+	if len(c.RoleBindings) > 0 {
+		errs = append(errs, fmt.Errorf("%s role_bindings are not used by totp: every allowed role reads the same seed's codes", where))
 	}
 	return errs
 }

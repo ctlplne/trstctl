@@ -98,6 +98,9 @@ var (
 	ErrLeaseHardExpiry  = errors.New("dynsecret: renewal exceeds provider hard expiry")
 	ErrLeaseMinimumTTL  = errors.New("dynsecret: Kubernetes rotating renewal needs at least 10 minutes of remaining lifetime")
 	ErrAWSSTSMinimumTTL = errors.New("dynsecret: AWS STS rotating renewal needs at least 15 minutes of remaining lifetime")
+	// ErrLeaseNotRenewable is a one-time code's lease (TOTP, A239): the code
+	// lapses at the end of its time step, so only a new lease gets a new code.
+	ErrLeaseNotRenewable = errors.New("dynsecret: a one-time code can't be renewed; issue a new lease for the next code")
 )
 
 // Lease is the durable record of a generated credential's lifecycle.

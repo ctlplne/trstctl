@@ -27,6 +27,8 @@ func TestValidateSecretIntegrationsAcceptsEveryBuiltIn(t *testing.T) {
 			{TenantID: tenant, ID: "k8s", Type: "kubernetes", Endpoint: "https://kubernetes.example.test", Namespace: "default", KubernetesAudience: "https://kubernetes.example.test", BearerTokenRef: ref, AllowedRoles: role, RoleBindings: map[string]string{"reader": "Role/secret-reader"}},
 			{TenantID: tenant, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: ref, RedisTLSServerName: "redis.internal", AllowedRoles: role,
 				RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}},
+			{TenantID: tenant, ID: "ldap", Type: "ldap", Addr: "ldap.internal:636", BindDN: "cn=admin,dc=example,dc=test", PasswordRef: ref, UsersDN: "ou=leases,dc=example,dc=test", AllowedRoles: role, RoleBindings: map[string]string{"reader": "cn=readers,ou=groups,dc=example,dc=test"}},
+			{TenantID: tenant, ID: "totp", Type: "totp", SeedRef: ref, AllowedRoles: role, MaxTTL: "30s"},
 		},
 		SyncTargets: []SecretSyncTargetConfig{
 			{TenantID: tenant, ID: "aws-sm", Type: "aws-secrets-manager", Endpoint: "https://secretsmanager.example.test", Region: "us-east-1", AccessKeyID: "AKID", SecretAccessRef: ref},
@@ -105,6 +107,48 @@ func TestValidateKubernetesTokenLeaseConfiguration(t *testing.T) {
 	bad.KubernetesTLSServerName = "kubernetes.default.svc"
 	if err := check(bad); err == nil || !strings.Contains(err.Error(), "requires kubernetes_tls_ca_ref") {
 		t.Fatalf("untrusted name override = %v", err)
+	}
+}
+
+// A239: a TOTP provider names a seed reference and standard code parameters,
+// and a lease can't be configured to outlast a code by more than one period.
+func TestValidateTOTPProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed", AllowedRoles: []string{"operator"}, MaxTTL: "30s"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	long := base
+	long.Digits, long.Period, long.Algorithm, long.MaxTTL = 8, "60s", "sha512", "60s"
+	if err := check(long); err != nil {
+		t.Fatalf("8 digits, 60s, SHA512: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no seed":             {func(c *DynamicSecretProviderConfig) { c.SeedRef = "" }, "seed_ref"},
+		"five digits":         {func(c *DynamicSecretProviderConfig) { c.Digits = 5 }, "digits must be 6, 7 or 8"},
+		"45s period":          {func(c *DynamicSecretProviderConfig) { c.Period = "45s" }, "period must be 30s or 60s"},
+		"MD5":                 {func(c *DynamicSecretProviderConfig) { c.Algorithm = "MD5" }, "algorithm must be SHA1"},
+		"no max_ttl":          {func(c *DynamicSecretProviderConfig) { c.MaxTTL = "" }, "max_ttl is required for totp"},
+		"lease past its code": {func(c *DynamicSecretProviderConfig) { c.MaxTTL = "5m" }, "exceeds the 30s period"},
+		"role bindings":       {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"operator": "x"} }, "role_bindings are not used by totp"},
+		"ldap fields":         {func(c *DynamicSecretProviderConfig) { c.UsersDN = "ou=x" }, "only valid for ldap"},
+	} {
+		c := base
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "redis", Type: "redis", Addr: "redis.internal:6379", PasswordRef: "file:/run/secrets/redis", RedisTLSServerName: "redis.internal", AllowedRoles: []string{"reader"},
+		RedisACLRoles: map[string]redisacl.Role{"reader": {KeyPrefixes: []string{"app:"}, Commands: []string{"get"}}}, SeedRef: "file:/run/secrets/totp-seed"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "only valid for totp") {
+		t.Fatalf("a seed on another provider type = %v", err)
 	}
 }
 

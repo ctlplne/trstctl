@@ -2,6 +2,10 @@
 
 ### Added
 
+- TOTP dynamic secrets (`type: totp`): each lease carries the current RFC 6238 code of a seed the control plane
+  holds and `valid_until`, the end of its time step; the code can't be renewed or withdrawn, so the catalog marks
+  it TTL-only and `max_ttl` can't exceed the period.
+
 - LDAP dynamic secrets (`type: ldap`): each lease is a directory entry with a password the directory sets and hashes,
   in the group its role is bound to, deleted at revocation, over LDAPS verified against the configured server name.
   The dynamic-secret provider catalog now states each adapter's authority and whether its revocation is confirmed or
