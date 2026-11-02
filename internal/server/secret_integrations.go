@@ -242,7 +242,11 @@ func (p *configuredDynamicProvider) DynamicSecretProviderType() string { return 
 // around AssumeRole or the token request so a lost response can never mint a
 // second live credential for the same lease.
 func (p *configuredDynamicProvider) DynamicSecretNeedsAtMostOnceEffect() bool {
-	return p.cfg.Type == "aws-iam" || p.cfg.Type == "aws-sts" || p.cfg.Type == "oauth-client-credentials"
+	switch p.cfg.Type {
+	case "aws-iam", "aws-sts", "oauth-client-credentials", "tailscale":
+		return true
+	}
+	return false
 }
 
 // DynamicSecretIndeterminateIssue states what may exist upstream after an
@@ -251,6 +255,9 @@ func (p *configuredDynamicProvider) DynamicSecretNeedsAtMostOnceEffect() bool {
 func (p *configuredDynamicProvider) DynamicSecretIndeterminateIssue() string {
 	if p.cfg.Type == "oauth-client-credentials" {
 		return fmt.Sprintf("OAuth token request outcome is indeterminate; an access token for client %q may exist for at most %s from the request. Revoke it at the authorization server or let it expire before issuing another credential", p.cfg.ClientID, p.maxTTL)
+	}
+	if p.cfg.Type == "tailscale" {
+		return fmt.Sprintf("Tailscale auth key creation outcome is indeterminate; a key whose description starts with \"trstctl \" (the lease's digest follows) may exist for at most %s. Delete it in the admin console before issuing another credential", p.maxTTL)
 	}
 	return awsSTSIndeterminateIssue
 }
@@ -382,7 +389,11 @@ func (p *configuredPreparedDynamicProvider) GeneratePrepared(ctx context.Context
 }
 
 func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef string) error {
-	if p.DynamicSecretNeedsAtMostOnceEffect() {
+	switch p.cfg.Type {
+	case "aws-iam", "aws-sts", "oauth-client-credentials":
+		// The reference alone can't end these credentials: they lapse at their
+		// native expiry (an OAuth token is revoked by presenting it, through
+		// RevokeCredential).
 		return dynsecret.CheckNativeExpiration(backendRef, time.Now())
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
@@ -443,6 +454,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredElasticsearchBackend(opener)
 	case "rabbitmq":
 		return openConfiguredRabbitMQBackend(opener)
+	case "tailscale":
+		return openConfiguredTailscaleBackend(opener)
 	default:
 		return opener.fail(fmt.Errorf("server: unsupported dynamic-secret backend type %q", p.cfg.Type))
 	}
@@ -601,6 +614,33 @@ func openConfiguredRabbitMQBackend(o *configuredDynamicBackendOpener) (requestDy
 	backend, err := dynsecret.NewRabbitMQBackend(dynsecret.RabbitMQConfig{
 		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
 		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredTailscaleBackend reads the API token into a backend that keeps
+// its own sealed copy and calls the Tailscale API through the SSRF-guarded
+// client (A239).
+func openConfiguredTailscaleBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	token, err := o.resolve(cfg.BearerTokenRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "https://api.tailscale.com"
+	}
+	client, err := secretIntegrationHTTPClient(endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewTailscaleBackend(dynsecret.TailscaleConfig{
+		Endpoint: endpoint, Tailnet: cfg.Tailnet, APIToken: token, RoleBindings: cfg.RoleBindings,
+		MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)

@@ -309,6 +309,45 @@ func TestValidateRabbitMQProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateTailscaleProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "tailnet", Type: "tailscale",
+		BearerTokenRef: "file:/run/secrets/tailscale-api", AllowedRoles: []string{"ci"},
+		RoleBindings: map[string]string{"ci": "tag:ci,tag:build"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	named := base
+	named.Tailnet, named.Endpoint = "example.com", "https://api.tailscale.com"
+	if err := check(named); err != nil {
+		t.Fatalf("named tailnet: %v", err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no token":             {func(c *DynamicSecretProviderConfig) { c.BearerTokenRef = "" }, "bearer_token_ref (the Tailscale API token)"},
+		"bad tailnet":          {func(c *DynamicSecretProviderConfig) { c.Tailnet = "a/b" }, "is not a tailnet name"},
+		"untagged role":        {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"ci": "ci"} }, "must list ACL tags"},
+		"binding without role": {func(c *DynamicSecretProviderConfig) { c.RoleBindings["ops"] = "tag:ops" }, `role_bindings["ops"] has no matching allowed role`},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"ci": "tag:ci,tag:build"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := DynamicSecretProviderConfig{TenantID: base.TenantID, ID: "totp", Type: "totp", SeedRef: "file:/run/secrets/totp-seed",
+		AllowedRoles: []string{"operator"}, MaxTTL: "30s", Tailnet: "example.com"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "tailnet is only valid for tailscale") {
+		t.Fatalf("a tailnet on another provider type = %v", err)
+	}
+}
+
 func TestValidateRedisACLRequiresExplicitScopedRoles(t *testing.T) {
 	base := DynamicSecretProviderConfig{
 		TenantID: "11111111-1111-1111-1111-111111111111", ID: "redis", Type: "redis",

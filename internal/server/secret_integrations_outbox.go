@@ -575,8 +575,13 @@ func (d *secretIntegrationOutboxDispatcher) generateDynamicSecretCredential(
 			// The effect key names the lease; AWS keeps its original prefix so
 			// effects recorded before OAuth providers existed still match.
 			key := "dynsecret-sts:" + command.ID
-			if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok && typed.DynamicSecretProviderType() == "oauth-client-credentials" {
-				key = "dynsecret-oauth:" + command.ID
+			if typed, ok := provider.(interface{ DynamicSecretProviderType() string }); ok {
+				switch typed.DynamicSecretProviderType() {
+				case "oauth-client-credentials":
+					key = "dynsecret-oauth:" + command.ID
+				case "tailscale":
+					key = "dynsecret-tailscale:" + command.ID
+				}
 			}
 			result, err := d.idem.DoAtMostOnceEffect(ctx, m.TenantID, key, func(callCtx context.Context) ([]byte, error) {
 				credential, generateErr := provider.Generate(callCtx, request)

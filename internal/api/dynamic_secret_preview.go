@@ -250,6 +250,12 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
 			roles(`Each allowed role maps to "<permissions> on <queues or exchanges> in <vhost>", for example "read on orders in /"; names match exactly.`),
 		)},
+		{Type: "tailscale", Label: "Tailscale auth keys", Purpose: "Creates a single-use, ephemeral, preauthorized Tailscale auth key carrying the role's ACL tags and expiring with the provider's maximum lifetime, and deletes it at revocation; Tailscale then refuses it. Devices it already registered stay until removed (an ephemeral one when it goes offline). Built against a stand-in of Tailscale's API; no tailnet proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "Tailscale API base URL; https://api.tailscale.com when empty.", false),
+			value("tailnet", "Tailnet", `The tailnet's name; "-" (the API token's own tailnet) when empty.`, false),
+			credential("bearer_token_ref", "API token reference", "A Tailscale API access token allowed to create and delete auth keys.", true),
+			roles("Each allowed role maps to the comma-separated ACL tags its keys give the devices they register, for example tag:ci."),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -290,6 +296,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's index privileges on its index patterns, through an API key invalidated at revocation or expiring with the provider's maximum lifetime", "confirmed"
 	case "rabbitmq":
 		return "the role's configure, write and read permissions on the named queues and exchanges in one virtual host, until the user is deleted and its connections closed", "confirmed"
+	case "tailscale":
+		return "one registration of a device with the role's ACL tags, until the auth key is deleted or expires; devices already registered keep their tags until removed", "confirmed"
 	}
 	return "", ""
 }

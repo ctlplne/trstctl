@@ -18663,7 +18663,8 @@
               "oauth-client-credentials",
               "clickhouse",
               "elasticsearch",
-              "rabbitmq"
+              "rabbitmq",
+              "tailscale"
             ],
             "type": "string"
           }

@@ -2343,6 +2343,24 @@ permissions are any of configure, write and read and the names match exactly. Ea
 lease is a user (named from `username_prefix`, default `trstctl`) with only those
 permissions; revocation deletes it and closes its connections.
 
+For Tailscale (A239, `tailscale`), set `bearer_token_ref` to an API access token
+allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own) and
+`endpoint` (default `https://api.tailscale.com`), and `role_bindings` to each allowed
+role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
+preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "tailnet",
+  "type": "tailscale",
+  "bearer_token_ref": "file:/run/secrets/tailscale-api",
+  "allowed_roles": ["ci"],
+  "role_bindings": {"ci": "tag:ci"},
+  "max_ttl": "1h"
+}
+```
+
 ```json
 {
   "tenant_id": "11111111-1111-1111-1111-111111111111",

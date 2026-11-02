@@ -355,11 +355,11 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Fourteen backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Fifteen backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
-users, Elasticsearch API keys, and RabbitMQ users (A239).
+users, Elasticsearch API keys, RabbitMQ users, and Tailscale auth keys (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -427,12 +427,21 @@ the user and closes its open connections, since RabbitMQ keeps established
 connections of a deleted user open; RabbitMQ then refuses its login. A retry after
 an uncertain attempt replaces the same user's password.
 
+The Tailscale backend creates one auth key per lease through Tailscale's API, with
+`bearer_token_ref` as the API token: single-use, ephemeral, preauthorized, carrying
+the ACL tags its role is bound to, and expiring with the provider's maximum lifetime.
+Revocation deletes the key, so Tailscale refuses it for any further registration;
+a device it already registered stays in the tailnet until removed (an ephemeral one
+when it goes offline). The key request has no idempotency key, so an uncertain one
+is never retried. It is built against a stand-in of Tailscale's API made from its
+documentation; there is no proof against a real tailnet yet.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns fifteen safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns sixteen safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

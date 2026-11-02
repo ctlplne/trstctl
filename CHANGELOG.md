@@ -2,6 +2,10 @@
 
 ### Added
 
+- Tailscale dynamic secrets (`type: tailscale`): each lease is a single-use, ephemeral, preauthorized auth key carrying
+  its role's ACL tags and expiring with the provider's maximum lifetime; revocation deletes it. The key request is
+  never retried blindly. Built against a stand-in of Tailscale's API.
+
 - RabbitMQ dynamic secrets (`type: rabbitmq`): each lease is a RabbitMQ user with a generated password and its
   role's permissions in one virtual host (`"<permissions> on <queues or exchanges> in <vhost>"`, names matched
   exactly), created through the management API as `admin_user`; revocation deletes the user and closes its open

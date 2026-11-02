@@ -126,7 +126,10 @@ type DynamicSecretProviderConfig struct {
 	// AdminUser is the administrator a clickhouse or rabbitmq provider creates
 	// and deletes leased users as, or an elasticsearch provider creates and
 	// invalidates API keys as (its password is password_ref, A239).
-	AdminUser    string   `json:"admin_user,omitempty"`
+	AdminUser string `json:"admin_user,omitempty"`
+	// Tailnet is a tailscale provider's tailnet, "-" (the API token's own) by
+	// default; its API token is bearer_token_ref (A239).
+	Tailnet      string   `json:"tailnet,omitempty"`
 	AllowedRoles []string `json:"allowed_roles"`
 	// RoleBindings maps an allowed role to its provider-native authority. AWS
 	// dynamic values are assumable IAM role ARNs; Kubernetes values are Role/name or
@@ -232,6 +235,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
+	"tailscale": {},
 }
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
@@ -402,8 +406,19 @@ func mapValues(values map[string]string) []string {
 	return out
 }
 
+// a239ProviderValidators check the A239 library's providers, one function each.
+var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig) []error{
+	"ldap": validateLDAPProvider, "totp": validateTOTPProvider,
+	"oauth-client-credentials": validateOAuthClientCredentialsProvider, "clickhouse": validateClickHouseProvider,
+	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
+	"tailscale": validateTailscaleProvider,
+}
+
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
 	errs := validateProviderFieldScopes(where, c)
+	if validate, ok := a239ProviderValidators[c.Type]; ok {
+		errs = append(errs, validate(where, c)...)
+	}
 	require := func(value, name string) {
 		if strings.TrimSpace(value) == "" {
 			errs = append(errs, fmt.Errorf("%s %s is required for %s", where, name, c.Type))
@@ -467,18 +482,6 @@ func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []erro
 				errs = append(errs, fmt.Errorf("%s redis_acl_roles[%q] has no matching allowed role", where, role))
 			}
 		}
-	case "ldap":
-		errs = append(errs, validateLDAPProvider(where, c)...)
-	case "totp":
-		errs = append(errs, validateTOTPProvider(where, c)...)
-	case "oauth-client-credentials":
-		errs = append(errs, validateOAuthClientCredentialsProvider(where, c)...)
-	case "clickhouse":
-		errs = append(errs, validateClickHouseProvider(where, c)...)
-	case "elasticsearch":
-		errs = append(errs, validateElasticsearchProvider(where, c)...)
-	case "rabbitmq":
-		errs = append(errs, validateRabbitMQProvider(where, c)...)
 	case "kubernetes":
 		require(c.Endpoint, "endpoint")
 		require(c.Namespace, "namespace")
@@ -818,6 +821,9 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && (c.ClientID != "" || c.ClientSecretRef != "" || c.RevocationEndpoint != "") {
 		errs = append(errs, fmt.Errorf("%s client_id, client_secret_ref and revocation_endpoint are only valid for oauth-client-credentials", where))
 	}
+	if c.Type != "tailscale" && c.Tailnet != "" {
+		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
+	}
 	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.Type != "rabbitmq" && c.AdminUser != "" {
 		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch and rabbitmq", where))
 	}
@@ -933,6 +939,42 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var (
+	tailscaleTag     = regexp.MustCompile(`^tag:[A-Za-z0-9][A-Za-z0-9-]{0,62}$`)
+	tailscaleTailnet = regexp.MustCompile(`^(-|[A-Za-z0-9.@_-]{1,253})$`)
+)
+
+// validateTailscaleProvider checks a Tailscale provider (A239): endpoint is the
+// API (https://api.tailscale.com when empty), tailnet the tailnet ("-" when
+// empty), bearer_token_ref an API access token allowed to manage auth keys, and
+// each allowed role is bound to the ACL tags its keys give devices.
+func validateTailscaleProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if c.Tailnet != "" && !tailscaleTailnet.MatchString(c.Tailnet) {
+		errs = append(errs, fmt.Errorf("%s tailnet %q is not a tailnet name", where, c.Tailnet))
+	}
+	if err := validateCredentialRef(c.BearerTokenRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s bearer_token_ref (the Tailscale API token): %w", where, err))
+	}
+	allowed := map[string]bool{}
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		allowed[role] = true
+		tags := strings.Split(c.RoleBindings[role], ",")
+		for _, tag := range tags {
+			if !tailscaleTag.MatchString(strings.TrimSpace(tag)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q] must list ACL tags (tag:name), not %q", where, role, strings.TrimSpace(tag)))
+				break
+			}
+		}
+	}
+	for role := range c.RoleBindings {
+		if !allowed[role] {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] has no matching allowed role", where, role))
+		}
+	}
+	return errs
 }
 
 // clickHouseIdentifier is a ClickHouse user or role name the provider accepts:
