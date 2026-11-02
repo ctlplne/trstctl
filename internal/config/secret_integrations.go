@@ -123,8 +123,8 @@ type DynamicSecretProviderConfig struct {
 	ClientID           string `json:"client_id,omitempty"`
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
-	// AdminUser is the administrator a clickhouse or rabbitmq provider creates
-	// and deletes leased users as, an elasticsearch provider creates and
+	// AdminUser is the administrator a clickhouse, rabbitmq or couchbase provider
+	// creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
 	// credentials and ACLs (its password is password_ref, A239).
 	AdminUser string `json:"admin_user,omitempty"`
@@ -236,8 +236,11 @@ var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
-	"tailscale": {}, "mongodb-atlas": {}, "kafka": {},
+	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {},
 }
+
+// adminUserProviderTypes take admin_user (A239).
+var adminUserProviderTypes = map[string]bool{"clickhouse": true, "elasticsearch": true, "rabbitmq": true, "kafka": true, "couchbase": true}
 
 // tlsProviderTypes take the shared tls_ca_ref, tls_server_name and
 // allow_plaintext settings (A239).
@@ -413,6 +416,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"oauth-client-credentials": validateOAuthClientCredentialsProvider, "clickhouse": validateClickHouseProvider,
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
+	"couchbase": validateCouchbaseProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -828,8 +832,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "tailscale" && c.Tailnet != "" {
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
 	}
-	if c.Type != "clickhouse" && c.Type != "elasticsearch" && c.Type != "rabbitmq" && c.Type != "kafka" && c.AdminUser != "" {
-		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq and kafka", where))
+	if !adminUserProviderTypes[c.Type] && c.AdminUser != "" {
+		errs = append(errs, fmt.Errorf("%s admin_user is only valid for clickhouse, elasticsearch, rabbitmq, kafka and couchbase", where))
 	}
 	return errs
 }
@@ -943,6 +947,51 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var (
+	couchbaseRole     = regexp.MustCompile(`^[a-z][a-z_]{1,63}$`)
+	couchbaseKeyspace = regexp.MustCompile(`^[A-Za-z0-9._%-]{1,100}(:[A-Za-z0-9_%-]{1,251}){0,2}$`)
+)
+
+// validateCouchbaseProvider checks a Couchbase provider (A239): endpoint is the
+// management REST API, admin_user and password_ref a user allowed to manage
+// users, and each allowed role is bound to "<roles> on <buckets>", for example
+// "bucket_full_access on orders".
+func validateCouchbaseProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the management REST API) is required for couchbase", where))
+	}
+	if strings.TrimSpace(c.AdminUser) == "" || strings.ContainsFunc(c.AdminUser, unicode.IsControl) {
+		errs = append(errs, fmt.Errorf("%s admin_user is required for couchbase", where))
+	}
+	if err := validateCredentialRef(c.PasswordRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s password_ref: %w", where, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			continue
+		}
+		roles, keyspaces, ok := strings.Cut(binding, " on ")
+		if !ok {
+			errs = append(errs, fmt.Errorf(`%s role_bindings[%q] must be "<roles> on <buckets>", for example "bucket_full_access on orders"`, where, role))
+			continue
+		}
+		for _, r := range strings.Split(roles, ",") {
+			if !couchbaseRole.MatchString(strings.TrimSpace(r)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: role %q is not a Couchbase role name", where, role, strings.TrimSpace(r)))
+			}
+		}
+		for _, k := range strings.Split(keyspaces, ",") {
+			if !couchbaseKeyspace.MatchString(strings.TrimSpace(k)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: keyspace %q is not a bucket or bucket:scope:collection", where, role, strings.TrimSpace(k)))
+			}
+		}
+	}
+	return errs
 }
 
 var (

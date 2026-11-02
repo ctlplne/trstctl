@@ -18666,7 +18666,8 @@
               "rabbitmq",
               "tailscale",
               "mongodb-atlas",
-              "kafka"
+              "kafka",
+              "couchbase"
             ],
             "type": "string"
           }

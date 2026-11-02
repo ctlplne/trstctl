@@ -5242,7 +5242,7 @@ when off, requiring a KEK when on):
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
-  `mongodb-atlas`, and `kafka` (A239). Issuance is
+  `mongodb-atlas`, `kafka`, and `couchbase` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5282,7 +5282,12 @@ when off, requiring a KEK when on):
   user and the stock producer is refused (TopicAuthorizationException), a
   renewal stays within the maximum lifetime, and after revocation a consumer
   still connected is refused on its open connection, a new login is refused,
-  and no leased user or ACL is left.
+  and no leased user or ACL is left. Couchbase users (A239) are proven against
+  stock Couchbase Server Community 8.0.2: the stock query shell (cbq) reads the
+  bound bucket as a leased user and is refused another bucket, a renewal stays
+  within the maximum lifetime, and after revocation the login is refused (401)
+  and no leased user is left. The Community Edition scopes a lease by bucket
+  only (its one data role is full access to a bucket).
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.

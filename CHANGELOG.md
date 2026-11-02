@@ -2,6 +2,11 @@
 
 ### Added
 
+- Couchbase dynamic secrets (`type: couchbase`): each lease is a local Couchbase user with a generated password and
+  only its role's roles on the named buckets (`"bucket_full_access on orders"`, the Community Edition's data role, or
+  Enterprise roles such as `"data_reader,query_select on orders"`), created through the management REST API;
+  revocation deletes it and Couchbase refuses its next request. Proven against stock Couchbase Server Community 8.0.2.
+
 - Kafka dynamic secrets (`type: kafka`): each lease is a SCRAM-SHA-512 user with a generated password and only its
   role's ACLs on topics, consumer groups and transactional IDs (`"read,describe on topic:orders; read on
   group:orders-app"`; a trailing `*` makes a prefix). Revocation deletes the ACLs, which refuse a client still

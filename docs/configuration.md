@@ -2349,6 +2349,28 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For Couchbase (A239, `couchbase`), set `endpoint` to the cluster's management REST
+API (`https://<node>:18091`), `admin_user` and `password_ref` to a user allowed to
+create and delete local users, and `role_bindings` to `"<roles> on <buckets>"` per
+allowed role. The Community Edition grants data access only through
+`bucket_full_access`; the Enterprise Edition's finer roles (`data_reader`,
+`query_select`, ...) and `bucket:scope:collection` keyspaces work the same way. Each
+lease is a local user with exactly those roles; revocation deletes it.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "cache",
+  "type": "couchbase",
+  "endpoint": "https://cb-0.internal:18091",
+  "admin_user": "trstctl_admin",
+  "password_ref": "file:/run/secrets/couchbase-admin",
+  "allowed_roles": ["orders"],
+  "role_bindings": {"orders": "bucket_full_access on orders"},
+  "max_ttl": "8h"
+}
+```
+
 For Kafka (A239, `kafka`), set `addr` to a bootstrap broker's SASL_SSL listener,
 `admin_user` and `password_ref` to a SCRAM-SHA-512 user allowed to alter user SCRAM
 credentials and create and delete ACLs (ALTER on the cluster), optionally `tls_ca_ref`

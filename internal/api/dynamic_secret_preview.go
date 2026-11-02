@@ -274,6 +274,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
 			roles(`Each allowed role maps to "<operations> on <resources>" clauses separated by ";", for example "read,describe on topic:orders; read on group:orders-app"; a name ending in * is a prefix.`),
 		)},
+		{Type: "couchbase", Label: "Couchbase users", Purpose: "Creates a local Couchbase user with a generated password and only its role's roles on the named buckets through the management REST API, and deletes it at revocation; Couchbase then refuses its next request.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Management REST API", "HTTPS URL of the cluster's management REST API (port 18091).", true),
+			value("admin_user", "Administrator", "A user allowed to create and delete local users (Full Admin or Security Admin).", true),
+			credential("password_ref", "Administrator password reference", "The administrator's password.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever deletes users with it.", false),
+			roles(`Each allowed role maps to "<roles> on <buckets>", for example "bucket_full_access on orders" (the Community Edition's data role) or "data_reader,query_select on orders".`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -320,6 +327,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's built-in roles on the named databases of one Atlas project, until the user is deleted or Atlas removes it at its deleteAfterDate", "confirmed"
 	case "kafka":
 		return "the role's ACL operations on its topics, consumer groups and transactional IDs, until the ACLs and the SCRAM credential are deleted", "confirmed"
+	case "couchbase":
+		return "the role's Couchbase roles on the named buckets, until the user is deleted", "confirmed"
 	}
 	return "", ""
 }

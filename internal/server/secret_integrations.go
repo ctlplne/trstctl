@@ -456,6 +456,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredRabbitMQBackend(opener)
 	case "kafka":
 		return openConfiguredKafkaBackend(opener)
+	case "couchbase":
+		return openConfiguredCouchbaseBackend(opener)
 	case "tailscale":
 		return openConfiguredTailscaleBackend(opener)
 	case "mongodb-atlas":
@@ -673,6 +675,29 @@ func openConfiguredMongoDBAtlasBackend(o *configuredDynamicBackendOpener) (reque
 		Endpoint: endpoint, GroupID: cfg.Project, ClientID: cfg.ClientID, ClientSecret: clientSecret,
 		RoleBindings: cfg.RoleBindings, UsernamePrefix: cfg.UsernamePrefix, MaxLifetime: o.provider.maxTTL,
 		AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredCouchbaseBackend reads the administrator password into a backend
+// that keeps its own sealed copy and calls the management REST API through the
+// SSRF-guarded client (A239).
+func openConfiguredCouchbaseBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	password, err := o.resolve(cfg.PasswordRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewCouchbaseBackend(dynsecret.CouchbaseConfig{
+		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
+		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)
