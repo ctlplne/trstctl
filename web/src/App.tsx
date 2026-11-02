@@ -139,6 +139,7 @@ export function AppRoutes() {
             {/* S-C2: the Secrets workspaces are routes in the Secrets space
               sidebar; the page derives its workspace from the pathname, and
               historical /secrets?tab= deep links redirect permanently. */}
+            <Route path="secrets/projects" element={<Secrets />} />
             <Route path="secrets/access" element={<Secrets />} />
             <Route path="secrets/developer" element={<Secrets />} />
             <Route path="secrets/sharing" element={<Secrets />} />

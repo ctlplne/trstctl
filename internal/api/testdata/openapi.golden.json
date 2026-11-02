@@ -41241,6 +41241,103 @@
           "owner_id": {
             "type": "string"
           },
+          "owner_resources": {
+            "properties": {
+              "certificates": {
+                "type": "integer"
+              },
+              "certificates_needing_work": {
+                "type": "integer"
+              },
+              "identities": {
+                "type": "integer"
+              },
+              "soonest_certificates": {
+                "items": {
+                  "properties": {
+                    "health": {
+                      "enum": [
+                        "ok",
+                        "expiring",
+                        "expired"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "not_after": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "health"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "soonest_identities": {
+                "items": {
+                  "properties": {
+                    "health": {
+                      "enum": [
+                        "ok",
+                        "expiring",
+                        "expired"
+                      ],
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "not_after": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "kind",
+                    "name",
+                    "health"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "certificates",
+              "identities",
+              "certificates_needing_work",
+              "soonest_certificates",
+              "soonest_identities"
+            ],
+            "type": "object"
+          },
           "slug": {
             "type": "string"
           }

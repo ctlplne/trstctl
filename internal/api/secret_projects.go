@@ -78,6 +78,27 @@ type secretProjectMemberResponse struct {
 	GrantedAt    time.Time `json:"granted_at"`
 }
 
+// secretProjectResourceResponse is one certificate or identity the project's
+// owner holds, with its health: expired, expiring (within 30 days) or ok.
+type secretProjectResourceResponse struct {
+	ID       string     `json:"id"`
+	Kind     string     `json:"kind"`
+	Name     string     `json:"name"`
+	Status   string     `json:"status,omitempty"`
+	NotAfter *time.Time `json:"not_after,omitempty"`
+	Health   string     `json:"health"`
+}
+
+// secretProjectOwnerResources is the application view: what the project's
+// owner holds besides these secrets.
+type secretProjectOwnerResources struct {
+	Certificates            int                             `json:"certificates"`
+	Identities              int                             `json:"identities"`
+	SoonestCertificates     []secretProjectResourceResponse `json:"soonest_certificates"`
+	SoonestIdentities       []secretProjectResourceResponse `json:"soonest_identities"`
+	CertificatesNeedingWork int                             `json:"certificates_needing_work"`
+}
+
 type secretProjectResponse struct {
 	Slug         string                             `json:"slug"`
 	Name         string                             `json:"name,omitempty"`
@@ -87,6 +108,8 @@ type secretProjectResponse struct {
 	CreatedAt    time.Time                          `json:"created_at"`
 	Environments []secretProjectEnvironmentResponse `json:"environments,omitempty"`
 	Members      []secretProjectMemberResponse      `json:"members,omitempty"`
+	// OwnerResources is absent when the owner is unknown: nothing is guessed.
+	OwnerResources *secretProjectOwnerResources `json:"owner_resources,omitempty"`
 }
 
 // secretScopeAllows reports whether the request's principal may read (or
@@ -420,6 +443,13 @@ func (a *API) secretProjectView(ctx context.Context, tenantID, slug string) (sec
 		}
 		resp.Environments = append(resp.Environments, view)
 	}
+	if resp.Owner != secretOwnerUnknown {
+		inv, err := a.store.OwnerApplicationInventory(ctx, tenantID, p.OwnerID, 5)
+		if err != nil {
+			return secretProjectResponse{}, err
+		}
+		resp.OwnerResources = ownerResourcesView(inv, time.Now())
+	}
 	for _, m := range members {
 		envs := m.Environments
 		if envs == nil {
@@ -462,4 +492,32 @@ func (a *API) writeSecretScopeError(w http.ResponseWriter, err error) bool {
 		a.writeError(w, err)
 	}
 	return true
+}
+
+func ownerResourcesView(inv store.OwnerInventory, now time.Time) *secretProjectOwnerResources {
+	out := &secretProjectOwnerResources{Certificates: inv.Certificates, Identities: inv.Identities,
+		SoonestCertificates: []secretProjectResourceResponse{}, SoonestIdentities: []secretProjectResourceResponse{}}
+	health := func(notAfter *time.Time) string {
+		switch {
+		case notAfter == nil:
+			return "ok"
+		case notAfter.Before(now):
+			return "expired"
+		case notAfter.Before(now.Add(30 * 24 * time.Hour)):
+			return "expiring"
+		default:
+			return "ok"
+		}
+	}
+	for _, c := range inv.SoonestCertificate {
+		h := health(c.NotAfter)
+		if h != "ok" {
+			out.CertificatesNeedingWork++
+		}
+		out.SoonestCertificates = append(out.SoonestCertificates, secretProjectResourceResponse{ID: c.ID, Kind: c.Kind, Name: c.Name, NotAfter: c.NotAfter, Health: h})
+	}
+	for _, i := range inv.SoonestIdentities {
+		out.SoonestIdentities = append(out.SoonestIdentities, secretProjectResourceResponse{ID: i.ID, Kind: i.Kind, Name: i.Name, Status: i.Status, NotAfter: i.NotAfter, Health: health(i.NotAfter)})
+	}
+	return out
 }

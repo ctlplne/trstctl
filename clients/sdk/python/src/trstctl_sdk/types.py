@@ -13480,6 +13480,7 @@ SecretProject = TypedDict(
         'name': str,
         'owner': str,
         'owner_id': str,
+        'owner_resources': dict[str, Any],
         'slug': str,
     },
     total=False,

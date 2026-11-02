@@ -337,3 +337,68 @@ func (s *Store) ListSecretNamesUnder(ctx context.Context, tenantID string, prefi
 	})
 	return out, err
 }
+
+// OwnerInventoryItem is one certificate or identity an owner holds.
+type OwnerInventoryItem struct {
+	ID       string
+	Kind     string
+	Name     string
+	Status   string
+	NotAfter *time.Time
+}
+
+// OwnerInventory is what an owner holds besides secrets (A235's application
+// view): how many certificates and identities, and the soonest-expiring few.
+type OwnerInventory struct {
+	Certificates       int
+	Identities         int
+	SoonestCertificate []OwnerInventoryItem
+	SoonestIdentities  []OwnerInventoryItem
+}
+
+// OwnerApplicationInventory returns the certificates and identities owned by
+// ownerID, counted, with up to limit of each, soonest-expiring first.
+func (s *Store) OwnerApplicationInventory(ctx context.Context, tenantID, ownerID string, limit int) (OwnerInventory, error) {
+	var inv OwnerInventory
+	if ownerID == "" || limit <= 0 {
+		return inv, nil
+	}
+	err := s.WithTenant(ctx, tenantID, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `SELECT
+			  (SELECT count(*) FROM certificates WHERE tenant_id = $1 AND owner_id::text = $2),
+			  (SELECT count(*) FROM identities WHERE tenant_id = $1 AND owner_id::text = $2)`,
+			tenantID, ownerID).Scan(&inv.Certificates, &inv.Identities); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT id::text, 'certificate', subject, '', not_after FROM certificates
+			WHERE tenant_id = $1 AND owner_id::text = $2 ORDER BY not_after NULLS LAST, id LIMIT $3`, tenantID, ownerID, limit)
+		if err != nil {
+			return err
+		}
+		inv.SoonestCertificate, err = scanOwnerInventory(rows)
+		if err != nil {
+			return err
+		}
+		rows, err = tx.Query(ctx, `SELECT id::text, kind, name, status, not_after FROM identities
+			WHERE tenant_id = $1 AND owner_id::text = $2 ORDER BY not_after NULLS LAST, id LIMIT $3`, tenantID, ownerID, limit)
+		if err != nil {
+			return err
+		}
+		inv.SoonestIdentities, err = scanOwnerInventory(rows)
+		return err
+	})
+	return inv, err
+}
+
+func scanOwnerInventory(rows pgx.Rows) ([]OwnerInventoryItem, error) {
+	defer rows.Close()
+	var out []OwnerInventoryItem
+	for rows.Next() {
+		var item OwnerInventoryItem
+		if err := rows.Scan(&item.ID, &item.Kind, &item.Name, &item.Status, &item.NotAfter); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}

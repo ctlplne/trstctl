@@ -47,7 +47,10 @@ describe("U8-6 navigation & IA refresh", () => {
     // real Trust Operations overview and no duplicate destination. Ceiling: 40.
     // F64 adds one explicit application-secret workspace instead of mixing its
     // review/run contract into machine-login administration. Ceiling: 41.
-    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(41);
+    // A235 spends one row on secrets projects: environments, members and the
+    // owner's application view are one workspace, not a mode of the store
+    // page. Ceiling: 42.
+    expect(sidebarRoutes.length + taskNavItems.length).toBeLessThanOrEqual(42);
 
     // S-A1 promoted the formerly-hidden surfaces into the rail; they are no
     // longer contextual-only.

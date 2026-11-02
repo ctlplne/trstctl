@@ -179,6 +179,28 @@ func TestServedSecretsWorkspaceKeepsRestrictedEnvironmentsToMembersA235(t *testi
 		t.Fatalf("team A's view: %v", got)
 	}
 
+	// An owned project names its owner and shows the application view (what
+	// the owner holds besides these secrets).
+	owner, err := h.srv.orch.CreateOwner(t.Context(), h.tenant, "team", "Billing team", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, out := cliRun(admin, "secrets", "projects", "create", "-f", write("b.json",
+		`{"slug":"billing","owner_id":"`+owner.ID+`","environments":[{"slug":"prod","restricted":true}]}`)); code != 0 {
+		t.Fatalf("create billing: %s", out)
+	}
+	code, text := cliRun(admin, "secrets", "projects", "show", "billing")
+	var billing struct {
+		Owner          string `json:"owner"`
+		OwnerResources *struct {
+			Certificates int `json:"certificates"`
+			Identities   int `json:"identities"`
+		} `json:"owner_resources"`
+	}
+	if code != 0 || json.Unmarshal([]byte(text), &billing) != nil || billing.Owner != "Billing team" || billing.OwnerResources == nil {
+		t.Fatalf("billing view: %s", text)
+	}
+
 	// Revoking team A closes stage to it too.
 	if code, out := cliRun(admin, "secrets", "projects", "members", "revoke", "payments", "team-a-ci", "--force"); code != 0 {
 		t.Fatalf("revoke: %s", out)

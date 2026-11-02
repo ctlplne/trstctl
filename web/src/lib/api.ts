@@ -26,6 +26,7 @@ export {
 export { loginURL } from "./bootstrapApi";
 import * as estate from "./estateApi";
 import * as decoy from "./decoyApi";
+import * as secretProjects from "./secretProjectsApi";
 import * as agentIdentity from "./agentIdentityApi";
 import * as accessReview from "./accessReviewApi";
 import * as endpointRecovery from "./endpointRecoveryApi";
@@ -362,6 +363,11 @@ import type {
   DecoySecret,
   DecoySecretList,
   DecoySecretRegisterRequest,
+  SecretProject,
+  SecretProjectCreateRequest,
+  SecretProjectEnvironmentRequest,
+  SecretProjectList,
+  SecretProjectMemberRequest,
   GraphPath,
   GraphQueryResult,
   GraphReachable,
@@ -775,6 +781,13 @@ export type { CertificateAssuranceRecord, AssuranceRecord } from "./api-types.ge
 export type { KMIPClient, KMIPClientEnrollment, KMIPClientList, KMIPClientRegisterRequest } from "./api-types.gen";
 export type { GraphAccessGrant, GraphAccessLink } from "./api-types.gen";
 export type { DecoySecret, DecoySecretList, DecoySecretRegisterRequest } from "./api-types.gen";
+export type {
+  SecretProject,
+  SecretProjectCreateRequest,
+  SecretProjectEnvironmentRequest,
+  SecretProjectList,
+  SecretProjectMemberRequest,
+} from "./api-types.gen";
 export type {
   DatabaseDecoy,
   DatabaseDecoyCreateRequest,
@@ -2600,6 +2613,12 @@ export interface Api {
   getHoneyToken(id: string): Promise<HoneyToken>;
   revokeHoneyToken(id: string): Promise<HoneyToken>;
   registerDecoySecret(input: DecoySecretRegisterRequest, idempotencyKey?: string): Promise<DecoySecret>;
+  listSecretProjects(): Promise<SecretProjectList>;
+  getSecretProject(project: string): Promise<SecretProject>;
+  createSecretProject(input: SecretProjectCreateRequest, idempotencyKey?: string): Promise<SecretProject>;
+  addSecretProjectEnvironment(project: string, input: SecretProjectEnvironmentRequest, idempotencyKey?: string): Promise<SecretProject>;
+  putSecretProjectMember(project: string, subject: string, input: SecretProjectMemberRequest, idempotencyKey?: string): Promise<SecretProject>;
+  deleteSecretProjectMember(project: string, subject: string): Promise<SecretProject>;
   listDecoySecrets(cursor?: string): Promise<DecoySecretList>;
   retireDecoySecret(id: string): Promise<DecoySecret>;
   createDatabaseDecoy(input: DatabaseDecoyCreateRequest, idempotencyKey?: string): Promise<DatabaseDecoyCreateResponse>;
@@ -3471,6 +3490,12 @@ const liveApi: Omit<Api, keyof BootstrapApi> = {
   getHoneyToken: (id) => req<HoneyToken>(`/api/v1/secrets/honeytokens/${encodeURIComponent(id)}`),
   revokeHoneyToken: (id) => mutate<HoneyToken>("POST", `/api/v1/secrets/honeytokens/${encodeURIComponent(id)}/revoke`),
   registerDecoySecret: decoy.registerDecoySecret,
+  listSecretProjects: secretProjects.listSecretProjects,
+  getSecretProject: secretProjects.getSecretProject,
+  createSecretProject: secretProjects.createSecretProject,
+  addSecretProjectEnvironment: secretProjects.addSecretProjectEnvironment,
+  putSecretProjectMember: secretProjects.putSecretProjectMember,
+  deleteSecretProjectMember: secretProjects.deleteSecretProjectMember,
   listDecoySecrets: decoy.listDecoySecrets,
   retireDecoySecret: decoy.retireDecoySecret,
   createDatabaseDecoy: decoy.createDatabaseDecoy,

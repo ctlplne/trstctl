@@ -7077,9 +7077,18 @@ func componentSchemas() map[string]*Schema {
 		"subject": str(), "role": {Type: "string", Enum: []string{"viewer", "developer", "admin"}},
 		"environments": {Type: "array", Items: str()}, "granted_by": str(), "granted_at": timestamp(),
 	}, "subject", "role", "environments", "granted_at")
+	secretProjectResource := object(map[string]*Schema{
+		"id": str(), "kind": str(), "name": str(), "status": str(), "not_after": timestamp(),
+		"health": {Type: "string", Enum: []string{"ok", "expiring", "expired"}},
+	}, "id", "kind", "name", "health")
+	secretProjectOwnerResources := object(map[string]*Schema{
+		"certificates": {Type: "integer"}, "identities": {Type: "integer"}, "certificates_needing_work": {Type: "integer"},
+		"soonest_certificates": {Type: "array", Items: secretProjectResource}, "soonest_identities": {Type: "array", Items: secretProjectResource},
+	}, "certificates", "identities", "certificates_needing_work", "soonest_certificates", "soonest_identities")
 	secretProject := object(map[string]*Schema{
 		"slug": str(), "name": str(), "owner_id": str(), "owner": str(), "created_by": str(), "created_at": timestamp(),
 		"environments": {Type: "array", Items: secretProjectEnvironment}, "members": {Type: "array", Items: secretProjectMember},
+		"owner_resources": secretProjectOwnerResources,
 	}, "slug", "owner", "created_at")
 	secretProjectEnvironmentReq := object(map[string]*Schema{"slug": str(), "name": str(), "restricted": {Type: "boolean"}}, "slug")
 	secretProjectCreateReq := object(map[string]*Schema{

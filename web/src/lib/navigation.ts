@@ -183,6 +183,7 @@ export const navSpaces: NavSpace[] = [
         labelKey: "nav.group.secretsEngines",
         items: [
           { to: "/secrets", labelKey: "nav.item.secrets", icon: "vault", mode: "real", featureIds: ["F37", "F63"] },
+          { to: "/secrets/projects", labelKey: "secrets.route.projects", icon: "vault", mode: "real", featureIds: ["F63"] },
           { to: "/secrets/engines", labelKey: "secrets.route.engines", icon: "key", mode: "real", featureIds: ["F65", "F66", "F67", "F80"] },
         ],
       },
@@ -395,6 +396,7 @@ export const appRoutePaths = [
   "/secrets/access",
   "/secrets/developer",
   "/secrets/sharing",
+  "/secrets/projects",
   "/secrets/engines",
   "/secrets/scanning",
   "/secrets/sync",
@@ -459,6 +461,7 @@ const routePermissionAny: Record<string, string[]> = {
   "/secrets/access": ["secrets:read"],
   "/secrets/developer": ["secrets:read"],
   "/secrets/sharing": ["secrets:read"],
+  "/secrets/projects": ["secrets:read"],
   "/secrets/engines": ["secrets:read"],
   "/secrets/scanning": ["secrets:read"],
   "/secrets/sync": ["secrets:read"],
@@ -944,7 +947,13 @@ export const realGuiSurfaces: RealGuiSurface[] = [
     kind: "observe",
     evidence: "signed audit evidence export plus framework-mapped compliance posture disclosure",
   },
-  { featureId: "F63", routes: ["/secrets"], component: "Secrets", kind: "operate", evidence: "native secret store metadata/create/reveal/rotate/delete" },
+  {
+    featureId: "F63",
+    routes: ["/secrets", "/secrets/projects"],
+    component: "Secrets",
+    kind: "operate",
+    evidence: "native secret store metadata/create/reveal/rotate/delete, plus projects with restricted environments, members and the owner's application view",
+  },
   {
     featureId: "F64",
     routes: ["/secrets/developer"],

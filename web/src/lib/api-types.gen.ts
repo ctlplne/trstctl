@@ -9752,6 +9752,7 @@ export interface SecretProject {
   name?: string;
   owner: string;
   owner_id?: string;
+  owner_resources?: { certificates: number; certificates_needing_work: number; identities: number; soonest_certificates: ({ health: "ok" | "expiring" | "expired"; id: string; kind: string; name: string; not_after?: string; status?: string })[]; soonest_identities: ({ health: "ok" | "expiring" | "expired"; id: string; kind: string; name: string; not_after?: string; status?: string })[] };
   slug: string;
 }
 

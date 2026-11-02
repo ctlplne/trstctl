@@ -79,6 +79,7 @@ const EphemeralAPIKeyWorkflow = lazy(() => import("./secrets/EphemeralAPIKeyWork
 const HoneyTokenWorkflow = lazy(() => import("./secrets/HoneyTokenWorkflow").then((module) => ({ default: module.HoneyTokenWorkflow })));
 const AWSHoneyTokenWorkflow = lazy(() => import("./secrets/AWSHoneyTokenWorkflow").then((module) => ({ default: module.AWSHoneyTokenWorkflow })));
 const DecoySecretWorkflow = lazy(() => import("./secrets/DecoySecretWorkflow").then((module) => ({ default: module.DecoySecretWorkflow })));
+const SecretProjectsWorkflow = lazy(() => import("./secrets/SecretProjectsWorkflow").then((module) => ({ default: module.SecretProjectsWorkflow })));
 const DecoyDatabaseWorkflow = lazy(() => import("./secrets/DecoyDatabaseWorkflow").then((module) => ({ default: module.DecoyDatabaseWorkflow })));
 const TransitOperations = lazy(() => import("./secrets/TransitOperations").then((module) => ({ default: module.TransitOperations })));
 const SecretSyncWorkflow = lazy(() => import("./secrets/SecretSyncWorkflow").then((module) => ({ default: module.SecretSyncWorkflow })));
@@ -92,8 +93,8 @@ function SecretsWorkflowFallback() {
  * stacking into a ~6,800px scroll (audit P0: mega-page pattern) or hiding
  * behind an in-page tab strip. The historical `?tab=` deep links redirect
  * permanently to the routes, mirroring the C-A1 /platform precedent. */
-type SecretsTab = "store" | "access" | "developer" | "sharing" | "engines" | "scanning" | "sync";
-const secretsTabIds: readonly SecretsTab[] = ["store", "access", "developer", "sharing", "engines", "scanning", "sync"];
+type SecretsTab = "store" | "projects" | "access" | "developer" | "sharing" | "engines" | "scanning" | "sync";
+const secretsTabIds: readonly SecretsTab[] = ["store", "projects", "access", "developer", "sharing", "engines", "scanning", "sync"];
 
 function secretsTabFromSearchParam(value: string | null): SecretsTab {
   return secretsTabIds.includes(value as SecretsTab) ? (value as SecretsTab) : "store";
@@ -115,6 +116,13 @@ const secretsRouteUX = {
     detailKey: "secrets.route.storeDetails",
     actionKey: "secrets.route.storeAction",
     focusID: "secret-create-name",
+  },
+  projects: {
+    titleKey: "secrets.route.projects",
+    answerKey: "secrets.route.projectsAnswer",
+    detailKey: "secrets.route.projectsDetails",
+    actionKey: "secrets.route.projectsAction",
+    focusID: "secret-projects-heading",
   },
   access: {
     titleKey: "secrets.route.access",
@@ -2675,6 +2683,12 @@ export function Secrets() {
             </section>
           )}
         </div>
+      )}
+
+      {tab === "projects" && (
+        <Suspense fallback={<SecretsWorkflowFallback />}>
+          <SecretProjectsWorkflow />
+        </Suspense>
       )}
 
       {tab === "sync" && (

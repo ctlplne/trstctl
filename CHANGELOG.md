@@ -6,7 +6,8 @@
   application's secrets by environment (by name, `<project>/<environment>/…`) in the same native store. A restricted
   environment is readable and writable only by members granted it, on every surface including references and the
   Vault-compatible KV routes; a denied read answers as a missing secret. Membership changes need `access:write`, and
-  the project view names unknown ownership.
+  the project view names unknown ownership. The console's Secrets → Projects and environments page shows them, with
+  the owner's certificates and identities and their expiry health beside the secrets.
 
 - An SMTP reply intake for ACME email challenges: `protocols.acme_email.smtp_listen` receives RFC 8823 replies for
   the challenge address only, verifies each one's DKIM signature for its From domain (rsa-sha256 and

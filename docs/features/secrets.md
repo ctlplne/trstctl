@@ -155,6 +155,17 @@ recorded. `projects show` lists each environment's secrets with their owner, or
 as `restricted` without its names. Tenant RLS stays the boundary: an environment is not
 a tenant.
 
+In the console, **Secrets → Projects and environments** (`/secrets/projects`) lists the
+projects with their owners. "Unknown owner" is shown plainly, never guessed. A project
+opens to its environments, each marked open, restricted and granted to you, or
+restricted. A restricted environment you aren't granted shows no names. Each secret
+shows its key, version and owner, and the page lists the members, with grant and revoke
+for `access:write` holders. When the project has an owner, the **application view** also
+shows how many certificates and identities that owner holds. It lists the soonest-expiring
+of each with its health (ok, expiring within 30 days, expired), so an application's
+certificates, workload identities and secrets read as one inventory. With no owner,
+the page says to set one instead of guessing.
+
 ### Vault/OpenBao-compatible common API
 
 Teams migrating from Vault or OpenBao can point a stock `vault` CLI at trstctl — a

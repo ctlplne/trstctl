@@ -1321,8 +1321,9 @@ never live in the API process. What you can do end to end against the running bi
   prefix `<project>/<environment>/`), restricted environments open only to granted
   members on every read/write surface (native API, references, previews, imports, syncs,
   rotations, Vault-compatible KV), membership under `access:write`, and a project view
-  naming unknown ownership. The console view, promotion between environments, folder
-  snapshots and scoped overrides are later steps (A235's console part, A236).
+  naming unknown ownership; the console Projects view (`/secrets/projects`) with the
+  application view of the owner's certificates and identities. Promotion between
+  environments, folder snapshots and scoped overrides are A236.
 - Moving a leaked secret into the vault (P6): `trstctl secrets scans move` re-finds a
   redacted repository finding's value in the operator's checkout with the pinned
   gitleaks, stores it as a native secret and links the finding

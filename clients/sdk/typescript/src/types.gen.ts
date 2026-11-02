@@ -20438,6 +20438,31 @@ export interface components {
             name?: string;
             owner: string;
             owner_id?: string;
+            owner_resources?: {
+                certificates: number;
+                certificates_needing_work: number;
+                identities: number;
+                soonest_certificates: {
+                    /** @enum {string} */
+                    health: "ok" | "expiring" | "expired";
+                    id: string;
+                    kind: string;
+                    name: string;
+                    /** Format: date-time */
+                    not_after?: string;
+                    status?: string;
+                }[];
+                soonest_identities: {
+                    /** @enum {string} */
+                    health: "ok" | "expiring" | "expired";
+                    id: string;
+                    kind: string;
+                    name: string;
+                    /** Format: date-time */
+                    not_after?: string;
+                    status?: string;
+                }[];
+            };
             slug: string;
         };
         SecretProjectCreateRequest: {
