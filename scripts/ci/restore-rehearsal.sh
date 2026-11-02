@@ -149,8 +149,36 @@ stop_server() {
 }
 
 post() { # $1 = base, $2 = token, $3 = idem key, $4 = path, $5 = body
-	curl -fsS -H "Authorization: Bearer $2" -H "Idempotency-Key: $3" \
-		-H "Content-Type: application/json" -XPOST "$1$4" -d "$5"
+	# A refused call fails with its problem detail on stderr (not a bare status
+	# code, nor lost in a jq pipe). 503 is the control plane's bounded
+	# backpressure ("retry"): the same idempotent request is retried a few times.
+	local out status attempt
+	for attempt in 1 2 3 4 5; do
+		out="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $2" -H "Idempotency-Key: $3" \
+			-H "Content-Type: application/json" -XPOST "$1$4" -d "$5")" ||
+			{ printf 'POST %s: transport error\n' "$4" >&2; return 22; }
+		status="${out##*$'\n'}"
+		out="${out%$'\n'*}"
+		if [ "$status" = 503 ] && [ "$attempt" -lt 5 ]; then
+			sleep 2
+			continue
+		fi
+		if [ "${status:0:1}" != 2 ]; then
+			printf 'POST %s refused (%s): %s\n' "$4" "$status" "$out" >&2
+			return 22
+		fi
+		printf '%s' "$out"
+		return 0
+	done
+}
+
+# issue_body prints an issue transition carrying a fresh P-256 CSR for $1. A
+# bootstrapped tenant starts with control-plane key generation off, so an
+# issuance names the key it certifies (subject_csr_pem); the key stays here.
+issue_body() { # $1 = common name
+	openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes \
+		-keyout "$ROOT/$1.key" -subj "/CN=$1" -addext "subjectAltName=DNS:$1" 2>/dev/null |
+		jq -Rs '{to: "issued", subject_csr_pem: .}'
 }
 
 # ---------------------------------------------------------------- instance A
@@ -179,7 +207,7 @@ ISSUER="$(post "$A_URL" "$TOKEN" rehearsal-issuer /api/v1/issuers \
 IDENT="$(post "$A_URL" "$TOKEN" rehearsal-ident /api/v1/identities \
 	"{\"kind\":\"x509_certificate\",\"name\":\"dr-rehearsal.example\",\"owner_id\":\"$OWNER\",\"issuer_id\":\"$ISSUER\"}" | jq -r .id)"
 [ -n "$IDENT" ] && [ "$IDENT" != "null" ] || fail "identity create failed"
-post "$A_URL" "$TOKEN" rehearsal-issue "/api/v1/identities/$IDENT/transitions" '{"to":"issued"}' >/dev/null || fail "issue transition failed"
+post "$A_URL" "$TOKEN" rehearsal-issue "/api/v1/identities/$IDENT/transitions" "$(issue_body dr-rehearsal.example)" >/dev/null || fail "issue transition failed"
 CERTS=0
 for _ in $(seq 1 30); do
 	CERTS="$(curl -fsS -H "Authorization: Bearer $TOKEN" "$A_URL/api/v1/certificates" | jq '[.items[]? | select((.subject // "") | contains("dr-rehearsal.example"))] | length')"
@@ -221,7 +249,7 @@ RESTORED_CERTS="$(curl -fsS -H "Authorization: Bearer $TOKEN" "$B_URL/api/v1/cer
 IDENT2="$(post "$B_URL" "$TOKEN" rehearsal-ident2 /api/v1/identities \
 	"{\"kind\":\"x509_certificate\",\"name\":\"dr-rehearsal-post-restore.example\",\"owner_id\":\"$OWNER\",\"issuer_id\":\"$ISSUER\"}" | jq -r .id)"
 [ -n "$IDENT2" ] && [ "$IDENT2" != "null" ] || fail "restored instance cannot create a new identity"
-post "$B_URL" "$TOKEN" rehearsal-issue2 "/api/v1/identities/$IDENT2/transitions" '{"to":"issued"}' >/dev/null \
+post "$B_URL" "$TOKEN" rehearsal-issue2 "/api/v1/identities/$IDENT2/transitions" "$(issue_body dr-rehearsal-post-restore.example)" >/dev/null \
 	|| fail "restored instance cannot issue"
 NEW_CERTS=0
 for _ in $(seq 1 30); do
