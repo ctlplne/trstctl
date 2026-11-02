@@ -2064,8 +2064,19 @@ Management API's `update:client_keys`, `allow_static_rotation: true`, and bind e
 allowed role (the secret's name) to the client ID of the application whose secret it
 rotates. Its rotations are single-phase and need `acknowledge_single_phase: true`.
 
-Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-iam`, `gcp-iam`,
-`azure-entra`, `kubernetes`, and `redis`. Sync `type` values are
+A `datadog` provider (A240) sets `endpoint` to the site's API (for example
+`https://api.datadoghq.com`), `api_key_ref` and `application_key_ref` to the
+administrator's keys (the application key needs `api_keys_write` and management of the
+bound service accounts' application keys), and binds each allowed role to `api_key` or
+to `application_key <service-account-id> <scope>,<scope>`. It issues leases, and with
+`allow_static_rotation: true` also rotates in two phases.
+
+Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
+`gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
+`oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
+`mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
+`aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`
+and `datadog`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and

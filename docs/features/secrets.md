@@ -765,6 +765,18 @@ and issues no leases) and verifies the new secret at the tenant's token endpoint
 (`verify_mode: authenticated`). It is built against a stand-in of the Auth0 API, with
 no Auth0 proof yet.
 
+`datadog` (A240) issues and rotates Datadog keys. A role bound to `api_key` gets an
+organization API key; one bound to `application_key <service-account-id>
+<scope>,<scope>` gets an application key of that service account restricted to those
+scopes. Revocation deletes a lease's key. A static rotation is two-phase: the
+successor is created next to the predecessor, both work until retirement (or the
+consumers' deadline), and retirement deletes only keys the provider named. An API key
+is verified at the site's `/api/v1/validate` (`verify_mode: authenticated`); a scoped
+application key has no side-effect-free proof, so its rotation records
+`not_available`. A retried creation first deletes the key its earlier attempt named,
+so an uncertain attempt leaves one key. It is built against a stand-in of the Datadog
+API, with no Datadog proof yet.
+
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
 configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
 provider role, `old_ref` is the lease id the secret publishes now (or `none`), and

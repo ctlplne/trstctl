@@ -470,6 +470,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredAPIConnectBackend(opener)
 	case "auth0":
 		return openConfiguredAuth0Backend(opener)
+	case "datadog":
+		return openConfiguredDatadogBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":
@@ -1671,27 +1673,17 @@ func (p *configuredDynamicProvider) rotationAccountPairs() map[string][2]string 
 
 // VerifyLeaseCredential implements dynsecret.LeaseCredentialVerifier for
 // dynamic-lease rotation: database providers open a session with the lease's
-// credential, and Redis authenticates as the lease's user against the
-// configured server and runs PING. Other types have no proof here.
+// credential, Redis authenticates as the lease's user against the configured
+// server and runs PING, and a Datadog API key validates at the site (A240).
+// Other types have no proof here.
 func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, credential []byte) (string, error) {
 	switch strings.TrimSpace(p.cfg.Type) {
 	case "postgresql":
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "redis":
-		backend, closeBackend, err := p.open(ctx)
-		if err != nil {
-			return "", err
-		}
-		defer closeBackend()
-		verifier, ok := backend.(interface {
-			VerifyCredential(context.Context, []byte) error
-		})
-		if !ok {
-			return "", errors.New("server: the redis backend cannot verify a lease credential")
-		}
-		return "authenticated", verifier.VerifyCredential(ctx, credential)
+	case "redis", "datadog":
+		return p.verifyWithBackend(ctx, credential)
 	default:
 		return "not_available", nil
 	}
@@ -1707,22 +1699,33 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "auth0":
+	case "auth0", "datadog":
 		// The rotated secret authenticates its application at the token
-		// endpoint (A240).
-		backend, closeBackend, err := p.open(ctx)
-		if err != nil {
-			return "", err
-		}
-		defer closeBackend()
-		verifier, ok := backend.(interface {
-			VerifyCredential(context.Context, []byte) error
-		})
-		if !ok {
-			return "", errors.New("server: the auth0 backend cannot verify a rotated secret")
-		}
-		return "authenticated", verifier.VerifyCredential(ctx, credential)
+		// endpoint; a Datadog API key validates at the site (A240).
+		return p.verifyWithBackend(ctx, credential)
 	default:
 		return "not_available", nil
 	}
+}
+
+// verifyWithBackend proves a credential with its backend's own check
+// ("authenticated"); a credential the backend cannot prove without side
+// effects (dynsecret.ErrNoSelfProof) is "not_available".
+func (p *configuredDynamicProvider) verifyWithBackend(ctx context.Context, credential []byte) (string, error) {
+	backend, closeBackend, err := p.open(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer closeBackend()
+	verifier, ok := backend.(interface {
+		VerifyCredential(context.Context, []byte) error
+	})
+	if !ok {
+		return "", fmt.Errorf("server: the %s backend cannot verify a credential", strings.TrimSpace(p.cfg.Type))
+	}
+	err = verifier.VerifyCredential(ctx, credential)
+	if errors.Is(err, dynsecret.ErrNoSelfProof) {
+		return "not_available", nil
+	}
+	return "authenticated", err
 }

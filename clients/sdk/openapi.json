@@ -18676,7 +18676,8 @@
               "ibm-api-connect",
               "mssql",
               "azure-sql",
-              "auth0"
+              "auth0",
+              "datadog"
             ],
             "type": "string"
           }

@@ -397,3 +397,30 @@ func openConfiguredAuth0Backend(o *configuredDynamicBackendOpener) (requestDynam
 	}
 	return backend, o.closeWith(backend, nil), nil
 }
+
+// openConfiguredDatadogBackend reads the administrator's API and application
+// keys into a backend that keeps its own sealed copies and calls the site's
+// API through the SSRF-guarded client (A240).
+func openConfiguredDatadogBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	apiKey, err := o.resolve(cfg.APIKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	applicationKey, err := o.resolve(cfg.ApplicationKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	client, err := secretIntegrationHTTPClient(cfg.Endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewDatadogBackend(dynsecret.DatadogConfig{
+		Endpoint: cfg.Endpoint, APIKey: apiKey, ApplicationKey: applicationKey, RoleBindings: cfg.RoleBindings,
+		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}

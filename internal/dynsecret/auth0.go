@@ -3,19 +3,16 @@
 package dynsecret
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 
 	"trstctl.com/trstctl/internal/crypto/secret"
-	"trstctl.com/trstctl/internal/netsec"
 )
 
 var auth0ClientID = regexp.MustCompile(`^[A-Za-z0-9]{8,64}$`)
@@ -39,22 +36,22 @@ type Auth0Config struct {
 
 // Auth0Backend rotates Auth0 application client secrets.
 type Auth0Backend struct {
-	endpoint     string
+	api          hostedAPI
 	clientID     string
 	clientSecret *secret.Buffer
 	clients      map[string]string
-	client       *http.Client
 }
 
 // NewAuth0Backend validates cfg.
 func NewAuth0Backend(cfg Auth0Config) (*Auth0Backend, error) {
-	if err := netsec.ValidateHTTPSOrInsecureLoopbackURL(cfg.Endpoint, cfg.AllowInsecureLoopback); err != nil {
-		return nil, fmt.Errorf("dynsecret auth0: endpoint: %w", err)
+	api, err := newHostedAPI("auth0", cfg.Endpoint, cfg.AllowInsecureLoopback, cfg.HTTPClient)
+	if err != nil {
+		return nil, err
 	}
-	if !auth0ClientID.MatchString(cfg.ClientID) || len(cfg.ClientSecret) == 0 || cfg.HTTPClient == nil {
-		return nil, errors.New("dynsecret auth0: the management client ID and secret and an HTTP client are required")
+	if !auth0ClientID.MatchString(cfg.ClientID) || len(cfg.ClientSecret) == 0 {
+		return nil, errors.New("dynsecret auth0: the management client ID and secret are required")
 	}
-	b := &Auth0Backend{endpoint: strings.TrimRight(cfg.Endpoint, "/"), clientID: cfg.ClientID, clients: map[string]string{}, client: cfg.HTTPClient}
+	b := &Auth0Backend{api: api, clientID: cfg.ClientID, clients: map[string]string{}}
 	for role, clientID := range cfg.RoleBindings {
 		if !auth0ClientID.MatchString(strings.TrimSpace(clientID)) {
 			return nil, fmt.Errorf("dynsecret auth0: role %q is not bound to an application client ID", role)
@@ -64,7 +61,6 @@ func NewAuth0Backend(cfg Auth0Config) (*Auth0Backend, error) {
 	if len(b.clients) == 0 {
 		return nil, errors.New("dynsecret auth0: every allowed role needs the application client ID it rotates in role_bindings")
 	}
-	var err error
 	if b.clientSecret, err = secret.NewFrom(cfg.ClientSecret); err != nil {
 		return nil, err
 	}
@@ -93,7 +89,7 @@ func (b *Auth0Backend) CreateCredential(ctx context.Context, req GenerateRequest
 		return "", nil, err
 	}
 	defer secret.Wipe(token)
-	status, response, err := b.call(ctx, http.MethodPost, "/api/v2/clients/"+url.PathEscape(clientID)+"/rotate-secret", token, nil)
+	status, response, err := b.api.call(ctx, http.MethodPost, "/api/v2/clients/"+url.PathEscape(clientID)+"/rotate-secret", nil, bearerValue(token))
 	if err != nil {
 		return "", nil, err
 	}
@@ -113,7 +109,7 @@ func (b *Auth0Backend) CreateCredential(ctx context.Context, req GenerateRequest
 		ClientID     string           `json:"client_id"`
 		ClientSecret secret.JSONBytes `json:"client_secret"`
 		Domain       string           `json:"domain"`
-	}{ClientID: clientID, ClientSecret: rotated.ClientSecret, Domain: b.endpoint})
+	}{ClientID: clientID, ClientSecret: rotated.ClientSecret, Domain: b.api.endpoint})
 	if err != nil {
 		return "", nil, err
 	}
@@ -199,35 +195,12 @@ func (b *Auth0Backend) tokenRequest(ctx context.Context, clientID string, client
 		ClientID     string           `json:"client_id"`
 		ClientSecret secret.JSONBytes `json:"client_secret"`
 		Audience     string           `json:"audience"`
-	}{GrantType: "client_credentials", ClientID: clientID, ClientSecret: clientSecret, Audience: b.endpoint + "/api/v2/"})
+	}{GrantType: "client_credentials", ClientID: clientID, ClientSecret: clientSecret, Audience: b.api.endpoint + "/api/v2/"})
 	if err != nil {
 		return 0, nil, err
 	}
 	defer secret.Wipe(body)
-	return b.call(ctx, http.MethodPost, "/oauth/token", nil, body)
-}
-
-func (b *Auth0Backend) call(ctx context.Context, method, path string, token, body []byte) (int, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, b.endpoint+path, bytes.NewReader(body))
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	if token != nil {
-		req.Header.Set("Authorization", "Bearer "+string(token))
-	}
-	resp, err := b.client.Do(req) // #nosec G704 -- the endpoint is operator configuration, sent through the SSRF-guarded client (CWE-918)
-	if err != nil {
-		return 0, nil, fmt.Errorf("dynsecret auth0: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	response, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	if err != nil {
-		secret.Wipe(response)
-		return 0, nil, fmt.Errorf("dynsecret auth0: read the response: %w", err)
-	}
-	return resp.StatusCode, response, nil
+	return b.api.call(ctx, http.MethodPost, "/oauth/token", body, nil)
 }
 
 // Close wipes the management client secret.

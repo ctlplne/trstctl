@@ -336,6 +336,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Required: this provider only rotates.", true),
 			roles("Each allowed role (the secret name) maps to the client ID of the application whose secret it rotates."),
 		)},
+		{Type: "datadog", Label: "Datadog API and application keys", Purpose: "Creates an API key, or an application key of a service account restricted to the role's scopes, through the Datadog API, and deletes it at revocation; Datadog then refuses it. A static rotation is two-phase: the new key is created next to the old one, which keeps working until the rotation retires it. API keys are proven at the site's validate endpoint; application keys have no side-effect-free proof. Built against a stand-in of the Datadog API; no Datadog proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "Site API", "HTTPS URL of the Datadog site's API, for example https://api.datadoghq.com.", true),
+			credential("api_key_ref", "Administrator API key reference", "An API key of the organization.", true),
+			credential("application_key_ref", "Administrator application key reference", "An application key allowed to manage API keys (api_keys_write) and the bound service accounts' application keys.", true),
+			value("username_prefix", "Key name prefix", "Optional prefix of issued key names (default trstctl); revocation only ever deletes keys with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to "api_key", or to "application_key <service-account-id> <scope>,<scope>" for an application key of that service account restricted to those scopes.`),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -408,6 +416,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the subscriptions (plans and products) of the consumer app the role is bound to, until the credential is deleted", "confirmed"
 	case "auth0":
 		return "the bound application's own grants, through its rotated client secret; the previous secret stops working when the next is issued", "confirmed"
+	case "datadog":
+		return "an organization API key, or a service account's application key restricted to the role's scopes, until the key is deleted", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

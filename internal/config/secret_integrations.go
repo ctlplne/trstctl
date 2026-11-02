@@ -138,8 +138,12 @@ type DynamicSecretProviderConfig struct {
 	UserGroup string `json:"user_group,omitempty"`
 	Engine    string `json:"engine,omitempty"`
 	// APIKeyRef is an ibm-api-connect provider's platform API key, exchanged
-	// with client_id and client_secret_ref for a platform token (A239).
+	// with client_id and client_secret_ref for a platform token (A239), or a
+	// datadog provider's administrator API key (A240).
 	APIKeyRef string `json:"api_key_ref,omitempty"`
+	// ApplicationKeyRef is a datadog provider's administrator application key,
+	// sent with api_key_ref on every key-management call (A240).
+	ApplicationKeyRef string `json:"application_key_ref,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
@@ -180,7 +184,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -190,6 +194,18 @@ var SinglePhaseRotationProviderTypes = map[string]bool{"auth0": true}
 // TwoUserRotationProviderTypes are the static-rotation types whose roles may
 // alternate between two fixed accounts (rotation_accounts, A240).
 var TwoUserRotationProviderTypes = map[string]bool{"postgresql": true}
+
+// sortedTrueKeys lists a type set's members in order, for messages.
+func sortedTrueKeys(set map[string]bool) []string {
+	out := make([]string, 0, len(set))
+	for key, ok := range set {
+		if ok {
+			out = append(out, key)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
 
 // MaxTTLDuration is the hard validity ceiling for a generated credential. A
 // shorter requested lease can be renewed only up to this bound.
@@ -271,6 +287,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
+	"datadog": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -323,7 +340,7 @@ func validateSecretIntegrations(cfg SecretIntegrationsConfig, secretsEnabled boo
 			errs = append(errs, fmt.Errorf("%s allowed_roles must contain at least one role", where))
 		}
 		if item.AllowStaticRotation && !StaticRotationProviderTypes[strings.TrimSpace(item.Type)] {
-			errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d]: allow_static_rotation is served for postgresql, mysql, aws-iam and auth0 providers only", i))
+			errs = append(errs, fmt.Errorf("secret_integrations.dynamic_providers[%d]: allow_static_rotation is served for %s providers only", i, strings.Join(sortedTrueKeys(StaticRotationProviderTypes), ", ")))
 		}
 		if ttl, err := item.MaxTTLDuration(); err != nil || ttl <= 0 {
 			errs = append(errs, fmt.Errorf("%s max_ttl must be a positive duration", where))
@@ -455,7 +472,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 	"ibm-api-connect": validateAPIConnectProvider,
-	"auth0":           validateAuth0Provider,
+	"auth0":           validateAuth0Provider, "datadog": validateDatadogProvider,
 }
 
 // validateRotationAccounts checks a provider's two-user pairs (A240): each
@@ -921,8 +938,11 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientID != "" {
 		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app, ibm-api-connect and auth0", where))
 	}
-	if c.Type != "ibm-api-connect" && c.APIKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect", where))
+	if c.Type != "ibm-api-connect" && c.Type != "datadog" && c.APIKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect and datadog", where))
+	}
+	if c.Type != "datadog" && c.ApplicationKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s application_key_ref is only valid for datadog", where))
 	}
 	if c.Type != "github-app" && c.InstallationID != "" {
 		errs = append(errs, fmt.Errorf("%s installation_id is only valid for github-app", where))
@@ -1083,6 +1103,59 @@ func validateAuth0Provider(where string, c DynamicSecretProviderConfig) []error 
 		}
 	}
 	return errs
+}
+
+// validateDatadogProvider checks a Datadog key provider (A240): endpoint is
+// the site's API, api_key_ref and application_key_ref the administrator's
+// keys, and each allowed role is bound to "api_key" or to "application_key
+// <service-account-id> <scope>,<scope>" (an application key of that service
+// account, restricted to those scopes).
+func validateDatadogProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the site's API, https://api.datadoghq.com or another site) is required for datadog", where))
+	}
+	for name, ref := range map[string]string{"api_key_ref": c.APIKeyRef, "application_key_ref": c.ApplicationKeyRef} {
+		if err := validateCredentialRef(ref); err != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", where, name, err))
+		}
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" {
+			if err := validateDatadogBinding(binding); err != nil {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %w", where, role, err))
+			}
+		}
+	}
+	return errs
+}
+
+var (
+	datadogServiceAccountID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	datadogScopeName        = regexp.MustCompile(`^[a-z][a-z0-9_]{0,79}$`)
+)
+
+// validateDatadogBinding is dynsecret.ParseDatadogBinding's grammar; config
+// stays free of the provider packages.
+func validateDatadogBinding(binding string) error {
+	fields := strings.Fields(binding)
+	switch {
+	case len(fields) == 1 && fields[0] == "api_key":
+		return nil
+	case len(fields) == 3 && fields[0] == "application_key":
+		if !datadogServiceAccountID.MatchString(fields[1]) {
+			return fmt.Errorf("%q is not a service account ID", fields[1])
+		}
+		for _, scope := range strings.Split(fields[2], ",") {
+			if !datadogScopeName.MatchString(scope) {
+				return fmt.Errorf("%q is not an authorization scope", scope)
+			}
+		}
+		return nil
+	default:
+		return errors.New(`must be "api_key" or "application_key <service-account-id> <scope>,<scope>"`)
+	}
 }
 
 // validateAPIConnectProvider checks an IBM API Connect provider (A239):

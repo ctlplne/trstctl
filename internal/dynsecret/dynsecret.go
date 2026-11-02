@@ -66,6 +66,11 @@ const (
 	RotationSinglePhase = "single_phase"
 )
 
+// ErrNoSelfProof is what a backend's VerifyCredential returns for a credential
+// it cannot prove without side effects (a scoped key whose permitted calls the
+// operator chose): the rotation records verify mode not_available (A240).
+var ErrNoSelfProof = errors.New("dynsecret: the credential has no side-effect-free proof")
+
 // RotationPhaser is a StaticRotationProvider that says which phase model its
 // rotation of role follows; a provider that does not is two-phase.
 type RotationPhaser interface {

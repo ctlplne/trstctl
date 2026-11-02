@@ -513,6 +513,66 @@ func TestValidateAuth0ProviderA240(t *testing.T) {
 	}
 }
 
+func TestValidateDatadogProviderA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "datadog", Type: "datadog",
+		Endpoint: "https://api.datadoghq.com", APIKeyRef: "file:/run/secrets/dd-api", ApplicationKeyRef: "file:/run/secrets/dd-app",
+		AllowedRoles: []string{"datadog/ingest", "datadog/metrics"}, MaxTTL: "1h", AllowStaticRotation: true}
+	bindings := func() map[string]string {
+		return map[string]string{"datadog/ingest": "api_key",
+			"datadog/metrics": "application_key 3f1e7e1a-1111-4222-8333-444455556666 metrics_read,timeseries_query"}
+	}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = bindings()
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	leases := base
+	leases.AllowStaticRotation = false
+	if err := check(leases); err != nil {
+		t.Fatalf("datadog issues leases too: %v", err)
+	}
+	if !StaticRotationProviderTypes["datadog"] || SinglePhaseRotationProviderTypes["datadog"] {
+		t.Fatal("datadog must rotate statically, in two phases")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint":  {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the site's API"},
+		"no api key":   {func(c *DynamicSecretProviderConfig) { c.APIKeyRef = "" }, "api_key_ref"},
+		"no app key":   {func(c *DynamicSecretProviderConfig) { c.ApplicationKeyRef = "" }, "application_key_ref"},
+		"unbound role": {func(c *DynamicSecretProviderConfig) { delete(c.RoleBindings, "datadog/ingest") }, `role_bindings["datadog/ingest"]`},
+		"bad kind":     {func(c *DynamicSecretProviderConfig) { c.RoleBindings["datadog/ingest"] = "api_keys" }, `must be "api_key" or`},
+		"bad account": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings["datadog/metrics"] = "application_key admin metrics_read"
+		}, "is not a service account ID"},
+		"unscoped app": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings["datadog/metrics"] = "application_key 3f1e7e1a-1111-4222-8333-444455556666"
+		}, `must be "api_key" or`},
+		"bad scope": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings["datadog/metrics"] = "application_key 3f1e7e1a-1111-4222-8333-444455556666 Metrics"
+		}, "is not an authorization scope"},
+		"app key on auth": {func(c *DynamicSecretProviderConfig) { c.Type = "auth0" }, "application_key_ref is only valid for datadog"},
+	} {
+		c := base
+		c.RoleBindings = bindings()
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := base
+	other.Type, other.APIKeyRef, other.ApplicationKeyRef, other.RoleBindings = "redis", "", "", nil
+	other.Addr = "10.0.0.5:6379"
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "allow_static_rotation is served for") ||
+		!strings.Contains(err.Error(), "auth0, aws-iam, datadog, mysql, postgresql") {
+		t.Fatalf("static rotation on a type without it: %v", err)
+	}
+}
+
 func TestValidateMSSQLProvidersA239(t *testing.T) {
 	for _, providerType := range []string{"mssql", "azure-sql"} {
 		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "sql", Type: providerType,
