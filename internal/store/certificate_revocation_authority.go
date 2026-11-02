@@ -265,7 +265,7 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 	}
 	if command.Status == "completed" {
 		if command.Event.Sequence != event.Sequence || command.Event.Type != event.Type ||
-			command.Event.SchemaVersion != event.SchemaVersion || !command.Event.Time.Equal(event.Time) {
+			command.Event.SchemaVersion != event.SchemaVersion || !sameStoredEventTime(command.Event.Time, event.Time) {
 			return ErrIdempotencyConflict
 		}
 		if event.Type == "certificate.revocation.batch.applied" {
@@ -280,7 +280,7 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 		return nil
 	}
 	if command.Event.Type != event.Type || command.Event.SchemaVersion != event.SchemaVersion ||
-		!command.Event.Time.Equal(event.Time) || !bytes.Equal(command.Event.Data, event.Data) {
+		!sameStoredEventTime(command.Event.Time, event.Time) || !bytes.Equal(command.Event.Data, event.Data) {
 		return fmt.Errorf("%w: certificate revocation differs from first command", ErrIdempotencyConflict)
 	}
 	if _, err := tx.Exec(ctx, `UPDATE certificate_revocation_authority_fences SET
@@ -294,6 +294,14 @@ func (s *Store) CompleteCertificateRevocationAuthorityTx(ctx context.Context, tx
 		WHERE tenant_id=$1 AND event_id=$2 AND status='pending'`,
 		event.TenantID, event.ID, int64(event.Sequence))
 	return err
+}
+
+// sameStoredEventTime compares an event's time with the one PostgreSQL kept:
+// timestamptz keeps microseconds, and an event the log stamped on Linux carries
+// nanoseconds, so its replay after a rebuild must compare at that precision.
+// One retained microsecond of difference still differs.
+func sameStoredEventTime(stored, event time.Time) bool {
+	return stored.UTC().Truncate(time.Microsecond).Equal(event.UTC().Truncate(time.Microsecond))
 }
 
 func restoreCompletedRevocationAuthorityFromEventTx(ctx context.Context, tx pgx.Tx, event events.Event,

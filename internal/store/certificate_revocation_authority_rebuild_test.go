@@ -78,3 +78,42 @@ func TestCompletedCertificateRevocationAuthorityRebuildsFromEventWithoutClaim(t 
 		t.Fatalf("event-only command recovery: %+v %v", command, err)
 	}
 }
+
+// PostgreSQL keeps microseconds. An event the log stamped on Linux carries
+// nanoseconds, so its replay after a rebuild must compare what the database
+// retained (CI: every completed-revocation replay conflicted on Linux, never on
+// macOS, whose clock has microsecond resolution); one retained microsecond of
+// difference still conflicts.
+func TestCompletedCertificateRevocationAuthorityReplayComparesStoredPrecision(t *testing.T) {
+	s := newStore(t)
+	seedTwoTenants(t, s)
+	ctx := context.Background()
+	const caID = "22222222-2222-4222-8222-222222222223"
+	const certID = "33333333-3333-4333-8333-333333333334"
+	digest := crypto.SHA256Hex([]byte("public certificate, nanosecond event"))
+	binding := crypto.SHA256Hex([]byte("exact revocation request, nanosecond event"))
+	data, err := json.Marshal(map[string]any{"request_binding": binding, "reason": "cessationOfOperation",
+		"items": []map[string]any{{"id": certID, "matched": true, "status": "revoked",
+			"ca_id": caID, "serial": "7b", "fingerprint": digest}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := events.Event{ID: "nanosecond-event-revocation", TenantID: tenantA,
+		Type: "certificate.revocation.batch.applied", SchemaVersion: 1,
+		Time: time.Date(2026, 11, 2, 14, 0, 0, 123456789, time.UTC), Sequence: 21, Data: data}
+	firstTargets := []store.CertificateRevocationAuthorityTarget{{CAID: caID, Serial: "7b", Fingerprint: digest}}
+	for replay := 0; replay < 2; replay++ {
+		if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+			return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, event, firstTargets)
+		}); err != nil {
+			t.Fatalf("replay %d of a nanosecond-stamped event: %v", replay, err)
+		}
+	}
+	moved := event
+	moved.Time = event.Time.Add(time.Microsecond)
+	if err := s.WithTenant(ctx, tenantA, func(tx pgx.Tx) error {
+		return s.CompleteCertificateRevocationAuthorityTx(ctx, tx, moved, firstTargets)
+	}); err == nil {
+		t.Fatal("a replay one microsecond off was accepted")
+	}
+}
