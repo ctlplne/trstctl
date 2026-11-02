@@ -2349,6 +2349,28 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For SQL Server (A239, `mssql`), set `admin_dsn_ref` to a `sqlserver://` DSN of a login
+allowed to manage logins and users, end sessions (`ALTER ANY CONNECTION`) and add role
+members, `database` to the database leased logins get a user in, and `role_bindings` to
+database roles per allowed role (comma separated, for example `db_datareader`). Each
+lease is a login with a generated password (meeting SQL Server's password policy) and a
+user in `database` in exactly those roles. For Azure SQL (`azure-sql`), the DSN names
+the database itself and each lease is a contained database user there; no server login
+is created.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "orders-sql",
+  "type": "mssql",
+  "admin_dsn_ref": "file:/run/secrets/sqlserver-admin-dsn",
+  "database": "orders",
+  "allowed_roles": ["reader"],
+  "role_bindings": {"reader": "db_datareader"},
+  "max_ttl": "8h"
+}
+```
+
 For Milvus (A239, `milvus`), set `endpoint` to the proxy's RESTful API
 (`https://<host>:19530`), `admin_user` and `password_ref` to a user allowed to create
 and drop users and grant roles (such as `root`), and `role_bindings` to existing Milvus

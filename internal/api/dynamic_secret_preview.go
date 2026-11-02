@@ -288,6 +288,18 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
 			roles(`Each allowed role maps to existing Milvus roles, comma separated, for example "orders_reader"; each role carries the privileges the lease should have.`),
 		)},
+		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
+			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
+			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
+			value("username_prefix", "Login name prefix", "Optional prefix of leased logins (default trstctl); revocation only ever drops principals with it.", false),
+			roles(`Each allowed role maps to database roles, comma separated, for example "db_datareader".`),
+		)},
+		{Type: "azure-sql", Label: "Azure SQL contained users", Purpose: "Creates a contained database user with a generated password that joins the role's database roles, and at revocation ends its open sessions and drops it; the database then refuses its login. Proven against SQL Server's contained database users; no Azure proof yet.", Requirements: dynamicSecretProviderRequirements(
+			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a user in the database allowed to manage users, add role members and end sessions.", true),
+			value("database", "Database", "The (contained) database the leased users live in.", true),
+			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
+			roles(`Each allowed role maps to database roles, comma separated, for example "db_datareader".`),
+		)},
 	}
 	for i := range providers {
 		providers[i].Authority, providers[i].Revocation = dynamicSecretProviderAuthority(providers[i].Type)
@@ -338,6 +350,10 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's Couchbase roles on the named buckets, until the user is deleted", "confirmed"
 	case "milvus":
 		return "the privileges of the Milvus roles the lease role is bound to, until the user is dropped", "confirmed"
+	case "mssql":
+		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
+	case "azure-sql":
+		return "membership of the role's database roles in one contained database, until the user's sessions are ended and the user dropped", "confirmed"
 	}
 	return "", ""
 }

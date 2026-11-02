@@ -355,12 +355,13 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Nineteen backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-one backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
-database users, Kafka SCRAM users, Couchbase users, and Milvus users (A239).
+database users, Kafka SCRAM users, Couchbase users, Milvus users, SQL Server logins, and
+Azure SQL contained database users (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -472,12 +473,28 @@ retry after an uncertain attempt replaces the user instead of adding one. If a g
 fails, the new user is dropped again. Revocation drops the user with its grants, and
 Milvus refuses its next request.
 
+The SQL Server backend (`mssql`) creates one login per lease with a generated password
+that meets SQL Server's password policy, a user for it in the configured database, and
+that user's membership of the role's database roles; the Azure SQL backend
+(`azure-sql`) creates a contained database user instead, with no server login. The
+password reaches SQL Server only as a parameter, which SQL Server quotes into the
+statement it runs itself, and a failure reports only SQL Server's error number. Every
+step finds what an earlier attempt left (the login or user gets the new password, a
+membership already held stays), so a retry after an uncertain attempt converges on one
+principal; a failed membership removes the new principal again. Revocation disables the
+login so no session starts, ends the principal's open sessions (SQL Server keeps a
+dropped principal's sessions and refuses to drop a login that is logged in), then drops
+the user and the login. Their lab tests run against SQL Server 2022 Developer Edition on
+an x86 CI runner, since the image is x86 only; Azure SQL is exercised through SQL
+Server's contained database users, the same T-SQL Azure SQL Database runs, with no
+Azure proof yet.
+
 The MySQL backend requires an explicit `account_host` for every generated
 account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns twenty safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns twenty-two safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

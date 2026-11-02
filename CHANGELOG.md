@@ -2,6 +2,13 @@
 
 ### Added
 
+- SQL Server and Azure SQL dynamic secrets (`type: mssql`, `type: azure-sql`): an `mssql` lease is a login with a
+  generated password and a user in the configured database that joins the role's database roles (`"db_datareader"`);
+  an `azure-sql` lease is a contained database user. Revocation disables the login, ends the principal's open sessions
+  (SQL Server keeps a dropped principal's sessions) and drops the user and login. The password reaches SQL Server only
+  as a parameter, never in statement text. Their lab tests run against SQL Server 2022 Developer Edition on an x86 CI
+  runner (the image is x86 only); Azure SQL is proven through SQL Server's contained database users.
+
 - Milvus dynamic secrets (`type: milvus`): each lease is a Milvus user with a generated password and only the Milvus
   roles its role is bound to (`"orders_reader"`), created through the RESTful API; revocation drops the user (and its
   role grants) and Milvus refuses its next request. Proven against stock Milvus 2.6.26 standalone.

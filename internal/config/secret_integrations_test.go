@@ -436,6 +436,40 @@ func TestValidateMilvusProviderA239(t *testing.T) {
 	}
 }
 
+func TestValidateMSSQLProvidersA239(t *testing.T) {
+	for _, providerType := range []string{"mssql", "azure-sql"} {
+		base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "sql", Type: providerType,
+			AdminDSNRef: "file:/run/secrets/sql-admin-dsn", Database: "orders", AllowedRoles: []string{"reader"}, MaxTTL: "1h"}
+		check := func(c DynamicSecretProviderConfig) error {
+			t.Helper()
+			return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+		}
+		base.RoleBindings = map[string]string{"reader": "db_datareader, report_reader"}
+		if err := check(base); err != nil {
+			t.Fatalf("%s: %v", providerType, err)
+		}
+		for name, tc := range map[string]struct {
+			mutate func(*DynamicSecretProviderConfig)
+			want   string
+		}{
+			"no dsn":       {func(c *DynamicSecretProviderConfig) { c.AdminDSNRef = "" }, "admin_dsn_ref"},
+			"no database":  {func(c *DynamicSecretProviderConfig) { c.Database = "" }, "database is required for " + providerType},
+			"bad database": {func(c *DynamicSecretProviderConfig) { c.Database = "orders]; DROP DATABASE x; --" }, "must be a plain database name"},
+			"no grant":     {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["reader"] is required for ` + providerType},
+			"bad role": {func(c *DynamicSecretProviderConfig) {
+				c.RoleBindings = map[string]string{"reader": "db_datareader]; --"}
+			}, "is not a database role name"},
+		} {
+			c := base
+			c.RoleBindings = map[string]string{"reader": "db_datareader, report_reader"}
+			tc.mutate(&c)
+			if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("%s %s: %v, want %q", providerType, name, err, tc.want)
+			}
+		}
+	}
+}
+
 func TestValidateTailscaleProviderA239(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "tailnet", Type: "tailscale",
 		BearerTokenRef: "file:/run/secrets/tailscale-api", AllowedRoles: []string{"ci"},

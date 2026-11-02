@@ -236,7 +236,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"postgresql": {}, "mysql": {}, "mongodb": {}, "aws-iam": {}, "aws-sts": {},
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
-	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {},
+	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -417,6 +417,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
+	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -947,6 +948,39 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var (
+	mssqlDatabaseName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_@#$-]{0,127}$`)
+	mssqlRoleName     = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_@#$]{0,127}$`)
+)
+
+// validateMSSQLProvider checks a SQL Server (mssql) or Azure SQL (azure-sql,
+// contained database users) provider (A239): admin_dsn_ref is a sqlserver://
+// DSN of an administrator, database the database leased principals get roles
+// in, and each allowed role is bound to database roles, for example
+// "db_datareader".
+func validateMSSQLProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if err := validateCredentialRef(c.AdminDSNRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s admin_dsn_ref: %w", where, err))
+	}
+	if !mssqlDatabaseName.MatchString(c.Database) {
+		errs = append(errs, fmt.Errorf("%s database is required for %s and must be a plain database name", where, c.Type))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			continue
+		}
+		for _, name := range strings.Split(binding, ",") {
+			if !mssqlRoleName.MatchString(strings.TrimSpace(name)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a database role name", where, role, strings.TrimSpace(name)))
+			}
+		}
+	}
+	return errs
 }
 
 var milvusRoleName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,31}$`)

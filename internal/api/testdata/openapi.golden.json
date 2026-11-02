@@ -18668,7 +18668,9 @@
               "mongodb-atlas",
               "kafka",
               "couchbase",
-              "milvus"
+              "milvus",
+              "mssql",
+              "azure-sql"
             ],
             "type": "string"
           }

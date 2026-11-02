@@ -5242,7 +5242,7 @@ when off, requiring a KEK when on):
   tenant-bound registry for `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam` alias),
   `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
   `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
-  `mongodb-atlas`, `kafka`, `couchbase`, and `milvus` (A239). Issuance is
+  `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `mssql`, and `azure-sql` (A239). Issuance is
   outbox-only: the pending event and sealed command commit first, provider
   retries reuse one stable lease identity where the provider has a native
   replay/lookup path; AWS STS fences an indeterminate call instead. Only the
@@ -5292,7 +5292,14 @@ when off, requiring a KEK when on):
   curl queries the collection the bound role can read as a leased user and is
   refused another collection and an insert (PermissionDenied), a renewal stays
   within the maximum lifetime, and after revocation the user's request is
-  refused (code 1800) and no leased user is left.
+  refused (code 1800) and no leased user is left. SQL Server logins and Azure
+  SQL contained users (A239) have lab tests against SQL Server 2022 Developer
+  Edition that run only on an x86 CI runner (job "a239 labs"; the image is x86
+  only): the stock sqlcmd reads the bound database as a leased principal and is
+  refused an insert and another database, a session held open across the
+  revocation is ended, a new login fails afterwards, and no leased principal is
+  left. Azure SQL is exercised through SQL Server's contained database users;
+  there is no Azure proof yet.
   The provider catalog states each adapter's authority and whether its
   revocation is confirmed or TTL-only. The rest of A239's provider library is
   still being built.
