@@ -211,6 +211,11 @@ TEST_PACKAGE_LIST = $(GO) list $(GO_PACKAGES) | grep -v -E '^$(LIVE_PERF_IMPORT_
 # A package measured above this many seconds runs as test slices spread over the
 # lanes (scripts/ci/go-test-shard.py), so no lane waits on one large package.
 TEST_MAX_UNIT_SECONDS ?= 360
+# CI builds the internal/server race + coverage test binary once (make
+# server-test-binary) and every server slice runs it (SERVER_TEST_BINARY);
+# locally each slice builds its own.
+SERVER_TEST_BINARY ?=
+SERVER_TEST_BINARY_OUT ?= server.test
 
 .PHONY: test
 test: ## Run all tests (race + coverage) and enforce the coverage minimum
@@ -240,7 +245,11 @@ test-packages: ## go test (race + coverage) over package shard TEST_SHARD of TES
 .PHONY: test-server
 test-server: ## internal/server census slice SERVER_SLICE of SERVER_SLICES (race + coverage, isolated parts)
 	@echo ">> go test internal/server complementary shard, slice index $(SERVER_SLICE) of $(SERVER_SLICES) (race + merged first-party coverage)"
-	@python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER).$(SERVER_SLICE) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server --slice $(SERVER_SLICE) --slices $(SERVER_SLICES)
+	@python3 scripts/ci/server-test-shards.py --go '$(GO)' --coverpkg='$(GO_COVER_PACKAGES)' --coverprofile=$(COVERPROFILE_SERVER).$(SERVER_SLICE) --skip '$(SERVER_ROTATION_CURSOR_TEST)' --timeout=$(SERVER_COMPLEMENTARY_TIMEOUT) --package ./internal/server --slice $(SERVER_SLICE) --slices $(SERVER_SLICES)$(if $(SERVER_TEST_BINARY), --test-binary '$(SERVER_TEST_BINARY)' --import-path $(SERVER_IMPORT))
+
+.PHONY: server-test-binary
+server-test-binary: ## Build the internal/server race + coverage test binary the CI server slices share
+	@$(GO) test -c -race -covermode=atomic -coverpkg=$(GO_COVER_PACKAGES) -o $(SERVER_TEST_BINARY_OUT) ./internal/server
 
 .PHONY: test-extra
 test-extra: ## The internal/server row-501 fairness shard and the live perf correctness lane (race + coverage)

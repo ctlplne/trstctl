@@ -74,6 +74,8 @@ def verify_slices(paths):
     digests = {r.get("census_sha256") for r in records}
     if len(counts) != 1 or len(digests) != 1 or None in digests:
         raise ValueError("slice results disagree on the census or the slice count")
+    if len({r.get("test_binary_sha256") for r in records}) != 1:
+        raise ValueError("slice results ran different test binaries")
     if any(census_digest(r.get("census", [])) != r["census_sha256"] for r in records):
         raise ValueError("a slice result's census does not match its digest")
     count = counts.pop()
@@ -206,6 +208,29 @@ def cancel_run(_signum, _frame):
     raise KeyboardInterrupt("server test run canceled")
 
 
+def test_commands(args):
+    """How the census and each part run: `go test` over the package, or a prebuilt race + coverage test binary
+    (--test-binary, built once for every CI slice) run in the package directory through test2json, as go test itself
+    runs it. Returns the census command, a part-command builder, the children's working directory and the binary's
+    digest (None for go test)."""
+    if not args.test_binary:
+        base = [args.go, "test", "-json", "-race", "-count=1", "-p=1", "-covermode=atomic", "-coverpkg=" + args.coverpkg]
+
+        def part(profile, expression):
+            return base + ["-coverprofile=" + str(profile), "-run", expression, "-skip", args.skip, f"-timeout={args.seconds}s", args.package]
+        return base + ["-list", "^(Test|Example|Fuzz)", args.package], part, None, None
+    if not args.import_path:
+        raise ValueError("--test-binary needs --import-path")
+    binary = Path(args.test_binary).resolve()
+    digest = hashlib.sha256(binary.read_bytes()).hexdigest()
+    wrap = [args.go, "tool", "test2json", "-t", "-p", args.import_path, str(binary), "-test.v=test2json"]
+
+    def part(profile, expression):
+        return wrap + ["-test.count=1", "-test.paniconexit0", "-test.coverprofile=" + str(profile), "-test.run=" + expression,
+                       "-test.skip=" + args.skip, f"-test.timeout={args.seconds}s"]
+    return wrap + ["-test.list", "^(Test|Example|Fuzz)"], part, str(Path(args.package).resolve()), digest
+
+
 def run(args):
     output = Path(args.coverprofile).resolve()
     artifacts = output.with_name(output.name + ".shards")
@@ -218,14 +243,15 @@ def run(args):
     children = []
     record = {"wall_seconds": args.seconds, "workers": 2, "package": args.package, "parts": [], "temporary_root": str(scratch),
               "slice": args.slice, "slices": args.slices}
-    base = [args.go, "test", "-json", "-race", "-count=1", "-p=1", "-covermode=atomic", "-coverpkg=" + args.coverpkg]
+    listing, part_command, workdir, binary_digest = test_commands(args)
+    record["test_binary_sha256"] = binary_digest
     success = False
     previous_signals = {sig: signal.signal(sig, cancel_run) for sig in (signal.SIGTERM, signal.SIGINT)}
     try:
         census = artifacts / "census.ndjson"
         began = time.monotonic()
         with census.open("w") as log:
-            census_child = subprocess.Popen(base + ["-list", "^(Test|Example|Fuzz)", args.package], stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            census_child = subprocess.Popen(listing, cwd=workdir, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             children.append(census_child)
             census_exit = census_child.wait()
         if census_exit:
@@ -249,9 +275,9 @@ def run(args):
             profile.unlink(missing_ok=True)
             env = {**os.environ, "TMPDIR": str(scratch / str(index))}
             expression = "^(" + "|".join(names) + ")$"
-            command = base + ["-coverprofile=" + str(profile), "-run", expression, "-skip", args.skip, f"-timeout={args.seconds}s", args.package]
+            command = part_command(profile, expression)
             log = logpath.open("w")
-            child = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            child = subprocess.Popen(command, cwd=workdir, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             children.append(child)
             commands.append((child, log, logpath, profile, names))
         while any(child.poll() is None for child, *_ in commands) and time.monotonic() < deadline:
@@ -333,6 +359,8 @@ if __name__ == "__main__":
     parser.add_argument("--timeout", dest="seconds", type=timeout_seconds, default="15m")
     parser.add_argument("--slice", type=int, default=0)
     parser.add_argument("--slices", type=int, default=1)
+    parser.add_argument("--test-binary", help="a prebuilt race + coverage test binary of --package (CI builds it once for every slice)")
+    parser.add_argument("--import-path", help="the package's import path, for test2json (with --test-binary)")
     parser.add_argument("--verify-slices", nargs="+", metavar="RESULT_JSON")
     options = parser.parse_args()
     if options.verify_slices:

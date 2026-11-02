@@ -103,8 +103,43 @@ jobs:
           path: cover.out.main.${{ matrix.shard }}
           if-no-files-found: error
 
+  # The internal/server race + coverage test binary is built once and shared by
+  # every server slice, instead of each slice compiling it (about 4.4 minutes).
+  go-test-server-build:
+    name: go test / server build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20 # TEST-004
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        env:
+          GOTOOLCHAIN: local # see the note at the top of this workflow
+        with:
+          go-version-file: go.mod
+          check-latest: true
+          cache: true
+
+      - name: Prefetch dependencies
+        run: go mod download
+
+      - name: Build the internal/server test binary (race + coverage)
+        run: make server-test-binary SERVER_TEST_BINARY_OUT=server.test
+
+      - name: Upload the server test binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: server-test-binary
+          path: server.test
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 1
+
   go-test-server:
     name: go test / server ${{ matrix.slice }}
+    needs: go-test-server-build
     runs-on: ubuntu-latest
     timeout-minutes: 30 # TEST-004
     strategy:
@@ -138,10 +173,17 @@ jobs:
           TRSTCTL_OPENSSL_INSTALL_DIR: ${{ runner.temp }}/openssl-pqc
         run: scripts/ci/install-openssl-pqc.sh
 
+      - name: Download the server test binary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: server-test-binary
+
       - name: Test (server census slice)
         env:
           TRSTCTL_REQUIRE_OPENSSH: "1"
-        run: make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=6
+        run: |
+          chmod +x server.test
+          make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=6 SERVER_TEST_BINARY="${GITHUB_WORKSPACE}/server.test"
 
       - name: Upload server slice coverage and census result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -448,7 +490,7 @@ jobs:
 
   build-test-lint:
     name: build / test / lint
-    needs: [go-test-packages, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire]
+    needs: [go-test-packages, go-test-server-build, go-test-server, go-test-extra, build-lint, sdk-terraform, perf-gates, core-integration-succession, core-integration-wire]
     # Always run, so a failed or skipped lane fails this required check instead of
     # leaving it skipped (a skipped required check would read as passing).
     if: always()

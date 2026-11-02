@@ -166,7 +166,7 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 	slicesN := ciMatrixSize(t, server, "slice")
 	for job, want := range map[string]string{
 		"go-test-packages": fmt.Sprintf("make test-packages TEST_SHARD=${{ matrix.shard }} TEST_SHARDS=%d", shards),
-		"go-test-server":   fmt.Sprintf("make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=%d", slicesN),
+		"go-test-server":   fmt.Sprintf("make test-server SERVER_SLICE=${{ matrix.slice }} SERVER_SLICES=%d SERVER_TEST_BINARY=", slicesN),
 		"go-test-extra":    "make test-extra",
 	} {
 		if !strings.Contains(ciJobRuns(wf.Jobs[job]), want) {
@@ -177,6 +177,28 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 		}
 	}
 
+	// Every server slice runs the one test binary the build job compiled.
+	build, okBuild := wf.Jobs["go-test-server-build"]
+	if !okBuild || !strings.Contains(ciJobRuns(build), "make server-test-binary SERVER_TEST_BINARY_OUT=server.test") ||
+		!slices.Contains(server.Needs, "go-test-server-build") {
+		t.Error("the server slices must need go-test-server-build, which builds the shared test binary")
+	}
+	uploaded, downloaded := false, false
+	for _, step := range build.Steps {
+		if strings.HasPrefix(step.Uses, "actions/upload-artifact@") && fmt.Sprint(step.With["name"]) == "server-test-binary" &&
+			fmt.Sprint(step.With["if-no-files-found"]) == "error" {
+			uploaded = true
+		}
+	}
+	for _, step := range server.Steps {
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") && fmt.Sprint(step.With["name"]) == "server-test-binary" {
+			downloaded = true
+		}
+	}
+	if !uploaded || !downloaded {
+		t.Error("the server test binary must be uploaded by the build job and downloaded by every slice")
+	}
+
 	_, umbrella, ok := ciJobByName(wf, ciUmbrellaCheck)
 	if !ok {
 		t.Fatalf("ci.yml has no %q job", ciUmbrellaCheck)
@@ -184,7 +206,7 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 	if strings.TrimSpace(umbrella.If) != "always()" {
 		t.Errorf("%s must run with if: always(), so a failed or skipped lane fails it instead of skipping it", ciUmbrellaCheck)
 	}
-	for _, lane := range []string{"go-test-packages", "go-test-server", "go-test-extra"} {
+	for _, lane := range []string{"go-test-packages", "go-test-server-build", "go-test-server", "go-test-extra"} {
 		if !slices.Contains(umbrella.Needs, lane) {
 			t.Errorf("%s must need lane %s", ciUmbrellaCheck, lane)
 		}

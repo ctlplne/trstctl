@@ -75,6 +75,7 @@ var branchProtectionExemptCIJobs = map[string]string{
 // fails unless every lane succeeded, so a lane cannot drop out of the gate.
 var branchProtectionUmbrellaLanes = map[string]string{
 	"go-test-packages":            ciUmbrellaCheck,
+	"go-test-server-build":        ciUmbrellaCheck,
 	"go-test-server":              ciUmbrellaCheck,
 	"go-test-extra":               ciUmbrellaCheck,
 	"build-lint":                  ciUmbrellaCheck,

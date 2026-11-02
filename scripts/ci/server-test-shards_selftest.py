@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BUSL-1.1
 """Exercise the server gate's pass/fail contract without a database or Go build."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -23,6 +24,30 @@ FAKE_GO = r'''
 import json, os, pathlib, subprocess, sys, time
 args = sys.argv[1:]
 scenario = os.environ.get('SHARDS_SELFTEST_SCENARIO', 'success')
+if args[:2] == ['tool', 'test2json']:
+    # A prebuilt test binary run through test2json: it must run from the package directory, and its baked-in
+    # build flags stand in for go test's; translate its -test.* flags into the go test form handled below.
+    assert args[2:6] == ['-t', '-p', 'example.test/internal/server', os.environ['FAKE_TEST_BINARY']] or (args[2:5] == ['-p', 'example.test/internal/server', os.environ['FAKE_TEST_BINARY']])
+    pathlib.Path(os.environ['FAKE_TEST_BINARY'] + '.cwd').open('a').write(os.getcwd() + '\n')
+    flags = args[args.index(os.environ['FAKE_TEST_BINARY']) + 1:]
+    assert '-test.v=test2json' in flags
+    translated = ['-json', '-race', '-count=1', '-p=1', '-covermode=atomic', '-coverpkg=./internal/...']
+    i = 0
+    while i < len(flags):
+        flag = flags[i]
+        if flag == '-test.list':
+            translated += ['-list', flags[i + 1]]
+            i += 1
+        elif flag.startswith('-test.run='):
+            translated += ['-run', flag.split('=', 1)[1]]
+        elif flag.startswith('-test.skip='):
+            translated += ['-skip', flag.split('=', 1)[1]]
+        elif flag.startswith('-test.coverprofile='):
+            translated.append('-coverprofile=' + flag.split('=', 1)[1])
+        i += 1
+    if '-list' not in translated:
+        assert '-test.count=1' in flags and '-test.paniconexit0' in flags and any(f.startswith('-test.timeout=') for f in flags)
+    args = translated
 def emit(**fields):
     print(json.dumps(fields), flush=True)
 if '-list' in args:
@@ -156,12 +181,34 @@ class SliceTests(unittest.TestCase):
                 'a test doubled': [record(0, ['TestA', 'TestC']), record(1, ['TestB', 'TestC'])],
                 'censuses differ': [record(0, ['TestA', 'TestC']), record(1, ['TestB'], census=['TestA', 'TestB', 'TestD'])],
                 'a digest that is not its census': [record(0, ['TestA', 'TestC'], digest='forged'), record(1, ['TestB'], digest='forged')],
+                'different test binaries': [dict(record(0, ['TestA', 'TestC']), test_binary_sha256='a'), dict(record(1, ['TestB']), test_binary_sha256='b')],
             }.items():
                 with self.subTest(case=name), self.assertRaises(ValueError):
                     runner.verify_slices(write(*records))
 
 
 class ProcessTests(unittest.TestCase):
+    def test_a_prebuilt_test_binary_runs_from_the_package_directory_through_test2json(self):
+        with tempfile.TemporaryDirectory(prefix='binary-selftest-') as directory:
+            binary = (Path(directory) / 'server.test').resolve()
+            binary.write_bytes(b'prebuilt race + coverage test binary')
+            package = Path(directory) / 'internal' / 'server'
+            package.mkdir(parents=True)
+            os.environ['FAKE_TEST_BINARY'] = str(binary)
+            try:
+                result, record, merged, _, _ = self.run_gate('success', extra=(
+                    '--test-binary', str(binary), '--import-path', 'example.test/internal/server', '--package', str(package)))
+            finally:
+                del os.environ['FAKE_TEST_BINARY']
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertTrue(merged.startswith('mode: atomic\n'))
+            self.assertEqual(record['test_binary_sha256'], hashlib.sha256(b'prebuilt race + coverage test binary').hexdigest())
+            dirs = set(Path(str(binary) + '.cwd').read_text().split())
+            self.assertEqual(dirs, {str(package.resolve())})
+            with self.assertRaises(ValueError):
+                runner.test_commands(argparse.Namespace(go='go', test_binary=str(binary), import_path=None, package=str(package),
+                                                        coverpkg='./...', skip='^TestFairness$', seconds=60))
+
     def run_gate(self, scenario, timeout='3s', extra=()):
         with tempfile.TemporaryDirectory(prefix='shards-selftest-') as directory:
             root = Path(directory)
