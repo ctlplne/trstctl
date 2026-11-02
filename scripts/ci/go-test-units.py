@@ -2,9 +2,6 @@
 # SPDX-License-Identifier: BUSL-1.1
 """Run one package lane's units (scripts/ci/go-test-shard.py) under race detection and merged coverage.
 
---tags passes build tags (the editions gate runs its trstctl_core lanes with them), --no-race drops the race detector,
-and without --coverpkg/--coverprofile no coverage is collected.
-
 Plain packages run first, in one `go test` with the lane's package parallelism. Then each sliced package's tests
 are listed with the same build flags (so the build is shared), one package at a time, and a slice
 `<package>#<i>/<K>` runs every K-th name of the sorted list from i with an anchored -run; at most --parallelism slices
@@ -47,45 +44,26 @@ def run_pattern(names):
     return "^(" + "|".join(names) + ")$"
 
 
-def describe(args):
-    parts = [] if args.no_race else ["race"]
-    if args.tags:
-        parts.append(f"tags {args.tags}")
-    if args.coverprofile:
-        parts.append("merged first-party coverage")
-    return " + ".join(parts) or "plain"
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--go", default="go")
     parser.add_argument("--parallelism", type=int, required=True)
     parser.add_argument("--timeout", required=True)
-    parser.add_argument("--coverpkg")
-    parser.add_argument("--coverprofile")
-    parser.add_argument("--tags", default="")
-    parser.add_argument("--no-race", action="store_true")
+    parser.add_argument("--coverpkg", required=True)
+    parser.add_argument("--coverprofile", required=True)
     parser.add_argument("units", nargs="+")
     args = parser.parse_args()
-    if bool(args.coverpkg) != bool(args.coverprofile):
-        parser.error("--coverpkg and --coverprofile go together")
-    covered = bool(args.coverprofile)
     plain, slices = parse_units(args.units)
-    base = [args.go, "test"] + ([] if args.no_race else ["-race"]) + ["-count=1", f"-timeout={args.timeout}"]
-    if args.tags:
-        base.append(f"-tags={args.tags}")
-    if covered:
-        base += ["-covermode=atomic", f"-coverpkg={args.coverpkg}"]
-    output = Path(args.coverprofile) if covered else None
-    if output:
-        output.unlink(missing_ok=True)
+    base = [args.go, "test", "-race", "-count=1", f"-timeout={args.timeout}", "-covermode=atomic", f"-coverpkg={args.coverpkg}"]
+    output = Path(args.coverprofile)
+    output.unlink(missing_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="go-test-units-"))
     try:
         finished = []  # (label, exit code, profile, log path or None)
         if plain:
             profile = scratch / "plain.cover"
-            print(f">> go test {len(plain)} packages ({describe(args)})", flush=True)
-            code = subprocess.call(base + [f"-p={args.parallelism}"] + ([f"-coverprofile={profile}"] if covered else []) + plain)
+            print(f">> go test {len(plain)} packages (race + merged first-party coverage)", flush=True)
+            code = subprocess.call(base + [f"-p={args.parallelism}", f"-coverprofile={profile}"] + plain)
             finished.append(("packages", code, profile, None))
         listed, queued = {}, []
         for n, (package, index, count) in enumerate(slices):
@@ -102,8 +80,7 @@ def main():
             if not mine:
                 print(f">> {label}: nothing to run", flush=True)
                 continue
-            cover = [f"-coverprofile={scratch / f'slice-{n}.cover'}"] if covered else []
-            queued.append((label, base + ["-run", run_pattern(mine)] + cover + [package],
+            queued.append((label, base + ["-run", run_pattern(mine), f"-coverprofile={scratch / f'slice-{n}.cover'}", package],
                            scratch / f"slice-{n}.cover", scratch / f"slice-{n}.log"))
         running = []
         for label, command, profile, log in queued:
@@ -119,15 +96,14 @@ def main():
             finished.append((label, code, profile, log))
         failed = [label for label, code, _, _ in finished if code != 0]
         profiles = [profile for _, _, profile, _ in finished]
-        bad = [str(p) for p in profiles if not p.exists() or not p.read_text().startswith("mode: atomic\n")] if covered else []
-        if covered and not failed and not bad:
+        bad = [str(p) for p in profiles if not p.exists() or not p.read_text().startswith("mode: atomic\n")]
+        if not failed and not bad:
             body = "".join("".join(p.read_text().splitlines(keepends=True)[1:]) for p in profiles)
             output.write_text("mode: atomic\n" + body)
         if failed or bad:
             print(f"FAIL: package lane: failed {failed}; missing or non-atomic coverage {bad}", flush=True)
             return 1
-        merged = f"; coverage merged into {output}" if covered else ""
-        print(f">> package lane: {len(finished)} go test invocations passed{merged}", flush=True)
+        print(f">> package lane: {len(finished)} go test invocations passed; coverage merged into {output}", flush=True)
         return 0
 
     finally:

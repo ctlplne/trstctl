@@ -1,5 +1,5 @@
 {
- "source": "CI run 41426772095 package shards (426 packages measured: go test / packages 1 (failure), go test / packages 2 (failure), go test / packages 5 (success), go test / packages 0 (failure), go test / packages 4 (failure), go test / packages 3 (failure)); others from: CI run 41409094271 (build / test / lint, make test: -race -cover), 2026-11-02; internal/server from the six race server slices of CI 41439816582 (49.3 job-min less about 1.5 min of setup each), for the editions gate's trstctl_core lanes; seconds per package; 0 = no test files",
+ "source": "CI run 41426772095 package shards (426 packages measured: go test / packages 1 (failure), go test / packages 2 (failure), go test / packages 5 (success), go test / packages 0 (failure), go test / packages 4 (failure), go test / packages 3 (failure)); others from: CI run 41409094271 (build / test / lint, make test: -race -cover), 2026-11-02; seconds per package; 0 = no test files",
  "weights": {
   "trstctl.com/trstctl/clients/embedded": 4.827,
   "trstctl.com/trstctl/cmd/trstctl": 3.393,
@@ -437,7 +437,6 @@
   "trstctl.com/trstctl/internal/secretsync": 1.371,
   "trstctl.com/trstctl/internal/secrettext": 1.602,
   "trstctl.com/trstctl/internal/servedstatus": 1.139,
-  "trstctl.com/trstctl/internal/server": 2400.0,
   "trstctl.com/trstctl/internal/serving": 2.169,
   "trstctl.com/trstctl/internal/signing": 102.523,
   "trstctl.com/trstctl/internal/signing/proto": 0.0,

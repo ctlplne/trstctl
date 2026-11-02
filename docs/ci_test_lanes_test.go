@@ -207,7 +207,7 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 	if strings.TrimSpace(umbrella.If) != "always()" {
 		t.Errorf("%s must run with if: always(), so a failed or skipped lane fails it instead of skipping it", ciUmbrellaCheck)
 	}
-	for _, lane := range []string{"go-test-packages", "go-test-server-build", "go-test-server", "go-test-extra", "editions-gate-tests"} {
+	for _, lane := range []string{"go-test-packages", "go-test-server-build", "go-test-server", "go-test-extra"} {
 		if !slices.Contains(umbrella.Needs, lane) {
 			t.Errorf("%s must need lane %s", ciUmbrellaCheck, lane)
 		}
@@ -241,42 +241,60 @@ func TestCIRunsEveryTestLaneAndGatesOnAll(t *testing.T) {
 	}
 }
 
-// TestEditionsGateTestsRunInLanesThatCoverEveryPackage keeps the editions gate's
-// trstctl_core test pass whole after it moved out of build-lint into parallel
-// lanes: build-lint still proves the core-only build and its dependency graph,
-// every lane runs one shard of the same pass with the ML-DSA OpenSSL the
-// interoperability tests need, the lanes match the Makefile's shard count (which
-// make test-selftests checks covers every non-ee package exactly once), and the
-// umbrella check needs them.
-func TestEditionsGateTestsRunInLanesThatCoverEveryPackage(t *testing.T) {
+// TestEditionsGateTestsThePackagesTheTagChanges keeps the editions gate the owner
+// approved on 2026-11-02: build-lint builds the core-only binary and checks its
+// graph (zero ee/, every core family), then runs the trstctl_core tests of exactly
+// the packages with a file whose //go:build line mentions the tag, derived from the
+// files (an empty list fails), and compiles every package and test under the tag
+// with go vet. No separate core-pass lanes remain.
+func TestEditionsGateTestsThePackagesTheTagChanges(t *testing.T) {
 	wf := readCIWorkflow(t)
-	lint, okLint := wf.Jobs["build-lint"]
-	lanes, okLanes := wf.Jobs["editions-gate-tests"]
-	if !okLint || !okLanes {
-		t.Fatal("ci.yml must have the build-lint job and the editions-gate-tests lanes")
+	lint, ok := wf.Jobs["build-lint"]
+	if !ok {
+		t.Fatal("ci.yml must have the build-lint job")
 	}
-	if runs := ciJobRuns(lint); !strings.Contains(runs, "make editions-gate-build") || strings.Contains(runs, "make editions-gate\n") {
-		t.Error("build-lint must run make editions-gate-build (the core-only build and graph), leaving the test pass to the lanes")
+	runs := ciJobRuns(lint)
+	build, tests := strings.Index(runs, "make editions-gate-build"), strings.Index(runs, "make editions-gate-tests")
+	if build < 0 || tests < build {
+		t.Error("build-lint must run make editions-gate-build, then make editions-gate-tests")
 	}
-	shards := ciMatrixSize(t, lanes, "shard")
-	if want := fmt.Sprintf("make editions-gate-tests EDITIONS_SHARD=${{ matrix.shard }} EDITIONS_SHARDS=%d", shards); !strings.Contains(ciJobRuns(lanes), want) {
-		t.Errorf("the editions lanes must run %q", want)
-	}
-	if !strings.Contains(ciJobRuns(lanes), "scripts/ci/install-openssl-pqc.sh") {
-		t.Error("the editions lanes must install the pinned ML-DSA OpenSSL: the core-only pass runs its interoperability tests")
+	if _, lanes := wf.Jobs["editions-gate-tests"]; lanes {
+		t.Error("the editions gate's core-pass lanes were dropped (owner decision 2026-11-02); ci.yml still has them")
 	}
 	makefile := read(t, "../Makefile")
-	if !strings.Contains(makefile, fmt.Sprintf("EDITIONS_CI_SHARDS ?= %d\n", shards)) {
-		t.Errorf("Makefile EDITIONS_CI_SHARDS must equal the %d editions lanes, so test-selftests checks the partition CI runs", shards)
-	}
 	for _, want := range []string{
 		"editions-gate: editions-gate-build editions-gate-tests",
-		"--shards $(EDITIONS_CI_SHARDS) --weights scripts/ci/go-test-weights.json --max-unit-seconds $(TEST_MAX_UNIT_SECONDS) --selftest",
-		"--tags trstctl_core --no-race",
+		"git ls-files -z '*.go' | xargs -0 grep -l -E '^//go:build .*trstctl_core'",
+		"the editions gate tests nothing\"; exit 1;",
+		"$(GO) test -tags trstctl_core -count=1 $$pkgs",
+		"@$(GO) vet -tags trstctl_core ./...",
+		"if $(GO) list -tags trstctl_core -deps ./cmd/trstctl | grep -E '^$(MODULE)/ee(/|$$)' >/dev/null; then",
 	} {
 		if !strings.Contains(makefile, want) {
 			t.Errorf("Makefile must contain %q", want)
 		}
+	}
+}
+
+// TestScheduledCIRunsHaveTheirOwnConcurrencyGroup keeps the owner decision of
+// 2026-11-02: scheduled (nightly) runs have their own concurrency group, so a
+// nightly and a push run never cancel each other, and a newer push still cancels
+// an older push run.
+func TestScheduledCIRunsHaveTheirOwnConcurrencyGroup(t *testing.T) {
+	var wf struct {
+		Concurrency struct {
+			Group            string `yaml:"group"`
+			CancelInProgress string `yaml:"cancel-in-progress"`
+		} `yaml:"concurrency"`
+	}
+	if err := yaml.Unmarshal([]byte(read(t, "../.github/workflows/ci.yml")), &wf); err != nil {
+		t.Fatalf("parse .github/workflows/ci.yml: %v", err)
+	}
+	if want := "ci-${{ github.event_name == 'schedule' && 'schedule-' || '' }}${{ github.ref }}"; wf.Concurrency.Group != want {
+		t.Errorf("ci.yml concurrency group is %q, want %q: scheduled runs need a group of their own", wf.Concurrency.Group, want)
+	}
+	if want := "${{ github.event_name != 'schedule' }}"; wf.Concurrency.CancelInProgress != want {
+		t.Errorf("ci.yml cancel-in-progress is %q, want %q: pushes cancel older push runs, scheduled runs are never cancelled", wf.Concurrency.CancelInProgress, want)
 	}
 }
 
