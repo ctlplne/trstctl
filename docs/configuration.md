@@ -2071,12 +2071,17 @@ bound service accounts' application keys), and binds each allowed role to `api_k
 to `application_key <service-account-id> <scope>,<scope>`. It issues leases, and with
 `allow_static_rotation: true` also rotates in two phases.
 
+An `openai` provider (A240) sets `endpoint` to the API (`https://api.openai.com`),
+`api_key_ref` to an organization admin key, and binds each allowed role to the project
+ID (`proj_...`) its service accounts are created in. It issues leases, and with
+`allow_static_rotation: true` also rotates in two phases.
+
 Dynamic `type` values are `postgresql`, `mysql`, `mongodb`, `aws-sts` (`aws-iam`),
 `gcp-iam`, `azure-entra`, `kubernetes`, `redis`, `ldap`, `totp`,
 `oauth-client-credentials`, `clickhouse`, `elasticsearch`, `rabbitmq`, `tailscale`,
 `mongodb-atlas`, `kafka`, `couchbase`, `milvus`, `github-app`, `snowflake`,
-`aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`
-and `datadog`. Sync `type` values are
+`aws-elasticache`, `aws-memorydb`, `ibm-api-connect`, `mssql`, `azure-sql`, `auth0`,
+`datadog` and `openai`. Sync `type` values are
 `aws-secrets-manager`, `aws-parameter-store`, `gcp-secret-manager`,
 `azure-key-vault`, `github-actions`, `gitlab-ci`, `vercel`, `netlify`,
 `generic-ci-json`, `webhook`, `kubernetes-secrets`, `terraform-cloud-opentofu`, and

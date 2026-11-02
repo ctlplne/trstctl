@@ -344,6 +344,13 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
 			roles(`Each allowed role maps to "api_key", or to "application_key <service-account-id> <scope>,<scope>" for an application key of that service account restricted to those scopes.`),
 		)},
+		{Type: "openai", Label: "OpenAI service account keys", Purpose: "Creates a service account in the project the role is bound to through the OpenAI admin API, whose API key the response returns once, and deletes the service account (and its key) at revocation; the API then refuses the key. A static rotation is two-phase: the successor is a new service account next to the predecessor, which keeps working until the rotation retires it. Keys are proven by listing models with them. Built against a stand-in of the admin API; no OpenAI proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "HTTPS URL of the API, https://api.openai.com.", true),
+			credential("api_key_ref", "Admin key reference", "An organization admin key allowed to manage the bound projects' service accounts.", true),
+			value("username_prefix", "Service account name prefix", "Optional prefix of issued service account names (default trstctl); revocation only ever deletes service accounts with it and the lease digest suffix the provider gives them.", false),
+			value("allow_static_rotation", "Static rotation", "Optional: also rotate a stored key in two phases.", false),
+			roles(`Each allowed role maps to the project ID ("proj_...") its service accounts are created in; the project's permissions are the key's authority.`),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -418,6 +425,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the bound application's own grants, through its rotated client secret; the previous secret stops working when the next is issued", "confirmed"
 	case "datadog":
 		return "an organization API key, or a service account's application key restricted to the role's scopes, until the key is deleted", "confirmed"
+	case "openai":
+		return "a member service account of the bound project, through its API key, until the service account is deleted", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

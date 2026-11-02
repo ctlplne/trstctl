@@ -472,6 +472,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredAuth0Backend(opener)
 	case "datadog":
 		return openConfiguredDatadogBackend(opener)
+	case "openai":
+		return openConfiguredOpenAIBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":
@@ -1682,7 +1684,7 @@ func (p *configuredDynamicProvider) VerifyLeaseCredential(ctx context.Context, c
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "redis", "datadog":
+	case "redis", "datadog", "openai":
 		return p.verifyWithBackend(ctx, credential)
 	default:
 		return "not_available", nil
@@ -1699,9 +1701,10 @@ func (p *configuredDynamicProvider) VerifyStaticCredential(ctx context.Context, 
 		return "connected", rotation.VerifyPostgresCredential(ctx, credential, "SELECT 1")
 	case "mysql":
 		return "connected", rotation.VerifyMySQLCredential(ctx, credential)
-	case "auth0", "datadog":
+	case "auth0", "datadog", "openai":
 		// The rotated secret authenticates its application at the token
-		// endpoint; a Datadog API key validates at the site (A240).
+		// endpoint; a Datadog API key validates at the site, and an OpenAI
+		// key lists models (A240).
 		return p.verifyWithBackend(ctx, credential)
 	default:
 		return "not_available", nil

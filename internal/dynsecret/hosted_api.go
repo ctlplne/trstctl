@@ -70,6 +70,16 @@ func (h hostedAPI) call(ctx context.Context, method, path string, body []byte, a
 	return resp.StatusCode, response, nil
 }
 
+// bearerFrom authenticates as "Authorization: Bearer" with a sealed token.
+func bearerFrom(token *secret.Buffer) func(http.Header) error {
+	return func(header http.Header) error {
+		return token.Use(func(value []byte) error {
+			header.Set("Authorization", "Bearer "+string(value))
+			return nil
+		})
+	}
+}
+
 // bearerValue authenticates as "Authorization: Bearer" with a credential the
 // caller holds (a successor being verified).
 func bearerValue(token []byte) func(http.Header) error {

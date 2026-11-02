@@ -568,8 +568,42 @@ func TestValidateDatadogProviderA240(t *testing.T) {
 	other.Type, other.APIKeyRef, other.ApplicationKeyRef, other.RoleBindings = "redis", "", "", nil
 	other.Addr = "10.0.0.5:6379"
 	if err := check(other); err == nil || !strings.Contains(err.Error(), "allow_static_rotation is served for") ||
-		!strings.Contains(err.Error(), "auth0, aws-iam, datadog, mysql, postgresql") {
+		!strings.Contains(err.Error(), strings.Join(sortedTrueKeys(StaticRotationProviderTypes), ", ")) {
 		t.Fatalf("static rotation on a type without it: %v", err)
+	}
+}
+
+func TestValidateOpenAIProviderA240(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "openai", Type: "openai",
+		Endpoint: "https://api.openai.com", APIKeyRef: "file:/run/secrets/openai-admin", AllowedRoles: []string{"openai/orders"},
+		MaxTTL: "1h", AllowStaticRotation: true}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"openai/orders": "proj_orders01"}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	if !StaticRotationProviderTypes["openai"] || SinglePhaseRotationProviderTypes["openai"] {
+		t.Fatal("openai must rotate statically, in two phases")
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no endpoint":   {func(c *DynamicSecretProviderConfig) { c.Endpoint = "" }, "endpoint (the API"},
+		"no admin key":  {func(c *DynamicSecretProviderConfig) { c.APIKeyRef = "" }, "api_key_ref"},
+		"unbound role":  {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{} }, `role_bindings["openai/orders"]`},
+		"not a project": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"openai/orders": "orders"} }, "must be the project ID"},
+		"app key":       {func(c *DynamicSecretProviderConfig) { c.ApplicationKeyRef = "file:/run/secrets/x" }, "application_key_ref is only valid for datadog"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"openai/orders": "proj_orders01"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
 	}
 }
 

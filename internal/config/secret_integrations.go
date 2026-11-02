@@ -138,8 +138,9 @@ type DynamicSecretProviderConfig struct {
 	UserGroup string `json:"user_group,omitempty"`
 	Engine    string `json:"engine,omitempty"`
 	// APIKeyRef is an ibm-api-connect provider's platform API key, exchanged
-	// with client_id and client_secret_ref for a platform token (A239), or a
-	// datadog provider's administrator API key (A240).
+	// with client_id and client_secret_ref for a platform token (A239), a
+	// datadog provider's administrator API key, or an openai provider's
+	// organization admin key (A240).
 	APIKeyRef string `json:"api_key_ref,omitempty"`
 	// ApplicationKeyRef is a datadog provider's administrator application key,
 	// sent with api_key_ref on every key-management call (A240).
@@ -184,7 +185,7 @@ type DynamicSecretProviderConfig struct {
 // StaticRotationProviderTypes are the dynamic-provider types whose backends can
 // mint a credential without native expiry and revoke it by reference, which is
 // what scheduled static rotation needs (A14).
-var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true}
+var StaticRotationProviderTypes = map[string]bool{"postgresql": true, "mysql": true, "aws-iam": true, "auth0": true, "datadog": true, "openai": true}
 
 // SinglePhaseRotationProviderTypes are the static-rotation types whose provider
 // invalidates the current credential when it issues the next one: a rotation
@@ -287,7 +288,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
 	"github-app": {}, "snowflake": {}, "aws-elasticache": {}, "aws-memorydb": {}, "ibm-api-connect": {}, "auth0": {},
-	"datadog": {},
+	"datadog": {}, "openai": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -472,7 +473,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 	"snowflake": validateSnowflakeProvider, "aws-elasticache": validateAWSCacheProvider, "aws-memorydb": validateAWSCacheProvider,
 	"ibm-api-connect": validateAPIConnectProvider,
-	"auth0":           validateAuth0Provider, "datadog": validateDatadogProvider,
+	"auth0":           validateAuth0Provider, "datadog": validateDatadogProvider, "openai": validateOpenAIProvider,
 }
 
 // validateRotationAccounts checks a provider's two-user pairs (A240): each
@@ -938,8 +939,8 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.Type != "ibm-api-connect" && c.Type != "auth0" && c.ClientID != "" {
 		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas, github-app, ibm-api-connect and auth0", where))
 	}
-	if c.Type != "ibm-api-connect" && c.Type != "datadog" && c.APIKeyRef != "" {
-		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect and datadog", where))
+	if c.Type != "ibm-api-connect" && c.Type != "datadog" && c.Type != "openai" && c.APIKeyRef != "" {
+		errs = append(errs, fmt.Errorf("%s api_key_ref is only valid for ibm-api-connect, datadog and openai", where))
 	}
 	if c.Type != "datadog" && c.ApplicationKeyRef != "" {
 		errs = append(errs, fmt.Errorf("%s application_key_ref is only valid for datadog", where))
@@ -1156,6 +1157,28 @@ func validateDatadogBinding(binding string) error {
 	default:
 		return errors.New(`must be "api_key" or "application_key <service-account-id> <scope>,<scope>"`)
 	}
+}
+
+var openAIProjectID = regexp.MustCompile(`^proj_[A-Za-z0-9]{1,64}$`)
+
+// validateOpenAIProvider checks an OpenAI service-account key provider
+// (A240): endpoint is the API, api_key_ref an organization admin key, and each
+// allowed role is bound to the project its service accounts are created in.
+func validateOpenAIProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.Endpoint) == "" {
+		errs = append(errs, fmt.Errorf("%s endpoint (the API, https://api.openai.com) is required for openai", where))
+	}
+	if err := validateCredentialRef(c.APIKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s api_key_ref: %w", where, err))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		if binding := strings.TrimSpace(c.RoleBindings[role]); binding != "" && !openAIProjectID.MatchString(binding) {
+			errs = append(errs, fmt.Errorf("%s role_bindings[%q] must be the project ID (proj_...) its service accounts are created in", where, role))
+		}
+	}
+	return errs
 }
 
 // validateAPIConnectProvider checks an IBM API Connect provider (A239):

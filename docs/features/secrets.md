@@ -777,6 +777,14 @@ application key has no side-effect-free proof, so its rotation records
 so an uncertain attempt leaves one key. It is built against a stand-in of the Datadog
 API, with no Datadog proof yet.
 
+`openai` (A240) issues and rotates OpenAI service-account keys. Each role is bound to a
+project; a lease, or a rotation's successor, is a new service account in that project,
+whose API key OpenAI returns once at creation, and revocation (or retirement) deletes
+the service account and its key with it, after checking the provider named it. The
+rotation is two-phase, and a key is verified by listing models with it
+(`verify_mode: authenticated`). It is built against a stand-in of the admin API, with
+no OpenAI proof yet.
+
 `dynamic-lease:<provider>` rotates the lease an application secret publishes, on a
 configured `postgresql`, `mysql` or `redis` provider. The secret's name is the
 provider role, `old_ref` is the lease id the secret publishes now (or `none`), and
