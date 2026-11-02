@@ -15,6 +15,9 @@ fi
 policy_json="$(jq -c . "$policy")"
 if [ -n "${TRSTCTL_BRANCH_PROTECTION_LIVE_JSON:-}" ]; then
 	live_json="$(jq -c . "$TRSTCTL_BRANCH_PROTECTION_LIVE_JSON")"
+	# A file read is offline evidence: it names a repository only when the
+	# caller says whose export it is, never the runner's GITHUB_REPOSITORY.
+	repo="${TRSTCTL_BRANCH_PROTECTION_REPO:-}"
 else
 	if [ -z "$repo" ]; then
 		echo "GITHUB_REPOSITORY or TRSTCTL_BRANCH_PROTECTION_REPO is required" >&2
