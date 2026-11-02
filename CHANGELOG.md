@@ -2,6 +2,12 @@
 
 ### Added
 
+- GitHub App dynamic secrets (`type: github-app`): each lease is an installation access token narrowed to the role's
+  permissions and named repositories (`"contents:read,metadata:read on api,web"`), minted with an RS256 app JWT signed
+  inside the crypto boundary. GitHub ends a token after an hour; revocation ends it at once by presenting it (the lease
+  keeps its sealed token until then), and a lease can't be extended. A token broader than requested is revoked and
+  refused. Built against a stand-in of GitHub's API.
+
 - SQL Server and Azure SQL dynamic secrets (`type: mssql`, `type: azure-sql`): an `mssql` lease is a login with a
   generated password and a user in the configured database that joins the role's database roles (`"db_datareader"`);
   an `azure-sql` lease is a contained database user. Revocation disables the login, ends the principal's open sessions

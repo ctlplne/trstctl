@@ -388,11 +388,13 @@ type DynamicSecretLeaseRevocationRequested struct {
 }
 
 // dynamicSecretRevocationNeedsCredential reports whether a lease is revoked by
-// presenting its credential: an OAuth access token (RFC 7009), whose provider
-// reference dynsecret writes as "oauth:<digest>:<expiry>" (A239). The lease
-// then keeps its sealed credential until the revocation completes.
+// presenting its credential: an OAuth access token (RFC 7009) or a GitHub App
+// installation token (DELETE /installation/token), whose provider references
+// dynsecret writes as "oauth:<digest>:<expiry>" and "github-app:<digest>:<expiry>"
+// (A239). The lease then keeps its sealed credential until the revocation
+// completes.
 func dynamicSecretRevocationNeedsCredential(backendRef string) bool {
-	return strings.HasPrefix(backendRef, "oauth:")
+	return strings.HasPrefix(backendRef, "oauth:") || strings.HasPrefix(backendRef, "github-app:")
 }
 
 // DynamicSecretLeaseRevocationRetryRequested binds a new outbox command to an

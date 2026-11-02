@@ -23,6 +23,9 @@ func NativeExpiration(ref string) (time.Time, bool) {
 	if expiration, ok := OAuthExpiration(ref); ok {
 		return expiration, true
 	}
+	if expiration, ok := GitHubAppExpiration(ref); ok {
+		return expiration, true
+	}
 	return time.Time{}, false
 }
 

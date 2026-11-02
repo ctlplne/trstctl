@@ -18669,6 +18669,7 @@
               "kafka",
               "couchbase",
               "milvus",
+              "github-app",
               "mssql",
               "azure-sql"
             ],

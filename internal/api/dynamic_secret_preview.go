@@ -288,6 +288,14 @@ func dynamicSecretSupportedProviders() []dynamicSecretSupportedProvider {
 			value("username_prefix", "User name prefix", "Optional prefix of leased users (default trstctl); revocation only ever drops users with it.", false),
 			roles(`Each allowed role maps to existing Milvus roles, comma separated, for example "orders_reader"; each role carries the privileges the lease should have.`),
 		)},
+		{Type: "github-app", Label: "GitHub App installation tokens", Purpose: "Mints an installation access token for a GitHub App, narrowed to the role's permissions and named repositories, which GitHub ends after an hour, and at revocation ends it at once by presenting it. A lease can't be extended; a new lease mints a new token. Built against a stand-in of GitHub's API; no GitHub proof yet.", Requirements: dynamicSecretProviderRequirements(
+			value("endpoint", "API", "GitHub API base URL; https://api.github.com when empty (GitHub Enterprise Server: https://<host>/api/v3).", false),
+			value("client_id", "App client ID", "The GitHub App's client ID (or app ID), the issuer of the JWT each token request is signed with.", true),
+			credential("private_key_ref", "App private key reference", "The GitHub App's private key (PEM).", true),
+			value("installation_id", "Installation ID", "The numeric ID of the app's installation the tokens are minted for.", true),
+			value("max_ttl", "Maximum lifetime", "At most 1h: GitHub ends installation tokens an hour after minting.", true),
+			roles(`Each allowed role maps to "<permission>:<level> on <repositories>", for example "contents:read,metadata:read on api,web"; repositories are named explicitly.`),
+		)},
 		{Type: "mssql", Label: "SQL Server logins", Purpose: "Creates a SQL Server login with a generated password and a user in the configured database that joins the role's database roles, and at revocation disables the login, ends its open sessions and drops the user and login; SQL Server then refuses its login.", Requirements: dynamicSecretProviderRequirements(
 			credential("admin_dsn_ref", "Administrator DSN reference", "sqlserver:// DSN of a login allowed to manage logins and users, end sessions (ALTER ANY CONNECTION) and add role members in the database.", true),
 			value("database", "Database", "The database leased logins get a user and role memberships in.", true),
@@ -350,6 +358,8 @@ func dynamicSecretProviderAuthority(providerType string) (authority, revocation 
 		return "the role's Couchbase roles on the named buckets, until the user is deleted", "confirmed"
 	case "milvus":
 		return "the privileges of the Milvus roles the lease role is bound to, until the user is dropped", "confirmed"
+	case "github-app":
+		return "the role's repository permissions on the named repositories, through an installation token ended at revocation or by GitHub an hour after minting", "confirmed"
 	case "mssql":
 		return "membership of the role's database roles in one database, until the login is disabled, its sessions ended and the login dropped", "confirmed"
 	case "azure-sql":

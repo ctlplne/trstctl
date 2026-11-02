@@ -485,7 +485,7 @@ func (d *secretIntegrationOutboxDispatcher) issueDynamicSecret(ctx context.Conte
 		providerType = typed.DynamicSecretProviderType()
 	}
 	switch providerType {
-	case "kubernetes", "aws-iam", "aws-sts", "oauth-client-credentials":
+	case "kubernetes", "aws-iam", "aws-sts", "oauth-client-credentials", "github-app":
 		nativeTTL = record.ExpiresAt.Sub(record.IssuedAt)
 	}
 	if (providerType == "aws-iam" || providerType == "aws-sts") && nativeTTL+time.Second <= 15*time.Minute {

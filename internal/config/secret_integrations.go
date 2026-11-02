@@ -123,6 +123,11 @@ type DynamicSecretProviderConfig struct {
 	ClientID           string `json:"client_id,omitempty"`
 	ClientSecretRef    string `json:"client_secret_ref,omitempty"`
 	RevocationEndpoint string `json:"revocation_endpoint,omitempty"`
+	// PrivateKeyRef and InstallationID are a github-app provider's app private
+	// key (PEM) and the installation its tokens are minted for; ClientID is the
+	// app's client ID (A239).
+	PrivateKeyRef  string `json:"private_key_ref,omitempty"`
+	InstallationID string `json:"installation_id,omitempty"`
 	// AdminUser is the administrator a clickhouse, rabbitmq, couchbase or milvus
 	// provider creates and deletes leased users as, an elasticsearch provider creates and
 	// invalidates API keys as, or a kafka provider's SCRAM user that sets
@@ -237,6 +242,7 @@ var dynamicSecretTypes = map[string]struct{}{
 	"gcp-iam": {}, "azure-entra": {}, "kubernetes": {}, "redis": {}, "ldap": {},
 	"totp": {}, "oauth-client-credentials": {}, "clickhouse": {}, "elasticsearch": {}, "rabbitmq": {},
 	"tailscale": {}, "mongodb-atlas": {}, "kafka": {}, "couchbase": {}, "milvus": {}, "mssql": {}, "azure-sql": {},
+	"github-app": {},
 }
 
 // adminUserProviderTypes take admin_user (A239).
@@ -417,7 +423,7 @@ var a239ProviderValidators = map[string]func(string, DynamicSecretProviderConfig
 	"elasticsearch": validateElasticsearchProvider, "rabbitmq": validateRabbitMQProvider,
 	"tailscale": validateTailscaleProvider, "mongodb-atlas": validateMongoDBAtlasProvider, "kafka": validateKafkaProvider,
 	"couchbase": validateCouchbaseProvider, "milvus": validateMilvusProvider,
-	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider,
+	"mssql": validateMSSQLProvider, "azure-sql": validateMSSQLProvider, "github-app": validateGitHubAppProvider,
 }
 
 func validateDynamicProvider(where string, c DynamicSecretProviderConfig) []error {
@@ -827,8 +833,14 @@ func validateProviderFieldScopes(where string, c DynamicSecretProviderConfig) []
 	if c.Type != "oauth-client-credentials" && c.RevocationEndpoint != "" {
 		errs = append(errs, fmt.Errorf("%s revocation_endpoint is only valid for oauth-client-credentials", where))
 	}
-	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && (c.ClientID != "" || c.ClientSecretRef != "") {
-		errs = append(errs, fmt.Errorf("%s client_id and client_secret_ref are only valid for oauth-client-credentials and mongodb-atlas", where))
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.ClientSecretRef != "" {
+		errs = append(errs, fmt.Errorf("%s client_secret_ref is only valid for oauth-client-credentials and mongodb-atlas", where))
+	}
+	if c.Type != "oauth-client-credentials" && c.Type != "mongodb-atlas" && c.Type != "github-app" && c.ClientID != "" {
+		errs = append(errs, fmt.Errorf("%s client_id is only valid for oauth-client-credentials, mongodb-atlas and github-app", where))
+	}
+	if c.Type != "github-app" && (c.PrivateKeyRef != "" || c.InstallationID != "") {
+		errs = append(errs, fmt.Errorf("%s private_key_ref and installation_id are only valid for github-app", where))
 	}
 	if c.Type != "tailscale" && c.Tailnet != "" {
 		errs = append(errs, fmt.Errorf("%s tailnet is only valid for tailscale", where))
@@ -948,6 +960,56 @@ func validRabbitMQGrant(binding string) error {
 		}
 	}
 	return nil
+}
+
+var (
+	githubPermissionGrant = regexp.MustCompile(`^[a-z][a-z_]{1,63}:(read|write|admin)$`)
+	githubRepositoryName  = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
+	githubInstallationID  = regexp.MustCompile(`^[1-9][0-9]{0,19}$`)
+)
+
+// validateGitHubAppProvider checks a GitHub App provider (A239): client_id and
+// private_key_ref are the app's, installation_id the installation tokens are
+// minted for, max_ttl at most GitHub's one-hour token lifetime, endpoint
+// optional (https://api.github.com), and each allowed role is bound to
+// "<permission>:<level>[,...] on <repository>[,...]".
+func validateGitHubAppProvider(where string, c DynamicSecretProviderConfig) []error {
+	var errs []error
+	if strings.TrimSpace(c.ClientID) == "" {
+		errs = append(errs, fmt.Errorf("%s client_id (the app's client ID) is required for github-app", where))
+	}
+	if err := validateCredentialRef(c.PrivateKeyRef); err != nil {
+		errs = append(errs, fmt.Errorf("%s private_key_ref: %w", where, err))
+	}
+	if !githubInstallationID.MatchString(c.InstallationID) {
+		errs = append(errs, fmt.Errorf("%s installation_id must be GitHub's numeric installation ID", where))
+	}
+	if ttl, err := c.MaxTTLDuration(); err == nil && ttl > time.Hour {
+		errs = append(errs, fmt.Errorf("%s max_ttl must be at most 1h: GitHub ends installation tokens after an hour", where))
+	}
+	errs = append(errs, validateRoleBindingsCoverRoles(where, c)...)
+	for _, role := range normalizedStrings(c.AllowedRoles) {
+		binding := strings.TrimSpace(c.RoleBindings[role])
+		if binding == "" {
+			continue
+		}
+		perms, repos, ok := strings.Cut(binding, " on ")
+		if !ok {
+			errs = append(errs, fmt.Errorf(`%s role_bindings[%q] must be "<permission>:<level> on <repositories>", for example "contents:read on api"`, where, role))
+			continue
+		}
+		for _, p := range strings.Split(perms, ",") {
+			if !githubPermissionGrant.MatchString(strings.TrimSpace(p)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not <permission>:read, :write or :admin", where, role, strings.TrimSpace(p)))
+			}
+		}
+		for _, r := range strings.Split(repos, ",") {
+			if !githubRepositoryName.MatchString(strings.TrimSpace(r)) {
+				errs = append(errs, fmt.Errorf("%s role_bindings[%q]: %q is not a repository name", where, role, strings.TrimSpace(r)))
+			}
+		}
+	}
+	return errs
 }
 
 var (

@@ -355,13 +355,13 @@ use a private file, or `-f -` for standard input, and do not log its content.
 Instead of a long-lived secret to steal, dynamic secrets are minted on demand, scoped,
 and time-limited by a [lease](../glossary.md); on expiry trstctl revokes the credential
 automatically where the provider supports native revocation, even across a restart, since the revocation intent is journaled first to
-a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-one backend families ship
+a durable [outbox](../glossary.md) and delivered at-least-once. Twenty-two backend families ship
 behind one interface, each backed by real infrastructure, not a stub: PostgreSQL,
 MySQL, MongoDB, AWS STS, GCP IAM, Azure Entra, Kubernetes ServiceAccount tokens,
 Redis ACL users, LDAP directory accounts, TOTP codes, OAuth 2.0 access tokens, ClickHouse
 users, Elasticsearch API keys, RabbitMQ users, Tailscale auth keys, MongoDB Atlas
-database users, Kafka SCRAM users, Couchbase users, Milvus users, SQL Server logins, and
-Azure SQL contained database users (A239).
+database users, Kafka SCRAM users, Couchbase users, Milvus users, GitHub App installation
+tokens, SQL Server logins, and Azure SQL contained database users (A239).
 
 The control plane mounts the lease lifecycle when `secrets.enable_api` is on and
 `secret_integrations.dynamic_providers` supplies tenant-bound endpoints, allowed roles,
@@ -473,6 +473,18 @@ retry after an uncertain attempt replaces the user instead of adding one. If a g
 fails, the new user is dropped again. Revocation drops the user with its grants, and
 Milvus refuses its next request.
 
+The GitHub App backend mints one installation access token per lease, narrowed to the
+role's permissions and the repositories it names; the token request is authenticated
+with a short RS256 JWT signed with the app's private key inside the crypto boundary.
+A token GitHub returns with broader permissions or other repositories, or without a
+future expiry, is revoked and refused. GitHub has no idempotency key for the request,
+so issuance is at-most-once: an uncertain request is not retried, and the lease states
+that a token may exist until an hour after the request. GitHub ends every token an hour
+after minting; revocation ends it at once by presenting it, so the lease keeps its sealed
+token until the revocation completes, and a lease can't be extended (a new lease mints
+a new token). It is built against a stand-in of GitHub's API made from its
+documentation; there is no proof against GitHub yet.
+
 The SQL Server backend (`mssql`) creates one login per lease with a generated password
 that meets SQL Server's password policy, a user for it in the configured database, and
 that user's membership of the role's database roles; the Azure SQL backend
@@ -494,7 +506,7 @@ account. Wildcard host patterns need the separate
 `allow_wildcard_account_host` operator opt-in; omitting the host never creates a
 global `user@'%'` login. The provider catalog shows both settings before issue.
 
-- `GET /api/v1/secrets/leases/providers` returns twenty-two safe setup recipes (including the
+- `GET /api/v1/secrets/leases/providers` returns twenty-three safe setup recipes (including the
   `aws-iam` compatibility name for `aws-sts`). Each states its `authority` (what a
   leased credential may do) and its `revocation`: `confirmed` when the provider ends
   the credential before its native expiry (the lease's `revocation_status` reaches

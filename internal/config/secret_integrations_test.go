@@ -470,6 +470,48 @@ func TestValidateMSSQLProvidersA239(t *testing.T) {
 	}
 }
 
+func TestValidateGitHubAppProviderA239(t *testing.T) {
+	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "github", Type: "github-app",
+		ClientID: "Iv1.0123456789abcdef", PrivateKeyRef: "file:/run/secrets/github-app.pem", InstallationID: "4242",
+		AllowedRoles: []string{"ci"}, MaxTTL: "1h"}
+	check := func(c DynamicSecretProviderConfig) error {
+		t.Helper()
+		return ValidateSecretIntegrations(SecretIntegrationsConfig{DynamicProviders: []DynamicSecretProviderConfig{c}}, true)
+	}
+	base.RoleBindings = map[string]string{"ci": "contents:read,metadata:read on api,web"}
+	if err := check(base); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*DynamicSecretProviderConfig)
+		want   string
+	}{
+		"no client":        {func(c *DynamicSecretProviderConfig) { c.ClientID = "" }, "client_id (the app's client ID) is required"},
+		"no key":           {func(c *DynamicSecretProviderConfig) { c.PrivateKeyRef = "" }, "private_key_ref"},
+		"bad installation": {func(c *DynamicSecretProviderConfig) { c.InstallationID = "acme" }, "installation_id must be GitHub's numeric"},
+		"over an hour":     {func(c *DynamicSecretProviderConfig) { c.MaxTTL = "2h" }, "max_ttl must be at most 1h"},
+		"no on":            {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"ci": "contents:read"} }, `must be "<permission>:<level> on <repositories>"`},
+		"bad level": {func(c *DynamicSecretProviderConfig) {
+			c.RoleBindings = map[string]string{"ci": "contents:owner on api"}
+		}, "is not <permission>:read"},
+		"every repository": {func(c *DynamicSecretProviderConfig) { c.RoleBindings = map[string]string{"ci": "contents:read on *"} }, "is not a repository name"},
+		"secret on github": {func(c *DynamicSecretProviderConfig) { c.ClientSecretRef = "file:/run/secrets/x" }, "client_secret_ref is only valid for"},
+	} {
+		c := base
+		c.RoleBindings = map[string]string{"ci": "contents:read,metadata:read on api,web"}
+		tc.mutate(&c)
+		if err := check(c); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", name, err, tc.want)
+		}
+	}
+	other := base
+	other.Type, other.ClientID = "tailscale", ""
+	other.BearerTokenRef, other.RoleBindings = "file:/run/secrets/ts", map[string]string{"ci": "tag:ci"}
+	if err := check(other); err == nil || !strings.Contains(err.Error(), "private_key_ref and installation_id are only valid for github-app") {
+		t.Fatalf("github-app fields on another type: %v", err)
+	}
+}
+
 func TestValidateTailscaleProviderA239(t *testing.T) {
 	base := DynamicSecretProviderConfig{TenantID: "11111111-1111-1111-1111-111111111111", ID: "tailnet", Type: "tailscale",
 		BearerTokenRef: "file:/run/secrets/tailscale-api", AllowedRoles: []string{"ci"},

@@ -2349,6 +2349,29 @@ allowed to manage auth keys, optionally `tailnet` (default `-`, the token's own)
 role's comma-separated ACL tags. Each lease is a single-use, ephemeral,
 preauthorized auth key with those tags, valid for `max_ttl`; revocation deletes it.
 
+For a GitHub App (A239, `github-app`), set `client_id` to the app's client ID,
+`private_key_ref` to its private key (PEM), `installation_id` to the installation the
+tokens are minted for, `max_ttl` to at most `1h` (GitHub ends installation tokens after
+an hour), optionally `endpoint` (default `https://api.github.com`; GitHub Enterprise
+Server is `https://<host>/api/v3`), and `role_bindings` to
+`"<permission>:<level> on <repositories>"` per allowed role, naming each repository.
+Each lease is a token with exactly those permissions on those repositories; revocation
+ends it by presenting it, and a lease can't be extended.
+
+```json
+{
+  "tenant_id": "11111111-1111-1111-1111-111111111111",
+  "id": "github",
+  "type": "github-app",
+  "client_id": "Iv1.0123456789abcdef",
+  "private_key_ref": "file:/run/secrets/github-app.pem",
+  "installation_id": "4242",
+  "allowed_roles": ["ci"],
+  "role_bindings": {"ci": "contents:read,metadata:read on api,web"},
+  "max_ttl": "1h"
+}
+```
+
 For SQL Server (A239, `mssql`), set `admin_dsn_ref` to a `sqlserver://` DSN of a login
 allowed to manage logins and users, end sessions (`ALTER ANY CONNECTION`) and add role
 members, `database` to the database leased logins get a user in, and `role_bindings` to

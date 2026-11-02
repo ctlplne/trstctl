@@ -243,7 +243,7 @@ func (p *configuredDynamicProvider) DynamicSecretProviderType() string { return 
 // second live credential for the same lease.
 func (p *configuredDynamicProvider) DynamicSecretNeedsAtMostOnceEffect() bool {
 	switch p.cfg.Type {
-	case "aws-iam", "aws-sts", "oauth-client-credentials", "tailscale":
+	case "aws-iam", "aws-sts", "oauth-client-credentials", "tailscale", "github-app":
 		return true
 	}
 	return false
@@ -258,6 +258,9 @@ func (p *configuredDynamicProvider) DynamicSecretIndeterminateIssue() string {
 	}
 	if p.cfg.Type == "tailscale" {
 		return fmt.Sprintf("Tailscale auth key creation outcome is indeterminate; a key whose description starts with \"trstctl \" (the lease's digest follows) may exist for at most %s. Delete it in the admin console before issuing another credential", p.maxTTL)
+	}
+	if p.cfg.Type == "github-app" {
+		return fmt.Sprintf("GitHub installation token request outcome is indeterminate; a token for installation %s may exist until one hour after the request (GitHub lists no installation tokens). Wait for that expiry, or suspend the installation, before issuing another credential", p.cfg.InstallationID)
 	}
 	return awsSTSIndeterminateIssue
 }
@@ -390,10 +393,10 @@ func (p *configuredPreparedDynamicProvider) GeneratePrepared(ctx context.Context
 
 func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef string) error {
 	switch p.cfg.Type {
-	case "aws-iam", "aws-sts", "oauth-client-credentials":
+	case "aws-iam", "aws-sts", "oauth-client-credentials", "github-app":
 		// The reference alone can't end these credentials: they lapse at their
-		// native expiry (an OAuth token is revoked by presenting it, through
-		// RevokeCredential).
+		// native expiry (an OAuth or GitHub token is revoked by presenting it,
+		// through RevokeCredential).
 		return dynsecret.CheckNativeExpiration(backendRef, time.Now())
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
@@ -408,7 +411,8 @@ func (p *configuredDynamicProvider) Revoke(ctx context.Context, backendRef strin
 // token at the RFC 7009 revocation endpoint). Without a revocation endpoint it
 // is Revoke: the token lapses at its native expiry.
 func (p *configuredDynamicProvider) RevokeCredential(ctx context.Context, backendRef string, credential []byte) error {
-	if p.cfg.Type != "oauth-client-credentials" || p.cfg.RevocationEndpoint == "" {
+	revocable := p.cfg.Type == "github-app" || (p.cfg.Type == "oauth-client-credentials" && p.cfg.RevocationEndpoint != "")
+	if !revocable {
 		return p.Revoke(ctx, backendRef)
 	}
 	backend, closeBackend, err := p.openBackend(ctx)
@@ -456,6 +460,8 @@ func openConfiguredDynamicBackend(ctx context.Context, p *configuredDynamicProvi
 		return openConfiguredRabbitMQBackend(opener)
 	case "kafka":
 		return openConfiguredKafkaBackend(opener)
+	case "github-app":
+		return openConfiguredGitHubAppBackend(opener)
 	case "couchbase":
 		return openConfiguredCouchbaseBackend(opener)
 	case "milvus":
@@ -723,6 +729,33 @@ func openConfiguredMilvusBackend(o *configuredDynamicBackendOpener) (requestDyna
 	backend, err := dynsecret.NewMilvusBackend(dynsecret.MilvusConfig{
 		Endpoint: cfg.Endpoint, AdminUser: cfg.AdminUser, AdminPassword: password, RoleBindings: cfg.RoleBindings,
 		UsernamePrefix: cfg.UsernamePrefix, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
+	})
+	if err != nil {
+		return o.fail(err)
+	}
+	return backend, o.closeWith(backend, nil), nil
+}
+
+// openConfiguredGitHubAppBackend reads the app's private key into a backend that
+// keeps its own sealed copy, signs each token request's app JWT through the
+// crypto boundary, and calls the API through the SSRF-guarded client (A239).
+func openConfiguredGitHubAppBackend(o *configuredDynamicBackendOpener) (requestDynamicBackend, func(), error) {
+	cfg := o.provider.cfg
+	privateKey, err := o.resolve(cfg.PrivateKeyRef)
+	if err != nil {
+		return o.fail(err)
+	}
+	endpoint := cfg.Endpoint
+	if endpoint == "" {
+		endpoint = "https://api.github.com"
+	}
+	client, err := secretIntegrationHTTPClient(endpoint, cfg.AllowPrivate, cfg.AllowInsecureLoopback, cfg.PrivateEgressCIDRs, o.provider.guard)
+	if err != nil {
+		return o.fail(err)
+	}
+	backend, err := dynsecret.NewGitHubAppBackend(dynsecret.GitHubAppConfig{
+		Endpoint: endpoint, ClientID: cfg.ClientID, PrivateKey: privateKey, InstallationID: cfg.InstallationID,
+		RoleBindings: cfg.RoleBindings, MaxLifetime: o.provider.maxTTL, AllowInsecureLoopback: cfg.AllowInsecureLoopback, HTTPClient: client,
 	})
 	if err != nil {
 		return o.fail(err)
