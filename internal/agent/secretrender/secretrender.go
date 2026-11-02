@@ -66,6 +66,9 @@ type Template struct {
 	// OnStale is what happens when the freshness bound passes without reaching
 	// the control plane: remove (the default) or keep.
 	OnStale string `yaml:"on_stale" json:"on_stale"`
+	// LeaseTTL is the lifetime asked for each dynamic lease the template uses;
+	// one hour when zero.
+	LeaseTTL time.Duration `yaml:"lease_ttl" json:"lease_ttl"`
 }
 
 // Hook reloads the application after a write: an argv run with no shell, or a
@@ -96,6 +99,22 @@ type Reporter interface {
 	Report(ctx context.Context, consumer, state string, versions map[string]int) error
 }
 
+// Lease is a dynamic credential as issued; Credential is returned only here.
+type Lease struct {
+	ID            string
+	Credential    []byte
+	ExpiresAt     time.Time
+	HardExpiresAt time.Time
+}
+
+// LeaseClient issues, renews and revokes dynamic leases. key makes an issue
+// idempotent: a retry with the same key returns the same lease.
+type LeaseClient interface {
+	IssueLease(ctx context.Context, provider, role string, ttl time.Duration, key string) (Lease, error)
+	RenewLease(ctx context.Context, id string, extend time.Duration, key string) (time.Time, error)
+	RevokeLease(ctx context.Context, id, key string) error
+}
+
 const (
 	defaultInterval  = 30 * time.Second
 	defaultFreshness = time.Hour
@@ -103,18 +122,24 @@ const (
 	stateKeep        = "keep"
 )
 
-var placeholder = regexp.MustCompile(`^\{\{\s*secret\s+"([^"]{1,512})"\s*\}\}`)
+var (
+	placeholder      = regexp.MustCompile(`^\{\{\s*secret\s+"([^"]{1,512})"\s*\}\}`)
+	leasePlaceholder = regexp.MustCompile(`^\{\{\s*lease\s+"([A-Za-z0-9][A-Za-z0-9._-]{0,127}/[A-Za-z0-9][A-Za-z0-9._-]{0,127})"(?:\s+"([A-Za-z0-9_.-]{1,64})")?\s*\}\}`)
+)
 
 type segment struct {
 	literal []byte
 	secret  string
+	lease   string // "provider/role"
+	field   string // a JSON field of the lease credential; empty for all of it
 }
 
-// parseTemplate splits text into literal bytes and secret placeholders. Only
-// {{ secret "name" }} is supported, so a template can't run code.
-func parseTemplate(text string) ([]segment, []string, error) {
+// parseTemplate splits text into literal bytes and placeholders: only
+// {{ secret "name" }} and {{ lease "provider/role" "field" }} are supported, so
+// a template can't run code.
+func parseTemplate(text string) ([]segment, []string, []string, error) {
 	var segs []segment
-	var names []string
+	var names, leases []string
 	rest := text
 	for {
 		idx := strings.Index(rest, "{{")
@@ -127,17 +152,25 @@ func parseTemplate(text string) ([]segment, []string, error) {
 		if idx > 0 {
 			segs = append(segs, segment{literal: []byte(rest[:idx])})
 		}
-		m := placeholder.FindStringSubmatch(rest[idx:])
-		if m == nil {
-			return nil, nil, errors.New(`secretrender: only {{ secret "name" }} placeholders are supported`)
+		if m := placeholder.FindStringSubmatch(rest[idx:]); m != nil {
+			segs = append(segs, segment{secret: m[1]})
+			if !slices.Contains(names, m[1]) {
+				names = append(names, m[1])
+			}
+			rest = rest[idx+len(m[0]):]
+			continue
 		}
-		segs = append(segs, segment{secret: m[1]})
-		if !slices.Contains(names, m[1]) {
-			names = append(names, m[1])
+		if m := leasePlaceholder.FindStringSubmatch(rest[idx:]); m != nil {
+			segs = append(segs, segment{lease: m[1], field: m[2]})
+			if !slices.Contains(leases, m[1]) {
+				leases = append(leases, m[1])
+			}
+			rest = rest[idx+len(m[0]):]
+			continue
 		}
-		rest = rest[idx+len(m[0]):]
+		return nil, nil, nil, errors.New(`secretrender: only {{ secret "name" }} and {{ lease "provider/role" "field" }} placeholders are supported`)
 	}
-	return segs, names, nil
+	return segs, names, leases, nil
 }
 
 // Validate checks a configuration before anything runs.
@@ -154,7 +187,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("secretrender: template %q needs a unique name and an absolute destination", t.Name)
 		}
 		seen[t.Name] = true
-		if _, _, err := parseTemplate(t.Text); err != nil {
+		if _, _, _, err := parseTemplate(t.Text); err != nil {
 			return fmt.Errorf("template %s: %w", t.Name, err)
 		}
 		if _, err := t.mode(); err != nil {
@@ -195,11 +228,24 @@ func signalKnown(name string) bool {
 // templateState is what the renderer keeps between runs: versions and times,
 // never values.
 type templateState struct {
-	Versions  map[string]int `json:"versions"`
-	FetchedAt time.Time      `json:"fetched_at"`
-	WrittenAt time.Time      `json:"written_at"`
-	Verified  bool           `json:"verified"`
-	Removed   bool           `json:"removed,omitempty"`
+	Versions  map[string]int        `json:"versions"`
+	FetchedAt time.Time             `json:"fetched_at"`
+	WrittenAt time.Time             `json:"written_at"`
+	Verified  bool                  `json:"verified"`
+	Removed   bool                  `json:"removed,omitempty"`
+	Leases    map[string]leaseState `json:"leases,omitempty"`
+	// Retire lists replaced leases, revoked once the application verified
+	// their replacement.
+	Retire []string `json:"retire,omitempty"`
+}
+
+// leaseState is a lease the file uses: never its credential. IssueKey is set
+// before an issue call, so a retry after a crash gets the same lease back.
+type leaseState struct {
+	ID            string    `json:"id,omitempty"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	HardExpiresAt time.Time `json:"hard_expires_at"`
+	IssueKey      string    `json:"issue_key,omitempty"`
 }
 
 // Renderer keeps a configuration's files current.
@@ -207,9 +253,13 @@ type Renderer struct {
 	cfg    Config
 	fetch  Fetcher
 	report Reporter
+	leases LeaseClient
 	logger *slog.Logger
 	now    func() time.Time
 }
+
+// UseLeases lets the renderer issue, renew and revoke dynamic leases.
+func (r *Renderer) UseLeases(c LeaseClient) { r.leases = c }
 
 // New builds a renderer from a validated configuration.
 func New(cfg Config, fetch Fetcher, report Reporter, logger *slog.Logger) (*Renderer, error) {
@@ -276,9 +326,12 @@ func (r *Renderer) saveState(t Template, st templateState) error {
 }
 
 func (r *Renderer) reconcile(ctx context.Context, t Template) error {
-	segs, names, err := parseTemplate(t.Text)
+	segs, names, leaseRefs, err := parseTemplate(t.Text)
 	if err != nil {
 		return err
+	}
+	if len(leaseRefs) > 0 && r.leases == nil {
+		return errors.New("secretrender: the template uses leases but no lease client is configured")
 	}
 	st := r.loadState(t)
 	values := map[string][]byte{}
@@ -308,20 +361,75 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 	for _, name := range names {
 		rendered[name] = versions[name]
 	}
-	if maps.Equal(rendered, st.Versions) && statErr == nil && !st.Removed {
+	ttl := t.LeaseTTL
+	if ttl <= 0 {
+		ttl = time.Hour
+	}
+	// A lease is renewed in place while it can be; one that can't be renewed
+	// far enough is replaced. A file that must be written again needs fresh
+	// credentials for every lease, since a credential is returned only once.
+	replace := false
+	for _, ref := range leaseRefs {
+		ls := st.Leases[ref]
+		if ls.ID == "" {
+			replace = true
+			continue
+		}
+		if ls.ExpiresAt.Sub(now) > ttl/3 {
+			continue
+		}
+		if exp, err := r.leases.RenewLease(ctx, ls.ID, ttl, ls.ID+"/renew/"+now.UTC().Format(time.RFC3339)); err == nil && exp.Sub(now) > ttl/3 {
+			ls.ExpiresAt = exp
+			st.Leases[ref] = ls
+			continue
+		}
+		replace = true
+	}
+	staticChanged := !maps.Equal(rendered, st.Versions) || statErr != nil || st.Removed
+	if !staticChanged && !replace {
 		if !st.Verified && t.Verify.URL != "" && r.verify(ctx, t, values) == nil {
 			st.Verified = true
 			r.reportQuietly(ctx, t, "verified", rendered)
 		}
+		if st.Verified || t.Verify.URL == "" {
+			r.retireLeases(ctx, t, &st)
+		}
 		return r.saveState(t, st)
+	}
+	leaseValues := map[string][]byte{}
+	defer func() {
+		for ref, v := range leaseValues {
+			secret.Wipe(v)
+			delete(leaseValues, ref)
+		}
+	}()
+	if len(leaseRefs) > 0 {
+		if st.Leases == nil {
+			st.Leases = map[string]leaseState{}
+		}
+		for _, ref := range leaseRefs {
+			lease, err := r.issueLease(ctx, t, &st, ref, ttl)
+			if err != nil {
+				return err
+			}
+			leaseValues[ref] = lease.Credential
+		}
 	}
 	var buf bytes.Buffer
 	for _, s := range segs {
-		if s.secret != "" {
+		switch {
+		case s.secret != "":
 			buf.Write(values[s.secret])
-			continue
+		case s.lease != "":
+			value, err := leaseField(leaseValues[s.lease], s.field)
+			if err != nil {
+				return fmt.Errorf("lease %s: %w", s.lease, err)
+			}
+			buf.Write(value)
+			secret.Wipe(value)
+		default:
+			buf.Write(s.literal)
 		}
-		buf.Write(s.literal)
 	}
 	content := buf.Bytes()
 	mode, _ := t.mode()
@@ -341,16 +449,86 @@ func (r *Renderer) reconcile(ctx context.Context, t Template) error {
 	if t.Verify.URL != "" {
 		if err := r.verify(ctx, t, values); err != nil {
 			r.logger.Warn("application did not verify the new values", slog.String("template", t.Name), slog.String("error", err.Error()))
-			return nil
+			return r.saveState(t, st)
 		}
 		st.Verified = true
-		if err := r.saveState(t, st); err != nil {
-			return err
-		}
 		r.reportQuietly(ctx, t, "verified", rendered)
+	}
+	// Replacement before revocation: a replaced lease is revoked only once the
+	// application took its replacement.
+	r.retireLeases(ctx, t, &st)
+	if err := r.saveState(t, st); err != nil {
+		return err
 	}
 	r.logger.Info("secret template written", slog.String("template", t.Name), slog.String("destination", t.Destination))
 	return nil
+}
+
+// issueLease issues a lease for ref under a key persisted first, and queues
+// the lease it replaces for retirement.
+func (r *Renderer) issueLease(ctx context.Context, t Template, st *templateState, ref string, ttl time.Duration) (Lease, error) {
+	provider, role, _ := strings.Cut(ref, "/")
+	ls := st.Leases[ref]
+	if ls.IssueKey == "" {
+		suffix, err := crypto.RandomBytes(12)
+		if err != nil {
+			return Lease{}, err
+		}
+		ls.IssueKey = "secret-render-lease-" + hex.EncodeToString(suffix)
+		st.Leases[ref] = ls
+		if err := r.saveState(t, *st); err != nil {
+			return Lease{}, err
+		}
+	}
+	lease, err := r.leases.IssueLease(ctx, provider, role, ttl, ls.IssueKey)
+	if err != nil {
+		return Lease{}, fmt.Errorf("issue lease %s: %w", ref, err)
+	}
+	if ls.ID != "" && ls.ID != lease.ID && !slices.Contains(st.Retire, ls.ID) {
+		st.Retire = append(st.Retire, ls.ID)
+	}
+	st.Leases[ref] = leaseState{ID: lease.ID, ExpiresAt: lease.ExpiresAt, HardExpiresAt: lease.HardExpiresAt}
+	return lease, nil
+}
+
+// retireLeases revokes replaced leases; one that can't be revoked now is tried
+// again on the next pass.
+func (r *Renderer) retireLeases(ctx context.Context, t Template, st *templateState) {
+	var keep []string
+	for _, id := range st.Retire {
+		if err := r.leases.RevokeLease(ctx, id, id+"/retire"); err != nil {
+			r.logger.Warn("a replaced lease could not be revoked yet", slog.String("template", t.Name), slog.String("lease", id))
+			keep = append(keep, id)
+		}
+	}
+	st.Retire = keep
+}
+
+// leaseField returns a copy of one JSON string field of a lease credential, or
+// the whole credential when field is empty.
+func leaseField(credential []byte, field string) ([]byte, error) {
+	if field == "" {
+		return bytes.Clone(credential), nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(credential, &fields); err != nil {
+		return nil, errors.New("the credential is not a JSON object")
+	}
+	defer func() {
+		for k, v := range fields {
+			secret.Wipe(v)
+			delete(fields, k)
+		}
+	}()
+	raw, ok := fields[field]
+	if !ok {
+		return nil, fmt.Errorf("the credential has no field %q", field)
+	}
+	var value secret.JSONBytes
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, fmt.Errorf("field %q is not a string", field)
+	}
+	return value, nil
 }
 
 // stale handles a template whose values can't be fetched: within the freshness
@@ -359,7 +537,13 @@ func (r *Renderer) stale(ctx context.Context, t Template, st templateState, caus
 	if st.FetchedAt.IsZero() || st.Removed {
 		return fmt.Errorf("control plane unreachable: %w", cause)
 	}
+	// A lease credential is dead at its own expiry, whatever the freshness bound.
 	deadline := st.FetchedAt.Add(r.cfg.Freshness)
+	for _, ls := range st.Leases {
+		if !ls.ExpiresAt.IsZero() && ls.ExpiresAt.Before(deadline) {
+			deadline = ls.ExpiresAt
+		}
+	}
 	if r.now().Before(deadline) {
 		r.logger.Warn("serving the last values until the freshness bound", slog.String("template", t.Name),
 			slog.Time("fresh_until", deadline))
@@ -602,6 +786,76 @@ func (c *HTTPClient) Report(ctx context.Context, consumer, state string, version
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("the control plane answered %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// IssueLease issues a dynamic lease; the credential is in this answer only.
+func (c *HTTPClient) IssueLease(ctx context.Context, provider, role string, ttl time.Duration, key string) (Lease, error) {
+	raw, err := json.Marshal(map[string]any{"provider": provider, "role": role, "ttl_seconds": int(ttl / time.Second)})
+	if err != nil {
+		return Lease{}, err
+	}
+	var body struct {
+		ID            string           `json:"id"`
+		Credential    secret.JSONBytes `json:"credential"`
+		ExpiresAt     time.Time        `json:"expires_at"`
+		HardExpiresAt *time.Time       `json:"hard_expires_at"`
+	}
+	if err := c.post(ctx, "/api/v1/secrets/leases", key, raw, &body); err != nil {
+		return Lease{}, err
+	}
+	if body.ID == "" || len(body.Credential) == 0 {
+		secret.Wipe(body.Credential)
+		return Lease{}, errors.New("the control plane issued no credential yet")
+	}
+	lease := Lease{ID: body.ID, Credential: []byte(body.Credential), ExpiresAt: body.ExpiresAt}
+	if body.HardExpiresAt != nil {
+		lease.HardExpiresAt = *body.HardExpiresAt
+	}
+	return lease, nil
+}
+
+// RenewLease extends a lease and returns its new expiry.
+func (c *HTTPClient) RenewLease(ctx context.Context, id string, extend time.Duration, key string) (time.Time, error) {
+	raw, err := json.Marshal(map[string]any{"extend_seconds": int(extend / time.Second)})
+	if err != nil {
+		return time.Time{}, err
+	}
+	var body struct {
+		ExpiresAt time.Time `json:"expires_at"`
+	}
+	if err := c.post(ctx, "/api/v1/secrets/leases/"+url.PathEscape(id)+"/renew", key, raw, &body); err != nil {
+		return time.Time{}, err
+	}
+	return body.ExpiresAt, nil
+}
+
+// RevokeLease revokes a lease.
+func (c *HTTPClient) RevokeLease(ctx context.Context, id, key string) error {
+	return c.post(ctx, "/api/v1/secrets/leases/"+url.PathEscape(id)+"/revoke", key, []byte("{}"), nil)
+}
+
+func (c *HTTPClient) post(ctx context.Context, path, key string, body []byte, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.server+path, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", key)
+	resp, err := c.do(req)
+	if err != nil {
+		return errors.New("the control plane could not be reached")
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("the control plane answered %d", resp.StatusCode)
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out); err != nil {
+		return errors.New("the control plane's answer could not be read")
 	}
 	return nil
 }

@@ -6,7 +6,9 @@
   templates rendered into files with atomic writes and the file's mode, runs the application's reload hook, and
   asks the application to prove it uses the new value. Delivery reports (`trstctl-cli secrets deliveries
   report|list`) keep "injected" apart from "verified", and a control-plane outage keeps the last file only until
-  its freshness bound, across agent restarts.
+  its freshness bound, across agent restarts. Templates can use dynamic leases (`{{ lease "provider/role" "field" }}`):
+  a lease is renewed in place or replaced, and the replaced lease is revoked only after the application verifies the
+  new credential.
 
 - Scoped secret sync: `trstctl secrets scoped-syncs define|preview|apply` keeps every secret under a source prefix
   in step with a KV v2 destination under a prefix. The value-free plan lists create, update (with drift named),

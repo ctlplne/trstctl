@@ -1106,9 +1106,21 @@ only, or `behind`. A consumer can report only secrets it may read, at versions t
 exist (`trstctl-cli secrets deliveries report`). When the control plane can't be reached
 the last file keeps serving until `freshness` runs out. Then it's removed and the
 application reloaded, or kept if the template says `on_stale: keep`. The fetch time lives
-in a state file with no values, so the bound holds across an agent restart. Replacing a
-dynamic lease before revoking the old one, and a CSI volume for pods, are A238's second
-part.
+in a state file with no values, so the bound holds across an agent restart.
+
+A template can also use a dynamic lease:
+`{{ lease "payments-db/readonly" "username" }}` and `{{ lease "payments-db/readonly" "password" }}`
+pick JSON fields of the lease's credential, and `{{ lease "provider/role" }}` takes all
+of it (`lease_ttl` sets the lifetime asked for; the token then needs `secrets:write`). A
+lease is renewed in place while it can be. When it can't be renewed far enough, or when
+the file must be written again for another reason (a credential is returned only at
+issue), a new lease is issued. The new credential is written and verified by the
+application, and only then is the replaced lease revoked: replacement before revocation.
+If the application doesn't verify, the old lease stays valid until it does. Each issue
+uses a key saved before the call, so a retry after a lost answer gets the same lease back
+instead of leaving an untracked one. Without the control plane, a file holding a lease
+credential goes at the lease's own expiry if that comes before the freshness bound. A CSI
+volume for pods is A238's last part.
 
 `GET /api/v1/secrets/unvaulted` / `trstctl-cli secrets unvaulted`: repository and
 third-party scanning sources, redacted `leaked_secret` finding counts, cloud-secret

@@ -55,5 +55,6 @@ func runSecretRender(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
+	renderer.UseLeases(client)
 	return renderer.Run(ctx)
 }

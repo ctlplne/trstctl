@@ -4,7 +4,9 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -247,3 +249,149 @@ func TestServedSecretRenderKeepsAnApplicationServingThroughRotationsA238(t *test
 type writerFunc func(p []byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// renderLeaseBackend is a database that hands out numbered logins and records
+// the order logins are created and revoked.
+type renderLeaseBackend struct {
+	mu      sync.Mutex
+	n       int
+	active  map[string]string // ref → password
+	events  []string
+	revoked map[string]bool
+}
+
+func (b *renderLeaseBackend) Create(_ context.Context, _ string) (string, []byte, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.n++
+	ref, pw := fmt.Sprintf("login-%d", b.n), fmt.Sprintf("lease-pw-%d", b.n)
+	b.active[ref] = pw
+	b.events = append(b.events, "create "+ref)
+	return ref, []byte(fmt.Sprintf(`{"username":"app-%d","password":"%s"}`, b.n, pw)), nil
+}
+
+func (b *renderLeaseBackend) Revoke(_ context.Context, ref string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.revoked[ref] {
+		b.revoked[ref] = true
+		b.events = append(b.events, "revoke "+ref)
+	}
+	return nil
+}
+
+func (b *renderLeaseBackend) accepts(password string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for ref, pw := range b.active {
+		if pw == password && !b.revoked[ref] {
+			return true
+		}
+	}
+	return false
+}
+
+// A238: a template that uses a dynamic lease gets a fresh lease when the file
+// must be written again; the new login is created, written and verified by the
+// application before the old login is revoked at the database.
+func TestServedSecretRenderReplacesALeaseBeforeRevokingItA238(t *testing.T) {
+	backend := &renderLeaseBackend{active: map[string]string{}, revoked: map[string]bool{}}
+	h := newServedHarness(t, config.Protocols{}, withSecretsEnabled(t, nil), withPreviewDynamicSecretProvider(backend))
+	registerServedTenant(t, h, "A238 lease tenant")
+	operator := seedScopedTokenSubject(t, h.store, h.tenant, "a238-lease-agent", "secrets:read", "secrets:write")
+	// Issuance and revocation run through the outbox: keep the dispatcher going.
+	dispatcherCtx, cancelDispatcher := context.WithCancel(context.Background())
+	dispatcherDone := make(chan struct{})
+	go func() {
+		defer close(dispatcherDone)
+		h.srv.RunDispatcher(dispatcherCtx)
+	}()
+	t.Cleanup(func() {
+		cancelDispatcher()
+		<-dispatcherDone
+	})
+	if status, raw := secretsReqKey(t, h, http.MethodPost, "/api/v1/secrets/store", operator, "a238-lease-app",
+		map[string]any{"name": "lease238/app/name", "value": "reporting"}); status != http.StatusCreated {
+		t.Fatalf("seed: HTTP %d %s", status, raw)
+	}
+	dir := t.TempDir()
+	file := filepath.Join(dir, "db.env")
+	// When the application first proves it uses the replacement login, the old
+	// login must still be alive: revocation waits for that proof.
+	var oldAliveAtVerify atomic.Int32
+	application := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		raw, _ := os.ReadFile(file) // #nosec G304 -- the test's own temp file (CWE-22)
+		_, pass, _ := strings.Cut(strings.TrimSpace(string(raw)), "pass=")
+		if pass == "lease-pw-2" && oldAliveAtVerify.Load() == 0 { // #nosec G101 -- fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798)
+			backend.mu.Lock()
+			if backend.revoked["login-1"] {
+				oldAliveAtVerify.Store(-1)
+			} else {
+				oldAliveAtVerify.Store(1)
+			}
+			backend.mu.Unlock()
+		}
+		if !backend.accepts(pass) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(application.Close)
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(tokenFile, []byte(operator), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	client, err := secretrender.NewHTTPClient(h.ts.URL, "", tokenFile, h.ts.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := secretrender.New(secretrender.Config{
+		Server: h.ts.URL, TokenFile: tokenFile, Consumer: "reporting/app", StateDir: filepath.Join(t.TempDir(), "state"),
+		Templates: []secretrender.Template{{
+			Name: "db", Destination: file, LeaseTTL: 15 * time.Minute,
+			Text: "app={{ secret \"lease238/app/name\" }} user={{ lease \"payments-db/readonly-reporting\" \"username\" }} " +
+				"pass={{ lease \"payments-db/readonly-reporting\" \"password\" }}\n",
+			Verify: secretrender.Verify{URL: application.URL, Timeout: 5 * time.Second},
+		}},
+	}, client, client, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.UseLeases(client)
+	r.Once(t.Context())
+	if raw, _ := os.ReadFile(file); !strings.Contains(string(raw), "pass=lease-pw-1") { // #nosec G304 -- the test's own temp file (CWE-22)
+		t.Fatalf("first file %q", raw)
+	}
+	if status, raw := secretsReqKey(t, h, http.MethodPut, "/api/v1/secrets/store/lease238/app/name", operator, "a238-lease-app-2",
+		map[string]any{"value": "reporting-v2"}); status != http.StatusOK {
+		t.Fatalf("rotate: HTTP %d %s", status, raw)
+	}
+	r.Once(t.Context())
+	if raw, _ := os.ReadFile(file); !strings.Contains(string(raw), "app=reporting-v2") || !strings.Contains(string(raw), "pass=lease-pw-2") { // #nosec G304 -- the test's own temp file (CWE-22)
+		t.Fatalf("replaced file %q", raw)
+	}
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		backend.mu.Lock()
+		done := backend.revoked["login-1"]
+		backend.mu.Unlock()
+		if done {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	backend.mu.Lock()
+	events := strings.Join(backend.events, ",")
+	backend.mu.Unlock()
+	if events != "create login-1,create login-2,revoke login-1" {
+		t.Fatalf("the database saw %s; want the replacement created before the old login was revoked", events)
+	}
+	if !backend.accepts("lease-pw-2") || backend.accepts("lease-pw-1") {
+		t.Fatal("the replacement is not the only live login")
+	}
+	if oldAliveAtVerify.Load() != 1 {
+		t.Fatal("the old login was revoked before the application verified its replacement")
+	}
+	t.Logf("A238_LEASE_OK %s", events)
+}

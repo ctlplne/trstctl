@@ -92,12 +92,14 @@ func app(t *testing.T, file string, healthy *atomic.Bool) *httptest.Server {
 }
 
 func TestTemplatesAcceptOnlySecretPlaceholdersA238(t *testing.T) {
-	segs, names, err := parseTemplate(`user:{{ secret "web/prod/password" }}` + "\n" + `{{secret "web/prod/password"}}`)
-	if err != nil || len(names) != 1 || names[0] != "web/prod/password" || len(segs) != 4 {
-		t.Fatalf("segments %d names %v err %v", len(segs), names, err)
+	segs, names, leases, err := parseTemplate(`user:{{ secret "web/prod/password" }}` + "\n" + `{{secret "web/prod/password"}}` +
+		`{{ lease "payments-db/readonly" "username" }}`)
+	if err != nil || len(names) != 1 || names[0] != "web/prod/password" || len(segs) != 5 ||
+		len(leases) != 1 || leases[0] != "payments-db/readonly" {
+		t.Fatalf("segments %d names %v leases %v err %v", len(segs), names, leases, err)
 	}
-	for _, bad := range []string{`{{ .Env.HOME }}`, `{{ secret "x" | printf }}`, `{{ exec "id" }}`} {
-		if _, _, err := parseTemplate(bad); err == nil {
+	for _, bad := range []string{`{{ .Env.HOME }}`, `{{ secret "x" | printf }}`, `{{ exec "id" }}`, `{{ lease "no-role" }}`} {
+		if _, _, _, err := parseTemplate(bad); err == nil {
 			t.Fatalf("%q was accepted", bad)
 		}
 	}

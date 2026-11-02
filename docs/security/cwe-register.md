@@ -54,11 +54,11 @@ golangci-lint results do not replace that evidence.
 
 ## Waivers (accepted or false-positive, in-source, reasoned)
 
-2218 annotated sites across 29 rules. Each row is
+2224 annotated sites across 29 rules. Each row is
 generated from the `#nosec` comment at that exact line; edit the source,
 not this file.
 
-### G101 — CWE-798 Use of hardcoded credentials (485 sites)
+### G101 — CWE-798 Use of hardcoded credentials (486 sites)
 
 | Location | Reason |
 |---|---|
@@ -138,7 +138,7 @@ not this file.
 | `internal/agent/relay/rightsize_job.go:49` | a credential REFERENCE NAME, not a credential (CWE-798) |
 | `internal/agent/relay/takedown_test.go:80` | a secret:// reference name, not a credential (CWE-798) |
 | `internal/agent/relay/ticketsync_test.go:66` | TokenRef is a non-secret locator in a deterministic test fixture (CWE-798). |
-| `internal/agent/secretrender/secretrender_test.go:123` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
+| `internal/agent/secretrender/secretrender_test.go:125` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/agent/transport/agentservice.go:917` | an RPC method name, not a credential. The material this |
 | `internal/agent/transport/agentservice.go:924` | an RPC method name. This call carries a CSR up and returns |
 | `internal/agent/transport/receipt.go:225` | an operator-facing refusal phrase matching the secret-name heuristic; no credential value present (CWE-798) |
@@ -491,6 +491,7 @@ not this file.
 | `internal/server/scheduler_history_assembled_test.go:34` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/scheduler_history_sanitation_test.go:14` | deliberately toxic non-routable fixture proves sanitation (CWE-798). |
 | `internal/server/secret_integrations.go:1188` | identifier/constant matching the secret-name heuristic; no credential value present (CWE-798) |
+| `internal/server/secret_render_served_test.go:325` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:196` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_scoped_sync_served_test.go:479` | fabricated fixture credential/identifier; the test needs the shape, no value is real (CWE-798) |
 | `internal/server/secret_store_api_key_served_test.go:104` | credential references to fabricated fixture values (CWE-798) |
@@ -1156,7 +1157,7 @@ not this file.
 | `internal/agent/relay/adcsdatabase.go:155` | reviewed SEC-005 argv: fixed flags built by this package; the binary is operator-configured and every value is validated as one non-option argument (CWE-78) |
 | `internal/agent/relay/native_probe_host_test.go:34` | local stock test executable, fixed arguments. |
 | `internal/agent/relay/native_probe_host_test.go:81` | fixed stock command against owned loopback fixtures. |
-| `internal/agent/secretrender/secretrender.go:406` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
+| `internal/agent/secretrender/secretrender.go:590` | operator-configured reload argv from the renderer's own configuration; running it is the feature (CWE-78) |
 | `internal/agent/sshkrl/revocations_test.go:84` | fixed ssh-keygen argv over test-owned temp paths |
 | `internal/agent/sshtrust/sshd_live_test.go:61` | test executes a fixed local tool or fixture it built itself (CWE-78) |
 | `internal/agent/sshtrust/sshd_live_test.go:153` | test executes a fixed local tool or fixture it built itself (CWE-78) |
@@ -1473,7 +1474,7 @@ not this file.
 | `tools/dodcensus/substrate_broker_test.go:166` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 | `tools/dodcensus/substrate_broker_test.go:293` | fixture mode in a test tempdir; the mode is part of the fixture (CWE-276) |
 
-### G304 — CWE-22 Path traversal (file inclusion via variable) (609 sites)
+### G304 — CWE-22 Path traversal (file inclusion via variable) (614 sites)
 
 | Location | Reason |
 |---|---|
@@ -1666,17 +1667,19 @@ not this file.
 | `internal/agent/secretinject/secretinject.go:179` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/secretinject/secretinject_test.go:26` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/agent/secretinject/secretinject_test.go:56` | test reads its own fixture/tempdir path (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:263` | the renderer's own state directory and a validated template name (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:388` | operator-configured pid file (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:479` | a fresh random name beside the configured destination (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:507` | the destination's own directory (CWE-22) |
-| `internal/agent/secretrender/secretrender.go:530` | operator-configured token file (CWE-22) |
+| `internal/agent/secretrender/lease_test.go:106` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/lease_test.go:130` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:313` | the renderer's own state directory and a validated template name (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:572` | operator-configured pid file (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:663` | a fresh random name beside the configured destination (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:691` | the destination's own directory (CWE-22) |
+| `internal/agent/secretrender/secretrender.go:714` | operator-configured token file (CWE-22) |
 | `internal/agent/secretrender/secretrender_test.go:82` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:139` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:145` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:160` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:215` | the test's own temp file (CWE-22) |
-| `internal/agent/secretrender/secretrender_test.go:243` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:141` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:147` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:162` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:217` | the test's own temp file (CWE-22) |
+| `internal/agent/secretrender/secretrender_test.go:245` | the test's own temp file (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:60` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:79` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
 | `internal/agent/sshdiscovery/sshdiscovery.go:96` | the agent inventories operator-configured roots; reading discovered paths is the product function (CWE-22) |
@@ -1957,7 +1960,10 @@ not this file.
 | `internal/server/run_connectors_test.go:89` | test reads its own fixture/tempdir path (CWE-22) |
 | `internal/server/runtime_worker_census_test.go:65` | test reads its own package directory (CWE-22) |
 | `internal/server/scan_annotation_served_test.go:43` | test fixture under t.TempDir (CWE-22) |
-| `internal/server/secret_render_served_test.go:67` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:323` | the test's own temp file (CWE-22) |
+| `internal/server/secret_render_served_test.go:363` | the test's own temp file (CWE-22) |
+| `internal/server/secret_render_served_test.go:371` | the test's own temp file (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:35` | test reads its own tempdir path (CWE-22) |
 | `internal/server/serve_test.go:80` | test-owned path under t.TempDir (CWE-22) |
 | `internal/server/serve_test.go:81` | test-owned path under t.TempDir (CWE-22) |
@@ -2422,11 +2428,11 @@ not this file.
 | `internal/server/protocols_served_tsa_test.go:198` | test reads its own fixture/tempdir path (CWE-22, CWE-276) |
 | `internal/server/run.go:1201` | operator-configured local file path from deployment config (CWE-22) |
 | `internal/server/secret_dynamic_lease_rotation_served_test.go:58` | test path inside its own tempdir/checkout (CWE-22) |
-| `internal/server/secret_render_served_test.go:67` | the test's own temp file or the lab directory the runner created (CWE-22) |
-| `internal/server/secret_render_served_test.go:144` | the test's own temp file or the lab directory the runner created (CWE-22) |
-| `internal/server/secret_render_served_test.go:220` | the test's own temp file or the lab directory the runner created (CWE-22) |
-| `internal/server/secret_render_served_test.go:225` | the test's own temp file or the lab directory the runner created (CWE-22) |
-| `internal/server/secret_render_served_test.go:232` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:69` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:146` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:222` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:227` | the test's own temp file or the lab directory the runner created (CWE-22) |
+| `internal/server/secret_render_served_test.go:234` | the test's own temp file or the lab directory the runner created (CWE-22) |
 | `internal/server/secret_third_party_scan_signature_served_test.go:44` | test-owned temp path |
 | `internal/server/secret_third_party_scan_signature_served_test.go:50` | test-owned temp path |
 | `internal/server/secrets_scan_served_test.go:324` | test path inside its own tempdir/checkout (CWE-22) |
@@ -2482,8 +2488,8 @@ not this file.
 | `internal/discovery/cloudcert/httpfetch.go:42` | fetches the cloud provider endpoint declared by the operator's discovery source (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:53` | the runner's own lab search engine (CWE-918) |
 | `internal/server/audit_feed_lab_p5_test.go:60` | the runner's own lab search engine (CWE-918) |
-| `internal/server/secret_render_served_test.go:132` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/secret_render_served_test.go:134` | the test application or the lab nginx on loopback (CWE-918) |
+| `internal/server/secret_render_served_test.go:136` | the test application or the lab nginx on loopback (CWE-918) |
 | `internal/server/spire_jwt_authorities_container_test.go:242` | test calls its own served harness (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:175` | test calls the cluster its runner named (CWE-918) |
 | `internal/server/vault_dynamic_credentials_cloud_test.go:181` | test calls the cluster its runner named (CWE-918) |
