@@ -229,7 +229,8 @@ def test_commands(args):
     if not args.test_binary:
         base = [args.go, "test", "-json", "-race", "-count=1", "-p=1", "-covermode=atomic", "-coverpkg=" + args.coverpkg]
 
-        def part(profile, expression):
+        def part(profile, expression, executable=None):
+            # go test builds a private binary for each part itself.
             return base + ["-coverprofile=" + str(profile), "-run", expression, "-skip", args.skip, f"-timeout={args.seconds}s", args.package]
         return base + ["-list", "^(Test|Example|Fuzz)", args.package], part, None, {}, None
     if not args.import_path:
@@ -246,10 +247,29 @@ def test_commands(args):
     overrides = {"GOROOT": goroot, "PATH": os.path.join(goroot, "bin") + os.pathsep + os.environ.get("PATH", "")}
     wrap = [args.go, "tool", "test2json", "-t", "-p", args.import_path, str(binary), "-test.v=test2json"]
 
-    def part(profile, expression):
-        return wrap + ["-test.count=1", "-test.paniconexit0", "-test.coverprofile=" + str(profile), "-test.run=" + expression,
-                       "-test.skip=" + args.skip, f"-test.timeout={args.seconds}s"]
+    def part(profile, expression, executable=None):
+        command = list(wrap)
+        if executable is not None:
+            command[command.index(str(binary))] = str(executable)
+        return command + ["-test.count=1", "-test.paniconexit0", "-test.coverprofile=" + str(profile), "-test.run=" + expression,
+                          "-test.skip=" + args.skip, f"-test.timeout={args.seconds}s"]
     return wrap + ["-test.list", "^(Test|Example|Fuzz)"], part, workdir, overrides, digest
+
+
+def private_test_binary(binary, root):
+    """A part's own name for the prebuilt test binary, in its private scratch. The product starts its signer as a
+    sibling of its own executable, and tests build that sibling next to the test binary and remove it afterwards
+    (installSiblingSignerBinary); parts sharing one binary directory removed the signer another part was starting
+    ("fork/exec .../trstctl-signer: no such file", CI run 41479056374). A hard link costs no space; a copy is the
+    fallback across file systems."""
+    directory = root / "bin"
+    directory.mkdir(mode=0o700)
+    target = directory / binary.name
+    try:
+        os.link(binary, target)
+    except OSError:
+        shutil.copy2(binary, target)
+    return target
 
 
 def run(args):
@@ -288,6 +308,9 @@ def run(args):
             root = scratch / str(index)
             root.mkdir(mode=0o700)
             seed_public_archives(Path(tempfile.gettempdir()), root, Path.home() / ".embedded-postgres-go")
+        binaries = {}
+        if args.test_binary:
+            binaries = {index: private_test_binary(Path(args.test_binary).resolve(), scratch / str(index)) for index in range(len(groups))}
         seeded = sorted(str(p.relative_to(scratch / "0")) for p in (scratch / "0").rglob("*.txz")) if groups else []
         print(f">> seeded public PostgreSQL archives into each part: {', '.join(seeded) or 'none (each part downloads its own)'}", flush=True)
         began = time.monotonic()
@@ -298,7 +321,7 @@ def run(args):
             profile.unlink(missing_ok=True)
             env = {**os.environ, **overrides, "TMPDIR": str(scratch / str(index))}
             expression = "^(" + "|".join(names) + ")$"
-            command = part_command(profile, expression)
+            command = part_command(profile, expression, binaries.get(index))
             log = logpath.open("w")
             child = subprocess.Popen(command, cwd=workdir, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             children.append(child)

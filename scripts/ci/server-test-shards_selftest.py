@@ -30,10 +30,15 @@ if args[:2] == ['env', 'GOROOT']:
 if args[:2] == ['tool', 'test2json']:
     # A prebuilt test binary run through test2json: it must run from the package directory, and its baked-in
     # build flags stand in for go test's; translate its -test.* flags into the go test form handled below.
-    assert args[2:6] == ['-t', '-p', 'example.test/internal/server', os.environ['FAKE_TEST_BINARY']] or (args[2:5] == ['-p', 'example.test/internal/server', os.environ['FAKE_TEST_BINARY']])
+    assert args[2:5] == ['-t', '-p', 'example.test/internal/server'] or args[2:4] == ['-p', 'example.test/internal/server']
+    executable = args[5] if args[2] == '-t' else args[4]
+    # The census runs the shared binary; each part runs its own link to the same file (its private sibling dir).
+    assert os.path.samefile(executable, os.environ['FAKE_TEST_BINARY'])
+    if executable != os.environ['FAKE_TEST_BINARY']:
+        pathlib.Path(os.environ['FAKE_TEST_BINARY'] + '.parts').open('a').write(executable + '\n')
     pathlib.Path(os.environ['FAKE_TEST_BINARY'] + '.cwd').open('a').write(os.getcwd() + '\n')
     pathlib.Path(os.environ['FAKE_TEST_BINARY'] + '.env').open('a').write(os.environ['GOROOT'] + ' ' + os.environ['PATH'].split(os.pathsep)[0] + '\n')
-    flags = args[args.index(os.environ['FAKE_TEST_BINARY']) + 1:]
+    flags = args[args.index(executable) + 1:]
     assert '-test.v=test2json' in flags
     translated = ['-json', '-race', '-count=1', '-p=1', '-covermode=atomic', '-coverpkg=./internal/...']
     i = 0
@@ -215,6 +220,12 @@ class ProcessTests(unittest.TestCase):
             self.assertEqual(record['test_binary_sha256'], hashlib.sha256(b'prebuilt race + coverage test binary').hexdigest())
             dirs = set(Path(str(binary) + '.cwd').read_text().split())
             self.assertEqual(dirs, {str(package.resolve())})
+            # Each part ran its own link to the binary, in its own private directory, so a sibling one part builds or
+            # removes next to its executable is never another part's.
+            parts = Path(str(binary) + '.parts').read_text().split()
+            self.assertEqual(len(parts), record['workers'])
+            self.assertEqual(len({str(Path(p).parent) for p in parts}), len(parts))
+            self.assertTrue(all(Path(p).name == 'server.test' and Path(p).parent.name == 'bin' for p in parts), parts)
             # Like go test, the binary's processes see the toolchain's GOROOT and its bin first on PATH.
             goroot = str(Path(directory) / 'go1.26.10')
             self.assertEqual(set(Path(str(binary) + '.env').read_text().splitlines()), {goroot + ' ' + os.path.join(goroot, 'bin')})
