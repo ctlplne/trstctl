@@ -74,6 +74,10 @@ func TestSupply101VulnScansStayRequired(t *testing.T) {
 	requireAllContained(t, "AUD-80", "verify-embedded-postgres.sh", verifyPG,
 		"--list-all-pkgs",
 		"https://www.postgresql.org/support/security/${postgres_major}/",
+		// Both downloads retry a transient network failure (curl 56 on CI run
+		// 41471582079) instead of failing the scan.
+		`curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 300 "$url"`,
+		`curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 120 "$security_url"`,
 		"postgresql-security-catalog.py",
 		"$security_catalog",
 	)

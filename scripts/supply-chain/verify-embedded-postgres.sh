@@ -53,7 +53,8 @@ mkdir -p "$archWorkdir"
 jar="$archWorkdir/embedded-postgres-${arch}-${ver}.jar"
 
 echo ">> downloading PostgreSQL ${ver} (${arch}) binary: ${url}"
-curl -fsSL "$url" -o "$jar"
+# Both downloads retry a transient network failure instead of failing the scan.
+curl -fsSL --retry 3 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 300 "$url" -o "$jar"
 
 gotJar="$(sha256sum "$jar" | awk '{print $1}')"
 echo ">> sha256(jar ${arch} ${ver}) = ${gotJar}"
@@ -119,7 +120,7 @@ security_html="$receipt_dir/postgresql-security-${postgres_major}.html"
 security_catalog="$receipt_dir/postgresql-security-${postgres_major}.json"
 
 echo ">> fetching official PostgreSQL ${postgres_major} security catalog"
-curl -fsSL --proto '=https' --tlsv1.2 "$security_url" -o "$security_html"
+curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-all-errors --retry-delay 10 --connect-timeout 30 --max-time 120 "$security_url" -o "$security_html"
 "$here/postgresql-security-catalog.py" \
   --html "$security_html" \
   --output "$security_catalog" \

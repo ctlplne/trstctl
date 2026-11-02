@@ -1024,7 +1024,7 @@ not this file.
 | `docs/docs_test.go:2591` | test walks the repo's own checkout; no hostile symlink exposure (CWE-367) |
 | `docs/embedded_postgres_teardown_test.go:46` | walks this repository's own test sources (CWE-22) |
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
-| `docs/protect_guards_completeness_test.go:276` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:922` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:988` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4744` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
@@ -1648,7 +1648,7 @@ not this file.
 | `docs/est_differential_test.go:190` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/nolint_gosec_guard_test.go:90` | test reads a path listed by this repository's own git index (CWE-22) |
 | `docs/operational_transfer_test.go:64` | test reads its own fixture/tempdir path (CWE-22) |
-| `docs/protect_guards_completeness_test.go:276` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
+| `docs/protect_guards_completeness_test.go:280` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:922` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:988` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
 | `docs/protect_guards_test.go:4744` | test reads its own fixture/tempdir path (CWE-22, CWE-367) |
